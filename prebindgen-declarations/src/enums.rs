@@ -139,29 +139,24 @@ pub fn enum_input<W: prebindgen_flat::WireKind, C, N, B>(
         _ => false,
     };
     let decode = mapping.decode(quote!(#wire));
-    let active = active.rust();
-    Ok(InputPlan {
-        fallible: true,
-        context: Default::default(),
-        acknowledgement: None,
-        node: prebindgen_flat::WireNode::Leaf(vec![Wire {
-            name: wire.clone(),
-            kind,
-        }]),
-        validation: quote!(let #var = if #active { Some(#decode) } else { None };),
-        acquire: quote!(),
-        resources: vec![],
-        statements: if borrowed {
-            quote!()
-        } else {
-            quote!(let #var = #var.expect("active enum");)
-        },
-        argument: if borrowed {
-            quote!(#var.as_ref().expect("active enum"))
-        } else {
-            quote!(#var)
-        },
-    })
+    let _ = active;
+    let (storage, code, value) = if borrowed {
+        (
+            quote!(#[allow(unused_mut,unused_assignments)] let mut #var=None;),
+            quote!(#var=Some(#decode);),
+            quote!(#var.as_ref().expect("active enum")),
+        )
+    } else {
+        (quote!(), quote!(let #var=#decode;), quote!(#var))
+    };
+    let mut plan = InputPlan::new(
+        prebindgen_flat::WireNode::Leaf(vec![Wire { name: wire, kind }]),
+        code,
+        value,
+    );
+    plan.storage = storage;
+    plan.fallible = true;
+    Ok(plan)
 }
 /// Prepare enum output by matching a borrow, without requiring `Copy` or `Clone`.
 pub fn enum_output<W: prebindgen_flat::WireKind, C, N, B>(

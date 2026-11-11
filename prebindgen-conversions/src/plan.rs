@@ -3,34 +3,52 @@ use prebindgen_flat::WireKind;
 
 use proc_macro2::TokenStream;
 use quote::quote;
-/// An input conversion with preparation, acquisition and construction code.
+/// A complete input conversion and the backing storage its borrows require.
 ///
-/// Optional storage for the staged request protocol in this crate.
-/// Generators may use this protocol or implement their own request types.
+/// `code` binds the caller's target and evaluates its continuation exactly once.
+/// `storage` contains only enclosing declarations with inert initializers. Recipe
+/// composition can hoist those declarations outside optional/selector branches.
 pub struct InputPlan<W: WireKind, C = (), N = (), B = ()> {
-    /// Whether validation or construction can return a binding error. This
-    /// excludes panics and allocation aborts. Composition preserves child flags.
+    /// Whether conversion can return a binding error, excluding panics/aborts.
     pub fallible: bool,
-    /// Context type supplied by the language generator at emission.
+    /// Context supplied by the language adapter during emission.
     pub context: std::marker::PhantomData<fn(&C)>,
-    /// Authoritative value tree. Adapter metadata records native encoding choices;
-    /// physical parameters are derived from this tree when the generator emits its signature.
+    /// Authoritative incoming representation, including adapter access metadata.
     pub node: prebindgen_flat::WireNode<W, N, B>,
-    /// Shared receipt-channel setup or acknowledgement, if this input needs one.
-    pub acknowledgement: Option<TokenStream>,
-    /// Validate this value before using it. Compiled recipes also acquire and
-    /// construct validated children here, keeping initialized values under RAII.
-    pub validation: TokenStream,
-    /// Acquire this leaf after its adapter-specific validation. Acquisition must be
-    /// infallible unless each moved resource records its own successful transfer
-    /// through `Resource::records_consumption`. Empty for eagerly built recipes.
-    pub acquire: TokenStream,
-    /// Active foreign resources used for ownership receipts and foreign preflight.
-    pub resources: Vec<Resource>,
-    /// Construct this value from acquired inputs, including source constructor calls.
-    pub statements: TokenStream,
-    /// Prepared value expression assigned to the caller-supplied target after `statements`.
-    pub argument: TokenStream,
+    /// Backing-storage declarations, without wire reads or ownership takes.
+    pub storage: TokenStream,
+    /// Complete scoped conversion with target and continuation markers.
+    pub code: TokenStream,
+}
+impl<W: WireKind, C, N, B> InputPlan<W, C, N, B> {
+    /// Prepare conversion statements and their value as one scoped operation.
+    /// Supporting owners needed outside conditional branches belong in `storage`.
+    pub fn new(
+        node: prebindgen_flat::WireNode<W, N, B>,
+        code: TokenStream,
+        value: TokenStream,
+    ) -> Self {
+        let target = template_parameter("input_target");
+        let next = template_parameter("continuation");
+        Self {
+            fallible: false,
+            context: Default::default(),
+            node,
+            storage: TokenStream::new(),
+            code: quote!({#code let #target = #value; #next}),
+        }
+    }
+    /// Compose a child conversion during preparation, retaining unresolved adapter
+    /// bindings. Move its `storage` to the enclosing scope before conditional use.
+    pub fn bind(
+        &self,
+        target: &syn::Ident,
+        next: TokenStream,
+    ) -> prebindgen_flat::Result<TokenStream> {
+        let code = crate::emission::bind_target(&self.code, target)?;
+        let code = crate::staged::continue_with(&code, next)?;
+        crate::staged::enclose(self.storage.clone(), code)
+    }
 }
 /// Output conversion whose owned temporaries survive until successful delivery.
 ///
@@ -68,34 +86,20 @@ pub enum Access {
     /// Ownership transfer; conflicts with every other active use of the resource.
     Move,
 }
-/// Resource metadata for ownership receipts and adapter-specific preflight.
-#[derive(Clone, Debug)]
-pub struct Resource {
-    /// Independent root allocation class represented by this declared type.
-    /// Kotlin preflight matches this type and access mode with generated handle
-    /// inputs. Distinct classes must own independent allocations. C interior
-    /// loans and resources without a known allocation class use None.
-    pub allocation_type: Option<syn::Type>,
-    /// This resource is acquired during input preparation. Its ownership count
-    /// is already included in the generated preparation code.
-    pub registered: bool,
-    /// Acquisition updates `__prebindgen_input_consumed` after each successful
-    /// ownership transfer. The compiler must not also count this resource.
-    /// Use this for acquisition that can fail or unwind between transfers.
-    /// Ignored for borrows.
-    pub records_consumption: bool,
-    /// Number of resources represented by this descriptor when active.
-    /// A side-effect-free Rust expression evaluating to usize; ordinary leaves
-    /// use `1usize`. Already-accounted collection descriptors may use zero.
-    pub count: TokenStream,
-    /// Borrow or ownership requirement imposed by this input conversion.
-    pub access: Access,
-    /// Side-effect-free Rust boolean expression selecting active resources.
-    pub active: TokenStream,
+/// Whether the adapter may choose another supported result delivery protocol.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum DeliveryPolicy {
+    /// Preserve the converter's explicit delivery code and native result ABI.
+    #[default]
+    Fixed,
+    /// Allow the adapter to choose its standard packet, direct or capture delivery.
+    AdapterSelected,
 }
 /// Result-slot glue executed after output preparation and before ownership commit.
 #[derive(Clone, Debug)]
 pub struct Delivery {
+    /// Permission to select an adapter delivery protocol; custom code stays fixed.
+    pub policy: DeliveryPolicy,
     /// Deliver every output; failure must leave owned temporaries uncommitted.
     pub statements: TokenStream,
     /// Infallible wrapper result expression evaluated after commit.
@@ -104,6 +108,7 @@ pub struct Delivery {
 impl Default for Delivery {
     fn default() -> Self {
         Self {
+            policy: DeliveryPolicy::Fixed,
             statements: TokenStream::new(),
             result: quote!(()),
         }
@@ -138,7 +143,7 @@ macro_rules! plan_traits {
         }
     }
 }
-plan_traits!(InputPlan; fallible, node, acknowledgement, validation, acquire, resources, statements, argument);
+plan_traits!(InputPlan; fallible, node, storage, code);
 plan_traits!(OutputPlan; fallible, outcomes, delivery, commit, statements, values);
 
 /// Match prepared expressions to the fields of a concrete result packet or row.

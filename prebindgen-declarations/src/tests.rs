@@ -97,7 +97,7 @@ impl Codec for TestCodec {
             }),
         )
     }
-    fn result_error(
+    fn mapped_error(
         &self,
         _flat: &prebindgen_flat::Flat<Self::Schema>,
         _: &Type,
@@ -106,43 +106,10 @@ impl Codec for TestCodec {
     ) -> Result<TokenStream> {
         Ok(message)
     }
-    fn niche(&self, _: &TestWire) -> Option<()> {
-        None
-    }
-    fn set_niche(&self, _: &mut TestWire, _: Option<()>) {}
-    type Niche = ();
+
     type Chain = TestGroup;
     type Branch = TestGroup;
-    fn group_metadata(&self) -> TestGroup {
-        TestGroup::Values
-    }
-    fn optional_niche(
-        &self,
-        payload: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
-    ) -> Option<NicheReservation<Self::Niche>> {
-        select_optional_niche(self, TestAbi::wires(payload))
-    }
-    fn optional_presence(
-        &self,
-        payload: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
-        reservation: &NicheReservation<Self::Niche>,
-    ) -> Result<TokenStream> {
-        optional_presence(self, TestAbi::wires(payload), reservation)
-    }
-    fn absent_output_values(
-        &self,
-        payload: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
-        reservation: Option<&NicheReservation<Self::Niche>>,
-    ) -> Result<Vec<(syn::Ident, TokenStream)>> {
-        absent_output_values(self, TestAbi::wires(payload), reservation)
-    }
-    fn retire_niches(
-        &self,
-        payload: &mut prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
-        reservation: Option<&NicheReservation<Self::Niche>>,
-    ) -> Result<()> {
-        retire_optional_niches(self, TestAbi::wires_mut(payload), reservation)
-    }
+
     fn validate_input(&self, plan: &CodecInput<Self>) -> Result<()> {
         TestAbi::validate(&plan.node)
     }
@@ -168,50 +135,22 @@ impl Codec for TestCodec {
             w.kind.component.prepend(segment.clone());
         }
     }
-    fn optional_metadata(
-        &self,
-        _: syn::Ident,
-        _: syn::Ident,
-        _: Option<()>,
-        controls: &[Wire<TestWire>],
-    ) -> Result<TestGroup> {
-        if controls
-            .iter()
-            .any(|wire| wire.kind.name == "reject_optional_metadata")
-        {
-            return Err("optional metadata rejected".into());
-        }
-        Ok(TestGroup::Maybe)
-    }
 
-    fn alternatives_metadata(&self, selector: &Wire<TestWire>) -> Result<TestGroup> {
-        if selector.kind.name == "reject_alternative_metadata" {
-            return Err("alternative metadata rejected".into());
-        }
-        Ok(TestGroup::Maybe)
-    }
-    fn field_group(&self, name: syn::Ident) -> TestGroup {
-        TestGroup::Member(name)
-    }
-    fn fields_group(&self) -> TestGroup {
-        TestGroup::Record
-    }
     type Extra = Extra;
     type Wire = TestWire;
     type Context = ();
 
-    fn absent_value(&self, _: &TestWire, _: Option<&()>, _: bool) -> Result<TokenStream> {
-        Ok(quote!(Default::default()))
+    fn selector(&self, extra: &Extra) -> Result<TestWire> {
+        Ok({
+            TestWire {
+                kind: Kind::Selector,
+                name: extra.name,
+                ty: "i32".into(),
+                component: Default::default(),
+            }
+        })
     }
-    fn selector(&self, extra: &Extra) -> TestWire {
-        TestWire {
-            kind: Kind::Selector,
-            name: extra.name,
-            ty: "i32".into(),
-            component: Default::default(),
-        }
-    }
-    fn consumes(
+    fn output_consumes(
         &self,
         _flat: &prebindgen_flat::Flat<Self::Schema>,
         ty: &Type,
@@ -219,51 +158,49 @@ impl Codec for TestCodec {
     ) -> bool {
         Value::of(ty).is_none() && !extra.copy
     }
-    fn input_leaf(
-        &self,
-        _flat: &prebindgen_flat::Flat<Self::Schema>,
-        ty: &Type,
-        extra: &Extra,
-        w: syn::Ident,
-        v: syn::Ident,
-        active: &Condition,
-    ) -> Result<InputPlan<TestWire>> {
+    fn input_leaf(&self, request: InputLeaf<'_, Self>) -> Result<InputPlan<TestWire>> {
+        let InputLeaf {
+            flat: _flat,
+            ty,
+            extra,
+            wire: w,
+            target: v,
+            ..
+        } = request;
+
         let name = extra.name;
         if let Some(value) = Value::of(ty) {
             let decode = quote!(decode(#name, #w)?);
-            return value::input(
-                ty,
-                w,
-                v,
-                &active.rust(),
-                decode,
-                wire(Kind::Value(value), ty, extra),
-            );
+            return value::input(ty, w, v, decode, wire(Kind::Value(value), ty, extra));
         }
-        Ok(InputPlan {
-            fallible: false,
-            context: Default::default(),
-            acknowledgement: None,
-            node: prebindgen_flat::WireNode::Leaf(vec![Wire {
-                name: w.clone(),
-                kind: wire(Kind::Token, ty, extra),
-            }]),
-            validation: quote!(),
-            acquire: quote!(),
-            resources: vec![],
-            statements: quote!(let #v=receive_token(#w);),
-            argument: quote!(#v),
+        Ok({
+            let validation = quote!();
+            let acquire = quote!();
+            let statements = quote!(let #v=receive_token(#w););
+            let mut plan = InputPlan::new(
+                prebindgen_flat::WireNode::Leaf(vec![Wire {
+                    name: w.clone(),
+                    kind: wire(Kind::Token, ty, extra),
+                }]),
+                quote!(#validation #acquire #statements),
+                quote!(#v),
+            );
+            plan.fallible = false;
+            plan
         })
     }
-    fn output_leaf(
-        &self,
-        _flat: &prebindgen_flat::Flat<Self::Schema>,
-        ty: &Type,
-        extra: &Extra,
-        w: syn::Ident,
-        v: TokenStream,
-        borrowed: bool,
-    ) -> Result<OutputPlan<TestWire>> {
+    fn output_leaf(&self, request: OutputLeaf<'_, Self>) -> Result<OutputPlan<TestWire>> {
+        let OutputLeaf {
+            flat: _flat,
+            ty,
+            extra,
+            wire: w,
+            value: v,
+            access,
+            ..
+        } = request;
+        let borrowed = access.is_shared();
+
         let name = extra.name;
         if let Some(value) = Value::of(ty) {
             let kind = wire(Kind::Value(value), ty, extra);
@@ -289,7 +226,82 @@ impl Codec for TestCodec {
             commit: quote!(),
         })
     }
+
+    fn group(&self, kind: GroupKind<'_>) -> Result<TestGroup> {
+        Ok(match kind {
+            GroupKind::Values | GroupKind::NamedOutput(_) => TestGroup::Values,
+            GroupKind::Fields => TestGroup::Record,
+            GroupKind::Field(name) => TestGroup::Member(name.clone()),
+        })
+    }
+    fn optional(&self, request: Optional<'_, Self>) -> Result<OptionalEncoding<Self>> {
+        let prepared = prepare_optional_payload(
+            TestAbi::wires_mut(request.payload),
+            request.direction,
+            |w| self.niche(w),
+            |w, n| {
+                self.set_niche(w, n);
+                Ok(())
+            },
+            |w, n, v| self.is_present(w, n, v),
+            |w, n| self.remaining_niche(w, n),
+            |w, n| self.absent_value(w, n, false),
+        )?;
+        if request.extra.name == "reject_optional_metadata" {
+            return Err("optional metadata rejected".into());
+        }
+        let metadata = TestGroup::Maybe;
+        let presence = if prepared.reservation.is_some() {
+            Presence::Niche {
+                input_test: prepared.input_test,
+            }
+        } else {
+            Presence::Flag(Wire {
+                name: request.presence,
+                kind: self.selector(request.extra)?,
+            })
+        };
+        Ok(OptionalEncoding {
+            presence,
+            metadata,
+            absent_values: prepared.absent_values,
+        })
+    }
+    fn alternatives(&self, request: Alternatives<'_, Self>) -> Result<TestGroup> {
+        for arm in request.arms {
+            retire_optional_niches(
+                TestAbi::wires_mut(arm),
+                None,
+                |w, n| self.remaining_niche(w, n),
+                |w, n| {
+                    self.set_niche(w, n);
+                    Ok(())
+                },
+            )?;
+        }
+        if request.selector.kind.name == "reject_alternative_metadata" {
+            return Err("alternative metadata rejected".into());
+        }
+        Ok(TestGroup::Maybe)
+    }
 }
+
+impl TestCodec {
+    fn niche(&self, _: &TestWire) -> Option<()> {
+        None
+    }
+    fn set_niche(&self, _: &mut TestWire, _: Option<()>) {}
+    fn absent_value(&self, _: &TestWire, _: Option<&()>, _: bool) -> Result<TokenStream> {
+        Ok(quote!(Default::default()))
+    }
+    fn is_present(&self, _: &TestWire, _: &(), _: TokenStream) -> Result<TokenStream> {
+        unreachable!()
+    }
+    fn remaining_niche(&self, _: &TestWire, _: &()) -> Option<()> {
+        None
+    }
+}
+
 fn parse(source: &str) -> Bindings<TestWire> {
     Flat::parse(
         syn::parse_file(source)
@@ -558,7 +570,7 @@ fn declarations_preserve_converters_and_replace_explicit_overrides() {
         .name,
         "result"
     );
-    assert!(x.validation.to_string().contains("\"x\""));
+    assert!(x.code.to_string().contains("\"x\""));
 }
 #[test]
 fn declaration_compilation_is_atomic_even_when_output_fails() {
@@ -721,7 +733,7 @@ fn explicit_scalar_identity_is_a_value_conversion() {
             .ty,
         "i64"
     );
-    assert!(input.validation.to_string().contains("scalar"));
+    assert!(input.code.to_string().contains("scalar"));
     assert!(output.statements.to_string().contains("scalar"));
 }
 #[test]
@@ -854,43 +866,10 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
     struct FinalizingCodec;
     impl Codec for FinalizingCodec {
         type Schema = prebindgen_conversions::PlanSchema<TestWire, (), TestGroup, TestGroup>;
-        fn niche(&self, _: &TestWire) -> Option<()> {
-            None
-        }
-        fn set_niche(&self, _: &mut TestWire, _: Option<()>) {}
-        type Niche = ();
+
         type Chain = TestGroup;
         type Branch = TestGroup;
-        fn group_metadata(&self) -> TestGroup {
-            TestGroup::Values
-        }
-        fn optional_niche(
-            &self,
-            payload: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
-        ) -> Option<NicheReservation<Self::Niche>> {
-            select_optional_niche(self, TestAbi::wires(payload))
-        }
-        fn optional_presence(
-            &self,
-            payload: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
-            reservation: &NicheReservation<Self::Niche>,
-        ) -> Result<TokenStream> {
-            optional_presence(self, TestAbi::wires(payload), reservation)
-        }
-        fn absent_output_values(
-            &self,
-            payload: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
-            reservation: Option<&NicheReservation<Self::Niche>>,
-        ) -> Result<Vec<(syn::Ident, TokenStream)>> {
-            absent_output_values(self, TestAbi::wires(payload), reservation)
-        }
-        fn retire_niches(
-            &self,
-            payload: &mut prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
-            reservation: Option<&NicheReservation<Self::Niche>>,
-        ) -> Result<()> {
-            retire_optional_niches(self, TestAbi::wires_mut(payload), reservation)
-        }
+
         fn validate_input(&self, plan: &CodecInput<Self>) -> Result<()> {
             TestAbi::validate(&plan.node)
         }
@@ -916,73 +895,72 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
                 w.kind.component.prepend(segment.clone());
             }
         }
-        fn optional_metadata(
-            &self,
-            _: syn::Ident,
-            _: syn::Ident,
-            _: Option<()>,
-            _controls: &[Wire<TestWire>],
-        ) -> Result<TestGroup> {
-            Ok(TestGroup::Maybe)
-        }
 
-        fn alternatives_metadata(&self, _selector: &Wire<TestWire>) -> Result<TestGroup> {
-            Ok(TestGroup::Maybe)
-        }
-        fn field_group(&self, name: syn::Ident) -> TestGroup {
-            TestGroup::Member(name)
-        }
-        fn fields_group(&self) -> TestGroup {
-            TestGroup::Record
-        }
         type Extra = Extra;
         type Wire = TestWire;
         type Context = ();
 
-        fn selector(&self, extra: &Extra) -> TestWire {
+        fn selector(&self, extra: &Extra) -> Result<TestWire> {
             TEST_CODEC.selector(extra)
         }
-        fn consumes(
+        fn output_consumes(
             &self,
             flat: &prebindgen_flat::Flat<Self::Schema>,
             ty: &Type,
             extra: &Extra,
         ) -> bool {
-            TEST_CODEC.consumes(flat, ty, extra)
+            TEST_CODEC.output_consumes(flat, ty, extra)
         }
-        fn input_leaf(
-            &self,
-            flat: &prebindgen_flat::Flat<Self::Schema>,
-            ty: &Type,
-            extra: &Extra,
-            w: syn::Ident,
-            v: syn::Ident,
-            active: &Condition,
-        ) -> Result<InputPlan<TestWire>> {
-            let mut plan = TEST_CODEC.input_leaf(flat, ty, extra, w.clone(), v, active)?;
-            plan.acknowledgement = Some(if extra.name == "conflict" {
-                quote!(ack(#w);)
-            } else {
-                quote!(ack();)
-            });
+        fn input_leaf(&self, request: InputLeaf<'_, Self>) -> Result<InputPlan<TestWire>> {
+            let InputLeaf {
+                flat,
+                ty,
+                extra,
+                wire: w,
+                target: v,
+                active,
+                ..
+            } = request;
+
+            let plan = TEST_CODEC.input_leaf(crate::InputLeaf::new(
+                flat,
+                ty,
+                extra,
+                w.clone(),
+                v,
+                active,
+            ))?;
             Ok(plan)
         }
-        fn output_leaf(
-            &self,
-            flat: &prebindgen_flat::Flat<Self::Schema>,
-            ty: &Type,
-            extra: &Extra,
-            w: syn::Ident,
-            v: TokenStream,
-            borrowed: bool,
-        ) -> Result<OutputPlan<TestWire>> {
-            TEST_CODEC.output_leaf(flat, ty, extra, w, v, borrowed)
+        fn output_leaf(&self, request: OutputLeaf<'_, Self>) -> Result<OutputPlan<TestWire>> {
+            let OutputLeaf {
+                flat,
+                ty,
+                extra,
+                wire: w,
+                value: v,
+                access,
+                ..
+            } = request;
+            let borrowed = access.is_shared();
+
+            TEST_CODEC.output_leaf(crate::OutputLeaf::new(
+                flat,
+                ty,
+                extra,
+                w,
+                v,
+                if borrowed {
+                    crate::ValueAccess::Shared
+                } else {
+                    crate::ValueAccess::Owned
+                },
+            ))
         }
-        fn finish_input(&self, plan: &mut InputPlan<TestWire>, _: &Extra) -> Result<()> {
-            assert_eq!(
-                plan.acknowledgement.as_ref().unwrap().to_string(),
-                quote!(ack();).to_string()
-            );
+        fn finish_input(&self, plan: &mut InputPlan<TestWire>, extra: &Extra) -> Result<()> {
+            if extra.name == "conflict" {
+                return Err("input finalization failed".into());
+            }
             assert_eq!(TestAbi::wires(&plan.node).len(), 2);
             assert_eq!(
                 prebindgen_flat::wire_definitions(std::iter::once(&plan.node)).count(),
@@ -1008,6 +986,28 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
             plan.delivery.statements = quote!(deliver_unit(););
             Ok(())
         }
+        fn group(&self, kind: GroupKind<'_>) -> Result<TestGroup> {
+            TEST_CODEC.group(kind)
+        }
+        fn optional(&self, request: Optional<'_, Self>) -> Result<OptionalEncoding<Self>> {
+            let e = TEST_CODEC.optional(Optional {
+                extra: request.extra,
+                payload: request.payload,
+                presence: request.presence,
+                direction: request.direction,
+            })?;
+            Ok(OptionalEncoding {
+                presence: e.presence,
+                metadata: e.metadata,
+                absent_values: e.absent_values,
+            })
+        }
+        fn alternatives(&self, request: Alternatives<'_, Self>) -> Result<TestGroup> {
+            TEST_CODEC.alternatives(Alternatives {
+                selector: request.selector,
+                arms: request.arms,
+            })
+        }
     }
     let source = "pub struct Pair { pub a:i32, pub b:i32 } pub fn pair(a:i32,b:i32)->Pair {} pub fn take(p:Pair) {}";
     let mut conflicting = parse(source);
@@ -1023,7 +1023,7 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
         }
     )
     .unwrap_err()
-    .contains("conflicting input acknowledgements"));
+    .contains("input finalization failed"));
     assert!(conflicting.function("take").unwrap().params[0]
         .ty
         .slot
@@ -1163,69 +1163,37 @@ fn source_binding() -> syn::Ident {
 }
 
 #[test]
-fn shared_record_input_preserves_ownership_phases_and_rejects_conflicting_acknowledgements() {
-    use prebindgen_conversions::{Access, Resource};
-    let make = |index: usize, ack: TokenStream| {
-        let name = format_ident!("field{index}");
+fn shared_record_input_composes_complete_fields_and_hoists_backing_storage() {
+    let make = |index: usize| {
+        let target = format_ident!("field{index}");
         let mut child = TEST_CODEC
-            .input_leaf(
+            .input_leaf(crate::InputLeaf::new(
                 &parse(""),
                 &syn::parse_quote!(i64),
                 &Extra::default(),
                 format_ident!("wire{index}"),
-                format_ident!("value{index}"),
+                target.clone(),
                 &Condition::default(),
-            )
+            ))
             .unwrap();
-        child.validation = quote!(validate(#index););
-        child.acquire = quote!(acquire(#index););
-        child.acknowledgement = Some(ack);
-        child.resources.push(Resource {
-            allocation_type: None,
-            registered: false,
-            records_consumption: false,
-            count: quote!(1usize),
-            access: Access::Move,
-            active: quote!(selected),
-        });
-        Ok((name, child))
+        child.storage = quote!(let #target=(););
+        Ok((target, child))
     };
     let plan = record_input(
         &TEST_CODEC,
         &syn::parse_quote!(Pair),
         format_ident!("pair"),
-        [make(0, quote!(ack())), make(1, quote!(ack()))],
+        [make(0), make(1)],
     )
     .unwrap();
-    assert_eq!(
-        plan.validation.to_string(),
-        quote!(validate(0usize); validate(1usize);).to_string()
-    );
-    assert_eq!(
-        plan.acquire.to_string(),
-        quote!(acquire(0usize); acquire(1usize);).to_string()
-    );
-    assert_eq!(plan.resources.len(), 2);
-    assert!(plan
-        .resources
-        .iter()
-        .all(|r| r.access == Access::Move && r.active.to_string() == "selected"));
-    assert_eq!(
-        plan.acknowledgement.unwrap().to_string(),
-        quote!(ack()).to_string()
-    );
+    assert!(plan.storage.to_string().contains("field0"));
+    assert!(plan.storage.to_string().contains("field1"));
+    let code = plan.code.to_string();
+    assert!(code.find("wire0").unwrap() < code.find("wire1").unwrap());
     assert_eq!(
         TestAbi::wires(&plan.node).nth(1).unwrap().kind.component,
         ComponentPath(vec![ComponentSegment::Field("field1".into())])
     );
-    assert!(record_input(
-        &TEST_CODEC,
-        &syn::parse_quote!(Pair),
-        format_ident!("pair"),
-        [make(0, quote!(ack())), make(1, quote!(different()))]
-    )
-    .unwrap_err()
-    .contains("conflicting input acknowledgements"));
 }
 
 #[test]
@@ -1237,14 +1205,14 @@ fn shared_record_output_evaluates_once_preserves_commit_and_rejects_early_delive
             quote!(next_record()),
             [format_ident!("x"), format_ident!("y")],
             |i, field| {
-                let mut child = TEST_CODEC.output_leaf(
+                let mut child = TEST_CODEC.output_leaf(crate::OutputLeaf::new(
                     &parse(""),
                     &syn::parse_quote!(i64),
                     &Extra::default(),
                     format_ident!("wire{i}"),
                     field,
-                    true,
-                )?;
+                    crate::ValueAccess::Shared,
+                ))?;
                 child.commit = quote!(commit(#i););
                 if early_delivery {
                     child.delivery.statements = quote!(deliver());
@@ -1569,14 +1537,14 @@ fn record_helpers_check_source_field_names_without_reading_group_metadata() {
     let names = || [syn::parse_quote!(x), syn::parse_quote!(r#x)];
     let fields = names().into_iter().enumerate().map(|(i, name)| {
         TEST_CODEC
-            .input_leaf(
+            .input_leaf(crate::InputLeaf::new(
                 &parse(""),
                 &syn::parse_quote!(i64),
                 &Extra::default(),
                 format_ident!("w{i}"),
                 format_ident!("v{i}"),
                 &Condition::default(),
-            )
+            ))
             .map(|plan| (name, plan))
     });
     let error = record_input(
@@ -1589,14 +1557,18 @@ fn record_helpers_check_source_field_names_without_reading_group_metadata() {
     assert!(error.contains("duplicate field"));
     for owned in [false, true] {
         let convert = |i, value| {
-            TEST_CODEC.output_leaf(
+            TEST_CODEC.output_leaf(crate::OutputLeaf::new(
                 &parse(""),
                 &syn::parse_quote!(i64),
                 &Extra::default(),
                 format_ident!("w{i}"),
                 value,
-                !owned,
-            )
+                if !owned {
+                    crate::ValueAccess::Shared
+                } else {
+                    crate::ValueAccess::Owned
+                },
+            ))
         };
         let result = if owned {
             record_output_owned(
@@ -1836,14 +1808,14 @@ fn test_parameter_names(
 fn nested_output_completion_channels_are_rejected_without_losing_unit_errors() {
     for source_error in [false, true] {
         let mut child = TEST_CODEC
-            .output_leaf(
+            .output_leaf(crate::OutputLeaf::new(
                 &parse(""),
                 &syn::parse_quote!(i32),
                 &Extra::default(),
                 syn::parse_quote!(out),
                 quote!(value),
-                false,
-            )
+                crate::ValueAccess::Owned,
+            ))
             .unwrap();
         if source_error {
             child.outcomes.source_error = Some(WireNode::default());
@@ -2008,7 +1980,7 @@ fn failed_metadata_construction_preserves_installed_conversions() {
         .slot
         .as_ref()
         .unwrap()
-        .validation
+        .code
         .to_string();
     let output_before = flat
         .function("f")
@@ -2053,7 +2025,7 @@ fn failed_metadata_construction_preserves_installed_conversions() {
                 .slot
                 .as_ref()
                 .unwrap()
-                .validation
+                .code
                 .to_string(),
             input_before
         );
@@ -2516,7 +2488,7 @@ fn bulk_normalization_preserves_callback_boundaries_inside_structural_nodes() {
 }
 
 #[test]
-fn resolved_bulk_enclosing_callback_delivery_is_diagnosed_before_adapter_lowering() {
+fn unsupported_bulk_is_diagnosed_before_adapter_lowering() {
     let flat = parse("pub fn values()->Option<Vec<i64>>{}");
     let recipe = Output::Optional(Box::new(Output::Sequence {
         delivery: SequenceDelivery::Callback,
@@ -2528,8 +2500,103 @@ fn resolved_bulk_enclosing_callback_delivery_is_diagnosed_before_adapter_lowerin
         .err()
         .unwrap();
     assert!(
-        error.contains("bulk cannot enclose callback delivery"),
+        error.contains("bulk outputs are unsupported by this codec"),
         "{error}"
     );
     assert!(flat.function("values").unwrap().ret.slot.is_none());
+}
+
+#[test]
+fn optional_fields_have_one_continuation_and_linear_generated_code_size() {
+    let size = |width: usize| {
+        let fields = (0..width)
+            .map(|i| format!("pub f{i}:Option<i64>"))
+            .collect::<Vec<_>>()
+            .join(",");
+        let flat = parse(&format!(
+            "pub struct Wide{{{fields}}} pub fn consume(value:Wide){{}}"
+        ));
+        let recipe = Input::Fields(
+            (0..width)
+                .map(|_| Input::Optional(Box::new(Input::Leaf)))
+                .collect(),
+        );
+        let plan = compile_input(
+            &flat,
+            &TEST_CODEC,
+            "consume",
+            "value",
+            &recipe,
+            &Extra::default(),
+        )
+        .unwrap();
+        let code = plan.code.to_string();
+        assert_eq!(code.matches("continuation").count(), 1);
+        code.len()
+    };
+    let small = size(8);
+    let large = size(64);
+    assert!(large < small * 10, "{small} -> {large}");
+}
+
+#[test]
+fn optional_temporary_borrows_survive_through_the_next_parameter_and_source_call() {
+    let flat = parse("pub fn combine(first:Option<&str>,second:Option<&str>)->usize{}");
+    let recipe = Input::Optional(Box::new(Input::Temporary(Box::new(Input::Leaf))));
+    let first = compile_input(
+        &flat,
+        &TEST_CODEC,
+        "combine",
+        "first",
+        &recipe,
+        &Extra::default(),
+    )
+    .unwrap();
+    let second = compile_input(
+        &flat,
+        &TEST_CODEC,
+        "combine",
+        "second",
+        &recipe,
+        &Extra::default(),
+    )
+    .unwrap();
+    let a = syn::parse_quote!(first);
+    let b = syn::parse_quote!(second);
+    let body = second.bind(&b, quote!(Ok(combine(#a,#b)))).unwrap();
+    let body = first.bind(&a, body).unwrap();
+    let parameters = TestAbi::wires(&first.node)
+        .chain(TestAbi::wires(&second.node))
+        .map(|w| {
+            let name = &w.name;
+            let ty = w.rust_type();
+            quote!(#name:#ty)
+        })
+        .collect::<Vec<_>>();
+    let program = quote! {
+        fn decode(_: &str,value:String)->Result<String,String>{Ok(value)}
+        fn combine(first:Option<&str>,second:Option<&str>)->usize {first.map_or(0,str::len)+second.map_or(0,str::len)}
+        fn bridge(#(#parameters),*)->Result<usize,String>{#body}
+        fn main(){assert_eq!(bridge(1,"hello".into(),1,"world".into()).unwrap(),10);assert_eq!(bridge(0,"ignored".into(),1,"a".into()).unwrap(),1);assert_eq!(bridge(1,"a".into(),0,"ignored".into()).unwrap(),1);}
+    };
+    let directory = tempfile::tempdir().unwrap();
+    let source = directory.path().join("borrows.rs");
+    let executable = directory.path().join("borrows");
+    std::fs::write(&source, program.to_string()).unwrap();
+    let built = std::process::Command::new("rustc")
+        .args(["--edition=2021"])
+        .arg(source)
+        .arg("-o")
+        .arg(&executable)
+        .output()
+        .unwrap();
+    assert!(
+        built.status.success(),
+        "{}",
+        String::from_utf8_lossy(&built.stderr)
+    );
+    assert!(std::process::Command::new(executable)
+        .status()
+        .unwrap()
+        .success());
 }

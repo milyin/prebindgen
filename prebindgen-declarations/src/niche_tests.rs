@@ -60,39 +60,9 @@ impl DomainAbi {
 struct DomainCodec;
 impl Codec for DomainCodec {
     type Schema = prebindgen_conversions::PlanSchema<Domain, (), DomainGroup, DomainGroup>;
-    type Niche = Sentinel;
     type Chain = DomainGroup;
     type Branch = DomainGroup;
-    fn group_metadata(&self) -> DomainGroup {
-        DomainGroup::default()
-    }
-    fn optional_niche(
-        &self,
-        payload: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
-    ) -> Option<NicheReservation<Self::Niche>> {
-        select_optional_niche(self, DomainAbi::wires(payload))
-    }
-    fn optional_presence(
-        &self,
-        payload: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
-        reservation: &NicheReservation<Self::Niche>,
-    ) -> Result<TokenStream> {
-        optional_presence(self, DomainAbi::wires(payload), reservation)
-    }
-    fn absent_output_values(
-        &self,
-        payload: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
-        reservation: Option<&NicheReservation<Self::Niche>>,
-    ) -> Result<Vec<(syn::Ident, TokenStream)>> {
-        absent_output_values(self, DomainAbi::wires(payload), reservation)
-    }
-    fn retire_niches(
-        &self,
-        payload: &mut prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
-        reservation: Option<&NicheReservation<Self::Niche>>,
-    ) -> Result<()> {
-        retire_optional_niches(self, DomainAbi::wires_mut(payload), reservation)
-    }
+
     fn validate_input(&self, plan: &CodecInput<Self>) -> Result<()> {
         DomainAbi::validate(&plan.node)
     }
@@ -105,74 +75,103 @@ impl Codec for DomainCodec {
         Ok(())
     }
 
-    fn optional_metadata(
-        &self,
-        presence: syn::Ident,
-        discriminator: syn::Ident,
-        niche: Option<Sentinel>,
-        _controls: &[Wire<Domain>],
-    ) -> Result<DomainGroup> {
-        Ok({
-            DomainGroup {
-                description: format!("optional:{presence}:{discriminator}:{niche:?}"),
-            }
-        })
-    }
-    fn alternatives_metadata(&self, _selector: &Wire<Domain>) -> Result<DomainGroup> {
-        Ok({
-            DomainGroup {
-                description: "choice".into(),
-            }
-        })
-    }
-    fn field_group(&self, name: syn::Ident) -> DomainGroup {
-        DomainGroup {
-            description: format!("member:{name}"),
-        }
-    }
-    fn fields_group(&self) -> DomainGroup {
-        DomainGroup {
-            description: "record".into(),
-        }
-    }
     type Extra = ();
     type Context = ();
     type Wire = Domain;
 
-    fn selector(&self, _: &()) -> Domain {
-        Domain {
-            ty: syn::parse_quote!(i32),
-            unused: vec![],
-            remaining: None,
-            prefix: false,
-            valid: quote!(true),
-        }
+    fn selector(&self, _: &()) -> Result<Domain> {
+        Ok({
+            Domain {
+                ty: syn::parse_quote!(i32),
+                unused: vec![],
+                remaining: None,
+                prefix: false,
+                valid: quote!(true),
+            }
+        })
     }
-    fn consumes(&self, _flat: &prebindgen_flat::Flat<Self::Schema>, _: &Type, _: &()) -> bool {
+    fn output_consumes(
+        &self,
+        _flat: &prebindgen_flat::Flat<Self::Schema>,
+        _: &Type,
+        _: &(),
+    ) -> bool {
         false
     }
-    fn input_leaf(
-        &self,
-        _flat: &prebindgen_flat::Flat<Self::Schema>,
-        _: &Type,
-        _: &(),
-        _: syn::Ident,
-        _: syn::Ident,
-        _: &Condition,
-    ) -> Result<InputPlan<Domain>> {
+    fn input_leaf(&self, _: InputLeaf<'_, Self>) -> Result<InputPlan<Domain>> {
         unreachable!()
     }
-    fn output_leaf(
-        &self,
-        _flat: &prebindgen_flat::Flat<Self::Schema>,
-        _: &Type,
-        _: &(),
-        _: syn::Ident,
-        _: TokenStream,
-        _: bool,
-    ) -> Result<OutputPlan<Domain>> {
+    fn output_leaf(&self, _: OutputLeaf<'_, Self>) -> Result<OutputPlan<Domain>> {
         unreachable!()
     }
+    fn group(&self, kind: GroupKind<'_>) -> Result<DomainGroup> {
+        Ok(match kind {
+            GroupKind::Values | GroupKind::NamedOutput(_) => DomainGroup::default(),
+            GroupKind::Fields => DomainGroup {
+                description: "record".into(),
+            },
+            GroupKind::Field(name) => DomainGroup {
+                description: format!("member:{name}"),
+            },
+        })
+    }
+    fn optional(&self, request: Optional<'_, Self>) -> Result<OptionalEncoding<Self>> {
+        let prepared = prepare_optional_payload(
+            DomainAbi::wires_mut(request.payload),
+            request.direction,
+            |w| self.niche(w),
+            |w, n| {
+                self.set_niche(w, n);
+                Ok(())
+            },
+            |w, n, v| self.is_present(w, n, v),
+            |w, n| self.remaining_niche(w, n),
+            |w, n| self.absent_value(w, n, false),
+        )?;
+        let discriminator = prepared
+            .reservation
+            .as_ref()
+            .map(|r| r.discriminator.clone())
+            .unwrap_or_else(|| request.presence.clone());
+        let niche = prepared.reservation.as_ref().map(|r| r.niche.clone());
+        let metadata = DomainGroup {
+            description: format!("optional:{}:{discriminator}:{niche:?}", request.presence),
+        };
+        let presence = if prepared.reservation.is_some() {
+            Presence::Niche {
+                input_test: prepared.input_test,
+            }
+        } else {
+            Presence::Flag(Wire {
+                name: request.presence,
+                kind: self.selector(request.extra)?,
+            })
+        };
+        Ok(OptionalEncoding {
+            presence,
+            metadata,
+            absent_values: prepared.absent_values,
+        })
+    }
+    fn alternatives(&self, request: Alternatives<'_, Self>) -> Result<DomainGroup> {
+        for arm in request.arms {
+            retire_optional_niches(
+                DomainAbi::wires_mut(arm),
+                None,
+                |w, n| self.remaining_niche(w, n),
+                |w, n| {
+                    self.set_niche(w, n);
+                    Ok(())
+                },
+            )?;
+        }
+        Ok(DomainGroup {
+            description: "choice".into(),
+        })
+    }
+}
+
+impl DomainCodec {
     fn niche(&self, wire: &Domain) -> Option<Sentinel> {
         wire.remaining.and_then(|i| wire.unused.get(i)).cloned()
     }
@@ -199,6 +198,7 @@ impl Codec for DomainCodec {
         wire.unused.get(index + 1).cloned()
     }
 }
+
 fn input(domain: &Domain, depth: usize, active: Condition) -> InputPlan<Domain> {
     if depth == 0 {
         let check = active.rust();
@@ -216,23 +216,24 @@ fn input(domain: &Domain, depth: usize, active: Condition) -> InputPlan<Domain> 
                 0,
                 Wire {
                     name: format_ident!("prefix"),
-                    kind: DomainCodec.selector(&()),
+                    kind: DomainCodec.selector(&()).unwrap(),
                 },
             );
             quote!(prefix == 123)
         } else {
             quote!(true)
         };
-        return InputPlan {
-            fallible: false,
-            context: Default::default(),
-            node: WireNode::Leaf(wires),
-            validation: quote!(if #check && (!(#prefix_valid) || !(#valid) #(|| #invalid)*) {return Err("invalid payload");}),
-            acquire: quote!(),
-            resources: vec![],
-            acknowledgement: None,
-            statements: quote!(),
-            argument: quote!(raw),
+        return {
+            let validation = quote!(if #check && (!(#prefix_valid) || !(#valid) #(|| #invalid)*) {return Err("invalid payload");});
+            let acquire = quote!();
+            let statements = quote!();
+            let mut plan = InputPlan::new(
+                WireNode::Leaf(wires),
+                quote!(#validation #acquire #statements),
+                quote!(raw),
+            );
+            plan.fallible = false;
+            plan
         };
     }
     let tag = format_ident!("tag{depth}");
@@ -264,7 +265,7 @@ fn output(domain: &Domain, depth: usize, source: TokenStream) -> OutputPlan<Doma
                 0,
                 Wire {
                     name: format_ident!("prefix"),
-                    kind: DomainCodec.selector(&()),
+                    kind: DomainCodec.selector(&()).unwrap(),
                 },
             );
             values.insert(0, (format_ident!("prefix"), quote!(123i32)));
@@ -405,14 +406,13 @@ fn arbitrary_domains_round_trip_all_nested_states_and_exhaust_to_flags() {
                     .map(|w| &w.name)
                     .collect::<Vec<_>>();
                 let types = DomainAbi::wires(&out.outcomes.success).map(|w| w.kind.rust_type());
-                let validation = inp.validation;
-                let construct = inp.statements;
-                let argument = inp.argument;
+                let target = syn::parse_quote!(decoded);
+                let conversion = inp.bind(&target, quote!(Ok(#target))).unwrap();
                 let prepare = out.statements;
                 let commit = out.commit;
                 let results = out.values.into_iter().map(|(_, v)| v).collect::<Vec<_>>();
                 functions.extend(quote!{
-                fn #decode(#(#params),*) -> Result<#source_ty,&'static str> {#validation #construct Ok(#argument)}
+                fn #decode(#(#params),*) -> Result<#source_ty,&'static str> {#conversion}
                 fn #encode(source:#source_ty)->Result<(#(#types,)*), &'static str> {#prepare let result=(#(#results,)*);#commit Ok(result)}
             });
                 if depth == 1 {

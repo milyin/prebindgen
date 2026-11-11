@@ -129,7 +129,7 @@ pub(crate) fn input(
             .join(","),
         type_key(&signature.return_type)
     );
-    let codec = enums::EnumCodec::default();
+    let codec = CCodec::declared();
     let mut arguments = Vec::new();
     for (index, source) in signature.arguments.into_iter().enumerate() {
         if has_mutable_reference(&source) {
@@ -158,9 +158,7 @@ pub(crate) fn input(
         }
         arguments.push(Argument { ty: source, output });
     }
-    let return_codec = enums::EnumCodec {
-        callback_return: true,
-    };
+    let return_codec = CCodec::declared();
     let returned = if unit {
         None
     } else {
@@ -231,21 +229,21 @@ pub(crate) fn input(
             panic!("callback failed: {}", error)
         }))
     };
-    let consumed = prebindgen_conversions::template_parameter("input_consumed");
-    Ok(InputPlan {
-        fallible: false,
-        context: Default::default(),
-        resources: Vec::new(),
-        node: WireNode::Leaf(vec![Wire {
+    let transfer = prebindgen_conversions::record_input_transfer(quote!(1usize));
+    Ok(InputPlan::new(
+        WireNode::Leaf(vec![Wire {
             name: wire.clone(),
             kind: CWire::Callback { callback },
         }]),
-        acknowledgement: None,
-        validation: quote!(let #run = if #condition {Some(unsafe {#wire.run.unwrap_unchecked()})} else {None};),
-        acquire: quote!(#release_capture let #owned = if #condition {{(#consumed).set((#consumed).get()+1); Some(__PbCallbackOwner::new(#wire.context, #wire.drop))}} else {None};),
-        statements: quote!(let #run = #run.expect("validated active callback"); let #owned = #owned.expect("validated active callback"); let #var=move |#(#params),*| {let result = ::prebindgen_runtime::boundary(|| #invocation); #handled};),
-        argument: quote!(#var),
-    })
+        quote!(
+            let #run=if #condition {Some(unsafe {#wire.run.unwrap_unchecked()})}else{None};
+            #release_capture
+            let #owned=if #condition {let owner=__PbCallbackOwner::new(#wire.context,#wire.drop); #transfer Some(owner)}else{None};
+            let #run=#run.expect("active callback");let #owned=#owned.expect("active callback");
+            let #var=move |#(#params),*| {let result=::prebindgen_runtime::boundary(|| #invocation);#handled};
+        ),
+        quote!(#var),
+    ))
 }
 fn contains_result(ty: &syn::Type) -> bool {
     prebindgen_flat::result_parts(ty).is_some()
@@ -329,6 +327,7 @@ impl CCallback {
             sequence::schemas(&plan.node, &mut schemas);
         }
         CContext {
+            input_transfers: prebindgen_conversions::InputTransfers::Forbidden,
             row_types: schemas
                 .into_iter()
                 .map(|(w, _, _)| {
@@ -428,25 +427,19 @@ impl CCallback {
         let result = if let Some((ty, plan)) = &self.returned {
             let target = syn::parse_quote!(callback_return_value);
             let expected = syn::parse_quote!(::prebindgen_runtime::Result<#ty>);
-            let mut body = plan.code_fragment_slot(
-                InputFragment::Construct {
-                    context,
+            let mut local = context.clone();
+            local.input_transfers = if crate::takes_input_owners(&plan.node) {
+                prebindgen_conversions::InputTransfers::Report(format_ident!(
+                    "__pb_callback_consumed"
+                ))
+            } else {
+                prebindgen_conversions::InputTransfers::Forbidden
+            };
+            plan.code_fragment_slot(
+                InputFragment {
+                    context: &local,
                     target: &target,
                     next: quote!(Ok(#target)),
-                },
-                &expected,
-            )?;
-            body = plan.code_fragment_slot(
-                InputFragment::Acquire {
-                    context,
-                    next: body,
-                },
-                &expected,
-            )?;
-            plan.code_fragment_slot(
-                InputFragment::Validate {
-                    context,
-                    next: body,
                 },
                 &expected,
             )?
@@ -468,9 +461,18 @@ impl CCallback {
             .zip(&values)
             .map(|(name, value)| quote!(let #name=#value;));
         let protect_result=self.has_release().then(||quote!(let callback_result=__PbCallbackResult {value:raw_result,context:#owner.context(),release:#release};let raw_result=callback_result.value;));
+        let counter = self
+            .returned
+            .as_ref()
+            .is_some_and(|(_, plan)| crate::takes_input_owners(&plan.node))
+            .then(|| {
+                quote!(
+                    let __pb_callback_consumed=::core::cell::Cell::new(0usize);
+                    let __prebindgen_input_consumed=&__pb_callback_consumed;
+                )
+            });
         let mut body = quote!({
-            let __pb_callback_consumed=::core::cell::Cell::new(0usize);
-            let __prebindgen_input_consumed=&__pb_callback_consumed;
+            #counter
             #(#snapshots)* #commits let raw_result=unsafe {#run(#owner.context(), #(#names),*)}; #protect_result #decode #owners #result });
         for (index, arg) in self.arguments.iter().enumerate().rev() {
             let source = format_ident!("callback_source_{index}");
@@ -576,13 +578,17 @@ fn receive_return_owners(
     })
 }
 fn render(context: &CContext, code: &TokenStream, source: &syn::Ident) -> Result<TokenStream> {
-    let code = prebindgen_conversions::render_template(code, &|name| {
-        Ok(if name == "source_result" {
-            quote!(#source)
-        } else {
-            prebindgen_conversions::template_parameter(name)
-        })
-    })?;
+    let code = prebindgen_conversions::render_template(
+        code,
+        &|name| {
+            Ok(if name == "source_result" {
+                quote!(#source)
+            } else {
+                prebindgen_conversions::template_parameter(name)
+            })
+        },
+        &|count| Ok(prebindgen_conversions::record_input_transfer(count.clone())),
+    )?;
     context.render(&code)
 }
 #[allow(clippy::too_many_arguments)]

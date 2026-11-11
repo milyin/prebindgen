@@ -1,0 +1,15 @@
+[package]
+name = "input-acquisition-probe"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# Investigation fixture, outside the production workspace.
+[workspace]
+
+[dependencies]
+prebindgen-c = { path = "../../../../prebindgen-c" }
+prebindgen-flat = { path = "../../../../prebindgen-flat" }
+prebindgen-declarations = { path = "../../../../prebindgen-declarations" }
+quote = "1.0"
+syn = { version = "2.0", features = ["full"] }

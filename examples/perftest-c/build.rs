@@ -1265,9 +1265,47 @@ fn main() {
     if let Some(path) = std::env::var_os("PREBINDGEN_OPAQUE_LAYOUTS") {
         cbindgen = cbindgen.opaque_layouts_file(path);
     }
-    let generation = enum_inputs(cbindgen)
-        .build()
-        .expect("build supported declarations");
+    let mut prepared = enum_inputs(cbindgen)
+        .function(fun!(scoped_input_new))
+        .panic()
+        .function(fun!(scoped_input_id))
+        .panic()
+        .function(fun!(scoped_input_drops))
+        .panic()
+        .function(fun!(scoped_input_pair))
+        .panic()
+        .function(fun!(scoped_input_failure).expand_param(
+            "second",
+            prebindgen_declarations::Input::constructor(
+                "scoped_input_checked",
+                [
+                    prebindgen_declarations::Input::constructor(
+                        "scoped_input_mode",
+                        [prebindgen_declarations::Input::Leaf],
+                    ),
+                    prebindgen_declarations::Input::Leaf,
+                ],
+            ),
+        ))
+        .prepare()
+        .expect("prepare supported declarations");
+    for name in ["scoped_input_pair", "scoped_input_failure"] {
+        let ty = prepared.function(name).unwrap().params[0].ty.ty.clone();
+        let leaf = prebindgen_declarations::Codec::input_leaf(
+            &prebindgen_c::CCodec::raw(),
+            prebindgen_declarations::InputLeaf::new(
+                &prepared,
+                &ty,
+                &(),
+                syn::parse_quote!(scoped_first),
+                syn::parse_quote!(scoped_first_value),
+                &Default::default(),
+            ),
+        )
+        .unwrap();
+        prepared.function_mut(name).unwrap().params[0].ty.slot = Some(leaf);
+    }
+    let generation = prebindgen_c::generate(&prepared).expect("generate mixed input declarations");
     generation.write_rust(out.join("bindings.rs")).unwrap();
     generation.write_header(out.join("bindings.h")).unwrap();
 }

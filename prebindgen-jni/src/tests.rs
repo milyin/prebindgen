@@ -705,7 +705,7 @@ fn explicit_data_expansion_replaces_a_configured_handle_slot() {
             .configure(|flat| {
                 prebindgen_declarations::bind_input(
                     flat,
-                    &JniCodec,
+                    &JniCodec::raw(),
                     "echo",
                     "value",
                     &prebindgen_declarations::Input::Leaf,
@@ -861,7 +861,7 @@ fn optional_niches_and_nested_presence_preserve_distinct_states() {
     for (name, count) in [("h", 1), ("n", 2), ("ch2", 1), ("u2", 1)] {
         d.fill(
             &mut flat,
-            &JniCodec,
+            &JniCodec::raw(),
             &FunctionDecl::new(syn::parse_str(name).unwrap()),
             &(),
         )
@@ -908,11 +908,9 @@ fn scalar_niches_exhaust_at_the_carrier_limit() {
         (Primitive::U32, i64::MIN),
     ] {
         let wire: JniWire = JniWire::scalar(primitive);
-        assert!(JniCodec
-            .remaining_niche(&wire, &JniNiche::Integer(min))
-            .is_none());
+        assert!(optional::remaining(&wire, &JniNiche::Integer(min)).is_none());
         assert!(matches!(
-            JniCodec.remaining_niche(&wire, &JniNiche::Integer(-1)),
+            optional::remaining(&wire, &JniNiche::Integer(-1)),
             Some(JniNiche::Integer(-2))
         ));
     }
@@ -925,7 +923,7 @@ fn optional_unannotated_fields_keep_outer_presence_in_both_directions() {
     let input = Input::Optional(Box::new(Input::Fields(vec![Input::Optional(Box::new(
         Input::Leaf,
     ))])));
-    bind_input(&mut source, &JniCodec, "echo", "value", &input, &()).unwrap();
+    bind_input(&mut source, &JniCodec::raw(), "echo", "value", &input, &()).unwrap();
     let generated =
         JniGen::builder()
             .flat(source)
@@ -986,7 +984,7 @@ fn reference_and_presence_flag_niches_keep_nested_wire_counts_bounded() {
                 prebindgen_declarations::Declarations::new(&source, vec![], vec![], vec![])
                     .unwrap();
             declarations
-                .fill(&mut source, &JniCodec, &fun!(echo), &())
+                .fill(&mut source, &JniCodec::raw(), &fun!(echo), &())
                 .unwrap();
             let function = source.function("echo").unwrap();
             let input = function.params[0].ty.slot.as_ref().unwrap();
@@ -1040,7 +1038,7 @@ fn nested_optional_selectors_reserve_distinct_tags_and_disable_arm_niches() {
     ]);
     bind_input(
         &mut source,
-        &JniCodec,
+        &JniCodec::raw(),
         "echo",
         "x",
         &Input::Optional(Box::new(Input::Optional(Box::new(selector)))),
@@ -1238,7 +1236,7 @@ fn callback_returns_do_not_guess_prebound_or_extra_output_projections() {
     let mut model = flat("pub fn values()->Vec<i64>{}");
     prebindgen_declarations::bind_output(
         &mut model,
-        &JniCodec,
+        &JniCodec::raw(),
         "values",
         &prebindgen_declarations::Output::Sequence {
             delivery: prebindgen_declarations::SequenceDelivery::Value,
@@ -1347,7 +1345,7 @@ fn logical_outcomes_keep_typed_errors_and_match_both_jni_sequence_deliveries() {
         vec![],
     )
     .unwrap();
-    let codec = data::DataCodec::default();
+    let codec = JniCodec::declared(None);
     let decl = fun!(f).callback_return();
     flat.metadata.package = "test".into();
     flat.function_mut("f").unwrap().metadata = Some(JniFunction {
@@ -1454,28 +1452,29 @@ fn logical_outcomes_keep_typed_errors_and_match_both_jni_sequence_deliveries() {
 #[test]
 fn manual_jni_plans_share_one_tree_through_flat_and_configure() {
     fn install(model: &mut Bindings, binding_failure: bool) -> Result<()> {
-        let mut input = JniCodec.input_leaf(
+        let mut input = JniCodec::raw().input_leaf(prebindgen_declarations::InputLeaf::new(
             &Bindings::parse([]).unwrap(),
             &syn::parse_quote!(i64),
             &(),
             syn::parse_quote!(native_input),
             syn::parse_quote!(value),
             &Default::default(),
-        )?;
-        JniCodec.finish_input(&mut input, &())?;
+        ))?;
+        JniCodec::raw().finish_input(&mut input, &())?;
 
-        let mut output = JniCodec.output_leaf(
+        let mut output = JniCodec::raw().output_leaf(prebindgen_declarations::OutputLeaf::new(
             &Bindings::parse([]).unwrap(),
             &syn::parse_quote!(i64),
             &(),
             syn::parse_quote!(native_output),
             prebindgen_conversions::source_result_expr(),
-            false,
-        )?;
-        JniCodec.finish_output(&mut output, &())?;
+            prebindgen_declarations::ValueAccess::Owned,
+        ))?;
+        JniCodec::raw().finish_output(&mut output, &())?;
 
         if binding_failure {
-            output.outcomes.binding_failure = Some(JniCodec.binding_failure_layout(&())?.unwrap());
+            output.outcomes.binding_failure =
+                Some(JniCodec::raw().binding_failure_layout(&())?.unwrap());
         }
         let function = model.function_mut("echo")?;
         function.params[0].ty.slot = Some(input.into());
@@ -3510,9 +3509,14 @@ fn resolved_callback_elements_can_keep_optional_presence_outside_a_bulk_frame() 
             .bulk(),
         ))),
     };
-    let conversion =
-        prebindgen_declarations::compile_output(&model, &JniCodec, "rows_fold", &recipe, &())
-            .unwrap();
+    let conversion = prebindgen_declarations::compile_output(
+        &model,
+        &JniCodec::raw(),
+        "rows_fold",
+        &recipe,
+        &(),
+    )
+    .unwrap();
     let (_, element, _) = sequence::return_sequence(&conversion.output_outcomes().success).unwrap();
     let fields = group::callback_parameters(element).collect::<Vec<_>>();
     // The optional uses a null frame, so presence stays outside its payload
@@ -4029,48 +4033,32 @@ fn kotlin_preflight_is_required_and_uses_retained_handles() {
 }
 
 #[test]
-fn incomplete_custom_resource_metadata_is_rejected() {
-    for missing in ["allocation", "mismatch", "access", "deferred"] {
-        let mut model = JniGen::builder()
-            .flat(flat("pub struct A{pub n:i64}pub struct B{pub n:i64}pub fn call(first:&mut A,second:&A){}"))
-            .set_package_prefix("test")
-            .package(package!().class(ptr_class!(A)).class(ptr_class!(B)).fun(fun!(call)))
-            .prepare().unwrap();
-        let first = &mut model.function_mut("call").unwrap().params[0]
-            .ty
-            .slot
-            .as_mut()
-            .unwrap()
-            .rust
-            .resources[0];
-        let expected = match missing {
-            "allocation" => {
-                first.allocation_type = None;
-                "allocation type"
-            }
-            "mismatch" => {
-                first.allocation_type = Some(syn::parse_quote!(B));
-                "matching allocation types and access modes"
-            }
-            "access" => {
-                first.access = Access::Shared;
-                "matching allocation types and access modes"
-            }
-            _ => {
-                first.registered = false;
-                "eagerly prepared"
-            }
-        };
-        let error = generate(&model).err().unwrap();
-        assert!(
-            error.contains("function `call` parameter `first`"),
-            "{error}"
-        );
-        assert!(
-            error.contains("Kotlin handle preflight") && error.contains(expected),
-            "{error}"
-        );
-    }
+fn raw_borrowed_leaf_composes_with_declared_inputs_using_wire_access() {
+    let mut model = JniGen::builder()
+        .flat(flat(
+            "pub struct A{pub n:i64}pub fn call(first:&mut A,second:&A){}",
+        ))
+        .set_package_prefix("test")
+        .package(package!().class(ptr_class!(A)).fun(fun!(call)))
+        .prepare()
+        .unwrap();
+    let ty = model.function("call").unwrap().params[0].ty.ty.clone();
+    let plan = JniCodec::raw()
+        .input_leaf(prebindgen_declarations::InputLeaf::new(
+            &model,
+            &ty,
+            &(),
+            syn::parse_quote!(raw_wire),
+            syn::parse_quote!(raw_value),
+            &Default::default(),
+        ))
+        .unwrap();
+    model.function_mut("call").unwrap().params[0].ty.slot = Some(plan.into());
+    let generated = generate(&model).unwrap();
+    assert!(generated
+        .kotlin
+        .values()
+        .any(|code| code.contains("withHandleLocks")));
 }
 
 #[test]
@@ -4233,4 +4221,23 @@ fn mixed_callback_rows_reject_multi_argument_constructor_alternatives() {
         error.contains("data-class input") || error.contains("exactly one"),
         "{error}"
     );
+}
+
+#[test]
+fn named_output_groups_keep_name_validation_in_both_codec_policies() {
+    let model = flat("pub fn value()->i64{}");
+    for codec in [JniCodec::raw(), JniCodec::declared(None)] {
+        for name in ["", "1bad", "bad-name", "line\nbreak"] {
+            let recipe = prebindgen_declarations::Output::Named {
+                name: name.into(),
+                output: Box::new(prebindgen_declarations::Output::Leaf),
+            };
+            assert!(
+                prebindgen_declarations::compile_output(&model, &codec, "value", &recipe, &())
+                    .is_err(),
+                "accepted {name:?}"
+            );
+        }
+        assert!(codec.group(GroupKind::NamedOutput("count")).is_ok());
+    }
 }

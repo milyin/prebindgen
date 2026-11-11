@@ -5,6 +5,53 @@ use prebindgen_declarations::{ComponentPath, ComponentSegment};
 use prebindgen_flat::{Conversion, Wire};
 use prebindgen_flat::{InputConversion, OutputConversion};
 
+/// Native transport selected for an ordinary function result.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum JniReturnDelivery {
+    /// An object-array result packet with status/error framing.
+    Packet,
+    /// A unit or one-wire native return; errors use the supplied capture.
+    Direct,
+    /// Success fields delivered through the supplied synchronous capture.
+    Capture,
+}
+/// Function-return reconstruction, including the selected native transport.
+/// Custom converters can override kotlin_return or reuse project for the
+/// canonical packet-relative projection produced by kotlin.
+pub struct KotlinReturnContext<'a> {
+    /// Names, classes and cleanup bindings for this wrapper.
+    pub kotlin: &'a KotlinContext<'a>,
+    /// Explicit native return protocol selected for this call.
+    pub delivery: JniReturnDelivery,
+    /// Native/capture expressions in successful wire order; empty for packets.
+    pub values: &'a [String],
+    /// Prepared row projection for a callback-sequence return, if applicable.
+    pub sequence: Option<&'a KotlinOutput>,
+}
+impl KotlinReturnContext<'_> {
+    /// Place a canonical Kotlin projection in the selected function-return ABI.
+    pub fn project(
+        &self,
+        outcomes: &prebindgen_flat::Outcomes<JniNode>,
+        mut output: KotlinOutput,
+    ) -> Result<KotlinOutput> {
+        let fields = crate::group::result_packet_fields(&outcomes.success).collect::<Vec<_>>();
+        if self.delivery != JniReturnDelivery::Packet && fields.len() != self.values.len() {
+            return Err("native return values do not match successful output fields".into());
+        }
+        remap_output(
+            &mut output,
+            self.kotlin.result,
+            self.kotlin.result,
+            1,
+            fields.len(),
+        );
+        if self.delivery != JniReturnDelivery::Packet {
+            returns::remap(&mut output, self.kotlin.result, &fields, 1, self.values);
+        }
+        Ok(output)
+    }
+}
 /// Configured names for a generated handle class and its native destructor.
 #[derive(Clone, Debug)]
 pub struct KotlinClass {
@@ -34,6 +81,18 @@ pub struct KotlinContext<'a> {
     pub output_prefix: &'a str,
 }
 impl KotlinContext<'_> {
+    /// Reconstruct the element of a sequence-callback result using its declared
+    /// JNI layout. Custom element projections can wrap the returned expressions
+    /// while preserving its ownership and cleanup code.
+    pub fn sequence_element(
+        &self,
+        outcomes: &prebindgen_flat::Outcomes<JniNode>,
+        owners: Option<&str>,
+    ) -> Result<KotlinOutput> {
+        let (_, element, _) = crate::sequence::return_sequence(&outcomes.success)
+            .ok_or("missing sequence return layout")?;
+        output_kotlin_scoped(element, self, owners)
+    }
     /// Resolve the configured Kotlin class name for a source type.
     pub fn class_name(&self, ty: &syn::Type) -> Result<String> {
         Ok(self
@@ -204,8 +263,10 @@ impl KotlinOutput {
 }
 
 /// Input conversion with opaque Kotlin-side emission.
+/// Also implements the native input contract so both sides describe the same
+/// wire tree. `kotlin` is called once per bound parameter during generation.
 pub trait KotlinInputConversion:
-    for<'a> Conversion<
+    for<'a> InputConversion<
     Wire = JniWire,
     Chain = JniChain,
     Branch = JniBranch,
@@ -214,10 +275,26 @@ pub trait KotlinInputConversion:
 {
     /// Emit destination-side input conversion for this slot.
     fn kotlin(&self, context: &KotlinContext<'_>) -> Result<KotlinInput>;
+    /// Emit callback-return construction using native bulk carriers already read
+    /// by the shared callback boundary. Independent inputs may reuse ordinary
+    /// construction; plan-based inputs reuse the cached carrier bindings.
+    fn callback_return_fragment(
+        &self,
+        request: prebindgen_conversions::InputFragment<'_, JniContext>,
+        expected: &syn::Type,
+        cached_buffers: bool,
+    ) -> Result<TokenStream> {
+        if cached_buffers
+            && !crate::bulk::callback_cache(self.input_node(), request.context)?.is_empty()
+        {
+            return Err("custom callback-return input must implement callback_return_fragment to reuse the native buffer cache".into());
+        }
+        self.code_fragment_slot(request, expected)
+    }
 }
 /// Output conversion with opaque Kotlin-side emission.
 pub trait KotlinOutputConversion:
-    for<'a> Conversion<
+    for<'a> OutputConversion<
     Wire = JniWire,
     Chain = JniChain,
     Branch = JniBranch,
@@ -226,28 +303,62 @@ pub trait KotlinOutputConversion:
 {
     /// Emit destination-side output conversion and rollback for this slot.
     fn kotlin(&self, context: &KotlinContext<'_>) -> Result<KotlinOutput>;
+    /// Allow the adapter to select direct/capture delivery, or preserve an
+    /// explicitly fixed packet protocol. Custom converters default to fixed.
+    fn delivery_policy(&self) -> prebindgen_conversions::DeliveryPolicy {
+        prebindgen_conversions::DeliveryPolicy::Fixed
+    }
+    /// Prepare the selected function-return delivery once, before requesting
+    /// Rust output fragments. None preserves this converter's fixed protocol.
+    fn prepare_return_delivery(
+        &self,
+        _context: &JniContext,
+    ) -> Result<Option<prebindgen_conversions::Delivery>> {
+        if self.delivery_policy() == prebindgen_conversions::DeliveryPolicy::AdapterSelected {
+            return Err("adapter-selected output must implement prepare_return_delivery".into());
+        }
+        Ok(None)
+    }
+    /// Rust wire expressions available inside this converter's Prepare scope
+    /// when a retained source callback delivers its arguments.
+    fn callback_arguments(
+        &self,
+        _context: &JniContext,
+        _source: &syn::Ident,
+    ) -> Result<Vec<(syn::Ident, TokenStream)>> {
+        Err("output converter does not implement callback argument delivery".into())
+    }
+    /// Reconstruct one element delivered through a function's sequence callback.
+    /// `owners` is an existing nested-owner journal, when the shared boundary
+    /// needs one. Reuse it so partial-row and unread-row cleanup stay coordinated.
+    fn kotlin_sequence_element(
+        &self,
+        context: &KotlinContext<'_>,
+        owners: Option<&str>,
+    ) -> Result<KotlinOutput> {
+        context.sequence_element(self.output_outcomes(), owners)
+    }
+    /// Reconstruct an ordinary function result in its selected native transport.
+    /// Callback-sequence return captures supply their prepared row projection.
+    fn kotlin_return(&self, context: &KotlinReturnContext<'_>) -> Result<KotlinOutput> {
+        let output = match context.sequence {
+            Some(output) => output.clone(),
+            None => self.kotlin(context.kotlin)?,
+        };
+        context.project(self.output_outcomes(), output)
+    }
 }
 /// Prepared JNI input, with a logical schema and a native plan shared by Rust/Kotlin emission.
 #[derive(Clone, Debug)]
-pub struct JniInput {
+pub(crate) struct PlanInput {
     pub(crate) rust: InputPlan<JniWire>,
 }
 /// Prepared JNI output, with logical outcomes and a native plan shared by Rust/Kotlin emission.
 #[derive(Clone, Debug)]
-pub struct JniOutput {
+pub(crate) struct PlanOutput {
     pub(crate) rust: OutputPlan<JniWire>,
 }
-impl From<InputPlan<JniWire>> for JniInput {
-    fn from(rust: InputPlan<JniWire>) -> Self {
-        Self { rust }
-    }
-}
-impl From<OutputPlan<JniWire>> for JniOutput {
-    fn from(rust: OutputPlan<JniWire>) -> Self {
-        Self { rust }
-    }
-}
-impl Conversion for JniInput {
+impl Conversion for PlanInput {
     type Wire = JniWire;
     type Chain = JniChain;
     type Branch = JniBranch;
@@ -262,7 +373,7 @@ impl Conversion for JniInput {
     }
 }
 
-impl Conversion for JniOutput {
+impl Conversion for PlanOutput {
     type Wire = JniWire;
     type Chain = JniChain;
     type Branch = JniBranch;
@@ -279,24 +390,32 @@ impl Conversion for JniOutput {
             | prebindgen_conversions::OutputFragment::Commit { context, .. }
             | prebindgen_conversions::OutputFragment::Result { context, .. } => *context,
         };
-        if let Some(sink) = context
-            .return_sink
-            .as_ref()
-            .filter(|_| self.native_return().is_some())
-        {
-            let mut plan = self.rust.clone();
-            plan.delivery = returns::delivery(&plan, sink, context.is_domain_error)?;
-            return plan.code_fragment_slot(mode, expected);
+        if let Some(delivery) = &context.prepared_delivery {
+            return self.rust.emit_with_delivery(mode, delivery);
         }
         self.rust.code_fragment_slot(mode, expected)
     }
 }
 
-impl KotlinInputConversion for JniInput {
+impl KotlinInputConversion for PlanInput {
     fn kotlin(&self, context: &KotlinContext<'_>) -> Result<KotlinInput> {
         crate::sequence::validate_buffered(self.input_node())?;
         validate_layout(self.input_node())?;
         input_kotlin(self.input_node(), context)
+    }
+    fn callback_return_fragment(
+        &self,
+        request: prebindgen_conversions::InputFragment<'_, JniContext>,
+        expected: &syn::Type,
+        cached_buffers: bool,
+    ) -> Result<TokenStream> {
+        if cached_buffers {
+            let code = request
+                .context
+                .cached_callback_validation(&self.rust.code, self.input_node())?;
+            return self.rust.emit_code(request, &code);
+        }
+        self.code_fragment_slot(request, expected)
     }
 }
 pub(crate) fn input_leaves(
@@ -459,10 +578,39 @@ pub(crate) fn input_leaves(
         consumed,
     })
 }
-impl KotlinOutputConversion for JniOutput {
+impl KotlinOutputConversion for PlanOutput {
     fn kotlin(&self, context: &KotlinContext<'_>) -> Result<KotlinOutput> {
         validate_layout(&self.output_outcomes().success)?;
         output_kotlin(&self.output_outcomes().success, context)
+    }
+    fn delivery_policy(&self) -> prebindgen_conversions::DeliveryPolicy {
+        self.rust.delivery.policy
+    }
+    fn prepare_return_delivery(
+        &self,
+        context: &JniContext,
+    ) -> Result<Option<prebindgen_conversions::Delivery>> {
+        if self.delivery_policy() == prebindgen_conversions::DeliveryPolicy::Fixed {
+            return Ok(None);
+        }
+        Ok(Some(context.output_delivery(
+            self.output_outcomes(),
+            &self.rust.values,
+        )?))
+    }
+    fn callback_arguments(
+        &self,
+        context: &JniContext,
+        source: &syn::Ident,
+    ) -> Result<Vec<(syn::Ident, TokenStream)>> {
+        self.rust
+            .values
+            .iter()
+            .map(|(name, value)| {
+                prebindgen_conversions::render_output(context, value, source)
+                    .map(|value| (name.clone(), value))
+            })
+            .collect()
     }
 }
 pub(crate) fn output_leaves(
@@ -897,26 +1045,12 @@ pub(crate) fn output_components(
     Ok(out)
 }
 
-impl JniOutput {
-    pub(crate) fn native_return(&self) -> Option<returns::NativeReturn> {
-        returns::select(&self.rust)
-    }
-    /// Fields stored in the successful JNI result array, excluding status/error
-    /// framing. Sequence rows and visitor arguments have their own schemas.
-    pub fn result_packet_fields(&self) -> Result<std::vec::IntoIter<&Wire<JniWire>>> {
-        validate_layout(&self.rust.outcomes.success)?;
-        Ok(crate::group::result_packet_fields(
-            &self.rust.outcomes.success,
-        ))
-    }
-}
-
-impl prebindgen_flat::InputConversion for JniInput {
+impl prebindgen_flat::InputConversion for PlanInput {
     fn input_node(&self) -> &JniNode {
         &self.rust.node
     }
 }
-impl prebindgen_flat::OutputConversion for JniOutput {
+impl prebindgen_flat::OutputConversion for PlanOutput {
     fn output_outcomes(&self) -> &prebindgen_flat::Outcomes<JniNode> {
         &self.rust.outcomes
     }
@@ -946,15 +1080,15 @@ mod tests {
             output_prefix: "wrapped_",
         };
         // This condition is arbitrary Kotlin code, not a declaration selector path.
-        let mut plan = JniCodec
-            .input_leaf(
+        let mut plan = JniCodec::raw()
+            .input_leaf(prebindgen_declarations::InputLeaf::new(
                 &Bindings::parse([]).unwrap(),
                 &syn::parse_quote!(Counter),
                 &(),
                 syn::parse_quote!(incoming),
                 syn::parse_quote!(value),
                 &prebindgen_declarations::Condition::default(),
-            )
+            ))
             .unwrap();
         let JniWire::Handle { condition, .. } =
             &mut prebindgen_flat::wire_definitions_mut(std::iter::once(&mut plan.node))
@@ -965,7 +1099,7 @@ mod tests {
             panic!()
         };
         *condition = "isEnabled() && count > 3".into();
-        JniCodec.finish_input(&mut plan, &()).unwrap();
+        JniCodec::raw().finish_input(&mut plan, &()).unwrap();
         let input = JniInput::from(plan);
         // A handle and an ordinary i64 expose identical transport information.
         let scalar = JniWire::scalar(Primitive::I64);
@@ -997,15 +1131,15 @@ mod tests {
             ["if (isEnabled() && count > 3) __pb_consume(incoming)"]
         );
 
-        let plan = JniCodec
-            .output_leaf(
+        let plan = JniCodec::raw()
+            .output_leaf(prebindgen_declarations::OutputLeaf::new(
                 &Bindings::parse([]).unwrap(),
                 &syn::parse_quote!(Counter),
                 &(),
                 syn::parse_quote!(wire),
                 quote!(returned),
-                false,
-            )
+                prebindgen_declarations::ValueAccess::Owned,
+            ))
             .unwrap();
         let output = JniOutput::from(plan).kotlin(&context).unwrap();
         assert_eq!(output.delivered, ["requireNotNull(wrapped_0)"]);

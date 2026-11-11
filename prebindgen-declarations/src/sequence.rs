@@ -1,7 +1,6 @@
 //! Decode and construct collection elements directly into their final storage.
 use super::*;
 
-use prebindgen_conversions::Resource;
 use prebindgen_flat::SequenceView;
 use prebindgen_flat::WireNode;
 use quote::ToTokens;
@@ -139,36 +138,23 @@ pub(crate) fn input<C: Codec>(
         return Err("collection reference elements are unsupported; use owned elements".into());
     }
     codec.validate_input(&child)?;
-    if !view.is_owned()
-        && child
-            .resources
-            .iter()
-            .any(|r| r.access == prebindgen_conversions::Access::Move)
-    {
-        return Err("borrowed collection inputs cannot consume elements; declare an element constructor using borrowed inputs, or use Vec<T>".into());
+    if bulk {
+        require_bulk(codec, Direction::Input)?;
     }
-    if child.acknowledgement.is_some() {
-        return Err("collection element acknowledgement belongs to the whole call".into());
-    }
-    let transport = if bulk {
-        codec.sequence_input_bulk(
-            extra,
-            wire.clone(),
-            length.clone(),
-            index.clone(),
-            &child.node,
-            active,
-        )
-    } else {
-        codec.sequence_input(
-            extra,
-            wire.clone(),
-            length.clone(),
-            index.clone(),
-            &child.node,
-            active,
-        )
-    }?;
+    let transport = codec.sequence_input(SequenceInputRequest {
+        extra,
+        view,
+        wire: wire.clone(),
+        length: length.clone(),
+        index: index.clone(),
+        element: &child.node,
+        active,
+        representation: if bulk {
+            Representation::Bulk
+        } else {
+            Representation::Ordinary
+        },
+    })?;
     if transport.validation_values.is_empty() && !bulk {
         return Err("collection elements must have at least one input binding".into());
     }
@@ -180,37 +166,13 @@ pub(crate) fn input<C: Codec>(
             return Err(format!("unknown collection validation binding `{name}`"));
         }
     }
-    let validation = replace(&child.validation, &transport.validation_values)?;
-    let acquire = replace(&child.acquire, &transport.validation_values)?;
-    let statements = replace(&child.statements, &transport.validation_values)?;
-    let child_argument = &child.argument;
-    let argument = replace(
-        &quote!(let #var=#child_argument;),
-        &transport.validation_values,
-    )?;
-    let mut count = TokenStream::new();
-    for resource in child.resources.iter().filter(|r| {
-        !r.registered && r.access == prebindgen_conversions::Access::Move && !r.records_consumption
-    }) {
-        let condition = &resource.active;
-        let size = &resource.count;
-        count.extend(replace(&quote!(if #condition {__prebindgen_input_consumed.set(__prebindgen_input_consumed.get()+(#size));}),&transport.validation_values)?);
-    }
+    let target = format_ident!("{wire}_row_value");
+    let mut child = child;
+    let child_storage = std::mem::take(&mut child.storage);
+    let conversion = child.bind(&target, quote!(Ok(#target)))?;
+    let conversion = replace(&conversion, &transport.validation_values)?;
+    let child_storage = replace(&child_storage, &transport.validation_values)?;
     let fallible = codec.validates_inputs() || child.fallible;
-    let resources = child
-        .resources
-        .into_iter()
-        .map(|resource| Resource {
-            allocation_type: resource.allocation_type,
-            registered: true,
-            records_consumption: true,
-            // The row conversion already accounts for ownership transfers.
-            // Keep type/access metadata for the foreign adapter without reading rows again.
-            count: quote!(0usize),
-            active: active.rust(),
-            access: resource.access,
-        })
-        .collect();
     let open = transport.open;
     let bind = transport.bind;
     let release = transport.release;
@@ -252,15 +214,25 @@ pub(crate) fn input<C: Codec>(
         SequenceView::Mutable => unreachable!(),
     };
     let element_value = format_ident!("{wire}_element_built");
+    let borrowed = matches!(
+        view,
+        SequenceView::ArrayReference | SequenceView::Vector | SequenceView::Slice
+    );
+    let declaration = quote!(let mut #var:Vec<#element>=Vec::new(););
+    let declare = if borrowed {
+        quote!()
+    } else {
+        declaration.clone()
+    };
     let direct = quote! {
-            let mut #var:Vec<#element>=Vec::new();
+            #declare
             if #condition { #open #length_check
                 #var.reserve_exact(#length);
                 for #index in 0..#length {
                     #bind
                     #[allow(clippy::redundant_closure_call)]
                     let #element_value=(|| -> ::core::result::Result<#element,String> {
-                        #validation #count #acquire #statements #argument Ok(#var)
+                        #child_storage #conversion
                     })();
                     #release
                     let element = #element_value?;
@@ -276,21 +248,20 @@ pub(crate) fn input<C: Codec>(
                 }
             }
     };
-    Ok(InputPlan {
-        fallible,
-        context: Default::default(),
-        acknowledgement: None,
-        node: WireNode::Chain {
+    let mut plan = InputPlan::new(
+        WireNode::Chain {
             controls: transport.controls,
             child: Box::new(child.node),
             meta: transport.metadata,
         },
-        validation: direct,
-        acquire: quote!(),
-        statements: to_array,
-        argument: value,
-        resources,
-    })
+        quote!(#direct #to_array),
+        value,
+    );
+    plan.fallible = fallible;
+    if borrowed {
+        plan.storage = declaration;
+    }
+    Ok(plan)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -328,27 +299,23 @@ pub(crate) fn output<C: Codec>(
     if !child.delivery.statements.is_empty() {
         return Err("collection element delivery belongs to the outer slot".into());
     }
-    let transport = if bulk {
-        codec.sequence_output_bulk(
-            extra,
-            wire.clone(),
-            length.clone(),
-            index.clone(),
-            &child.outcomes.success,
-            &child.values,
-            delivery,
-        )
-    } else {
-        codec.sequence_output(
-            extra,
-            wire.clone(),
-            length.clone(),
-            index.clone(),
-            &child.outcomes.success,
-            &child.values,
-            delivery,
-        )
-    }?;
+    if bulk {
+        require_bulk(codec, Direction::Output)?;
+    }
+    let transport = codec.sequence_output(SequenceOutputRequest {
+        extra,
+        wire: wire.clone(),
+        length: length.clone(),
+        index: index.clone(),
+        element: &child.outcomes.success,
+        values: &child.values,
+        delivery,
+        representation: if bulk {
+            Representation::Bulk
+        } else {
+            Representation::Ordinary
+        },
+    })?;
     let owner = format_ident!("{wire}_source");
     let commits = format_ident!("{wire}_commits");
     let vector = matches!(view, SequenceView::Owned | SequenceView::Vector);
@@ -402,17 +369,21 @@ pub(crate) fn output<C: Codec>(
     } = transport;
     let store = if commit_each {
         let count = std::cell::Cell::new(0);
-        let store = prebindgen_conversions::render_template(&store, &|name| {
-            if name == "commit_element" {
-                count.set(count.get() + 1);
-                Ok(quote!(
-                    #[allow(clippy::redundant_closure_call, clippy::let_unit_value, clippy::unused_unit)]
-                    let _: () = (|| -> () { #child_commit })();
-                ))
-            } else {
-                Ok(prebindgen_conversions::template_parameter(name))
-            }
-        })?;
+        let store = prebindgen_conversions::render_template(
+            &store,
+            &|name| {
+                if name == "commit_element" {
+                    count.set(count.get() + 1);
+                    Ok(quote!(
+                        #[allow(clippy::redundant_closure_call, clippy::let_unit_value, clippy::unused_unit)]
+                        let _: () = (|| -> () { #child_commit })();
+                    ))
+                } else {
+                    Ok(prebindgen_conversions::template_parameter(name))
+                }
+            },
+            &|count| Ok(prebindgen_conversions::record_input_transfer(count.clone())),
+        )?;
         if count.get() != 1 {
             return Err("per-element delivery requires exactly one commit_element marker".into());
         }

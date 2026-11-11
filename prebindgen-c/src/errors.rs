@@ -31,7 +31,7 @@ impl ErrorBinding {
 /// Fill the conversions of error declarations already attached to their source types.
 pub(crate) fn prepare(
     flat: &mut Bindings,
-    codec: &enums::EnumCodec,
+    codec: &CCodec,
     declarations: &prebindgen_declarations::Declarations,
 ) -> Result<()> {
     let mut types = flat
@@ -124,6 +124,7 @@ pub(crate) fn emit(
         let helper = helper(name);
         let input = format_ident!("source_error");
         let context = CContext {
+            input_transfers: prebindgen_conversions::InputTransfers::Forbidden,
             row_types: {
                 let mut schemas = Vec::new();
                 sequence::schemas(&plan.outcomes.success, &mut schemas);
@@ -260,7 +261,7 @@ pub(crate) fn emit(
         let definition = prebindgen_reprc::Record::new(rust_name.clone(), fields)?.definition();
         tokens.extend(quote! {
             #definition
-            #[allow(clippy::needless_range_loop,clippy::needless_borrow,clippy::let_unit_value,clippy::unnecessary_cast,clippy::useless_conversion)]
+            #[allow(clippy::let_and_return,clippy::needless_range_loop,clippy::needless_borrow,clippy::let_unit_value,clippy::unnecessary_cast,clippy::useless_conversion)]
             unsafe fn #helper(#input:#source_ty,error_output:*mut #rust_name,reported:&mut bool)->Result<(),String>{
                 if error_output.is_null(){return Ok(());}
                 #prepare
@@ -308,7 +309,7 @@ pub(crate) fn result_function(
             .enumerate()
             .map(|(i, wire)| {
                 let field = format_ident!("v{i}");
-                let value = context.render(&CCodec.absent_value(&wire.kind, None, false)?)?;
+                let value = context.render(&wire::absent_output_value(&wire.kind, None)?)?;
                 Ok(quote!(#field:#value))
             })
             .collect::<Result<Vec<_>>>()?;
@@ -342,7 +343,7 @@ pub(crate) fn result_function(
         let wire = outputs[*i];
         let ty = wire.rust_type();
         let field = format_ident!("v{i}");
-        let failure = CCodec.absent_value(&wire.kind, Some(niche), false)?;
+        let failure = wire::absent_output_value(&wire.kind, Some(niche))?;
         (
             quote!(#ty),
             c_ty(wire, prefix, pointers, context),
@@ -410,11 +411,12 @@ pub(crate) fn result_function(
         context,
         true,
     );
+    let incoming_counter = consumes.then(|| quote!(let #accepted=::core::cell::Cell::new(0usize);));
     tokens.extend(quote! {
         #[doc="# Safety\nSuccess, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations."]
-        #[allow(clippy::needless_range_loop,clippy::needless_borrow,clippy::let_unit_value,clippy::unnecessary_cast,clippy::useless_conversion)]
+        #[allow(clippy::let_and_return,clippy::needless_range_loop,clippy::needless_borrow,clippy::let_unit_value,clippy::unnecessary_cast,clippy::useless_conversion)]
         #[no_mangle]pub unsafe extern "C" fn #name(#(#params),*)->#rust_return {
-            #[allow(unused_mut)]let #accepted=::core::cell::Cell::new(0usize);
+            #incoming_counter
             #[allow(unused_mut)]let mut #reported=false;
             let mut success_committed=false;
             let mut storage=std::mem::MaybeUninit::<#internal>::uninit();

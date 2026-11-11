@@ -4,9 +4,7 @@
 //! package prefix and native initialization.
 //! Declaration processing fills occurrence slots before wrappers are generated.
 #![warn(missing_docs)]
-use prebindgen_flat::{
-    type_key, Conversion, Flat, InputConversion, OutputConversion, Result, WireKind,
-};
+use prebindgen_flat::{type_key, Conversion, Flat, OutputConversion, Result, WireKind};
 
 pub use prebindgen_declarations::{callback, CallbackDecl, Projection, ProjectionMode};
 mod bulk;
@@ -38,10 +36,15 @@ use prebindgen_flat::Primitive;
 pub use sequence::JniSequence;
 mod wire;
 use prebindgen_conversions::Access;
-use prebindgen_declarations::Codec;
+use prebindgen_declarations::{
+    Alternatives, Codec, Condition, Direction, GroupKind, InputLeaf, Optional, OptionalEncoding,
+    OutputLeaf, Presence, Representation, SequenceInputRequest, SequenceOutputRequest, SourceError,
+    SourceErrorPlan, ValueAccess,
+};
 pub use wire::{JniArgument, JniWire};
 mod emission;
 mod errors;
+pub use errors::bind_error_output;
 mod handles;
 mod names;
 mod parameter_names;
@@ -50,12 +53,20 @@ type InputPlan<W> =
     prebindgen_conversions::InputPlan<W, JniContext, crate::JniChain, crate::JniBranch>;
 type OutputPlan<W> =
     prebindgen_conversions::OutputPlan<W, JniContext, crate::JniChain, crate::JniBranch>;
+mod converters;
+pub use converters::{JniInput, JniOutput};
 mod kotlin;
 pub use kotlin::{
-    JniInput, JniOutput, KotlinBinding, KotlinClass, KotlinContext, KotlinHandleInput, KotlinInput,
-    KotlinInputConversion, KotlinOutput, KotlinOutputConversion,
+    JniReturnDelivery, KotlinBinding, KotlinClass, KotlinContext, KotlinHandleInput, KotlinInput,
+    KotlinInputConversion, KotlinOutput, KotlinOutputConversion, KotlinReturnContext,
 };
 /// Flat source model with JNI conversion data for wrapper emission.
+///
+/// Defaults retain [`JniInput`] and [`JniOutput`] containers. Their `new`
+/// constructors accept independent implementations of the same conversion
+/// contracts, including per-function overrides in a builder's configure hook.
+/// `Flat<JniSchema<MyInput, MyOutput>>` also supports concrete occurrence types;
+/// JNI declaration metadata and wire representations remain adapter-specific.
 ///
 /// Use [`JniCodec`] when binding conversions. Rust rejects a C codec because its
 /// wire type belongs to a different adapter:
@@ -63,7 +74,7 @@ pub use kotlin::{
 /// use prebindgen_jni::Bindings;
 /// use prebindgen_declarations::{bind_input, Input};
 /// fn wrong(flat: &mut Bindings) {
-///     bind_input(flat, &prebindgen_c::CCodec, "echo", "x", &Input::Leaf, &()).unwrap();
+///     bind_input(flat, &prebindgen_c::CCodec::raw(), "echo", "x", &Input::Leaf, &()).unwrap();
 /// }
 /// ```
 /// A completed JNI model also cannot be passed to the C generator:
@@ -298,8 +309,8 @@ impl JniGenBuilder {
     /// let generated = JniGen::builder().flat(flat)
     ///     .set_package_prefix("example")
     ///     .configure(|flat| {
-    ///         bind_input(flat, &JniCodec, "echo", "x", &Input::Leaf, &())?;
-    ///         bind_output(flat, &JniCodec, "echo", &Output::Leaf, &())
+    ///         bind_input(flat, &JniCodec::raw(), "echo", "x", &Input::Leaf, &())?;
+    ///         bind_output(flat, &JniCodec::raw(), "echo", &Output::Leaf, &())
     ///     })
     ///     .package(package!().fun(fun!(echo)))
     ///     .build()?;
@@ -547,7 +558,7 @@ impl JniGenBuilder {
                 return Err("duplicate exception class for source error type".into());
             }
         }
-        let codec = data::DataCodec::default();
+        let codec = JniCodec::declared(None);
         for configure in self.configure {
             configure(&mut flat)?;
         }
@@ -577,9 +588,7 @@ impl JniGenBuilder {
             self.error_mappers,
         )?;
         errors::prepare(&mut flat, &codec, &defaults, &declarations)?;
-        let codec = data::DataCodec {
-            callback_outputs: Some(&output_defaults),
-        };
+        let codec = JniCodec::declared(Some(&output_defaults));
         for ty in callback_types {
             let recipe = defaults.resolve_input(&flat, &codec, &ty, &Input::auto(), &())?;
             let Input::Callback(configuration) = recipe else {
@@ -712,43 +721,32 @@ fn foreign_name_exists(flat: &Bindings, name: &str) -> bool {
 /// The writer supplies the error boundary and matching Kotlin protocol.
 /// Use with [`prebindgen_declarations::bind_input`] and [`prebindgen_declarations::bind_output`]
 /// to fill [`Bindings`] manually.
-pub struct JniCodec;
-impl Codec for JniCodec {
-    fn input_bulk_row_leaf(
-        &self,
-        flat: &Bindings,
-        ty: &syn::Type,
-        extra: &(),
-        wire: syn::Ident,
-        var: syn::Ident,
-        active: &prebindgen_declarations::Condition,
-    ) -> Result<InputPlan<JniWire>> {
-        let mut plan = self.input_bulk_leaf(flat, ty, extra, wire.clone(), var.clone(), active)?;
-        bulk::prepare_row_leaf(&mut plan, ty, &wire, &var, active);
-        Ok(plan)
+#[derive(Clone, Copy, Debug, Default)]
+pub struct JniCodec<'a> {
+    declared: bool,
+    callback_outputs: Option<&'a BTreeSet<String>>,
+}
+impl<'a> JniCodec<'a> {
+    /// Preserve manual low-level conversion, without declaration reinterpretation.
+    pub const fn raw() -> Self {
+        Self {
+            declared: false,
+            callback_outputs: None,
+        }
     }
-    fn input_bulk_leaf(
-        &self,
-        flat: &Bindings,
-        ty: &syn::Type,
-        _: &(),
-        w: syn::Ident,
-        v: syn::Ident,
-        active: &prebindgen_declarations::Condition,
-    ) -> Result<InputPlan<JniWire>> {
-        bulk::input_leaf(flat, ty, w, v, active)
+    /// Honor declarations in Flat and borrow source-callback preparation policy.
+    /// The set contains `prebindgen_flat::type_key` values for generator-wide
+    /// output expansions. Those expansions transfer callback output ownership
+    /// to the callback author. None leaves retained callback input unsupported;
+    /// Some(empty_set) enables it with the default scoped output policy.
+    pub const fn declared(callback_outputs: Option<&'a BTreeSet<String>>) -> Self {
+        Self {
+            declared: true,
+            callback_outputs,
+        }
     }
-    fn output_bulk_leaf(
-        &self,
-        flat: &Bindings,
-        ty: &syn::Type,
-        _: &(),
-        w: syn::Ident,
-        v: TokenStream,
-        borrowed: bool,
-    ) -> Result<OutputPlan<JniWire>> {
-        bulk::output_leaf(flat, ty, w, v, borrowed)
-    }
+}
+impl Codec for JniCodec<'_> {
     fn bulk_input(
         &self,
         _: &Bindings,
@@ -770,40 +768,10 @@ impl Codec for JniCodec {
     ) -> Result<OutputPlan<JniWire>> {
         bulk::output(w, child)
     }
-    fn sequence_input_bulk(
-        &self,
-        _: &(),
-        w: syn::Ident,
-        n: syn::Ident,
-        i: syn::Ident,
-        element: &kotlin::JniNode,
-        active: &prebindgen_declarations::Condition,
-    ) -> Result<prebindgen_declarations::SequenceInput<JniWire, JniChain>> {
-        bulk::sequence_input(w, n, i, element, active)
-    }
-    fn sequence_output_bulk(
-        &self,
-        _: &(),
-        w: syn::Ident,
-        n: syn::Ident,
-        i: syn::Ident,
-        element: &kotlin::JniNode,
-        values: &[(syn::Ident, TokenStream)],
-        delivery: prebindgen_declarations::SequenceDelivery,
-    ) -> Result<prebindgen_declarations::SequenceOutput<JniWire, JniChain>> {
-        if delivery != prebindgen_declarations::SequenceDelivery::Value {
-            return Err("bulk collection delivery cannot also use per-element callbacks".into());
-        }
-        bulk::sequence_output(w, n, i, element, values)
-    }
 
     type Schema = JniSchema;
-    type Niche = crate::optional::JniNiche;
     type Chain = JniChain;
     type Branch = JniBranch;
-    fn group_metadata(&self) -> JniBranch {
-        JniBranch::Group(JniGroup::Values)
-    }
 
     fn prefix_layout(
         &self,
@@ -819,11 +787,6 @@ impl Codec for JniCodec {
         }
     }
 
-    fn named_output_group(&self, name: &str) -> Result<JniBranch> {
-        validate_name(name)?;
-        Ok(JniBranch::Group(JniGroup::Named(name.into())))
-    }
-
     fn binding_failure_layout(
         &self,
         _: &(),
@@ -835,44 +798,12 @@ impl Codec for JniCodec {
             },
         ])))
     }
-    fn optional_metadata(
-        &self,
-        presence: syn::Ident,
-        discriminator: syn::Ident,
-        niche: Option<JniNiche>,
-        controls: &[prebindgen_flat::Wire<JniWire>],
-    ) -> Result<JniChain> {
-        JniOptional::from_parts(presence, discriminator, niche, controls).map(JniChain::Optional)
-    }
-    fn alternatives_metadata(
-        &self,
-        selector: &prebindgen_flat::Wire<JniWire>,
-    ) -> Result<JniBranch> {
-        group::validate_selector(selector)?;
-        Ok(JniBranch::Alternatives)
-    }
-    fn field_group(&self, name: syn::Ident) -> JniBranch {
-        JniBranch::Group(JniGroup::Field(name))
-    }
-    fn fields_group(&self) -> JniBranch {
-        JniBranch::Group(JniGroup::Fields(None))
-    }
+
     type Extra = ();
     type Wire = JniWire;
     type Context = JniContext;
     fn finish_input(&self, plan: &mut InputPlan<JniWire>, _: &()) -> Result<()> {
-        group::validate_layout(&plan.node)?;
-        let env = prebindgen_conversions::template_parameter("environment");
-        let ownership = prebindgen_conversions::template_parameter("acknowledgement");
-        if plan.resources.iter().any(|r| r.access == Access::Move) {
-            plan.acknowledgement = Some(quote!(
-                if #env.get_array_length(&#ownership).map_err(|e|e.to_string())? != 1 {
-                    return Err("invalid ownership acknowledgement".into());
-                }
-                __pb_receipt_valid.set(true);
-            ));
-        }
-        Ok(())
+        group::validate_layout(&plan.node)
     }
     fn finish_output(&self, plan: &mut OutputPlan<JniWire>, _: &()) -> Result<()> {
         plan.fallible = true;
@@ -881,7 +812,7 @@ impl Codec for JniCodec {
             .extend(prebindgen_conversions::template_parameter(
                 "output_committed",
             ));
-        plan.delivery = returns::packet_delivery(plan)?;
+        plan.delivery = returns::packet_delivery(&plan.outcomes.success, &plan.values)?;
         Ok(())
     }
 
@@ -890,125 +821,128 @@ impl Codec for JniCodec {
     }
     fn sequence_input(
         &self,
-        _: &(),
-        wire: syn::Ident,
-        length: syn::Ident,
-        index: syn::Ident,
-        element: &prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
-        active: &prebindgen_declarations::Condition,
-    ) -> Result<prebindgen_declarations::SequenceInput<JniWire, crate::JniChain>> {
-        sequence::input(wire, length, index, element, active)
+        request: SequenceInputRequest<'_, Self>,
+    ) -> Result<prebindgen_declarations::SequenceInput<JniWire, JniChain>> {
+        if !request.view.is_owned() && takes_input_owners(request.element) {
+            return Err("borrowed collection inputs cannot consume elements; declare an element constructor using borrowed inputs, or use Vec<T>".into());
+        }
+        let SequenceInputRequest {
+            extra: _,
+            view: _,
+            wire,
+            length,
+            index,
+            element,
+            active,
+            representation,
+        } = request;
+        if representation == Representation::Bulk {
+            bulk::sequence_input(wire, length, index, element, active)
+        } else {
+            sequence::input(wire, length, index, element, active)
+        }
     }
     fn sequence_output(
         &self,
-        _: &(),
-        wire: syn::Ident,
-        length: syn::Ident,
-        index: syn::Ident,
-        element: &prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
-        values: &[(syn::Ident, TokenStream)],
-        delivery: prebindgen_declarations::SequenceDelivery,
-    ) -> Result<prebindgen_declarations::SequenceOutput<JniWire, crate::JniChain>> {
-        match delivery {
-            prebindgen_declarations::SequenceDelivery::Auto
-            | prebindgen_declarations::SequenceDelivery::Value => {
-                sequence::output(wire, length, index, element, values)
+        request: SequenceOutputRequest<'_, Self>,
+    ) -> Result<prebindgen_declarations::SequenceOutput<JniWire, JniChain>> {
+        let SequenceOutputRequest {
+            extra: _,
+            wire,
+            length,
+            index,
+            element,
+            values,
+            delivery,
+            representation,
+        } = request;
+        if representation == Representation::Bulk {
+            if delivery != prebindgen_declarations::SequenceDelivery::Value {
+                return Err(
+                    "bulk collection delivery cannot also use per-element callbacks".into(),
+                );
             }
-            prebindgen_declarations::SequenceDelivery::Callback => {
-                sequence_callback::transport(wire, length, element, values)
+            bulk::sequence_output(wire, length, index, element, values)
+        } else {
+            match delivery {
+                prebindgen_declarations::SequenceDelivery::Auto
+                | prebindgen_declarations::SequenceDelivery::Value => {
+                    sequence::output(wire, length, index, element, values)
+                }
+                prebindgen_declarations::SequenceDelivery::Callback => {
+                    sequence_callback::transport(wire, length, element, values)
+                }
             }
         }
     }
-    fn niche(&self, wire: &JniWire) -> Option<crate::optional::JniNiche> {
-        wire.available_niche()
+
+    fn selector(&self, _: &()) -> Result<JniWire> {
+        Ok(JniWire::selector())
     }
-    fn set_niche(&self, wire: &mut JniWire, niche: Option<JniNiche>) {
-        wire.set_niche(niche)
-            .expect("JNI codec supplied an incompatible niche");
-    }
-    fn is_present(
-        &self,
-        wire: &JniWire,
-        niche: &Self::Niche,
-        value: TokenStream,
-    ) -> Result<TokenStream> {
-        Ok(niche.present(wire, value))
-    }
-    fn remaining_niche(&self, wire: &JniWire, niche: &Self::Niche) -> Option<Self::Niche> {
-        optional::remaining(wire, niche)
-    }
-    fn absent_value(
-        &self,
-        wire: &JniWire,
-        niche: Option<&crate::optional::JniNiche>,
-        input: bool,
-    ) -> Result<TokenStream> {
-        optional::absent(wire, niche, input)
-    }
-    fn selector(&self, _: &()) -> JniWire {
-        JniWire::selector()
-    }
-    fn consumes(
+    fn output_consumes(
         &self,
         _flat: &prebindgen_flat::Flat<Self::Schema>,
         ty: &syn::Type,
         _: &(),
     ) -> bool {
+        if self.declared {
+            if let Some(inner) = prebindgen_declarations::option_inner(ty) {
+                return self.output_consumes(_flat, inner, &());
+            }
+            if _flat
+                .type_info(ty)
+                .ok()
+                .and_then(|t| t.metadata.class.as_ref())
+                .is_some_and(|c| c.data)
+                || self.enum_type(_flat, ty).is_some()
+            {
+                return false;
+            }
+        }
+
         if let Some(inner) = prebindgen_declarations::option_inner(ty) {
-            return self.consumes(_flat, inner, &());
+            return self.output_consumes(_flat, inner, &());
         }
         // Owned text/bytes are moved into their encoder. Keep observing getters
         // before that move and reject two consuming views, as for opaque objects.
         !matches!(ty, syn::Type::Reference(_)) && !matches!(Value::of(ty), Some(Value::Scalar(_)))
     }
-    fn input_leaf(
-        &self,
-        _flat: &prebindgen_flat::Flat<Self::Schema>,
-        ty: &syn::Type,
-        _: &(),
-        w: syn::Ident,
-        v: syn::Ident,
-        active: &prebindgen_declarations::Condition,
-    ) -> Result<InputPlan<JniWire>> {
-        if prebindgen_flat::sequence_parts(ty).is_some() {
-            return Err("collections require a Sequence recipe, not an opaque leaf; use an alias for opaque storage".into());
-        }
-        if prebindgen_declarations::option_inner(ty).is_some() {
-            return Err("resolve Optional operations before leaf compilation".into());
-        }
-        let env = prebindgen_conversions::template_parameter("environment");
-        let (decode, kind) = match Value::of(ty) {
-            Some(Value::Scalar(p)) => (scalar::decode(p, &w), JniWire::scalar(p)),
-            Some(Value::Text) => (
-                quote!(::prebindgen_jni_runtime::text(&mut #env,&#w)?),
-                JniWire::text(),
-            ),
-            Some(Value::Bytes) => (
-                quote!(::prebindgen_jni_runtime::bytes(&mut #env,&#w)?),
-                JniWire::bytes(),
-            ),
-            None => {
-                return prebindgen_conversions::boxed::input(
-                    &storage(),
-                    ty,
-                    w,
-                    v,
-                    &active.rust(),
-                    |b| JniWire::handle(b, kotlin_condition(active)),
-                )
-            }
-        };
-        prebindgen_conversions::value::input(ty, w, v, &active.rust(), decode, kind)
+    fn input_leaf(&self, request: InputLeaf<'_, Self>) -> Result<InputPlan<JniWire>> {
+        self.input_value(request)
     }
-    fn output_leaf(
-        &self,
-        _flat: &prebindgen_flat::Flat<Self::Schema>,
-        ty: &syn::Type,
-        _: &(),
-        w: syn::Ident,
-        v: TokenStream,
-        borrowed: bool,
-    ) -> Result<OutputPlan<JniWire>> {
+
+    fn output_leaf(&self, request: OutputLeaf<'_, Self>) -> Result<OutputPlan<JniWire>> {
+        let OutputLeaf {
+            flat: _flat,
+            ty,
+            extra: _,
+            wire: w,
+            value: v,
+            access,
+            representation,
+        } = request;
+        let borrowed = access.is_shared();
+        if representation == Representation::Bulk {
+            if let Some(e) = self.enum_type(_flat, ty) {
+                if matches!(ty,syn::Type::Reference(r) if r.mutability.is_some()) {
+                    return Err("mutable-reference outputs are unsupported".into());
+                }
+                return Ok(e.output(w, v));
+            }
+            return bulk::output_leaf(_flat, ty, w, v, borrowed);
+        }
+        if self.declared {
+            if Self::source_record(_flat, ty)?.is_some() {
+                return Err("resolve the data-class Output::Record before leaf compilation".into());
+            }
+            if let Some(e) = self.enum_type(_flat, ty) {
+                if matches!(ty,syn::Type::Reference(r) if r.mutability.is_some()) {
+                    return Err("mutable-reference outputs are unsupported".into());
+                }
+                return Ok(e.output(w, v));
+            }
+        }
+
         if prebindgen_flat::sequence_parts(ty).is_some() {
             return Err("collections require a Sequence recipe, not an opaque leaf; use an alias for opaque storage".into());
         }
@@ -1054,7 +988,14 @@ impl Codec for JniCodec {
                 return Err("mutable-reference outputs are unsupported".into());
             }
             let value = if borrowed { quote!(*#v) } else { v };
-            return self.output_leaf(_flat, &reference.elem, &(), w, value, true);
+            return JniCodec::raw().output_leaf(OutputLeaf::new(
+                _flat,
+                &reference.elem,
+                &(),
+                w,
+                value,
+                ValueAccess::Shared,
+            ));
         }
         if prebindgen_declarations::option_inner(ty).is_some() {
             return Err("resolve Optional operations before leaf compilation".into());
@@ -1081,102 +1022,121 @@ impl Codec for JniCodec {
 
     fn output_projected(
         &self,
-        flat: &Bindings,
-        ty: &syn::Type,
-        _: &(),
-        wire: syn::Ident,
-        mut value: TokenStream,
-        projection: &prebindgen_declarations::Projection,
+        request: OutputLeaf<'_, Self>,
+        projection: &Projection,
     ) -> Result<OutputPlan<JniWire>> {
-        use prebindgen_declarations::ProjectionMode;
-        if !projection.fields.is_empty() {
-            return Err("this output converter does not support field projection overrides".into());
+        let OutputLeaf {
+            flat,
+            ty,
+            extra: _,
+            wire,
+            mut value,
+            representation,
+            ..
+        } = request;
+        if self.declared
+            && representation == Representation::Ordinary
+            && Self::source_record(flat, ty)?.is_some()
+        {
+            return Err("resolve data-class projections before leaf compilation".into());
         }
-        let borrowed = projection.mode == ProjectionMode::Borrowed;
-        let mut payload = ty;
-        while let syn::Type::Reference(reference) = payload {
-            if !borrowed {
+        if let Some(e) = self.enum_type(flat, ty) {
+            if projection.mode == ProjectionMode::Owned && matches!(ty, syn::Type::Reference(_)) {
                 return Err("owned projection cannot consume a reference payload".into());
             }
-            if reference.mutability.is_some() {
-                return Err("mutable-reference outputs are unsupported".into());
+            if !projection.fields.is_empty() {
+                return Err("enum values do not have projection fields".into());
             }
-            if matches!(reference.elem.as_ref(), syn::Type::Slice(_))
-                || matches!(reference.elem.as_ref(),syn::Type::Path(p) if p.path.is_ident("str"))
-            {
-                break;
-            }
-            payload = &reference.elem;
-            value = quote!(*(#value));
+            return Ok(e.output(wire, value));
         }
-        if borrowed && Value::of(payload).is_none() {
-            // The explicit projection, rather than the existence of a borrow,
-            // authorizes cloning into the Kotlin handle's owned allocation.
-            return self.output_leaf(
+        if representation == Representation::Bulk {
+            if !projection.fields.is_empty() {
+                return Err("bulk leaf projection has field overrides".into());
+            }
+            if Value::of(ty).is_none() {
+                JniCodec::raw().output_projected(
+                    OutputLeaf::new(
+                        flat,
+                        ty,
+                        &(),
+                        wire,
+                        value,
+                        if projection.mode == ProjectionMode::Borrowed {
+                            ValueAccess::Shared
+                        } else {
+                            ValueAccess::Owned
+                        },
+                    ),
+                    projection,
+                )
+            } else {
+                JniCodec::raw().output_leaf(OutputLeaf {
+                    representation: Representation::Bulk,
+                    ..OutputLeaf::new(
+                        flat,
+                        ty,
+                        &(),
+                        wire,
+                        value,
+                        if projection.mode == prebindgen_declarations::ProjectionMode::Borrowed {
+                            ValueAccess::Shared
+                        } else {
+                            ValueAccess::Owned
+                        },
+                    )
+                })
+            }
+        } else {
+            use prebindgen_declarations::ProjectionMode;
+            if !projection.fields.is_empty() {
+                return Err(
+                    "this output converter does not support field projection overrides".into(),
+                );
+            }
+            let borrowed = projection.mode == ProjectionMode::Borrowed;
+            let mut payload = ty;
+            while let syn::Type::Reference(reference) = payload {
+                if !borrowed {
+                    return Err("owned projection cannot consume a reference payload".into());
+                }
+                if reference.mutability.is_some() {
+                    return Err("mutable-reference outputs are unsupported".into());
+                }
+                if matches!(reference.elem.as_ref(), syn::Type::Slice(_))
+                    || matches!(reference.elem.as_ref(),syn::Type::Path(p) if p.path.is_ident("str"))
+                {
+                    break;
+                }
+                payload = &reference.elem;
+                value = quote!(*(#value));
+            }
+            if borrowed && Value::of(payload).is_none() {
+                // The explicit projection, rather than the existence of a borrow,
+                // authorizes cloning into the Kotlin handle's owned allocation.
+                return JniCodec::raw().output_leaf(OutputLeaf::new(
+                    flat,
+                    payload,
+                    &(),
+                    wire,
+                    quote!(::core::clone::Clone::clone(#value)),
+                    ValueAccess::Owned,
+                ));
+            }
+            JniCodec::raw().output_leaf(OutputLeaf::new(
                 flat,
                 payload,
                 &(),
                 wire,
-                quote!(::core::clone::Clone::clone(#value)),
-                false,
-            );
-        }
-        self.output_leaf(flat, payload, &(), wire, value, borrowed)
-    }
-
-    fn output_bulk_projected(
-        &self,
-        flat: &Bindings,
-        ty: &syn::Type,
-        _: &(),
-        wire: syn::Ident,
-        value: TokenStream,
-        projection: &prebindgen_declarations::Projection,
-    ) -> Result<OutputPlan<JniWire>> {
-        if !projection.fields.is_empty() {
-            return Err("bulk leaf projection has field overrides".into());
-        }
-        if Value::of(ty).is_none() {
-            self.output_projected(flat, ty, &(), wire, value, projection)
-        } else {
-            self.output_bulk_leaf(
-                flat,
-                ty,
-                &(),
-                wire,
                 value,
-                projection.mode == prebindgen_declarations::ProjectionMode::Borrowed,
-            )
+                if borrowed {
+                    ValueAccess::Shared
+                } else {
+                    ValueAccess::Owned
+                },
+            ))
         }
     }
 
-    fn optional_niche(
-        &self,
-        payload: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
-    ) -> Option<prebindgen_declarations::NicheReservation<Self::Niche>> {
-        crate::group::optional_niche(payload)
-    }
-    fn optional_presence(
-        &self,
-        payload: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
-        reservation: &prebindgen_declarations::NicheReservation<Self::Niche>,
-    ) -> Result<TokenStream> {
-        crate::group::optional_presence(payload, reservation)
-    }
-    fn absent_output_values(
-        &self,
-        payload: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
-        reservation: Option<&prebindgen_declarations::NicheReservation<Self::Niche>>,
-    ) -> Result<Vec<(syn::Ident, TokenStream)>> {
-        crate::group::absent_output_values(payload, reservation)
-    }
-    fn retire_niches(
-        &self,
-        payload: &mut prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
-        reservation: Option<&prebindgen_declarations::NicheReservation<Self::Niche>>,
-    ) -> Result<()> {
-        crate::group::retire_niches(payload, reservation)
-    }
     fn validate_input(&self, plan: &prebindgen_declarations::CodecInput<Self>) -> Result<()> {
         sequence::validate_buffered(&plan.node)?;
         crate::group::validate_layout(&plan.node)
@@ -1200,7 +1160,248 @@ impl Codec for JniCodec {
         crate::group::result_packet(&plan.outcomes.success, &plan.values)?;
         Ok(())
     }
+    fn expand_input(
+        &self,
+        flat: &Flat<JniSchema>,
+        ty: &syn::Type,
+        tree: &Input<InputRequest>,
+        _: &(),
+    ) -> Result<Option<Input<InputRequest>>> {
+        if !self.declared {
+            return Ok(None);
+        }
+
+        if !matches!(tree, Input::Leaf) {
+            return Ok(None);
+        }
+        let Some(record) = Self::source_record(flat, ty)? else {
+            return Ok(None);
+        };
+        if record.has_handles {
+            return Err(format!(
+                "data class `{}` contains handles and cannot be passed into Rust as a record",
+                record.fqn()
+            ));
+        }
+        Ok(Some(Input::Record(vec![
+            Input::Leaf;
+            flat.record(ty)?.fields.len()
+        ])))
+    }
+    fn expand_output(
+        &self,
+        flat: &Flat<JniSchema>,
+        ty: &syn::Type,
+        tree: &Output<OutputRequest>,
+        _: &(),
+    ) -> Result<Option<Output<OutputRequest>>> {
+        if !self.declared {
+            return Ok(None);
+        }
+
+        let policy = match tree {
+            Output::Leaf => None,
+            Output::Projected(p) => Some(p.clone()),
+            _ => return Ok(None),
+        };
+        let Some(record) = Self::source_record(flat, ty)? else {
+            return Ok(None);
+        };
+        let fields = &flat.record(ty)?.fields;
+        for name in policy.iter().flat_map(|p| p.fields.keys()) {
+            if !fields
+                .iter()
+                .any(|f| f.name.to_string().trim_start_matches("r#") == name)
+            {
+                return Err(format!(
+                    "data class `{}`: unknown projection field `{name}`",
+                    record.fqn()
+                ));
+            }
+        }
+        let inherited = policy.as_ref().map(Projection::inherited);
+        let children = fields.iter().map(|field| {
+            let name = field.name.to_string();
+            let Some(policy) = &policy else { return Ok(Output::Leaf); };
+            let child = policy.fields.get(name.trim_start_matches("r#")).unwrap_or(inherited.as_ref().unwrap());
+            if policy.mode == ProjectionMode::Borrowed && child.mode == ProjectionMode::Owned {
+                return Err(format!("data class `{}` field `{name}`: owned projection cannot consume a shared-reference occurrence", record.fqn()));
+            }
+            Ok(Output::Projected(child.clone()))
+        }).collect::<Result<Vec<_>>>()?;
+        Ok(Some(Output::Record {
+            fields: children,
+            mode: policy.map(|p| p.mode),
+        }))
+    }
+    fn input_record_metadata(
+        &self,
+        flat: &prebindgen_flat::Flat<Self::Schema>,
+        ty: &syn::Type,
+        wire: &syn::Ident,
+        active: &Condition,
+        plan: &mut InputPlan<JniWire>,
+        _: &(),
+    ) -> Result<()> {
+        if !self.declared {
+            return Err("foreign record inputs are unsupported by this codec".into());
+        }
+
+        Self::source_record(flat, ty)?
+            .ok_or("missing data-class representation")?
+            .mark(&mut plan.node, wire.to_string(), kotlin_condition(active))
+    }
+    fn output_record_metadata(
+        &self,
+        flat: &prebindgen_flat::Flat<Self::Schema>,
+        ty: &syn::Type,
+        wire: &syn::Ident,
+        plan: &mut OutputPlan<JniWire>,
+        _: &(),
+    ) -> Result<()> {
+        if !self.declared {
+            return Err("foreign record outputs are unsupported by this codec".into());
+        }
+
+        Self::source_record(flat, ty)?
+            .ok_or("missing data-class representation")?
+            .mark(&mut plan.outcomes.success, wire.to_string(), "true".into())
+    }
+
+    fn supports_bulk(&self, _: Direction) -> bool {
+        true
+    }
+    fn group(&self, kind: GroupKind<'_>) -> Result<JniBranch> {
+        Ok(JniBranch::Group(match kind {
+            GroupKind::Values => JniGroup::Values,
+            GroupKind::Fields => JniGroup::Fields(None),
+            GroupKind::Field(name) => JniGroup::Field(name.clone()),
+            GroupKind::NamedOutput(name) => {
+                validate_name(name)?;
+                JniGroup::Named(name.into())
+            }
+        }))
+    }
+    fn optional(&self, request: Optional<'_, Self>) -> Result<OptionalEncoding<Self>> {
+        group::prepare_optional(request)
+    }
+    fn alternatives(&self, request: Alternatives<'_, Self>) -> Result<JniBranch> {
+        group::validate_selector(request.selector)?;
+        for arm in request.arms {
+            group::retire_niches(arm, None)?;
+        }
+        Ok(JniBranch::Alternatives)
+    }
+    fn source_error(&self, request: SourceError<'_, Self>) -> Result<SourceErrorPlan<Self>> {
+        if !self.declared {
+            return prebindgen_declarations::prepare_mapped_source_error(self, request);
+        }
+        let mapped = request.message.is_some();
+        let binding = request
+            .flat
+            .type_info(request.ty)?
+            .metadata
+            .errors
+            .get(&mapped)
+            .ok_or("missing declared JNI error output")?;
+        let helper = &binding.helper;
+        let env = prebindgen_conversions::template_parameter("environment");
+        let reported = prebindgen_conversions::template_parameter("domain_output");
+        let sink = prebindgen_conversions::template_parameter("return_sink");
+        let value = request.message.unwrap_or(request.value);
+        Ok(SourceErrorPlan {
+            payload: binding.output.output_outcomes().success.clone(),
+            propagate: quote!({#helper(&mut #env, #value, &mut #reported, #sink)?; String::new()}),
+        })
+    }
+    fn callback_input(
+        &self,
+        flat: &Bindings,
+        configuration: &prebindgen_declarations::CallbackInput,
+        _: &(),
+        wire: syn::Ident,
+        var: syn::Ident,
+        active: &prebindgen_declarations::Condition,
+    ) -> Result<InputPlan<JniWire>> {
+        if !self.declared {
+            return Err("configured callbacks are unsupported by this codec".into());
+        }
+        let outputs = self
+            .callback_outputs
+            .ok_or("source callback parameters require adapter callback preparation")?;
+        callback::input(
+            flat,
+            configuration,
+            outputs,
+            &configuration.ty,
+            wire,
+            var,
+            active,
+        )
+    }
 }
+
+impl JniCodec<'_> {
+    fn input_value(&self, request: InputLeaf<'_, Self>) -> Result<InputPlan<JniWire>> {
+        let InputLeaf {
+            flat,
+            ty,
+            extra,
+            wire,
+            target: var,
+            active,
+            representation,
+            ..
+        } = request;
+        if representation == Representation::Bulk {
+            if let Some(e) = self.enum_type(flat, ty) {
+                return e.input(ty, wire, var, active);
+            }
+            return bulk::input_leaf(flat, ty, wire, var, active);
+        }
+        if self.declared {
+            if prebindgen_flat::callback_signature(ty)?.is_some() {
+                return Err("resolve Callback operations before leaf compilation".into());
+            }
+            if Self::source_record(flat, ty)?.is_some() {
+                return Err("resolve the data-class Input::Record before leaf compilation".into());
+            }
+            if let Some(e) = self.enum_type(flat, ty) {
+                return e.input(ty, wire, var, active);
+            }
+        }
+        let _ = extra;
+        let _flat = flat;
+        let w = wire;
+        let v = var;
+
+        if prebindgen_flat::sequence_parts(ty).is_some() {
+            return Err("collections require a Sequence recipe, not an opaque leaf; use an alias for opaque storage".into());
+        }
+        if prebindgen_declarations::option_inner(ty).is_some() {
+            return Err("resolve Optional operations before leaf compilation".into());
+        }
+        let env = prebindgen_conversions::template_parameter("environment");
+        let (decode, kind) = match Value::of(ty) {
+            Some(Value::Scalar(p)) => (scalar::decode(p, &w), JniWire::scalar(p)),
+            Some(Value::Text) => (
+                quote!(::prebindgen_jni_runtime::text(&mut #env,&#w)?),
+                JniWire::text(),
+            ),
+            Some(Value::Bytes) => (
+                quote!(::prebindgen_jni_runtime::bytes(&mut #env,&#w)?),
+                JniWire::bytes(),
+            ),
+            None => {
+                return prebindgen_conversions::boxed::input(&storage(), ty, w, v, |b| {
+                    JniWire::handle(b, kotlin_condition(active))
+                })
+            }
+        };
+        prebindgen_conversions::value::input(ty, w, v, decode, kind)
+    }
+}
+
 pub(crate) fn encode_array(
     fields: Vec<(&prebindgen_flat::Wire<JniWire>, &TokenStream)>,
     array: &syn::Ident,
@@ -1468,7 +1669,12 @@ fn symbol(pkg: &str, method: &str) -> syn::Ident {
 
 /// Emit Rust/JNI and Kotlin using only the prepared Flat model.
 /// All project-dependent settings and declarations are read from its metadata.
-pub fn generate(flat: &Bindings) -> Result<JniGen> {
+/// Built-in and independent inputs use this same emitter. Inputs must provide
+/// native wire ownership and matching Kotlin handle snapshots
+/// and ownership updates; incomplete descriptions return a generation error.
+pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
+    flat: &Flat<JniSchema<I, O>>,
+) -> Result<JniGen> {
     let prefix = &flat.metadata.package;
     validate_package(prefix)?;
     for f in flat.functions.values().filter(|f| f.ret.slot.is_some()) {
@@ -1628,21 +1834,40 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
         let error = errors.get(&source);
         let outcomes = f.output_conversion()?.output_outcomes();
         let logical = &outcomes.success;
+        if let (Some(declared), Some(error)) = (&outcomes.source_error, error) {
+            if group::error_wire_shape(declared)
+                != group::error_wire_shape(&error.output.output_outcomes().success)
+            {
+                return Err(format!(
+                    "`{source}`: domain-error converter differs from the declared error wires"
+                ));
+            }
+        }
         let input_slots: usize = crate::group::function_parameters(f)?
             .map(|w| w.kind.parameter_slots())
             .sum();
-        let acknowledgement = usize::from(
-            f.input_conversions()?
-                .iter()
-                .any(|i| i.rust.acknowledgement.is_some()),
-        );
+        let kotlin_context = KotlinContext {
+            package: prefix,
+            classes: &kotlin_classes,
+            result: "result",
+            failure: "failure",
+            cleanup_failure: None,
+            output_prefix: "output",
+        };
+        let inputs = f.input_conversions()?;
+        let mut kotlin_inputs = inputs
+            .iter()
+            .map(|input| input.kotlin(&kotlin_context))
+            .collect::<Result<Vec<_>>>()?;
+        // Kotlin ownership updates determine the hidden receipt parameter before
+        // choosing return transport. Native acknowledgement is checked below
+        // using the final emission context.
+        let acknowledgement = usize::from(kotlin_inputs.iter().any(|i| !i.consumed.is_empty()));
         // Keep the packet protocol when the extra capture would exceed the
         // existing native parameter limit; previously valid signatures stay valid.
-        let native_return = f
-            .output_conversion()?
-            .native_return()
+        let native_return = returns::select(f.output_conversion()?)
             .filter(|_| input_slots + acknowledgement + 2 * usize::from(callback) < 255)
-            .filter(|_| error.is_none_or(|e| e.output.native_return().is_some()));
+            .filter(|_| error.is_none_or(|e| returns::select(&e.output).is_some()));
         let native_result_type = native_return.as_ref().map_or_else(
             || syn::parse_quote!(::prebindgen_jni_runtime::jni::sys::jobjectArray),
             returns::NativeReturn::rust_type,
@@ -1682,9 +1907,15 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
         let throws = error.map_or_else(String::new, |error| error.throws(exception));
         let env = format_ident!("jni_environment");
         let ownership = format_ident!("ownership_accepted");
-        let context = JniContext {
+        let mut context = JniContext {
+            input_transfers: if inputs.iter().any(|i| takes_input_owners(i.input_node())) {
+                prebindgen_conversions::InputTransfers::Report(format_ident!("__pb_input_consumed"))
+            } else {
+                prebindgen_conversions::InputTransfers::Forbidden
+            },
+            return_delivery: crate::JniReturnDelivery::Packet,
+            prepared_delivery: None,
             environment: env.clone(),
-            acknowledgement: ownership.clone(),
             domain_output: format_ident!("domain_output"),
             return_sink: native_return.as_ref().map(|_| return_sink.clone()),
             is_domain_error: false,
@@ -1698,6 +1929,14 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
                 quote!()
             },
         };
+        context.return_delivery =
+            native_return
+                .as_ref()
+                .map_or(JniReturnDelivery::Packet, |kind| match kind {
+                    returns::NativeReturn::Callback => JniReturnDelivery::Capture,
+                    _ => JniReturnDelivery::Direct,
+                });
+        returns::prepare(f.output_conversion()?, &mut context)?;
         let source = format_ident!("source_value");
 
         let capture_name = if let Some(kind) = &native_return {
@@ -1761,14 +2000,6 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
         } else {
             "onError"
         };
-        let kotlin_context = KotlinContext {
-            package: prefix,
-            classes: &kotlin_classes,
-            result: "result",
-            failure: "failure",
-            cleanup_failure: None,
-            output_prefix: "output",
-        };
         let mut kt_params = Vec::new();
         let mut kt_args = Vec::new();
         let mut setup = String::new();
@@ -1779,11 +2010,6 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
             params.push(quote!(#n:#rt));
             raw_params.push(format!("{n}: {}", w.kind.kotlin_type()));
         }
-        let inputs = f.input_conversions()?;
-        let mut kotlin_inputs = inputs
-            .iter()
-            .map(|input| input.kotlin(&kotlin_context))
-            .collect::<Result<Vec<_>>>()?;
         parameter_names::apply(
             &f.params
                 .iter()
@@ -1792,8 +2018,10 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
             &mut kotlin_inputs,
             &parameter_package_roots,
         )?;
+        let mut delegated_handles = false;
         for (parameter, input) in f.params.iter().zip(&inputs) {
-            handles::require_preflight(input).map_err(|error| {
+            delegated_handles |= crate::kotlin::input_handles(input.input_node(), false);
+            handles::require_preflight(*input).map_err(|error| {
                 format!(
                     "function `{}` parameter `{}`: {error}",
                     f.name, parameter.name
@@ -1810,7 +2038,6 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
                 matches!(&wire.kind,JniWire::Callback{callback} if callback.requires_preflight())
             })
         });
-        let delegated_handles = inputs.iter().any(|input| !input.rust.resources.is_empty());
         let path_identity = names::path_identity(&f.path);
         let function_identity = f.name.to_string();
         let mut identity = vec![path_identity.as_str(), function_identity.as_str()];
@@ -1831,19 +2058,8 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
             return Err("Kotlin input argument/parameter count differs".into());
         }
         let has_consumes = !consumed.is_empty();
-        let has_acknowledgement = f
-            .input_conversions()?
-            .iter()
-            .map(|i| {
-                i.code_fragment_slot(
-                    prebindgen_conversions::InputFragment::Acknowledge { context: &context },
-                    &syn::parse_quote!(()),
-                )
-                .map(|code| code.to_string() != quote!(()).to_string())
-            })
-            .collect::<Result<Vec<_>>>()?
-            .into_iter()
-            .any(|present| present);
+        debug_assert_eq!(acknowledgement != 0, has_consumes);
+        let has_acknowledgement = inputs.iter().any(|i| takes_input_owners(i.input_node()));
         if has_acknowledgement != has_consumes {
             return Err("JNI acknowledgement does not match slot ownership updates".into());
         }
@@ -1938,6 +2154,8 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
         } else {
             TokenStream::new()
         };
+        let incoming_counter =
+            has_consumes.then(|| quote!(let __pb_input_consumed=::core::cell::Cell::new(0usize);));
         let body = prebindgen_conversions::staged::emit_call(
             f,
             &context,
@@ -1947,6 +2165,8 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
                 .map(|w| w.name.clone())
                 .collect::<Vec<_>>(),
         )?;
+        let receipt_ready=has_consumes.then(||quote!(if #env.get_array_length(&#ownership).map_err(|e|e.to_string())? != 1 {return Err("invalid ownership acknowledgement".into());} __pb_receipt_valid.set(true);));
+        let body = quote!(#receipt_ready #body);
         let body = if callback {
             quote!(if #env.get_array_length(&__pb_output_accepted).map_err(|e|e.to_string())? != 1 {return Err("invalid sequence output acknowledgement".into());} if __pb_callback.is_null(){return Err("null sequence callback".into());} #body)
         } else {
@@ -1954,7 +2174,7 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
         };
         let fold = if callback {
             Some(sequence_callback::fold(
-                &f.output_conversion()?.output_outcomes().success,
+                f.output_conversion()?,
                 &kotlin_context,
             )?)
         } else {
@@ -1964,39 +2184,28 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
         if let Some(fold) = &fold {
             setup.push_str(&fold.discard);
         }
-        let mut kotlin_output = match &fold {
-            Some(fold) => fold.output.clone(),
-            None => f.output_conversion()?.kotlin(&kotlin_context)?,
-        };
-        kotlin::remap_output(
-            &mut kotlin_output,
-            kotlin_context.result,
-            kotlin_context.result,
-            1,
-            crate::group::result_packet_fields(&f.output_conversion()?.output_outcomes().success)
-                .len(),
-        );
         let success_fields = crate::group::result_packet_fields(logical).collect::<Vec<_>>();
-        if let Some(kind) = &native_return {
-            let values = success_fields
+        let return_values = if native_return.is_some() {
+            success_fields
                 .iter()
                 .enumerate()
                 .map(|(i, _)| {
-                    if matches!(kind, returns::NativeReturn::Direct(_)) {
+                    if matches!(native_return, Some(returns::NativeReturn::Direct(_))) {
                         "nativeResult".into()
                     } else {
                         format!("returnCapture.s{i}")
                     }
                 })
-                .collect::<Vec<_>>();
-            returns::remap(
-                &mut kotlin_output,
-                kotlin_context.result,
-                &success_fields,
-                1,
-                &values,
-            );
-        }
+                .collect::<Vec<_>>()
+        } else {
+            Vec::new()
+        };
+        let kotlin_output = f.output_conversion()?.kotlin_return(&KotlinReturnContext {
+            kotlin: &kotlin_context,
+            delivery: context.return_delivery,
+            values: &return_values,
+            sequence: fold.as_ref().map(|fold| &fold.output),
+        })?;
         let build_parameters = kotlin_output.callback_type_parameters()?;
         let KotlinOutput {
             delivered,
@@ -2050,13 +2259,13 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
             }
         ));
         rust.extend(quote!{
-   #[allow(clippy::needless_borrow, clippy::borrow_deref_ref, clippy::let_unit_value, clippy::unnecessary_cast, clippy::useless_conversion)]
+   # [allow(clippy::let_and_return,clippy::needless_borrow, clippy::borrow_deref_ref, clippy::let_unit_value, clippy::unnecessary_cast, clippy::useless_conversion)]
    #[doc = "# Safety\nThe caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases."]
 #[no_mangle]pub unsafe extern "system" fn #sym<'local>(mut #env: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,_class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,#(#params),*) #native_signature_return {
     #[allow(unused_mut)]
     let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
     #success_tracking
-    let __pb_input_consumed=::core::cell::Cell::new(0usize);
+    #incoming_counter
     let __pb_receipt_valid=::core::cell::Cell::new(false);
     let outcome=::prebindgen_runtime::boundary(||{
      #reserve_outputs
@@ -2220,6 +2429,10 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
 }
 
 #[cfg(test)]
+mod input_contract_tests;
+#[cfg(test)]
+mod output_contract_tests;
+#[cfg(test)]
 mod tests;
 
 fn kotlin_condition(condition: &prebindgen_declarations::Condition) -> String {
@@ -2243,4 +2456,9 @@ fn native_handle(prefix: &str, gc_managed: bool) -> String {
     } else {
         source
     }
+}
+
+fn takes_input_owners(node: &crate::kotlin::JniNode) -> bool {
+    prebindgen_flat::wire_definitions(std::iter::once(node))
+        .any(|w| matches!(&w.kind,JniWire::Handle{handle,..} if handle.access==Access::Move))
 }

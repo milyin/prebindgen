@@ -1,4 +1,4 @@
-//! Execution tests for the optional staged protocol, without declarations.
+//! Execution tests for complete input conversion and scoped output delivery.
 use super::*;
 use crate::staged::emit_call;
 use prebindgen_flat::Result;
@@ -15,18 +15,17 @@ impl Input {
         let validate = format!("validate{index}");
         let acquire = format!("acquire{index}");
         let construct = format!("construct{index}");
-        InputPlan {
-            fallible: false,
-            context: Default::default(),
-            acknowledgement: Some(
-                quote!(log("acknowledge"); if fail_acknowledge { return Err("acknowledgement".into()); }),
-            ),
-            node: Default::default(),
-            validation: quote!(log(#validate); if #index == 1 && fail_validation { return Err("validation".into()); }),
-            resources: vec![],
-            acquire: quote!(log(#acquire);),
-            statements: quote!(log(#construct); let #name = 1;),
-            argument: quote!(#name),
+        {
+            let validation = quote!(log(#validate); if #index == 1 && fail_validation { return Err("validation".into()); });
+            let acquire = quote!(log(#acquire););
+            let statements = quote!(log(#construct); let #name = 1;);
+            let mut plan = InputPlan::new(
+                Default::default(),
+                quote!(#validation #acquire #statements),
+                quote!(#name),
+            );
+            plan.fallible = false;
+            plan
         }
     }
 }
@@ -37,6 +36,7 @@ impl Output {
             fallible: false,
             context: Default::default(),
             delivery: Delivery {
+                policy: crate::DeliveryPolicy::Fixed,
                 statements: quote!(log("deliver"); if fail_delivery { return Err("delivery".into()); }),
                 result: source_result_expr(),
             },
@@ -85,20 +85,22 @@ fn generated_call_enforces_order_across_validation_and_delivery_failures() {
         fn log(event: &'static str) { LOG.lock().unwrap().push(event); }
         #items
         fn run(fail_validation:bool, fail_acknowledge:bool, fail_delivery:bool) -> Result<i32,String> {
+            log("acknowledge");
+            if fail_acknowledge {return Err("acknowledgement".into());}
             (|| { #body })()
         }
         fn main() {
             assert_eq!(run(true, false, false), Err("validation".into()));
-            assert_eq!(*LOG.lock().unwrap(), ["validate0", "validate1"]);
+            assert_eq!(*LOG.lock().unwrap(), ["acknowledge", "validate0", "acquire0", "construct0", "validate1"]);
             LOG.lock().unwrap().clear();
             assert_eq!(run(false, true, false), Err("acknowledgement".into()));
-            assert_eq!(*LOG.lock().unwrap(), ["validate0", "validate1", "acknowledge"]);
+            assert_eq!(*LOG.lock().unwrap(), ["acknowledge"]);
             LOG.lock().unwrap().clear();
             assert_eq!(run(false, false, true), Err("delivery".into()));
-            assert_eq!(*LOG.lock().unwrap(), ["validate0", "validate1", "acknowledge", "acquire0", "acquire1", "construct0", "construct1", "source", "prepare", "deliver"]);
+            assert_eq!(*LOG.lock().unwrap(), ["acknowledge", "validate0", "acquire0", "construct0", "validate1", "acquire1", "construct1", "source", "prepare", "deliver"]);
             LOG.lock().unwrap().clear();
             assert_eq!(run(false, false, false), Ok(2));
-            assert_eq!(*LOG.lock().unwrap(), ["validate0", "validate1", "acknowledge", "acquire0", "acquire1", "construct0", "construct1", "source", "prepare", "deliver", "commit"]);
+            assert_eq!(*LOG.lock().unwrap(), ["acknowledge", "validate0", "acquire0", "construct0", "validate1", "acquire1", "construct1", "source", "prepare", "deliver", "commit"]);
         }
     };
     let dir = tempfile::tempdir().unwrap();
@@ -108,6 +110,126 @@ fn generated_call_enforces_order_across_validation_and_delivery_failures() {
     let compiled = std::process::Command::new("rustc")
         .arg("--edition=2021")
         .arg(&path)
+        .arg("-o")
+        .arg(&executable)
+        .output()
+        .unwrap();
+    assert!(
+        compiled.status.success(),
+        "{}",
+        String::from_utf8_lossy(&compiled.stderr)
+    );
+    let run = std::process::Command::new(executable).output().unwrap();
+    assert!(
+        run.status.success(),
+        "{}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+}
+
+#[test]
+fn boxed_input_releases_empty_allocation_before_continuation() {
+    struct Context;
+    impl TemplateContext for Context {
+        fn render(&self, code: &TokenStream) -> Result<TokenStream> {
+            render_template(
+                code,
+                &|name| Err(format!("unexpected binding {name}")),
+                &|count| InputTransfers::Report(syn::parse_quote!(taken)).render(count),
+            )
+        }
+    }
+    let mut wrappers = TokenStream::new();
+    for (name, storage) in [
+        ("direct", boxed::Storage::Direct),
+        (
+            "wrapped",
+            boxed::Storage::Wrapped(syn::parse_quote!(Wrapper)),
+        ),
+    ] {
+        let name = format_ident!("{name}");
+        let plan = boxed::input::<syn::Type, Context, (), ()>(
+            &storage,
+            &syn::parse_quote!(Item),
+            syn::parse_quote!(incoming),
+            syn::parse_quote!(decoded),
+            |wire| {
+                let ty = wire.ty;
+                syn::parse_quote!(*mut #ty)
+            },
+        )
+        .unwrap();
+        let body = plan
+            .code_fragment_slot(
+                InputFragment {
+                    context: &Context,
+                    target: &syn::parse_quote!(argument),
+                    next: quote! {
+                        assert_eq!(taken.get(), 1);
+                        assert!(FREED.load(Ordering::SeqCst));
+                        assert_eq!(DROPPED.load(Ordering::SeqCst), 0);
+                        assert_eq!(argument.0, 42);
+                        drop(argument);
+                        assert_eq!(DROPPED.load(Ordering::SeqCst), 1);
+                        Ok(())
+                    },
+                },
+                &syn::parse_quote!(()),
+            )
+            .unwrap();
+        wrappers.extend(quote! {
+            fn #name(incoming: usize) -> Result<(), String> {
+                let taken = std::cell::Cell::new(0usize);
+                #body
+            }
+        });
+    }
+    let code = quote! {
+        extern crate self as prebindgen_runtime;
+        use std::alloc::{GlobalAlloc, Layout, System};
+        use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+        static WATCHED: AtomicUsize = AtomicUsize::new(0);
+        static FREED: AtomicBool = AtomicBool::new(false);
+        static DROPPED: AtomicUsize = AtomicUsize::new(0);
+        struct Allocator;
+        unsafe impl GlobalAlloc for Allocator {
+            unsafe fn alloc(&self, layout: Layout) -> *mut u8 { System.alloc(layout) }
+            unsafe fn dealloc(&self, pointer: *mut u8, layout: Layout) {
+                if pointer as usize == WATCHED.load(Ordering::SeqCst) {
+                    FREED.store(true, Ordering::SeqCst);
+                }
+                System.dealloc(pointer, layout);
+            }
+        }
+        #[global_allocator]
+        static ALLOCATOR: Allocator = Allocator;
+        struct Item(u64);
+        impl Drop for Item {
+            fn drop(&mut self) { DROPPED.fetch_add(1, Ordering::SeqCst); }
+        }
+        struct Wrapper<T> { value: T }
+        fn validate_pointer<T>(pointer: *mut T) -> Result<(), String> {
+            assert!(!pointer.is_null()); Ok(())
+        }
+        #wrappers
+        fn main() {
+            let pointer = Box::into_raw(Box::new(Item(42)));
+            WATCHED.store(pointer as usize, Ordering::SeqCst);
+            direct(pointer as usize).unwrap();
+            FREED.store(false, Ordering::SeqCst);
+            DROPPED.store(0, Ordering::SeqCst);
+            let pointer = Box::into_raw(Box::new(Wrapper { value: Item(42) }));
+            WATCHED.store(pointer as usize, Ordering::SeqCst);
+            wrapped(pointer as usize).unwrap();
+        }
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let source = dir.path().join("boxed_scope.rs");
+    let executable = dir.path().join("boxed_scope");
+    std::fs::write(&source, code.to_string()).unwrap();
+    let compiled = std::process::Command::new("rustc")
+        .arg("--edition=2021")
+        .arg(&source)
         .arg("-o")
         .arg(&executable)
         .output()
@@ -250,59 +372,31 @@ fn several_physical_wires_may_supply_one_component() {
 }
 
 #[test]
-fn shared_acknowledgement_is_optional_and_conflicts_are_rejected() {
-    let items = syn::parse_file("pub fn add(a:i32,b:i32)->i32 { a+b }").unwrap();
-    let mut flat =
-        Flat::<syn::Type>::parse(items.items.into_iter().map(|i| (i, Default::default()))).unwrap();
-    let f = flat.function_mut("add").unwrap();
-    f.params[0].ty.slot = Some(Input(0).plan());
-    f.params[1].ty.slot = Some(Input(1).plan());
-    f.ret.slot = Some(Output.plan());
-    let both = emit_call(
-        f,
-        &(),
-        &source_binding(),
-        &syn::parse_quote!(_),
-        &test_parameter_names(f),
-    )
-    .unwrap()
-    .to_string();
-    f.params[0].ty.slot.as_mut().unwrap().acknowledgement = None;
-    assert_eq!(
-        emit_call(
-            f,
-            &(),
-            &source_binding(),
-            &syn::parse_quote!(_),
-            &test_parameter_names(f)
-        )
+fn transfer_reporting_is_selected_by_the_boundary() {
+    let count = quote!(2usize);
+    let code = record_input_transfer(count);
+    let resolve = |name: &str| Err(format!("unknown {name}"));
+    let report = InputTransfers::Report(syn::parse_quote!(accepted));
+    let rendered = render_template(&code, &resolve, &|n| report.render(n))
         .unwrap()
-        .to_string(),
-        both
-    );
-    f.params[0].ty.slot.as_mut().unwrap().acknowledgement = Some(quote!(different_ack()));
-    assert!(emit_call(
-        f,
-        &(),
-        &source_binding(),
-        &syn::parse_quote!(_),
-        &test_parameter_names(f)
-    )
-    .unwrap_err()
-    .contains("conflicting input acknowledgements"));
-    for param in &mut f.params {
-        param.ty.slot.as_mut().unwrap().acknowledgement = None;
-    }
-    assert!(!emit_call(
-        f,
-        &(),
-        &source_binding(),
-        &syn::parse_quote!(_),
-        &test_parameter_names(f)
-    )
-    .unwrap()
-    .to_string()
-    .contains("acknowledge"));
+        .to_string();
+    assert!(rendered.contains("accepted . set"));
+    assert!(!rendered.contains("__prebindgen"));
+    let empty = render_template(&code, &resolve, &|n| InputTransfers::Abort.render(n))
+        .unwrap()
+        .to_string();
+    assert_eq!(empty, "{ }");
+    assert!(().render(&code).unwrap_err().contains("ownership receipt"));
+}
+
+#[test]
+fn continuation_composition_requires_one_use_and_preserves_inserted_templates() {
+    let marker = template_parameter("continuation");
+    let inserted = quote!({#marker});
+    let result = crate::staged::continue_with(&quote!({#marker}), inserted).unwrap();
+    assert!(result.to_string().contains("continuation"));
+    assert!(crate::staged::continue_with(&quote!({}), quote!(())).is_err());
+    assert!(crate::staged::continue_with(&quote!({#marker;#marker}), quote!(())).is_err());
 }
 
 #[test]
@@ -326,16 +420,17 @@ fn function_accessors_borrow_non_clone_wire_metadata() {
         kind: NonClone,
     };
     let f = flat.function_mut("echo").unwrap();
-    f.params[0].ty.slot = Some(InputPlan {
-        fallible: false,
-        context: Default::default(),
-        node: prebindgen_flat::WireNode::Leaf(vec![wire()]),
-        acknowledgement: None,
-        validation: quote!(),
-        acquire: quote!(),
-        resources: vec![],
-        statements: quote!(),
-        argument: quote!(x),
+    f.params[0].ty.slot = Some({
+        let validation = quote!();
+        let acquire = quote!();
+        let statements = quote!();
+        let mut plan = InputPlan::new(
+            prebindgen_flat::WireNode::Leaf(vec![wire()]),
+            quote!(#validation #acquire #statements),
+            quote!(x),
+        );
+        plan.fallible = false;
+        plan
     });
     f.ret.slot = Some(OutputPlan {
         fallible: false,
@@ -349,6 +444,7 @@ fn function_accessors_borrow_non_clone_wire_metadata() {
         values: vec![(wire().name, source_result_expr())],
         commit: quote!(),
         delivery: Delivery {
+            policy: crate::DeliveryPolicy::Fixed,
             statements: quote!(),
             result: source_result_expr(),
         },
@@ -440,13 +536,17 @@ struct TestContext {
 impl TemplateContext for TestContext {
     fn render(&self, code: &TokenStream) -> Result<TokenStream> {
         use quote::ToTokens;
-        render_template(code, &|name| match name {
-            "runtime" => Ok(self.runtime.to_token_stream()),
-            "sink" => Ok(self.sink.to_token_stream()),
-            "accepted" => Ok(self.accepted.to_token_stream()),
-            "carrier" => Ok(self.carrier.to_token_stream()),
-            _ => Err(format!("unknown emission parameter `{name}`")),
-        })
+        render_template(
+            code,
+            &|name| match name {
+                "runtime" => Ok(self.runtime.to_token_stream()),
+                "sink" => Ok(self.sink.to_token_stream()),
+                "accepted" => Ok(self.accepted.to_token_stream()),
+                "carrier" => Ok(self.carrier.to_token_stream()),
+                _ => Err(format!("unknown emission parameter `{name}`")),
+            },
+            &|count| InputTransfers::Forbidden.render(count),
+        )
     }
 }
 
@@ -470,16 +570,17 @@ fn the_same_slots_execute_with_two_explicit_wrapper_environments() {
         name: syn::parse_quote!(incoming),
         kind: syn::parse_quote!(i32),
     };
-    function.params[0].ty.slot = Some(InputPlan {
-        fallible: false,
-        context: Default::default(),
-        node: prebindgen_flat::WireNode::Leaf(vec![wire()]),
-        acknowledgement: Some(quote!(*#ack = true;)),
-        validation: quote!(if #env < 0 { return Err("environment".into()); }),
-        acquire: quote!(),
-        resources: vec![],
-        statements: quote!(let converted = incoming + #env;),
-        argument: quote!(converted),
+    function.params[0].ty.slot = Some({
+        let validation = quote!(if #env < 0 { return Err("environment".into()); } *#ack=true;);
+        let acquire = quote!();
+        let statements = quote!(let converted = incoming + #env;);
+        let mut plan = InputPlan::new(
+            prebindgen_flat::WireNode::Leaf(vec![wire()]),
+            quote!(#validation #acquire #statements),
+            quote!(converted),
+        );
+        plan.fallible = false;
+        plan
     });
     function.ret.slot = Some(OutputPlan {
         fallible: false,
@@ -493,6 +594,7 @@ fn the_same_slots_execute_with_two_explicit_wrapper_environments() {
         values: vec![(wire().name, value.clone())],
         commit: quote!(),
         delivery: Delivery {
+            policy: crate::DeliveryPolicy::Fixed,
             statements: quote!(unsafe { #out.write(#ty { value: #value }); }),
             result: value,
         },
@@ -601,19 +703,20 @@ fn caller_targets_avoid_surrounding_bindings_and_keep_borrowed_storage_alive() {
     );
     let mut flat = Flat::<syn::Type>::parse([(item, Default::default())]).unwrap();
     let function = flat.function_mut("length").unwrap();
-    function.params[0].ty.slot = Some(InputPlan {
-        fallible: false,
-        context: Default::default(),
-        node: prebindgen_flat::WireNode::Leaf(vec![Wire {
-            name: syn::parse_quote!(__prebindgen_argument_0),
-            kind: syn::parse_quote!(usize),
-        }]),
-        acknowledgement: None,
-        validation: quote!(let __prebindgen_argument_0_ = __prebindgen_argument_0 + 1;),
-        acquire: quote!(),
-        resources: vec![],
-        statements: quote!(let storage = String::from("abc");),
-        argument: quote!(storage.as_str()),
+    function.params[0].ty.slot = Some({
+        let validation = quote!(let __prebindgen_argument_0_ = __prebindgen_argument_0 + 1;);
+        let acquire = quote!();
+        let statements = quote!(let storage = String::from("abc"););
+        let mut plan = InputPlan::new(
+            prebindgen_flat::WireNode::Leaf(vec![Wire {
+                name: syn::parse_quote!(__prebindgen_argument_0),
+                kind: syn::parse_quote!(usize),
+            }]),
+            quote!(#validation #acquire #statements),
+            quote!(storage.as_str()),
+        );
+        plan.fallible = false;
+        plan
     });
     let source = source_result_expr();
     function.ret.slot = Some(OutputPlan {
@@ -628,6 +731,7 @@ fn caller_targets_avoid_surrounding_bindings_and_keep_borrowed_storage_alive() {
         statements: quote!(),
         commit: quote!(),
         delivery: Delivery {
+            policy: crate::DeliveryPolicy::Fixed,
             statements: quote!(),
             result: quote!(#source + __prebindgen_argument_0_),
         },
@@ -649,7 +753,7 @@ fn caller_targets_avoid_surrounding_bindings_and_keep_borrowed_storage_alive() {
         .as_ref()
         .unwrap()
         .code_fragment_slot(
-            InputFragment::Construct {
+            InputFragment {
                 context: &context,
                 target: &target,
                 next: quote!(assert_eq!(#target, "abc")),
@@ -662,6 +766,7 @@ fn caller_targets_avoid_surrounding_bindings_and_keep_borrowed_storage_alive() {
         fn wrapper(__prebindgen_argument_0: usize) -> Result<usize, String> { #body }
         fn main() {
             assert_eq!(wrapper(10), Ok(14));
+            let __prebindgen_argument_0=10usize;
             #standalone
 
         }
@@ -780,7 +885,7 @@ fn result_fields_match_named_expressions_independently_of_binding_order() {
 }
 
 #[test]
-fn mixed_eager_and_deferred_resources_cannot_report_a_consumed_prefix() {
+fn complete_inputs_have_no_phase_compatibility_gate() {
     let mut flat = Flat::<syn::Type>::parse(
         syn::parse_file("pub fn add(a:i32,b:i32)->i32{a+b}")
             .unwrap()
@@ -791,28 +896,17 @@ fn mixed_eager_and_deferred_resources_cannot_report_a_consumed_prefix() {
     .unwrap();
     let f = flat.function_mut("add").unwrap();
     for (i, param) in f.params.iter_mut().enumerate() {
-        let mut plan = Input(i).plan();
-        plan.resources = vec![Resource {
-            allocation_type: None,
-            registered: i == 0,
-            records_consumption: false,
-            count: quote!(1usize),
-            access: Access::Move,
-            active: quote!(true),
-        }];
-        param.ty.slot = Some(plan);
+        param.ty.slot = Some(Input(i).plan());
     }
     f.ret.slot = Some(Output.plan());
-    let error = emit_call(
+    let code = emit_call(
         f,
         &(),
         &source_binding(),
         &syn::parse_quote!(i32),
         &test_parameter_names(f),
     )
-    .unwrap_err();
-    assert!(
-        error.contains("cannot mix deferred resource conversions"),
-        "{error}"
-    );
+    .unwrap()
+    .to_string();
+    assert!(code.find("construct0").unwrap() < code.find("validate1").unwrap());
 }

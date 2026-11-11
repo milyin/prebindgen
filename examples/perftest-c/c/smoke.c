@@ -766,5 +766,31 @@ int main(void) {
     f32 = perftest_primitive_f32(-0.0f); assert(signbit(f32));
 
     perftest_primitive_unit();
+    /* Raw-leaf first input plus a declaration-compiled second input. */
+    {
+        perftest_owned_resource *read = perftest_scoped_input_new(10);
+        perftest_owned_resource *moved = perftest_scoped_input_new(20);
+        size_t drops = perftest_scoped_input_drops();
+        assert(perftest_scoped_input_pair(read, moved) == 30);
+        assert(perftest_scoped_input_drops() == drops + 1);
+        assert(perftest_scoped_input_id(read) == 10);
+        perftest_drop_owned_resource(read);
+        for (int64_t mode = 0; mode <= 3; ++mode) {
+            perftest_owned_resource *first = perftest_scoped_input_new(mode == 3 ? 3 : 10);
+            perftest_owned_resource *second = perftest_scoped_input_new(20);
+            drops = perftest_scoped_input_drops();
+            size_t consumed = 999;
+            int64_t output = -1;
+            bool success = perftest_scoped_input_failure(first, mode, second, &output, &consumed, NULL);
+            assert(success == (mode == 0));
+            assert(consumed == (mode == 1 ? 1u : 2u));
+            assert(perftest_scoped_input_drops() == drops + consumed);
+            if (mode == 0) assert(output == 30); else assert(output == -1);
+            if (mode == 1) {
+                assert(perftest_scoped_input_id(second) == 20);
+                perftest_drop_owned_resource(second);
+            }
+        }
+    }
     puts("perftest-c PASS: all primitives, restored fields, constructor selectors and ownership");
 }

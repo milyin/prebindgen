@@ -171,6 +171,11 @@ fn bulk_replay_input() -> prebindgen_declarations::Input<prebindgen_jni::InputRe
     bulk_replay_input_with(false, true)
 }
 
+#[path = "build_support/input_contracts.rs"]
+mod input_contracts;
+#[path = "build_support/output_contracts.rs"]
+mod output_contracts;
+
 fn main() {
     use prebindgen_declarations::{Output, OutputRequest, SequenceDelivery};
     let ordinary_rows = |element| Output::Sequence {
@@ -675,11 +680,11 @@ fn main() {
             // deliberately lift inner bulk modifiers to the enclosing sequence.
             let sequence = |element,mode| prebindgen_declarations::Output::Sequence {delivery:prebindgen_declarations::SequenceDelivery::Value,element:Box::new(element),mode};
             let recipe=sequence(prebindgen_declarations::Output::Combine(vec![prebindgen_declarations::Output::Bulk(Box::new(sequence(prebindgen_declarations::Output::Leaf,Some(prebindgen_declarations::ProjectionMode::Borrowed))))]),None);
-            let conversion=prebindgen_declarations::compile_output(flat,&prebindgen_jni::JniCodec,"jni_output_mixed",&recipe,&())?;
+            let conversion=prebindgen_declarations::compile_output(flat,&prebindgen_jni::JniCodec::raw(),"jni_output_mixed",&recipe,&())?;
             flat.function_mut("jni_output_mixed")?.ret.slot=Some(conversion);
             let mut probe = flat.clone();
             let declarations = prebindgen_declarations::Declarations::new(&probe, vec![],vec![],vec![])?;
-            declarations.fill(&mut probe, &prebindgen_jni::JniCodec, &fun!(collection_probe).expand_return(expand_return!(Vec<char>).field_self()), &())?;
+            declarations.fill(&mut probe, &prebindgen_jni::JniCodec::raw(), &fun!(collection_probe).expand_return(expand_return!(Vec<char>).field_self()), &())?;
             // Observe a clone so the builder still installs its own codec.
             // Collections.kt exercises the separately generated JNI boundary.
             let output = probe.function("collection_probe")?.output_conversion()?;
@@ -1927,7 +1932,43 @@ fn main() {
 
     */
     let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
-    let mut jni = binding.build().expect("build supported declarations");
+    let mut prepared = binding
+        .package(
+            package!("scopedinputs")
+                .fun(fun!(scoped_input_new))
+                .fun(fun!(scoped_input_id))
+                .fun(fun!(scoped_input_drops))
+                .fun(fun!(scoped_input_pair))
+                .fun(fun!(scoped_input_failure).expand_param(
+                    "second",
+                    Input::constructor(
+                        "scoped_input_checked",
+                        [
+                            Input::constructor("scoped_input_mode", [Input::Leaf]),
+                            Input::Leaf,
+                        ],
+                    ),
+                )),
+        )
+        .prepare()
+        .expect("prepare supported declarations");
+    for name in ["scoped_input_pair", "scoped_input_failure"] {
+        let ty = prepared.function(name).unwrap().params[0].ty.ty.clone();
+        let leaf = prebindgen_declarations::Codec::input_leaf(
+            &prebindgen_jni::JniCodec::raw(),
+            prebindgen_declarations::InputLeaf::new(
+                &prepared,
+                &ty,
+                &(),
+                syn::parse_quote!(scoped_first),
+                syn::parse_quote!(scoped_first_value),
+                &Default::default(),
+            ),
+        )
+        .unwrap();
+        prepared.function_mut(name).unwrap().params[0].ty.slot = Some(leaf.into());
+    }
+    let mut jni = prebindgen_jni::generate(&prepared).expect("generate mixed input declarations");
     // Test-only constructor fault injection: handwritten OutputCleanupRow has
     // the exact generated fields plus an init hook that can throw or take a
     // handle. All Rust/JNI and collection-decoder code remains generated.
@@ -1966,6 +2007,16 @@ fn main() {
         relocated.rust
     ));
     for (path, source) in relocated.kotlin {
+        assert!(jni.kotlin.insert(path, source).is_none());
+    }
+    let independent = input_contracts::generate().expect("generate independent input converter");
+    independent.write_rust("input-contracts.rs").unwrap();
+    for (path, source) in independent.kotlin {
+        assert!(jni.kotlin.insert(path, source).is_none());
+    }
+    let independent = output_contracts::generate().expect("generate independent output converters");
+    independent.write_rust("output-contracts.rs").unwrap();
+    for (path, source) in independent.kotlin {
         assert!(jni.kotlin.insert(path, source).is_none());
     }
     for native_check in [
