@@ -675,14 +675,16 @@ pub unsafe extern "C" fn bench_callback_fixed(
                         let callback_outcome: ::prebindgen_runtime::Result<_> = {
                             let callback_return_w2_pointer = callback_return_w2
                                 as *mut c_collection_flat::Resource;
-                            let callback_return_w1 = unsafe {
-                                Box::from_raw(callback_return_w2_pointer)
+                            let callback_return_w1: c_collection_flat::Resource = {
+                                let callback_return_w1 = unsafe {
+                                    Box::from_raw(callback_return_w2_pointer)
+                                };
+                                {
+                                    __pb_callback_consumed
+                                        .set(__pb_callback_consumed.get() + (1usize));
+                                }
+                                *callback_return_w1
                             };
-                            {
-                                __pb_callback_consumed
-                                    .set(__pb_callback_consumed.get() + (1usize));
-                            }
-                            let callback_return_w1: c_collection_flat::Resource = *callback_return_w1;
                             let callback_return_w0_argument_0 = callback_return_w1;
                             let callback_return_w3: u64 = ::core::convert::Into::into(
                                 callback_return_w4,
@@ -690,14 +692,16 @@ pub unsafe extern "C" fn bench_callback_fixed(
                             let callback_return_w0_argument_1 = callback_return_w3;
                             let callback_return_w6_pointer = callback_return_w6
                                 as *mut c_collection_flat::Resource;
-                            let callback_return_w5 = unsafe {
-                                Box::from_raw(callback_return_w6_pointer)
+                            let callback_return_w5: c_collection_flat::Resource = {
+                                let callback_return_w5 = unsafe {
+                                    Box::from_raw(callback_return_w6_pointer)
+                                };
+                                {
+                                    __pb_callback_consumed
+                                        .set(__pb_callback_consumed.get() + (1usize));
+                                }
+                                *callback_return_w5
                             };
-                            {
-                                __pb_callback_consumed
-                                    .set(__pb_callback_consumed.get() + (1usize));
-                            }
-                            let callback_return_w5: c_collection_flat::Resource = *callback_return_w5;
                             let callback_return_w0_argument_2 = callback_return_w5;
                             let callback_return_w0: c_collection_flat::Record = c_collection_flat::record_new(
                                 callback_return_w0_argument_0,
@@ -848,14 +852,16 @@ pub unsafe extern "C" fn bench_callback_many(
                                         {
                                             let callback_return_w5_pointer = (callback_return_w5)
                                                 as *mut c_collection_flat::Resource;
-                                            let callback_return_w4 = unsafe {
-                                                Box::from_raw(callback_return_w5_pointer)
+                                            let callback_return_w4: c_collection_flat::Resource = {
+                                                let callback_return_w4 = unsafe {
+                                                    Box::from_raw(callback_return_w5_pointer)
+                                                };
+                                                {
+                                                    __pb_callback_consumed
+                                                        .set(__pb_callback_consumed.get() + (1usize));
+                                                }
+                                                *callback_return_w4
                                             };
-                                            {
-                                                __pb_callback_consumed
-                                                    .set(__pb_callback_consumed.get() + (1usize));
-                                            }
-                                            let callback_return_w4: c_collection_flat::Resource = *callback_return_w4;
                                             let callback_return_w1_row_value = callback_return_w4;
                                             Ok(callback_return_w1_row_value)
                                         }
@@ -1258,14 +1264,16 @@ pub unsafe extern "C" fn bench_callback_native_mixed(
                                         {
                                             let callback_return_w6_pointer = (callback_return_w6)
                                                 as *mut c_collection_flat::Resource;
-                                            let callback_return_w5 = unsafe {
-                                                Box::from_raw(callback_return_w6_pointer)
+                                            let callback_return_w5: c_collection_flat::Resource = {
+                                                let callback_return_w5 = unsafe {
+                                                    Box::from_raw(callback_return_w6_pointer)
+                                                };
+                                                {
+                                                    __pb_callback_consumed
+                                                        .set(__pb_callback_consumed.get() + (1usize));
+                                                }
+                                                *callback_return_w5
                                             };
-                                            {
-                                                __pb_callback_consumed
-                                                    .set(__pb_callback_consumed.get() + (1usize));
-                                            }
-                                            let callback_return_w5: c_collection_flat::Resource = *callback_return_w5;
                                             let callback_return_w4_argument_0 = callback_return_w5;
                                             #[allow(unused_parens)]
                                             let callback_return_w8_storage = (callback_return_w8);
@@ -1290,14 +1298,16 @@ pub unsafe extern "C" fn bench_callback_native_mixed(
                                             let callback_return_w4_argument_1 = callback_return_w7;
                                             let callback_return_w10_pointer = (callback_return_w10)
                                                 as *mut c_collection_flat::Resource;
-                                            let callback_return_w9 = unsafe {
-                                                Box::from_raw(callback_return_w10_pointer)
+                                            let callback_return_w9: c_collection_flat::Resource = {
+                                                let callback_return_w9 = unsafe {
+                                                    Box::from_raw(callback_return_w10_pointer)
+                                                };
+                                                {
+                                                    __pb_callback_consumed
+                                                        .set(__pb_callback_consumed.get() + (1usize));
+                                                }
+                                                *callback_return_w9
                                             };
-                                            {
-                                                __pb_callback_consumed
-                                                    .set(__pb_callback_consumed.get() + (1usize));
-                                            }
-                                            let callback_return_w9: c_collection_flat::Resource = *callback_return_w9;
                                             let callback_return_w4_argument_2 = callback_return_w9;
                                             let callback_return_w4: c_collection_flat::NativeMixed = c_collection_flat::native_mixed_new(
                                                 callback_return_w4_argument_0,
@@ -1464,14 +1474,18 @@ pub unsafe extern "C" fn bench_fixed_move(
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
             let p0_w1_pointer = p0_w1 as *mut c_collection_flat::Resource;
-            let p0_w0 = unsafe { Box::from_raw(p0_w1_pointer) };
-            {}
-            let p0_w0: c_collection_flat::Resource = *p0_w0;
+            let p0_w0: c_collection_flat::Resource = {
+                let p0_w0 = unsafe { Box::from_raw(p0_w1_pointer) };
+                {}
+                *p0_w0
+            };
             let __prebindgen_argument_0 = p0_w0;
             let p1_w1_pointer = p1_w1 as *mut c_collection_flat::Resource;
-            let p1_w0 = unsafe { Box::from_raw(p1_w1_pointer) };
-            {}
-            let p1_w0: c_collection_flat::Resource = *p1_w0;
+            let p1_w0: c_collection_flat::Resource = {
+                let p1_w0 = unsafe { Box::from_raw(p1_w1_pointer) };
+                {}
+                *p1_w0
+            };
             let __prebindgen_argument_1 = p1_w0;
             let source_value = c_collection_flat::fixed_move(
                 __prebindgen_argument_0,
@@ -2597,9 +2611,11 @@ pub unsafe extern "C" fn bench_take_buffers(p0_w1: __PbRows) -> u64 {
                         {
                             let p0_w6_pointer = (p0_w6)
                                 as *mut c_collection_flat::Resource;
-                            let p0_w5 = unsafe { Box::from_raw(p0_w6_pointer) };
-                            {}
-                            let p0_w5: c_collection_flat::Resource = *p0_w5;
+                            let p0_w5: c_collection_flat::Resource = {
+                                let p0_w5 = unsafe { Box::from_raw(p0_w6_pointer) };
+                                {}
+                                *p0_w5
+                            };
                             let p0_w4_argument_0 = p0_w5;
                             let p0_w7: String = ::core::convert::Into::into(unsafe {
                                 std::str::from_utf8_unchecked(__pb_read(p0_w8))
@@ -2685,9 +2701,11 @@ pub unsafe extern "C" fn bench_take_bytes(p0_w1: __PbRows) -> u64 {
                         {
                             let p0_w6_pointer = (p0_w6)
                                 as *mut c_collection_flat::Resource;
-                            let p0_w5 = unsafe { Box::from_raw(p0_w6_pointer) };
-                            {}
-                            let p0_w5: c_collection_flat::Resource = *p0_w5;
+                            let p0_w5: c_collection_flat::Resource = {
+                                let p0_w5 = unsafe { Box::from_raw(p0_w6_pointer) };
+                                {}
+                                *p0_w5
+                            };
                             let p0_w4_argument_0 = p0_w5;
                             let p0_w7: Vec<u8> = ::core::convert::Into::into(unsafe {
                                 __pb_read(p0_w8)
@@ -2766,9 +2784,11 @@ pub unsafe extern "C" fn bench_take_handles(p0_w1: __PbRows) -> u64 {
                         {
                             let p0_w5_pointer = (p0_w5)
                                 as *mut c_collection_flat::Resource;
-                            let p0_w4 = unsafe { Box::from_raw(p0_w5_pointer) };
-                            {}
-                            let p0_w4: c_collection_flat::Resource = *p0_w4;
+                            let p0_w4: c_collection_flat::Resource = {
+                                let p0_w4 = unsafe { Box::from_raw(p0_w5_pointer) };
+                                {}
+                                *p0_w4
+                            };
                             let p0_w1_row_value = p0_w4;
                             Ok(p0_w1_row_value)
                         }
@@ -2934,9 +2954,11 @@ pub unsafe extern "C" fn bench_take_native_mixed(p0_w1: __PbRows) -> u64 {
                         {
                             let p0_w6_pointer = (p0_w6)
                                 as *mut c_collection_flat::Resource;
-                            let p0_w5 = unsafe { Box::from_raw(p0_w6_pointer) };
-                            {}
-                            let p0_w5: c_collection_flat::Resource = *p0_w5;
+                            let p0_w5: c_collection_flat::Resource = {
+                                let p0_w5 = unsafe { Box::from_raw(p0_w6_pointer) };
+                                {}
+                                *p0_w5
+                            };
                             let p0_w4_argument_0 = p0_w5;
                             let p0_w8_pointer = (p0_w8)
                                 as *mut c_collection_flat::NativePacket;
@@ -2966,9 +2988,11 @@ pub unsafe extern "C" fn bench_take_native_mixed(p0_w1: __PbRows) -> u64 {
                             let p0_w4_argument_1 = p0_w7;
                             let p0_w10_pointer = (p0_w10)
                                 as *mut c_collection_flat::Resource;
-                            let p0_w9 = unsafe { Box::from_raw(p0_w10_pointer) };
-                            {}
-                            let p0_w9: c_collection_flat::Resource = *p0_w9;
+                            let p0_w9: c_collection_flat::Resource = {
+                                let p0_w9 = unsafe { Box::from_raw(p0_w10_pointer) };
+                                {}
+                                *p0_w9
+                            };
                             let p0_w4_argument_2 = p0_w9;
                             let p0_w4: c_collection_flat::NativeMixed = c_collection_flat::native_mixed_new(
                                 p0_w4_argument_0,
@@ -3115,17 +3139,21 @@ pub unsafe extern "C" fn bench_take_records(p0_w1: __PbRows) -> u64 {
                         {
                             let p0_w6_pointer = (p0_w6)
                                 as *mut c_collection_flat::Resource;
-                            let p0_w5 = unsafe { Box::from_raw(p0_w6_pointer) };
-                            {}
-                            let p0_w5: c_collection_flat::Resource = *p0_w5;
+                            let p0_w5: c_collection_flat::Resource = {
+                                let p0_w5 = unsafe { Box::from_raw(p0_w6_pointer) };
+                                {}
+                                *p0_w5
+                            };
                             let p0_w4_argument_0 = p0_w5;
                             let p0_w7: u64 = ::core::convert::Into::into(p0_w8);
                             let p0_w4_argument_1 = p0_w7;
                             let p0_w10_pointer = (p0_w10)
                                 as *mut c_collection_flat::Resource;
-                            let p0_w9 = unsafe { Box::from_raw(p0_w10_pointer) };
-                            {}
-                            let p0_w9: c_collection_flat::Resource = *p0_w9;
+                            let p0_w9: c_collection_flat::Resource = {
+                                let p0_w9 = unsafe { Box::from_raw(p0_w10_pointer) };
+                                {}
+                                *p0_w9
+                            };
                             let p0_w4_argument_2 = p0_w9;
                             let p0_w4: c_collection_flat::Record = c_collection_flat::record_new(
                                 p0_w4_argument_0,
@@ -3203,9 +3231,11 @@ pub unsafe extern "C" fn bench_take_tagged(p0_w1: __PbRows) -> u64 {
                         {
                             let p0_w6_pointer = (p0_w6)
                                 as *mut c_collection_flat::Resource;
-                            let p0_w5 = unsafe { Box::from_raw(p0_w6_pointer) };
-                            {}
-                            let p0_w5: c_collection_flat::Resource = *p0_w5;
+                            let p0_w5: c_collection_flat::Resource = {
+                                let p0_w5 = unsafe { Box::from_raw(p0_w6_pointer) };
+                                {}
+                                *p0_w5
+                            };
                             let p0_w4_argument_0 = p0_w5;
                             let p0_w7 = match p0_w8 {
                                 -3i32 => c_collection_flat::InputTag::Low,
@@ -3295,9 +3325,11 @@ pub unsafe extern "C" fn bench_take_tagged_buffers(p0_w1: __PbRows) -> u64 {
                         {
                             let p0_w6_pointer = (p0_w6)
                                 as *mut c_collection_flat::Resource;
-                            let p0_w5 = unsafe { Box::from_raw(p0_w6_pointer) };
-                            {}
-                            let p0_w5: c_collection_flat::Resource = *p0_w5;
+                            let p0_w5: c_collection_flat::Resource = {
+                                let p0_w5 = unsafe { Box::from_raw(p0_w6_pointer) };
+                                {}
+                                *p0_w5
+                            };
                             let p0_w4_argument_0 = p0_w5;
                             let p0_w7 = match p0_w8 {
                                 -3i32 => c_collection_flat::InputTag::Low,
@@ -3393,9 +3425,11 @@ pub unsafe extern "C" fn bench_take_text(p0_w1: __PbRows) -> u64 {
                         {
                             let p0_w6_pointer = (p0_w6)
                                 as *mut c_collection_flat::Resource;
-                            let p0_w5 = unsafe { Box::from_raw(p0_w6_pointer) };
-                            {}
-                            let p0_w5: c_collection_flat::Resource = *p0_w5;
+                            let p0_w5: c_collection_flat::Resource = {
+                                let p0_w5 = unsafe { Box::from_raw(p0_w6_pointer) };
+                                {}
+                                *p0_w5
+                            };
                             let p0_w4_argument_0 = p0_w5;
                             let p0_w7: String = ::core::convert::Into::into(unsafe {
                                 std::str::from_utf8_unchecked(__pb_read(p0_w8))
@@ -3488,9 +3522,11 @@ pub unsafe extern "C" fn bench_take_wide(p0_w1: __PbRows) -> u64 {
                         {
                             let p0_w6_pointer = (p0_w6)
                                 as *mut c_collection_flat::Resource;
-                            let p0_w5 = unsafe { Box::from_raw(p0_w6_pointer) };
-                            {}
-                            let p0_w5: c_collection_flat::Resource = *p0_w5;
+                            let p0_w5: c_collection_flat::Resource = {
+                                let p0_w5 = unsafe { Box::from_raw(p0_w6_pointer) };
+                                {}
+                                *p0_w5
+                            };
                             let p0_w4_argument_0 = p0_w5;
                             let p0_w7: u64 = ::core::convert::Into::into(p0_w8);
                             let p0_w4_argument_1 = p0_w7;
