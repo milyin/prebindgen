@@ -8,6 +8,7 @@ publish = false
 [workspace]
 
 [dependencies]
+prebindgen = { path = "../../../../prebindgen" }
 prebindgen-c = { path = "../../../../prebindgen-c" }
 prebindgen-declarations = { path = "../../../../prebindgen-declarations" }
 prebindgen-flat = { path = "../../../../prebindgen-flat" }

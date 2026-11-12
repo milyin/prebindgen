@@ -11,6 +11,8 @@ use syn::{visit_mut::VisitMut, Type};
 
 mod value;
 pub use value::{ValueConversion, ValueConversions, ValueSource};
+mod payload;
+pub use payload::{PayloadEnum, PayloadField, PayloadVariant, VariantStyle};
 
 mod conversion;
 pub use conversion::*;
@@ -168,6 +170,8 @@ pub struct Flat<M: Schema = ()> {
     pub records: BTreeMap<String, Record<M::Field>>,
     /// Fieldless enums indexed by qualified source type.
     pub enums: BTreeMap<String, FieldlessEnum<M::Variant>>,
+    /// Data-carrying source enums and concrete standard Result shapes.
+    pub payload_enums: BTreeMap<String, PayloadEnum<M::Variant, M::Field>>,
     /// Canonical source types and their metadata. Declared names (including opaque
     /// aliases) are keys; built-ins and composites registered through
     /// `Flat::type_metadata_mut` use their qualified type syntax as keys.
@@ -193,6 +197,7 @@ where
             functions: self.functions.clone(),
             records: self.records.clone(),
             enums: self.enums.clone(),
+            payload_enums: self.payload_enums.clone(),
             types: self.types.clone(),
             guards: self.guards.clone(),
         }
@@ -214,6 +219,7 @@ where
             .field("functions", &self.functions)
             .field("records", &self.records)
             .field("enums", &self.enums)
+            .field("payload_enums", &self.payload_enums)
             .field("types", &self.types)
             .field("guards", &self.guards)
             .finish()
@@ -299,6 +305,11 @@ impl<M: Schema> Flat<M> {
                 match item {
                     syn::Item::Fn(f) => visitor.visit_signature_mut(&mut f.sig.clone()),
                     syn::Item::Struct(s) => visitor.visit_fields_mut(&mut s.fields.clone()),
+                    syn::Item::Enum(e) => {
+                        for variant in &e.variants {
+                            visitor.visit_fields_mut(&mut variant.fields.clone());
+                        }
+                    }
                     // Aliases are opaque: their implementation is not part of the boundary.
                     _ => {}
                 }
@@ -313,9 +324,9 @@ impl<M: Schema> Flat<M> {
         }))
     }
 
-    /// Read captured free functions, named records, fieldless enums and opaque aliases.
-    /// Only exhaustive enums with unconditional fieldless variants belong to this
-    /// subset. Rejects duplicate names, non-public declarations, unsupported
+    /// Read captured free functions, named records, exhaustive enums and opaque aliases.
+    /// Payload enums preserve source variant/field structure independently of ABI tags.
+    /// Rejects duplicate names, non-public declarations, unsupported
     /// signatures and types, and inaccessible record fields.
     ///
     /// Input and output slots start at `None`; no default conversion is required.
@@ -375,6 +386,7 @@ impl<M: Schema> Flat<M> {
             functions: BTreeMap::new(),
             records: BTreeMap::new(),
             enums: BTreeMap::new(),
+            payload_enums: BTreeMap::new(),
             types,
             guards: Vec::new(),
         };
@@ -482,6 +494,14 @@ impl<M: Schema> Flat<M> {
                         return Err("fieldless enums require at least one variant".into());
                     }
                     let ty = flat.types[&e.ident.to_string()].ty.clone();
+                    if e.variants
+                        .iter()
+                        .any(|v| !matches!(v.fields, syn::Fields::Unit))
+                    {
+                        let payload = flat.parse_payload(ty.clone(), e)?;
+                        flat.payload_enums.insert(type_key(&ty), payload);
+                        continue;
+                    }
                     let mut variants = Vec::new();
                     let mut names = BTreeSet::new();
                     for variant in e.variants {
@@ -535,6 +555,7 @@ impl<M: Schema> Flat<M> {
                 const _: () = assert!(::core::mem::size_of::<#ty>() != 0, #message);
             });
         }
+        flat.register_results();
         Ok(flat)
     }
 }
@@ -567,6 +588,7 @@ impl<M: Schema> Flat<M> {
     /// own declarations such as error handlers without creating another registry.
     pub fn type_metadata_mut(&mut self, ty: &Type) -> Result<&mut M::Type> {
         let ty = self.resolve_type(ty)?;
+        self.register_result(&ty);
         let key = self
             .types
             .iter()
@@ -761,6 +783,7 @@ impl<M: Schema> Flat<M> {
             functions,
             records: self.records,
             enums: self.enums,
+            payload_enums: self.payload_enums,
             types: self.types,
             guards: self.guards,
         })

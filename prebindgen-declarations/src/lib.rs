@@ -25,6 +25,7 @@ pub use builders::{ErrorDecl, ExpandDecl, ExpandParamDecl, ExpandReturnDecl, Fie
 mod enums;
 pub use enums::{enum_input, enum_output, EnumMapping};
 mod optional;
+mod variants;
 pub use optional::{
     absent_output_values, optional_input, optional_output, optional_presence,
     prepare_optional_payload, retire_optional_niches, select_optional_niche, NicheReservation,
@@ -33,12 +34,6 @@ pub use optional::{
 pub use prebindgen_flat::{option_inner, result_parts, sequence_parts, SequenceView};
 mod sequence;
 pub use sequence::{SequenceInput, SequenceOutput};
-fn contains_result(ty: &Type) -> bool {
-    result_parts(ty).is_some()
-        || option_inner(ty).is_some_and(contains_result)
-        || sequence_parts(ty).is_some_and(|(ty, _)| contains_result(ty))
-        || matches!(ty, Type::Reference(r) if contains_result(&r.elem))
-}
 // Sized shared outputs use the referent's ordinary recipe, with borrowing
 // carried by the compiler. Keep unsized string/slice views as their own types:
 // adapters and sequence transport already understand those reference shapes.
@@ -131,6 +126,13 @@ pub enum SequenceDelivery {
 /// ```
 #[derive(Clone, Debug)]
 pub enum Input<P = std::convert::Infallible> {
+    /// Construct the selected source enum variant from its field recipes.
+    Enum {
+        /// One field list per source variant, in source order.
+        variants: Vec<Vec<Input<P>>>,
+        /// Group the foreign value, rather than expose expanded tag/field arguments.
+        value: bool,
+    },
     /// A pending preparation instruction. The default payload is uninhabited,
     /// so a resolved Input cannot contain this variant in safe Rust.
     Request(P),
@@ -173,6 +175,10 @@ pub enum Input<P = std::convert::Infallible> {
 /// Source-dependent choices accepted only while preparing an input tree.
 #[derive(Clone, Debug)]
 pub enum InputRequest {
+    /// Expand enum fields, inheriting defaults for fields not explicitly overridden.
+    EnumFields(
+        std::collections::BTreeMap<String, std::collections::BTreeMap<String, Input<InputRequest>>>,
+    ),
     /// Resolve only the canonical value form, independently of boundary defaults.
     Value,
     /// Select a local single-value conversion.
@@ -193,6 +199,13 @@ pub enum InputRequest {
 }
 
 impl Input<InputRequest> {
+    /// Expand the tag and selected fields. Keys are source variant and field
+    /// names (or tuple indices). Unspecified fields inherit boundary defaults.
+    pub fn enum_fields<'a>(
+        overrides: impl IntoIterator<Item = (&'a str, Vec<(&'a str, Self)>)>,
+    ) -> Self {
+        Self::Request(InputRequest::EnumFields(variants::overrides(overrides)))
+    }
     /// Request the canonical value representation, bypassing boundary defaults.
     pub fn value() -> Self {
         Self::Request(InputRequest::Value)
@@ -307,6 +320,15 @@ impl<P> Input<P> {
 /// leaves select borrowed or owned conversion independently of type contents.
 #[derive(Clone, Debug)]
 pub enum Output<P = std::convert::Infallible> {
+    /// Match a source enum and convert only its active payload.
+    Enum {
+        /// One field list per source variant, in source order.
+        variants: Vec<Vec<Output<P>>>,
+        /// Group a foreign value instead of exposing expanded tag/field arguments.
+        value: bool,
+        /// Explicit observation or move; None follows the source occurrence.
+        mode: Option<ProjectionMode>,
+    },
     /// Omit this output value; source ownership still follows the enclosing operation.
     Discard,
     /// Group the expanded fields into an adapter-selected C-representation bulk carrier.
@@ -392,6 +414,13 @@ pub enum Output<P = std::convert::Infallible> {
 /// Source-dependent choices accepted only while preparing an output tree.
 #[derive(Clone, Debug)]
 pub enum OutputRequest {
+    /// Expand enum fields, inheriting boundary defaults for unspecified fields.
+    EnumFields(
+        std::collections::BTreeMap<
+            String,
+            std::collections::BTreeMap<String, Output<OutputRequest>>,
+        >,
+    ),
     /// Resolve only the canonical value form, independently of boundary defaults.
     Value {
         /// Explicit field ownership/projection policy, if any.
@@ -418,6 +447,12 @@ pub enum OutputRequest {
 }
 
 impl Output<OutputRequest> {
+    /// Expand an enum's tag and active fields using source variant/member keys.
+    pub fn enum_fields<'a>(
+        overrides: impl IntoIterator<Item = (&'a str, Vec<(&'a str, Self)>)>,
+    ) -> Self {
+        Self::Request(OutputRequest::EnumFields(variants::overrides(overrides)))
+    }
     /// Request the canonical value representation, bypassing boundary defaults.
     pub fn value() -> Self {
         Self::Request(OutputRequest::Value { projection: None })
@@ -583,6 +618,10 @@ impl Output {
                 .map_or(!borrowed && output_referent(ty).is_none(), |m| {
                     m == ProjectionMode::Owned
                 }),
+            Self::Enum { mode, .. } => mode
+                .map_or(!borrowed && output_referent(ty).is_none(), |m| {
+                    m == ProjectionMode::Owned
+                }),
             Self::Request(never) => match *never {},
             Self::Combine(p) => p
                 .iter()
@@ -712,7 +751,7 @@ pub fn compile_callback_return<C: Codec>(
     extra: &C::Extra,
 ) -> Result<<C::Schema as Schema>::Input> {
     let compiler = Compiler {
-        input_role: InputRole::CallbackResult,
+        input_role: std::cell::Cell::new(InputRole::CallbackResult),
         ..Compiler::new(flat, codec, "callback_return".into())
     };
     let mut plan = compiler.input(ty, recipe, extra, &Condition::default())?;
@@ -874,7 +913,7 @@ fn finalize_output_schema<C: Codec>(
 }
 
 struct Compiler<'a, C: Codec> {
-    input_role: InputRole,
+    input_role: std::cell::Cell<InputRole>,
     bulk: std::cell::Cell<bool>,
     // Explicit borrowed collection/record projections authorize owning copies
     // of borrowed leaves, without changing conversions of owned getter results.
@@ -892,7 +931,7 @@ struct Compiler<'a, C: Codec> {
 impl<'a, C: Codec> Compiler<'a, C> {
     fn new(flat: &'a Flat<C::Schema>, codec: &'a C, prefix: String) -> Self {
         Self {
-            input_role: InputRole::Parameter,
+            input_role: std::cell::Cell::new(InputRole::Parameter),
             bulk: std::cell::Cell::new(false),
             copy_borrowed: std::cell::Cell::new(false),
             ordinary_collections: std::cell::Cell::new(false),
@@ -973,13 +1012,13 @@ impl<'a, C: Codec> Compiler<'a, C> {
         {
             return Err("source callback parameters only support leaf inputs".into());
         }
-        if contains_result(ty) {
-            return Err("Result inputs require an explicit data representation; error routing is output-only".into());
-        }
         let var = names
             .map(|(_, var)| var.clone())
             .unwrap_or_else(|| self.name());
         match recipe {
+            Input::Enum { variants, value } => {
+                self.enum_input(ty, variants, *value, extra, active, names)
+            }
             Input::Convert { conversion, input } => {
                 self.input_conversion(ty, conversion, input, extra, active, names)
             }
@@ -1128,7 +1167,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     target: var,
                     active,
                     representation,
-                    role: self.input_role,
+                    role: self.input_role.get(),
                 })
             }
             Input::Request(never) => match *never {},
@@ -1472,9 +1511,6 @@ impl<'a, C: Codec> Compiler<'a, C> {
             let value = if borrowed { quote!(*(#value)) } else { value };
             return self.output_named(referent, recipe, extra, value, true, wire_name);
         }
-        if contains_result(ty) {
-            return Err("Result error routing is supported only at the outermost return with an explicit mapper".into());
-        }
         let mut out = OutputPlan {
             fallible: false,
             context: Default::default(),
@@ -1493,6 +1529,15 @@ impl<'a, C: Codec> Compiler<'a, C> {
             values: Vec::new(),
         };
         match recipe {
+            Output::Enum {
+                variants,
+                value: grouped,
+                mode,
+            } => {
+                return self.enum_output(
+                    ty, variants, *grouped, *mode, extra, value, borrowed, wire_name,
+                )
+            }
             Output::Convert { conversion, output } => {
                 return self.output_conversion(ty, conversion, output, extra, value, borrowed)
             }

@@ -286,7 +286,9 @@ p0_w3_bulkList.forEachIndexed { p0_w3_bulkIndex, p0_w7 ->
 val p0_w8_elements = if (true) p0_w7.history?.toList() else null
 p0_w1_writer.long((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.rf2e4d425e0f43581.size) + io.prebindgen.covertest.BulkLayouts.rf2e4d425e0f43581.offsets[0], io.prebindgen.covertest.InputValidation.value { p0_w7.delay })
 p0_w1_writer.int((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.rf2e4d425e0f43581.size) + io.prebindgen.covertest.BulkLayouts.rf2e4d425e0f43581.offsets[1], io.prebindgen.covertest.InputValidation.value { (if (p0_w7.optional != null) 1 else 0) })
+if (((if (p0_w7.optional != null) 1 else 0)) == 1) {
 p0_w1_writer.long((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.rf2e4d425e0f43581.size) + io.prebindgen.covertest.BulkLayouts.rf2e4d425e0f43581.offsets[2], io.prebindgen.covertest.InputValidation.value { if (p0_w7.optional != null) requireNotNull(p0_w7.optional) else 0L })
+}
 val p0_w8_bulkList = io.prebindgen.covertest.InputValidation.value { p0_w8_elements }
 if (p0_w8_bulkList == null) { p0_w1_writer.absent((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.rf2e4d425e0f43581.size) + io.prebindgen.covertest.BulkLayouts.rf2e4d425e0f43581.offsets[3]) } else {
 val p0_w8_bulkStart = p0_w1_writer.rows(p0_w8_bulkList.size, io.prebindgen.covertest.BulkLayouts.ra60d3960993b9a77)

@@ -158,6 +158,7 @@ callback_return_w4_writer.range((0) + io.prebindgen.covertest.BulkLayouts.r31afb
 callback_return_w5_bulkList.forEachIndexed { callback_return_w5_bulkIndex, callback_return_w11 ->
 val callback_return_w11_elements = if (callback_return_w11 != null) (if (true) requireNotNull(callback_return_w11).toList() else null) else (null)
 callback_return_w4_writer.int((callback_return_w5_bulkStart + callback_return_w5_bulkIndex * io.prebindgen.covertest.BulkLayouts.r1033cb21c6bf06e2.size) + io.prebindgen.covertest.BulkLayouts.r1033cb21c6bf06e2.offsets[0], io.prebindgen.covertest.InputValidation.value { (if (callback_return_w11 != null) 1 else 0) })
+if (((if (callback_return_w11 != null) 1 else 0)) == 1) {
 val callback_return_w11_bulkList = io.prebindgen.covertest.InputValidation.value { if (callback_return_w11 != null) callback_return_w11_elements else null }
 if (callback_return_w11_bulkList == null) { callback_return_w4_writer.absent((callback_return_w5_bulkStart + callback_return_w5_bulkIndex * io.prebindgen.covertest.BulkLayouts.r1033cb21c6bf06e2.size) + io.prebindgen.covertest.BulkLayouts.r1033cb21c6bf06e2.offsets[1]) } else {
 val callback_return_w11_bulkStart = callback_return_w4_writer.rows(callback_return_w11_bulkList.size, io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3)
@@ -171,6 +172,7 @@ callback_return_w4_writer.handle((callback_return_w11_bulkStart + callback_retur
 callback_return_w4_writer.handle((callback_return_w11_bulkStart + callback_return_w11_bulkIndex * io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.size) + io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.offsets[1], io.prebindgen.covertest.InputValidation.value { if (__pb_callback_return_w15_field1 != null) requireNotNull(if (true) requireNotNull(__pb_callback_return_w15_field1) else null) { "invalid option payload" } else null }, true, 0)
 callback_return_w4_writer.int((callback_return_w11_bulkStart + callback_return_w11_bulkIndex * io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.size) + io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.offsets[2], io.prebindgen.covertest.InputValidation.value { __pb_callback_return_w15_field2 })
 callback_return_w4_writer.handle((callback_return_w11_bulkStart + callback_return_w11_bulkIndex * io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.size) + io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.offsets[3], io.prebindgen.covertest.InputValidation.value { __pb_callback_return_w15_field3 }, true, 0)
+}
 }
 }
 }
@@ -237,6 +239,7 @@ p0_w1_writer.range((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.
 p0_w8_bulkList.forEachIndexed { p0_w8_bulkIndex, p0_w14 ->
 val p0_w14_elements = if (p0_w14 != null) (if (true) requireNotNull(p0_w14).toList() else null) else (null)
 p0_w1_writer.int((p0_w8_bulkStart + p0_w8_bulkIndex * io.prebindgen.covertest.BulkLayouts.r1033cb21c6bf06e2.size) + io.prebindgen.covertest.BulkLayouts.r1033cb21c6bf06e2.offsets[0], io.prebindgen.covertest.InputValidation.value { (if (p0_w14 != null) 1 else 0) })
+if (((if (p0_w14 != null) 1 else 0)) == 1) {
 val p0_w14_bulkList = io.prebindgen.covertest.InputValidation.value { if (p0_w14 != null) p0_w14_elements else null }
 if (p0_w14_bulkList == null) { p0_w1_writer.absent((p0_w8_bulkStart + p0_w8_bulkIndex * io.prebindgen.covertest.BulkLayouts.r1033cb21c6bf06e2.size) + io.prebindgen.covertest.BulkLayouts.r1033cb21c6bf06e2.offsets[1]) } else {
 val p0_w14_bulkStart = p0_w1_writer.rows(p0_w14_bulkList.size, io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3)
@@ -250,6 +253,7 @@ p0_w1_writer.handle((p0_w14_bulkStart + p0_w14_bulkIndex * io.prebindgen.coverte
 p0_w1_writer.handle((p0_w14_bulkStart + p0_w14_bulkIndex * io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.size) + io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.offsets[1], io.prebindgen.covertest.InputValidation.value { if (__pb_p0_w18_field1 != null) requireNotNull(if (true) requireNotNull(__pb_p0_w18_field1) else null) { "invalid option payload" } else null }, true, 0)
 p0_w1_writer.int((p0_w14_bulkStart + p0_w14_bulkIndex * io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.size) + io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.offsets[2], io.prebindgen.covertest.InputValidation.value { __pb_p0_w18_field2 })
 p0_w1_writer.handle((p0_w14_bulkStart + p0_w14_bulkIndex * io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.size) + io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.offsets[3], io.prebindgen.covertest.InputValidation.value { __pb_p0_w18_field3 }, true, 0)
+}
 }
 }
 }
@@ -531,6 +535,7 @@ callback_return_w8_writer.range((0) + io.prebindgen.covertest.BulkLayouts.r31afb
 callback_return_w9_bulkList.forEachIndexed { callback_return_w9_bulkIndex, callback_return_w15 ->
 val callback_return_w15_elements = if (callback_return_w15 != null) (if (true) requireNotNull(callback_return_w15).toList() else null) else (null)
 callback_return_w8_writer.int((callback_return_w9_bulkStart + callback_return_w9_bulkIndex * io.prebindgen.covertest.BulkLayouts.r1033cb21c6bf06e2.size) + io.prebindgen.covertest.BulkLayouts.r1033cb21c6bf06e2.offsets[0], io.prebindgen.covertest.InputValidation.value { (if (callback_return_w15 != null) 1 else 0) })
+if (((if (callback_return_w15 != null) 1 else 0)) == 1) {
 val callback_return_w15_bulkList = io.prebindgen.covertest.InputValidation.value { if (callback_return_w15 != null) callback_return_w15_elements else null }
 if (callback_return_w15_bulkList == null) { callback_return_w8_writer.absent((callback_return_w9_bulkStart + callback_return_w9_bulkIndex * io.prebindgen.covertest.BulkLayouts.r1033cb21c6bf06e2.size) + io.prebindgen.covertest.BulkLayouts.r1033cb21c6bf06e2.offsets[1]) } else {
 val callback_return_w15_bulkStart = callback_return_w8_writer.rows(callback_return_w15_bulkList.size, io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3)
@@ -544,6 +549,7 @@ callback_return_w8_writer.handle((callback_return_w15_bulkStart + callback_retur
 callback_return_w8_writer.handle((callback_return_w15_bulkStart + callback_return_w15_bulkIndex * io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.size) + io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.offsets[1], io.prebindgen.covertest.InputValidation.value { if (__pb_callback_return_w19_field1 != null) requireNotNull(if (true) requireNotNull(__pb_callback_return_w19_field1) else null) { "invalid option payload" } else null }, true, 0)
 callback_return_w8_writer.int((callback_return_w15_bulkStart + callback_return_w15_bulkIndex * io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.size) + io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.offsets[2], io.prebindgen.covertest.InputValidation.value { __pb_callback_return_w19_field2 })
 callback_return_w8_writer.handle((callback_return_w15_bulkStart + callback_return_w15_bulkIndex * io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.size) + io.prebindgen.covertest.BulkLayouts.r3f18e0d568ad44e3.offsets[3], io.prebindgen.covertest.InputValidation.value { __pb_callback_return_w19_field3 }, true, 0)
+}
 }
 }
 }

@@ -11,6 +11,8 @@ mod layout;
 pub use layout::{LayoutArtifact, SizeAlign, SourceFeatures};
 mod record;
 pub use record::Record;
+mod tagged;
+pub use tagged::TaggedUnion;
 
 /// Stable, target-independent identifier for a canonical record schema.
 ///

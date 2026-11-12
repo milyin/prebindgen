@@ -14,6 +14,7 @@ private fun expectInvalid(action: () -> Unit) {
 // Exercises the active subset of the migrated source and build declarations.
 fun main(args: Array<String>) {
     if (args.contentEquals(arrayOf("handle-lock-stack"))) { checkHandleLockStack(); return }
+    if (args.contentEquals(arrayOf("payload-bench"))) { benchmarkPayloadEnums(); return }
     checkInputContracts()
     checkOutputContracts()
     checkRowMetadata()
@@ -46,6 +47,7 @@ fun main(args: Array<String>) {
     checkResults()
     checkOptions()
     checkEnums()
+    checkPayloadEnums()
     for (text in listOf("", "ordinary", "héllo 世界", "embedded\u0000nul")) {
         check(stringNew(text) == text)
         // Explicit reconstruction borrows the decoded Rust String temporary.

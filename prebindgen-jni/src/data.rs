@@ -60,6 +60,8 @@ pub enum ClassDecl {
     Data(DataClassDecl),
     /// A fieldless enum mapped to a Kotlin enum class.
     Enum(EnumClassDecl),
+    /// A source payload enum represented as a sealed interface.
+    Sealed(SealedClassDecl),
     /// A retained callback interface and its signature defaults.
     Callback(prebindgen_declarations::CallbackDecl),
 }
@@ -71,6 +73,11 @@ impl From<PtrClassDecl> for ClassDecl {
 impl From<DataClassDecl> for ClassDecl {
     fn from(value: DataClassDecl) -> Self {
         Self::Data(value)
+    }
+}
+impl From<SealedClassDecl> for ClassDecl {
+    fn from(value: SealedClassDecl) -> Self {
+        Self::Sealed(value)
     }
 }
 impl From<EnumClassDecl> for ClassDecl {
@@ -89,6 +96,7 @@ impl ClassDecl {
             Self::Ptr(c) => &c.ty,
             Self::Data(c) => &c.ty,
             Self::Enum(c) => &c.ty,
+            Self::Sealed(c) => &c.ty,
             Self::Callback(c) => &c.ty,
         }
     }
@@ -97,6 +105,7 @@ impl ClassDecl {
             Self::Ptr(c) => &c.name,
             Self::Data(c) => &c.name,
             Self::Enum(c) => &c.name,
+            Self::Sealed(c) => &c.name,
             Self::Callback(c) => &c.foreign,
         }
     }
@@ -226,10 +235,10 @@ pub(crate) fn prepare(flat: &mut Bindings) -> Result<()> {
             .ok()
             .and_then(|t| t.metadata.class.clone())
         {
-            let handles = if class.data {
+            let handles = if matches!(class.kind, ClassKind::Data | ClassKind::Sealed) {
                 resolve(flat, &type_key(ty), stack, resolved)?
             } else {
-                !class.enumeration
+                class.kind != ClassKind::Enum
             };
             return Ok((class.fqn(), handles));
         }
@@ -261,19 +270,49 @@ pub(crate) fn prepare(flat: &mut Bindings) -> Result<()> {
                 .unwrap()
                 .has_handles);
         }
-        let record = flat
-            .records
-            .get(key)
-            .ok_or_else(|| format!("data class `{key}` requires a named-field record"))?;
-        let source_fields = record.fields.clone();
-        if record.fields.is_empty() {
-            return Err(format!("data class `{key}` must have at least one field"));
-        }
+        let class = flat
+            .type_info(&syn::parse_str::<syn::Type>(key).map_err(|e| e.to_string())?)?
+            .metadata
+            .class
+            .as_ref()
+            .unwrap();
+        let sealed = class.kind == ClassKind::Sealed;
+        let mut starts = BTreeSet::new();
+        let source_fields = if sealed {
+            let source = flat
+                .payload_enums
+                .get(key)
+                .ok_or_else(|| format!("sealed class `{key}` requires a payload enum"))?;
+            let mut fields = Vec::new();
+            for arm in &source.variants {
+                starts.insert(fields.len());
+                for f in &arm.fields {
+                    fields.push(prebindgen_flat::Field {
+                        name: format_ident!("{}", f.property()),
+                        ty: f.ty.clone(),
+                        metadata: f.metadata.clone(),
+                    });
+                }
+            }
+            fields
+        } else {
+            let record = flat
+                .records
+                .get(key)
+                .ok_or_else(|| format!("data class `{key}` requires a named-field record"))?;
+            if record.fields.is_empty() {
+                return Err(format!("data class `{key}` must have at least one field"));
+            }
+            record.fields.clone()
+        };
         stack.push(key.into());
         let mut fields = vec![];
         let mut getters = BTreeSet::from(["getClass".to_string()]);
         let mut has_handles = false;
-        for f in &source_fields {
+        for (index, f) in source_fields.iter().enumerate() {
+            if starts.contains(&index) {
+                getters = BTreeSet::from(["getClass".to_string()]);
+            }
             let source_name = f.name.to_string();
             let name = source_name.trim_start_matches("r#");
             validate_name(name).map_err(|e| format!("data class `{key}` field `{name}`: {e}"))?;
@@ -331,7 +370,9 @@ pub(crate) fn prepare(flat: &mut Bindings) -> Result<()> {
             let mut bytes = false;
             let mut floating = false;
             let mut slots = 1;
-            let mut kotlin_type = if let Some(value) = Value::of(ty) {
+            let mut kotlin_type = if type_key(ty) == "()" {
+                "kotlin.Unit".into()
+            } else if let Some(value) = Value::of(ty) {
                 match value {
                     Value::Scalar(p @ (Primitive::I128 | Primitive::U128)) => {
                         slots = JniWire::scalar(p).parameter_slots();
@@ -353,9 +394,9 @@ pub(crate) fn prepare(flat: &mut Bindings) -> Result<()> {
                 .ok()
                 .and_then(|t| t.metadata.class.clone())
             {
-                if child.data {
+                if matches!(child.kind, ClassKind::Data | ClassKind::Sealed) {
                     has_handles |= resolve(flat, &field_key, stack, resolved)?;
-                } else if !child.enumeration {
+                } else if child.kind != ClassKind::Enum {
                     has_handles = true;
                 }
                 child.fqn()
@@ -380,13 +421,42 @@ pub(crate) fn prepare(flat: &mut Bindings) -> Result<()> {
             });
         }
         let slots = fields.iter().map(|f| f.slots).sum::<usize>() + fields.len().div_ceil(32) + 2;
-        if slots > 255 {
+        if !sealed && slots > 255 {
             return Err(format!("data class `{key}` copy method needs {slots} JVM parameter slots; the limit is 255"));
         }
         stack.pop();
-        let record = flat.records.get_mut(key).unwrap();
-        for (field, metadata) in record.fields.iter_mut().zip(fields) {
-            field.metadata = metadata;
+        if sealed {
+            let mut start = 0;
+            for arm in &flat.payload_enums[key].variants {
+                let count = arm.fields.len();
+                let slots = fields[start..start + count]
+                    .iter()
+                    .map(|f| f.slots)
+                    .sum::<usize>()
+                    + count.div_ceil(32)
+                    + 2;
+                if slots > 255 {
+                    return Err(format!("sealed class `{key}` variant `{}` copy method needs {slots} JVM parameter slots; the limit is 255",arm.name));
+                }
+                start += count;
+            }
+            let mut metadata = fields.into_iter();
+            for arm in &mut flat.payload_enums.get_mut(key).unwrap().variants {
+                for field in &mut arm.fields {
+                    field.metadata = metadata.next().unwrap();
+                }
+            }
+        } else {
+            for (field, metadata) in flat
+                .records
+                .get_mut(key)
+                .unwrap()
+                .fields
+                .iter_mut()
+                .zip(fields)
+            {
+                field.metadata = metadata;
+            }
         }
         let ty = syn::parse_str::<syn::Type>(key).map_err(|e| e.to_string())?;
         let class = flat.type_metadata_mut(&ty)?.class.as_mut().unwrap();
@@ -411,10 +481,10 @@ pub(crate) fn prepare(flat: &mut Bindings) -> Result<()> {
             .as_ref()
             .unwrap()
             .clone();
-        if class.data {
+        if matches!(class.kind, ClassKind::Data | ClassKind::Sealed) {
             resolve(flat, &key, &mut Vec::new(), &mut resolved)?;
         }
-        if class.enumeration && flat.type_info(&ty)?.metadata.enumeration.is_none() {
+        if class.kind == ClassKind::Enum && flat.type_info(&ty)?.metadata.enumeration.is_none() {
             let enumeration = Rc::new(JniEnum::from_class(flat, &class, &key)?);
             flat.guards.extend(enumeration.mapping.guards());
             let info = flat.type_metadata_mut(&ty)?;
@@ -451,7 +521,7 @@ impl JniCodec<'_> {
                 .type_info(&r.elem)
                 .ok()
                 .and_then(|t| t.metadata.class.as_ref())
-                .is_some_and(|c| c.data)
+                .is_some_and(|c| c.kind == ClassKind::Data)
             {
                 return Err(format!(
                     "data class `{}` supports owned occurrences only",
@@ -463,7 +533,7 @@ impl JniCodec<'_> {
             .type_info(ty)
             .ok()
             .and_then(|t| t.metadata.class.as_ref())
-            .filter(|c| c.data))
+            .filter(|c| c.kind == ClassKind::Data))
     }
 }
 pub(crate) fn render_record<I: KotlinInputConversion, O: KotlinOutputConversion>(
@@ -472,8 +542,13 @@ pub(crate) fn render_record<I: KotlinInputConversion, O: KotlinOutputConversion>
     ty: &syn::Type,
 ) -> Result<String> {
     let record = flat.record(ty)?;
-    let fields = record
-        .fields
+    render_record_fields(class, &record.fields)
+}
+pub(crate) fn render_record_fields(
+    class: &Class,
+    fields: &[prebindgen_flat::Field<JniField>],
+) -> Result<String> {
+    let parameters = fields
         .iter()
         .map(|f| {
             format!(
@@ -490,12 +565,11 @@ pub(crate) fn render_record<I: KotlinInputConversion, O: KotlinOutputConversion>
         ""
     };
     let mut out = format!(
-        "package {}\n\n{lifecycle}public data class {}(\n{fields}\n)",
+        "package {}\n\n{lifecycle}public data class {}(\n{parameters}\n)",
         class.pkg, class.name
     );
-    if record.fields.iter().any(|f| f.metadata.bytes) {
-        let equal = record
-            .fields
+    if fields.iter().any(|f| f.metadata.bytes) {
+        let equal = fields
             .iter()
             .map(|f| {
                 let n = kotlin_identifier(&field_name(f));
@@ -511,8 +585,7 @@ pub(crate) fn render_record<I: KotlinInputConversion, O: KotlinOutputConversion>
             })
             .collect::<Vec<_>>()
             .join(" &&\n            ");
-        let hashes = record
-            .fields
+        let hashes = fields
             .iter()
             .map(|f| {
                 let n = kotlin_identifier(&field_name(f));
@@ -527,8 +600,7 @@ pub(crate) fn render_record<I: KotlinInputConversion, O: KotlinOutputConversion>
         for h in &hashes[1..] {
             hash = format!("31 * ({hash}) + {h}");
         }
-        let display = record
-            .fields
+        let display = fields
             .iter()
             .map(|f| {
                 let label = field_name(f);
@@ -789,8 +861,7 @@ mod group_tests {
         flat.type_metadata_mut(&ty).unwrap().class = Some(Rc::new(Class {
             pkg: "example".into(),
             name: "Record".into(),
-            data: true,
-            enumeration: false,
+            kind: ClassKind::Data,
             has_handles: false,
             gc_managed: false,
             variant_names: vec![],

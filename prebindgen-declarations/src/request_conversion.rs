@@ -6,6 +6,13 @@ impl Input {
     /// source-dependent normalization still runs when the tree is resolved.
     pub fn into_preparation(self) -> Input<InputRequest> {
         match self {
+            Input::Enum { variants, value } => Input::Enum {
+                variants: variants
+                    .into_iter()
+                    .map(|v| v.into_iter().map(Input::into_preparation).collect())
+                    .collect(),
+                value,
+            },
             Input::Request(never) => match never {},
             Input::Leaf => Input::Leaf,
             Input::Convert { conversion, input } => Input::Convert {
@@ -38,6 +45,18 @@ impl Output {
     /// source-dependent normalization still runs when the tree is resolved.
     pub fn into_preparation(self) -> Output<OutputRequest> {
         match self {
+            Output::Enum {
+                variants,
+                value,
+                mode,
+            } => Output::Enum {
+                variants: variants
+                    .into_iter()
+                    .map(|v| v.into_iter().map(Output::into_preparation).collect())
+                    .collect(),
+                value,
+                mode,
+            },
             Output::Request(never) => match never {},
             Output::Leaf => Output::Leaf,
             Output::Convert { conversion, output } => Output::Convert {

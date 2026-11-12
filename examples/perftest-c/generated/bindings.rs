@@ -151,6 +151,12 @@ fn __pb_owned_owned_vec_perftest_flat_sparsecode_634596980e0ca051_len(
     value.len()
 }
 #[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_owned_vec_perftest_flat_wireownedevent_ea3c9cf89ff2a45e_len(
+    value: &Vec<perftest_flat::WireOwnedEvent>,
+) -> usize {
+    value.len()
+}
+#[allow(dead_code, clippy::ptr_arg)]
 fn __pb_owned_owned_vec_u8_672e72343c1b4cb4_len(value: &Vec<u8>) -> usize {
     value.len()
 }
@@ -1004,6 +1010,680 @@ pub unsafe extern "C" fn perftest_owned_vec_u8_672e72343c1b4cb4_view_mut(
         len: bytes.len(),
     }
 }
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbEnum_perftest_wire_checked_event_a1 {
+    pub first: *mut perftest_flat::CallbackReturnResource,
+    pub marker: i64,
+    pub last: *mut perftest_flat::CallbackReturnResource,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub union __PbEnum_perftest_wire_checked_event_payload {
+    pub __empty: [u8; 0],
+    pub a1: ::core::mem::ManuallyDrop<__PbEnum_perftest_wire_checked_event_a1>,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbEnum_perftest_wire_checked_event {
+    pub tag: i32,
+    pub payload: __PbEnum_perftest_wire_checked_event_payload,
+}
+#[allow(dead_code)]
+impl __PbEnum_perftest_wire_checked_event {
+    fn empty() -> Self {
+        Self {
+            tag: -1,
+            payload: __PbEnum_perftest_wire_checked_event_payload {
+                __empty: [],
+            },
+        }
+    }
+}
+/**# Safety
+Value must point to a live carrier of this exact type, or be null.*/
+#[no_mangle]
+pub unsafe extern "C" fn perftest_drop_wire_checked_event(
+    value: *mut __PbEnum_perftest_wire_checked_event,
+) {
+    if value.is_null() {
+        return;
+    }
+    let tag = (*value).tag;
+    (*value).tag = -1;
+    match tag {
+        -1 => {}
+        0i32 => {}
+        1i32 => {
+            if !(::core::ptr::read(
+                (value)
+                    .cast::<u8>()
+                    .wrapping_add(
+                        ::core::mem::offset_of!(
+                            __PbEnum_perftest_wire_checked_event, payload
+                        )
+                            + ::core::mem::offset_of!(
+                                __PbEnum_perftest_wire_checked_event_a1, first
+                            ),
+                    )
+                    .cast::<*mut perftest_flat::CallbackReturnResource>(),
+            ))
+                .is_null()
+            {
+                drop(
+                    Box::from_raw(
+                        (::core::ptr::read(
+                            (value)
+                                .cast::<u8>()
+                                .wrapping_add(
+                                    ::core::mem::offset_of!(
+                                        __PbEnum_perftest_wire_checked_event, payload
+                                    )
+                                        + ::core::mem::offset_of!(
+                                            __PbEnum_perftest_wire_checked_event_a1, first
+                                        ),
+                                )
+                                .cast::<*mut perftest_flat::CallbackReturnResource>(),
+                        )) as *mut perftest_flat::CallbackReturnResource,
+                    ),
+                );
+            }
+            if !(::core::ptr::read(
+                (value)
+                    .cast::<u8>()
+                    .wrapping_add(
+                        ::core::mem::offset_of!(
+                            __PbEnum_perftest_wire_checked_event, payload
+                        )
+                            + ::core::mem::offset_of!(
+                                __PbEnum_perftest_wire_checked_event_a1, last
+                            ),
+                    )
+                    .cast::<*mut perftest_flat::CallbackReturnResource>(),
+            ))
+                .is_null()
+            {
+                drop(
+                    Box::from_raw(
+                        (::core::ptr::read(
+                            (value)
+                                .cast::<u8>()
+                                .wrapping_add(
+                                    ::core::mem::offset_of!(
+                                        __PbEnum_perftest_wire_checked_event, payload
+                                    )
+                                        + ::core::mem::offset_of!(
+                                            __PbEnum_perftest_wire_checked_event_a1, last
+                                        ),
+                                )
+                                .cast::<*mut perftest_flat::CallbackReturnResource>(),
+                        )) as *mut perftest_flat::CallbackReturnResource,
+                    ),
+                );
+            }
+        }
+        _ => ::core::hint::unreachable_unchecked(),
+    }
+}
+/**# Safety
+Value must point to a live carrier of this exact type.*/
+#[no_mangle]
+pub unsafe extern "C" fn perftest_take_wire_checked_event(
+    value: *mut __PbEnum_perftest_wire_checked_event,
+) -> __PbEnum_perftest_wire_checked_event {
+    ::core::ptr::replace(value, __PbEnum_perftest_wire_checked_event::empty())
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbEnum_perftest_wire_empty {
+    pub tag: i32,
+}
+#[allow(dead_code)]
+impl __PbEnum_perftest_wire_empty {
+    fn empty() -> Self {
+        Self { tag: -1 }
+    }
+}
+/**# Safety
+Value must point to a live carrier of this exact type, or be null.*/
+#[no_mangle]
+pub unsafe extern "C" fn perftest_drop_wire_empty(
+    value: *mut __PbEnum_perftest_wire_empty,
+) {
+    if value.is_null() {
+        return;
+    }
+    let tag = (*value).tag;
+    (*value).tag = -1;
+    match tag {
+        -1 => {}
+        0i32 => {}
+        1i32 => {}
+        2i32 => {}
+        _ => ::core::hint::unreachable_unchecked(),
+    }
+}
+/**# Safety
+Value must point to a live carrier of this exact type.*/
+#[no_mangle]
+pub unsafe extern "C" fn perftest_take_wire_empty(
+    value: *mut __PbEnum_perftest_wire_empty,
+) -> __PbEnum_perftest_wire_empty {
+    ::core::ptr::replace(value, __PbEnum_perftest_wire_empty::empty())
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbEnum_perftest_wire_event_a1 {
+    pub v0: u64,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbEnum_perftest_wire_event_a2 {
+    pub id: u64,
+    pub bytes: __PbOwned_owned_vec_u8_672e72343c1b4cb4,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub union __PbEnum_perftest_wire_event_payload {
+    pub __empty: [u8; 0],
+    pub a1: ::core::mem::ManuallyDrop<__PbEnum_perftest_wire_event_a1>,
+    pub a2: ::core::mem::ManuallyDrop<__PbEnum_perftest_wire_event_a2>,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbEnum_perftest_wire_event {
+    pub tag: i32,
+    pub payload: __PbEnum_perftest_wire_event_payload,
+}
+#[allow(dead_code)]
+impl __PbEnum_perftest_wire_event {
+    fn empty() -> Self {
+        Self {
+            tag: -1,
+            payload: __PbEnum_perftest_wire_event_payload {
+                __empty: [],
+            },
+        }
+    }
+}
+/**# Safety
+Value must point to a live carrier of this exact type, or be null.*/
+#[no_mangle]
+pub unsafe extern "C" fn perftest_drop_wire_event(
+    value: *mut __PbEnum_perftest_wire_event,
+) {
+    if value.is_null() {
+        return;
+    }
+    let tag = (*value).tag;
+    (*value).tag = -1;
+    match tag {
+        -1 => {}
+        0i32 => {}
+        1i32 => {}
+        2i32 => {
+            drop(
+                (::core::ptr::read(
+                    (value)
+                        .cast::<u8>()
+                        .wrapping_add(
+                            ::core::mem::offset_of!(
+                                __PbEnum_perftest_wire_event, payload
+                            )
+                                + ::core::mem::offset_of!(
+                                    __PbEnum_perftest_wire_event_a2, bytes
+                                ),
+                        )
+                        .cast::<__PbOwned_owned_vec_u8_672e72343c1b4cb4>(),
+                ))
+                    .into_rust(),
+            );
+        }
+        3i32 => {}
+        4i32 => {}
+        _ => ::core::hint::unreachable_unchecked(),
+    }
+}
+/**# Safety
+Value must point to a live carrier of this exact type.*/
+#[no_mangle]
+pub unsafe extern "C" fn perftest_take_wire_event(
+    value: *mut __PbEnum_perftest_wire_event,
+) -> __PbEnum_perftest_wire_event {
+    ::core::ptr::replace(value, __PbEnum_perftest_wire_event::empty())
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbEnum_perftest_wire_optional_event_a1 {
+    pub payload_v0: i32,
+    pub payload_v1: __PbOwned_owned_vec_u8_672e72343c1b4cb4,
+    pub tail: *mut perftest_flat::CallbackReturnResource,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub union __PbEnum_perftest_wire_optional_event_payload {
+    pub __empty: [u8; 0],
+    pub a1: ::core::mem::ManuallyDrop<__PbEnum_perftest_wire_optional_event_a1>,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbEnum_perftest_wire_optional_event {
+    pub tag: i32,
+    pub payload: __PbEnum_perftest_wire_optional_event_payload,
+}
+#[allow(dead_code)]
+impl __PbEnum_perftest_wire_optional_event {
+    fn empty() -> Self {
+        Self {
+            tag: -1,
+            payload: __PbEnum_perftest_wire_optional_event_payload {
+                __empty: [],
+            },
+        }
+    }
+}
+/**# Safety
+Value must point to a live carrier of this exact type, or be null.*/
+#[no_mangle]
+pub unsafe extern "C" fn perftest_drop_wire_optional_event(
+    value: *mut __PbEnum_perftest_wire_optional_event,
+) {
+    if value.is_null() {
+        return;
+    }
+    let tag = (*value).tag;
+    (*value).tag = -1;
+    match tag {
+        -1 => {}
+        0i32 => {}
+        1i32 => {
+            #[allow(clippy::collapsible_if)]
+            if (::core::ptr::read(
+                (value)
+                    .cast::<u8>()
+                    .wrapping_add(
+                        ::core::mem::offset_of!(
+                            __PbEnum_perftest_wire_optional_event, payload
+                        )
+                            + ::core::mem::offset_of!(
+                                __PbEnum_perftest_wire_optional_event_a1, payload_v0
+                            ),
+                    )
+                    .cast::<i32>(),
+            ) == 1) && (true)
+            {
+                drop(
+                    (::core::ptr::read(
+                        (value)
+                            .cast::<u8>()
+                            .wrapping_add(
+                                ::core::mem::offset_of!(
+                                    __PbEnum_perftest_wire_optional_event, payload
+                                )
+                                    + ::core::mem::offset_of!(
+                                        __PbEnum_perftest_wire_optional_event_a1, payload_v1
+                                    ),
+                            )
+                            .cast::<__PbOwned_owned_vec_u8_672e72343c1b4cb4>(),
+                    ))
+                        .into_rust(),
+                );
+            }
+            #[allow(clippy::collapsible_if)]
+            if ((::core::ptr::read(
+                (value)
+                    .cast::<u8>()
+                    .wrapping_add(
+                        ::core::mem::offset_of!(
+                            __PbEnum_perftest_wire_optional_event, payload
+                        )
+                            + ::core::mem::offset_of!(
+                                __PbEnum_perftest_wire_optional_event_a1, tail
+                            ),
+                    )
+                    .cast::<*mut perftest_flat::CallbackReturnResource>(),
+            ) as usize) != 0) && (true)
+            {
+                if !(::core::ptr::read(
+                    (value)
+                        .cast::<u8>()
+                        .wrapping_add(
+                            ::core::mem::offset_of!(
+                                __PbEnum_perftest_wire_optional_event, payload
+                            )
+                                + ::core::mem::offset_of!(
+                                    __PbEnum_perftest_wire_optional_event_a1, tail
+                                ),
+                        )
+                        .cast::<*mut perftest_flat::CallbackReturnResource>(),
+                ))
+                    .is_null()
+                {
+                    drop(
+                        Box::from_raw(
+                            (::core::ptr::read(
+                                (value)
+                                    .cast::<u8>()
+                                    .wrapping_add(
+                                        ::core::mem::offset_of!(
+                                            __PbEnum_perftest_wire_optional_event, payload
+                                        )
+                                            + ::core::mem::offset_of!(
+                                                __PbEnum_perftest_wire_optional_event_a1, tail
+                                            ),
+                                    )
+                                    .cast::<*mut perftest_flat::CallbackReturnResource>(),
+                            )) as *mut perftest_flat::CallbackReturnResource,
+                        ),
+                    );
+                }
+            }
+        }
+        _ => ::core::hint::unreachable_unchecked(),
+    }
+}
+/**# Safety
+Value must point to a live carrier of this exact type.*/
+#[no_mangle]
+pub unsafe extern "C" fn perftest_take_wire_optional_event(
+    value: *mut __PbEnum_perftest_wire_optional_event,
+) -> __PbEnum_perftest_wire_optional_event {
+    ::core::ptr::replace(value, __PbEnum_perftest_wire_optional_event::empty())
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbEnum_perftest_wire_owned_event_a1 {
+    pub first: *mut perftest_flat::CallbackReturnResource,
+    pub second: *mut perftest_flat::CallbackReturnResource,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbEnum_perftest_wire_owned_event_a2 {
+    pub v0: __PbOwned_owned_string,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub union __PbEnum_perftest_wire_owned_event_payload {
+    pub __empty: [u8; 0],
+    pub a1: ::core::mem::ManuallyDrop<__PbEnum_perftest_wire_owned_event_a1>,
+    pub a2: ::core::mem::ManuallyDrop<__PbEnum_perftest_wire_owned_event_a2>,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbEnum_perftest_wire_owned_event {
+    pub tag: i32,
+    pub payload: __PbEnum_perftest_wire_owned_event_payload,
+}
+#[allow(dead_code)]
+impl __PbEnum_perftest_wire_owned_event {
+    fn empty() -> Self {
+        Self {
+            tag: -1,
+            payload: __PbEnum_perftest_wire_owned_event_payload {
+                __empty: [],
+            },
+        }
+    }
+}
+/**# Safety
+Value must point to a live carrier of this exact type, or be null.*/
+#[no_mangle]
+pub unsafe extern "C" fn perftest_drop_wire_owned_event(
+    value: *mut __PbEnum_perftest_wire_owned_event,
+) {
+    if value.is_null() {
+        return;
+    }
+    let tag = (*value).tag;
+    (*value).tag = -1;
+    match tag {
+        -1 => {}
+        0i32 => {}
+        1i32 => {
+            if !(::core::ptr::read(
+                (value)
+                    .cast::<u8>()
+                    .wrapping_add(
+                        ::core::mem::offset_of!(
+                            __PbEnum_perftest_wire_owned_event, payload
+                        )
+                            + ::core::mem::offset_of!(
+                                __PbEnum_perftest_wire_owned_event_a1, first
+                            ),
+                    )
+                    .cast::<*mut perftest_flat::CallbackReturnResource>(),
+            ))
+                .is_null()
+            {
+                drop(
+                    Box::from_raw(
+                        (::core::ptr::read(
+                            (value)
+                                .cast::<u8>()
+                                .wrapping_add(
+                                    ::core::mem::offset_of!(
+                                        __PbEnum_perftest_wire_owned_event, payload
+                                    )
+                                        + ::core::mem::offset_of!(
+                                            __PbEnum_perftest_wire_owned_event_a1, first
+                                        ),
+                                )
+                                .cast::<*mut perftest_flat::CallbackReturnResource>(),
+                        )) as *mut perftest_flat::CallbackReturnResource,
+                    ),
+                );
+            }
+            if !(::core::ptr::read(
+                (value)
+                    .cast::<u8>()
+                    .wrapping_add(
+                        ::core::mem::offset_of!(
+                            __PbEnum_perftest_wire_owned_event, payload
+                        )
+                            + ::core::mem::offset_of!(
+                                __PbEnum_perftest_wire_owned_event_a1, second
+                            ),
+                    )
+                    .cast::<*mut perftest_flat::CallbackReturnResource>(),
+            ))
+                .is_null()
+            {
+                drop(
+                    Box::from_raw(
+                        (::core::ptr::read(
+                            (value)
+                                .cast::<u8>()
+                                .wrapping_add(
+                                    ::core::mem::offset_of!(
+                                        __PbEnum_perftest_wire_owned_event, payload
+                                    )
+                                        + ::core::mem::offset_of!(
+                                            __PbEnum_perftest_wire_owned_event_a1, second
+                                        ),
+                                )
+                                .cast::<*mut perftest_flat::CallbackReturnResource>(),
+                        )) as *mut perftest_flat::CallbackReturnResource,
+                    ),
+                );
+            }
+        }
+        2i32 => {
+            drop(
+                (::core::ptr::read(
+                    (value)
+                        .cast::<u8>()
+                        .wrapping_add(
+                            ::core::mem::offset_of!(
+                                __PbEnum_perftest_wire_owned_event, payload
+                            )
+                                + ::core::mem::offset_of!(
+                                    __PbEnum_perftest_wire_owned_event_a2, v0
+                                ),
+                        )
+                        .cast::<__PbOwned_owned_string>(),
+                ))
+                    .into_rust(),
+            );
+        }
+        _ => ::core::hint::unreachable_unchecked(),
+    }
+}
+/**# Safety
+Value must point to a live carrier of this exact type.*/
+#[no_mangle]
+pub unsafe extern "C" fn perftest_take_wire_owned_event(
+    value: *mut __PbEnum_perftest_wire_owned_event,
+) -> __PbEnum_perftest_wire_owned_event {
+    ::core::ptr::replace(value, __PbEnum_perftest_wire_owned_event::empty())
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbEnum_perftest_wire_notice_a1 {
+    pub v0: __PbOwned_owned_string,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub union __PbEnum_perftest_wire_notice_payload {
+    pub __empty: [u8; 0],
+    pub a1: ::core::mem::ManuallyDrop<__PbEnum_perftest_wire_notice_a1>,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbEnum_perftest_wire_notice {
+    pub tag: i32,
+    pub payload: __PbEnum_perftest_wire_notice_payload,
+}
+#[allow(dead_code)]
+impl __PbEnum_perftest_wire_notice {
+    fn empty() -> Self {
+        Self {
+            tag: -1,
+            payload: __PbEnum_perftest_wire_notice_payload {
+                __empty: [],
+            },
+        }
+    }
+}
+/**# Safety
+Value must point to a live carrier of this exact type, or be null.*/
+#[no_mangle]
+pub unsafe extern "C" fn perftest_drop_wire_notice(
+    value: *mut __PbEnum_perftest_wire_notice,
+) {
+    if value.is_null() {
+        return;
+    }
+    let tag = (*value).tag;
+    (*value).tag = -1;
+    match tag {
+        -1 => {}
+        0i32 => {}
+        1i32 => {
+            drop(
+                (::core::ptr::read(
+                    (value)
+                        .cast::<u8>()
+                        .wrapping_add(
+                            ::core::mem::offset_of!(
+                                __PbEnum_perftest_wire_notice, payload
+                            )
+                                + ::core::mem::offset_of!(
+                                    __PbEnum_perftest_wire_notice_a1, v0
+                                ),
+                        )
+                        .cast::<__PbOwned_owned_string>(),
+                ))
+                    .into_rust(),
+            );
+        }
+        _ => ::core::hint::unreachable_unchecked(),
+    }
+}
+/**# Safety
+Value must point to a live carrier of this exact type.*/
+#[no_mangle]
+pub unsafe extern "C" fn perftest_take_wire_notice(
+    value: *mut __PbEnum_perftest_wire_notice,
+) -> __PbEnum_perftest_wire_notice {
+    ::core::ptr::replace(value, __PbEnum_perftest_wire_notice::empty())
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbEnum_perftest_wire_decision_a0 {
+    pub v0: i64,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbEnum_perftest_wire_decision_a1 {
+    pub v0: __PbOwned_owned_string,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub union __PbEnum_perftest_wire_decision_payload {
+    pub __empty: [u8; 0],
+    pub a0: ::core::mem::ManuallyDrop<__PbEnum_perftest_wire_decision_a0>,
+    pub a1: ::core::mem::ManuallyDrop<__PbEnum_perftest_wire_decision_a1>,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbEnum_perftest_wire_decision {
+    pub tag: i32,
+    pub payload: __PbEnum_perftest_wire_decision_payload,
+}
+#[allow(dead_code)]
+impl __PbEnum_perftest_wire_decision {
+    fn empty() -> Self {
+        Self {
+            tag: -1,
+            payload: __PbEnum_perftest_wire_decision_payload {
+                __empty: [],
+            },
+        }
+    }
+}
+/**# Safety
+Value must point to a live carrier of this exact type, or be null.*/
+#[no_mangle]
+pub unsafe extern "C" fn perftest_drop_wire_decision(
+    value: *mut __PbEnum_perftest_wire_decision,
+) {
+    if value.is_null() {
+        return;
+    }
+    let tag = (*value).tag;
+    (*value).tag = -1;
+    match tag {
+        -1 => {}
+        0i32 => {}
+        1i32 => {
+            drop(
+                (::core::ptr::read(
+                    (value)
+                        .cast::<u8>()
+                        .wrapping_add(
+                            ::core::mem::offset_of!(
+                                __PbEnum_perftest_wire_decision, payload
+                            )
+                                + ::core::mem::offset_of!(
+                                    __PbEnum_perftest_wire_decision_a1, v0
+                                ),
+                        )
+                        .cast::<__PbOwned_owned_string>(),
+                ))
+                    .into_rust(),
+            );
+        }
+        _ => ::core::hint::unreachable_unchecked(),
+    }
+}
+/**# Safety
+Value must point to a live carrier of this exact type.*/
+#[no_mangle]
+pub unsafe extern "C" fn perftest_take_wire_decision(
+    value: *mut __PbEnum_perftest_wire_decision,
+) -> __PbEnum_perftest_wire_decision {
+    ::core::ptr::replace(value, __PbEnum_perftest_wire_decision::empty())
+}
 struct __PbCallbackResult<T: Copy> {
     value: T,
     context: *mut ::core::ffi::c_void,
@@ -1458,6 +2138,29 @@ pub struct perftest_callback_af8866ae3e4d0e12 {
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
+pub struct perftest_callback_b3a926c45f75675c {
+    pub run: Option<
+        unsafe extern "C" fn(
+            *mut ::core::ffi::c_void,
+        ) -> __PbEnum_perftest_wire_checked_event,
+    >,
+    pub context: *mut ::core::ffi::c_void,
+    pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct perftest_callback_b7adf34facddaf10 {
+    pub run: Option<
+        unsafe extern "C" fn(
+            *mut ::core::ffi::c_void,
+            __PbEnum_perftest_wire_notice,
+        ) -> __PbEnum_perftest_wire_decision,
+    >,
+    pub context: *mut ::core::ffi::c_void,
+    pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
 pub struct __PbRow_callback_b98c737eadfea95e_callback_arg_0_w4 {
     pub v0: *mut perftest_flat::CallbackRowResource,
     pub v1: __PbOwned_owned_string,
@@ -1545,6 +2248,18 @@ pub struct perftest_callback_d47c7bdcce5eb73a {
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
+pub struct perftest_callback_d67524396b65a6b2 {
+    pub run: Option<
+        unsafe extern "C" fn(
+            *mut ::core::ffi::c_void,
+            __PbEnum_perftest_wire_event,
+        ) -> __PbEnum_perftest_wire_event,
+    >,
+    pub context: *mut ::core::ffi::c_void,
+    pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
 pub struct perftest_callback_e00f09649cf788a6 {
     pub run: Option<
         unsafe extern "C" fn(
@@ -1566,6 +2281,18 @@ pub struct perftest_callback_e79b477ebab70ab0 {
 #[derive(Clone, Copy)]
 pub struct perftest_callback_e7c993c21d79dcc8 {
     pub run: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void, i8) -> i8>,
+    pub context: *mut ::core::ffi::c_void,
+    pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct perftest_callback_f371ab967149fa90 {
+    pub run: Option<
+        unsafe extern "C" fn(
+            *mut ::core::ffi::c_void,
+            __PbEnum_perftest_wire_owned_event,
+        ) -> __PbEnum_perftest_wire_owned_event,
+    >,
     pub context: *mut ::core::ffi::c_void,
     pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
 }
@@ -1809,7 +2536,10 @@ pub unsafe extern "C" fn perftest_drop_rich_error(error: *mut __PbError_rich_err
                 &mut (*error).v2,
                 __PbOwned_owned_string::empty(),
             );
-            drop((owned_2).into_rust());
+            #[allow(clippy::collapsible_if)]
+            if ((*error).v1 == 1) && (true) {
+                drop((owned_2).into_rust());
+            }
         }
         Ok(())
     }) {
@@ -7243,15 +7973,18 @@ pub unsafe extern "C" fn perftest_c_result_optional_handle(
         Err(message) => {
             if success_committed {
                 let value = storage.assume_init();
-                if !(value.v0).is_null() {
-                    let _ = ::prebindgen_runtime::boundary(|| {
-                        drop(
-                            Box::from_raw(
-                                (value.v0) as *mut perftest_flat::OwnedResource,
-                            ),
-                        );
-                        Ok(())
-                    });
+                #[allow(clippy::collapsible_if)]
+                if ((value.v0 as usize) != 0) && (true) {
+                    if !(value.v0).is_null() {
+                        let _ = ::prebindgen_runtime::boundary(|| {
+                            drop(
+                                Box::from_raw(
+                                    (value.v0) as *mut perftest_flat::OwnedResource,
+                                ),
+                            );
+                            Ok(())
+                        });
+                    }
                 }
             }
             if !error_reported && !error.is_null() {
@@ -18815,22 +19548,25 @@ pub unsafe extern "C" fn perftest_collection_result_optional(
         Err(message) => {
             if success_committed {
                 let value = storage.assume_init();
-                if (value.v1).len != 0 {
-                    let rows = Box::from_raw(
-                        std::ptr::slice_from_raw_parts_mut(
-                            (value.v1).data
-                                as *mut __PbRow_collection_result_optional_ret_w4,
-                            (value.v1).len,
-                        ),
-                    );
-                    for row in rows.iter() {
-                        if !(row.v0).is_null() {
-                            let _ = ::prebindgen_runtime::boundary(|| {
-                                drop(
-                                    Box::from_raw((row.v0) as *mut perftest_flat::OwnedResource),
-                                );
-                                Ok(())
-                            });
+                #[allow(clippy::collapsible_if)]
+                if (value.v0 == 1) && (true) {
+                    if (value.v1).len != 0 {
+                        let rows = Box::from_raw(
+                            std::ptr::slice_from_raw_parts_mut(
+                                (value.v1).data
+                                    as *mut __PbRow_collection_result_optional_ret_w4,
+                                (value.v1).len,
+                            ),
+                        );
+                        for row in rows.iter() {
+                            if !(row.v0).is_null() {
+                                let _ = ::prebindgen_runtime::boundary(|| {
+                                    drop(
+                                        Box::from_raw((row.v0) as *mut perftest_flat::OwnedResource),
+                                    );
+                                    Ok(())
+                                });
+                            }
                         }
                     }
                 }
@@ -32418,6 +33154,4627 @@ pub unsafe extern "C" fn perftest_unsigned_round_trip(
     let value = storage.assume_init();
     value.v0
 }
+#[repr(C)]
+pub struct perftest_wire_bare_echo_result {
+    pub v0: i32,
+    pub v1: i64,
+    pub v2: u64,
+    pub v3: f64,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::let_and_return,
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_wire_bare_echo(
+    p0_w1_tag: i32,
+    p0_w1_a0_f0: i64,
+    p0_w1_a1_f0: u64,
+    p0_w1_a1_f1: f64,
+    out1: *mut i64,
+    out2: *mut u64,
+    out3: *mut f64,
+) -> i32 {
+    let mut storage = std::mem::MaybeUninit::<perftest_wire_bare_echo_result>::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w2: perftest_flat::WireBare = match p0_w1_tag {
+                0i32 => {
+                    let p0_w2_a0_f0_value: i64 = ::core::convert::Into::into(
+                        p0_w1_a0_f0,
+                    );
+                    let p0_w2_a0_f0 = p0_w2_a0_f0_value;
+                    perftest_flat::WireBare::Count(p0_w2_a0_f0)
+                }
+                1i32 => {
+                    let p0_w2_a1_f0_value: u64 = ::core::convert::Into::into(
+                        p0_w1_a1_f0,
+                    );
+                    let p0_w2_a1_f0 = p0_w2_a1_f0_value;
+                    let p0_w2_a1_f1_value: f64 = ::core::convert::Into::into(
+                        p0_w1_a1_f1,
+                    );
+                    let p0_w2_a1_f1 = p0_w2_a1_f1_value;
+                    perftest_flat::WireBare::Packet {
+                        x: p0_w2_a1_f0,
+                        y: p0_w2_a1_f1,
+                    }
+                }
+                _ => unsafe { ::core::hint::unreachable_unchecked() }
+            };
+            let __prebindgen_argument_0 = p0_w2;
+            let source_value = perftest_flat::wire_bare_echo(__prebindgen_argument_0);
+            #[allow(non_camel_case_types)]
+            enum __PbEnumCommit_ret_w1<F0, F1> {
+                A0(F0),
+                A1(F1),
+            }
+            let (
+                ret_w1_tag,
+                (__ret_w1_a0_value0, __ret_w1_a1_value0, __ret_w1_a1_value1),
+                __ret_w1_commit,
+            ) = match source_value {
+                perftest_flat::WireBare::Count(__ret_w1_a0_b0) => {
+                    let ret_w1_a0_f0 = __ret_w1_a0_b0;
+                    let values = (ret_w1_a0_f0, 0, 0.0);
+                    (0i32, values, __PbEnumCommit_ret_w1::A0(move || {}))
+                }
+                perftest_flat::WireBare::Packet {
+                    x: __ret_w1_a1_b0,
+                    y: __ret_w1_a1_b1,
+                } => {
+                    let ret_w1_a1_f0 = __ret_w1_a1_b0;
+                    let ret_w1_a1_f1 = __ret_w1_a1_b1;
+                    let values = (0, ret_w1_a1_f0, ret_w1_a1_f1);
+                    (1i32, values, __PbEnumCommit_ret_w1::A1(move || {}))
+                }
+            };
+            let result = perftest_wire_bare_echo_result {
+                v0: ret_w1_tag,
+                v1: __ret_w1_a0_value0,
+                v2: __ret_w1_a1_value0,
+                v3: __ret_w1_a1_value1,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                match __ret_w1_commit {
+                    __PbEnumCommit_ret_w1::A0(action) => action(),
+                    __PbEnumCommit_ret_w1::A1(action) => action(),
+                }
+            };
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    std::ptr::write(out1, value.v1);
+    std::ptr::write(out2, value.v2);
+    std::ptr::write(out3, value.v3);
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_wire_checked_callback_result {
+    pub v0: i64,
+}
+/**# Safety
+Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
+#[allow(
+    clippy::let_and_return,
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_wire_checked_callback(
+    p0_callback: perftest_callback_b3a926c45f75675c,
+    out0: *mut i64,
+    ownership: *mut usize,
+    error: *mut *mut std::ffi::c_char,
+) -> bool {
+    let ownership_accepted = ::core::cell::Cell::new(0usize);
+    #[allow(unused_mut)]
+    let mut error_reported = false;
+    let mut success_committed = false;
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_wire_checked_callback_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    let outcome = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_callback_run = if true {
+                Some(unsafe { p0_callback.run.unwrap_unchecked() })
+            } else {
+                None
+            };
+            let p0_callback_owner = if true {
+                let owner = __PbCallbackOwner::new(
+                    p0_callback.context,
+                    p0_callback.drop,
+                );
+                {
+                    ownership_accepted.set(ownership_accepted.get() + (1usize));
+                }
+                Some(owner)
+            } else {
+                None
+            };
+            let p0_callback_run = p0_callback_run.expect("active callback");
+            let p0_callback_owner = p0_callback_owner.expect("active callback");
+            let p0_callback_value = move || {
+                let result = ::prebindgen_runtime::boundary(|| {
+                    let __pb_callback_consumed = ::core::cell::Cell::new(0usize);
+                    let __prebindgen_input_consumed = &__pb_callback_consumed;
+                    let raw_result = unsafe {
+                        p0_callback_run(p0_callback_owner.context())
+                    };
+                    let callback_return_w1 = raw_result;
+                    let callback_return_w1_return_location = ::core::ptr::addr_of!(
+                        callback_return_w1
+                    );
+                    let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
+                    {
+                        let mut __pb_return_ordinal = 0usize;
+                        {
+                            let ordinal = __pb_return_ordinal;
+                            __pb_return_ordinal += 1;
+                            if ordinal >= __prebindgen_input_consumed.get() {
+                                unsafe {
+                                    perftest_drop_wire_checked_event(
+                                        (callback_return_w1_return_location
+                                            as *const __PbEnum_perftest_wire_checked_event)
+                                            .cast_mut(),
+                                    );
+                                }
+                            }
+                        }
+                        Ok(())
+                    });
+                    {
+                        let callback_outcome: ::prebindgen_runtime::Result<_> = {
+                            #[allow(unused_mut)]
+                            let mut callback_return_w1 = callback_return_w1;
+                            #[allow(unused_parens)]
+                            let callback_return_w1_carrier = ::core::ptr::addr_of_mut!(
+                                callback_return_w1
+                            );
+                            let callback_return_w1_tag = if true {
+                                unsafe { (*callback_return_w1_carrier).tag }
+                            } else {
+                                0
+                            };
+                            let callback_return_w1_a1_f0_enum_slot = if (callback_return_w1_tag)
+                                == 1i32
+                            {
+                                (callback_return_w1_carrier)
+                                    .cast::<u8>()
+                                    .wrapping_add(
+                                        ::core::mem::offset_of!(
+                                            __PbEnum_perftest_wire_checked_event, payload
+                                        )
+                                            + ::core::mem::offset_of!(
+                                                __PbEnum_perftest_wire_checked_event_a1, first
+                                            ),
+                                    )
+                                    .cast::<*mut perftest_flat::CallbackReturnResource>()
+                            } else {
+                                ::core::ptr::null_mut()
+                            };
+                            let callback_return_w1_a1_f0 = if (callback_return_w1_tag)
+                                == 1i32
+                            {
+                                unsafe {
+                                    ::core::ptr::read(
+                                        (callback_return_w1_carrier)
+                                            .cast::<u8>()
+                                            .wrapping_add(
+                                                ::core::mem::offset_of!(
+                                                    __PbEnum_perftest_wire_checked_event, payload
+                                                )
+                                                    + ::core::mem::offset_of!(
+                                                        __PbEnum_perftest_wire_checked_event_a1, first
+                                                    ),
+                                            )
+                                            .cast::<*mut perftest_flat::CallbackReturnResource>(),
+                                    )
+                                }
+                            } else {
+                                std::ptr::null_mut()
+                            };
+                            let callback_return_w1_a1_f1 = if (callback_return_w1_tag)
+                                == 1i32
+                            {
+                                unsafe {
+                                    ::core::ptr::read(
+                                        (callback_return_w1_carrier)
+                                            .cast::<u8>()
+                                            .wrapping_add(
+                                                ::core::mem::offset_of!(
+                                                    __PbEnum_perftest_wire_checked_event, payload
+                                                )
+                                                    + ::core::mem::offset_of!(
+                                                        __PbEnum_perftest_wire_checked_event_a1, marker
+                                                    ),
+                                            )
+                                            .cast::<i64>(),
+                                    )
+                                }
+                            } else {
+                                0
+                            };
+                            let callback_return_w1_a1_f2_enum_slot = if (callback_return_w1_tag)
+                                == 1i32
+                            {
+                                (callback_return_w1_carrier)
+                                    .cast::<u8>()
+                                    .wrapping_add(
+                                        ::core::mem::offset_of!(
+                                            __PbEnum_perftest_wire_checked_event, payload
+                                        )
+                                            + ::core::mem::offset_of!(
+                                                __PbEnum_perftest_wire_checked_event_a1, last
+                                            ),
+                                    )
+                                    .cast::<*mut perftest_flat::CallbackReturnResource>()
+                            } else {
+                                ::core::ptr::null_mut()
+                            };
+                            let callback_return_w1_a1_f2 = if (callback_return_w1_tag)
+                                == 1i32
+                            {
+                                unsafe {
+                                    ::core::ptr::read(
+                                        (callback_return_w1_carrier)
+                                            .cast::<u8>()
+                                            .wrapping_add(
+                                                ::core::mem::offset_of!(
+                                                    __PbEnum_perftest_wire_checked_event, payload
+                                                )
+                                                    + ::core::mem::offset_of!(
+                                                        __PbEnum_perftest_wire_checked_event_a1, last
+                                                    ),
+                                            )
+                                            .cast::<*mut perftest_flat::CallbackReturnResource>(),
+                                    )
+                                }
+                            } else {
+                                std::ptr::null_mut()
+                            };
+                            let callback_return_w1_remaining = if true {
+                                unsafe {
+                                    (*callback_return_w1_carrier).tag = -1;
+                                }
+                                {
+                                    __pb_callback_consumed
+                                        .set(__pb_callback_consumed.get() + (1usize));
+                                }
+                                Some(
+                                    ::prebindgen_runtime::CallbackReturnCleanup::new(move || {
+                                        unsafe {
+                                            #[allow(clippy::collapsible_if)]
+                                            if (callback_return_w1_tag) == 1i32 && (true) {
+                                                if !(::core::ptr::read(
+                                                    (callback_return_w1_carrier)
+                                                        .cast::<u8>()
+                                                        .wrapping_add(
+                                                            ::core::mem::offset_of!(
+                                                                __PbEnum_perftest_wire_checked_event, payload
+                                                            )
+                                                                + ::core::mem::offset_of!(
+                                                                    __PbEnum_perftest_wire_checked_event_a1, first
+                                                                ),
+                                                        )
+                                                        .cast::<*mut perftest_flat::CallbackReturnResource>(),
+                                                ))
+                                                    .is_null()
+                                                {
+                                                    let _ = ::prebindgen_runtime::boundary(|| {
+                                                        drop(
+                                                            Box::from_raw(
+                                                                (::core::ptr::read(
+                                                                    (callback_return_w1_carrier)
+                                                                        .cast::<u8>()
+                                                                        .wrapping_add(
+                                                                            ::core::mem::offset_of!(
+                                                                                __PbEnum_perftest_wire_checked_event, payload
+                                                                            )
+                                                                                + ::core::mem::offset_of!(
+                                                                                    __PbEnum_perftest_wire_checked_event_a1, first
+                                                                                ),
+                                                                        )
+                                                                        .cast::<*mut perftest_flat::CallbackReturnResource>(),
+                                                                )) as *mut perftest_flat::CallbackReturnResource,
+                                                            ),
+                                                        );
+                                                        Ok(())
+                                                    });
+                                                }
+                                            }
+                                            #[allow(clippy::collapsible_if)]
+                                            if (callback_return_w1_tag) == 1i32 && (true) {
+                                                if !(::core::ptr::read(
+                                                    (callback_return_w1_carrier)
+                                                        .cast::<u8>()
+                                                        .wrapping_add(
+                                                            ::core::mem::offset_of!(
+                                                                __PbEnum_perftest_wire_checked_event, payload
+                                                            )
+                                                                + ::core::mem::offset_of!(
+                                                                    __PbEnum_perftest_wire_checked_event_a1, last
+                                                                ),
+                                                        )
+                                                        .cast::<*mut perftest_flat::CallbackReturnResource>(),
+                                                ))
+                                                    .is_null()
+                                                {
+                                                    let _ = ::prebindgen_runtime::boundary(|| {
+                                                        drop(
+                                                            Box::from_raw(
+                                                                (::core::ptr::read(
+                                                                    (callback_return_w1_carrier)
+                                                                        .cast::<u8>()
+                                                                        .wrapping_add(
+                                                                            ::core::mem::offset_of!(
+                                                                                __PbEnum_perftest_wire_checked_event, payload
+                                                                            )
+                                                                                + ::core::mem::offset_of!(
+                                                                                    __PbEnum_perftest_wire_checked_event_a1, last
+                                                                                ),
+                                                                        )
+                                                                        .cast::<*mut perftest_flat::CallbackReturnResource>(),
+                                                                )) as *mut perftest_flat::CallbackReturnResource,
+                                                            ),
+                                                        );
+                                                        Ok(())
+                                                    });
+                                                }
+                                            }
+                                        }
+                                        Ok(())
+                                    }),
+                                )
+                            } else {
+                                None
+                            };
+                            let callback_return_w2: perftest_flat::WireCheckedEvent = match callback_return_w1_tag {
+                                0i32 => perftest_flat::WireCheckedEvent::Empty,
+                                1i32 => {
+                                    let callback_return_w1_a1_f0_pointer = callback_return_w1_a1_f0
+                                        as *mut perftest_flat::CallbackReturnResource;
+                                    let callback_return_w2_a1_f0_value: perftest_flat::CallbackReturnResource = {
+                                        let callback_return_w2_a1_f0_value = unsafe {
+                                            Box::from_raw(callback_return_w1_a1_f0_pointer)
+                                        };
+                                        unsafe {
+                                            ::core::ptr::write(
+                                                callback_return_w1_a1_f0_enum_slot,
+                                                ::core::ptr::null_mut(),
+                                            );
+                                        }
+                                        *callback_return_w2_a1_f0_value
+                                    };
+                                    let callback_return_w2_a1_f0 = callback_return_w2_a1_f0_value;
+                                    let callback_return_w2_a1_f1_value_repr_decoded: i64 = ::core::convert::Into::into(
+                                        callback_return_w1_a1_f1,
+                                    );
+                                    let callback_return_w2_a1_f1_value_repr = callback_return_w2_a1_f1_value_repr_decoded;
+                                    let callback_return_w2_a1_f1_value: perftest_flat::WireMarker = perftest_flat::wire_marker_new(
+                                        callback_return_w2_a1_f1_value_repr,
+                                    );
+                                    let callback_return_w2_a1_f1 = callback_return_w2_a1_f1_value;
+                                    let callback_return_w1_a1_f2_pointer = callback_return_w1_a1_f2
+                                        as *mut perftest_flat::CallbackReturnResource;
+                                    let callback_return_w2_a1_f2_value: perftest_flat::CallbackReturnResource = {
+                                        let callback_return_w2_a1_f2_value = unsafe {
+                                            Box::from_raw(callback_return_w1_a1_f2_pointer)
+                                        };
+                                        unsafe {
+                                            ::core::ptr::write(
+                                                callback_return_w1_a1_f2_enum_slot,
+                                                ::core::ptr::null_mut(),
+                                            );
+                                        }
+                                        *callback_return_w2_a1_f2_value
+                                    };
+                                    let callback_return_w2_a1_f2 = callback_return_w2_a1_f2_value;
+                                    perftest_flat::WireCheckedEvent::Data {
+                                        first: callback_return_w2_a1_f0,
+                                        marker: callback_return_w2_a1_f1,
+                                        last: callback_return_w2_a1_f2,
+                                    }
+                                }
+                                _ => unsafe { ::core::hint::unreachable_unchecked() }
+                            };
+                            let callback_return_value = callback_return_w2;
+                            Ok(callback_return_value)
+                        };
+                        let callback_decoded = callback_outcome?;
+                        callback_return_cleanup.commit();
+                        Ok(callback_decoded)
+                    }
+                });
+                result
+                    .unwrap_or_else(|error| {
+                        ::prebindgen_runtime::report_callback_error(
+                            "perftest_callback_b3a926c45f75675c",
+                            "()->perftest_flat :: WireCheckedEvent",
+                            &error,
+                        );
+                        panic!("callback failed: {}", error)
+                    })
+            };
+            let __prebindgen_argument_0 = p0_callback_value;
+            let source_value = perftest_flat::wire_checked_callback(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = match source_value {
+                ::core::result::Result::Ok(value) => value,
+                ::core::result::Result::Err(ret_w1) => {
+                    return Err({
+                        if !error.is_null() {
+                            unsafe {
+                                __pb_report_message(
+                                    perftest_flat::callback_return_error_message(&ret_w1),
+                                    error,
+                                )
+                            };
+                        }
+                        error_reported = true;
+                        String::new()
+                    });
+                }
+            };
+            let ret_w2 = ret_w0;
+            let result = perftest_wire_checked_callback_result {
+                v0: ret_w2,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                success_committed = true;
+            };
+            Ok(())
+        }
+    });
+    std::ptr::write(ownership, ownership_accepted.get());
+    match outcome {
+        Ok(()) => {
+            let value = storage.assume_init();
+            std::ptr::write(out0, value.v0);
+            true
+        }
+        Err(message) => {
+            if success_committed {
+                let value = storage.assume_init();
+            }
+            if !error_reported && !error.is_null() {
+                unsafe { __pb_report_message(message, error) };
+            }
+            false
+        }
+    }
+}
+#[repr(C)]
+pub struct perftest_wire_checked_new_result {
+    pub v0: __PbEnum_perftest_wire_checked_event,
+}
+/**# Safety
+Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations.*/
+#[allow(
+    clippy::let_and_return,
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_wire_checked_new(
+    p0_w1: i64,
+    out0: *mut __PbEnum_perftest_wire_checked_event,
+    error: *mut *mut std::ffi::c_char,
+) -> bool {
+    #[allow(unused_mut)]
+    let mut error_reported = false;
+    let mut success_committed = false;
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_wire_checked_new_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    let outcome = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w0: i64 = ::core::convert::Into::into(p0_w1);
+            let __prebindgen_argument_0 = p0_w0;
+            let source_value = perftest_flat::wire_checked_new(__prebindgen_argument_0);
+            let ret_w0 = match source_value {
+                ::core::result::Result::Ok(value) => value,
+                ::core::result::Result::Err(ret_w1) => {
+                    return Err({
+                        if !error.is_null() {
+                            unsafe {
+                                __pb_report_message(
+                                    perftest_flat::callback_return_error_message(&ret_w1),
+                                    error,
+                                )
+                            };
+                        }
+                        error_reported = true;
+                        String::new()
+                    });
+                }
+            };
+            #[allow(non_camel_case_types)]
+            enum __PbEnumCommit_ret_w3<F0, F1> {
+                A0(F0),
+                A1(F1),
+            }
+            let (
+                ret_w3_tag,
+                (__ret_w3_a1_value0, __ret_w3_a1_value1, __ret_w3_a1_value2),
+                __ret_w3_commit,
+            ) = match ret_w0 {
+                perftest_flat::WireCheckedEvent::Empty => {
+                    let values = (std::ptr::null_mut(), 0, std::ptr::null_mut());
+                    (0i32, values, __PbEnumCommit_ret_w3::A0(move || {}))
+                }
+                perftest_flat::WireCheckedEvent::Data {
+                    first: __ret_w3_a1_b0,
+                    marker: __ret_w3_a1_b1,
+                    last: __ret_w3_a1_b2,
+                } => {
+                    let ret_w3_a1_f0: *mut perftest_flat::CallbackReturnResource = Box::into_raw(
+                        Box::new(__ret_w3_a1_b0),
+                    );
+                    let ret_w3_a1_f0_owner = __PbOutputOwner(ret_w3_a1_f0);
+                    let ret_w4 = __ret_w3_a1_b1;
+                    let ret_w5 = perftest_flat::wire_marker_value(&ret_w4);
+                    let ret_w6 = ret_w5;
+                    let ret_w3_a1_f2: *mut perftest_flat::CallbackReturnResource = Box::into_raw(
+                        Box::new(__ret_w3_a1_b2),
+                    );
+                    let ret_w3_a1_f2_owner = __PbOutputOwner(ret_w3_a1_f2);
+                    let values = (ret_w3_a1_f0, ret_w6, ret_w3_a1_f2);
+                    (
+                        1i32,
+                        values,
+                        __PbEnumCommit_ret_w3::A1(move || {
+                            ::core::mem::forget(ret_w3_a1_f0_owner);
+                            ::core::mem::forget(ret_w3_a1_f2_owner);
+                        }),
+                    )
+                }
+            };
+            let ret_w3_carrier_value = match ret_w3_tag {
+                0i32 => {
+                    __PbEnum_perftest_wire_checked_event {
+                        tag: 0i32,
+                        payload: __PbEnum_perftest_wire_checked_event_payload {
+                            __empty: [],
+                        },
+                    }
+                }
+                1i32 => {
+                    __PbEnum_perftest_wire_checked_event {
+                        tag: 1i32,
+                        payload: __PbEnum_perftest_wire_checked_event_payload {
+                            a1: ::core::mem::ManuallyDrop::new(__PbEnum_perftest_wire_checked_event_a1 {
+                                first: __ret_w3_a1_value0,
+                                marker: __ret_w3_a1_value1,
+                                last: __ret_w3_a1_value2,
+                            }),
+                        },
+                    }
+                }
+                _ => unsafe { ::core::hint::unreachable_unchecked() }
+            };
+            let result = perftest_wire_checked_new_result {
+                v0: ret_w3_carrier_value,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                match __ret_w3_commit {
+                    __PbEnumCommit_ret_w3::A0(action) => action(),
+                    __PbEnumCommit_ret_w3::A1(action) => action(),
+                }
+                success_committed = true;
+            };
+            Ok(())
+        }
+    });
+    match outcome {
+        Ok(()) => {
+            let value = storage.assume_init();
+            std::ptr::write(out0, value.v0);
+            true
+        }
+        Err(message) => {
+            if success_committed {
+                let value = storage.assume_init();
+                {
+                    let mut carrier = value.v0;
+                    perftest_drop_wire_checked_event(::core::ptr::addr_of_mut!(carrier));
+                }
+            }
+            if !error_reported && !error.is_null() {
+                unsafe { __pb_report_message(message, error) };
+            }
+            false
+        }
+    }
+}
+#[repr(C)]
+pub struct perftest_wire_empty_echo_result {
+    pub v0: __PbEnum_perftest_wire_empty,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::let_and_return,
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_wire_empty_echo(
+    p0_w1: __PbEnum_perftest_wire_empty,
+) -> __PbEnum_perftest_wire_empty {
+    let mut storage = std::mem::MaybeUninit::<perftest_wire_empty_echo_result>::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            #[allow(unused_mut)]
+            let mut p0_w1 = p0_w1;
+            #[allow(unused_parens)]
+            let p0_w1_carrier = ::core::ptr::addr_of_mut!(p0_w1);
+            let p0_w1_tag = if true { unsafe { (*p0_w1_carrier).tag } } else { 0 };
+            let p0_w2: perftest_flat::WireEmpty = match p0_w1_tag {
+                0i32 => perftest_flat::WireEmpty::Unit,
+                1i32 => perftest_flat::WireEmpty::Tuple(),
+                2i32 => perftest_flat::WireEmpty::Named {},
+                _ => unsafe { ::core::hint::unreachable_unchecked() }
+            };
+            let __prebindgen_argument_0 = p0_w2;
+            let source_value = perftest_flat::wire_empty_echo(__prebindgen_argument_0);
+            #[allow(non_camel_case_types)]
+            enum __PbEnumCommit_ret_w1<F0, F1, F2> {
+                A0(F0),
+                A1(F1),
+                A2(F2),
+            }
+            let (ret_w1_tag, (), __ret_w1_commit) = match source_value {
+                perftest_flat::WireEmpty::Unit => {
+                    let values = ();
+                    (0i32, values, __PbEnumCommit_ret_w1::A0(move || {}))
+                }
+                perftest_flat::WireEmpty::Tuple() => {
+                    let values = ();
+                    (1i32, values, __PbEnumCommit_ret_w1::A1(move || {}))
+                }
+                perftest_flat::WireEmpty::Named {} => {
+                    let values = ();
+                    (2i32, values, __PbEnumCommit_ret_w1::A2(move || {}))
+                }
+            };
+            let ret_w1_carrier_value = match ret_w1_tag {
+                0i32 => {
+                    __PbEnum_perftest_wire_empty {
+                        tag: 0i32,
+                    }
+                }
+                1i32 => {
+                    __PbEnum_perftest_wire_empty {
+                        tag: 1i32,
+                    }
+                }
+                2i32 => {
+                    __PbEnum_perftest_wire_empty {
+                        tag: 2i32,
+                    }
+                }
+                _ => unsafe { ::core::hint::unreachable_unchecked() }
+            };
+            let result = perftest_wire_empty_echo_result {
+                v0: ret_w1_carrier_value,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                match __ret_w1_commit {
+                    __PbEnumCommit_ret_w1::A0(action) => action(),
+                    __PbEnumCommit_ret_w1::A1(action) => action(),
+                    __PbEnumCommit_ret_w1::A2(action) => action(),
+                }
+            };
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_wire_event_callback_result {
+    pub v0: __PbEnum_perftest_wire_event,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::let_and_return,
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_wire_event_callback(
+    p0_callback: perftest_callback_d67524396b65a6b2,
+) -> __PbEnum_perftest_wire_event {
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_wire_event_callback_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_callback_run = if true {
+                Some(unsafe { p0_callback.run.unwrap_unchecked() })
+            } else {
+                None
+            };
+            let p0_callback_owner = if true {
+                let owner = __PbCallbackOwner::new(
+                    p0_callback.context,
+                    p0_callback.drop,
+                );
+                {}
+                Some(owner)
+            } else {
+                None
+            };
+            let p0_callback_run = p0_callback_run.expect("active callback");
+            let p0_callback_owner = p0_callback_owner.expect("active callback");
+            let p0_callback_value = move |callback_source_0: perftest_flat::WireEvent| {
+                let result = ::prebindgen_runtime::boundary(|| {
+                    #[allow(non_camel_case_types)]
+                    enum __PbEnumCommit_callback_arg_0_w1<F0, F1, F2, F3, F4> {
+                        A0(F0),
+                        A1(F1),
+                        A2(F2),
+                        A3(F3),
+                        A4(F4),
+                    }
+                    let (
+                        callback_arg_0_w1_tag,
+                        (
+                            __callback_arg_0_w1_a1_value0,
+                            __callback_arg_0_w1_a2_value0,
+                            __callback_arg_0_w1_a2_value1,
+                        ),
+                        __callback_arg_0_w1_commit,
+                    ) = match callback_source_0 {
+                        perftest_flat::WireEvent::Idle => {
+                            let values = (
+                                0,
+                                0,
+                                unsafe {
+                                    ::core::mem::MaybeUninit::<
+                                        __PbOwned_owned_vec_u8_672e72343c1b4cb4,
+                                    >::uninit()
+                                        .assume_init()
+                                },
+                            );
+                            (
+                                0i32,
+                                values,
+                                __PbEnumCommit_callback_arg_0_w1::A0(move || {}),
+                            )
+                        }
+                        perftest_flat::WireEvent::Count(__callback_arg_0_w1_a1_b0) => {
+                            let callback_arg_0_w1_a1_f0 = __callback_arg_0_w1_a1_b0;
+                            let values = (
+                                callback_arg_0_w1_a1_f0,
+                                0,
+                                unsafe {
+                                    ::core::mem::MaybeUninit::<
+                                        __PbOwned_owned_vec_u8_672e72343c1b4cb4,
+                                    >::uninit()
+                                        .assume_init()
+                                },
+                            );
+                            (
+                                1i32,
+                                values,
+                                __PbEnumCommit_callback_arg_0_w1::A1(move || {}),
+                            )
+                        }
+                        perftest_flat::WireEvent::Packet {
+                            id: __callback_arg_0_w1_a2_b0,
+                            bytes: __callback_arg_0_w1_a2_b1,
+                        } => {
+                            let callback_arg_0_w1_a2_f0 = __callback_arg_0_w1_a2_b0;
+                            let callback_arg_0_w1_a2_f1 = __PbOwned_owned_vec_u8_672e72343c1b4cb4::guard(
+                                __callback_arg_0_w1_a2_b1,
+                            );
+                            let values = (
+                                0,
+                                callback_arg_0_w1_a2_f0,
+                                callback_arg_0_w1_a2_f1.0,
+                            );
+                            (
+                                2i32,
+                                values,
+                                __PbEnumCommit_callback_arg_0_w1::A2(move || {
+                                    ::core::mem::forget(callback_arg_0_w1_a2_f1);
+                                }),
+                            )
+                        }
+                        perftest_flat::WireEvent::EmptyTuple() => {
+                            let values = (
+                                0,
+                                0,
+                                unsafe {
+                                    ::core::mem::MaybeUninit::<
+                                        __PbOwned_owned_vec_u8_672e72343c1b4cb4,
+                                    >::uninit()
+                                        .assume_init()
+                                },
+                            );
+                            (
+                                3i32,
+                                values,
+                                __PbEnumCommit_callback_arg_0_w1::A3(move || {}),
+                            )
+                        }
+                        perftest_flat::WireEvent::EmptyRecord {} => {
+                            let values = (
+                                0,
+                                0,
+                                unsafe {
+                                    ::core::mem::MaybeUninit::<
+                                        __PbOwned_owned_vec_u8_672e72343c1b4cb4,
+                                    >::uninit()
+                                        .assume_init()
+                                },
+                            );
+                            (
+                                4i32,
+                                values,
+                                __PbEnumCommit_callback_arg_0_w1::A4(move || {}),
+                            )
+                        }
+                    };
+                    let callback_arg_0_w1_carrier_value = match callback_arg_0_w1_tag {
+                        0i32 => {
+                            __PbEnum_perftest_wire_event {
+                                tag: 0i32,
+                                payload: __PbEnum_perftest_wire_event_payload {
+                                    __empty: [],
+                                },
+                            }
+                        }
+                        1i32 => {
+                            __PbEnum_perftest_wire_event {
+                                tag: 1i32,
+                                payload: __PbEnum_perftest_wire_event_payload {
+                                    a1: ::core::mem::ManuallyDrop::new(__PbEnum_perftest_wire_event_a1 {
+                                        v0: __callback_arg_0_w1_a1_value0,
+                                    }),
+                                },
+                            }
+                        }
+                        2i32 => {
+                            __PbEnum_perftest_wire_event {
+                                tag: 2i32,
+                                payload: __PbEnum_perftest_wire_event_payload {
+                                    a2: ::core::mem::ManuallyDrop::new(__PbEnum_perftest_wire_event_a2 {
+                                        id: __callback_arg_0_w1_a2_value0,
+                                        bytes: __callback_arg_0_w1_a2_value1,
+                                    }),
+                                },
+                            }
+                        }
+                        3i32 => {
+                            __PbEnum_perftest_wire_event {
+                                tag: 3i32,
+                                payload: __PbEnum_perftest_wire_event_payload {
+                                    __empty: [],
+                                },
+                            }
+                        }
+                        4i32 => {
+                            __PbEnum_perftest_wire_event {
+                                tag: 4i32,
+                                payload: __PbEnum_perftest_wire_event_payload {
+                                    __empty: [],
+                                },
+                            }
+                        }
+                        _ => unsafe { ::core::hint::unreachable_unchecked() }
+                    };
+                    let __pb_callback_consumed = ::core::cell::Cell::new(0usize);
+                    let __prebindgen_input_consumed = &__pb_callback_consumed;
+                    let callback_argument_0 = callback_arg_0_w1_carrier_value;
+                    {
+                        match __callback_arg_0_w1_commit {
+                            __PbEnumCommit_callback_arg_0_w1::A0(action) => action(),
+                            __PbEnumCommit_callback_arg_0_w1::A1(action) => action(),
+                            __PbEnumCommit_callback_arg_0_w1::A2(action) => action(),
+                            __PbEnumCommit_callback_arg_0_w1::A3(action) => action(),
+                            __PbEnumCommit_callback_arg_0_w1::A4(action) => action(),
+                        }
+                    }
+                    let raw_result = unsafe {
+                        p0_callback_run(p0_callback_owner.context(), callback_argument_0)
+                    };
+                    let callback_return_w1 = raw_result;
+                    let callback_return_w1_return_location = ::core::ptr::addr_of!(
+                        callback_return_w1
+                    );
+                    let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
+                    {
+                        let mut __pb_return_ordinal = 0usize;
+                        {
+                            let ordinal = __pb_return_ordinal;
+                            __pb_return_ordinal += 1;
+                            if ordinal >= __prebindgen_input_consumed.get() {
+                                unsafe {
+                                    perftest_drop_wire_event(
+                                        (callback_return_w1_return_location
+                                            as *const __PbEnum_perftest_wire_event)
+                                            .cast_mut(),
+                                    );
+                                }
+                            }
+                        }
+                        Ok(())
+                    });
+                    let callback_outcome: ::prebindgen_runtime::Result<_> = {
+                        #[allow(unused_mut)]
+                        let mut callback_return_w1 = callback_return_w1;
+                        #[allow(unused_parens)]
+                        let callback_return_w1_carrier = ::core::ptr::addr_of_mut!(
+                            callback_return_w1
+                        );
+                        let callback_return_w1_tag = if true {
+                            unsafe { (*callback_return_w1_carrier).tag }
+                        } else {
+                            0
+                        };
+                        let callback_return_w1_a1_f0 = if (callback_return_w1_tag)
+                            == 1i32
+                        {
+                            unsafe {
+                                ::core::ptr::read(
+                                    (callback_return_w1_carrier)
+                                        .cast::<u8>()
+                                        .wrapping_add(
+                                            ::core::mem::offset_of!(
+                                                __PbEnum_perftest_wire_event, payload
+                                            )
+                                                + ::core::mem::offset_of!(
+                                                    __PbEnum_perftest_wire_event_a1, v0
+                                                ),
+                                        )
+                                        .cast::<u64>(),
+                                )
+                            }
+                        } else {
+                            0
+                        };
+                        let callback_return_w1_a2_f0 = if (callback_return_w1_tag)
+                            == 2i32
+                        {
+                            unsafe {
+                                ::core::ptr::read(
+                                    (callback_return_w1_carrier)
+                                        .cast::<u8>()
+                                        .wrapping_add(
+                                            ::core::mem::offset_of!(
+                                                __PbEnum_perftest_wire_event, payload
+                                            )
+                                                + ::core::mem::offset_of!(
+                                                    __PbEnum_perftest_wire_event_a2, id
+                                                ),
+                                        )
+                                        .cast::<u64>(),
+                                )
+                            }
+                        } else {
+                            0
+                        };
+                        let callback_return_w1_a2_f1 = if (callback_return_w1_tag)
+                            == 2i32
+                        {
+                            (callback_return_w1_carrier)
+                                .cast::<u8>()
+                                .wrapping_add(
+                                    ::core::mem::offset_of!(
+                                        __PbEnum_perftest_wire_event, payload
+                                    )
+                                        + ::core::mem::offset_of!(
+                                            __PbEnum_perftest_wire_event_a2, bytes
+                                        ),
+                                )
+                                .cast::<__PbOwned_owned_vec_u8_672e72343c1b4cb4>()
+                        } else {
+                            ::core::ptr::null_mut()
+                        };
+                        let callback_return_w1_remaining = if true {
+                            unsafe {
+                                (*callback_return_w1_carrier).tag = -1;
+                            }
+                            {
+                                __pb_callback_consumed
+                                    .set(__pb_callback_consumed.get() + (1usize));
+                            }
+                            Some(
+                                ::prebindgen_runtime::CallbackReturnCleanup::new(move || {
+                                    unsafe {
+                                        #[allow(clippy::collapsible_if)]
+                                        if (callback_return_w1_tag) == 2i32 && (true) {
+                                            let _ = ::prebindgen_runtime::boundary(|| {
+                                                drop(
+                                                    (::core::ptr::read(
+                                                        (callback_return_w1_carrier)
+                                                            .cast::<u8>()
+                                                            .wrapping_add(
+                                                                ::core::mem::offset_of!(
+                                                                    __PbEnum_perftest_wire_event, payload
+                                                                )
+                                                                    + ::core::mem::offset_of!(
+                                                                        __PbEnum_perftest_wire_event_a2, bytes
+                                                                    ),
+                                                            )
+                                                            .cast::<__PbOwned_owned_vec_u8_672e72343c1b4cb4>(),
+                                                    ))
+                                                        .into_rust(),
+                                                );
+                                                Ok(())
+                                            });
+                                        }
+                                    }
+                                    Ok(())
+                                }),
+                            )
+                        } else {
+                            None
+                        };
+                        let callback_return_w2: perftest_flat::WireEvent = match callback_return_w1_tag {
+                            0i32 => perftest_flat::WireEvent::Idle,
+                            1i32 => {
+                                let callback_return_w2_a1_f0_value: u64 = ::core::convert::Into::into(
+                                    callback_return_w1_a1_f0,
+                                );
+                                let callback_return_w2_a1_f0 = callback_return_w2_a1_f0_value;
+                                perftest_flat::WireEvent::Count(callback_return_w2_a1_f0)
+                            }
+                            2i32 => {
+                                let callback_return_w2_a2_f0_value: u64 = ::core::convert::Into::into(
+                                    callback_return_w1_a2_f0,
+                                );
+                                let callback_return_w2_a2_f0 = callback_return_w2_a2_f0_value;
+                                let callback_return_w1_a2_f1_pointer = callback_return_w1_a2_f1
+                                    as *mut Vec<u8>;
+                                let callback_return_w1_a2_f1_empty = if callback_return_w1_tag
+                                    == 2i32
+                                {
+                                    Some(<Vec<u8> as ::core::default::Default>::default())
+                                } else {
+                                    None
+                                };
+                                let callback_return_w2_a2_f1_value = if callback_return_w1_tag
+                                    == 2i32
+                                {
+                                    {
+                                        let value = unsafe {
+                                            ::core::ptr::replace(
+                                                callback_return_w1_a2_f1_pointer,
+                                                callback_return_w1_a2_f1_empty
+                                                    .expect("prepared empty owner"),
+                                            )
+                                        };
+                                        Some(value)
+                                    }
+                                } else {
+                                    None
+                                };
+                                let callback_return_w2_a2_f1_value: Vec<u8> = callback_return_w2_a2_f1_value
+                                    .expect("active inline owner");
+                                let callback_return_w2_a2_f1 = callback_return_w2_a2_f1_value;
+                                perftest_flat::WireEvent::Packet {
+                                    id: callback_return_w2_a2_f0,
+                                    bytes: callback_return_w2_a2_f1,
+                                }
+                            }
+                            3i32 => perftest_flat::WireEvent::EmptyTuple(),
+                            4i32 => {
+                                perftest_flat::WireEvent::EmptyRecord {
+                                }
+                            }
+                            _ => unsafe { ::core::hint::unreachable_unchecked() }
+                        };
+                        let callback_return_value = callback_return_w2;
+                        Ok(callback_return_value)
+                    };
+                    let callback_decoded = callback_outcome?;
+                    callback_return_cleanup.commit();
+                    Ok(callback_decoded)
+                });
+                result
+                    .unwrap_or_else(|error| {
+                        ::prebindgen_runtime::report_callback_error(
+                            "perftest_callback_d67524396b65a6b2",
+                            "(perftest_flat :: WireEvent)->perftest_flat :: WireEvent",
+                            &error,
+                        );
+                        panic!("callback failed: {}", error)
+                    })
+            };
+            let __prebindgen_argument_0 = p0_callback_value;
+            let source_value = perftest_flat::wire_event_callback(
+                __prebindgen_argument_0,
+            );
+            #[allow(non_camel_case_types)]
+            enum __PbEnumCommit_ret_w1<F0, F1, F2, F3, F4> {
+                A0(F0),
+                A1(F1),
+                A2(F2),
+                A3(F3),
+                A4(F4),
+            }
+            let (
+                ret_w1_tag,
+                (__ret_w1_a1_value0, __ret_w1_a2_value0, __ret_w1_a2_value1),
+                __ret_w1_commit,
+            ) = match source_value {
+                perftest_flat::WireEvent::Idle => {
+                    let values = (
+                        0,
+                        0,
+                        unsafe {
+                            ::core::mem::MaybeUninit::<
+                                __PbOwned_owned_vec_u8_672e72343c1b4cb4,
+                            >::uninit()
+                                .assume_init()
+                        },
+                    );
+                    (0i32, values, __PbEnumCommit_ret_w1::A0(move || {}))
+                }
+                perftest_flat::WireEvent::Count(__ret_w1_a1_b0) => {
+                    let ret_w1_a1_f0 = __ret_w1_a1_b0;
+                    let values = (
+                        ret_w1_a1_f0,
+                        0,
+                        unsafe {
+                            ::core::mem::MaybeUninit::<
+                                __PbOwned_owned_vec_u8_672e72343c1b4cb4,
+                            >::uninit()
+                                .assume_init()
+                        },
+                    );
+                    (1i32, values, __PbEnumCommit_ret_w1::A1(move || {}))
+                }
+                perftest_flat::WireEvent::Packet {
+                    id: __ret_w1_a2_b0,
+                    bytes: __ret_w1_a2_b1,
+                } => {
+                    let ret_w1_a2_f0 = __ret_w1_a2_b0;
+                    let ret_w1_a2_f1 = __PbOwned_owned_vec_u8_672e72343c1b4cb4::guard(
+                        __ret_w1_a2_b1,
+                    );
+                    let values = (0, ret_w1_a2_f0, ret_w1_a2_f1.0);
+                    (
+                        2i32,
+                        values,
+                        __PbEnumCommit_ret_w1::A2(move || {
+                            ::core::mem::forget(ret_w1_a2_f1);
+                        }),
+                    )
+                }
+                perftest_flat::WireEvent::EmptyTuple() => {
+                    let values = (
+                        0,
+                        0,
+                        unsafe {
+                            ::core::mem::MaybeUninit::<
+                                __PbOwned_owned_vec_u8_672e72343c1b4cb4,
+                            >::uninit()
+                                .assume_init()
+                        },
+                    );
+                    (3i32, values, __PbEnumCommit_ret_w1::A3(move || {}))
+                }
+                perftest_flat::WireEvent::EmptyRecord {} => {
+                    let values = (
+                        0,
+                        0,
+                        unsafe {
+                            ::core::mem::MaybeUninit::<
+                                __PbOwned_owned_vec_u8_672e72343c1b4cb4,
+                            >::uninit()
+                                .assume_init()
+                        },
+                    );
+                    (4i32, values, __PbEnumCommit_ret_w1::A4(move || {}))
+                }
+            };
+            let ret_w1_carrier_value = match ret_w1_tag {
+                0i32 => {
+                    __PbEnum_perftest_wire_event {
+                        tag: 0i32,
+                        payload: __PbEnum_perftest_wire_event_payload {
+                            __empty: [],
+                        },
+                    }
+                }
+                1i32 => {
+                    __PbEnum_perftest_wire_event {
+                        tag: 1i32,
+                        payload: __PbEnum_perftest_wire_event_payload {
+                            a1: ::core::mem::ManuallyDrop::new(__PbEnum_perftest_wire_event_a1 {
+                                v0: __ret_w1_a1_value0,
+                            }),
+                        },
+                    }
+                }
+                2i32 => {
+                    __PbEnum_perftest_wire_event {
+                        tag: 2i32,
+                        payload: __PbEnum_perftest_wire_event_payload {
+                            a2: ::core::mem::ManuallyDrop::new(__PbEnum_perftest_wire_event_a2 {
+                                id: __ret_w1_a2_value0,
+                                bytes: __ret_w1_a2_value1,
+                            }),
+                        },
+                    }
+                }
+                3i32 => {
+                    __PbEnum_perftest_wire_event {
+                        tag: 3i32,
+                        payload: __PbEnum_perftest_wire_event_payload {
+                            __empty: [],
+                        },
+                    }
+                }
+                4i32 => {
+                    __PbEnum_perftest_wire_event {
+                        tag: 4i32,
+                        payload: __PbEnum_perftest_wire_event_payload {
+                            __empty: [],
+                        },
+                    }
+                }
+                _ => unsafe { ::core::hint::unreachable_unchecked() }
+            };
+            let result = perftest_wire_event_callback_result {
+                v0: ret_w1_carrier_value,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                match __ret_w1_commit {
+                    __PbEnumCommit_ret_w1::A0(action) => action(),
+                    __PbEnumCommit_ret_w1::A1(action) => action(),
+                    __PbEnumCommit_ret_w1::A2(action) => action(),
+                    __PbEnumCommit_ret_w1::A3(action) => action(),
+                    __PbEnumCommit_ret_w1::A4(action) => action(),
+                }
+            };
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_wire_event_echo_result {
+    pub v0: __PbEnum_perftest_wire_event,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::let_and_return,
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_wire_event_echo(
+    p0_w1: *mut __PbEnum_perftest_wire_event,
+) -> __PbEnum_perftest_wire_event {
+    let mut storage = std::mem::MaybeUninit::<perftest_wire_event_echo_result>::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            #[allow(unused_parens)]
+            let p0_w1_carrier = p0_w1;
+            let p0_w1_tag = if true { unsafe { (*p0_w1_carrier).tag } } else { 0 };
+            let p0_w1_a1_f0 = if (p0_w1_tag) == 1i32 {
+                unsafe {
+                    ::core::ptr::read(
+                        (p0_w1_carrier)
+                            .cast::<u8>()
+                            .wrapping_add(
+                                ::core::mem::offset_of!(
+                                    __PbEnum_perftest_wire_event, payload
+                                )
+                                    + ::core::mem::offset_of!(
+                                        __PbEnum_perftest_wire_event_a1, v0
+                                    ),
+                            )
+                            .cast::<u64>(),
+                    )
+                }
+            } else {
+                0
+            };
+            let p0_w1_a2_f0 = if (p0_w1_tag) == 2i32 {
+                unsafe {
+                    ::core::ptr::read(
+                        (p0_w1_carrier)
+                            .cast::<u8>()
+                            .wrapping_add(
+                                ::core::mem::offset_of!(
+                                    __PbEnum_perftest_wire_event, payload
+                                )
+                                    + ::core::mem::offset_of!(
+                                        __PbEnum_perftest_wire_event_a2, id
+                                    ),
+                            )
+                            .cast::<u64>(),
+                    )
+                }
+            } else {
+                0
+            };
+            let p0_w1_a2_f1 = if (p0_w1_tag) == 2i32 {
+                (p0_w1_carrier)
+                    .cast::<u8>()
+                    .wrapping_add(
+                        ::core::mem::offset_of!(__PbEnum_perftest_wire_event, payload)
+                            + ::core::mem::offset_of!(
+                                __PbEnum_perftest_wire_event_a2, bytes
+                            ),
+                    )
+                    .cast::<__PbOwned_owned_vec_u8_672e72343c1b4cb4>()
+            } else {
+                ::core::ptr::null_mut()
+            };
+            let p0_w1_remaining = if true {
+                unsafe {
+                    (*p0_w1_carrier).tag = -1;
+                }
+                {}
+                Some(
+                    ::prebindgen_runtime::CallbackReturnCleanup::new(move || {
+                        unsafe {
+                            #[allow(clippy::collapsible_if)]
+                            if (p0_w1_tag) == 2i32 && (true) {
+                                let _ = ::prebindgen_runtime::boundary(|| {
+                                    drop(
+                                        (::core::ptr::read(
+                                            (p0_w1_carrier)
+                                                .cast::<u8>()
+                                                .wrapping_add(
+                                                    ::core::mem::offset_of!(
+                                                        __PbEnum_perftest_wire_event, payload
+                                                    )
+                                                        + ::core::mem::offset_of!(
+                                                            __PbEnum_perftest_wire_event_a2, bytes
+                                                        ),
+                                                )
+                                                .cast::<__PbOwned_owned_vec_u8_672e72343c1b4cb4>(),
+                                        ))
+                                            .into_rust(),
+                                    );
+                                    Ok(())
+                                });
+                            }
+                        }
+                        Ok(())
+                    }),
+                )
+            } else {
+                None
+            };
+            let p0_w2: perftest_flat::WireEvent = match p0_w1_tag {
+                0i32 => perftest_flat::WireEvent::Idle,
+                1i32 => {
+                    let p0_w2_a1_f0_value: u64 = ::core::convert::Into::into(
+                        p0_w1_a1_f0,
+                    );
+                    let p0_w2_a1_f0 = p0_w2_a1_f0_value;
+                    perftest_flat::WireEvent::Count(p0_w2_a1_f0)
+                }
+                2i32 => {
+                    let p0_w2_a2_f0_value: u64 = ::core::convert::Into::into(
+                        p0_w1_a2_f0,
+                    );
+                    let p0_w2_a2_f0 = p0_w2_a2_f0_value;
+                    let p0_w1_a2_f1_pointer = p0_w1_a2_f1 as *mut Vec<u8>;
+                    let p0_w1_a2_f1_empty = if p0_w1_tag == 2i32 {
+                        Some(<Vec<u8> as ::core::default::Default>::default())
+                    } else {
+                        None
+                    };
+                    let p0_w2_a2_f1_value = if p0_w1_tag == 2i32 {
+                        {
+                            let value = unsafe {
+                                ::core::ptr::replace(
+                                    p0_w1_a2_f1_pointer,
+                                    p0_w1_a2_f1_empty.expect("prepared empty owner"),
+                                )
+                            };
+                            Some(value)
+                        }
+                    } else {
+                        None
+                    };
+                    let p0_w2_a2_f1_value: Vec<u8> = p0_w2_a2_f1_value
+                        .expect("active inline owner");
+                    let p0_w2_a2_f1 = p0_w2_a2_f1_value;
+                    perftest_flat::WireEvent::Packet {
+                        id: p0_w2_a2_f0,
+                        bytes: p0_w2_a2_f1,
+                    }
+                }
+                3i32 => perftest_flat::WireEvent::EmptyTuple(),
+                4i32 => {
+                    perftest_flat::WireEvent::EmptyRecord {
+                    }
+                }
+                _ => unsafe { ::core::hint::unreachable_unchecked() }
+            };
+            let __prebindgen_argument_0 = p0_w2;
+            let source_value = perftest_flat::wire_event_echo(__prebindgen_argument_0);
+            #[allow(non_camel_case_types)]
+            enum __PbEnumCommit_ret_w1<F0, F1, F2, F3, F4> {
+                A0(F0),
+                A1(F1),
+                A2(F2),
+                A3(F3),
+                A4(F4),
+            }
+            let (
+                ret_w1_tag,
+                (__ret_w1_a1_value0, __ret_w1_a2_value0, __ret_w1_a2_value1),
+                __ret_w1_commit,
+            ) = match source_value {
+                perftest_flat::WireEvent::Idle => {
+                    let values = (
+                        0,
+                        0,
+                        unsafe {
+                            ::core::mem::MaybeUninit::<
+                                __PbOwned_owned_vec_u8_672e72343c1b4cb4,
+                            >::uninit()
+                                .assume_init()
+                        },
+                    );
+                    (0i32, values, __PbEnumCommit_ret_w1::A0(move || {}))
+                }
+                perftest_flat::WireEvent::Count(__ret_w1_a1_b0) => {
+                    let ret_w1_a1_f0 = __ret_w1_a1_b0;
+                    let values = (
+                        ret_w1_a1_f0,
+                        0,
+                        unsafe {
+                            ::core::mem::MaybeUninit::<
+                                __PbOwned_owned_vec_u8_672e72343c1b4cb4,
+                            >::uninit()
+                                .assume_init()
+                        },
+                    );
+                    (1i32, values, __PbEnumCommit_ret_w1::A1(move || {}))
+                }
+                perftest_flat::WireEvent::Packet {
+                    id: __ret_w1_a2_b0,
+                    bytes: __ret_w1_a2_b1,
+                } => {
+                    let ret_w1_a2_f0 = __ret_w1_a2_b0;
+                    let ret_w1_a2_f1 = __PbOwned_owned_vec_u8_672e72343c1b4cb4::guard(
+                        __ret_w1_a2_b1,
+                    );
+                    let values = (0, ret_w1_a2_f0, ret_w1_a2_f1.0);
+                    (
+                        2i32,
+                        values,
+                        __PbEnumCommit_ret_w1::A2(move || {
+                            ::core::mem::forget(ret_w1_a2_f1);
+                        }),
+                    )
+                }
+                perftest_flat::WireEvent::EmptyTuple() => {
+                    let values = (
+                        0,
+                        0,
+                        unsafe {
+                            ::core::mem::MaybeUninit::<
+                                __PbOwned_owned_vec_u8_672e72343c1b4cb4,
+                            >::uninit()
+                                .assume_init()
+                        },
+                    );
+                    (3i32, values, __PbEnumCommit_ret_w1::A3(move || {}))
+                }
+                perftest_flat::WireEvent::EmptyRecord {} => {
+                    let values = (
+                        0,
+                        0,
+                        unsafe {
+                            ::core::mem::MaybeUninit::<
+                                __PbOwned_owned_vec_u8_672e72343c1b4cb4,
+                            >::uninit()
+                                .assume_init()
+                        },
+                    );
+                    (4i32, values, __PbEnumCommit_ret_w1::A4(move || {}))
+                }
+            };
+            let ret_w1_carrier_value = match ret_w1_tag {
+                0i32 => {
+                    __PbEnum_perftest_wire_event {
+                        tag: 0i32,
+                        payload: __PbEnum_perftest_wire_event_payload {
+                            __empty: [],
+                        },
+                    }
+                }
+                1i32 => {
+                    __PbEnum_perftest_wire_event {
+                        tag: 1i32,
+                        payload: __PbEnum_perftest_wire_event_payload {
+                            a1: ::core::mem::ManuallyDrop::new(__PbEnum_perftest_wire_event_a1 {
+                                v0: __ret_w1_a1_value0,
+                            }),
+                        },
+                    }
+                }
+                2i32 => {
+                    __PbEnum_perftest_wire_event {
+                        tag: 2i32,
+                        payload: __PbEnum_perftest_wire_event_payload {
+                            a2: ::core::mem::ManuallyDrop::new(__PbEnum_perftest_wire_event_a2 {
+                                id: __ret_w1_a2_value0,
+                                bytes: __ret_w1_a2_value1,
+                            }),
+                        },
+                    }
+                }
+                3i32 => {
+                    __PbEnum_perftest_wire_event {
+                        tag: 3i32,
+                        payload: __PbEnum_perftest_wire_event_payload {
+                            __empty: [],
+                        },
+                    }
+                }
+                4i32 => {
+                    __PbEnum_perftest_wire_event {
+                        tag: 4i32,
+                        payload: __PbEnum_perftest_wire_event_payload {
+                            __empty: [],
+                        },
+                    }
+                }
+                _ => unsafe { ::core::hint::unreachable_unchecked() }
+            };
+            let result = perftest_wire_event_echo_result {
+                v0: ret_w1_carrier_value,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                match __ret_w1_commit {
+                    __PbEnumCommit_ret_w1::A0(action) => action(),
+                    __PbEnumCommit_ret_w1::A1(action) => action(),
+                    __PbEnumCommit_ret_w1::A2(action) => action(),
+                    __PbEnumCommit_ret_w1::A3(action) => action(),
+                    __PbEnumCommit_ret_w1::A4(action) => action(),
+                }
+            };
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_wire_optional_echo_result {
+    pub v0: __PbEnum_perftest_wire_optional_event,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::let_and_return,
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_wire_optional_echo(
+    p0_w1: *mut __PbEnum_perftest_wire_optional_event,
+) -> __PbEnum_perftest_wire_optional_event {
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_wire_optional_echo_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            #[allow(unused_parens)]
+            let p0_w1_carrier = p0_w1;
+            let p0_w1_tag = if true { unsafe { (*p0_w1_carrier).tag } } else { 0 };
+            let p0_w1_a1_f0_present = if (p0_w1_tag) == 1i32 {
+                unsafe {
+                    ::core::ptr::read(
+                        (p0_w1_carrier)
+                            .cast::<u8>()
+                            .wrapping_add(
+                                ::core::mem::offset_of!(
+                                    __PbEnum_perftest_wire_optional_event, payload
+                                )
+                                    + ::core::mem::offset_of!(
+                                        __PbEnum_perftest_wire_optional_event_a1, payload_v0
+                                    ),
+                            )
+                            .cast::<i32>(),
+                    )
+                }
+            } else {
+                0
+            };
+            let p0_w1_a1_f0_some = if ((p0_w1_tag) == 1i32)
+                && ((p0_w1_a1_f0_present) == 1i32)
+            {
+                (p0_w1_carrier)
+                    .cast::<u8>()
+                    .wrapping_add(
+                        ::core::mem::offset_of!(
+                            __PbEnum_perftest_wire_optional_event, payload
+                        )
+                            + ::core::mem::offset_of!(
+                                __PbEnum_perftest_wire_optional_event_a1, payload_v1
+                            ),
+                    )
+                    .cast::<__PbOwned_owned_vec_u8_672e72343c1b4cb4>()
+            } else {
+                ::core::ptr::null_mut()
+            };
+            let p0_w1_a1_f1_some_enum_slot = if (p0_w1_tag) == 1i32 {
+                (p0_w1_carrier)
+                    .cast::<u8>()
+                    .wrapping_add(
+                        ::core::mem::offset_of!(
+                            __PbEnum_perftest_wire_optional_event, payload
+                        )
+                            + ::core::mem::offset_of!(
+                                __PbEnum_perftest_wire_optional_event_a1, tail
+                            ),
+                    )
+                    .cast::<*mut perftest_flat::CallbackReturnResource>()
+            } else {
+                ::core::ptr::null_mut()
+            };
+            let p0_w1_a1_f1_some = if (p0_w1_tag) == 1i32 {
+                unsafe {
+                    ::core::ptr::read(
+                        (p0_w1_carrier)
+                            .cast::<u8>()
+                            .wrapping_add(
+                                ::core::mem::offset_of!(
+                                    __PbEnum_perftest_wire_optional_event, payload
+                                )
+                                    + ::core::mem::offset_of!(
+                                        __PbEnum_perftest_wire_optional_event_a1, tail
+                                    ),
+                            )
+                            .cast::<*mut perftest_flat::CallbackReturnResource>(),
+                    )
+                }
+            } else {
+                std::ptr::null_mut()
+            };
+            let p0_w1_remaining = if true {
+                unsafe {
+                    (*p0_w1_carrier).tag = -1;
+                }
+                {}
+                Some(
+                    ::prebindgen_runtime::CallbackReturnCleanup::new(move || {
+                        unsafe {
+                            #[allow(clippy::collapsible_if)]
+                            if (p0_w1_tag) == 1i32
+                                && ((p0_w1_a1_f0_present == 1) && (true))
+                            {
+                                let _ = ::prebindgen_runtime::boundary(|| {
+                                    drop(
+                                        (::core::ptr::read(
+                                            (p0_w1_carrier)
+                                                .cast::<u8>()
+                                                .wrapping_add(
+                                                    ::core::mem::offset_of!(
+                                                        __PbEnum_perftest_wire_optional_event, payload
+                                                    )
+                                                        + ::core::mem::offset_of!(
+                                                            __PbEnum_perftest_wire_optional_event_a1, payload_v1
+                                                        ),
+                                                )
+                                                .cast::<__PbOwned_owned_vec_u8_672e72343c1b4cb4>(),
+                                        ))
+                                            .into_rust(),
+                                    );
+                                    Ok(())
+                                });
+                            }
+                            #[allow(clippy::collapsible_if)]
+                            if (p0_w1_tag) == 1i32
+                                && (((p0_w1_a1_f1_some as usize) != 0) && (true))
+                            {
+                                if !(::core::ptr::read(
+                                    (p0_w1_carrier)
+                                        .cast::<u8>()
+                                        .wrapping_add(
+                                            ::core::mem::offset_of!(
+                                                __PbEnum_perftest_wire_optional_event, payload
+                                            )
+                                                + ::core::mem::offset_of!(
+                                                    __PbEnum_perftest_wire_optional_event_a1, tail
+                                                ),
+                                        )
+                                        .cast::<*mut perftest_flat::CallbackReturnResource>(),
+                                ))
+                                    .is_null()
+                                {
+                                    let _ = ::prebindgen_runtime::boundary(|| {
+                                        drop(
+                                            Box::from_raw(
+                                                (::core::ptr::read(
+                                                    (p0_w1_carrier)
+                                                        .cast::<u8>()
+                                                        .wrapping_add(
+                                                            ::core::mem::offset_of!(
+                                                                __PbEnum_perftest_wire_optional_event, payload
+                                                            )
+                                                                + ::core::mem::offset_of!(
+                                                                    __PbEnum_perftest_wire_optional_event_a1, tail
+                                                                ),
+                                                        )
+                                                        .cast::<*mut perftest_flat::CallbackReturnResource>(),
+                                                )) as *mut perftest_flat::CallbackReturnResource,
+                                            ),
+                                        );
+                                        Ok(())
+                                    });
+                                }
+                            }
+                        }
+                        Ok(())
+                    }),
+                )
+            } else {
+                None
+            };
+            let p0_w2: perftest_flat::WireOptionalEvent = match p0_w1_tag {
+                0i32 => perftest_flat::WireOptionalEvent::Empty,
+                1i32 => {
+                    let p0_w2_a1_f0_value = if (p0_w1_tag == 1i32)
+                        && (p0_w1_a1_f0_present == 1i32)
+                    {
+                        {
+                            let p0_w1_a1_f0_some_pointer = p0_w1_a1_f0_some
+                                as *mut Vec<u8>;
+                            let p0_w1_a1_f0_some_empty = if (p0_w1_tag == 1i32)
+                                && (p0_w1_a1_f0_present == 1i32)
+                            {
+                                Some(<Vec<u8> as ::core::default::Default>::default())
+                            } else {
+                                None
+                            };
+                            let p0_w2_a1_f0_value_some = if (p0_w1_tag == 1i32)
+                                && (p0_w1_a1_f0_present == 1i32)
+                            {
+                                {
+                                    let value = unsafe {
+                                        ::core::ptr::replace(
+                                            p0_w1_a1_f0_some_pointer,
+                                            p0_w1_a1_f0_some_empty.expect("prepared empty owner"),
+                                        )
+                                    };
+                                    Some(value)
+                                }
+                            } else {
+                                None
+                            };
+                            let p0_w2_a1_f0_value_some: Vec<u8> = p0_w2_a1_f0_value_some
+                                .expect("active inline owner");
+                            let p0_w2_a1_f0_value_payload = p0_w2_a1_f0_value_some;
+                            Some(p0_w2_a1_f0_value_payload)
+                        }
+                    } else {
+                        None
+                    };
+                    let p0_w2_a1_f0 = p0_w2_a1_f0_value;
+                    let p0_w1_a1_f1_present: i32 = i32::from(
+                        (p0_w1_a1_f1_some as usize) != 0,
+                    );
+                    let p0_w2_a1_f1_value = if (p0_w1_tag == 1i32)
+                        && (p0_w1_a1_f1_present == 1i32)
+                    {
+                        {
+                            let p0_w1_a1_f1_some_pointer = p0_w1_a1_f1_some
+                                as *mut perftest_flat::CallbackReturnResource;
+                            let p0_w2_a1_f1_value_some: perftest_flat::CallbackReturnResource = {
+                                let p0_w2_a1_f1_value_some = unsafe {
+                                    Box::from_raw(p0_w1_a1_f1_some_pointer)
+                                };
+                                unsafe {
+                                    ::core::ptr::write(
+                                        p0_w1_a1_f1_some_enum_slot,
+                                        ::core::ptr::null_mut(),
+                                    );
+                                }
+                                *p0_w2_a1_f1_value_some
+                            };
+                            let p0_w2_a1_f1_value_payload = p0_w2_a1_f1_value_some;
+                            Some(p0_w2_a1_f1_value_payload)
+                        }
+                    } else {
+                        None
+                    };
+                    let p0_w2_a1_f1 = p0_w2_a1_f1_value;
+                    perftest_flat::WireOptionalEvent::Bytes {
+                        payload: p0_w2_a1_f0,
+                        tail: p0_w2_a1_f1,
+                    }
+                }
+                _ => unsafe { ::core::hint::unreachable_unchecked() }
+            };
+            let __prebindgen_argument_0 = p0_w2;
+            let source_value = perftest_flat::wire_optional_echo(
+                __prebindgen_argument_0,
+            );
+            #[allow(non_camel_case_types)]
+            enum __PbEnumCommit_ret_w1<F0, F1> {
+                A0(F0),
+                A1(F1),
+            }
+            let (
+                ret_w1_tag,
+                (__ret_w1_a1_value0, __ret_w1_a1_value1, __ret_w1_a1_value2),
+                __ret_w1_commit,
+            ) = match source_value {
+                perftest_flat::WireOptionalEvent::Empty => {
+                    let values = (
+                        0,
+                        unsafe {
+                            ::core::mem::MaybeUninit::<
+                                __PbOwned_owned_vec_u8_672e72343c1b4cb4,
+                            >::uninit()
+                                .assume_init()
+                        },
+                        std::ptr::null_mut(),
+                    );
+                    (0i32, values, __PbEnumCommit_ret_w1::A0(move || {}))
+                }
+                perftest_flat::WireOptionalEvent::Bytes {
+                    payload: __ret_w1_a1_b0,
+                    tail: __ret_w1_a1_b1,
+                } => {
+                    let (
+                        ret_w1_a1_f0_present,
+                        (ret_w1_a1_f0_present_value0,),
+                        ret_w1_a1_f0_present_commit,
+                    ) = if let Some(ret_w1_a1_f0_payload) = __ret_w1_a1_b0 {
+                        let ret_w1_a1_f0_some = __PbOwned_owned_vec_u8_672e72343c1b4cb4::guard(
+                            ret_w1_a1_f0_payload,
+                        );
+                        let ret_w1_a1_f0_present_values = (ret_w1_a1_f0_some.0,);
+                        (
+                            1i32,
+                            ret_w1_a1_f0_present_values,
+                            Some(move || {
+                                ::core::mem::forget(ret_w1_a1_f0_some);
+                            }),
+                        )
+                    } else {
+                        (0i32, (__PbOwned_owned_vec_u8_672e72343c1b4cb4::empty(),), None)
+                    };
+                    let (
+                        _,
+                        (ret_w1_a1_f1_present_value0,),
+                        ret_w1_a1_f1_present_commit,
+                    ) = if let Some(ret_w1_a1_f1_payload) = __ret_w1_a1_b1 {
+                        let ret_w1_a1_f1_some: *mut perftest_flat::CallbackReturnResource = Box::into_raw(
+                            Box::new(ret_w1_a1_f1_payload),
+                        );
+                        let ret_w1_a1_f1_some_owner = __PbOutputOwner(ret_w1_a1_f1_some);
+                        let ret_w1_a1_f1_present_values = (ret_w1_a1_f1_some,);
+                        (
+                            1i32,
+                            ret_w1_a1_f1_present_values,
+                            Some(move || {
+                                ::core::mem::forget(ret_w1_a1_f1_some_owner);
+                            }),
+                        )
+                    } else {
+                        (0i32, (std::ptr::null_mut(),), None)
+                    };
+                    let values = (
+                        ret_w1_a1_f0_present,
+                        ret_w1_a1_f0_present_value0,
+                        ret_w1_a1_f1_present_value0,
+                    );
+                    (
+                        1i32,
+                        values,
+                        __PbEnumCommit_ret_w1::A1(move || {
+                            if let Some(ret_w1_a1_f0_present_action) = ret_w1_a1_f0_present_commit {
+                                ret_w1_a1_f0_present_action();
+                            }
+                            if let Some(ret_w1_a1_f1_present_action) = ret_w1_a1_f1_present_commit {
+                                ret_w1_a1_f1_present_action();
+                            }
+                        }),
+                    )
+                }
+            };
+            let ret_w1_carrier_value = match ret_w1_tag {
+                0i32 => {
+                    __PbEnum_perftest_wire_optional_event {
+                        tag: 0i32,
+                        payload: __PbEnum_perftest_wire_optional_event_payload {
+                            __empty: [],
+                        },
+                    }
+                }
+                1i32 => {
+                    __PbEnum_perftest_wire_optional_event {
+                        tag: 1i32,
+                        payload: __PbEnum_perftest_wire_optional_event_payload {
+                            a1: ::core::mem::ManuallyDrop::new(__PbEnum_perftest_wire_optional_event_a1 {
+                                payload_v0: __ret_w1_a1_value0,
+                                payload_v1: __ret_w1_a1_value1,
+                                tail: __ret_w1_a1_value2,
+                            }),
+                        },
+                    }
+                }
+                _ => unsafe { ::core::hint::unreachable_unchecked() }
+            };
+            let result = perftest_wire_optional_echo_result {
+                v0: ret_w1_carrier_value,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                match __ret_w1_commit {
+                    __PbEnumCommit_ret_w1::A0(action) => action(),
+                    __PbEnumCommit_ret_w1::A1(action) => action(),
+                }
+            };
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_wire_optional_none_result {
+    pub v0: __PbEnum_perftest_wire_optional_event,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::let_and_return,
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_wire_optional_none() -> __PbEnum_perftest_wire_optional_event {
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_wire_optional_none_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let source_value = perftest_flat::wire_optional_none();
+            #[allow(non_camel_case_types)]
+            enum __PbEnumCommit_ret_w1<F0, F1> {
+                A0(F0),
+                A1(F1),
+            }
+            let (
+                ret_w1_tag,
+                (__ret_w1_a1_value0, __ret_w1_a1_value1, __ret_w1_a1_value2),
+                __ret_w1_commit,
+            ) = match source_value {
+                perftest_flat::WireOptionalEvent::Empty => {
+                    let values = (
+                        0,
+                        unsafe {
+                            ::core::mem::MaybeUninit::<
+                                __PbOwned_owned_vec_u8_672e72343c1b4cb4,
+                            >::uninit()
+                                .assume_init()
+                        },
+                        std::ptr::null_mut(),
+                    );
+                    (0i32, values, __PbEnumCommit_ret_w1::A0(move || {}))
+                }
+                perftest_flat::WireOptionalEvent::Bytes {
+                    payload: __ret_w1_a1_b0,
+                    tail: __ret_w1_a1_b1,
+                } => {
+                    let (
+                        ret_w1_a1_f0_present,
+                        (ret_w1_a1_f0_present_value0,),
+                        ret_w1_a1_f0_present_commit,
+                    ) = if let Some(ret_w1_a1_f0_payload) = __ret_w1_a1_b0 {
+                        let ret_w1_a1_f0_some = __PbOwned_owned_vec_u8_672e72343c1b4cb4::guard(
+                            ret_w1_a1_f0_payload,
+                        );
+                        let ret_w1_a1_f0_present_values = (ret_w1_a1_f0_some.0,);
+                        (
+                            1i32,
+                            ret_w1_a1_f0_present_values,
+                            Some(move || {
+                                ::core::mem::forget(ret_w1_a1_f0_some);
+                            }),
+                        )
+                    } else {
+                        (0i32, (__PbOwned_owned_vec_u8_672e72343c1b4cb4::empty(),), None)
+                    };
+                    let (
+                        _,
+                        (ret_w1_a1_f1_present_value0,),
+                        ret_w1_a1_f1_present_commit,
+                    ) = if let Some(ret_w1_a1_f1_payload) = __ret_w1_a1_b1 {
+                        let ret_w1_a1_f1_some: *mut perftest_flat::CallbackReturnResource = Box::into_raw(
+                            Box::new(ret_w1_a1_f1_payload),
+                        );
+                        let ret_w1_a1_f1_some_owner = __PbOutputOwner(ret_w1_a1_f1_some);
+                        let ret_w1_a1_f1_present_values = (ret_w1_a1_f1_some,);
+                        (
+                            1i32,
+                            ret_w1_a1_f1_present_values,
+                            Some(move || {
+                                ::core::mem::forget(ret_w1_a1_f1_some_owner);
+                            }),
+                        )
+                    } else {
+                        (0i32, (std::ptr::null_mut(),), None)
+                    };
+                    let values = (
+                        ret_w1_a1_f0_present,
+                        ret_w1_a1_f0_present_value0,
+                        ret_w1_a1_f1_present_value0,
+                    );
+                    (
+                        1i32,
+                        values,
+                        __PbEnumCommit_ret_w1::A1(move || {
+                            if let Some(ret_w1_a1_f0_present_action) = ret_w1_a1_f0_present_commit {
+                                ret_w1_a1_f0_present_action();
+                            }
+                            if let Some(ret_w1_a1_f1_present_action) = ret_w1_a1_f1_present_commit {
+                                ret_w1_a1_f1_present_action();
+                            }
+                        }),
+                    )
+                }
+            };
+            let ret_w1_carrier_value = match ret_w1_tag {
+                0i32 => {
+                    __PbEnum_perftest_wire_optional_event {
+                        tag: 0i32,
+                        payload: __PbEnum_perftest_wire_optional_event_payload {
+                            __empty: [],
+                        },
+                    }
+                }
+                1i32 => {
+                    __PbEnum_perftest_wire_optional_event {
+                        tag: 1i32,
+                        payload: __PbEnum_perftest_wire_optional_event_payload {
+                            a1: ::core::mem::ManuallyDrop::new(__PbEnum_perftest_wire_optional_event_a1 {
+                                payload_v0: __ret_w1_a1_value0,
+                                payload_v1: __ret_w1_a1_value1,
+                                tail: __ret_w1_a1_value2,
+                            }),
+                        },
+                    }
+                }
+                _ => unsafe { ::core::hint::unreachable_unchecked() }
+            };
+            let result = perftest_wire_optional_none_result {
+                v0: ret_w1_carrier_value,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                match __ret_w1_commit {
+                    __PbEnumCommit_ret_w1::A0(action) => action(),
+                    __PbEnumCommit_ret_w1::A1(action) => action(),
+                }
+            };
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_wire_owned_callback_result {
+    pub v0: __PbEnum_perftest_wire_owned_event,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::let_and_return,
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_wire_owned_callback(
+    p0_callback: perftest_callback_f371ab967149fa90,
+) -> __PbEnum_perftest_wire_owned_event {
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_wire_owned_callback_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_callback_run = if true {
+                Some(unsafe { p0_callback.run.unwrap_unchecked() })
+            } else {
+                None
+            };
+            let p0_callback_owner = if true {
+                let owner = __PbCallbackOwner::new(
+                    p0_callback.context,
+                    p0_callback.drop,
+                );
+                {}
+                Some(owner)
+            } else {
+                None
+            };
+            let p0_callback_run = p0_callback_run.expect("active callback");
+            let p0_callback_owner = p0_callback_owner.expect("active callback");
+            let p0_callback_value = move |
+                callback_source_0: perftest_flat::WireOwnedEvent|
+            {
+                let result = ::prebindgen_runtime::boundary(|| {
+                    #[allow(non_camel_case_types)]
+                    enum __PbEnumCommit_callback_arg_0_w1<F0, F1, F2> {
+                        A0(F0),
+                        A1(F1),
+                        A2(F2),
+                    }
+                    let (
+                        callback_arg_0_w1_tag,
+                        (
+                            __callback_arg_0_w1_a1_value0,
+                            __callback_arg_0_w1_a1_value1,
+                            __callback_arg_0_w1_a2_value0,
+                        ),
+                        __callback_arg_0_w1_commit,
+                    ) = match callback_source_0 {
+                        perftest_flat::WireOwnedEvent::Empty => {
+                            let values = (
+                                std::ptr::null_mut(),
+                                std::ptr::null_mut(),
+                                unsafe {
+                                    ::core::mem::MaybeUninit::<__PbOwned_owned_string>::uninit()
+                                        .assume_init()
+                                },
+                            );
+                            (
+                                0i32,
+                                values,
+                                __PbEnumCommit_callback_arg_0_w1::A0(move || {}),
+                            )
+                        }
+                        perftest_flat::WireOwnedEvent::Pair {
+                            first: __callback_arg_0_w1_a1_b0,
+                            second: __callback_arg_0_w1_a1_b1,
+                        } => {
+                            let callback_arg_0_w1_a1_f0: *mut perftest_flat::CallbackReturnResource = Box::into_raw(
+                                Box::new(__callback_arg_0_w1_a1_b0),
+                            );
+                            let callback_arg_0_w1_a1_f0_owner = __PbOutputOwner(
+                                callback_arg_0_w1_a1_f0,
+                            );
+                            let callback_arg_0_w1_a1_f1: *mut perftest_flat::CallbackReturnResource = Box::into_raw(
+                                Box::new(__callback_arg_0_w1_a1_b1),
+                            );
+                            let callback_arg_0_w1_a1_f1_owner = __PbOutputOwner(
+                                callback_arg_0_w1_a1_f1,
+                            );
+                            let values = (
+                                callback_arg_0_w1_a1_f0,
+                                callback_arg_0_w1_a1_f1,
+                                unsafe {
+                                    ::core::mem::MaybeUninit::<__PbOwned_owned_string>::uninit()
+                                        .assume_init()
+                                },
+                            );
+                            (
+                                1i32,
+                                values,
+                                __PbEnumCommit_callback_arg_0_w1::A1(move || {
+                                    ::core::mem::forget(callback_arg_0_w1_a1_f0_owner);
+                                    ::core::mem::forget(callback_arg_0_w1_a1_f1_owner);
+                                }),
+                            )
+                        }
+                        perftest_flat::WireOwnedEvent::Text(
+                            __callback_arg_0_w1_a2_b0,
+                        ) => {
+                            let callback_arg_0_w1_a2_f0 = __PbOwned_owned_string::guard(
+                                __callback_arg_0_w1_a2_b0,
+                            );
+                            let values = (
+                                std::ptr::null_mut(),
+                                std::ptr::null_mut(),
+                                callback_arg_0_w1_a2_f0.0,
+                            );
+                            (
+                                2i32,
+                                values,
+                                __PbEnumCommit_callback_arg_0_w1::A2(move || {
+                                    ::core::mem::forget(callback_arg_0_w1_a2_f0);
+                                }),
+                            )
+                        }
+                    };
+                    let callback_arg_0_w1_carrier_value = match callback_arg_0_w1_tag {
+                        0i32 => {
+                            __PbEnum_perftest_wire_owned_event {
+                                tag: 0i32,
+                                payload: __PbEnum_perftest_wire_owned_event_payload {
+                                    __empty: [],
+                                },
+                            }
+                        }
+                        1i32 => {
+                            __PbEnum_perftest_wire_owned_event {
+                                tag: 1i32,
+                                payload: __PbEnum_perftest_wire_owned_event_payload {
+                                    a1: ::core::mem::ManuallyDrop::new(__PbEnum_perftest_wire_owned_event_a1 {
+                                        first: __callback_arg_0_w1_a1_value0,
+                                        second: __callback_arg_0_w1_a1_value1,
+                                    }),
+                                },
+                            }
+                        }
+                        2i32 => {
+                            __PbEnum_perftest_wire_owned_event {
+                                tag: 2i32,
+                                payload: __PbEnum_perftest_wire_owned_event_payload {
+                                    a2: ::core::mem::ManuallyDrop::new(__PbEnum_perftest_wire_owned_event_a2 {
+                                        v0: __callback_arg_0_w1_a2_value0,
+                                    }),
+                                },
+                            }
+                        }
+                        _ => unsafe { ::core::hint::unreachable_unchecked() }
+                    };
+                    let __pb_callback_consumed = ::core::cell::Cell::new(0usize);
+                    let __prebindgen_input_consumed = &__pb_callback_consumed;
+                    let callback_argument_0 = callback_arg_0_w1_carrier_value;
+                    {
+                        match __callback_arg_0_w1_commit {
+                            __PbEnumCommit_callback_arg_0_w1::A0(action) => action(),
+                            __PbEnumCommit_callback_arg_0_w1::A1(action) => action(),
+                            __PbEnumCommit_callback_arg_0_w1::A2(action) => action(),
+                        }
+                    }
+                    let raw_result = unsafe {
+                        p0_callback_run(p0_callback_owner.context(), callback_argument_0)
+                    };
+                    let callback_return_w1 = raw_result;
+                    let callback_return_w1_return_location = ::core::ptr::addr_of!(
+                        callback_return_w1
+                    );
+                    let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
+                    {
+                        let mut __pb_return_ordinal = 0usize;
+                        {
+                            let ordinal = __pb_return_ordinal;
+                            __pb_return_ordinal += 1;
+                            if ordinal >= __prebindgen_input_consumed.get() {
+                                unsafe {
+                                    perftest_drop_wire_owned_event(
+                                        (callback_return_w1_return_location
+                                            as *const __PbEnum_perftest_wire_owned_event)
+                                            .cast_mut(),
+                                    );
+                                }
+                            }
+                        }
+                        Ok(())
+                    });
+                    let callback_outcome: ::prebindgen_runtime::Result<_> = {
+                        #[allow(unused_mut)]
+                        let mut callback_return_w1 = callback_return_w1;
+                        #[allow(unused_parens)]
+                        let callback_return_w1_carrier = ::core::ptr::addr_of_mut!(
+                            callback_return_w1
+                        );
+                        let callback_return_w1_tag = if true {
+                            unsafe { (*callback_return_w1_carrier).tag }
+                        } else {
+                            0
+                        };
+                        let callback_return_w1_a1_f0_enum_slot = if (callback_return_w1_tag)
+                            == 1i32
+                        {
+                            (callback_return_w1_carrier)
+                                .cast::<u8>()
+                                .wrapping_add(
+                                    ::core::mem::offset_of!(
+                                        __PbEnum_perftest_wire_owned_event, payload
+                                    )
+                                        + ::core::mem::offset_of!(
+                                            __PbEnum_perftest_wire_owned_event_a1, first
+                                        ),
+                                )
+                                .cast::<*mut perftest_flat::CallbackReturnResource>()
+                        } else {
+                            ::core::ptr::null_mut()
+                        };
+                        let callback_return_w1_a1_f0 = if (callback_return_w1_tag)
+                            == 1i32
+                        {
+                            unsafe {
+                                ::core::ptr::read(
+                                    (callback_return_w1_carrier)
+                                        .cast::<u8>()
+                                        .wrapping_add(
+                                            ::core::mem::offset_of!(
+                                                __PbEnum_perftest_wire_owned_event, payload
+                                            )
+                                                + ::core::mem::offset_of!(
+                                                    __PbEnum_perftest_wire_owned_event_a1, first
+                                                ),
+                                        )
+                                        .cast::<*mut perftest_flat::CallbackReturnResource>(),
+                                )
+                            }
+                        } else {
+                            std::ptr::null_mut()
+                        };
+                        let callback_return_w1_a1_f1_enum_slot = if (callback_return_w1_tag)
+                            == 1i32
+                        {
+                            (callback_return_w1_carrier)
+                                .cast::<u8>()
+                                .wrapping_add(
+                                    ::core::mem::offset_of!(
+                                        __PbEnum_perftest_wire_owned_event, payload
+                                    )
+                                        + ::core::mem::offset_of!(
+                                            __PbEnum_perftest_wire_owned_event_a1, second
+                                        ),
+                                )
+                                .cast::<*mut perftest_flat::CallbackReturnResource>()
+                        } else {
+                            ::core::ptr::null_mut()
+                        };
+                        let callback_return_w1_a1_f1 = if (callback_return_w1_tag)
+                            == 1i32
+                        {
+                            unsafe {
+                                ::core::ptr::read(
+                                    (callback_return_w1_carrier)
+                                        .cast::<u8>()
+                                        .wrapping_add(
+                                            ::core::mem::offset_of!(
+                                                __PbEnum_perftest_wire_owned_event, payload
+                                            )
+                                                + ::core::mem::offset_of!(
+                                                    __PbEnum_perftest_wire_owned_event_a1, second
+                                                ),
+                                        )
+                                        .cast::<*mut perftest_flat::CallbackReturnResource>(),
+                                )
+                            }
+                        } else {
+                            std::ptr::null_mut()
+                        };
+                        let callback_return_w1_a2_f0 = if (callback_return_w1_tag)
+                            == 2i32
+                        {
+                            (callback_return_w1_carrier)
+                                .cast::<u8>()
+                                .wrapping_add(
+                                    ::core::mem::offset_of!(
+                                        __PbEnum_perftest_wire_owned_event, payload
+                                    )
+                                        + ::core::mem::offset_of!(
+                                            __PbEnum_perftest_wire_owned_event_a2, v0
+                                        ),
+                                )
+                                .cast::<__PbOwned_owned_string>()
+                        } else {
+                            ::core::ptr::null_mut()
+                        };
+                        let callback_return_w1_remaining = if true {
+                            unsafe {
+                                (*callback_return_w1_carrier).tag = -1;
+                            }
+                            {
+                                __pb_callback_consumed
+                                    .set(__pb_callback_consumed.get() + (1usize));
+                            }
+                            Some(
+                                ::prebindgen_runtime::CallbackReturnCleanup::new(move || {
+                                    unsafe {
+                                        #[allow(clippy::collapsible_if)]
+                                        if (callback_return_w1_tag) == 1i32 && (true) {
+                                            if !(::core::ptr::read(
+                                                (callback_return_w1_carrier)
+                                                    .cast::<u8>()
+                                                    .wrapping_add(
+                                                        ::core::mem::offset_of!(
+                                                            __PbEnum_perftest_wire_owned_event, payload
+                                                        )
+                                                            + ::core::mem::offset_of!(
+                                                                __PbEnum_perftest_wire_owned_event_a1, first
+                                                            ),
+                                                    )
+                                                    .cast::<*mut perftest_flat::CallbackReturnResource>(),
+                                            ))
+                                                .is_null()
+                                            {
+                                                let _ = ::prebindgen_runtime::boundary(|| {
+                                                    drop(
+                                                        Box::from_raw(
+                                                            (::core::ptr::read(
+                                                                (callback_return_w1_carrier)
+                                                                    .cast::<u8>()
+                                                                    .wrapping_add(
+                                                                        ::core::mem::offset_of!(
+                                                                            __PbEnum_perftest_wire_owned_event, payload
+                                                                        )
+                                                                            + ::core::mem::offset_of!(
+                                                                                __PbEnum_perftest_wire_owned_event_a1, first
+                                                                            ),
+                                                                    )
+                                                                    .cast::<*mut perftest_flat::CallbackReturnResource>(),
+                                                            )) as *mut perftest_flat::CallbackReturnResource,
+                                                        ),
+                                                    );
+                                                    Ok(())
+                                                });
+                                            }
+                                        }
+                                        #[allow(clippy::collapsible_if)]
+                                        if (callback_return_w1_tag) == 1i32 && (true) {
+                                            if !(::core::ptr::read(
+                                                (callback_return_w1_carrier)
+                                                    .cast::<u8>()
+                                                    .wrapping_add(
+                                                        ::core::mem::offset_of!(
+                                                            __PbEnum_perftest_wire_owned_event, payload
+                                                        )
+                                                            + ::core::mem::offset_of!(
+                                                                __PbEnum_perftest_wire_owned_event_a1, second
+                                                            ),
+                                                    )
+                                                    .cast::<*mut perftest_flat::CallbackReturnResource>(),
+                                            ))
+                                                .is_null()
+                                            {
+                                                let _ = ::prebindgen_runtime::boundary(|| {
+                                                    drop(
+                                                        Box::from_raw(
+                                                            (::core::ptr::read(
+                                                                (callback_return_w1_carrier)
+                                                                    .cast::<u8>()
+                                                                    .wrapping_add(
+                                                                        ::core::mem::offset_of!(
+                                                                            __PbEnum_perftest_wire_owned_event, payload
+                                                                        )
+                                                                            + ::core::mem::offset_of!(
+                                                                                __PbEnum_perftest_wire_owned_event_a1, second
+                                                                            ),
+                                                                    )
+                                                                    .cast::<*mut perftest_flat::CallbackReturnResource>(),
+                                                            )) as *mut perftest_flat::CallbackReturnResource,
+                                                        ),
+                                                    );
+                                                    Ok(())
+                                                });
+                                            }
+                                        }
+                                        #[allow(clippy::collapsible_if)]
+                                        if (callback_return_w1_tag) == 2i32 && (true) {
+                                            let _ = ::prebindgen_runtime::boundary(|| {
+                                                drop(
+                                                    (::core::ptr::read(
+                                                        (callback_return_w1_carrier)
+                                                            .cast::<u8>()
+                                                            .wrapping_add(
+                                                                ::core::mem::offset_of!(
+                                                                    __PbEnum_perftest_wire_owned_event, payload
+                                                                )
+                                                                    + ::core::mem::offset_of!(
+                                                                        __PbEnum_perftest_wire_owned_event_a2, v0
+                                                                    ),
+                                                            )
+                                                            .cast::<__PbOwned_owned_string>(),
+                                                    ))
+                                                        .into_rust(),
+                                                );
+                                                Ok(())
+                                            });
+                                        }
+                                    }
+                                    Ok(())
+                                }),
+                            )
+                        } else {
+                            None
+                        };
+                        let callback_return_w2: perftest_flat::WireOwnedEvent = match callback_return_w1_tag {
+                            0i32 => perftest_flat::WireOwnedEvent::Empty,
+                            1i32 => {
+                                let callback_return_w1_a1_f0_pointer = callback_return_w1_a1_f0
+                                    as *mut perftest_flat::CallbackReturnResource;
+                                let callback_return_w2_a1_f0_value: perftest_flat::CallbackReturnResource = {
+                                    let callback_return_w2_a1_f0_value = unsafe {
+                                        Box::from_raw(callback_return_w1_a1_f0_pointer)
+                                    };
+                                    unsafe {
+                                        ::core::ptr::write(
+                                            callback_return_w1_a1_f0_enum_slot,
+                                            ::core::ptr::null_mut(),
+                                        );
+                                    }
+                                    *callback_return_w2_a1_f0_value
+                                };
+                                let callback_return_w2_a1_f0 = callback_return_w2_a1_f0_value;
+                                let callback_return_w1_a1_f1_pointer = callback_return_w1_a1_f1
+                                    as *mut perftest_flat::CallbackReturnResource;
+                                let callback_return_w2_a1_f1_value: perftest_flat::CallbackReturnResource = {
+                                    let callback_return_w2_a1_f1_value = unsafe {
+                                        Box::from_raw(callback_return_w1_a1_f1_pointer)
+                                    };
+                                    unsafe {
+                                        ::core::ptr::write(
+                                            callback_return_w1_a1_f1_enum_slot,
+                                            ::core::ptr::null_mut(),
+                                        );
+                                    }
+                                    *callback_return_w2_a1_f1_value
+                                };
+                                let callback_return_w2_a1_f1 = callback_return_w2_a1_f1_value;
+                                perftest_flat::WireOwnedEvent::Pair {
+                                    first: callback_return_w2_a1_f0,
+                                    second: callback_return_w2_a1_f1,
+                                }
+                            }
+                            2i32 => {
+                                let callback_return_w1_a2_f0_pointer = callback_return_w1_a2_f0
+                                    as *mut String;
+                                let callback_return_w1_a2_f0_empty = if callback_return_w1_tag
+                                    == 2i32
+                                {
+                                    Some(<String as ::core::default::Default>::default())
+                                } else {
+                                    None
+                                };
+                                let callback_return_w2_a2_f0_value = if callback_return_w1_tag
+                                    == 2i32
+                                {
+                                    {
+                                        let value = unsafe {
+                                            ::core::ptr::replace(
+                                                callback_return_w1_a2_f0_pointer,
+                                                callback_return_w1_a2_f0_empty
+                                                    .expect("prepared empty owner"),
+                                            )
+                                        };
+                                        Some(value)
+                                    }
+                                } else {
+                                    None
+                                };
+                                let callback_return_w2_a2_f0_value: String = callback_return_w2_a2_f0_value
+                                    .expect("active inline owner");
+                                let callback_return_w2_a2_f0 = callback_return_w2_a2_f0_value;
+                                perftest_flat::WireOwnedEvent::Text(
+                                    callback_return_w2_a2_f0,
+                                )
+                            }
+                            _ => unsafe { ::core::hint::unreachable_unchecked() }
+                        };
+                        let callback_return_value = callback_return_w2;
+                        Ok(callback_return_value)
+                    };
+                    let callback_decoded = callback_outcome?;
+                    callback_return_cleanup.commit();
+                    Ok(callback_decoded)
+                });
+                result
+                    .unwrap_or_else(|error| {
+                        ::prebindgen_runtime::report_callback_error(
+                            "perftest_callback_f371ab967149fa90",
+                            "(perftest_flat :: WireOwnedEvent)->perftest_flat :: WireOwnedEvent",
+                            &error,
+                        );
+                        panic!("callback failed: {}", error)
+                    })
+            };
+            let __prebindgen_argument_0 = p0_callback_value;
+            let source_value = perftest_flat::wire_owned_callback(
+                __prebindgen_argument_0,
+            );
+            #[allow(non_camel_case_types)]
+            enum __PbEnumCommit_ret_w1<F0, F1, F2> {
+                A0(F0),
+                A1(F1),
+                A2(F2),
+            }
+            let (
+                ret_w1_tag,
+                (__ret_w1_a1_value0, __ret_w1_a1_value1, __ret_w1_a2_value0),
+                __ret_w1_commit,
+            ) = match source_value {
+                perftest_flat::WireOwnedEvent::Empty => {
+                    let values = (
+                        std::ptr::null_mut(),
+                        std::ptr::null_mut(),
+                        unsafe {
+                            ::core::mem::MaybeUninit::<__PbOwned_owned_string>::uninit()
+                                .assume_init()
+                        },
+                    );
+                    (0i32, values, __PbEnumCommit_ret_w1::A0(move || {}))
+                }
+                perftest_flat::WireOwnedEvent::Pair {
+                    first: __ret_w1_a1_b0,
+                    second: __ret_w1_a1_b1,
+                } => {
+                    let ret_w1_a1_f0: *mut perftest_flat::CallbackReturnResource = Box::into_raw(
+                        Box::new(__ret_w1_a1_b0),
+                    );
+                    let ret_w1_a1_f0_owner = __PbOutputOwner(ret_w1_a1_f0);
+                    let ret_w1_a1_f1: *mut perftest_flat::CallbackReturnResource = Box::into_raw(
+                        Box::new(__ret_w1_a1_b1),
+                    );
+                    let ret_w1_a1_f1_owner = __PbOutputOwner(ret_w1_a1_f1);
+                    let values = (
+                        ret_w1_a1_f0,
+                        ret_w1_a1_f1,
+                        unsafe {
+                            ::core::mem::MaybeUninit::<__PbOwned_owned_string>::uninit()
+                                .assume_init()
+                        },
+                    );
+                    (
+                        1i32,
+                        values,
+                        __PbEnumCommit_ret_w1::A1(move || {
+                            ::core::mem::forget(ret_w1_a1_f0_owner);
+                            ::core::mem::forget(ret_w1_a1_f1_owner);
+                        }),
+                    )
+                }
+                perftest_flat::WireOwnedEvent::Text(__ret_w1_a2_b0) => {
+                    let ret_w1_a2_f0 = __PbOwned_owned_string::guard(__ret_w1_a2_b0);
+                    let values = (
+                        std::ptr::null_mut(),
+                        std::ptr::null_mut(),
+                        ret_w1_a2_f0.0,
+                    );
+                    (
+                        2i32,
+                        values,
+                        __PbEnumCommit_ret_w1::A2(move || {
+                            ::core::mem::forget(ret_w1_a2_f0);
+                        }),
+                    )
+                }
+            };
+            let ret_w1_carrier_value = match ret_w1_tag {
+                0i32 => {
+                    __PbEnum_perftest_wire_owned_event {
+                        tag: 0i32,
+                        payload: __PbEnum_perftest_wire_owned_event_payload {
+                            __empty: [],
+                        },
+                    }
+                }
+                1i32 => {
+                    __PbEnum_perftest_wire_owned_event {
+                        tag: 1i32,
+                        payload: __PbEnum_perftest_wire_owned_event_payload {
+                            a1: ::core::mem::ManuallyDrop::new(__PbEnum_perftest_wire_owned_event_a1 {
+                                first: __ret_w1_a1_value0,
+                                second: __ret_w1_a1_value1,
+                            }),
+                        },
+                    }
+                }
+                2i32 => {
+                    __PbEnum_perftest_wire_owned_event {
+                        tag: 2i32,
+                        payload: __PbEnum_perftest_wire_owned_event_payload {
+                            a2: ::core::mem::ManuallyDrop::new(__PbEnum_perftest_wire_owned_event_a2 {
+                                v0: __ret_w1_a2_value0,
+                            }),
+                        },
+                    }
+                }
+                _ => unsafe { ::core::hint::unreachable_unchecked() }
+            };
+            let result = perftest_wire_owned_callback_result {
+                v0: ret_w1_carrier_value,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                match __ret_w1_commit {
+                    __PbEnumCommit_ret_w1::A0(action) => action(),
+                    __PbEnumCommit_ret_w1::A1(action) => action(),
+                    __PbEnumCommit_ret_w1::A2(action) => action(),
+                }
+            };
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_wire_owned_echo_result {
+    pub v0: __PbEnum_perftest_wire_owned_event,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::let_and_return,
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_wire_owned_echo(
+    p0_w1: *mut __PbEnum_perftest_wire_owned_event,
+) -> __PbEnum_perftest_wire_owned_event {
+    let mut storage = std::mem::MaybeUninit::<perftest_wire_owned_echo_result>::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            #[allow(unused_parens)]
+            let p0_w1_carrier = p0_w1;
+            let p0_w1_tag = if true { unsafe { (*p0_w1_carrier).tag } } else { 0 };
+            let p0_w1_a1_f0_enum_slot = if (p0_w1_tag) == 1i32 {
+                (p0_w1_carrier)
+                    .cast::<u8>()
+                    .wrapping_add(
+                        ::core::mem::offset_of!(
+                            __PbEnum_perftest_wire_owned_event, payload
+                        )
+                            + ::core::mem::offset_of!(
+                                __PbEnum_perftest_wire_owned_event_a1, first
+                            ),
+                    )
+                    .cast::<*mut perftest_flat::CallbackReturnResource>()
+            } else {
+                ::core::ptr::null_mut()
+            };
+            let p0_w1_a1_f0 = if (p0_w1_tag) == 1i32 {
+                unsafe {
+                    ::core::ptr::read(
+                        (p0_w1_carrier)
+                            .cast::<u8>()
+                            .wrapping_add(
+                                ::core::mem::offset_of!(
+                                    __PbEnum_perftest_wire_owned_event, payload
+                                )
+                                    + ::core::mem::offset_of!(
+                                        __PbEnum_perftest_wire_owned_event_a1, first
+                                    ),
+                            )
+                            .cast::<*mut perftest_flat::CallbackReturnResource>(),
+                    )
+                }
+            } else {
+                std::ptr::null_mut()
+            };
+            let p0_w1_a1_f1_enum_slot = if (p0_w1_tag) == 1i32 {
+                (p0_w1_carrier)
+                    .cast::<u8>()
+                    .wrapping_add(
+                        ::core::mem::offset_of!(
+                            __PbEnum_perftest_wire_owned_event, payload
+                        )
+                            + ::core::mem::offset_of!(
+                                __PbEnum_perftest_wire_owned_event_a1, second
+                            ),
+                    )
+                    .cast::<*mut perftest_flat::CallbackReturnResource>()
+            } else {
+                ::core::ptr::null_mut()
+            };
+            let p0_w1_a1_f1 = if (p0_w1_tag) == 1i32 {
+                unsafe {
+                    ::core::ptr::read(
+                        (p0_w1_carrier)
+                            .cast::<u8>()
+                            .wrapping_add(
+                                ::core::mem::offset_of!(
+                                    __PbEnum_perftest_wire_owned_event, payload
+                                )
+                                    + ::core::mem::offset_of!(
+                                        __PbEnum_perftest_wire_owned_event_a1, second
+                                    ),
+                            )
+                            .cast::<*mut perftest_flat::CallbackReturnResource>(),
+                    )
+                }
+            } else {
+                std::ptr::null_mut()
+            };
+            let p0_w1_a2_f0 = if (p0_w1_tag) == 2i32 {
+                (p0_w1_carrier)
+                    .cast::<u8>()
+                    .wrapping_add(
+                        ::core::mem::offset_of!(
+                            __PbEnum_perftest_wire_owned_event, payload
+                        )
+                            + ::core::mem::offset_of!(
+                                __PbEnum_perftest_wire_owned_event_a2, v0
+                            ),
+                    )
+                    .cast::<__PbOwned_owned_string>()
+            } else {
+                ::core::ptr::null_mut()
+            };
+            let p0_w1_remaining = if true {
+                unsafe {
+                    (*p0_w1_carrier).tag = -1;
+                }
+                {}
+                Some(
+                    ::prebindgen_runtime::CallbackReturnCleanup::new(move || {
+                        unsafe {
+                            #[allow(clippy::collapsible_if)]
+                            if (p0_w1_tag) == 1i32 && (true) {
+                                if !(::core::ptr::read(
+                                    (p0_w1_carrier)
+                                        .cast::<u8>()
+                                        .wrapping_add(
+                                            ::core::mem::offset_of!(
+                                                __PbEnum_perftest_wire_owned_event, payload
+                                            )
+                                                + ::core::mem::offset_of!(
+                                                    __PbEnum_perftest_wire_owned_event_a1, first
+                                                ),
+                                        )
+                                        .cast::<*mut perftest_flat::CallbackReturnResource>(),
+                                ))
+                                    .is_null()
+                                {
+                                    let _ = ::prebindgen_runtime::boundary(|| {
+                                        drop(
+                                            Box::from_raw(
+                                                (::core::ptr::read(
+                                                    (p0_w1_carrier)
+                                                        .cast::<u8>()
+                                                        .wrapping_add(
+                                                            ::core::mem::offset_of!(
+                                                                __PbEnum_perftest_wire_owned_event, payload
+                                                            )
+                                                                + ::core::mem::offset_of!(
+                                                                    __PbEnum_perftest_wire_owned_event_a1, first
+                                                                ),
+                                                        )
+                                                        .cast::<*mut perftest_flat::CallbackReturnResource>(),
+                                                )) as *mut perftest_flat::CallbackReturnResource,
+                                            ),
+                                        );
+                                        Ok(())
+                                    });
+                                }
+                            }
+                            #[allow(clippy::collapsible_if)]
+                            if (p0_w1_tag) == 1i32 && (true) {
+                                if !(::core::ptr::read(
+                                    (p0_w1_carrier)
+                                        .cast::<u8>()
+                                        .wrapping_add(
+                                            ::core::mem::offset_of!(
+                                                __PbEnum_perftest_wire_owned_event, payload
+                                            )
+                                                + ::core::mem::offset_of!(
+                                                    __PbEnum_perftest_wire_owned_event_a1, second
+                                                ),
+                                        )
+                                        .cast::<*mut perftest_flat::CallbackReturnResource>(),
+                                ))
+                                    .is_null()
+                                {
+                                    let _ = ::prebindgen_runtime::boundary(|| {
+                                        drop(
+                                            Box::from_raw(
+                                                (::core::ptr::read(
+                                                    (p0_w1_carrier)
+                                                        .cast::<u8>()
+                                                        .wrapping_add(
+                                                            ::core::mem::offset_of!(
+                                                                __PbEnum_perftest_wire_owned_event, payload
+                                                            )
+                                                                + ::core::mem::offset_of!(
+                                                                    __PbEnum_perftest_wire_owned_event_a1, second
+                                                                ),
+                                                        )
+                                                        .cast::<*mut perftest_flat::CallbackReturnResource>(),
+                                                )) as *mut perftest_flat::CallbackReturnResource,
+                                            ),
+                                        );
+                                        Ok(())
+                                    });
+                                }
+                            }
+                            #[allow(clippy::collapsible_if)]
+                            if (p0_w1_tag) == 2i32 && (true) {
+                                let _ = ::prebindgen_runtime::boundary(|| {
+                                    drop(
+                                        (::core::ptr::read(
+                                            (p0_w1_carrier)
+                                                .cast::<u8>()
+                                                .wrapping_add(
+                                                    ::core::mem::offset_of!(
+                                                        __PbEnum_perftest_wire_owned_event, payload
+                                                    )
+                                                        + ::core::mem::offset_of!(
+                                                            __PbEnum_perftest_wire_owned_event_a2, v0
+                                                        ),
+                                                )
+                                                .cast::<__PbOwned_owned_string>(),
+                                        ))
+                                            .into_rust(),
+                                    );
+                                    Ok(())
+                                });
+                            }
+                        }
+                        Ok(())
+                    }),
+                )
+            } else {
+                None
+            };
+            let p0_w2: perftest_flat::WireOwnedEvent = match p0_w1_tag {
+                0i32 => perftest_flat::WireOwnedEvent::Empty,
+                1i32 => {
+                    let p0_w1_a1_f0_pointer = p0_w1_a1_f0
+                        as *mut perftest_flat::CallbackReturnResource;
+                    let p0_w2_a1_f0_value: perftest_flat::CallbackReturnResource = {
+                        let p0_w2_a1_f0_value = unsafe {
+                            Box::from_raw(p0_w1_a1_f0_pointer)
+                        };
+                        unsafe {
+                            ::core::ptr::write(
+                                p0_w1_a1_f0_enum_slot,
+                                ::core::ptr::null_mut(),
+                            );
+                        }
+                        *p0_w2_a1_f0_value
+                    };
+                    let p0_w2_a1_f0 = p0_w2_a1_f0_value;
+                    let p0_w1_a1_f1_pointer = p0_w1_a1_f1
+                        as *mut perftest_flat::CallbackReturnResource;
+                    let p0_w2_a1_f1_value: perftest_flat::CallbackReturnResource = {
+                        let p0_w2_a1_f1_value = unsafe {
+                            Box::from_raw(p0_w1_a1_f1_pointer)
+                        };
+                        unsafe {
+                            ::core::ptr::write(
+                                p0_w1_a1_f1_enum_slot,
+                                ::core::ptr::null_mut(),
+                            );
+                        }
+                        *p0_w2_a1_f1_value
+                    };
+                    let p0_w2_a1_f1 = p0_w2_a1_f1_value;
+                    perftest_flat::WireOwnedEvent::Pair {
+                        first: p0_w2_a1_f0,
+                        second: p0_w2_a1_f1,
+                    }
+                }
+                2i32 => {
+                    let p0_w1_a2_f0_pointer = p0_w1_a2_f0 as *mut String;
+                    let p0_w1_a2_f0_empty = if p0_w1_tag == 2i32 {
+                        Some(<String as ::core::default::Default>::default())
+                    } else {
+                        None
+                    };
+                    let p0_w2_a2_f0_value = if p0_w1_tag == 2i32 {
+                        {
+                            let value = unsafe {
+                                ::core::ptr::replace(
+                                    p0_w1_a2_f0_pointer,
+                                    p0_w1_a2_f0_empty.expect("prepared empty owner"),
+                                )
+                            };
+                            Some(value)
+                        }
+                    } else {
+                        None
+                    };
+                    let p0_w2_a2_f0_value: String = p0_w2_a2_f0_value
+                        .expect("active inline owner");
+                    let p0_w2_a2_f0 = p0_w2_a2_f0_value;
+                    perftest_flat::WireOwnedEvent::Text(p0_w2_a2_f0)
+                }
+                _ => unsafe { ::core::hint::unreachable_unchecked() }
+            };
+            let __prebindgen_argument_0 = p0_w2;
+            let source_value = perftest_flat::wire_owned_echo(__prebindgen_argument_0);
+            #[allow(non_camel_case_types)]
+            enum __PbEnumCommit_ret_w1<F0, F1, F2> {
+                A0(F0),
+                A1(F1),
+                A2(F2),
+            }
+            let (
+                ret_w1_tag,
+                (__ret_w1_a1_value0, __ret_w1_a1_value1, __ret_w1_a2_value0),
+                __ret_w1_commit,
+            ) = match source_value {
+                perftest_flat::WireOwnedEvent::Empty => {
+                    let values = (
+                        std::ptr::null_mut(),
+                        std::ptr::null_mut(),
+                        unsafe {
+                            ::core::mem::MaybeUninit::<__PbOwned_owned_string>::uninit()
+                                .assume_init()
+                        },
+                    );
+                    (0i32, values, __PbEnumCommit_ret_w1::A0(move || {}))
+                }
+                perftest_flat::WireOwnedEvent::Pair {
+                    first: __ret_w1_a1_b0,
+                    second: __ret_w1_a1_b1,
+                } => {
+                    let ret_w1_a1_f0: *mut perftest_flat::CallbackReturnResource = Box::into_raw(
+                        Box::new(__ret_w1_a1_b0),
+                    );
+                    let ret_w1_a1_f0_owner = __PbOutputOwner(ret_w1_a1_f0);
+                    let ret_w1_a1_f1: *mut perftest_flat::CallbackReturnResource = Box::into_raw(
+                        Box::new(__ret_w1_a1_b1),
+                    );
+                    let ret_w1_a1_f1_owner = __PbOutputOwner(ret_w1_a1_f1);
+                    let values = (
+                        ret_w1_a1_f0,
+                        ret_w1_a1_f1,
+                        unsafe {
+                            ::core::mem::MaybeUninit::<__PbOwned_owned_string>::uninit()
+                                .assume_init()
+                        },
+                    );
+                    (
+                        1i32,
+                        values,
+                        __PbEnumCommit_ret_w1::A1(move || {
+                            ::core::mem::forget(ret_w1_a1_f0_owner);
+                            ::core::mem::forget(ret_w1_a1_f1_owner);
+                        }),
+                    )
+                }
+                perftest_flat::WireOwnedEvent::Text(__ret_w1_a2_b0) => {
+                    let ret_w1_a2_f0 = __PbOwned_owned_string::guard(__ret_w1_a2_b0);
+                    let values = (
+                        std::ptr::null_mut(),
+                        std::ptr::null_mut(),
+                        ret_w1_a2_f0.0,
+                    );
+                    (
+                        2i32,
+                        values,
+                        __PbEnumCommit_ret_w1::A2(move || {
+                            ::core::mem::forget(ret_w1_a2_f0);
+                        }),
+                    )
+                }
+            };
+            let ret_w1_carrier_value = match ret_w1_tag {
+                0i32 => {
+                    __PbEnum_perftest_wire_owned_event {
+                        tag: 0i32,
+                        payload: __PbEnum_perftest_wire_owned_event_payload {
+                            __empty: [],
+                        },
+                    }
+                }
+                1i32 => {
+                    __PbEnum_perftest_wire_owned_event {
+                        tag: 1i32,
+                        payload: __PbEnum_perftest_wire_owned_event_payload {
+                            a1: ::core::mem::ManuallyDrop::new(__PbEnum_perftest_wire_owned_event_a1 {
+                                first: __ret_w1_a1_value0,
+                                second: __ret_w1_a1_value1,
+                            }),
+                        },
+                    }
+                }
+                2i32 => {
+                    __PbEnum_perftest_wire_owned_event {
+                        tag: 2i32,
+                        payload: __PbEnum_perftest_wire_owned_event_payload {
+                            a2: ::core::mem::ManuallyDrop::new(__PbEnum_perftest_wire_owned_event_a2 {
+                                v0: __ret_w1_a2_value0,
+                            }),
+                        },
+                    }
+                }
+                _ => unsafe { ::core::hint::unreachable_unchecked() }
+            };
+            let result = perftest_wire_owned_echo_result {
+                v0: ret_w1_carrier_value,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                match __ret_w1_commit {
+                    __PbEnumCommit_ret_w1::A0(action) => action(),
+                    __PbEnumCommit_ret_w1::A1(action) => action(),
+                    __PbEnumCommit_ret_w1::A2(action) => action(),
+                }
+            };
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_wire_owned_new_result {
+    pub v0: __PbEnum_perftest_wire_owned_event,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::let_and_return,
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_wire_owned_new() -> __PbEnum_perftest_wire_owned_event {
+    let mut storage = std::mem::MaybeUninit::<perftest_wire_owned_new_result>::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let source_value = perftest_flat::wire_owned_new();
+            #[allow(non_camel_case_types)]
+            enum __PbEnumCommit_ret_w1<F0, F1, F2> {
+                A0(F0),
+                A1(F1),
+                A2(F2),
+            }
+            let (
+                ret_w1_tag,
+                (__ret_w1_a1_value0, __ret_w1_a1_value1, __ret_w1_a2_value0),
+                __ret_w1_commit,
+            ) = match source_value {
+                perftest_flat::WireOwnedEvent::Empty => {
+                    let values = (
+                        std::ptr::null_mut(),
+                        std::ptr::null_mut(),
+                        unsafe {
+                            ::core::mem::MaybeUninit::<__PbOwned_owned_string>::uninit()
+                                .assume_init()
+                        },
+                    );
+                    (0i32, values, __PbEnumCommit_ret_w1::A0(move || {}))
+                }
+                perftest_flat::WireOwnedEvent::Pair {
+                    first: __ret_w1_a1_b0,
+                    second: __ret_w1_a1_b1,
+                } => {
+                    let ret_w1_a1_f0: *mut perftest_flat::CallbackReturnResource = Box::into_raw(
+                        Box::new(__ret_w1_a1_b0),
+                    );
+                    let ret_w1_a1_f0_owner = __PbOutputOwner(ret_w1_a1_f0);
+                    let ret_w1_a1_f1: *mut perftest_flat::CallbackReturnResource = Box::into_raw(
+                        Box::new(__ret_w1_a1_b1),
+                    );
+                    let ret_w1_a1_f1_owner = __PbOutputOwner(ret_w1_a1_f1);
+                    let values = (
+                        ret_w1_a1_f0,
+                        ret_w1_a1_f1,
+                        unsafe {
+                            ::core::mem::MaybeUninit::<__PbOwned_owned_string>::uninit()
+                                .assume_init()
+                        },
+                    );
+                    (
+                        1i32,
+                        values,
+                        __PbEnumCommit_ret_w1::A1(move || {
+                            ::core::mem::forget(ret_w1_a1_f0_owner);
+                            ::core::mem::forget(ret_w1_a1_f1_owner);
+                        }),
+                    )
+                }
+                perftest_flat::WireOwnedEvent::Text(__ret_w1_a2_b0) => {
+                    let ret_w1_a2_f0 = __PbOwned_owned_string::guard(__ret_w1_a2_b0);
+                    let values = (
+                        std::ptr::null_mut(),
+                        std::ptr::null_mut(),
+                        ret_w1_a2_f0.0,
+                    );
+                    (
+                        2i32,
+                        values,
+                        __PbEnumCommit_ret_w1::A2(move || {
+                            ::core::mem::forget(ret_w1_a2_f0);
+                        }),
+                    )
+                }
+            };
+            let ret_w1_carrier_value = match ret_w1_tag {
+                0i32 => {
+                    __PbEnum_perftest_wire_owned_event {
+                        tag: 0i32,
+                        payload: __PbEnum_perftest_wire_owned_event_payload {
+                            __empty: [],
+                        },
+                    }
+                }
+                1i32 => {
+                    __PbEnum_perftest_wire_owned_event {
+                        tag: 1i32,
+                        payload: __PbEnum_perftest_wire_owned_event_payload {
+                            a1: ::core::mem::ManuallyDrop::new(__PbEnum_perftest_wire_owned_event_a1 {
+                                first: __ret_w1_a1_value0,
+                                second: __ret_w1_a1_value1,
+                            }),
+                        },
+                    }
+                }
+                2i32 => {
+                    __PbEnum_perftest_wire_owned_event {
+                        tag: 2i32,
+                        payload: __PbEnum_perftest_wire_owned_event_payload {
+                            a2: ::core::mem::ManuallyDrop::new(__PbEnum_perftest_wire_owned_event_a2 {
+                                v0: __ret_w1_a2_value0,
+                            }),
+                        },
+                    }
+                }
+                _ => unsafe { ::core::hint::unreachable_unchecked() }
+            };
+            let result = perftest_wire_owned_new_result {
+                v0: ret_w1_carrier_value,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                match __ret_w1_commit {
+                    __PbEnumCommit_ret_w1::A0(action) => action(),
+                    __PbEnumCommit_ret_w1::A1(action) => action(),
+                    __PbEnumCommit_ret_w1::A2(action) => action(),
+                }
+            };
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbRow_wire_owned_rows_p0_w1 {
+    pub v0: *mut __PbEnum_perftest_wire_owned_event,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbRow_wire_owned_rows_ret_w0 {
+    pub v0: __PbEnum_perftest_wire_owned_event,
+}
+/**# Safety
+The rows must be an unchanged allocation returned with this exact element layout. This frees only row storage, not element-owned fields.*/
+#[no_mangle]
+pub unsafe extern "C" fn perftest_wire_owned_rows_ret_w0_rows_free(rows: __PbRows) {
+    if rows.len != 0 {
+        drop(
+            Box::from_raw(
+                std::ptr::slice_from_raw_parts_mut(
+                    rows.data as *mut __PbRow_wire_owned_rows_ret_w0,
+                    rows.len,
+                ),
+            ),
+        );
+    }
+}
+#[repr(C)]
+pub struct perftest_wire_owned_rows_result {
+    pub v0: __PbRows,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::let_and_return,
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_wire_owned_rows(p0_w1: __PbRows) -> __PbRows {
+    let mut storage = std::mem::MaybeUninit::<perftest_wire_owned_rows_result>::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let mut p0_w0: Vec<perftest_flat::WireOwnedEvent> = Vec::new();
+            if true {
+                let p0_w2 = p0_w1.len;
+                let p0_w1_data = p0_w1.data as *const __PbRow_wire_owned_rows_p0_w1;
+                p0_w0.reserve_exact(p0_w2);
+                for p0_w3 in 0..p0_w2 {
+                    let p0_w5 = unsafe { (*p0_w1_data.add(p0_w3)).v0 };
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w1_element_built = (|| -> ::core::result::Result<
+                        perftest_flat::WireOwnedEvent,
+                        String,
+                    > {
+                        {
+                            #[allow(unused_parens)]
+                            let p0_w5_carrier = (p0_w5);
+                            let p0_w5_tag = if true {
+                                unsafe { (*p0_w5_carrier).tag }
+                            } else {
+                                0
+                            };
+                            let p0_w5_a1_f0_enum_slot = if (p0_w5_tag) == 1i32 {
+                                (p0_w5_carrier)
+                                    .cast::<u8>()
+                                    .wrapping_add(
+                                        ::core::mem::offset_of!(
+                                            __PbEnum_perftest_wire_owned_event, payload
+                                        )
+                                            + ::core::mem::offset_of!(
+                                                __PbEnum_perftest_wire_owned_event_a1, first
+                                            ),
+                                    )
+                                    .cast::<*mut perftest_flat::CallbackReturnResource>()
+                            } else {
+                                ::core::ptr::null_mut()
+                            };
+                            let p0_w5_a1_f0 = if (p0_w5_tag) == 1i32 {
+                                unsafe {
+                                    ::core::ptr::read(
+                                        (p0_w5_carrier)
+                                            .cast::<u8>()
+                                            .wrapping_add(
+                                                ::core::mem::offset_of!(
+                                                    __PbEnum_perftest_wire_owned_event, payload
+                                                )
+                                                    + ::core::mem::offset_of!(
+                                                        __PbEnum_perftest_wire_owned_event_a1, first
+                                                    ),
+                                            )
+                                            .cast::<*mut perftest_flat::CallbackReturnResource>(),
+                                    )
+                                }
+                            } else {
+                                std::ptr::null_mut()
+                            };
+                            let p0_w5_a1_f1_enum_slot = if (p0_w5_tag) == 1i32 {
+                                (p0_w5_carrier)
+                                    .cast::<u8>()
+                                    .wrapping_add(
+                                        ::core::mem::offset_of!(
+                                            __PbEnum_perftest_wire_owned_event, payload
+                                        )
+                                            + ::core::mem::offset_of!(
+                                                __PbEnum_perftest_wire_owned_event_a1, second
+                                            ),
+                                    )
+                                    .cast::<*mut perftest_flat::CallbackReturnResource>()
+                            } else {
+                                ::core::ptr::null_mut()
+                            };
+                            let p0_w5_a1_f1 = if (p0_w5_tag) == 1i32 {
+                                unsafe {
+                                    ::core::ptr::read(
+                                        (p0_w5_carrier)
+                                            .cast::<u8>()
+                                            .wrapping_add(
+                                                ::core::mem::offset_of!(
+                                                    __PbEnum_perftest_wire_owned_event, payload
+                                                )
+                                                    + ::core::mem::offset_of!(
+                                                        __PbEnum_perftest_wire_owned_event_a1, second
+                                                    ),
+                                            )
+                                            .cast::<*mut perftest_flat::CallbackReturnResource>(),
+                                    )
+                                }
+                            } else {
+                                std::ptr::null_mut()
+                            };
+                            let p0_w5_a2_f0 = if (p0_w5_tag) == 2i32 {
+                                (p0_w5_carrier)
+                                    .cast::<u8>()
+                                    .wrapping_add(
+                                        ::core::mem::offset_of!(
+                                            __PbEnum_perftest_wire_owned_event, payload
+                                        )
+                                            + ::core::mem::offset_of!(
+                                                __PbEnum_perftest_wire_owned_event_a2, v0
+                                            ),
+                                    )
+                                    .cast::<__PbOwned_owned_string>()
+                            } else {
+                                ::core::ptr::null_mut()
+                            };
+                            let p0_w5_remaining = if true {
+                                unsafe {
+                                    (*p0_w5_carrier).tag = -1;
+                                }
+                                {}
+                                Some(
+                                    ::prebindgen_runtime::CallbackReturnCleanup::new(move || {
+                                        unsafe {
+                                            #[allow(clippy::collapsible_if)]
+                                            if (p0_w5_tag) == 1i32 && (true) {
+                                                if !(::core::ptr::read(
+                                                    (p0_w5_carrier)
+                                                        .cast::<u8>()
+                                                        .wrapping_add(
+                                                            ::core::mem::offset_of!(
+                                                                __PbEnum_perftest_wire_owned_event, payload
+                                                            )
+                                                                + ::core::mem::offset_of!(
+                                                                    __PbEnum_perftest_wire_owned_event_a1, first
+                                                                ),
+                                                        )
+                                                        .cast::<*mut perftest_flat::CallbackReturnResource>(),
+                                                ))
+                                                    .is_null()
+                                                {
+                                                    let _ = ::prebindgen_runtime::boundary(|| {
+                                                        drop(
+                                                            Box::from_raw(
+                                                                (::core::ptr::read(
+                                                                    (p0_w5_carrier)
+                                                                        .cast::<u8>()
+                                                                        .wrapping_add(
+                                                                            ::core::mem::offset_of!(
+                                                                                __PbEnum_perftest_wire_owned_event, payload
+                                                                            )
+                                                                                + ::core::mem::offset_of!(
+                                                                                    __PbEnum_perftest_wire_owned_event_a1, first
+                                                                                ),
+                                                                        )
+                                                                        .cast::<*mut perftest_flat::CallbackReturnResource>(),
+                                                                )) as *mut perftest_flat::CallbackReturnResource,
+                                                            ),
+                                                        );
+                                                        Ok(())
+                                                    });
+                                                }
+                                            }
+                                            #[allow(clippy::collapsible_if)]
+                                            if (p0_w5_tag) == 1i32 && (true) {
+                                                if !(::core::ptr::read(
+                                                    (p0_w5_carrier)
+                                                        .cast::<u8>()
+                                                        .wrapping_add(
+                                                            ::core::mem::offset_of!(
+                                                                __PbEnum_perftest_wire_owned_event, payload
+                                                            )
+                                                                + ::core::mem::offset_of!(
+                                                                    __PbEnum_perftest_wire_owned_event_a1, second
+                                                                ),
+                                                        )
+                                                        .cast::<*mut perftest_flat::CallbackReturnResource>(),
+                                                ))
+                                                    .is_null()
+                                                {
+                                                    let _ = ::prebindgen_runtime::boundary(|| {
+                                                        drop(
+                                                            Box::from_raw(
+                                                                (::core::ptr::read(
+                                                                    (p0_w5_carrier)
+                                                                        .cast::<u8>()
+                                                                        .wrapping_add(
+                                                                            ::core::mem::offset_of!(
+                                                                                __PbEnum_perftest_wire_owned_event, payload
+                                                                            )
+                                                                                + ::core::mem::offset_of!(
+                                                                                    __PbEnum_perftest_wire_owned_event_a1, second
+                                                                                ),
+                                                                        )
+                                                                        .cast::<*mut perftest_flat::CallbackReturnResource>(),
+                                                                )) as *mut perftest_flat::CallbackReturnResource,
+                                                            ),
+                                                        );
+                                                        Ok(())
+                                                    });
+                                                }
+                                            }
+                                            #[allow(clippy::collapsible_if)]
+                                            if (p0_w5_tag) == 2i32 && (true) {
+                                                let _ = ::prebindgen_runtime::boundary(|| {
+                                                    drop(
+                                                        (::core::ptr::read(
+                                                            (p0_w5_carrier)
+                                                                .cast::<u8>()
+                                                                .wrapping_add(
+                                                                    ::core::mem::offset_of!(
+                                                                        __PbEnum_perftest_wire_owned_event, payload
+                                                                    )
+                                                                        + ::core::mem::offset_of!(
+                                                                            __PbEnum_perftest_wire_owned_event_a2, v0
+                                                                        ),
+                                                                )
+                                                                .cast::<__PbOwned_owned_string>(),
+                                                        ))
+                                                            .into_rust(),
+                                                    );
+                                                    Ok(())
+                                                });
+                                            }
+                                        }
+                                        Ok(())
+                                    }),
+                                )
+                            } else {
+                                None
+                            };
+                            let p0_w6: perftest_flat::WireOwnedEvent = match p0_w5_tag {
+                                0i32 => perftest_flat::WireOwnedEvent::Empty,
+                                1i32 => {
+                                    let p0_w5_a1_f0_pointer = p0_w5_a1_f0
+                                        as *mut perftest_flat::CallbackReturnResource;
+                                    let p0_w6_a1_f0_value: perftest_flat::CallbackReturnResource = {
+                                        let p0_w6_a1_f0_value = unsafe {
+                                            Box::from_raw(p0_w5_a1_f0_pointer)
+                                        };
+                                        unsafe {
+                                            ::core::ptr::write(
+                                                p0_w5_a1_f0_enum_slot,
+                                                ::core::ptr::null_mut(),
+                                            );
+                                        }
+                                        *p0_w6_a1_f0_value
+                                    };
+                                    let p0_w6_a1_f0 = p0_w6_a1_f0_value;
+                                    let p0_w5_a1_f1_pointer = p0_w5_a1_f1
+                                        as *mut perftest_flat::CallbackReturnResource;
+                                    let p0_w6_a1_f1_value: perftest_flat::CallbackReturnResource = {
+                                        let p0_w6_a1_f1_value = unsafe {
+                                            Box::from_raw(p0_w5_a1_f1_pointer)
+                                        };
+                                        unsafe {
+                                            ::core::ptr::write(
+                                                p0_w5_a1_f1_enum_slot,
+                                                ::core::ptr::null_mut(),
+                                            );
+                                        }
+                                        *p0_w6_a1_f1_value
+                                    };
+                                    let p0_w6_a1_f1 = p0_w6_a1_f1_value;
+                                    perftest_flat::WireOwnedEvent::Pair {
+                                        first: p0_w6_a1_f0,
+                                        second: p0_w6_a1_f1,
+                                    }
+                                }
+                                2i32 => {
+                                    let p0_w5_a2_f0_pointer = p0_w5_a2_f0 as *mut String;
+                                    let p0_w5_a2_f0_empty = if p0_w5_tag == 2i32 {
+                                        Some(<String as ::core::default::Default>::default())
+                                    } else {
+                                        None
+                                    };
+                                    let p0_w6_a2_f0_value = if p0_w5_tag == 2i32 {
+                                        {
+                                            let value = unsafe {
+                                                ::core::ptr::replace(
+                                                    p0_w5_a2_f0_pointer,
+                                                    p0_w5_a2_f0_empty.expect("prepared empty owner"),
+                                                )
+                                            };
+                                            Some(value)
+                                        }
+                                    } else {
+                                        None
+                                    };
+                                    let p0_w6_a2_f0_value: String = p0_w6_a2_f0_value
+                                        .expect("active inline owner");
+                                    let p0_w6_a2_f0 = p0_w6_a2_f0_value;
+                                    perftest_flat::WireOwnedEvent::Text(p0_w6_a2_f0)
+                                }
+                                _ => unsafe { ::core::hint::unreachable_unchecked() }
+                            };
+                            let p0_w1_row_value = p0_w6;
+                            Ok(p0_w1_row_value)
+                        }
+                    })();
+                    let element = p0_w1_element_built?;
+                    #[allow(clippy::zst_offset)]
+                    unsafe {
+                        let initialized = p0_w0.len();
+                        p0_w0.as_mut_ptr().add(initialized).write(element);
+                        p0_w0.set_len(initialized + 1);
+                    }
+                }
+            }
+            let __prebindgen_argument_0 = p0_w0;
+            let source_value = perftest_flat::wire_owned_rows(__prebindgen_argument_0);
+            let ret_w0_source: ::std::vec::Vec<perftest_flat::WireOwnedEvent> = source_value;
+            let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
+            unsafe fn ret_w0_release_row(row: &__PbRow_wire_owned_rows_ret_w0) {
+                {
+                    let mut carrier = row.v0;
+                    perftest_drop_wire_owned_event(::core::ptr::addr_of_mut!(carrier));
+                }
+            }
+            let mut ret_w0 = unsafe {
+                ::prebindgen_runtime::OutputRows::<
+                    __PbRow_wire_owned_rows_ret_w0,
+                >::new(ret_w2, ret_w0_release_row)
+            };
+            for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w0_source),
+            ) {
+                #[allow(non_camel_case_types)]
+                enum __PbEnumCommit_ret_w5<F0, F1, F2> {
+                    A0(F0),
+                    A1(F1),
+                    A2(F2),
+                }
+                let (
+                    ret_w5_tag,
+                    (__ret_w5_a1_value0, __ret_w5_a1_value1, __ret_w5_a2_value0),
+                    __ret_w5_commit,
+                ) = match ret_w1 {
+                    perftest_flat::WireOwnedEvent::Empty => {
+                        let values = (
+                            std::ptr::null_mut(),
+                            std::ptr::null_mut(),
+                            unsafe {
+                                ::core::mem::MaybeUninit::<__PbOwned_owned_string>::uninit()
+                                    .assume_init()
+                            },
+                        );
+                        (0i32, values, __PbEnumCommit_ret_w5::A0(move || {}))
+                    }
+                    perftest_flat::WireOwnedEvent::Pair {
+                        first: __ret_w5_a1_b0,
+                        second: __ret_w5_a1_b1,
+                    } => {
+                        let ret_w5_a1_f0: *mut perftest_flat::CallbackReturnResource = Box::into_raw(
+                            Box::new(__ret_w5_a1_b0),
+                        );
+                        let ret_w5_a1_f0_owner = __PbOutputOwner(ret_w5_a1_f0);
+                        let ret_w5_a1_f1: *mut perftest_flat::CallbackReturnResource = Box::into_raw(
+                            Box::new(__ret_w5_a1_b1),
+                        );
+                        let ret_w5_a1_f1_owner = __PbOutputOwner(ret_w5_a1_f1);
+                        let values = (
+                            ret_w5_a1_f0,
+                            ret_w5_a1_f1,
+                            unsafe {
+                                ::core::mem::MaybeUninit::<__PbOwned_owned_string>::uninit()
+                                    .assume_init()
+                            },
+                        );
+                        (
+                            1i32,
+                            values,
+                            __PbEnumCommit_ret_w5::A1(move || {
+                                ::core::mem::forget(ret_w5_a1_f0_owner);
+                                ::core::mem::forget(ret_w5_a1_f1_owner);
+                            }),
+                        )
+                    }
+                    perftest_flat::WireOwnedEvent::Text(__ret_w5_a2_b0) => {
+                        let ret_w5_a2_f0 = __PbOwned_owned_string::guard(__ret_w5_a2_b0);
+                        let values = (
+                            std::ptr::null_mut(),
+                            std::ptr::null_mut(),
+                            ret_w5_a2_f0.0,
+                        );
+                        (
+                            2i32,
+                            values,
+                            __PbEnumCommit_ret_w5::A2(move || {
+                                ::core::mem::forget(ret_w5_a2_f0);
+                            }),
+                        )
+                    }
+                };
+                let ret_w5_carrier_value = match ret_w5_tag {
+                    0i32 => {
+                        __PbEnum_perftest_wire_owned_event {
+                            tag: 0i32,
+                            payload: __PbEnum_perftest_wire_owned_event_payload {
+                                __empty: [],
+                            },
+                        }
+                    }
+                    1i32 => {
+                        __PbEnum_perftest_wire_owned_event {
+                            tag: 1i32,
+                            payload: __PbEnum_perftest_wire_owned_event_payload {
+                                a1: ::core::mem::ManuallyDrop::new(__PbEnum_perftest_wire_owned_event_a1 {
+                                    first: __ret_w5_a1_value0,
+                                    second: __ret_w5_a1_value1,
+                                }),
+                            },
+                        }
+                    }
+                    2i32 => {
+                        __PbEnum_perftest_wire_owned_event {
+                            tag: 2i32,
+                            payload: __PbEnum_perftest_wire_owned_event_payload {
+                                a2: ::core::mem::ManuallyDrop::new(__PbEnum_perftest_wire_owned_event_a2 {
+                                    v0: __ret_w5_a2_value0,
+                                }),
+                            },
+                        }
+                    }
+                    _ => unsafe { ::core::hint::unreachable_unchecked() }
+                };
+                unsafe {
+                    ret_w0
+                        .write_next(__PbRow_wire_owned_rows_ret_w0 {
+                            v0: ret_w5_carrier_value,
+                        });
+                }
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {
+                    match __ret_w5_commit {
+                        __PbEnumCommit_ret_w5::A0(action) => action(),
+                        __PbEnumCommit_ret_w5::A1(action) => action(),
+                        __PbEnumCommit_ret_w5::A2(action) => action(),
+                    }
+                })();
+                unsafe {
+                    ret_w0.commit_row();
+                }
+            }
+            let result = perftest_wire_owned_rows_result {
+                v0: __PbRows {
+                    data: if ret_w0.is_empty() {
+                        ::core::ptr::null()
+                    } else {
+                        ret_w0.as_ptr().cast()
+                    },
+                    len: ret_w0.len(),
+                },
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                ret_w0.commit();
+            };
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct __PbRow_wire_owned_rows_new_ret_w0 {
+    pub v0: __PbEnum_perftest_wire_owned_event,
+}
+/**# Safety
+The rows must be an unchanged allocation returned with this exact element layout. This frees only row storage, not element-owned fields.*/
+#[no_mangle]
+pub unsafe extern "C" fn perftest_wire_owned_rows_new_ret_w0_rows_free(rows: __PbRows) {
+    if rows.len != 0 {
+        drop(
+            Box::from_raw(
+                std::ptr::slice_from_raw_parts_mut(
+                    rows.data as *mut __PbRow_wire_owned_rows_new_ret_w0,
+                    rows.len,
+                ),
+            ),
+        );
+    }
+}
+#[repr(C)]
+pub struct perftest_wire_owned_rows_new_result {
+    pub v0: __PbRows,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::let_and_return,
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_wire_owned_rows_new() -> __PbRows {
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_wire_owned_rows_new_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let source_value = perftest_flat::wire_owned_rows_new();
+            let ret_w0_source: ::std::vec::Vec<perftest_flat::WireOwnedEvent> = source_value;
+            let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
+            unsafe fn ret_w0_release_row(row: &__PbRow_wire_owned_rows_new_ret_w0) {
+                {
+                    let mut carrier = row.v0;
+                    perftest_drop_wire_owned_event(::core::ptr::addr_of_mut!(carrier));
+                }
+            }
+            let mut ret_w0 = unsafe {
+                ::prebindgen_runtime::OutputRows::<
+                    __PbRow_wire_owned_rows_new_ret_w0,
+                >::new(ret_w2, ret_w0_release_row)
+            };
+            for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w0_source),
+            ) {
+                #[allow(non_camel_case_types)]
+                enum __PbEnumCommit_ret_w5<F0, F1, F2> {
+                    A0(F0),
+                    A1(F1),
+                    A2(F2),
+                }
+                let (
+                    ret_w5_tag,
+                    (__ret_w5_a1_value0, __ret_w5_a1_value1, __ret_w5_a2_value0),
+                    __ret_w5_commit,
+                ) = match ret_w1 {
+                    perftest_flat::WireOwnedEvent::Empty => {
+                        let values = (
+                            std::ptr::null_mut(),
+                            std::ptr::null_mut(),
+                            unsafe {
+                                ::core::mem::MaybeUninit::<__PbOwned_owned_string>::uninit()
+                                    .assume_init()
+                            },
+                        );
+                        (0i32, values, __PbEnumCommit_ret_w5::A0(move || {}))
+                    }
+                    perftest_flat::WireOwnedEvent::Pair {
+                        first: __ret_w5_a1_b0,
+                        second: __ret_w5_a1_b1,
+                    } => {
+                        let ret_w5_a1_f0: *mut perftest_flat::CallbackReturnResource = Box::into_raw(
+                            Box::new(__ret_w5_a1_b0),
+                        );
+                        let ret_w5_a1_f0_owner = __PbOutputOwner(ret_w5_a1_f0);
+                        let ret_w5_a1_f1: *mut perftest_flat::CallbackReturnResource = Box::into_raw(
+                            Box::new(__ret_w5_a1_b1),
+                        );
+                        let ret_w5_a1_f1_owner = __PbOutputOwner(ret_w5_a1_f1);
+                        let values = (
+                            ret_w5_a1_f0,
+                            ret_w5_a1_f1,
+                            unsafe {
+                                ::core::mem::MaybeUninit::<__PbOwned_owned_string>::uninit()
+                                    .assume_init()
+                            },
+                        );
+                        (
+                            1i32,
+                            values,
+                            __PbEnumCommit_ret_w5::A1(move || {
+                                ::core::mem::forget(ret_w5_a1_f0_owner);
+                                ::core::mem::forget(ret_w5_a1_f1_owner);
+                            }),
+                        )
+                    }
+                    perftest_flat::WireOwnedEvent::Text(__ret_w5_a2_b0) => {
+                        let ret_w5_a2_f0 = __PbOwned_owned_string::guard(__ret_w5_a2_b0);
+                        let values = (
+                            std::ptr::null_mut(),
+                            std::ptr::null_mut(),
+                            ret_w5_a2_f0.0,
+                        );
+                        (
+                            2i32,
+                            values,
+                            __PbEnumCommit_ret_w5::A2(move || {
+                                ::core::mem::forget(ret_w5_a2_f0);
+                            }),
+                        )
+                    }
+                };
+                let ret_w5_carrier_value = match ret_w5_tag {
+                    0i32 => {
+                        __PbEnum_perftest_wire_owned_event {
+                            tag: 0i32,
+                            payload: __PbEnum_perftest_wire_owned_event_payload {
+                                __empty: [],
+                            },
+                        }
+                    }
+                    1i32 => {
+                        __PbEnum_perftest_wire_owned_event {
+                            tag: 1i32,
+                            payload: __PbEnum_perftest_wire_owned_event_payload {
+                                a1: ::core::mem::ManuallyDrop::new(__PbEnum_perftest_wire_owned_event_a1 {
+                                    first: __ret_w5_a1_value0,
+                                    second: __ret_w5_a1_value1,
+                                }),
+                            },
+                        }
+                    }
+                    2i32 => {
+                        __PbEnum_perftest_wire_owned_event {
+                            tag: 2i32,
+                            payload: __PbEnum_perftest_wire_owned_event_payload {
+                                a2: ::core::mem::ManuallyDrop::new(__PbEnum_perftest_wire_owned_event_a2 {
+                                    v0: __ret_w5_a2_value0,
+                                }),
+                            },
+                        }
+                    }
+                    _ => unsafe { ::core::hint::unreachable_unchecked() }
+                };
+                unsafe {
+                    ret_w0
+                        .write_next(__PbRow_wire_owned_rows_new_ret_w0 {
+                            v0: ret_w5_carrier_value,
+                        });
+                }
+                #[allow(
+                    clippy::redundant_closure_call,
+                    clippy::let_unit_value,
+                    clippy::unused_unit
+                )]
+                let _: () = (|| -> () {
+                    match __ret_w5_commit {
+                        __PbEnumCommit_ret_w5::A0(action) => action(),
+                        __PbEnumCommit_ret_w5::A1(action) => action(),
+                        __PbEnumCommit_ret_w5::A2(action) => action(),
+                    }
+                })();
+                unsafe {
+                    ret_w0.commit_row();
+                }
+            }
+            let result = perftest_wire_owned_rows_new_result {
+                v0: __PbRows {
+                    data: if ret_w0.is_empty() {
+                        ::core::ptr::null()
+                    } else {
+                        ret_w0.as_ptr().cast()
+                    },
+                    len: ret_w0.len(),
+                },
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                ret_w0.commit();
+            };
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_wire_result_callback_result {
+    pub v0: __PbEnum_perftest_wire_decision,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::let_and_return,
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_wire_result_callback(
+    p0_callback: perftest_callback_b7adf34facddaf10,
+) -> __PbEnum_perftest_wire_decision {
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_wire_result_callback_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_callback_run = if true {
+                Some(unsafe { p0_callback.run.unwrap_unchecked() })
+            } else {
+                None
+            };
+            let p0_callback_owner = if true {
+                let owner = __PbCallbackOwner::new(
+                    p0_callback.context,
+                    p0_callback.drop,
+                );
+                {}
+                Some(owner)
+            } else {
+                None
+            };
+            let p0_callback_run = p0_callback_run.expect("active callback");
+            let p0_callback_owner = p0_callback_owner.expect("active callback");
+            let p0_callback_value = move |
+                callback_source_0: ::core::result::Result<(), String>|
+            {
+                let result = ::prebindgen_runtime::boundary(|| {
+                    #[allow(non_camel_case_types)]
+                    enum __PbEnumCommit_callback_arg_0_w1<F0, F1> {
+                        A0(F0),
+                        A1(F1),
+                    }
+                    let (
+                        callback_arg_0_w1_tag,
+                        (__callback_arg_0_w1_a1_value0,),
+                        __callback_arg_0_w1_commit,
+                    ) = match callback_source_0 {
+                        ::core::result::Result::Ok(__callback_arg_0_w1_a0_b0) => {
+                            let values = (
+                                unsafe {
+                                    ::core::mem::MaybeUninit::<__PbOwned_owned_string>::uninit()
+                                        .assume_init()
+                                },
+                            );
+                            (
+                                0i32,
+                                values,
+                                __PbEnumCommit_callback_arg_0_w1::A0(move || {}),
+                            )
+                        }
+                        ::core::result::Result::Err(__callback_arg_0_w1_a1_b0) => {
+                            let callback_arg_0_w1_a1_f0 = __PbOwned_owned_string::guard(
+                                __callback_arg_0_w1_a1_b0,
+                            );
+                            let values = (callback_arg_0_w1_a1_f0.0,);
+                            (
+                                1i32,
+                                values,
+                                __PbEnumCommit_callback_arg_0_w1::A1(move || {
+                                    ::core::mem::forget(callback_arg_0_w1_a1_f0);
+                                }),
+                            )
+                        }
+                    };
+                    let callback_arg_0_w1_carrier_value = match callback_arg_0_w1_tag {
+                        0i32 => {
+                            __PbEnum_perftest_wire_notice {
+                                tag: 0i32,
+                                payload: __PbEnum_perftest_wire_notice_payload {
+                                    __empty: [],
+                                },
+                            }
+                        }
+                        1i32 => {
+                            __PbEnum_perftest_wire_notice {
+                                tag: 1i32,
+                                payload: __PbEnum_perftest_wire_notice_payload {
+                                    a1: ::core::mem::ManuallyDrop::new(__PbEnum_perftest_wire_notice_a1 {
+                                        v0: __callback_arg_0_w1_a1_value0,
+                                    }),
+                                },
+                            }
+                        }
+                        _ => unsafe { ::core::hint::unreachable_unchecked() }
+                    };
+                    let __pb_callback_consumed = ::core::cell::Cell::new(0usize);
+                    let __prebindgen_input_consumed = &__pb_callback_consumed;
+                    let callback_argument_0 = callback_arg_0_w1_carrier_value;
+                    {
+                        match __callback_arg_0_w1_commit {
+                            __PbEnumCommit_callback_arg_0_w1::A0(action) => action(),
+                            __PbEnumCommit_callback_arg_0_w1::A1(action) => action(),
+                        }
+                    }
+                    let raw_result = unsafe {
+                        p0_callback_run(p0_callback_owner.context(), callback_argument_0)
+                    };
+                    let callback_return_w1 = raw_result;
+                    let callback_return_w1_return_location = ::core::ptr::addr_of!(
+                        callback_return_w1
+                    );
+                    let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
+                    {
+                        let mut __pb_return_ordinal = 0usize;
+                        {
+                            let ordinal = __pb_return_ordinal;
+                            __pb_return_ordinal += 1;
+                            if ordinal >= __prebindgen_input_consumed.get() {
+                                unsafe {
+                                    perftest_drop_wire_decision(
+                                        (callback_return_w1_return_location
+                                            as *const __PbEnum_perftest_wire_decision)
+                                            .cast_mut(),
+                                    );
+                                }
+                            }
+                        }
+                        Ok(())
+                    });
+                    let callback_outcome: ::prebindgen_runtime::Result<_> = {
+                        #[allow(unused_mut)]
+                        let mut callback_return_w1 = callback_return_w1;
+                        #[allow(unused_parens)]
+                        let callback_return_w1_carrier = ::core::ptr::addr_of_mut!(
+                            callback_return_w1
+                        );
+                        let callback_return_w1_tag = if true {
+                            unsafe { (*callback_return_w1_carrier).tag }
+                        } else {
+                            0
+                        };
+                        let callback_return_w1_a0_f0 = if (callback_return_w1_tag)
+                            == 0i32
+                        {
+                            unsafe {
+                                ::core::ptr::read(
+                                    (callback_return_w1_carrier)
+                                        .cast::<u8>()
+                                        .wrapping_add(
+                                            ::core::mem::offset_of!(
+                                                __PbEnum_perftest_wire_decision, payload
+                                            )
+                                                + ::core::mem::offset_of!(
+                                                    __PbEnum_perftest_wire_decision_a0, v0
+                                                ),
+                                        )
+                                        .cast::<i64>(),
+                                )
+                            }
+                        } else {
+                            0
+                        };
+                        let callback_return_w1_a1_f0 = if (callback_return_w1_tag)
+                            == 1i32
+                        {
+                            (callback_return_w1_carrier)
+                                .cast::<u8>()
+                                .wrapping_add(
+                                    ::core::mem::offset_of!(
+                                        __PbEnum_perftest_wire_decision, payload
+                                    )
+                                        + ::core::mem::offset_of!(
+                                            __PbEnum_perftest_wire_decision_a1, v0
+                                        ),
+                                )
+                                .cast::<__PbOwned_owned_string>()
+                        } else {
+                            ::core::ptr::null_mut()
+                        };
+                        let callback_return_w1_remaining = if true {
+                            unsafe {
+                                (*callback_return_w1_carrier).tag = -1;
+                            }
+                            {
+                                __pb_callback_consumed
+                                    .set(__pb_callback_consumed.get() + (1usize));
+                            }
+                            Some(
+                                ::prebindgen_runtime::CallbackReturnCleanup::new(move || {
+                                    unsafe {
+                                        #[allow(clippy::collapsible_if)]
+                                        if (callback_return_w1_tag) == 1i32 && (true) {
+                                            let _ = ::prebindgen_runtime::boundary(|| {
+                                                drop(
+                                                    (::core::ptr::read(
+                                                        (callback_return_w1_carrier)
+                                                            .cast::<u8>()
+                                                            .wrapping_add(
+                                                                ::core::mem::offset_of!(
+                                                                    __PbEnum_perftest_wire_decision, payload
+                                                                )
+                                                                    + ::core::mem::offset_of!(
+                                                                        __PbEnum_perftest_wire_decision_a1, v0
+                                                                    ),
+                                                            )
+                                                            .cast::<__PbOwned_owned_string>(),
+                                                    ))
+                                                        .into_rust(),
+                                                );
+                                                Ok(())
+                                            });
+                                        }
+                                    }
+                                    Ok(())
+                                }),
+                            )
+                        } else {
+                            None
+                        };
+                        let callback_return_w2: ::core::result::Result<i64, String> = match callback_return_w1_tag {
+                            0i32 => {
+                                let callback_return_w2_a0_f0_value: i64 = ::core::convert::Into::into(
+                                    callback_return_w1_a0_f0,
+                                );
+                                let callback_return_w2_a0_f0 = callback_return_w2_a0_f0_value;
+                                ::core::result::Result::Ok(callback_return_w2_a0_f0)
+                            }
+                            1i32 => {
+                                let callback_return_w1_a1_f0_pointer = callback_return_w1_a1_f0
+                                    as *mut String;
+                                let callback_return_w1_a1_f0_empty = if callback_return_w1_tag
+                                    == 1i32
+                                {
+                                    Some(<String as ::core::default::Default>::default())
+                                } else {
+                                    None
+                                };
+                                let callback_return_w2_a1_f0_value = if callback_return_w1_tag
+                                    == 1i32
+                                {
+                                    {
+                                        let value = unsafe {
+                                            ::core::ptr::replace(
+                                                callback_return_w1_a1_f0_pointer,
+                                                callback_return_w1_a1_f0_empty
+                                                    .expect("prepared empty owner"),
+                                            )
+                                        };
+                                        Some(value)
+                                    }
+                                } else {
+                                    None
+                                };
+                                let callback_return_w2_a1_f0_value: String = callback_return_w2_a1_f0_value
+                                    .expect("active inline owner");
+                                let callback_return_w2_a1_f0 = callback_return_w2_a1_f0_value;
+                                ::core::result::Result::Err(callback_return_w2_a1_f0)
+                            }
+                            _ => unsafe { ::core::hint::unreachable_unchecked() }
+                        };
+                        let callback_return_value = callback_return_w2;
+                        Ok(callback_return_value)
+                    };
+                    let callback_decoded = callback_outcome?;
+                    callback_return_cleanup.commit();
+                    Ok(callback_decoded)
+                });
+                result
+                    .unwrap_or_else(|error| {
+                        ::prebindgen_runtime::report_callback_error(
+                            "perftest_callback_b7adf34facddaf10",
+                            "(:: core :: result :: Result < () , String >)->:: core :: result :: Result < i64 , String >",
+                            &error,
+                        );
+                        panic!("callback failed: {}", error)
+                    })
+            };
+            let __prebindgen_argument_0 = p0_callback_value;
+            let source_value = perftest_flat::wire_result_callback(
+                __prebindgen_argument_0,
+            );
+            #[allow(non_camel_case_types)]
+            enum __PbEnumCommit_ret_w1<F0, F1> {
+                A0(F0),
+                A1(F1),
+            }
+            let (
+                ret_w1_tag,
+                (__ret_w1_a0_value0, __ret_w1_a1_value0),
+                __ret_w1_commit,
+            ) = match source_value {
+                ::core::result::Result::Ok(__ret_w1_a0_b0) => {
+                    let ret_w1_a0_f0 = __ret_w1_a0_b0;
+                    let values = (
+                        ret_w1_a0_f0,
+                        unsafe {
+                            ::core::mem::MaybeUninit::<__PbOwned_owned_string>::uninit()
+                                .assume_init()
+                        },
+                    );
+                    (0i32, values, __PbEnumCommit_ret_w1::A0(move || {}))
+                }
+                ::core::result::Result::Err(__ret_w1_a1_b0) => {
+                    let ret_w1_a1_f0 = __PbOwned_owned_string::guard(__ret_w1_a1_b0);
+                    let values = (0, ret_w1_a1_f0.0);
+                    (
+                        1i32,
+                        values,
+                        __PbEnumCommit_ret_w1::A1(move || {
+                            ::core::mem::forget(ret_w1_a1_f0);
+                        }),
+                    )
+                }
+            };
+            let ret_w1_carrier_value = match ret_w1_tag {
+                0i32 => {
+                    __PbEnum_perftest_wire_decision {
+                        tag: 0i32,
+                        payload: __PbEnum_perftest_wire_decision_payload {
+                            a0: ::core::mem::ManuallyDrop::new(__PbEnum_perftest_wire_decision_a0 {
+                                v0: __ret_w1_a0_value0,
+                            }),
+                        },
+                    }
+                }
+                1i32 => {
+                    __PbEnum_perftest_wire_decision {
+                        tag: 1i32,
+                        payload: __PbEnum_perftest_wire_decision_payload {
+                            a1: ::core::mem::ManuallyDrop::new(__PbEnum_perftest_wire_decision_a1 {
+                                v0: __ret_w1_a1_value0,
+                            }),
+                        },
+                    }
+                }
+                _ => unsafe { ::core::hint::unreachable_unchecked() }
+            };
+            let result = perftest_wire_result_callback_result {
+                v0: ret_w1_carrier_value,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                match __ret_w1_commit {
+                    __PbEnumCommit_ret_w1::A0(action) => action(),
+                    __PbEnumCommit_ret_w1::A1(action) => action(),
+                }
+            };
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_wire_result_echo_result {
+    pub v0: __PbEnum_perftest_wire_decision,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::let_and_return,
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_wire_result_echo(
+    p0_w1: *mut __PbEnum_perftest_wire_decision,
+) -> __PbEnum_perftest_wire_decision {
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_wire_result_echo_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            #[allow(unused_parens)]
+            let p0_w1_carrier = p0_w1;
+            let p0_w1_tag = if true { unsafe { (*p0_w1_carrier).tag } } else { 0 };
+            let p0_w1_a0_f0 = if (p0_w1_tag) == 0i32 {
+                unsafe {
+                    ::core::ptr::read(
+                        (p0_w1_carrier)
+                            .cast::<u8>()
+                            .wrapping_add(
+                                ::core::mem::offset_of!(
+                                    __PbEnum_perftest_wire_decision, payload
+                                )
+                                    + ::core::mem::offset_of!(
+                                        __PbEnum_perftest_wire_decision_a0, v0
+                                    ),
+                            )
+                            .cast::<i64>(),
+                    )
+                }
+            } else {
+                0
+            };
+            let p0_w1_a1_f0 = if (p0_w1_tag) == 1i32 {
+                (p0_w1_carrier)
+                    .cast::<u8>()
+                    .wrapping_add(
+                        ::core::mem::offset_of!(__PbEnum_perftest_wire_decision, payload)
+                            + ::core::mem::offset_of!(
+                                __PbEnum_perftest_wire_decision_a1, v0
+                            ),
+                    )
+                    .cast::<__PbOwned_owned_string>()
+            } else {
+                ::core::ptr::null_mut()
+            };
+            let p0_w1_remaining = if true {
+                unsafe {
+                    (*p0_w1_carrier).tag = -1;
+                }
+                {}
+                Some(
+                    ::prebindgen_runtime::CallbackReturnCleanup::new(move || {
+                        unsafe {
+                            #[allow(clippy::collapsible_if)]
+                            if (p0_w1_tag) == 1i32 && (true) {
+                                let _ = ::prebindgen_runtime::boundary(|| {
+                                    drop(
+                                        (::core::ptr::read(
+                                            (p0_w1_carrier)
+                                                .cast::<u8>()
+                                                .wrapping_add(
+                                                    ::core::mem::offset_of!(
+                                                        __PbEnum_perftest_wire_decision, payload
+                                                    )
+                                                        + ::core::mem::offset_of!(
+                                                            __PbEnum_perftest_wire_decision_a1, v0
+                                                        ),
+                                                )
+                                                .cast::<__PbOwned_owned_string>(),
+                                        ))
+                                            .into_rust(),
+                                    );
+                                    Ok(())
+                                });
+                            }
+                        }
+                        Ok(())
+                    }),
+                )
+            } else {
+                None
+            };
+            let p0_w2: ::core::result::Result<i64, String> = match p0_w1_tag {
+                0i32 => {
+                    let p0_w2_a0_f0_value: i64 = ::core::convert::Into::into(
+                        p0_w1_a0_f0,
+                    );
+                    let p0_w2_a0_f0 = p0_w2_a0_f0_value;
+                    ::core::result::Result::Ok(p0_w2_a0_f0)
+                }
+                1i32 => {
+                    let p0_w1_a1_f0_pointer = p0_w1_a1_f0 as *mut String;
+                    let p0_w1_a1_f0_empty = if p0_w1_tag == 1i32 {
+                        Some(<String as ::core::default::Default>::default())
+                    } else {
+                        None
+                    };
+                    let p0_w2_a1_f0_value = if p0_w1_tag == 1i32 {
+                        {
+                            let value = unsafe {
+                                ::core::ptr::replace(
+                                    p0_w1_a1_f0_pointer,
+                                    p0_w1_a1_f0_empty.expect("prepared empty owner"),
+                                )
+                            };
+                            Some(value)
+                        }
+                    } else {
+                        None
+                    };
+                    let p0_w2_a1_f0_value: String = p0_w2_a1_f0_value
+                        .expect("active inline owner");
+                    let p0_w2_a1_f0 = p0_w2_a1_f0_value;
+                    ::core::result::Result::Err(p0_w2_a1_f0)
+                }
+                _ => unsafe { ::core::hint::unreachable_unchecked() }
+            };
+            let __prebindgen_argument_0 = p0_w2;
+            let source_value = perftest_flat::wire_result_echo(__prebindgen_argument_0);
+            #[allow(non_camel_case_types)]
+            enum __PbEnumCommit_ret_w1<F0, F1> {
+                A0(F0),
+                A1(F1),
+            }
+            let (
+                ret_w1_tag,
+                (__ret_w1_a0_value0, __ret_w1_a1_value0),
+                __ret_w1_commit,
+            ) = match source_value {
+                ::core::result::Result::Ok(__ret_w1_a0_b0) => {
+                    let ret_w1_a0_f0 = __ret_w1_a0_b0;
+                    let values = (
+                        ret_w1_a0_f0,
+                        unsafe {
+                            ::core::mem::MaybeUninit::<__PbOwned_owned_string>::uninit()
+                                .assume_init()
+                        },
+                    );
+                    (0i32, values, __PbEnumCommit_ret_w1::A0(move || {}))
+                }
+                ::core::result::Result::Err(__ret_w1_a1_b0) => {
+                    let ret_w1_a1_f0 = __PbOwned_owned_string::guard(__ret_w1_a1_b0);
+                    let values = (0, ret_w1_a1_f0.0);
+                    (
+                        1i32,
+                        values,
+                        __PbEnumCommit_ret_w1::A1(move || {
+                            ::core::mem::forget(ret_w1_a1_f0);
+                        }),
+                    )
+                }
+            };
+            let ret_w1_carrier_value = match ret_w1_tag {
+                0i32 => {
+                    __PbEnum_perftest_wire_decision {
+                        tag: 0i32,
+                        payload: __PbEnum_perftest_wire_decision_payload {
+                            a0: ::core::mem::ManuallyDrop::new(__PbEnum_perftest_wire_decision_a0 {
+                                v0: __ret_w1_a0_value0,
+                            }),
+                        },
+                    }
+                }
+                1i32 => {
+                    __PbEnum_perftest_wire_decision {
+                        tag: 1i32,
+                        payload: __PbEnum_perftest_wire_decision_payload {
+                            a1: ::core::mem::ManuallyDrop::new(__PbEnum_perftest_wire_decision_a1 {
+                                v0: __ret_w1_a1_value0,
+                            }),
+                        },
+                    }
+                }
+                _ => unsafe { ::core::hint::unreachable_unchecked() }
+            };
+            let result = perftest_wire_result_echo_result {
+                v0: ret_w1_carrier_value,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                match __ret_w1_commit {
+                    __PbEnumCommit_ret_w1::A0(action) => action(),
+                    __PbEnumCommit_ret_w1::A1(action) => action(),
+                }
+            };
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
 const _: () = {
     konst::assertc_eq!(
         perftest_flat::FEATURES, "",
@@ -32694,6 +38051,34 @@ const _: () = assert!(
 const _: () = assert!(
     ::core::mem::size_of:: < perftest_flat::Unsigned > () != 0,
     "flat object `Unsigned` must have nonzero size"
+);
+const _: () = assert!(
+    ::core::mem::size_of:: < perftest_flat::WireBare > () != 0,
+    "flat object `WireBare` must have nonzero size"
+);
+const _: () = assert!(
+    ::core::mem::size_of:: < perftest_flat::WireCheckedEvent > () != 0,
+    "flat object `WireCheckedEvent` must have nonzero size"
+);
+const _: () = assert!(
+    ::core::mem::size_of:: < perftest_flat::WireEmpty > () != 0,
+    "flat object `WireEmpty` must have nonzero size"
+);
+const _: () = assert!(
+    ::core::mem::size_of:: < perftest_flat::WireEvent > () != 0,
+    "flat object `WireEvent` must have nonzero size"
+);
+const _: () = assert!(
+    ::core::mem::size_of:: < perftest_flat::WireMarker > () != 0,
+    "flat object `WireMarker` must have nonzero size"
+);
+const _: () = assert!(
+    ::core::mem::size_of:: < perftest_flat::WireOptionalEvent > () != 0,
+    "flat object `WireOptionalEvent` must have nonzero size"
+);
+const _: () = assert!(
+    ::core::mem::size_of:: < perftest_flat::WireOwnedEvent > () != 0,
+    "flat object `WireOwnedEvent` must have nonzero size"
 );
 const _: () = assert!(
     perftest_flat::CallbackReturnChoice::First as i128 == 0i32 as i128,

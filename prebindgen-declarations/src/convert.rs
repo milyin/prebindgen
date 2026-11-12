@@ -27,6 +27,7 @@ pub struct ConvertSource {
     source: ValueSource,
     representation: Option<Type>,
     input: Option<bool>,
+    result_value: bool,
 }
 impl ConvertSource {
     /// Construct an input trait conversion (normally written with `from!`).
@@ -35,6 +36,7 @@ impl ConvertSource {
             source: ValueSource::Into { fallible },
             representation: Some(representation),
             input: Some(true),
+            result_value: false,
         }
     }
     /// Construct an output trait conversion (normally written with `into!`).
@@ -43,6 +45,7 @@ impl ConvertSource {
             source: ValueSource::Into { fallible },
             representation: Some(representation),
             input: Some(false),
+            result_value: false,
         }
     }
     pub(crate) fn resolve<S: Schema>(
@@ -70,8 +73,9 @@ impl ConvertSource {
                     }
                     _ => param,
                 };
-                let result =
-                    prebindgen_flat::result_parts(&f.ret.ty).map_or(&f.ret.ty, |(ok, _)| ok);
+                let result = prebindgen_flat::result_parts(&f.ret.ty)
+                    .filter(|_| !self.result_value && !(input && same_type(&f.ret.ty, ty)))
+                    .map_or(&f.ret.ty, |(ok, _)| ok);
                 if input {
                     if !same_type(result, ty) {
                         return Err(format!(
@@ -111,11 +115,14 @@ impl ConvertSource {
     }
 }
 impl From<FunctionDecl> for ConvertSource {
-    fn from(f: FunctionDecl) -> Self {
+    fn from(mut f: FunctionDecl) -> Self {
+        let result_value = f.result_value;
+        f.result_value = false;
         Self {
             source: ValueSource::Function(f.source_name()),
             representation: None,
             input: None,
+            result_value,
         }
     }
 }
@@ -209,7 +216,6 @@ pub fn prepare_value_conversions<S: Schema>(
             || Primitive::from_type(&ty).is_some()
             || prebindgen_flat::option_inner(&ty).is_some()
             || prebindgen_flat::sequence_parts(&ty).is_some()
-            || prebindgen_flat::result_parts(&ty).is_some()
             || matches!(type_key(&ty).as_str(), "String" | "str" | "()")
             || flat.type_info(&ty).is_err()
         {
@@ -347,6 +353,9 @@ impl Declarations {
         extra: &C::Extra,
         stack: &mut Vec<String>,
     ) -> Result<Input> {
+        if type_key(ty) == "()" {
+            return Ok(Input::Fields(vec![]));
+        }
         if let Some(c) = flat
             .type_info(ty)
             .ok()
@@ -368,7 +377,7 @@ impl Declarations {
             )));
         }
         if let Some((inner, _)) = prebindgen_flat::sequence_parts(ty)
-            .filter(|_| !codec.input_collection_is_leaf(flat, ty, extra))
+            .filter(|_| !codec.input_collection_is_leaf(flat, ty, self.input_role.get(), extra))
         {
             return Ok(Input::Sequence(Box::new(
                 self.resolve_input_value(flat, codec, inner, extra, stack)?,
@@ -387,6 +396,9 @@ impl Declarations {
         getter: bool,
         policy: Option<&crate::Projection>,
     ) -> Result<Output> {
+        if type_key(ty) == "()" {
+            return Ok(Output::Fields(vec![]));
+        }
         let c = flat
             .type_info(ty)
             .ok()
@@ -467,6 +479,20 @@ fn validate_conversion<S: Schema>(
         source: conversion.source.clone(),
         representation: Some(conversion.representation.clone()),
         input: None,
+        result_value: match &conversion.source {
+            ValueSource::Function(name) => {
+                let f = flat.function(name)?;
+                same_type(
+                    &f.ret.ty,
+                    if input {
+                        ty
+                    } else {
+                        &conversion.representation
+                    },
+                )
+            }
+            ValueSource::Into { .. } => false,
+        },
     }
     .resolve(flat, ty, input)?;
     if !same_type(&resolved.representation, &conversion.representation) {
@@ -507,7 +533,7 @@ impl<C: Codec> Compiler<'_, C> {
                 let path = &f.path;
                 (
                     quote!(#path(#repr)),
-                    prebindgen_flat::result_parts(&f.ret.ty).is_some(),
+                    prebindgen_flat::result_parts(&f.ret.ty).is_some() && !same_type(&f.ret.ty, ty),
                 )
             }
             ValueSource::Into { fallible } => {
@@ -574,7 +600,8 @@ impl<C: Codec> Compiler<'_, C> {
                 };
                 (
                     quote!(#path(#argument)),
-                    prebindgen_flat::result_parts(&f.ret.ty).is_some(),
+                    prebindgen_flat::result_parts(&f.ret.ty).is_some()
+                        && !same_type(&f.ret.ty, &conversion.representation),
                 )
             }
             ValueSource::Into { fallible } => {

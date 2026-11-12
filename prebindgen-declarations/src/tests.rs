@@ -1658,53 +1658,74 @@ fn invalid_result_policies_leave_all_function_slots_unchanged() {
 }
 
 #[test]
-fn result_routing_rejects_nested_and_borrowed_data_occurrences() {
+fn result_data_occurrences_are_not_implicitly_error_channels() {
     for source in [
         "pub fn f(x:Result<i64,String>){}",
         "pub fn f(x:Option<&Result<i64,String>>){}",
     ] {
         let mut flat = parse(source);
-        assert!(fill(&mut flat, &fun!(f))
-            .unwrap_err()
-            .contains("output-only"));
+        fill(&mut flat, &fun!(f)).unwrap();
+        assert!(flat
+            .function("f")
+            .unwrap()
+            .ret
+            .slot
+            .as_ref()
+            .unwrap()
+            .outcomes
+            .source_error
+            .is_none());
     }
     for (source, recipe) in [
         (
             "pub fn f()->Option<Result<i64,String>>{}",
             Output::Optional(Box::new(Output::Leaf)),
         ),
-        ("pub fn f()->&Result<i64,String>{}", Output::Leaf),
         (
             "pub struct R{pub value:Result<i64,String>}pub fn f()->R{}",
-            Output::Fields(vec![Output::Leaf]),
+            Output::OwnedFields(vec![Output::Leaf]),
         ),
     ] {
         let mut flat = parse(source);
-        assert!(
-            bind_output(&mut flat, &TEST_CODEC, "f", &recipe, &Extra::default())
-                .unwrap_err()
-                .contains("outermost")
-        );
+        bind_output(&mut flat, &TEST_CODEC, "f", &recipe, &Extra::default()).unwrap();
+        assert!(flat
+            .function("f")
+            .unwrap()
+            .ret
+            .slot
+            .as_ref()
+            .unwrap()
+            .outcomes
+            .source_error
+            .is_none());
     }
     let mut flat =
         parse("pub fn message(e:String)->String{}pub fn f()->Result<Result<i64,String>,String>{}");
-    assert!(fill(&mut flat, &fun!(f).on_error(fun!(message)))
-        .unwrap_err()
-        .contains("outermost"));
+    fill(&mut flat, &fun!(f).on_error(fun!(message))).unwrap();
+    assert!(flat
+        .function("f")
+        .unwrap()
+        .ret
+        .slot
+        .as_ref()
+        .unwrap()
+        .outcomes
+        .source_error
+        .is_some());
     assert!(Declarations::new(
         &flat,
         vec![],
         vec![expand_return!(Result<i64,String>).field_self().into()],
         vec![]
     )
-    .is_err());
+    .is_ok());
     assert!(Declarations::new(
         &flat,
         vec![expand_param!(Result<i64,String>).variant_self().into()],
         vec![],
         vec![]
     )
-    .is_err());
+    .is_ok());
 }
 
 #[test]

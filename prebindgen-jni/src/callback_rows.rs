@@ -223,7 +223,7 @@ fn receive(
             field(context, row, fields, name, quote!(if #present { #scan }))?
         }
         WireNode::Branch {
-            meta: JniBranch::Alternatives,
+            meta: JniBranch::Alternatives | JniBranch::Enum(_),
             controls,
             children,
         } => {
