@@ -74,7 +74,7 @@
 <a href=#74 id=74 data-nosnippet>74</a>                    <span class="kw">_ </span>=&gt; param,
 <a href=#75 id=75 data-nosnippet>75</a>                };
 <a href=#76 id=76 data-nosnippet>76</a>                <span class="kw">let </span>result = prebindgen_flat::result_parts(<span class="kw-2">&amp;</span>f.ret.ty)
-<a href=#77 id=77 data-nosnippet>77</a>                    .filter(|<span class="kw">_</span>| !<span class="self">self</span>.result_value &amp;&amp; !(input &amp;&amp; same_type(<span class="kw-2">&amp;</span>f.ret.ty, ty)))
+<a href=#77 id=77 data-nosnippet>77</a>                    .filter(|<span class="kw">_</span>| !(<span class="self">self</span>.result_value || input &amp;&amp; same_type(<span class="kw-2">&amp;</span>f.ret.ty, ty)))
 <a href=#78 id=78 data-nosnippet>78</a>                    .map_or(<span class="kw-2">&amp;</span>f.ret.ty, |(ok, <span class="kw">_</span>)| ok);
 <a href=#79 id=79 data-nosnippet>79</a>                <span class="kw">if </span>input {
 <a href=#80 id=80 data-nosnippet>80</a>                    <span class="kw">if </span>!same_type(result, ty) {
