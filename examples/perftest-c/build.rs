@@ -1,7 +1,7 @@
 //! Migrated from main; unsupported declarations remain commented in place.
 use prebindgen_declarations::{
     convert, expand_param, expand_return, fields, from, fun, into, try_from, try_into,
-    DeclarationOutput as Output, SequenceDelivery,
+    DeclarationOutput, SequenceDelivery,
 };
 use prebindgen_declarations::{
     frontend::InputLeafOp, frontend::InputUnary, frontend::OutputBranch, frontend::OutputLeafOp,
@@ -27,7 +27,7 @@ fn main() {
                     "value",
                     prebindgen_declarations::DeclarationInput::enum_fields([]),
                 )
-                .expand_return(Output::enum_fields([])),
+                .expand_return(DeclarationOutput::enum_fields([])),
         )
         .panic()
         .tagged_union("wire_optional_event", pq!(WireOptionalEvent))
@@ -46,21 +46,25 @@ fn main() {
         .panic()
         .function(fun!(wire_owned_callback))
         .panic()
-        .function(fun!(wire_owned_rows).expand_return(Output::Unary {
-            operation: OutputUnary::Sequence {
-                delivery: SequenceDelivery::Value,
-                mode: None,
-            },
-            child: Box::new(Output::value()),
-        }))
+        .function(
+            fun!(wire_owned_rows).expand_return(DeclarationOutput::Unary {
+                operation: OutputUnary::Sequence {
+                    delivery: SequenceDelivery::Value,
+                    mode: None,
+                },
+                child: Box::new(DeclarationOutput::value()),
+            }),
+        )
         .panic()
-        .function(fun!(wire_owned_rows_new).expand_return(Output::Unary {
-            operation: OutputUnary::Sequence {
-                delivery: SequenceDelivery::Value,
-                mode: None,
-            },
-            child: Box::new(Output::value()),
-        }))
+        .function(
+            fun!(wire_owned_rows_new).expand_return(DeclarationOutput::Unary {
+                operation: OutputUnary::Sequence {
+                    delivery: SequenceDelivery::Value,
+                    mode: None,
+                },
+                child: Box::new(DeclarationOutput::value()),
+            }),
+        )
         .panic()
         .tagged_union("wire_decision", pq!(Result<i64,String>))
         .tagged_union("wire_notice", pq!(Result<(),String>))
@@ -104,13 +108,15 @@ fn main() {
         .panic()
         .function(fun!(canonical_millis_optional))
         .panic()
-        .function(fun!(canonical_millis_rows).expand_return(Output::Unary {
-            operation: OutputUnary::Sequence {
-                delivery: SequenceDelivery::Value,
-                mode: None,
-            },
-            child: Box::new(Output::value()),
-        }))
+        .function(
+            fun!(canonical_millis_rows).expand_return(DeclarationOutput::Unary {
+                operation: OutputUnary::Sequence {
+                    delivery: SequenceDelivery::Value,
+                    mode: None,
+                },
+                child: Box::new(DeclarationOutput::value()),
+            }),
+        )
         .panic()
         .function(fun!(canonical_millis_callback))
         .panic()

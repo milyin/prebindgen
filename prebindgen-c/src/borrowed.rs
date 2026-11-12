@@ -639,7 +639,7 @@ mod tests {
     }
     #[test]
     fn reconstruction_is_explicit_and_can_be_global_local_optional_or_nested() {
-        use prebindgen_declarations::{expand_param, DeclarationInput as Input};
+        use prebindgen_declarations::{expand_param, DeclarationInput};
         for ty in [
             "&[i64]",
             "&Vec<i64>",
@@ -668,7 +668,7 @@ mod tests {
         assert!(!g.rust.contains("_prepared"));
         assert!(
             Cbindgen::new(model("pub fn inspect(values:&String)->usize{}"))
-                .function(fun!(inspect).input("values", Input::auto().reconstruct()))
+                .function(fun!(inspect).input("values", DeclarationInput::auto().reconstruct()))
                 .panic()
                 .build()
                 .is_ok()

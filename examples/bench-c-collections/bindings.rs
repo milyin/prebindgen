@@ -1,9 +1,9 @@
 use prebindgen_declarations::{
-    expand_param, expand_return, fields, fun, InputRequest, DeclarationOutput as Output, OutputRequest, frontend::OutputUnary,
+    expand_param, expand_return, fields, fun, InputRequest, DeclarationOutput, OutputRequest, frontend::OutputUnary,
     SequenceDelivery,
 };
-fn rows(element: Output<OutputRequest, InputRequest>) -> Output<OutputRequest, InputRequest> {
-    Output::Unary {
+fn rows(element: DeclarationOutput<OutputRequest, InputRequest>) -> DeclarationOutput<OutputRequest, InputRequest> {
+    DeclarationOutput::Unary {
         operation: OutputUnary::Sequence {
             delivery: SequenceDelivery::Value,
             mode: None,
@@ -90,15 +90,15 @@ fn main() {
         .panic()
         .function(fun!(resource_value))
         .panic()
-        .function(fun!(make_handles).output(rows(Output::auto())))
+        .function(fun!(make_handles).output(rows(DeclarationOutput::auto())))
         .panic()
-        .function(fun!(make_records).output(rows(Output::auto())))
+        .function(fun!(make_records).output(rows(DeclarationOutput::auto())))
         .panic()
-        .function(fun!(make_nested).output(rows(rows(Output::auto()))))
+        .function(fun!(make_nested).output(rows(rows(DeclarationOutput::auto()))))
         .panic()
-        .function(fun!(make_many).output(rows(rows(Output::auto()))))
+        .function(fun!(make_many).output(rows(rows(DeclarationOutput::auto()))))
         .panic()
-        .function(fun!(make_numbers).output(rows(Output::auto())))
+        .function(fun!(make_numbers).output(rows(DeclarationOutput::auto())))
         .panic();
     let generation = builder.build().expect("C collection benchmark bindings");
     let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());

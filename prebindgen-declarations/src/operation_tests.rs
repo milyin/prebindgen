@@ -116,16 +116,16 @@ fn minimal_codec_rejects_optional_features_and_bulk_before_decoding() {
     for (source, input) in [
         (
             ty.clone(),
-            Input::Unary {
+            DeclarationInput::Unary {
                 operation: InputUnary::Bulk,
-                child: Box::new(Input::Leaf(InputLeafOp::Value)),
+                child: Box::new(DeclarationInput::Leaf(InputLeafOp::Value)),
             },
         ),
         (
             syn::parse_quote!(()),
-            Input::Unary {
+            DeclarationInput::Unary {
                 operation: InputUnary::Bulk,
-                child: Box::new(Input::Branch {
+                child: Box::new(DeclarationInput::Branch {
                     operation: InputBranch::Fields,
                     children: vec![],
                 }),
@@ -133,11 +133,11 @@ fn minimal_codec_rejects_optional_features_and_bulk_before_decoding() {
         ),
         (
             syn::parse_quote!(Vec<i64>),
-            Input::Unary {
+            DeclarationInput::Unary {
                 operation: InputUnary::Bulk,
-                child: Box::new(Input::Unary {
+                child: Box::new(DeclarationInput::Unary {
                     operation: InputUnary::Sequence,
-                    child: Box::new(Input::Leaf(InputLeafOp::Value)),
+                    child: Box::new(DeclarationInput::Leaf(InputLeafOp::Value)),
                 }),
             },
         ),
@@ -148,23 +148,25 @@ fn minimal_codec_rejects_optional_features_and_bulk_before_decoding() {
     for (source, output) in [
         (
             ty.clone(),
-            Output::Unary {
+            DeclarationOutput::Unary {
                 operation: OutputUnary::Bulk,
-                child: Box::new(Output::Leaf(OutputLeafOp::Value)),
+                child: Box::new(DeclarationOutput::Leaf(OutputLeafOp::Value)),
             },
         ),
         (
             ty.clone(),
-            Output::Unary {
+            DeclarationOutput::Unary {
                 operation: OutputUnary::Bulk,
-                child: Box::new(Output::Leaf(OutputLeafOp::Projected(Projection::owned()))),
+                child: Box::new(DeclarationOutput::Leaf(OutputLeafOp::Projected(
+                    Projection::owned(),
+                ))),
             },
         ),
         (
             syn::parse_quote!(()),
-            Output::Unary {
+            DeclarationOutput::Unary {
                 operation: OutputUnary::Bulk,
-                child: Box::new(Output::Branch {
+                child: Box::new(DeclarationOutput::Branch {
                     operation: OutputBranch::Fields,
                     children: vec![],
                 }),
@@ -172,14 +174,14 @@ fn minimal_codec_rejects_optional_features_and_bulk_before_decoding() {
         ),
         (
             syn::parse_quote!(Vec<i64>),
-            Output::Unary {
+            DeclarationOutput::Unary {
                 operation: OutputUnary::Bulk,
-                child: Box::new(Output::Unary {
+                child: Box::new(DeclarationOutput::Unary {
                     operation: OutputUnary::Sequence {
                         delivery: SequenceDelivery::Value,
                         mode: None,
                     },
-                    child: Box::new(Output::Leaf(OutputLeafOp::Value)),
+                    child: Box::new(DeclarationOutput::Leaf(OutputLeafOp::Value)),
                 }),
             },
         ),
@@ -191,9 +193,9 @@ fn minimal_codec_rejects_optional_features_and_bulk_before_decoding() {
         &flat,
         &Scalars,
         &syn::parse_quote!(Option<i64>),
-        &Input::Unary {
+        &DeclarationInput::Unary {
             operation: InputUnary::Optional,
-            child: Box::new(Input::Leaf(InputLeafOp::Value)),
+            child: Box::new(DeclarationInput::Leaf(InputLeafOp::Value)),
         },
         &(),
     )
@@ -320,7 +322,7 @@ fn input_context_preserves_all_dispatch_cases_and_callback_roles() {
             compiler
                 .input(
                     &ty,
-                    &Input::Leaf(InputLeafOp::Value),
+                    &DeclarationInput::Leaf(InputLeafOp::Value),
                     &(),
                     &Condition::default(),
                 )
@@ -333,7 +335,7 @@ fn input_context_preserves_all_dispatch_cases_and_callback_roles() {
         &flat,
         &codec,
         &syn::parse_quote!(()),
-        &Input::Branch {
+        &DeclarationInput::Branch {
             operation: InputBranch::Fields,
             children: vec![],
         },
@@ -344,11 +346,11 @@ fn input_context_preserves_all_dispatch_cases_and_callback_roles() {
         &flat,
         &codec,
         &ty,
-        &Input::constructor(
+        &DeclarationInput::constructor(
             "add",
             [
-                Input::Leaf(InputLeafOp::Value),
-                Input::Leaf(InputLeafOp::Value),
+                DeclarationInput::Leaf(InputLeafOp::Value),
+                DeclarationInput::Leaf(InputLeafOp::Value),
             ],
         ),
         &(),
@@ -364,9 +366,9 @@ fn input_context_preserves_all_dispatch_cases_and_callback_roles() {
         &flat,
         &codec,
         &ty,
-        &Output::Unary {
+        &DeclarationOutput::Unary {
             operation: OutputUnary::Bulk,
-            child: Box::new(Output::Leaf(OutputLeafOp::Value)),
+            child: Box::new(DeclarationOutput::Leaf(OutputLeafOp::Value)),
         },
         &(),
     )
@@ -458,9 +460,9 @@ fn malformed_optional_encodings_are_rejected_before_installing_a_slot() {
                 &MalformedOptional(mode),
                 "f",
                 "value",
-                &Input::Unary {
+                &DeclarationInput::Unary {
                     operation: InputUnary::Optional,
-                    child: Box::new(Input::Leaf(InputLeafOp::Value)),
+                    child: Box::new(DeclarationInput::Leaf(InputLeafOp::Value)),
                 },
                 &(),
             )
@@ -469,9 +471,9 @@ fn malformed_optional_encodings_are_rejected_before_installing_a_slot() {
                 &mut flat,
                 &MalformedOptional(mode),
                 "f",
-                &Output::Unary {
+                &DeclarationOutput::Unary {
                     operation: OutputUnary::Optional,
-                    child: Box::new(Output::Leaf(OutputLeafOp::Value)),
+                    child: Box::new(DeclarationOutput::Leaf(OutputLeafOp::Value)),
                 },
                 &(),
             )
@@ -488,14 +490,14 @@ fn enabled_bulk_still_rejects_enclosing_callback_delivery_before_element_lowerin
     let flat = model();
     let codec = Probe::default();
     codec.1.set(true);
-    let recipe = Output::Unary {
+    let recipe = DeclarationOutput::Unary {
         operation: OutputUnary::Bulk,
-        child: Box::new(Output::Unary {
+        child: Box::new(DeclarationOutput::Unary {
             operation: OutputUnary::Sequence {
                 delivery: SequenceDelivery::Callback,
                 mode: None,
             },
-            child: Box::new(Output::Leaf(OutputLeafOp::Value)),
+            child: Box::new(DeclarationOutput::Leaf(OutputLeafOp::Value)),
         }),
     };
     let error = compile_output_value(&flat, &codec, &syn::parse_quote!(Vec<i64>), &recipe, &())
@@ -518,7 +520,7 @@ fn resolved_flat_compiles_after_its_configuration_is_dropped() {
     drop(declarations);
     assert!(matches!(
         resolved.function("add").unwrap().params[0].ty.slot,
-        Some(ResolvedSlot::Tree(Input::Leaf(_)))
+        Some(ResolvedSlot::Tree(DeclarationInput::Leaf(_)))
     ));
     let compiled = compile_resolved(resolved).unwrap();
     prebindgen_flat::validate_bindings(&compiled).unwrap();
@@ -534,7 +536,7 @@ fn none_is_unit_and_cannot_silently_discard_non_unit_values() {
             &source,
             &Scalars,
             &syn::parse_quote!(i64),
-            &Input::None,
+            &DeclarationInput::None,
             &()
         )
         .is_err());
@@ -543,24 +545,32 @@ fn none_is_unit_and_cannot_silently_discard_non_unit_values() {
             &source,
             &Scalars,
             &syn::parse_quote!(i64),
-            &Output::None,
+            &DeclarationOutput::None,
             &()
         )
         .is_err());
-    for tree in [Input::auto(), Input::fields([]), Input::None] {
+    for tree in [
+        DeclarationInput::auto(),
+        DeclarationInput::fields([]),
+        DeclarationInput::None,
+    ] {
         assert!(matches!(
             defaults
                 .resolve_input(&source, &Scalars, &syn::parse_quote!(()), &tree, &())
                 .unwrap(),
-            Input::None
+            DeclarationInput::None
         ));
     }
-    for tree in [Output::auto(), Output::fields([]), Output::None] {
+    for tree in [
+        DeclarationOutput::auto(),
+        DeclarationOutput::fields([]),
+        DeclarationOutput::None,
+    ] {
         assert!(matches!(
             defaults
                 .resolve_output(&source, &Scalars, &syn::parse_quote!(()), &tree, &())
                 .unwrap(),
-            Output::None
+            DeclarationOutput::None
         ));
     }
 }

@@ -85,9 +85,9 @@ pub use kotlin::{
 /// wire type belongs to a different adapter:
 /// ```compile_fail
 /// use prebindgen_jni::Bindings;
-/// use prebindgen_declarations::{bind_input, DeclarationInput as Input};
+/// use prebindgen_declarations::{bind_input, DeclarationInput};
 /// fn wrong(flat: &mut Bindings) {
-///     bind_input(flat, &prebindgen_c::CCodec::raw(), "echo", "x", &Input::Leaf(prebindgen_declarations::frontend::InputLeafOp::Value), &()).unwrap();
+///     bind_input(flat, &prebindgen_c::CCodec::raw(), "echo", "x", &DeclarationInput::Leaf(prebindgen_declarations::frontend::InputLeafOp::Value), &()).unwrap();
 /// }
 /// ```
 /// A completed JNI model also cannot be passed to the C generator:
@@ -102,9 +102,9 @@ use quote::{format_ident, quote};
 use std::collections::{BTreeMap, BTreeSet};
 
 pub use prebindgen_declarations::{
-    expand_param, expand_return, fields, fun, DeclarationInput as Input,
-    DeclarationOutput as Output, ErrorDecl, ExpandDecl, ExpandParamDecl, ExpandReturnDecl,
-    FieldsDecl, FunctionDecl, InputRequest, OutputRequest,
+    expand_param, expand_return, fields, fun, DeclarationInput, DeclarationOutput, ErrorDecl,
+    ExpandDecl, ExpandParamDecl, ExpandReturnDecl, FieldsDecl, FunctionDecl, InputRequest,
+    OutputRequest,
 };
 /// A Kotlin owning handle class for one nonzero-sized source type.
 ///
@@ -316,7 +316,7 @@ impl JniGenBuilder {
     ///
     /// ```
     /// use prebindgen_jni::{Bindings, JniGen, JniCodec, fun, package};
-    /// use prebindgen_declarations::{bind_input, bind_output, DeclarationInput as Input, DeclarationOutput as Output};
+    /// use prebindgen_declarations::{bind_input, bind_output, DeclarationInput, DeclarationOutput};
     /// let source = syn::parse_file("pub fn echo(x: i64) -> i64 { x }")?;
     /// let flat = Bindings::parse(
     ///     source.items.into_iter().map(|item| (item, Default::default())),
@@ -324,8 +324,8 @@ impl JniGenBuilder {
     /// let generated = JniGen::builder().flat(flat)
     ///     .set_package_prefix("example")
     ///     .configure(|flat| {
-    ///         bind_input(flat, &JniCodec::raw(), "echo", "x", &Input::Leaf(prebindgen_declarations::frontend::InputLeafOp::Value), &())?;
-    ///         bind_output(flat, &JniCodec::raw(), "echo", &Output::Leaf(prebindgen_declarations::frontend::OutputLeafOp::Value), &())
+    ///         bind_input(flat, &JniCodec::raw(), "echo", "x", &DeclarationInput::Leaf(prebindgen_declarations::frontend::InputLeafOp::Value), &())?;
+    ///         bind_output(flat, &JniCodec::raw(), "echo", &DeclarationOutput::Leaf(prebindgen_declarations::frontend::OutputLeafOp::Value), &())
     ///     })
     ///     .package(package!().fun(fun!(echo)))
     ///     .build()?;
@@ -632,7 +632,8 @@ impl JniGenBuilder {
         )?;
         errors::resolve(&mut flat, &codec, &defaults, &declarations)?;
         for ty in callback_types {
-            let recipe = defaults.resolve_input(&flat, &codec, &ty, &Input::auto(), &())?;
+            let recipe =
+                defaults.resolve_input(&flat, &codec, &ty, &DeclarationInput::auto(), &())?;
             let operations::Input::Arrow {
                 operation: configuration,
                 ..
@@ -2693,7 +2694,7 @@ impl prebindgen_declarations::DeclarationCodec for JniCodec {
         &self,
         cx: &mut prebindgen_declarations::Resolve<'_, Self>,
         ty: &syn::Type,
-        tree: &Input<InputRequest, OutputRequest>,
+        tree: &DeclarationInput<InputRequest, OutputRequest>,
     ) -> Result<Option<operations::Input>> {
         let flat = cx.flat;
         let replacement = (|| {
@@ -2701,7 +2702,7 @@ impl prebindgen_declarations::DeclarationCodec for JniCodec {
                 return Ok(None);
             }
 
-            if !matches!(tree, Input::Leaf(InputLeafOp::Value)) {
+            if !matches!(tree, DeclarationInput::Leaf(InputLeafOp::Value)) {
                 return Ok(None);
             }
             if flat.payload_enums.contains_key(&type_key(ty))
@@ -2722,11 +2723,11 @@ impl prebindgen_declarations::DeclarationCodec for JniCodec {
                 .and_then(|t| t.metadata.class.as_ref())
                 .is_some_and(|c| c.kind == ClassKind::Sealed)
             {
-                return Ok(Some(Input::enum_variants(
+                return Ok(Some(DeclarationInput::enum_variants(
                     flat.payload_enum(ty)?
                         .variants
                         .iter()
-                        .map(|v| vec![Input::value(); v.fields.len()])
+                        .map(|v| vec![DeclarationInput::value(); v.fields.len()])
                         .collect(),
                     true,
                 )));
@@ -2740,9 +2741,9 @@ impl prebindgen_declarations::DeclarationCodec for JniCodec {
                     record.fqn()
                 ));
             }
-            Ok(Some(Input::Branch {
+            Ok(Some(DeclarationInput::Branch {
                 operation: InputBranch::Record,
-                children: vec![Input::value(); flat.record(ty)?.fields.len()],
+                children: vec![DeclarationInput::value(); flat.record(ty)?.fields.len()],
             }))
         })();
         replacement?.map(|tree| cx.input(ty, &tree)).transpose()
@@ -2751,7 +2752,7 @@ impl prebindgen_declarations::DeclarationCodec for JniCodec {
         &self,
         cx: &mut prebindgen_declarations::Resolve<'_, Self>,
         ty: &syn::Type,
-        tree: &Output<OutputRequest, InputRequest>,
+        tree: &DeclarationOutput<OutputRequest, InputRequest>,
     ) -> Result<Option<operations::Output>> {
         let flat = cx.flat;
         let replacement = (|| {
@@ -2760,8 +2761,8 @@ impl prebindgen_declarations::DeclarationCodec for JniCodec {
             }
 
             let policy = match tree {
-                Output::Leaf(OutputLeafOp::Value) => None,
-                Output::Leaf(OutputLeafOp::Projected(p)) => Some(p.clone()),
+                DeclarationOutput::Leaf(OutputLeafOp::Value) => None,
+                DeclarationOutput::Leaf(OutputLeafOp::Projected(p)) => Some(p.clone()),
                 _ => return Ok(None),
             };
             if flat.payload_enums.contains_key(&type_key(ty))
@@ -2782,11 +2783,11 @@ impl prebindgen_declarations::DeclarationCodec for JniCodec {
                 .and_then(|t| t.metadata.class.as_ref())
                 .is_some_and(|c| c.kind == ClassKind::Sealed)
             {
-                return Ok(Some(Output::enum_variants(
+                return Ok(Some(DeclarationOutput::enum_variants(
                     flat.payload_enum(ty)?
                         .variants
                         .iter()
-                        .map(|v| vec![Output::value(); v.fields.len()])
+                        .map(|v| vec![DeclarationOutput::value(); v.fields.len()])
                         .collect(),
                     true,
                     policy.as_ref().map(|p| p.mode),
@@ -2810,14 +2811,14 @@ impl prebindgen_declarations::DeclarationCodec for JniCodec {
             let inherited = policy.as_ref().map(Projection::inherited);
             let children = fields.iter().map(|field| {
             let name = field.name.to_string();
-            let Some(policy) = &policy else { return Ok(Output::value()); };
+            let Some(policy) = &policy else { return Ok(DeclarationOutput::value()); };
             let child = policy.fields.get(name.trim_start_matches("r#")).unwrap_or(inherited.as_ref().unwrap());
             if policy.mode == ProjectionMode::Borrowed && child.mode == ProjectionMode::Owned {
                 return Err(format!("data class `{}` field `{name}`: owned projection cannot consume a shared-reference occurrence", record.fqn()));
             }
-            Ok(Output::Request(OutputRequest::Value {projection:Some(child.clone())}))
+            Ok(DeclarationOutput::Request(OutputRequest::Value {projection:Some(child.clone())}))
         }).collect::<Result<Vec<_>>>()?;
-            Ok(Some(Output::Branch {
+            Ok(Some(DeclarationOutput::Branch {
                 operation: OutputBranch::Record {
                     mode: policy.map(|p| p.mode),
                 },

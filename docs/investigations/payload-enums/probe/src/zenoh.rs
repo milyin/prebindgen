@@ -1,6 +1,6 @@
 //! Source-shape checks and controls for Zenoh's nested expansion requirements.
 use super::{items, rejected};
-use prebindgen_declarations::{expand_return, fun, DeclarationOutput as Output};
+use prebindgen_declarations::{expand_return, fun, DeclarationOutput};
 use prebindgen_flat::{Flat, Result};
 use prebindgen_jni::{callback, data_class, package, JniGen};
 use quote::ToTokens;
@@ -154,7 +154,7 @@ pub fn run() -> Result<()> {
             .items(items(source))
             .set_package_prefix("example")
             .expand(expand_return!(NativePayload).field(fun!(payload_size)))
-            .expand(expand_return!(Envelope).view(Output::OwnedFields(vec![Output::auto()])))
+            .expand(expand_return!(Envelope).view(DeclarationOutput::OwnedFields(vec![DeclarationOutput::auto()])))
     };
     let expanded = builder()
         .package(

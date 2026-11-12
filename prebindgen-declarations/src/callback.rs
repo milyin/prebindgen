@@ -1,5 +1,5 @@
 //! Signature defaults and occurrence overrides for source callbacks.
-use crate::{Input, InputRequest, Output, OutputRequest};
+use crate::{DeclarationInput, DeclarationOutput, InputRequest, OutputRequest};
 use prebindgen_flat::{callback_signature, Flat, Result, Schema};
 use std::collections::BTreeMap;
 use syn::Type;
@@ -28,9 +28,9 @@ pub struct CallbackDecl {
     /// Destination namespace, supplied by the language adapter's placement declaration.
     pub namespace: Option<String>,
     /// Argument output overrides, indexed in source invocation order.
-    pub params: BTreeMap<usize, Output<OutputRequest, InputRequest>>,
+    pub params: BTreeMap<usize, DeclarationOutput<OutputRequest, InputRequest>>,
     /// Returned-value input override.
-    pub ret: Option<Input<InputRequest, OutputRequest>>,
+    pub ret: Option<DeclarationInput<InputRequest, OutputRequest>>,
 }
 impl CallbackDecl {
     /// Declare defaults or an occurrence override for a source callback signature.
@@ -55,7 +55,7 @@ impl CallbackDecl {
     pub fn expand_param(
         mut self,
         index: usize,
-        output: impl Into<Output<OutputRequest, InputRequest>>,
+        output: impl Into<DeclarationOutput<OutputRequest, InputRequest>>,
     ) -> Self {
         assert!(
             self.params.insert(index, output.into()).is_none(),
@@ -64,12 +64,15 @@ impl CallbackDecl {
         self
     }
     /// Override the callback result's foreign-to-Rust conversion.
-    pub fn expand_return(mut self, input: impl Into<Input<InputRequest, OutputRequest>>) -> Self {
+    pub fn expand_return(
+        mut self,
+        input: impl Into<DeclarationInput<InputRequest, OutputRequest>>,
+    ) -> Self {
         self.ret = Some(input.into());
         self
     }
 }
-impl From<CallbackDecl> for Input<InputRequest, OutputRequest> {
+impl From<CallbackDecl> for DeclarationInput<InputRequest, OutputRequest> {
     fn from(decl: CallbackDecl) -> Self {
         Self::for_type(
             decl.ty.clone(),

@@ -1,5 +1,5 @@
 //! Single-value conversion declarations and preparation into Flat.
-use crate::{FunctionDecl, Input, InputRequest, Output, OutputRequest};
+use crate::{DeclarationInput, DeclarationOutput, FunctionDecl, InputRequest, OutputRequest};
 use crate::{InputBranch, InputLeafOp, InputUnary, OutputBranch, OutputLeafOp, OutputUnary};
 use crate::{InputNode, OutputNode};
 use prebindgen_flat::{
@@ -188,7 +188,7 @@ impl ConvertDecl {
             .collect()
     }
 }
-impl From<ConvertDecl> for Input<InputRequest, OutputRequest> {
+impl From<ConvertDecl> for DeclarationInput<InputRequest, OutputRequest> {
     fn from(decl: ConvertDecl) -> Self {
         Self::for_type(
             decl.ty.clone(),
@@ -196,7 +196,7 @@ impl From<ConvertDecl> for Input<InputRequest, OutputRequest> {
         )
     }
 }
-impl From<ConvertDecl> for Output<OutputRequest, InputRequest> {
+impl From<ConvertDecl> for DeclarationOutput<OutputRequest, InputRequest> {
     fn from(decl: ConvertDecl) -> Self {
         Self::for_type(
             decl.ty.clone(),
@@ -300,7 +300,7 @@ impl Declarations {
         codec: &C,
         ty: &Type,
         conversion: ValueConversion,
-        child: &Input<InputRequest, OutputRequest>,
+        child: &DeclarationInput<InputRequest, OutputRequest>,
         extra: &C::Extra,
         stack: &mut Vec<String>,
     ) -> Result<crate::ResolvedInput<C>> {
@@ -325,7 +325,7 @@ impl Declarations {
         codec: &C,
         ty: &Type,
         conversion: ValueConversion,
-        child: &Output<OutputRequest, InputRequest>,
+        child: &DeclarationOutput<OutputRequest, InputRequest>,
         extra: &C::Extra,
         stack: &mut Vec<String>,
     ) -> Result<crate::ResolvedOutput<C>> {
@@ -375,7 +375,7 @@ impl Declarations {
                 codec,
                 ty,
                 c,
-                &Input::value(),
+                &DeclarationInput::value(),
                 extra,
                 stack,
             );
@@ -398,7 +398,7 @@ impl Declarations {
             flat,
             codec,
             ty,
-            &Input::Leaf(InputLeafOp::Value),
+            &DeclarationInput::Leaf(InputLeafOp::Value),
             extra,
             stack,
         )
@@ -447,7 +447,7 @@ impl Declarations {
                 codec,
                 ty,
                 c,
-                &Output::value(),
+                &DeclarationOutput::value(),
                 extra,
                 stack,
             );
@@ -477,8 +477,8 @@ impl Declarations {
             flat,
             codec,
             ty,
-            &policy.map_or(Output::Leaf(OutputLeafOp::Value), |p| {
-                Output::Leaf(OutputLeafOp::Projected(p.clone()))
+            &policy.map_or(DeclarationOutput::Leaf(OutputLeafOp::Value), |p| {
+                DeclarationOutput::Leaf(OutputLeafOp::Projected(p.clone()))
             }),
             extra,
             stack,

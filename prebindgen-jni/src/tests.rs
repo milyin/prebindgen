@@ -18,11 +18,11 @@ fn flat(source: &str) -> Bindings {
 #[test]
 fn kotlin_preflight_removes_native_row_staging_for_both_transports() {
     let source = "pub type Handle=String;pub enum Kind{A,B}pub struct Row{pub h:Handle,pub text:Option<String>,pub bytes:Option<Vec<u8>>,pub kind:Option<Kind>}pub fn rows(values:Vec<Row>)->usize{}";
-    let recipe = Input::Unary {
+    let recipe = DeclarationInput::Unary {
         operation: InputUnary::Sequence,
-        child: Box::new(Input::Branch {
+        child: Box::new(DeclarationInput::Branch {
             operation: InputBranch::Record,
-            children: vec![Input::Leaf(InputLeafOp::Value); 4],
+            children: vec![DeclarationInput::Leaf(InputLeafOp::Value); 4],
         }),
     };
     for bulk in [false, true] {
@@ -57,25 +57,25 @@ fn nested_bulk_modifiers_do_not_force_prepared_handle_rows() {
     let source = "pub type Handle=String;pub struct Row{pub h:Handle,pub tag:i64}pub fn make(h:Handle)->Handle{}pub fn nested(values:Vec<Vec<Row>>){}";
     for bulk in [false, true] {
         let handle = if bulk {
-            Input::Leaf(InputLeafOp::Value).bulk()
+            DeclarationInput::Leaf(InputLeafOp::Value).bulk()
         } else {
-            Input::Leaf(InputLeafOp::Value)
+            DeclarationInput::Leaf(InputLeafOp::Value)
         };
-        let row = Input::Branch {
+        let row = DeclarationInput::Branch {
             operation: InputBranch::Record,
             children: vec![
-                Input::Branch {
+                DeclarationInput::Branch {
                     operation: InputBranch::Constructor {
                         function: "make".into(),
                     },
                     children: vec![handle],
                 },
-                Input::Leaf(InputLeafOp::Value),
+                DeclarationInput::Leaf(InputLeafOp::Value),
             ],
         };
-        let input = Input::Unary {
+        let input = DeclarationInput::Unary {
             operation: InputUnary::Sequence,
-            child: Box::new(Input::Unary {
+            child: Box::new(DeclarationInput::Unary {
                 operation: InputUnary::Sequence,
                 child: Box::new(row),
             }),
@@ -939,15 +939,15 @@ fn scalar_niches_exhaust_at_the_carrier_limit() {
 
 #[test]
 fn optional_unannotated_fields_keep_outer_presence_in_both_directions() {
-    use prebindgen_declarations::{bind_input, DeclarationInput as Input};
+    use prebindgen_declarations::{bind_input, DeclarationInput};
     let mut source = flat("pub struct Wrapped { pub value: Option<i64> } pub fn wrapped_fields(x: &Wrapped) -> Wrapped {} pub fn echo(value: Option<Wrapped>) -> Option<Wrapped> {}");
-    let input = Input::Unary {
+    let input = DeclarationInput::Unary {
         operation: InputUnary::Optional,
-        child: Box::new(Input::Branch {
+        child: Box::new(DeclarationInput::Branch {
             operation: InputBranch::Fields,
-            children: vec![Input::Unary {
+            children: vec![DeclarationInput::Unary {
                 operation: InputUnary::Optional,
-                child: Box::new(Input::Leaf(InputLeafOp::Value)),
+                child: Box::new(DeclarationInput::Leaf(InputLeafOp::Value)),
             }],
         }),
     };
@@ -1058,20 +1058,20 @@ fn reference_and_presence_flag_niches_keep_nested_wire_counts_bounded() {
 
 #[test]
 fn nested_optional_selectors_reserve_distinct_tags_and_disable_arm_niches() {
-    use prebindgen_declarations::{bind_input, DeclarationInput as Input};
+    use prebindgen_declarations::{bind_input, DeclarationInput};
     let mut source = flat("pub fn echo(x:Option<Option<char>>)->char {} pub fn first(x:char)->char{} pub fn second(x:char)->char{}");
-    let selector = Input::selector([
-        Input::constructor("first", [Input::Leaf(InputLeafOp::Value)]),
-        Input::constructor("second", [Input::Leaf(InputLeafOp::Value)]),
+    let selector = DeclarationInput::selector([
+        DeclarationInput::constructor("first", [DeclarationInput::Leaf(InputLeafOp::Value)]),
+        DeclarationInput::constructor("second", [DeclarationInput::Leaf(InputLeafOp::Value)]),
     ]);
     bind_input(
         &mut source,
         &JniCodec::raw(),
         "echo",
         "x",
-        &Input::Unary {
+        &DeclarationInput::Unary {
             operation: InputUnary::Optional,
-            child: Box::new(Input::Unary {
+            child: Box::new(DeclarationInput::Unary {
                 operation: InputUnary::Optional,
                 child: Box::new(selector),
             }),
@@ -2155,11 +2155,11 @@ fn c_supports_callbacks_in_direct_and_constructor_parameters() {
 
 #[test]
 fn callback_constructor_rejects_a_selector_for_the_callable_itself() {
-    let recipe: Input<InputRequest, OutputRequest> = Input::constructor(
+    let recipe: DeclarationInput<InputRequest, OutputRequest> = DeclarationInput::constructor(
         "make",
-        [Input::selector([
-            Input::Leaf(InputLeafOp::Value),
-            Input::Leaf(InputLeafOp::Value),
+        [DeclarationInput::selector([
+            DeclarationInput::Leaf(InputLeafOp::Value),
+            DeclarationInput::Leaf(InputLeafOp::Value),
         ])],
     );
     let error = fail(JniGen::builder()
@@ -2660,7 +2660,7 @@ fn bulk_selector_and_empty_expansion_generate_valid_boundaries() {
             .flat(flat(source))
             .set_package_prefix("test");
         let call = if is_unit {
-            fun!(call).output(Output::auto().bulk())
+            fun!(call).output(DeclarationOutput::auto().bulk())
         } else {
             fun!(call)
                 .expand_param(
@@ -2684,7 +2684,9 @@ fn bulk_rejects_callback_objects_and_conflicting_collection_delivery() {
     let callback = JniGen::builder()
         .set_package_prefix("test")
         .flat(flat("pub fn call(callback:impl Fn(i64)){}"))
-        .package(package!().fun(fun!(call).expand_param("callback", Input::auto().bulk())))
+        .package(
+            package!().fun(fun!(call).expand_param("callback", DeclarationInput::auto().bulk())),
+        )
         .build()
         .err()
         .unwrap();
@@ -4122,11 +4124,11 @@ fn raw_borrowed_leaf_composes_with_declared_inputs_using_wire_access() {
 #[test]
 fn callback_results_and_arguments_omit_all_native_alias_history() {
     for bulk in [false, true] {
-        let rows = Input::Unary {
+        let rows = DeclarationInput::Unary {
             operation: InputUnary::Sequence,
-            child: Box::new(Input::Branch {
+            child: Box::new(DeclarationInput::Branch {
                 operation: InputBranch::Record,
-                children: vec![Input::Leaf(InputLeafOp::Value); 2],
+                children: vec![DeclarationInput::Leaf(InputLeafOp::Value); 2],
             }),
         };
         let rows = if bulk { rows.bulk() } else { rows };
@@ -4158,32 +4160,32 @@ fn callback_results_defer_ownership_tracking_through_ordinary_result_trees() {
     for (function, returned, deferred) in [
         (
             "fixed",
-            Input::Branch {
+            DeclarationInput::Branch {
                 operation: InputBranch::Record,
-                children: vec![Input::Leaf(InputLeafOp::Value); 4],
+                children: vec![DeclarationInput::Leaf(InputLeafOp::Value); 4],
             },
             true,
         ),
         (
             "rows",
-            Input::Unary {
+            DeclarationInput::Unary {
                 operation: InputUnary::Sequence,
-                child: Box::new(Input::Branch {
+                child: Box::new(DeclarationInput::Branch {
                     operation: InputBranch::Record,
-                    children: vec![Input::Leaf(InputLeafOp::Value); 4],
+                    children: vec![DeclarationInput::Leaf(InputLeafOp::Value); 4],
                 }),
             },
             true,
         ),
         (
             "nested",
-            Input::Unary {
+            DeclarationInput::Unary {
                 operation: InputUnary::Sequence,
-                child: Box::new(Input::Unary {
+                child: Box::new(DeclarationInput::Unary {
                     operation: InputUnary::Sequence,
-                    child: Box::new(Input::Branch {
+                    child: Box::new(DeclarationInput::Branch {
                         operation: InputBranch::Record,
-                        children: vec![Input::Leaf(InputLeafOp::Value); 4],
+                        children: vec![DeclarationInput::Leaf(InputLeafOp::Value); 4],
                     }),
                 }),
             },
@@ -4234,17 +4236,17 @@ fn callback_results_defer_ownership_tracking_through_ordinary_result_trees() {
 
 #[test]
 fn ordinary_callback_with_a_packed_child_uses_failure_only_cleanup() {
-    let returned = Input::Unary {
+    let returned = DeclarationInput::Unary {
         operation: InputUnary::Sequence,
-        child: Box::new(Input::Branch {
+        child: Box::new(DeclarationInput::Branch {
             operation: InputBranch::Record,
             children: vec![
-                Input::Leaf(InputLeafOp::Value),
-                Input::Unary {
+                DeclarationInput::Leaf(InputLeafOp::Value),
+                DeclarationInput::Unary {
                     operation: InputUnary::Sequence,
-                    child: Box::new(Input::Branch {
+                    child: Box::new(DeclarationInput::Branch {
                         operation: InputBranch::Record,
-                        children: vec![Input::Leaf(InputLeafOp::Value); 4],
+                        children: vec![DeclarationInput::Leaf(InputLeafOp::Value); 4],
                     }),
                 }
                 .bulk(),
@@ -4304,23 +4306,23 @@ fn data_class_collection_fields_reuse_logical_types_and_check_recursion() {
 
 #[test]
 fn mixed_callback_rows_reject_multi_argument_constructor_alternatives() {
-    let returned = Input::Unary {
+    let returned = DeclarationInput::Unary {
         operation: InputUnary::Sequence,
-        child: Box::new(Input::Branch {
+        child: Box::new(DeclarationInput::Branch {
             operation: InputBranch::Record,
             children: vec![
-                Input::Branch {
+                DeclarationInput::Branch {
                     operation: InputBranch::Selector,
                     children: vec![
-                        Input::Leaf(InputLeafOp::Value),
-                        Input::Leaf(InputLeafOp::Value),
+                        DeclarationInput::Leaf(InputLeafOp::Value),
+                        DeclarationInput::Leaf(InputLeafOp::Value),
                     ],
                 },
-                Input::Unary {
+                DeclarationInput::Unary {
                     operation: InputUnary::Sequence,
-                    child: Box::new(Input::Branch {
+                    child: Box::new(DeclarationInput::Branch {
                         operation: InputBranch::Record,
-                        children: vec![Input::Leaf(InputLeafOp::Value); 2],
+                        children: vec![DeclarationInput::Leaf(InputLeafOp::Value); 2],
                     }),
                 }
                 .bulk(),

@@ -605,7 +605,7 @@ mod tests {
     #[test]
     fn borrowed_records_and_sequences_cannot_lend_owned_getter_temporaries() {
         use prebindgen_declarations::{
-            fields, DeclarationOutput as Output, ProjectionMode, SequenceDelivery,
+            fields, DeclarationOutput, ProjectionMode, SequenceDelivery,
         };
         let source="pub type Owner=String; pub struct Info{pub inner:Inner} pub type Inner=String; pub fn make()->Owner{} pub fn borrow(v:&Owner)->&Owner{} pub fn info(o:&Owner)->Info{} pub fn name(v:&Inner)->&str{} pub fn list(o:&Owner)->Vec<Inner>{}";
         for function in ["make", "borrow"] {
@@ -631,14 +631,14 @@ mod tests {
         let error = Cbindgen::new(flat(source))
             .opaque_ptr("owner", syn::parse_quote!(Owner))
             .opaque_ptr("inner", syn::parse_quote!(Inner))
-            .function(fun!(borrow).output(Output::getter(
+            .function(fun!(borrow).output(DeclarationOutput::getter(
                 "list",
-                Output::Unary {
+                DeclarationOutput::Unary {
                     operation: OutputUnary::Sequence {
                         delivery: SequenceDelivery::Value,
                         mode: Some(ProjectionMode::Borrowed),
                     },
-                    child: Box::new(Output::getter("name", Output::auto())),
+                    child: Box::new(DeclarationOutput::getter("name", DeclarationOutput::auto())),
                 },
             )))
             .panic()

@@ -870,12 +870,14 @@ mod group_tests {
         let codec = JniCodec::declared();
         let defaults =
             prebindgen_declarations::Declarations::new(&flat, vec![], vec![], vec![]).unwrap();
-        let request = Output::Unary {
+        let request = DeclarationOutput::Unary {
             operation: OutputUnary::Sequence {
                 delivery: prebindgen_declarations::SequenceDelivery::Callback,
                 mode: Some(ProjectionMode::Owned),
             },
-            child: Box::new(Output::Leaf(OutputLeafOp::Projected(Projection::owned()))),
+            child: Box::new(DeclarationOutput::Leaf(OutputLeafOp::Projected(
+                Projection::owned(),
+            ))),
         };
         let resolved = defaults
             .resolve_output(

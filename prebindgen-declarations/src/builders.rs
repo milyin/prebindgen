@@ -1,14 +1,16 @@
 //! Production declaration syntax writing directly into conversion descriptions.
-use crate::{FunctionDecl, Input, InputRequest, Output, OutputRequest, Projection};
+use crate::{
+    DeclarationInput, DeclarationOutput, FunctionDecl, InputRequest, OutputRequest, Projection,
+};
 use crate::{InputBranch, InputUnary, OutputBranch, OutputLeafOp, OutputUnary};
 use std::collections::BTreeMap;
 
-/// Input alternatives for a source type, built directly as an [`Input`] tree.
+/// Input alternatives for a source type, built directly as a [`DeclarationInput`] tree.
 #[derive(Clone, Debug)]
 pub struct ExpandParamDecl {
     /// Source type targeted by this default or occurrence override.
     pub ty: syn::Type,
-    input: Input<InputRequest, OutputRequest>,
+    input: DeclarationInput<InputRequest, OutputRequest>,
     bulk: bool,
     reconstruct: bool,
 }
@@ -17,7 +19,7 @@ impl ExpandParamDecl {
     pub fn new(ty: syn::Type) -> Self {
         Self {
             ty,
-            input: Input::Branch {
+            input: DeclarationInput::Branch {
                 operation: InputBranch::Selector,
                 children: vec![],
             },
@@ -49,35 +51,35 @@ impl ExpandParamDecl {
         self
     }
 }
-impl From<ExpandParamDecl> for Input<InputRequest, OutputRequest> {
+impl From<ExpandParamDecl> for DeclarationInput<InputRequest, OutputRequest> {
     fn from(decl: ExpandParamDecl) -> Self {
         let mut input = decl.input;
         if decl.reconstruct {
-            if matches!(&input, Input::Branch { operation: InputBranch::Selector, children: arms } if arms.is_empty())
+            if matches!(&input, DeclarationInput::Branch { operation: InputBranch::Selector, children: arms } if arms.is_empty())
             {
-                input = Input::auto();
+                input = DeclarationInput::auto();
             }
-            input = Input::Unary {
+            input = DeclarationInput::Unary {
                 operation: InputUnary::Temporary,
                 child: Box::new(input),
             };
         }
         if decl.bulk {
-            input = Input::Unary {
+            input = DeclarationInput::Unary {
                 operation: InputUnary::Bulk,
                 child: Box::new(input),
             };
         }
-        Input::for_type(decl.ty, input)
+        DeclarationInput::for_type(decl.ty, input)
     }
 }
 
-/// Simultaneous views of a source return value, built directly as an [`Output`] tree.
+/// Simultaneous views of a source return value, built directly as a [`DeclarationOutput`] tree.
 #[derive(Clone, Debug)]
 pub struct ExpandReturnDecl {
     /// Source type targeted by this default or occurrence override.
     pub ty: syn::Type,
-    output: Output<OutputRequest, InputRequest>,
+    output: DeclarationOutput<OutputRequest, InputRequest>,
     bulk: bool,
 }
 impl ExpandReturnDecl {
@@ -85,7 +87,7 @@ impl ExpandReturnDecl {
     pub fn new(ty: syn::Type) -> Self {
         Self {
             ty,
-            output: Output::Branch {
+            output: DeclarationOutput::Branch {
                 operation: OutputBranch::Combine,
                 children: vec![],
             },
@@ -108,9 +110,10 @@ impl ExpandReturnDecl {
     pub fn field(mut self, function: impl Into<FunctionDecl>) -> Self {
         let function = function.into();
         let name = function.foreign.clone();
-        let getter = Output::getter(function.reference_name(true), Output::auto());
+        let getter =
+            DeclarationOutput::getter(function.reference_name(true), DeclarationOutput::auto());
         self.output = self.output.view(match name {
-            Some(name) => Output::Unary {
+            Some(name) => DeclarationOutput::Unary {
                 operation: OutputUnary::Named { name },
                 child: Box::new(getter),
             },
@@ -123,7 +126,10 @@ impl ExpandReturnDecl {
         self.view(fields)
     }
     /// Append another explicit output view.
-    pub fn view(mut self, output: impl Into<Output<OutputRequest, InputRequest>>) -> Self {
+    pub fn view(
+        mut self,
+        output: impl Into<DeclarationOutput<OutputRequest, InputRequest>>,
+    ) -> Self {
         self.output = self.output.view(output.into());
         self
     }
@@ -157,12 +163,12 @@ impl ExpandReturnDecl {
         self
     }
 }
-impl From<ExpandReturnDecl> for Output<OutputRequest, InputRequest> {
+impl From<ExpandReturnDecl> for DeclarationOutput<OutputRequest, InputRequest> {
     fn from(decl: ExpandReturnDecl) -> Self {
-        Output::for_type(
+        DeclarationOutput::for_type(
             decl.ty,
             if decl.bulk {
-                Output::Unary {
+                DeclarationOutput::Unary {
                     operation: OutputUnary::Bulk,
                     child: Box::new(decl.output),
                 }
@@ -178,7 +184,7 @@ impl From<ExpandReturnDecl> for Output<OutputRequest, InputRequest> {
 #[derive(Clone, Debug)]
 pub struct FieldsDecl {
     function: String,
-    overrides: BTreeMap<String, Output<OutputRequest, InputRequest>>,
+    overrides: BTreeMap<String, DeclarationOutput<OutputRequest, InputRequest>>,
 }
 impl FieldsDecl {
     /// Select a getter whose returned record supplies the fields.
@@ -198,11 +204,11 @@ impl FieldsDecl {
     pub fn field_override(
         mut self,
         name: impl Into<String>,
-        output: impl Into<Output<OutputRequest, InputRequest>>,
+        output: impl Into<DeclarationOutput<OutputRequest, InputRequest>>,
     ) -> Self {
         let output = match output.into() {
-            Output::Request(OutputRequest::ForType { ty, output }) if matches!(output.as_ref(),Output::Branch { operation: OutputBranch::Combine, children: parts } if parts.is_empty()) => {
-                Output::for_type(*ty, Output::Leaf(OutputLeafOp::Discard))
+            DeclarationOutput::Request(OutputRequest::ForType { ty, output }) if matches!(output.as_ref(),DeclarationOutput::Branch { operation: OutputBranch::Combine, children: parts } if parts.is_empty()) => {
+                DeclarationOutput::for_type(*ty, DeclarationOutput::Leaf(OutputLeafOp::Discard))
             }
             output => output,
         };
@@ -213,11 +219,11 @@ impl FieldsDecl {
         self
     }
 }
-impl From<FieldsDecl> for Output<OutputRequest, InputRequest> {
+impl From<FieldsDecl> for DeclarationOutput<OutputRequest, InputRequest> {
     fn from(fields: FieldsDecl) -> Self {
-        Output::getter(
+        DeclarationOutput::getter(
             fields.function,
-            Output::Request(OutputRequest::NamedFields {
+            DeclarationOutput::Request(OutputRequest::NamedFields {
                 overrides: fields.overrides,
                 mode: crate::ProjectionMode::Borrowed,
             }),

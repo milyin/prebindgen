@@ -88,9 +88,9 @@ fn local_result_and_nested_constructor_overrides_inherit_arguments() {
                 .fun(
                     fun!(nested).expand_param(
                         "handlers",
-                        Input::for_type(
+                        DeclarationInput::for_type(
                             syn::parse_quote!(Handler),
-                            Input::constructor(
+                            DeclarationInput::constructor(
                                 "make",
                                 [callback!(impl Fn(Value, i64) -> Value)
                                     .name("Nested")
@@ -323,7 +323,7 @@ fn callback_overrides_validate_positions_types_and_foreign_names() {
     for (local, expected) in [
         (
             callback!(impl Fn(Value, i64) -> Value)
-                .expand_param(2, Output::Leaf(OutputLeafOp::Value)),
+                .expand_param(2, DeclarationOutput::Leaf(OutputLeafOp::Value)),
             "out of range",
         ),
         (

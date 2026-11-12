@@ -336,9 +336,9 @@ fn different_occurrences_have_different_converters() {
         &TEST_CODEC,
         "foo",
         "x",
-        &Input::selector([
-            Input::Leaf(InputLeafOp::Value),
-            Input::constructor("make", [Input::Leaf(InputLeafOp::Value)]),
+        &DeclarationInput::selector([
+            DeclarationInput::Leaf(InputLeafOp::Value),
+            DeclarationInput::constructor("make", [DeclarationInput::Leaf(InputLeafOp::Value)]),
         ]),
         &extra("x"),
     )
@@ -348,7 +348,7 @@ fn different_occurrences_have_different_converters() {
         &TEST_CODEC,
         "foo",
         "y",
-        &Input::Leaf(InputLeafOp::Value),
+        &DeclarationInput::Leaf(InputLeafOp::Value),
         &extra("y"),
     )
     .unwrap();
@@ -356,7 +356,7 @@ fn different_occurrences_have_different_converters() {
         &mut flat,
         &TEST_CODEC,
         "foo",
-        &Output::Leaf(OutputLeafOp::Value),
+        &DeclarationOutput::Leaf(OutputLeafOp::Value),
         &extra("result"),
     )
     .unwrap();
@@ -376,7 +376,7 @@ fn rejects_incomplete_slots() {
         &mut flat,
         &TEST_CODEC,
         "foo",
-        &Output::Leaf(OutputLeafOp::Value),
+        &DeclarationOutput::Leaf(OutputLeafOp::Value),
         &Extra::default(),
     )
     .unwrap();
@@ -390,7 +390,7 @@ fn rejects_inputs_without_a_result_converter() {
         &TEST_CODEC,
         "foo",
         "x",
-        &Input::Leaf(InputLeafOp::Value),
+        &DeclarationInput::Leaf(InputLeafOp::Value),
         &Extra::default(),
     )
     .unwrap();
@@ -429,20 +429,20 @@ fn failed_rebinding_preserves_existing_converter() {
         &TEST_CODEC,
         "foo",
         "x",
-        &Input::constructor("foo", []),
+        &DeclarationInput::constructor("foo", []),
         &Extra::default(),
     )
     .unwrap_err();
     assert!(error.contains("argument count"));
     assert_eq!(format!("{flat:?}"), before);
     for output in [
-        Output::combine([
-            Output::Leaf(OutputLeafOp::Value),
-            Output::Leaf(OutputLeafOp::Value),
+        DeclarationOutput::combine([
+            DeclarationOutput::Leaf(OutputLeafOp::Value),
+            DeclarationOutput::Leaf(OutputLeafOp::Value),
         ]),
-        Output::fields([
-            Output::Leaf(OutputLeafOp::Value),
-            Output::Leaf(OutputLeafOp::Value),
+        DeclarationOutput::fields([
+            DeclarationOutput::Leaf(OutputLeafOp::Value),
+            DeclarationOutput::Leaf(OutputLeafOp::Value),
         ]),
     ] {
         assert!(bind_output(&mut flat, &TEST_CODEC, "foo", &output, &Extra::default()).is_err());
@@ -453,7 +453,7 @@ fn failed_rebinding_preserves_existing_converter() {
         &TEST_CODEC,
         "foo",
         "missing",
-        &Input::Leaf(InputLeafOp::Value),
+        &DeclarationInput::Leaf(InputLeafOp::Value),
         &Extra::default()
     )
     .unwrap_err()
@@ -466,9 +466,9 @@ fn observations_precede_move_but_wires_keep_order() {
         &mut flat,
         &TEST_CODEC,
         "foo",
-        &Output::combine([
-            Output::Leaf(OutputLeafOp::Value),
-            Output::fields([Output::Leaf(OutputLeafOp::Value)]),
+        &DeclarationOutput::combine([
+            DeclarationOutput::Leaf(OutputLeafOp::Value),
+            DeclarationOutput::fields([DeclarationOutput::Leaf(OutputLeafOp::Value)]),
         ]),
         &Extra::default(),
     )
@@ -518,9 +518,9 @@ fn declarations_preserve_converters_and_replace_explicit_overrides() {
         &TEST_CODEC,
         "foo",
         "x",
-        &Input::selector([
-            Input::constructor("make", [Input::Leaf(InputLeafOp::Value)]),
-            Input::Leaf(InputLeafOp::Value),
+        &DeclarationInput::selector([
+            DeclarationInput::constructor("make", [DeclarationInput::Leaf(InputLeafOp::Value)]),
+            DeclarationInput::Leaf(InputLeafOp::Value),
         ]),
         &extra("x"),
     )
@@ -529,7 +529,7 @@ fn declarations_preserve_converters_and_replace_explicit_overrides() {
         &mut flat,
         &TEST_CODEC,
         "foo",
-        &Output::Leaf(OutputLeafOp::Value),
+        &DeclarationOutput::Leaf(OutputLeafOp::Value),
         &extra("result"),
     )
     .unwrap();
@@ -613,7 +613,7 @@ fn independent_binding_and_rebinding_keeps_names_unique_and_stable() {
                 &TEST_CODEC,
                 "foo",
                 parameter,
-                &Input::Leaf(InputLeafOp::Value),
+                &DeclarationInput::Leaf(InputLeafOp::Value),
                 &Extra::default(),
             )
             .unwrap();
@@ -622,7 +622,7 @@ fn independent_binding_and_rebinding_keeps_names_unique_and_stable() {
             model,
             &TEST_CODEC,
             "foo",
-            &Output::Leaf(OutputLeafOp::Value),
+            &DeclarationOutput::Leaf(OutputLeafOp::Value),
             &Extra::default(),
         )
         .unwrap();
@@ -634,9 +634,9 @@ fn independent_binding_and_rebinding_keeps_names_unique_and_stable() {
         &TEST_CODEC,
         "foo",
         "x",
-        &Input::selector([
-            Input::Leaf(InputLeafOp::Value),
-            Input::constructor("make", [Input::Leaf(InputLeafOp::Value)]),
+        &DeclarationInput::selector([
+            DeclarationInput::Leaf(InputLeafOp::Value),
+            DeclarationInput::constructor("make", [DeclarationInput::Leaf(InputLeafOp::Value)]),
         ]),
         &Extra::default(),
     )
@@ -772,7 +772,7 @@ fn nested_recipes_use_only_the_callers_extra() {
         &TEST_CODEC,
         "make",
         "k",
-        &Input::Leaf(InputLeafOp::Value),
+        &DeclarationInput::Leaf(InputLeafOp::Value),
         &extra("constructor declaration"),
     )
     .unwrap();
@@ -780,7 +780,7 @@ fn nested_recipes_use_only_the_callers_extra() {
         &mut flat,
         &TEST_CODEC,
         "parts",
-        &Output::Leaf(OutputLeafOp::Value),
+        &DeclarationOutput::Leaf(OutputLeafOp::Value),
         &extra("getter declaration"),
     )
     .unwrap();
@@ -789,9 +789,9 @@ fn nested_recipes_use_only_the_callers_extra() {
         &TEST_CODEC,
         "foo",
         "x",
-        &Input::selector([
-            Input::Leaf(InputLeafOp::Value),
-            Input::constructor("make", [Input::Leaf(InputLeafOp::Value)]),
+        &DeclarationInput::selector([
+            DeclarationInput::Leaf(InputLeafOp::Value),
+            DeclarationInput::constructor("make", [DeclarationInput::Leaf(InputLeafOp::Value)]),
         ]),
         &extra("x"),
     )
@@ -801,7 +801,7 @@ fn nested_recipes_use_only_the_callers_extra() {
         &TEST_CODEC,
         "foo",
         "y",
-        &Input::fields([Input::Leaf(InputLeafOp::Value)]),
+        &DeclarationInput::fields([DeclarationInput::Leaf(InputLeafOp::Value)]),
         &extra("y"),
     )
     .unwrap();
@@ -809,9 +809,12 @@ fn nested_recipes_use_only_the_callers_extra() {
         &mut flat,
         &TEST_CODEC,
         "foo",
-        &Output::combine([
-            Output::Leaf(OutputLeafOp::Value),
-            Output::getter("parts", Output::fields([Output::Leaf(OutputLeafOp::Value)])),
+        &DeclarationOutput::combine([
+            DeclarationOutput::Leaf(OutputLeafOp::Value),
+            DeclarationOutput::getter(
+                "parts",
+                DeclarationOutput::fields([DeclarationOutput::Leaf(OutputLeafOp::Value)]),
+            ),
         ]),
         &Extra {
             name: "result",
@@ -849,9 +852,9 @@ fn nested_recipes_use_only_the_callers_extra() {
 }
 #[test]
 fn extra_controls_consumption_without_changing_the_recipe() {
-    let recipe = Output::combine([
-        Output::Leaf(OutputLeafOp::Value),
-        Output::Leaf(OutputLeafOp::Value),
+    let recipe = DeclarationOutput::combine([
+        DeclarationOutput::Leaf(OutputLeafOp::Value),
+        DeclarationOutput::Leaf(OutputLeafOp::Value),
     ]);
     for copy in [false, true] {
         let mut flat = model();
@@ -880,9 +883,9 @@ fn record_projection_retains_field_mappings_in_prepared_flat() {
         &mut flat,
         &TEST_CODEC,
         "point",
-        &Output::fields([
-            Output::Leaf(OutputLeafOp::Value),
-            Output::Leaf(OutputLeafOp::Value),
+        &DeclarationOutput::fields([
+            DeclarationOutput::Leaf(OutputLeafOp::Value),
+            DeclarationOutput::Leaf(OutputLeafOp::Value),
         ]),
         &Extra::default(),
     )
@@ -1054,11 +1057,11 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
         &FinalizingCodec,
         "take",
         "p",
-        &Input::constructor(
+        &DeclarationInput::constructor(
             "pair",
             [
-                Input::Leaf(InputLeafOp::Value),
-                Input::Leaf(InputLeafOp::Value)
+                DeclarationInput::Leaf(InputLeafOp::Value),
+                DeclarationInput::Leaf(InputLeafOp::Value)
             ]
         ),
         &Extra {
@@ -1078,11 +1081,11 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
         &FinalizingCodec,
         "take",
         "p",
-        &Input::constructor(
+        &DeclarationInput::constructor(
             "pair",
             [
-                Input::Leaf(InputLeafOp::Value),
-                Input::Leaf(InputLeafOp::Value),
+                DeclarationInput::Leaf(InputLeafOp::Value),
+                DeclarationInput::Leaf(InputLeafOp::Value),
             ],
         ),
         &Extra::default(),
@@ -1104,16 +1107,16 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
         &mut direct,
         &FinalizingCodec,
         "take",
-        &Output::fields([]),
+        &DeclarationOutput::fields([]),
         &Extra::default(),
     )
     .unwrap();
     let declarations = Declarations::new(&direct, vec![], vec![], vec![]).unwrap();
     let decl = FunctionDecl::new(syn::parse_quote!(take)).input(
         "p",
-        Input::for_type(
+        DeclarationInput::for_type(
             syn::parse_quote!(Pair),
-            Input::Branch {
+            DeclarationInput::Branch {
                 operation: InputBranch::Selector,
                 children: vec![],
             },
@@ -1169,9 +1172,9 @@ fn generation_needs_no_preparation_registry_or_record_lookup() {
         &mut flat,
         &TEST_CODEC,
         "point",
-        &Output::fields([
-            Output::Leaf(OutputLeafOp::Value),
-            Output::Leaf(OutputLeafOp::Value),
+        &DeclarationOutput::fields([
+            DeclarationOutput::Leaf(OutputLeafOp::Value),
+            DeclarationOutput::Leaf(OutputLeafOp::Value),
         ]),
         &Extra::default(),
     )
@@ -1516,22 +1519,22 @@ fn optional_output_drops_prepared_owners_on_failure_and_skips_absent_payloads() 
 fn field_groups_preserve_empty_and_multiwire_fields_in_both_directions() {
     use prebindgen_flat::WireNode;
     let mut flat = parse("pub struct Empty {} pub struct Pair { pub x: i32, pub y: i32 } pub struct Record { pub maybe: Option<i32>, pub empty: Empty, pub pair: Pair } pub fn echo(value: Record) -> Record { value }");
-    let input = Input::Branch {
+    let input = DeclarationInput::Branch {
         operation: InputBranch::Fields,
         children: vec![
-            Input::Unary {
+            DeclarationInput::Unary {
                 operation: InputUnary::Optional,
-                child: Box::new(Input::Leaf(InputLeafOp::Value)),
+                child: Box::new(DeclarationInput::Leaf(InputLeafOp::Value)),
             },
-            Input::Branch {
+            DeclarationInput::Branch {
                 operation: InputBranch::Fields,
                 children: vec![],
             },
-            Input::Branch {
+            DeclarationInput::Branch {
                 operation: InputBranch::Fields,
                 children: vec![
-                    Input::Leaf(InputLeafOp::Value),
-                    Input::Leaf(InputLeafOp::Value),
+                    DeclarationInput::Leaf(InputLeafOp::Value),
+                    DeclarationInput::Leaf(InputLeafOp::Value),
                 ],
             },
         ],
@@ -1591,29 +1594,29 @@ fn field_groups_preserve_empty_and_multiwire_fields_in_both_directions() {
     );
     for owned in [false, true] {
         let fields = vec![
-            Output::Unary {
+            DeclarationOutput::Unary {
                 operation: OutputUnary::Optional,
-                child: Box::new(Output::Leaf(OutputLeafOp::Value)),
+                child: Box::new(DeclarationOutput::Leaf(OutputLeafOp::Value)),
             },
-            Output::Branch {
+            DeclarationOutput::Branch {
                 operation: OutputBranch::Fields,
                 children: vec![],
             },
-            Output::Branch {
+            DeclarationOutput::Branch {
                 operation: OutputBranch::Fields,
                 children: vec![
-                    Output::Leaf(OutputLeafOp::Value),
-                    Output::Leaf(OutputLeafOp::Value),
+                    DeclarationOutput::Leaf(OutputLeafOp::Value),
+                    DeclarationOutput::Leaf(OutputLeafOp::Value),
                 ],
             },
         ];
         let output = if owned {
-            Output::Branch {
+            DeclarationOutput::Branch {
                 operation: OutputBranch::OwnedFields,
                 children: fields,
             }
         } else {
-            Output::Branch {
+            DeclarationOutput::Branch {
                 operation: OutputBranch::Fields,
                 children: fields,
             }
@@ -1772,16 +1775,16 @@ fn result_data_occurrences_are_not_implicitly_error_channels() {
     for (source, recipe) in [
         (
             "pub fn f()->Option<Result<i64,String>>{}",
-            Output::Unary {
+            DeclarationOutput::Unary {
                 operation: OutputUnary::Optional,
-                child: Box::new(Output::Leaf(OutputLeafOp::Value)),
+                child: Box::new(DeclarationOutput::Leaf(OutputLeafOp::Value)),
             },
         ),
         (
             "pub struct R{pub value:Result<i64,String>}pub fn f()->R{}",
-            Output::Branch {
+            DeclarationOutput::Branch {
                 operation: OutputBranch::OwnedFields,
-                children: vec![Output::Leaf(OutputLeafOp::Value)],
+                children: vec![DeclarationOutput::Leaf(OutputLeafOp::Value)],
             },
         ),
     ] {
@@ -1854,9 +1857,9 @@ fn selector_schema_separates_control_from_mutually_exclusive_payloads() {
         &TEST_CODEC,
         "take",
         "v",
-        &Input::selector([
-            Input::constructor("empty", []),
-            Input::constructor("numbered", [Input::Leaf(InputLeafOp::Value)]),
+        &DeclarationInput::selector([
+            DeclarationInput::constructor("empty", []),
+            DeclarationInput::constructor("numbered", [DeclarationInput::Leaf(InputLeafOp::Value)]),
         ]),
         &Extra::default(),
     )
@@ -2006,7 +2009,10 @@ fn constructor_and_output_components_keep_groups_at_every_arity() {
             &TEST_CODEC,
             "f",
             "value",
-            &Input::constructor(name, vec![Input::Leaf(InputLeafOp::Value); count]),
+            &DeclarationInput::constructor(
+                name,
+                vec![DeclarationInput::Leaf(InputLeafOp::Value); count],
+            ),
             &Extra::default(),
         )
         .unwrap();
@@ -2025,10 +2031,10 @@ fn constructor_and_output_components_keep_groups_at_every_arity() {
             &mut flat,
             &TEST_CODEC,
             "f",
-            &Output::combine(vec![
-                Output::getter(
+            &DeclarationOutput::combine(vec![
+                DeclarationOutput::getter(
                     "observe",
-                    Output::Leaf(OutputLeafOp::Value)
+                    DeclarationOutput::Leaf(OutputLeafOp::Value)
                 );
                 count
             ]),
@@ -2049,7 +2055,7 @@ fn malformed_error_channel_is_rejected_before_replacing_output() {
         &mut flat,
         &TEST_CODEC,
         "f",
-        &Output::Leaf(OutputLeafOp::Value),
+        &DeclarationOutput::Leaf(OutputLeafOp::Value),
         &Extra::default(),
     )
     .unwrap();
@@ -2066,7 +2072,7 @@ fn malformed_error_channel_is_rejected_before_replacing_output() {
         &mut flat,
         &TEST_CODEC,
         "f",
-        &Output::Leaf(OutputLeafOp::Value),
+        &DeclarationOutput::Leaf(OutputLeafOp::Value),
         &Extra {
             name: "malformed_binding_failure",
             ..Extra::default()
@@ -2082,9 +2088,9 @@ fn malformed_error_channel_is_rejected_before_replacing_output() {
 #[test]
 fn failed_metadata_construction_preserves_installed_conversions() {
     let mut flat=parse("pub fn empty()->Option<i64>{} pub fn some(v:i64)->Option<i64>{} pub fn f(v:Option<i64>)->Option<i64>{}");
-    let optional = Input::Unary {
+    let optional = DeclarationInput::Unary {
         operation: InputUnary::Optional,
-        child: Box::new(Input::Leaf(InputLeafOp::Value)),
+        child: Box::new(DeclarationInput::Leaf(InputLeafOp::Value)),
     };
     bind_input(
         &mut flat,
@@ -2099,9 +2105,9 @@ fn failed_metadata_construction_preserves_installed_conversions() {
         &mut flat,
         &TEST_CODEC,
         "f",
-        &Output::Unary {
+        &DeclarationOutput::Unary {
             operation: OutputUnary::Optional,
-            child: Box::new(Output::Leaf(OutputLeafOp::Value)),
+            child: Box::new(DeclarationOutput::Leaf(OutputLeafOp::Value)),
         },
         &Extra::default(),
     )
@@ -2129,9 +2135,9 @@ fn failed_metadata_construction_preserves_installed_conversions() {
             "optional metadata rejected",
         ),
         (
-            Input::selector([
-                Input::constructor("empty", []),
-                Input::constructor("some", [Input::Leaf(InputLeafOp::Value)]),
+            DeclarationInput::selector([
+                DeclarationInput::constructor("empty", []),
+                DeclarationInput::constructor("some", [DeclarationInput::Leaf(InputLeafOp::Value)]),
             ]),
             "reject_alternative_metadata",
             "alternative metadata rejected",
@@ -2165,9 +2171,9 @@ fn failed_metadata_construction_preserves_installed_conversions() {
         &mut flat,
         &TEST_CODEC,
         "f",
-        &Output::Unary {
+        &DeclarationOutput::Unary {
             operation: OutputUnary::Optional,
-            child: Box::new(Output::Leaf(OutputLeafOp::Value)),
+            child: Box::new(DeclarationOutput::Leaf(OutputLeafOp::Value)),
         },
         &Extra {
             name: "reject_optional_metadata",
@@ -2205,7 +2211,7 @@ fn preparation_fills_one_fixed_schema_and_emission_needs_no_defaults() {
             &source,
             &TEST_CODEC,
             &source.function("echo").unwrap().params[0].ty.ty,
-            &Input::auto(),
+            &DeclarationInput::auto(),
             &Extra::default(),
         )
         .unwrap();
@@ -2214,15 +2220,15 @@ fn preparation_fills_one_fixed_schema_and_emission_needs_no_defaults() {
             &source,
             &TEST_CODEC,
             &source.function("echo").unwrap().ret.ty,
-            &Output::auto(),
+            &DeclarationOutput::auto(),
             &Extra::default(),
         )
         .unwrap();
     assert!(
-        matches!(&input,Input::Unary { operation: InputUnary::Optional, child } if matches!(child.as_ref(),Input::Branch { operation: InputBranch::Constructor { function, .. }, .. } if function=="make"))
+        matches!(&input,DeclarationInput::Unary { operation: InputUnary::Optional, child } if matches!(child.as_ref(),DeclarationInput::Branch { operation: InputBranch::Constructor { function, .. }, .. } if function=="make"))
     );
     assert!(
-        matches!(&output,Output::Unary { operation: OutputUnary::Optional, child } if matches!(child.as_ref(),Output::Unary { operation: OutputUnary::Getter { function, .. }, .. } if function=="inspect"))
+        matches!(&output,DeclarationOutput::Unary { operation: OutputUnary::Optional, child } if matches!(child.as_ref(),DeclarationOutput::Unary { operation: OutputUnary::Getter { function, .. }, .. } if function=="inspect"))
     );
     assert!(source.function("echo").unwrap().ret.slot.is_none());
     defaults
@@ -2255,19 +2261,19 @@ fn sequence_identity_uses_element_defaults_and_staged_errors_name_the_function()
             &source
                 .resolve_type(&syn::parse_quote!(Vec<Payload>))
                 .unwrap(),
-            &Input::auto(),
+            &DeclarationInput::auto(),
             &Extra::default(),
         )
         .unwrap();
     assert!(
-        matches!(resolved,Input::Unary { operation: InputUnary::Sequence, child } if matches!(&*child,Input::Branch { operation: InputBranch::Constructor { function, .. }, .. } if function=="make"))
+        matches!(resolved,DeclarationInput::Unary { operation: InputUnary::Sequence, child } if matches!(&*child,DeclarationInput::Branch { operation: InputBranch::Constructor { function, .. }, .. } if function=="make"))
     );
     let mut source = source;
     let error = defaults
         .fill(
             &mut source,
             &TEST_CODEC,
-            &fun!(foo).input("x", Input::call("missing")),
+            &fun!(foo).input("x", DeclarationInput::call("missing")),
             &Extra::default(),
         )
         .unwrap_err();
@@ -2277,9 +2283,9 @@ fn sequence_identity_uses_element_defaults_and_staged_errors_name_the_function()
         .fill(
             &mut invalid,
             &TEST_CODEC,
-            &fun!(broken).output(Output::Unary {
+            &fun!(broken).output(DeclarationOutput::Unary {
                 operation: OutputUnary::Optional,
-                child: Box::new(Output::Leaf(OutputLeafOp::Value)),
+                child: Box::new(DeclarationOutput::Leaf(OutputLeafOp::Value)),
             }),
             &Extra::default(),
         )
@@ -2290,7 +2296,7 @@ fn sequence_identity_uses_element_defaults_and_staged_errors_name_the_function()
 #[test]
 fn omitted_typed_fields_drop_all_enclosing_option_and_sequence_wires() {
     let mut model = parse("pub type Hidden=String;pub type Other=u32;pub struct Record{pub optional:Option<Hidden>,pub nested:Option<Vec<Option<Hidden>>>,pub visible:i64}pub fn parts(value:Record)->Record{}pub fn read()->Record{}");
-    let output: Output<OutputRequest, InputRequest> = expand_return!(Record)
+    let output: DeclarationOutput<OutputRequest, InputRequest> = expand_return!(Record)
         .fields_into(
             fields!(parts)
                 .field("optional", expand_return!(Hidden))
@@ -2304,7 +2310,7 @@ fn omitted_typed_fields_drop_all_enclosing_option_and_sequence_wires() {
         1
     );
     assert_eq!(plan.values.len(), 1);
-    let invalid: Output<OutputRequest, InputRequest> = expand_return!(Record)
+    let invalid: DeclarationOutput<OutputRequest, InputRequest> = expand_return!(Record)
         .fields_into(fields!(parts).field("optional", expand_return!(Other)))
         .into();
     assert!(bind_output(&mut model, &TEST_CODEC, "read", &invalid, &Extra::default()).is_err());
@@ -2314,7 +2320,7 @@ fn omitted_typed_fields_drop_all_enclosing_option_and_sequence_wires() {
 fn named_getter_resolution_preserves_the_selected_name_in_the_tree() {
     let model = parse("pub type T=String;pub fn length(value:&T)->i64{}");
     let defaults = Declarations::new(&model, vec![], vec![], vec![]).unwrap();
-    let tree: Output<OutputRequest, InputRequest> =
+    let tree: DeclarationOutput<OutputRequest, InputRequest> =
         expand_return!(T).field(fun!(length).name("size")).into();
     let tree = defaults
         .resolve_output(
@@ -2326,7 +2332,7 @@ fn named_getter_resolution_preserves_the_selected_name_in_the_tree() {
         )
         .unwrap();
     assert!(
-        matches!(tree,Output::Unary { operation: OutputUnary::Named { name }, child: output,  } if name=="size" && matches!(output.as_ref(),Output::Unary { operation: OutputUnary::Getter { function }, child: output,  } if function=="length"&&matches!(output.as_ref(),Output::Leaf(OutputLeafOp::Value))))
+        matches!(tree,DeclarationOutput::Unary { operation: OutputUnary::Named { name }, child: output,  } if name=="size" && matches!(output.as_ref(),DeclarationOutput::Unary { operation: OutputUnary::Getter { function }, child: output,  } if function=="length"&&matches!(output.as_ref(),DeclarationOutput::Leaf(OutputLeafOp::Value))))
     );
 }
 
@@ -2352,17 +2358,17 @@ fn nested_requests_resolve_into_strict_schemas_before_compilation() {
         vec![],
     )
     .unwrap();
-    let requested: Input<InputRequest, OutputRequest> = Input::constructor(
+    let requested: DeclarationInput<InputRequest, OutputRequest> = DeclarationInput::constructor(
         "make",
         [
-            Input::Leaf(InputLeafOp::Value),
-            Input::Unary {
+            DeclarationInput::Leaf(InputLeafOp::Value),
+            DeclarationInput::Unary {
                 operation: InputUnary::Optional,
-                child: Box::new(Input::auto()),
+                child: Box::new(DeclarationInput::auto()),
             },
         ],
     );
-    let resolved: Input = defaults
+    let resolved: DeclarationInput = defaults
         .resolve_input(
             &source,
             &TEST_CODEC,
@@ -2371,7 +2377,7 @@ fn nested_requests_resolve_into_strict_schemas_before_compilation() {
             &Extra::default(),
         )
         .unwrap();
-    let Input::Branch {
+    let DeclarationInput::Branch {
         operation: InputBranch::Constructor { .. },
         children: args,
         ..
@@ -2379,9 +2385,12 @@ fn nested_requests_resolve_into_strict_schemas_before_compilation() {
     else {
         panic!("constructor not resolved")
     };
-    assert!(matches!(&args[0], Input::Leaf(InputLeafOp::Value)));
+    assert!(matches!(
+        &args[0],
+        DeclarationInput::Leaf(InputLeafOp::Value)
+    ));
     assert!(
-        matches!(&args[1],Input::Unary { operation: InputUnary::Optional, child } if matches!(child.as_ref(),Input::Branch { operation: InputBranch::Constructor { function }, children: args,  } if function=="narrow"&&matches!(args.as_slice(),[Input::Leaf(InputLeafOp::Value)])))
+        matches!(&args[1],DeclarationInput::Unary { operation: InputUnary::Optional, child } if matches!(child.as_ref(),DeclarationInput::Branch { operation: InputBranch::Constructor { function }, children: args,  } if function=="narrow"&&matches!(args.as_slice(),[DeclarationInput::Leaf(InputLeafOp::Value)])))
     );
     compile_input(
         &source,
@@ -2405,8 +2414,10 @@ fn completed_subtrees_keep_explicit_choices_when_used_in_preparation() {
         vec![],
     )
     .unwrap();
-    let input: Input = Input::constructor("direct", [Input::Leaf(InputLeafOp::Value)]);
-    let output: Output = Output::getter("observe", Output::Leaf(OutputLeafOp::Value));
+    let input: DeclarationInput =
+        DeclarationInput::constructor("direct", [DeclarationInput::Leaf(InputLeafOp::Value)]);
+    let output: DeclarationOutput =
+        DeclarationOutput::getter("observe", DeclarationOutput::Leaf(OutputLeafOp::Value));
     let decl = fun!(run)
         .input("value", input.into_preparation())
         .output(output.into_preparation());
@@ -2425,7 +2436,7 @@ fn completed_subtrees_keep_explicit_choices_when_used_in_preparation() {
             &source,
             &TEST_CODEC,
             &run.params[1].ty.ty,
-            &Input::auto(),
+            &DeclarationInput::auto(),
             &Extra::default(),
         )
         .unwrap();
@@ -2439,13 +2450,13 @@ fn completed_subtrees_keep_explicit_choices_when_used_in_preparation() {
         )
         .unwrap();
     assert!(
-        matches!(&input,Input::Branch { operation: InputBranch::Constructor { function }, children: args,  } if function=="direct"&&matches!(args.as_slice(),[Input::Leaf(InputLeafOp::Value)]))
+        matches!(&input,DeclarationInput::Branch { operation: InputBranch::Constructor { function }, children: args,  } if function=="direct"&&matches!(args.as_slice(),[DeclarationInput::Leaf(InputLeafOp::Value)]))
     );
     assert!(
-        matches!(&count,Input::Branch { operation: InputBranch::Constructor { function, .. }, .. } if function=="narrow")
+        matches!(&count,DeclarationInput::Branch { operation: InputBranch::Constructor { function, .. }, .. } if function=="narrow")
     );
     assert!(
-        matches!(&output,Output::Unary { operation: OutputUnary::Getter { function }, child: output,  } if function=="observe"&&matches!(output.as_ref(),Output::Leaf(OutputLeafOp::Value)))
+        matches!(&output,DeclarationOutput::Unary { operation: OutputUnary::Getter { function }, child: output,  } if function=="observe"&&matches!(output.as_ref(),DeclarationOutput::Leaf(OutputLeafOp::Value)))
     );
     let mut source = source;
     defaults
@@ -2463,16 +2474,16 @@ fn result_resolution_consumes_nested_requests_and_preserves_error_mapper() {
         vec![],
     )
     .unwrap();
-    let request = Output::Unary {
+    let request = DeclarationOutput::Unary {
         operation: OutputUnary::Result {
             error: Some("message".into()),
         },
-        child: Box::new(Output::Unary {
+        child: Box::new(DeclarationOutput::Unary {
             operation: OutputUnary::Optional,
-            child: Box::new(Output::auto()),
+            child: Box::new(DeclarationOutput::auto()),
         }),
     };
-    let resolved: Output = defaults
+    let resolved: DeclarationOutput = defaults
         .resolve_output(
             &source,
             &TEST_CODEC,
@@ -2481,7 +2492,7 @@ fn result_resolution_consumes_nested_requests_and_preserves_error_mapper() {
             &Extra::default(),
         )
         .unwrap();
-    let Output::Unary {
+    let DeclarationOutput::Unary {
         operation: OutputUnary::Result { error },
         child: ok,
     } = &resolved
@@ -2490,7 +2501,7 @@ fn result_resolution_consumes_nested_requests_and_preserves_error_mapper() {
     };
     assert_eq!(error.as_deref(), Some("message"));
     assert!(
-        matches!(ok.as_ref(),Output::Unary { operation: OutputUnary::Optional, child } if matches!(child.as_ref(),Output::Unary { operation: OutputUnary::Getter { function }, child: output,  } if function=="sign" && matches!(output.as_ref(),Output::Leaf(OutputLeafOp::Value))))
+        matches!(ok.as_ref(),DeclarationOutput::Unary { operation: OutputUnary::Optional, child } if matches!(child.as_ref(),DeclarationOutput::Unary { operation: OutputUnary::Getter { function }, child: output,  } if function=="sign" && matches!(output.as_ref(),DeclarationOutput::Leaf(OutputLeafOp::Value))))
     );
     compile_output(&source, &TEST_CODEC, "run", &resolved, &Extra::default()).unwrap();
     let mut source = source;
@@ -2499,9 +2510,9 @@ fn result_resolution_consumes_nested_requests_and_preserves_error_mapper() {
             &mut source,
             &TEST_CODEC,
             &fun!(run)
-                .output(Output::Unary {
+                .output(DeclarationOutput::Unary {
                     operation: OutputUnary::Optional,
-                    child: Box::new(Output::auto()),
+                    child: Box::new(DeclarationOutput::auto()),
                 })
                 .on_error(fun!(message)),
             &Extra::default(),
@@ -2523,19 +2534,19 @@ fn result_resolution_consumes_nested_requests_and_preserves_error_mapper() {
 fn resolved_omissions_and_sequence_policies_survive_preparation_round_trip() {
     let source = parse("pub type Hidden=String;pub struct R{pub hidden:Option<Vec<Option<Hidden>>>,pub rows:Vec<i64>}pub fn read()->R{}");
     let defaults = Declarations::new(&source, vec![], vec![], vec![]).unwrap();
-    let tree = Output::Branch {
+    let tree = DeclarationOutput::Branch {
         operation: OutputBranch::OwnedFields,
         children: vec![
-            Output::for_type(
+            DeclarationOutput::for_type(
                 syn::parse_quote!(Hidden),
-                Output::Leaf(OutputLeafOp::Discard),
+                DeclarationOutput::Leaf(OutputLeafOp::Discard),
             ),
-            Output::Unary {
+            DeclarationOutput::Unary {
                 operation: OutputUnary::Sequence {
                     delivery: SequenceDelivery::Callback,
                     mode: Some(ProjectionMode::Owned),
                 },
-                child: Box::new(Output::auto()),
+                child: Box::new(DeclarationOutput::auto()),
             },
         ],
     };
@@ -2549,7 +2560,7 @@ fn resolved_omissions_and_sequence_policies_survive_preparation_round_trip() {
         )
         .unwrap();
     assert!(
-        matches!(&resolved,Output::Branch { operation: OutputBranch::OwnedFields, children: fields } if matches!(fields.as_slice(),[Output::Leaf(OutputLeafOp::Discard),Output::Unary { operation: OutputUnary::Sequence { delivery: SequenceDelivery::Callback, mode: Some(ProjectionMode::Owned), .. }, .. }]))
+        matches!(&resolved,DeclarationOutput::Branch { operation: OutputBranch::OwnedFields, children: fields } if matches!(fields.as_slice(),[DeclarationOutput::Leaf(OutputLeafOp::Discard),DeclarationOutput::Unary { operation: OutputUnary::Sequence { delivery: SequenceDelivery::Callback, mode: Some(ProjectionMode::Owned), .. }, .. }]))
     );
     let round_trip = defaults
         .resolve_output(
@@ -2567,14 +2578,14 @@ fn resolved_omissions_and_sequence_policies_survive_preparation_round_trip() {
 fn bulk_normalization_preserves_callback_boundaries_inside_structural_nodes() {
     let flat = parse("pub fn values()->Vec<Vec<i64>>{}");
     let defaults = Declarations::new(&flat, vec![], vec![], vec![]).unwrap();
-    let callback = Output::Unary {
+    let callback = DeclarationOutput::Unary {
         operation: OutputUnary::Sequence {
             delivery: SequenceDelivery::Callback,
             mode: None,
         },
-        child: Box::new(Output::Leaf(OutputLeafOp::Value).bulk()),
+        child: Box::new(DeclarationOutput::Leaf(OutputLeafOp::Value).bulk()),
     };
-    let recipe = Output::Unary {
+    let recipe = DeclarationOutput::Unary {
         operation: OutputUnary::Sequence {
             delivery: SequenceDelivery::Value,
             mode: None,
@@ -2591,21 +2602,21 @@ fn bulk_normalization_preserves_callback_boundaries_inside_structural_nodes() {
         )
         .unwrap();
     assert!(
-        matches!(resolved,Output::Unary { operation: OutputUnary::Sequence { .. }, child: element, .. } if matches!(*element,Output::Unary { operation: OutputUnary::Sequence { delivery: SequenceDelivery::Callback, .. }, .. }))
+        matches!(resolved,DeclarationOutput::Unary { operation: OutputUnary::Sequence { .. }, child: element, .. } if matches!(*element,DeclarationOutput::Unary { operation: OutputUnary::Sequence { delivery: SequenceDelivery::Callback, .. }, .. }))
     );
 }
 
 #[test]
 fn unsupported_bulk_is_diagnosed_before_adapter_lowering() {
     let flat = parse("pub fn values()->Option<Vec<i64>>{}");
-    let recipe = Output::Unary {
+    let recipe = DeclarationOutput::Unary {
         operation: OutputUnary::Optional,
-        child: Box::new(Output::Unary {
+        child: Box::new(DeclarationOutput::Unary {
             operation: OutputUnary::Sequence {
                 delivery: SequenceDelivery::Callback,
                 mode: None,
             },
-            child: Box::new(Output::Leaf(OutputLeafOp::Value)),
+            child: Box::new(DeclarationOutput::Leaf(OutputLeafOp::Value)),
         }),
     }
     .bulk();
@@ -2629,12 +2640,12 @@ fn optional_fields_have_one_continuation_and_linear_generated_code_size() {
         let flat = parse(&format!(
             "pub struct Wide{{{fields}}} pub fn consume(value:Wide){{}}"
         ));
-        let recipe = Input::Branch {
+        let recipe = DeclarationInput::Branch {
             operation: InputBranch::Fields,
             children: (0..width)
-                .map(|_| Input::Unary {
+                .map(|_| DeclarationInput::Unary {
                     operation: InputUnary::Optional,
-                    child: Box::new(Input::Leaf(InputLeafOp::Value)),
+                    child: Box::new(DeclarationInput::Leaf(InputLeafOp::Value)),
                 })
                 .collect(),
         };
@@ -2659,11 +2670,11 @@ fn optional_fields_have_one_continuation_and_linear_generated_code_size() {
 #[test]
 fn optional_temporary_borrows_survive_through_the_next_parameter_and_source_call() {
     let flat = parse("pub fn combine(first:Option<&str>,second:Option<&str>)->usize{}");
-    let recipe = Input::Unary {
+    let recipe = DeclarationInput::Unary {
         operation: InputUnary::Optional,
-        child: Box::new(Input::Unary {
+        child: Box::new(DeclarationInput::Unary {
             operation: InputUnary::Temporary,
-            child: Box::new(Input::Leaf(InputLeafOp::Value)),
+            child: Box::new(DeclarationInput::Leaf(InputLeafOp::Value)),
         }),
     };
     let first = compile_input(

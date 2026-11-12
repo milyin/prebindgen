@@ -24,18 +24,20 @@ impl Operations for OutputOperations {
 }
 /// Input syntax before adapter lowering.
 ///
-/// Preparation uses `Input<InputRequest, OutputRequest>`. Plain `Input` uses
-/// `Infallible` for both directions, including reverse-direction arrow domains.
+/// Preparation uses `DeclarationInput<InputRequest, OutputRequest>`.
+/// Plain `DeclarationInput` uses `Infallible` for both directions, including
+/// reverse-direction arrow domains.
 /// ```compile_fail
-/// use prebindgen_declarations::{DeclarationInput as Input, frontend::InputBranch, InputRequest};
-/// let resolved: Input = Input::Branch {
+/// use prebindgen_declarations::{DeclarationInput, frontend::InputBranch, InputRequest};
+/// let resolved: DeclarationInput = DeclarationInput::Branch {
 ///     operation: InputBranch::Constructor { function: "make".into() },
-///     children: vec![Input::Request(InputRequest::Auto)],
+///     children: vec![DeclarationInput::Request(InputRequest::Auto)],
 /// };
 /// ```
-pub type Input<P = Infallible, Q = Infallible> = InputNode<InputOperations, OutputOperations, P, Q>;
+pub type DeclarationInput<P = Infallible, Q = Infallible> =
+    InputNode<InputOperations, OutputOperations, P, Q>;
 /// Output declaration tree; both request parameters must be uninhabited after resolution.
-pub type Output<P = Infallible, Q = Infallible> =
+pub type DeclarationOutput<P = Infallible, Q = Infallible> =
     OutputNode<InputOperations, OutputOperations, Q, P>;
 
 /// Terminal input operations.
@@ -165,7 +167,7 @@ pub enum OutputBranch {
     Arguments,
 }
 
-impl<P, Q> Output<P, Q> {
+impl<P, Q> DeclarationOutput<P, Q> {
     /// Group a callable's domain in source parameter order.
     pub fn arguments(children: Vec<Self>) -> Self {
         if children.is_empty() {
@@ -190,7 +192,7 @@ impl<P, Q> Output<P, Q> {
     }
 }
 
-impl<P, Q> Input<P, Q> {
+impl<P, Q> DeclarationInput<P, Q> {
     /// Describe source variants, each with an ordinary branch of field conversions.
     pub fn enum_variants(variants: Vec<Vec<Self>>, value: bool) -> Self {
         Self::Branch {
@@ -216,7 +218,7 @@ impl<P, Q> Input<P, Q> {
     }
 }
 
-impl<P, Q> Output<P, Q> {
+impl<P, Q> DeclarationOutput<P, Q> {
     /// Describe source variants, each with an ordinary branch of field conversions.
     pub fn enum_variants(
         variants: Vec<Vec<Self>>,
@@ -246,7 +248,7 @@ impl<P, Q> Output<P, Q> {
     }
 }
 
-impl<P, Q> Input<P, Q> {
+impl<P, Q> DeclarationInput<P, Q> {
     /// Convert each incoming collection element using the supplied subtree.
     pub fn sequence(element: Self) -> Self {
         Self::Unary {
@@ -256,7 +258,7 @@ impl<P, Q> Input<P, Q> {
     }
 }
 
-impl<P, Q> Output<P, Q> {
+impl<P, Q> DeclarationOutput<P, Q> {
     /// Attach the lifetime of produced foreign owners to this callable argument.
     pub fn callback_argument(self, ownership: crate::CallbackArgumentOwnership) -> Self {
         Self::Unary {

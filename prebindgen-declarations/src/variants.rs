@@ -49,13 +49,17 @@ impl Declarations {
         codec: &C,
         ty: &Type,
         extra: &C::Extra,
-        entries: &BTreeMap<String, BTreeMap<String, Input<InputRequest, OutputRequest>>>,
+        entries: &BTreeMap<String, BTreeMap<String, DeclarationInput<InputRequest, OutputRequest>>>,
         value: bool,
         stack: &mut Vec<String>,
     ) -> Result<crate::ResolvedInput<C>> {
         let source = flat.payload_enum(ty)?;
         validate_overrides(source, entries)?;
-        let default = if value { Input::value() } else { Input::auto() };
+        let default = if value {
+            DeclarationInput::value()
+        } else {
+            DeclarationInput::auto()
+        };
         let variants = source
             .variants
             .iter()
@@ -87,7 +91,10 @@ impl Declarations {
         codec: &C,
         ty: &Type,
         extra: &C::Extra,
-        entries: &BTreeMap<String, BTreeMap<String, Output<OutputRequest, InputRequest>>>,
+        entries: &BTreeMap<
+            String,
+            BTreeMap<String, DeclarationOutput<OutputRequest, InputRequest>>,
+        >,
         value: bool,
         stack: &mut Vec<String>,
         getter: bool,
@@ -95,9 +102,9 @@ impl Declarations {
         let source = flat.payload_enum(ty)?;
         validate_overrides(source, entries)?;
         let default = if value {
-            Output::value()
+            DeclarationOutput::value()
         } else {
-            Output::auto()
+            DeclarationOutput::auto()
         };
         let variants = source
             .variants

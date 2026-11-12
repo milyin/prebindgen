@@ -556,7 +556,7 @@ pub trait DeclarationCodec: Codec {
         &self,
         _cx: &mut Resolve<'_, Self>,
         _ty: &Type,
-        _tree: &Input<InputRequest, OutputRequest>,
+        _tree: &DeclarationInput<InputRequest, OutputRequest>,
     ) -> Result<Option<ResolvedInput<Self>>>
     where
         Self: Sized,
@@ -568,7 +568,7 @@ pub trait DeclarationCodec: Codec {
         &self,
         _cx: &mut Resolve<'_, Self>,
         _ty: &Type,
-        _tree: &Output<OutputRequest, InputRequest>,
+        _tree: &DeclarationOutput<OutputRequest, InputRequest>,
     ) -> Result<Option<ResolvedOutput<Self>>>
     where
         Self: Sized,
