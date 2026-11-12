@@ -560,7 +560,7 @@ binding supplied by the generator, and `source_result_expr()` marks the source
 return-value binding carried by output requests. Custom converters need neither
 stored plans nor template support.
 
-`prebindgen-declarations` prepares slots. Its `PlanBindings<Wire, Context>` alias is
+`prebindgen-declarations` prepares slots. Its `PlanBindings<WireType, Context>` alias is
 `Flat<prebindgen_conversions::PlanSchema<W, C>>`. `PlanSchema` selects the standard
 input/output plans and unit declaration metadata for simple codecs. `Codec::Context` selects the context
 type for the prepared slots; it defaults to `()` in the alias for
@@ -2131,8 +2131,8 @@ Custom converters implement `Conversion` for code emission and the applicable
 `InputConversion` or `OutputConversion` interface for their description.
 Custom codecs return `CodecInputPlan<Self>` and `CodecOutputPlan<Self>`, declare the
 `Chain` and `Branch` metadata types and implement their hooks. For the shared
-plans, `PlanBindings<Wire, Context, Chain, Branch>`, `InputPlan<Wire, Context, Chain, Branch>` and
-`OutputPlan<Wire, Context, Chain, Branch>` default all parameters after `W` to `()`; `C` here is
+plans, `PlanBindings<WireType, Context, Chain, Branch>`, `InputPlan<WireType, Context, Chain, Branch>` and
+`OutputPlan<WireType, Context, Chain, Branch>` default all parameters after `W` to `()`; `C` here is
 the emission context, `N` is chain metadata and `B` is branch metadata. Shared value and boxed helpers create terminal
 bundles without inventing parent metadata.
 

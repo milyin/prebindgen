@@ -523,8 +523,8 @@ pub use operations::*;
 ///     flat.function_mut("foo").unwrap().params[0].ty.slot = Some(DeclInput::Leaf(prebindgen_declarations::frontend::DeclInputLeafOp::Value));
 /// }
 /// ```
-pub type PlanBindings<Wire, Context = (), Chain = (), Branch = ()> =
-    Flat<prebindgen_conversions::PlanSchema<Wire, Context, Chain, Branch>>;
+pub type PlanBindings<WireType, Context = (), Chain = (), Branch = ()> =
+    Flat<prebindgen_conversions::PlanSchema<WireType, Context, Chain, Branch>>;
 
 /// Compile a request-free description for one named source parameter.
 /// The model keeps its fixed schema; this returns a converter without modifying its slot.

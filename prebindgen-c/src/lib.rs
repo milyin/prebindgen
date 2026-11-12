@@ -61,10 +61,10 @@ use prebindgen_flat::Wire as GenericWire;
 pub use sequence::CSequence;
 mod emission;
 pub use emission::CContext;
-type CInputPlan<Wire> =
-    prebindgen_conversions::InputPlan<Wire, CContext, crate::CChain, crate::CBranch>;
-type COutputPlan<Wire> =
-    prebindgen_conversions::OutputPlan<Wire, CContext, crate::CChain, crate::CBranch>;
+type CInputPlan<WireType> =
+    prebindgen_conversions::InputPlan<WireType, CContext, crate::CChain, crate::CBranch>;
+type COutputPlan<WireType> =
+    prebindgen_conversions::OutputPlan<WireType, CContext, crate::CChain, crate::CBranch>;
 /// Prepared C parameter conversion.
 pub type CInputConverter = CInputPlan<CWire>;
 /// Prepared C result conversion.

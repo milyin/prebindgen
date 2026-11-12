@@ -63,10 +63,10 @@ mod handles;
 mod names;
 mod parameter_names;
 pub use emission::JniContext;
-type JniInputPlan<Wire> =
-    prebindgen_conversions::InputPlan<Wire, JniContext, crate::JniChain, crate::JniBranch>;
-type JniOutputPlan<Wire> =
-    prebindgen_conversions::OutputPlan<Wire, JniContext, crate::JniChain, crate::JniBranch>;
+type JniInputPlan<WireType> =
+    prebindgen_conversions::InputPlan<WireType, JniContext, crate::JniChain, crate::JniBranch>;
+type JniOutputPlan<WireType> =
+    prebindgen_conversions::OutputPlan<WireType, JniContext, crate::JniChain, crate::JniBranch>;
 mod converters;
 pub use converters::{JniInputConverter, JniOutputConverter};
 mod kotlin;
