@@ -13,9 +13,9 @@ pub struct InputArrow<'a, C: Codec + ?Sized> {
     /// Callable representation and invocation policy.
     pub operation: &'a CallbackOperation,
     /// Reverse-direction argument tree.
-    pub domain: &'a Output,
+    pub domain: &'a ResolvedOutput<C>,
     /// Same-direction result tree.
-    pub codomain: &'a Input,
+    pub codomain: &'a ResolvedInput<C>,
     /// Occurrence settings owned by the resolved model.
     pub extra: &'a C::Extra,
     /// Incoming foreign callable binding.

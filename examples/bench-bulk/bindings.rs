@@ -1,5 +1,5 @@
-use prebindgen_declarations::{InputBranch, InputLeafOp, InputUnary};
-use prebindgen_declarations::{callback, convert, expand_param, expand_return, fun, Input};
+use prebindgen_declarations::{frontend::InputBranch, frontend::InputLeafOp, frontend::InputUnary};
+use prebindgen_declarations::{callback, convert, expand_param, expand_return, fun, DeclarationInput as Input};
 use prebindgen_jni::{data_class, package, ptr_class, JniGen};
 fn main() {
     let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());

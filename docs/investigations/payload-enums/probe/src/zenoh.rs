@@ -1,6 +1,6 @@
 //! Source-shape checks and controls for Zenoh's nested expansion requirements.
 use super::{items, rejected};
-use prebindgen_declarations::{expand_return, fun, Output};
+use prebindgen_declarations::{expand_return, fun, DeclarationOutput as Output};
 use prebindgen_flat::{Flat, Result};
 use prebindgen_jni::{callback, data_class, package, JniGen};
 use quote::ToTokens;

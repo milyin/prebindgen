@@ -604,7 +604,9 @@ mod tests {
     }
     #[test]
     fn borrowed_records_and_sequences_cannot_lend_owned_getter_temporaries() {
-        use prebindgen_declarations::{fields, Output, ProjectionMode, SequenceDelivery};
+        use prebindgen_declarations::{
+            fields, DeclarationOutput as Output, ProjectionMode, SequenceDelivery,
+        };
         let source="pub type Owner=String; pub struct Info{pub inner:Inner} pub type Inner=String; pub fn make()->Owner{} pub fn borrow(v:&Owner)->&Owner{} pub fn info(o:&Owner)->Info{} pub fn name(v:&Inner)->&str{} pub fn list(o:&Owner)->Vec<Inner>{}";
         for function in ["make", "borrow"] {
             let fields = fields!(info).field("inner", expand_return!(Inner).field(fun!(name)));

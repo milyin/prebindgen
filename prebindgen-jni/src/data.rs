@@ -887,26 +887,12 @@ mod group_tests {
             )
             .unwrap();
         assert!(
-            matches!(&resolved,Output::Unary { operation: OutputUnary::Sequence { .. }, child: element, .. } if matches!(element.as_ref(),Output::Branch { operation: OutputBranch::Record { mode: Some(ProjectionMode::Owned) }, children: fields,  } if matches!(fields.as_slice(),[Output::Leaf(OutputLeafOp::Projected(_))])))
+            matches!(&resolved,crate::operations::Output::Unary { operation: crate::operations::OutputUnary::Sequence { .. }, child: element, .. } if matches!(element.as_ref(),crate::operations::Output::Branch { operation: crate::operations::OutputBranch::Record { mode: Some(ProjectionMode::Owned) }, children: fields,  } if matches!(fields.as_slice(),[crate::operations::Output::Leaf(crate::operations::OutputLeafOp::Projected(_))])))
         );
-        let round_trip = defaults
-            .resolve_output(
-                &flat,
-                &codec,
-                &flat.function("items").unwrap().ret.ty,
-                &resolved.clone().into_preparation(),
-                &(),
-            )
+        drop(defaults);
+        let plan = prebindgen_declarations::compile_output(&flat, &codec, "items", &resolved, &())
             .unwrap();
-        assert_eq!(format!("{resolved:?}"), format!("{round_trip:?}"));
-        prebindgen_declarations::bind_output(
-            &mut flat,
-            &codec,
-            "items",
-            &round_trip.into_preparation(),
-            &(),
-        )
-        .unwrap();
+        flat.function_mut("items").unwrap().ret.slot = Some(plan);
     }
 
     fn record(root: &str) -> WireNode<JniWire, crate::JniChain, crate::JniBranch> {

@@ -4,9 +4,11 @@
 //! package prefix and native initialization.
 //! Declaration processing fills occurrence slots before wrappers are generated.
 #![warn(missing_docs)]
-use prebindgen_declarations::{InputBranch, InputLeafOp, OutputBranch, OutputLeafOp};
+use prebindgen_declarations::{
+    frontend::InputBranch, frontend::InputLeafOp, frontend::OutputBranch, frontend::OutputLeafOp,
+};
 #[cfg(test)]
-use prebindgen_declarations::{InputUnary, OutputUnary};
+use prebindgen_declarations::{frontend::InputUnary, frontend::OutputUnary};
 use prebindgen_flat::{type_key, Conversion, Flat, OutputConversion, Result, WireKind};
 
 pub use prebindgen_declarations::{
@@ -83,9 +85,9 @@ pub use kotlin::{
 /// wire type belongs to a different adapter:
 /// ```compile_fail
 /// use prebindgen_jni::Bindings;
-/// use prebindgen_declarations::{bind_input, Input};
+/// use prebindgen_declarations::{bind_input, DeclarationInput as Input};
 /// fn wrong(flat: &mut Bindings) {
-///     bind_input(flat, &prebindgen_c::CCodec::raw(), "echo", "x", &Input::Leaf(prebindgen_declarations::InputLeafOp::Value), &()).unwrap();
+///     bind_input(flat, &prebindgen_c::CCodec::raw(), "echo", "x", &Input::Leaf(prebindgen_declarations::frontend::InputLeafOp::Value), &()).unwrap();
 /// }
 /// ```
 /// A completed JNI model also cannot be passed to the C generator:
@@ -100,8 +102,9 @@ use quote::{format_ident, quote};
 use std::collections::{BTreeMap, BTreeSet};
 
 pub use prebindgen_declarations::{
-    expand_param, expand_return, fields, fun, ErrorDecl, ExpandDecl, ExpandParamDecl,
-    ExpandReturnDecl, FieldsDecl, FunctionDecl, Input, InputRequest, Output, OutputRequest,
+    expand_param, expand_return, fields, fun, DeclarationInput as Input,
+    DeclarationOutput as Output, ErrorDecl, ExpandDecl, ExpandParamDecl, ExpandReturnDecl,
+    FieldsDecl, FunctionDecl, InputRequest, OutputRequest,
 };
 /// A Kotlin owning handle class for one nonzero-sized source type.
 ///
@@ -269,8 +272,8 @@ pub struct JniGenBuilder {
     source: Option<std::path::PathBuf>,
     items: Option<Vec<(syn::Item, prebindgen::SourceLocation)>>,
     conversions: Vec<prebindgen_declarations::ConvertDecl>,
-    inputs: Vec<prebindgen_declarations::Input<InputRequest, OutputRequest>>,
-    outputs: Vec<prebindgen_declarations::Output<OutputRequest, InputRequest>>,
+    inputs: Vec<prebindgen_declarations::DeclarationInput<InputRequest, OutputRequest>>,
+    outputs: Vec<prebindgen_declarations::DeclarationOutput<OutputRequest, InputRequest>>,
     error_mappers: Vec<(syn::Type, String)>,
     prefix: String,
     init: String,
@@ -313,7 +316,7 @@ impl JniGenBuilder {
     ///
     /// ```
     /// use prebindgen_jni::{Bindings, JniGen, JniCodec, fun, package};
-    /// use prebindgen_declarations::{bind_input, bind_output, Input, Output};
+    /// use prebindgen_declarations::{bind_input, bind_output, DeclarationInput as Input, DeclarationOutput as Output};
     /// let source = syn::parse_file("pub fn echo(x: i64) -> i64 { x }")?;
     /// let flat = Bindings::parse(
     ///     source.items.into_iter().map(|item| (item, Default::default())),
@@ -321,8 +324,8 @@ impl JniGenBuilder {
     /// let generated = JniGen::builder().flat(flat)
     ///     .set_package_prefix("example")
     ///     .configure(|flat| {
-    ///         bind_input(flat, &JniCodec::raw(), "echo", "x", &Input::Leaf(prebindgen_declarations::InputLeafOp::Value), &())?;
-    ///         bind_output(flat, &JniCodec::raw(), "echo", &Output::Leaf(prebindgen_declarations::OutputLeafOp::Value), &())
+    ///         bind_input(flat, &JniCodec::raw(), "echo", "x", &Input::Leaf(prebindgen_declarations::frontend::InputLeafOp::Value), &())?;
+    ///         bind_output(flat, &JniCodec::raw(), "echo", &Output::Leaf(prebindgen_declarations::frontend::OutputLeafOp::Value), &())
     ///     })
     ///     .package(package!().fun(fun!(echo)))
     ///     .build()?;
@@ -379,7 +382,7 @@ impl JniGenBuilder {
     /// type and direction are rejected during build.
     pub fn input(
         mut self,
-        tree: impl Into<prebindgen_declarations::Input<InputRequest, OutputRequest>>,
+        tree: impl Into<prebindgen_declarations::DeclarationInput<InputRequest, OutputRequest>>,
     ) -> Self {
         self.inputs.push(tree.into());
         self
@@ -387,7 +390,7 @@ impl JniGenBuilder {
     /// Register a type-wide direct output conversion tree.
     pub fn output(
         mut self,
-        tree: impl Into<prebindgen_declarations::Output<OutputRequest, InputRequest>>,
+        tree: impl Into<prebindgen_declarations::DeclarationOutput<OutputRequest, InputRequest>>,
     ) -> Self {
         self.outputs.push(tree.into());
         self
@@ -630,7 +633,7 @@ impl JniGenBuilder {
         errors::resolve(&mut flat, &codec, &defaults, &declarations)?;
         for ty in callback_types {
             let recipe = defaults.resolve_input(&flat, &codec, &ty, &Input::auto(), &())?;
-            let Input::Arrow {
+            let operations::Input::Arrow {
                 operation: configuration,
                 ..
             } = &recipe
@@ -792,10 +795,68 @@ impl JniCodec {
     }
 }
 impl Codec for JniCodec {
+    type InputOperations = operations::InputOperations;
+    type OutputOperations = operations::OutputOperations;
+    type CompileState = compilation::State;
+
+    fn compile_input_tree(
+        &self,
+        cx: &prebindgen_declarations::Compiler<'_, Self>,
+        ty: &syn::Type,
+        tree: &operations::Input,
+        extra: &Self::Extra,
+        active: &prebindgen_declarations::Condition,
+        names: Option<(&syn::Ident, &syn::Ident)>,
+    ) -> Result<prebindgen_declarations::CodecInput<Self>> {
+        compilation::LanguageCompiler { cx }.input_named(ty, tree, extra, active, names)
+    }
+    fn compile_output_tree(
+        &self,
+        cx: &prebindgen_declarations::Compiler<'_, Self>,
+        ty: &syn::Type,
+        tree: &operations::Output,
+        extra: &Self::Extra,
+        value: TokenStream,
+        borrowed: bool,
+        wire: Option<&syn::Ident>,
+    ) -> Result<prebindgen_declarations::CodecOutput<Self>> {
+        compilation::LanguageCompiler { cx }.output_named(ty, tree, extra, value, borrowed, wire)
+    }
+    fn compile_output_root(
+        &self,
+        cx: &prebindgen_declarations::Compiler<'_, Self>,
+        ty: &syn::Type,
+        tree: &operations::Output,
+        extra: &Self::Extra,
+        value: TokenStream,
+        borrowed: bool,
+        reference_return: bool,
+    ) -> Result<prebindgen_declarations::CodecOutput<Self>> {
+        compilation::LanguageCompiler { cx }.output_root(
+            ty,
+            tree,
+            extra,
+            value,
+            borrowed,
+            reference_return,
+        )
+    }
+    fn compile_output_return(
+        &self,
+        cx: &prebindgen_declarations::Compiler<'_, Self>,
+        ty: &syn::Type,
+        tree: &operations::Output,
+        extra: &Self::Extra,
+        value: TokenStream,
+        borrowed: bool,
+    ) -> Result<prebindgen_declarations::CodecOutput<Self>> {
+        compilation::LanguageCompiler { cx }.output_return(ty, tree, extra, value, borrowed)
+    }
+
     fn compile_declarations(&self, flat: &mut Bindings, _: &()) -> Result<()> {
         errors::compile(flat, self)?;
         for recipe in std::mem::take(&mut flat.metadata.callback_recipes) {
-            let Input::Arrow { operation, .. } = &recipe else {
+            let operations::Input::Arrow { operation, .. } = &recipe else {
                 return Err("callback declaration requires an arrow".into());
             };
             let plan = prebindgen_declarations::compile_input_value(
@@ -1231,137 +1292,7 @@ impl Codec for JniCodec {
         crate::group::result_packet(&plan.outcomes.success, &plan.values)?;
         Ok(())
     }
-    fn expand_input(
-        &self,
-        flat: &Flat<JniSchema>,
-        ty: &syn::Type,
-        tree: &Input<InputRequest, OutputRequest>,
-        _: &(),
-    ) -> Result<Option<Input<InputRequest, OutputRequest>>> {
-        if !self.declared {
-            return Ok(None);
-        }
 
-        if !matches!(tree, Input::Leaf(InputLeafOp::Value)) {
-            return Ok(None);
-        }
-        if flat.payload_enums.contains_key(&type_key(ty))
-            && flat
-                .type_info(ty)
-                .ok()
-                .and_then(|t| t.metadata.class.as_ref())
-                .is_none()
-        {
-            return Err(format!(
-                "ordinary payload enum `{}` requires sealed_class! or an explicit field expansion",
-                type_key(ty)
-            ));
-        }
-        if flat
-            .type_info(ty)
-            .ok()
-            .and_then(|t| t.metadata.class.as_ref())
-            .is_some_and(|c| c.kind == ClassKind::Sealed)
-        {
-            return Ok(Some(Input::enum_variants(
-                flat.payload_enum(ty)?
-                    .variants
-                    .iter()
-                    .map(|v| vec![Input::value(); v.fields.len()])
-                    .collect(),
-                true,
-            )));
-        }
-        let Some(record) = Self::source_record(flat, ty)? else {
-            return Ok(None);
-        };
-        if record.has_handles {
-            return Err(format!(
-                "data class `{}` contains handles and cannot be passed into Rust as a record",
-                record.fqn()
-            ));
-        }
-        Ok(Some(Input::Branch {
-            operation: InputBranch::Record,
-            children: vec![Input::value(); flat.record(ty)?.fields.len()],
-        }))
-    }
-    fn expand_output(
-        &self,
-        flat: &Flat<JniSchema>,
-        ty: &syn::Type,
-        tree: &Output<OutputRequest, InputRequest>,
-        _: &(),
-    ) -> Result<Option<Output<OutputRequest, InputRequest>>> {
-        if !self.declared {
-            return Ok(None);
-        }
-
-        let policy = match tree {
-            Output::Leaf(OutputLeafOp::Value) => None,
-            Output::Leaf(OutputLeafOp::Projected(p)) => Some(p.clone()),
-            _ => return Ok(None),
-        };
-        if flat.payload_enums.contains_key(&type_key(ty))
-            && flat
-                .type_info(ty)
-                .ok()
-                .and_then(|t| t.metadata.class.as_ref())
-                .is_none()
-        {
-            return Err(format!(
-                "ordinary payload enum `{}` requires sealed_class! or an explicit field expansion",
-                type_key(ty)
-            ));
-        }
-        if flat
-            .type_info(ty)
-            .ok()
-            .and_then(|t| t.metadata.class.as_ref())
-            .is_some_and(|c| c.kind == ClassKind::Sealed)
-        {
-            return Ok(Some(Output::enum_variants(
-                flat.payload_enum(ty)?
-                    .variants
-                    .iter()
-                    .map(|v| vec![Output::value(); v.fields.len()])
-                    .collect(),
-                true,
-                policy.as_ref().map(|p| p.mode),
-            )));
-        }
-        let Some(record) = Self::source_record(flat, ty)? else {
-            return Ok(None);
-        };
-        let fields = &flat.record(ty)?.fields;
-        for name in policy.iter().flat_map(|p| p.fields.keys()) {
-            if !fields
-                .iter()
-                .any(|f| f.name.to_string().trim_start_matches("r#") == name)
-            {
-                return Err(format!(
-                    "data class `{}`: unknown projection field `{name}`",
-                    record.fqn()
-                ));
-            }
-        }
-        let inherited = policy.as_ref().map(Projection::inherited);
-        let children = fields.iter().map(|field| {
-            let name = field.name.to_string();
-            let Some(policy) = &policy else { return Ok(Output::value()); };
-            let child = policy.fields.get(name.trim_start_matches("r#")).unwrap_or(inherited.as_ref().unwrap());
-            if policy.mode == ProjectionMode::Borrowed && child.mode == ProjectionMode::Owned {
-                return Err(format!("data class `{}` field `{name}`: owned projection cannot consume a shared-reference occurrence", record.fqn()));
-            }
-            Ok(Output::Request(OutputRequest::Value {projection:Some(child.clone())}))
-        }).collect::<Result<Vec<_>>>()?;
-        Ok(Some(Output::Branch {
-            operation: OutputBranch::Record {
-                mode: policy.map(|p| p.mode),
-            },
-            children,
-        }))
-    }
     fn input_record_metadata(
         &self,
         flat: &prebindgen_flat::Flat<Self::Schema>,
@@ -2586,4 +2517,313 @@ fn native_handle(prefix: &str, gc_managed: bool) -> String {
 fn takes_input_owners(node: &crate::kotlin::JniNode) -> bool {
     prebindgen_flat::wire_definitions(std::iter::once(node))
         .any(|w| matches!(&w.kind,JniWire::Handle{handle,..} if handle.access==Access::Move))
+}
+
+mod compilation;
+/// Resolved conversion operations interpreted by this adapter.
+pub mod operations;
+
+impl prebindgen_declarations::DeclarationCodec for JniCodec {
+    fn sequence_callback(
+        &self,
+        cx: &mut prebindgen_declarations::Resolve<'_, Self>,
+        ty: &syn::Type,
+        tree: operations::Output,
+        structural: bool,
+    ) -> Result<operations::Output> {
+        operations::sequence_callback(cx, ty, tree, structural)
+    }
+
+    fn is_discarded_output(&self, tree: &operations::Output) -> bool {
+        matches!(
+            tree,
+            operations::Output::Leaf(operations::OutputLeafOp::Discard)
+        )
+    }
+
+    fn resolve_input_leaf(
+        &self,
+        operation: prebindgen_declarations::frontend::InputLeafOp,
+    ) -> Result<<Self::InputOperations as prebindgen_declarations::Operations>::Leaf> {
+        Ok(match operation {
+            prebindgen_declarations::frontend::InputLeafOp::Value => operations::InputLeafOp::Value,
+        })
+    }
+    fn resolve_input_unary(
+        &self,
+        operation: prebindgen_declarations::frontend::InputUnary,
+    ) -> Result<<Self::InputOperations as prebindgen_declarations::Operations>::Unary> {
+        Ok(match operation {
+            prebindgen_declarations::frontend::InputUnary::Convert { conversion } => {
+                operations::InputUnary::Convert { conversion }
+            }
+            prebindgen_declarations::frontend::InputUnary::Sequence => {
+                operations::InputUnary::Sequence
+            }
+            prebindgen_declarations::frontend::InputUnary::Temporary => {
+                operations::InputUnary::Temporary
+            }
+            prebindgen_declarations::frontend::InputUnary::Bulk => operations::InputUnary::Bulk,
+            prebindgen_declarations::frontend::InputUnary::Optional => {
+                operations::InputUnary::Optional
+            }
+        })
+    }
+    fn resolve_input_branch(
+        &self,
+        operation: prebindgen_declarations::frontend::InputBranch,
+    ) -> Result<<Self::InputOperations as prebindgen_declarations::Operations>::Branch> {
+        Ok(match operation {
+            prebindgen_declarations::frontend::InputBranch::Fields => {
+                operations::InputBranch::Fields
+            }
+            prebindgen_declarations::frontend::InputBranch::Record => {
+                operations::InputBranch::Record
+            }
+            prebindgen_declarations::frontend::InputBranch::Selector => {
+                operations::InputBranch::Selector
+            }
+            prebindgen_declarations::frontend::InputBranch::Constructor { function } => {
+                operations::InputBranch::Constructor { function }
+            }
+            prebindgen_declarations::frontend::InputBranch::Enum { value } => {
+                operations::InputBranch::Enum { value }
+            }
+            prebindgen_declarations::frontend::InputBranch::Variant => {
+                operations::InputBranch::Variant
+            }
+        })
+    }
+    fn resolve_input_arrow(
+        &self,
+        operation: Box<prebindgen_declarations::CallbackOperation>,
+    ) -> Result<<Self::InputOperations as prebindgen_declarations::Operations>::Arrow> {
+        Ok(operation)
+    }
+    fn finish_input_tree(&self, tree: operations::Input) -> Result<operations::Input> {
+        Ok(operations::lift_input_bulk(tree))
+    }
+    fn resolve_output_leaf(
+        &self,
+        operation: prebindgen_declarations::frontend::OutputLeafOp,
+    ) -> Result<<Self::OutputOperations as prebindgen_declarations::Operations>::Leaf> {
+        Ok(match operation {
+            prebindgen_declarations::frontend::OutputLeafOp::Value => {
+                operations::OutputLeafOp::Value
+            }
+            prebindgen_declarations::frontend::OutputLeafOp::Discard => {
+                operations::OutputLeafOp::Discard
+            }
+            prebindgen_declarations::frontend::OutputLeafOp::Projected(projection) => {
+                operations::OutputLeafOp::Projected(projection)
+            }
+        })
+    }
+    fn resolve_output_unary(
+        &self,
+        operation: prebindgen_declarations::frontend::OutputUnary,
+    ) -> Result<<Self::OutputOperations as prebindgen_declarations::Operations>::Unary> {
+        Ok(match operation {
+            prebindgen_declarations::frontend::OutputUnary::CallbackArgument { ownership } => {
+                operations::OutputUnary::CallbackArgument { ownership }
+            }
+            prebindgen_declarations::frontend::OutputUnary::Bulk => operations::OutputUnary::Bulk,
+            prebindgen_declarations::frontend::OutputUnary::Named { name } => {
+                operations::OutputUnary::Named { name }
+            }
+            prebindgen_declarations::frontend::OutputUnary::Convert { conversion } => {
+                operations::OutputUnary::Convert { conversion }
+            }
+            prebindgen_declarations::frontend::OutputUnary::Sequence { delivery, mode } => {
+                operations::OutputUnary::Sequence { delivery, mode }
+            }
+            prebindgen_declarations::frontend::OutputUnary::Result { error } => {
+                operations::OutputUnary::Result { error }
+            }
+            prebindgen_declarations::frontend::OutputUnary::Optional => {
+                operations::OutputUnary::Optional
+            }
+            prebindgen_declarations::frontend::OutputUnary::Into { function } => {
+                operations::OutputUnary::Into { function }
+            }
+            prebindgen_declarations::frontend::OutputUnary::Getter { function } => {
+                operations::OutputUnary::Getter { function }
+            }
+        })
+    }
+    fn resolve_output_branch(
+        &self,
+        operation: prebindgen_declarations::frontend::OutputBranch,
+    ) -> Result<<Self::OutputOperations as prebindgen_declarations::Operations>::Branch> {
+        Ok(match operation {
+            prebindgen_declarations::frontend::OutputBranch::Fields => {
+                operations::OutputBranch::Fields
+            }
+            prebindgen_declarations::frontend::OutputBranch::OwnedFields => {
+                operations::OutputBranch::OwnedFields
+            }
+            prebindgen_declarations::frontend::OutputBranch::Record { mode } => {
+                operations::OutputBranch::Record { mode }
+            }
+            prebindgen_declarations::frontend::OutputBranch::Combine => {
+                operations::OutputBranch::Combine
+            }
+            prebindgen_declarations::frontend::OutputBranch::Enum { value, mode } => {
+                operations::OutputBranch::Enum { value, mode }
+            }
+            prebindgen_declarations::frontend::OutputBranch::Variant => {
+                operations::OutputBranch::Variant
+            }
+            prebindgen_declarations::frontend::OutputBranch::Arguments => {
+                operations::OutputBranch::Arguments
+            }
+        })
+    }
+    fn resolve_output_arrow(
+        &self,
+        operation: std::convert::Infallible,
+    ) -> Result<<Self::OutputOperations as prebindgen_declarations::Operations>::Arrow> {
+        Ok(operation)
+    }
+    fn finish_output_tree(&self, tree: operations::Output) -> Result<operations::Output> {
+        Ok(operations::lift_output_bulk(tree))
+    }
+
+    fn expand_input(
+        &self,
+        cx: &mut prebindgen_declarations::Resolve<'_, Self>,
+        ty: &syn::Type,
+        tree: &Input<InputRequest, OutputRequest>,
+    ) -> Result<Option<operations::Input>> {
+        let flat = cx.flat;
+        let replacement = (|| {
+            if !self.declared {
+                return Ok(None);
+            }
+
+            if !matches!(tree, Input::Leaf(InputLeafOp::Value)) {
+                return Ok(None);
+            }
+            if flat.payload_enums.contains_key(&type_key(ty))
+                && flat
+                    .type_info(ty)
+                    .ok()
+                    .and_then(|t| t.metadata.class.as_ref())
+                    .is_none()
+            {
+                return Err(format!(
+                "ordinary payload enum `{}` requires sealed_class! or an explicit field expansion",
+                type_key(ty)
+            ));
+            }
+            if flat
+                .type_info(ty)
+                .ok()
+                .and_then(|t| t.metadata.class.as_ref())
+                .is_some_and(|c| c.kind == ClassKind::Sealed)
+            {
+                return Ok(Some(Input::enum_variants(
+                    flat.payload_enum(ty)?
+                        .variants
+                        .iter()
+                        .map(|v| vec![Input::value(); v.fields.len()])
+                        .collect(),
+                    true,
+                )));
+            }
+            let Some(record) = Self::source_record(flat, ty)? else {
+                return Ok(None);
+            };
+            if record.has_handles {
+                return Err(format!(
+                    "data class `{}` contains handles and cannot be passed into Rust as a record",
+                    record.fqn()
+                ));
+            }
+            Ok(Some(Input::Branch {
+                operation: InputBranch::Record,
+                children: vec![Input::value(); flat.record(ty)?.fields.len()],
+            }))
+        })();
+        replacement?.map(|tree| cx.input(ty, &tree)).transpose()
+    }
+    fn expand_output(
+        &self,
+        cx: &mut prebindgen_declarations::Resolve<'_, Self>,
+        ty: &syn::Type,
+        tree: &Output<OutputRequest, InputRequest>,
+    ) -> Result<Option<operations::Output>> {
+        let flat = cx.flat;
+        let replacement = (|| {
+            if !self.declared {
+                return Ok(None);
+            }
+
+            let policy = match tree {
+                Output::Leaf(OutputLeafOp::Value) => None,
+                Output::Leaf(OutputLeafOp::Projected(p)) => Some(p.clone()),
+                _ => return Ok(None),
+            };
+            if flat.payload_enums.contains_key(&type_key(ty))
+                && flat
+                    .type_info(ty)
+                    .ok()
+                    .and_then(|t| t.metadata.class.as_ref())
+                    .is_none()
+            {
+                return Err(format!(
+                "ordinary payload enum `{}` requires sealed_class! or an explicit field expansion",
+                type_key(ty)
+            ));
+            }
+            if flat
+                .type_info(ty)
+                .ok()
+                .and_then(|t| t.metadata.class.as_ref())
+                .is_some_and(|c| c.kind == ClassKind::Sealed)
+            {
+                return Ok(Some(Output::enum_variants(
+                    flat.payload_enum(ty)?
+                        .variants
+                        .iter()
+                        .map(|v| vec![Output::value(); v.fields.len()])
+                        .collect(),
+                    true,
+                    policy.as_ref().map(|p| p.mode),
+                )));
+            }
+            let Some(record) = Self::source_record(flat, ty)? else {
+                return Ok(None);
+            };
+            let fields = &flat.record(ty)?.fields;
+            for name in policy.iter().flat_map(|p| p.fields.keys()) {
+                if !fields
+                    .iter()
+                    .any(|f| f.name.to_string().trim_start_matches("r#") == name)
+                {
+                    return Err(format!(
+                        "data class `{}`: unknown projection field `{name}`",
+                        record.fqn()
+                    ));
+                }
+            }
+            let inherited = policy.as_ref().map(Projection::inherited);
+            let children = fields.iter().map(|field| {
+            let name = field.name.to_string();
+            let Some(policy) = &policy else { return Ok(Output::value()); };
+            let child = policy.fields.get(name.trim_start_matches("r#")).unwrap_or(inherited.as_ref().unwrap());
+            if policy.mode == ProjectionMode::Borrowed && child.mode == ProjectionMode::Owned {
+                return Err(format!("data class `{}` field `{name}`: owned projection cannot consume a shared-reference occurrence", record.fqn()));
+            }
+            Ok(Output::Request(OutputRequest::Value {projection:Some(child.clone())}))
+        }).collect::<Result<Vec<_>>>()?;
+            Ok(Some(Output::Branch {
+                operation: OutputBranch::Record {
+                    mode: policy.map(|p| p.mode),
+                },
+                children,
+            }))
+        })();
+        replacement?.map(|tree| cx.output(ty, &tree)).transpose()
+    }
 }

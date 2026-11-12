@@ -60,7 +60,7 @@ pub struct JniModule {
     /// Prepared callback declarations, including interfaces unused by exported functions.
     pub callbacks: Vec<JniInput>,
     /// Resolved standalone callback roots, consumed when plans are compiled.
-    pub callback_recipes: Vec<prebindgen_declarations::Input>,
+    pub callback_recipes: Vec<crate::operations::Input>,
     /// Use bulk for materialized collection outputs with automatic transport.
     pub bulk_collection_outputs: bool,
 }

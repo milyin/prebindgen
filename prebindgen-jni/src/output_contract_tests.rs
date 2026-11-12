@@ -1,6 +1,5 @@
 use super::*;
 use prebindgen_conversions::{Delivery, DeliveryPolicy, OutputFragment};
-use prebindgen_declarations::{OutputLeafOp, OutputUnary};
 use prebindgen_flat::{Function, InputConversion, TypeUse};
 use std::{cell::Cell, rc::Rc};
 
@@ -194,6 +193,8 @@ fn packet_policy_is_explicit_and_does_not_require_token_recognition() {
 
 #[test]
 fn local_error_override_rejects_an_incompatible_wire_description() {
+    use crate::operations::{Output, OutputLeafOp};
+
     let mut flat = prepared();
     let output = prebindgen_declarations::compile_output_value(
         &Bindings::parse([]).unwrap(),
@@ -388,6 +389,8 @@ fn local_error_handlers_are_independent_for_overloads() {
 }
 #[test]
 fn nested_error_layouts_must_match_even_with_the_same_outer_byte_array() {
+    use crate::operations::{Output, OutputLeafOp, OutputParts, OutputUnary};
+
     let source = syn::parse_file("pub fn failed()->Result<i64,Vec<i64>>{}").unwrap();
     let mut flat = JniGen::builder()
         .items(

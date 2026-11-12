@@ -1,9 +1,11 @@
-//! Contract tests for the operation API, including a four-method implementation.
+//! Contract tests for reusable operations and independent adapter vocabularies.
 use super::*;
 use prebindgen_conversions::{staged::emit_call, value};
 
 struct Scalars;
+test_frontend!(Scalars);
 impl Codec for Scalars {
+    test_operations!();
     type Schema = prebindgen_conversions::PlanSchema<Type>;
     type Wire = Type;
     type Context = ();
@@ -52,7 +54,7 @@ fn model() -> Flat<<Scalars as Codec>::Schema> {
     .unwrap()
 }
 #[test]
-fn four_method_codec_compiles_and_executes_a_complete_call() {
+fn declaration_helpers_compile_and_execute_a_complete_call() {
     let mut flat = model();
     Declarations::new(&flat, vec![], vec![], vec![])
         .unwrap()
@@ -257,7 +259,9 @@ struct Probe(
     std::cell::RefCell<Vec<(Representation, InputRole)>>,
     std::cell::Cell<bool>,
 );
+test_frontend!(Probe);
 impl Codec for Probe {
+    test_operations!();
     type Schema = <Scalars as Codec>::Schema;
     type Wire = Type;
     type Context = ();
@@ -312,7 +316,7 @@ fn input_context_preserves_all_dispatch_cases_and_callback_roles() {
                 input_role: role.into(),
                 ..Compiler::new(&flat, &codec, "arg".into())
             };
-            compiler.bulk.set(bulk);
+            compiler.state.bulk.set(bulk);
             compiler
                 .input(
                     &ty,
@@ -371,7 +375,9 @@ fn input_context_preserves_all_dispatch_cases_and_callback_roles() {
 }
 
 struct MalformedOptional(u8);
+test_frontend!(MalformedOptional);
 impl Codec for MalformedOptional {
+    test_operations!();
     type Schema = <Scalars as Codec>::Schema;
     type Wire = Type;
     type Context = ();
@@ -557,4 +563,183 @@ fn none_is_unit_and_cannot_silently_discard_non_unit_values() {
             Output::None
         ));
     }
+}
+
+// This adapter deliberately does not implement DeclarationCodec. Its operations
+// cannot be represented by the optional declaration frontend's fixed vocabulary.
+#[derive(Clone, Debug)]
+struct ArithmeticInputs;
+#[derive(Clone, Debug)]
+struct ArithmeticOutputs;
+#[derive(Clone, Debug)]
+struct AddInput(i64);
+#[derive(Clone, Debug)]
+struct ScaleOutput(i64);
+impl Operations for ArithmeticInputs {
+    type Leaf = ();
+    type Unary = AddInput;
+    type Branch = std::convert::Infallible;
+    type Arrow = std::convert::Infallible;
+}
+impl Operations for ArithmeticOutputs {
+    type Leaf = ScaleOutput;
+    type Unary = std::convert::Infallible;
+    type Branch = std::convert::Infallible;
+    type Arrow = std::convert::Infallible;
+}
+struct Arithmetic;
+impl Codec for Arithmetic {
+    type InputOperations = ArithmeticInputs;
+    type OutputOperations = ArithmeticOutputs;
+    type CompileState = ();
+    type Schema = prebindgen_conversions::PlanSchema<Type>;
+    type Wire = Type;
+    type Context = ();
+    type Extra = ();
+    type Chain = ();
+    type Branch = ();
+    fn input_leaf(&self, r: InputLeaf<'_, Self>) -> Result<CodecInput<Self>> {
+        let wire = &r.wire;
+        value::input(r.ty, r.wire.clone(), r.target, quote!(#wire), r.ty.clone())
+    }
+    fn output_leaf(&self, r: OutputLeaf<'_, Self>) -> Result<CodecOutput<Self>> {
+        value::output(
+            r.ty,
+            r.wire,
+            r.value,
+            r.access.is_shared(),
+            |v| v,
+            r.ty.clone(),
+        )
+    }
+    fn output_consumes(&self, _: &Flat<Self::Schema>, _: &Type, _: &()) -> bool {
+        false
+    }
+    fn group(&self, _: GroupKind<'_>) -> Result<()> {
+        Ok(())
+    }
+    fn compile_input_tree(
+        &self,
+        cx: &Compiler<'_, Self>,
+        ty: &Type,
+        tree: &ResolvedInput<Self>,
+        extra: &(),
+        active: &Condition,
+        names: Option<(&syn::Ident, &syn::Ident)>,
+    ) -> Result<CodecInput<Self>> {
+        match tree {
+            InputNode::Leaf(()) => self.input_leaf(InputLeaf::new(
+                cx.flat,
+                ty,
+                extra,
+                names.map_or_else(|| cx.name(), |(w, _)| w.clone()),
+                names.map_or_else(|| cx.name(), |(_, v)| v.clone()),
+                active,
+            )),
+            InputNode::Unary {
+                operation: AddInput(amount),
+                child,
+            } => {
+                let plan = cx.input_named(ty, child, extra, active, names)?;
+                let v = cx.name();
+                let body = plan.bind(&v, quote!(#v + #amount))?;
+                Ok(InputPlan::new(plan.node, quote!(), quote!({#body})))
+            }
+            _ => Err("unsupported arithmetic input".into()),
+        }
+    }
+    fn compile_output_tree(
+        &self,
+        cx: &Compiler<'_, Self>,
+        ty: &Type,
+        tree: &ResolvedOutput<Self>,
+        extra: &(),
+        value: TokenStream,
+        borrowed: bool,
+        wire: Option<&syn::Ident>,
+    ) -> Result<CodecOutput<Self>> {
+        let OutputNode::Leaf(ScaleOutput(scale)) = tree else {
+            return Err("unsupported arithmetic output".into());
+        };
+        self.output_leaf(OutputLeaf::new(
+            cx.flat,
+            ty,
+            extra,
+            wire.cloned().unwrap_or_else(|| cx.name()),
+            quote!((#value) * #scale),
+            if borrowed {
+                ValueAccess::Shared
+            } else {
+                ValueAccess::Owned
+            },
+        ))
+    }
+}
+#[test]
+fn independent_operation_vocabularies_compile_without_declaration_frontend() {
+    let mut model = Flat::<Resolved<Arithmetic>>::parse(
+        syn::parse_file("pub fn add(a:i64,b:i64)->i64{}")
+            .unwrap()
+            .items
+            .into_iter()
+            .map(|i| (i, Default::default())),
+    )
+    .unwrap();
+    model.metadata = ResolvedModule::new((), Arithmetic, ());
+    let f = model.function_mut("add").unwrap();
+    for (i, p) in f.params.iter_mut().enumerate() {
+        p.ty.slot = Some(ResolvedSlot::Tree(InputNode::Unary {
+            operation: AddInput(i as i64 + 1),
+            child: Box::new(InputNode::Leaf(())),
+        }));
+    }
+    f.ret.slot = Some(ResolvedSlot::Tree(OutputNode::Leaf(ScaleOutput(2))));
+    let mut model = compile_resolved(model).unwrap();
+    let output = model
+        .function_mut("add")
+        .unwrap()
+        .ret
+        .slot
+        .as_mut()
+        .unwrap();
+    output.delivery.result = output.values[0].1.clone();
+    let f = model.function("add").unwrap();
+    let params = f
+        .params
+        .iter()
+        .flat_map(|p| {
+            prebindgen_flat::wire_definitions(std::iter::once(&p.ty.slot.as_ref().unwrap().node))
+        })
+        .map(|w| w.name.clone())
+        .collect::<Vec<_>>();
+    let types = params.iter().map(|p| quote!(#p:i64));
+    let body = emit_call(
+        f,
+        &(),
+        &syn::parse_quote!(result),
+        &syn::parse_quote!(i64),
+        &params,
+    )
+    .unwrap();
+    let code = quote! {fn add(a:i64,b:i64)->i64{a+b} fn bridge(#(#types),*)->Result<i64,String>{#body} fn main(){assert_eq!(bridge(10,8).unwrap(),42);}};
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("custom.rs");
+    let binary = dir.path().join("custom");
+    std::fs::write(&file, code.to_string()).unwrap();
+    let built = std::process::Command::new("rustc")
+        .arg("--edition=2021")
+        .arg(&file)
+        .arg("-o")
+        .arg(&binary)
+        .output()
+        .unwrap();
+    assert!(
+        built.status.success(),
+        "{}",
+        String::from_utf8_lossy(&built.stderr)
+    );
+    assert!(std::process::Command::new(binary)
+        .status()
+        .unwrap()
+        .success());
 }

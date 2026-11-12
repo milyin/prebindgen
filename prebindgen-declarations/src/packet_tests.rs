@@ -125,7 +125,9 @@ struct CodecImpl {
     unknown_validation_read: bool,
     row_only_leaf: bool,
 }
+test_frontend!(CodecImpl);
 impl Codec for CodecImpl {
+    test_operations!();
     type Schema = prebindgen_conversions::PlanSchema<Type, (), PacketChain, Metadata>;
     type Wire = Type;
     type Chain = PacketChain;

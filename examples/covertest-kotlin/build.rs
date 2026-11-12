@@ -104,7 +104,8 @@
 //! "skipping undeclared" build warning while emitting nothing.
 
 use prebindgen_declarations::{
-    InputBranch, InputLeafOp, InputUnary, OutputBranch, OutputLeafOp, OutputUnary,
+    frontend::InputBranch, frontend::InputLeafOp, frontend::InputUnary, frontend::OutputBranch,
+    frontend::OutputLeafOp, frontend::OutputUnary,
 };
 /* Unsupported: imports and helpers for the disabled declarations.
 use prebindgen_jni::{
@@ -140,11 +141,10 @@ use prebindgen_jni::{
 fn bulk_replay_input_with(
     redundant_bulk: bool,
     bulk_rows: bool,
-) -> prebindgen_declarations::Input<
+) -> prebindgen_declarations::DeclarationInput<
     prebindgen_jni::InputRequest,
     prebindgen_declarations::OutputRequest,
 > {
-    use prebindgen_declarations::Input;
     let borrowed = |function: &str| Input::Unary {
         operation: InputUnary::Optional,
         child: Box::new(Input::Branch {
@@ -186,7 +186,7 @@ fn bulk_replay_input_with(
     }
 }
 
-fn bulk_replay_input() -> prebindgen_declarations::Input<
+fn bulk_replay_input() -> prebindgen_declarations::DeclarationInput<
     prebindgen_jni::InputRequest,
     prebindgen_declarations::OutputRequest,
 > {
@@ -199,7 +199,7 @@ mod input_contracts;
 mod output_contracts;
 
 fn main() {
-    use prebindgen_declarations::{Output, OutputRequest, SequenceDelivery};
+    use prebindgen_declarations::{DeclarationOutput as Output, OutputRequest, SequenceDelivery};
     let ordinary_rows = |element| Output::Unary {
         operation: OutputUnary::Sequence {
             delivery: SequenceDelivery::Value,
@@ -234,8 +234,8 @@ fn main() {
     let binding = JniGen::builder()
         .convert(convert!(WireMarker).input(fun!(wire_marker_new)).output(fun!(wire_marker_value)))
         .expand(expand_return!(WireReply).fields_into(fields!(wire_reply_into_struct)))
-        .expand(expand_return!(WireReplyResult).view(prebindgen_declarations::Output::enum_fields([])))
-        .expand(expand_return!(WireReplySample).view(prebindgen_declarations::Output::Branch { operation: OutputBranch::OwnedFields, children: vec![prebindgen_declarations::Output::auto();2] }))
+        .expand(expand_return!(WireReplyResult).view(prebindgen_declarations::DeclarationOutput::enum_fields([])))
+        .expand(expand_return!(WireReplySample).view(prebindgen_declarations::DeclarationOutput::Branch { operation: OutputBranch::OwnedFields, children: vec![prebindgen_declarations::DeclarationOutput::auto();2] }))
         .expand(expand_return!(WireReplyError).fields(fields!(wire_reply_error_view)))
         .convert(convert!(WireDuration).input(fun!(wire_duration_new)).output(fun!(wire_duration_millis)))
         .package(package!("payloadenums")
@@ -286,7 +286,7 @@ fn main() {
             .class(sealed_class!(Result<(),String>).name("WireNotice"))
             .fun(fun!(wire_event_rows).expand_param("values",Input::Unary { operation: InputUnary::Sequence, child: Box::new(Input::value()) }.bulk()))
             .fun(fun!(wire_event_rows_callback))
-            .fun(fun!(wire_bare_echo).expand_param("value",Input::enum_fields([])).expand_return(prebindgen_declarations::Output::enum_fields([])))
+            .fun(fun!(wire_bare_echo).expand_param("value",Input::enum_fields([])).expand_return(prebindgen_declarations::DeclarationOutput::enum_fields([])))
             .fun(fun!(wire_event_echo))
             .fun(fun!(wire_event_callback))
             .fun(fun!(wire_result_echo).result_as_value())
@@ -628,10 +628,10 @@ fn main() {
                 .field(fun!(getter_child_number)).field(fun!(getter_child_name))))
             .fun(fun!(getter_counts))
             .fun(fun!(getter_two_clones_new).expand_return(expand_return!(GetterOwner)
-                .view(prebindgen_declarations::Output::getter("getter_owner_leaf",
-                    prebindgen_declarations::Output::combine([
-                        prebindgen_declarations::Output::Leaf(OutputLeafOp::Projected(prebindgen_declarations::Projection::borrowed())),
-                        prebindgen_declarations::Output::Leaf(OutputLeafOp::Projected(prebindgen_declarations::Projection::borrowed()))])))))
+                .view(prebindgen_declarations::DeclarationOutput::getter("getter_owner_leaf",
+                    prebindgen_declarations::DeclarationOutput::combine([
+                        prebindgen_declarations::DeclarationOutput::Leaf(OutputLeafOp::Projected(prebindgen_declarations::Projection::borrowed())),
+                        prebindgen_declarations::DeclarationOutput::Leaf(OutputLeafOp::Projected(prebindgen_declarations::Projection::borrowed()))])))))
             .fun(fun!(getter_fields_new).expand_return(expand_return!(GetterOwner)
                 .field_self_into().fields(fields!(getter_owner_details))))
             .fun(fun!(getter_callback).expand_param("callback",
@@ -844,30 +844,30 @@ fn main() {
             .class(data_class!(OutputCleanupRow))
             .fun(fun!(native_bulk_rows).expand_return(expand_return!(CallbackRow).field_self_ref().bulk()))
             .fun(fun!(native_bulk_nested).expand_return(expand_return!(CallbackRow).field_self_ref().bulk()))
-            .fun(fun!(native_bulk_pair).output(prebindgen_declarations::Output::Branch { operation: OutputBranch::OwnedFields, children: vec![prebindgen_declarations::Output::Request(prebindgen_declarations::OutputRequest::Auto); 2] }))
+            .fun(fun!(native_bulk_pair).output(prebindgen_declarations::DeclarationOutput::Branch { operation: OutputBranch::OwnedFields, children: vec![prebindgen_declarations::DeclarationOutput::Request(prebindgen_declarations::OutputRequest::Auto); 2] }))
             .fun(fun!(native_bulk_callback).expand_param("callback", callback!(impl Fn(Vec<Vec<CallbackRow>>)).name("NativeBulkCallback")))
-            .fun(fun!(output_cleanup_surround).output(prebindgen_declarations::Output::Branch { operation: OutputBranch::OwnedFields, children: vec![
-                prebindgen_declarations::Output::Request(prebindgen_declarations::OutputRequest::Auto),
-                prebindgen_declarations::Output::Unary { operation: OutputUnary::Sequence { delivery: prebindgen_declarations::SequenceDelivery::Value, mode: None }, child: Box::new(prebindgen_declarations::Output::Request(prebindgen_declarations::OutputRequest::Auto)),  },
-                prebindgen_declarations::Output::Request(prebindgen_declarations::OutputRequest::Auto),
+            .fun(fun!(output_cleanup_surround).output(prebindgen_declarations::DeclarationOutput::Branch { operation: OutputBranch::OwnedFields, children: vec![
+                prebindgen_declarations::DeclarationOutput::Request(prebindgen_declarations::OutputRequest::Auto),
+                prebindgen_declarations::DeclarationOutput::Unary { operation: OutputUnary::Sequence { delivery: prebindgen_declarations::SequenceDelivery::Value, mode: None }, child: Box::new(prebindgen_declarations::DeclarationOutput::Request(prebindgen_declarations::OutputRequest::Auto)),  },
+                prebindgen_declarations::DeclarationOutput::Request(prebindgen_declarations::OutputRequest::Auto),
             ] }))
-            .fun(fun!(output_cleanup_surround_bulk).output(prebindgen_declarations::Output::Branch { operation: OutputBranch::OwnedFields, children: vec![
-                prebindgen_declarations::Output::Request(prebindgen_declarations::OutputRequest::Auto),
-                prebindgen_declarations::Output::Request(prebindgen_declarations::OutputRequest::Auto),
-                prebindgen_declarations::Output::Request(prebindgen_declarations::OutputRequest::Auto),
+            .fun(fun!(output_cleanup_surround_bulk).output(prebindgen_declarations::DeclarationOutput::Branch { operation: OutputBranch::OwnedFields, children: vec![
+                prebindgen_declarations::DeclarationOutput::Request(prebindgen_declarations::OutputRequest::Auto),
+                prebindgen_declarations::DeclarationOutput::Request(prebindgen_declarations::OutputRequest::Auto),
+                prebindgen_declarations::DeclarationOutput::Request(prebindgen_declarations::OutputRequest::Auto),
             ] }))
-            .fun(fun!(output_cleanup_rows).callback_return().output(prebindgen_declarations::Output::Unary { operation: OutputUnary::Sequence { delivery: prebindgen_declarations::SequenceDelivery::Value, mode: None }, child: Box::new(prebindgen_declarations::Output::Request(prebindgen_declarations::OutputRequest::Auto)),  }))
+            .fun(fun!(output_cleanup_rows).callback_return().output(prebindgen_declarations::DeclarationOutput::Unary { operation: OutputUnary::Sequence { delivery: prebindgen_declarations::SequenceDelivery::Value, mode: None }, child: Box::new(prebindgen_declarations::DeclarationOutput::Request(prebindgen_declarations::OutputRequest::Auto)),  }))
             .fun(fun!(output_cleanup_rows_bulk).callback_return().expand_return(expand_return!(OutputCleanupRow).field_self_into().bulk()))
-            .fun(fun!(output_cleanup_nested).callback_return().output(prebindgen_declarations::Output::Unary { operation: OutputUnary::Sequence { delivery: prebindgen_declarations::SequenceDelivery::Value, mode: None }, child: Box::new(prebindgen_declarations::Output::Request(prebindgen_declarations::OutputRequest::Auto)),  }))
+            .fun(fun!(output_cleanup_nested).callback_return().output(prebindgen_declarations::DeclarationOutput::Unary { operation: OutputUnary::Sequence { delivery: prebindgen_declarations::SequenceDelivery::Value, mode: None }, child: Box::new(prebindgen_declarations::DeclarationOutput::Request(prebindgen_declarations::OutputRequest::Auto)),  }))
             .fun(fun!(output_cleanup_nested_bulk).callback_return().expand_return(expand_return!(OutputCleanupRow).field_self_into().bulk()))
-            .fun(fun!(output_cleanup_callback).expand_param("callback",callback!(impl Fn(Vec<Option<Vec<OutputCleanupRow>>>)).name("OutputCleanupCallback").expand_param(0, prebindgen_declarations::Output::Unary { operation: OutputUnary::Sequence { delivery: prebindgen_declarations::SequenceDelivery::Value, mode: None }, child: Box::new(prebindgen_declarations::Output::Request(prebindgen_declarations::OutputRequest::Auto)),  })))
+            .fun(fun!(output_cleanup_callback).expand_param("callback",callback!(impl Fn(Vec<Option<Vec<OutputCleanupRow>>>)).name("OutputCleanupCallback").expand_param(0, prebindgen_declarations::DeclarationOutput::Unary { operation: OutputUnary::Sequence { delivery: prebindgen_declarations::SequenceDelivery::Value, mode: None }, child: Box::new(prebindgen_declarations::DeclarationOutput::Request(prebindgen_declarations::OutputRequest::Auto)),  })))
             .fun(fun!(output_cleanup_callback_bulk).expand_param("callback",callback!(impl Fn(Vec<Option<Vec<OutputCleanupRow>>>)).name("OutputCleanupBulkCallback").expand_param(0,expand_return!(OutputCleanupRow).field_self_into().bulk()))))
         .configure(|flat| {
             use prebindgen_flat::{OutputConversion, Outcomes, WireNode};
             // Compile a mixed prepared tree directly: declaration defaults
             // deliberately lift inner bulk modifiers to the enclosing sequence.
-            let sequence = |element,mode| prebindgen_declarations::Output::Unary { operation: OutputUnary::Sequence { delivery: prebindgen_declarations::SequenceDelivery::Value, mode }, child: Box::new(element),  };
-            let recipe=sequence(prebindgen_declarations::Output::Branch { operation: OutputBranch::Combine, children: vec![prebindgen_declarations::Output::Unary { operation: OutputUnary::Bulk, child: Box::new(sequence(prebindgen_declarations::Output::Leaf(OutputLeafOp::Value),Some(prebindgen_declarations::ProjectionMode::Borrowed))) }] },None);
+            let sequence = |element,mode| prebindgen_jni::operations::Output::Unary { operation: prebindgen_jni::operations::OutputUnary::Sequence { delivery: prebindgen_declarations::SequenceDelivery::Value, mode }, child: Box::new(element),  };
+            let recipe=sequence(prebindgen_jni::operations::Output::Branch { operation: prebindgen_jni::operations::OutputBranch::Combine, children: vec![prebindgen_jni::operations::Output::Unary { operation: prebindgen_jni::operations::OutputUnary::Bulk, child: Box::new(sequence(prebindgen_jni::operations::Output::Leaf(prebindgen_jni::operations::OutputLeafOp::Value),Some(prebindgen_declarations::ProjectionMode::Borrowed))) }] },None);
             let conversion=prebindgen_declarations::compile_output(flat,&prebindgen_jni::JniCodec::raw(),"jni_output_mixed",&recipe,&())?;
             flat.function_mut("jni_output_mixed")?.ret.slot=Some(conversion);
             let mut probe = flat.clone();

@@ -95,7 +95,8 @@ pub struct CallbackOperation {
 }
 
 impl CallbackOperation {
-    pub(crate) fn validate_for<M: Schema>(&self, flat: &Flat<M>, ty: &Type) -> Result<()> {
+    /// Verify the configured signature against this source callback occurrence.
+    pub fn validate_for<M: Schema>(&self, flat: &Flat<M>, ty: &Type) -> Result<()> {
         if input_key(flat, ty)? != prebindgen_flat::type_key(&self.ty) {
             return Err("prepared callback type does not match occurrence".into());
         }

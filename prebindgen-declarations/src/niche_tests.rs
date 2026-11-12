@@ -58,7 +58,9 @@ impl DomainAbi {
     }
 }
 struct DomainCodec;
+test_frontend!(DomainCodec);
 impl Codec for DomainCodec {
+    test_operations!();
     type Schema = prebindgen_conversions::PlanSchema<Domain, (), DomainGroup, DomainGroup>;
     type Chain = DomainGroup;
     type Branch = DomainGroup;

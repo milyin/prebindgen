@@ -1,5 +1,5 @@
 use prebindgen_declarations::{
-    expand_param, expand_return, fields, fun, InputRequest, Output, OutputRequest, OutputUnary,
+    expand_param, expand_return, fields, fun, InputRequest, DeclarationOutput as Output, OutputRequest, frontend::OutputUnary,
     SequenceDelivery,
 };
 fn rows(element: Output<OutputRequest, InputRequest>) -> Output<OutputRequest, InputRequest> {

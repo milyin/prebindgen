@@ -1,6 +1,7 @@
 use super::*;
 use prebindgen_declarations::{
-    InputBranch, InputLeafOp, InputUnary, OutputBranch, OutputLeafOp, OutputUnary,
+    frontend::InputBranch, frontend::InputLeafOp, frontend::InputUnary, frontend::OutputBranch,
+    frontend::OutputLeafOp, frontend::OutputUnary,
 };
 use prebindgen_flat::InputConversion;
 fn flat(source: &str) -> Bindings {
@@ -728,7 +729,7 @@ fn explicit_data_expansion_replaces_a_configured_handle_slot() {
                     &JniCodec::raw(),
                     "echo",
                     "value",
-                    &prebindgen_declarations::Input::Leaf(InputLeafOp::Value),
+                    &prebindgen_declarations::DeclarationInput::Leaf(InputLeafOp::Value),
                     &(),
                 )
             })
@@ -938,7 +939,7 @@ fn scalar_niches_exhaust_at_the_carrier_limit() {
 
 #[test]
 fn optional_unannotated_fields_keep_outer_presence_in_both_directions() {
-    use prebindgen_declarations::{bind_input, Input};
+    use prebindgen_declarations::{bind_input, DeclarationInput as Input};
     let mut source = flat("pub struct Wrapped { pub value: Option<i64> } pub fn wrapped_fields(x: &Wrapped) -> Wrapped {} pub fn echo(value: Option<Wrapped>) -> Option<Wrapped> {}");
     let input = Input::Unary {
         operation: InputUnary::Optional,
@@ -1057,7 +1058,7 @@ fn reference_and_presence_flag_niches_keep_nested_wire_counts_bounded() {
 
 #[test]
 fn nested_optional_selectors_reserve_distinct_tags_and_disable_arm_niches() {
-    use prebindgen_declarations::{bind_input, Input};
+    use prebindgen_declarations::{bind_input, DeclarationInput as Input};
     let mut source = flat("pub fn echo(x:Option<Option<char>>)->char {} pub fn first(x:char)->char{} pub fn second(x:char)->char{}");
     let selector = Input::selector([
         Input::constructor("first", [Input::Leaf(InputLeafOp::Value)]),
@@ -1271,12 +1272,14 @@ fn callback_returns_do_not_guess_prebound_or_extra_output_projections() {
         &mut model,
         &JniCodec::raw(),
         "values",
-        &prebindgen_declarations::Output::Unary {
+        &prebindgen_declarations::DeclarationOutput::Unary {
             operation: OutputUnary::Sequence {
                 delivery: prebindgen_declarations::SequenceDelivery::Value,
                 mode: None,
             },
-            child: Box::new(prebindgen_declarations::Output::Leaf(OutputLeafOp::Value)),
+            child: Box::new(prebindgen_declarations::DeclarationOutput::Leaf(
+                OutputLeafOp::Value,
+            )),
         },
         &(),
     )
@@ -2369,20 +2372,23 @@ fn default_record_outputs_follow_source_ownership_and_allow_copy_overrides() {
     // Two views of optional references are observations, never two moves.
     let source =
         format!("{records}pub type Owner=String;pub fn maybe(owner:&Owner)->Option<&Bundle>{{}}");
-    let view = prebindgen_declarations::Output::Unary {
+    let view = prebindgen_declarations::DeclarationOutput::Unary {
         operation: OutputUnary::Optional,
-        child: Box::new(prebindgen_declarations::Output::Branch {
+        child: Box::new(prebindgen_declarations::DeclarationOutput::Branch {
             operation: OutputBranch::Record {
                 mode: Some(prebindgen_declarations::ProjectionMode::Borrowed),
             },
-            children: vec![prebindgen_declarations::Output::Leaf(OutputLeafOp::Value); 4],
+            children: vec![
+                prebindgen_declarations::DeclarationOutput::Leaf(OutputLeafOp::Value);
+                4
+            ],
         }),
     };
     JniGen::builder()
         .flat(flat(&source))
         .set_package_prefix("test")
         .package(classes().class(ptr_class!(Owner)).fun(fun!(maybe).output(
-            prebindgen_declarations::Output::combine([view.clone(), view]),
+            prebindgen_declarations::DeclarationOutput::combine([view.clone(), view]),
         )))
         .build()
         .unwrap();
@@ -3525,7 +3531,9 @@ fn whole_collection_bulk_defaults_cannot_enclose_callback_delivery() {
 
 #[test]
 fn resolved_callback_elements_can_keep_optional_presence_outside_a_bulk_frame() {
-    use prebindgen_declarations::{Output, SequenceDelivery};
+    use crate::operations::{Output, OutputLeafOp, OutputParts, OutputUnary};
+
+    use prebindgen_declarations::SequenceDelivery;
     let mut model = JniGen::builder()
         .flat(flat(
             "pub type Owner=String;pub fn rows()->Vec<Option<Vec<Owner>>>{}",
@@ -4333,12 +4341,14 @@ fn mixed_callback_rows_reject_multi_argument_constructor_alternatives() {
 
 #[test]
 fn named_output_groups_keep_name_validation_in_both_codec_policies() {
+    use crate::operations::{Output, OutputLeafOp, OutputUnary};
+
     let model = flat("pub fn value()->i64{}");
     for codec in [JniCodec::raw(), JniCodec::declared()] {
         for name in ["", "1bad", "bad-name", "line\nbreak"] {
-            let recipe = prebindgen_declarations::Output::Unary {
+            let recipe = Output::Unary {
                 operation: OutputUnary::Named { name: name.into() },
-                child: Box::new(prebindgen_declarations::Output::Leaf(OutputLeafOp::Value)),
+                child: Box::new(Output::Leaf(OutputLeafOp::Value)),
             };
             assert!(
                 prebindgen_declarations::compile_output(&model, &codec, "value", &recipe, &())
@@ -4352,6 +4362,8 @@ fn named_output_groups_keep_name_validation_in_both_codec_policies() {
 
 #[test]
 fn resolved_callback_owns_its_conversions_and_cleanup_policy() {
+    use crate::operations::{Input, OutputParts};
+
     use prebindgen_declarations::{compile_resolved, CallbackDecl, Declarations, ResolvedSlot};
     let mut source =
         flat("pub fn scoped(cb:impl Fn(i64)->i64){} pub fn owned(cb:impl Fn(i64)->i64){}");
@@ -4362,7 +4374,7 @@ fn resolved_callback_owns_its_conversions_and_cleanup_policy() {
         fun!(owned).expand_param(
             "cb",
             CallbackDecl::new(syn::parse_quote!(impl Fn(i64) -> i64))
-                .expand_param(0, prebindgen_declarations::Output::value()),
+                .expand_param(0, prebindgen_declarations::DeclarationOutput::value()),
         ),
     ];
     let resolved = defaults
@@ -4394,4 +4406,133 @@ fn resolved_callback_owns_its_conversions_and_cleanup_policy() {
     for name in ["scoped", "owned"] {
         assert!(compiled.function(name).unwrap().params[0].ty.slot.is_some());
     }
+}
+
+#[test]
+fn callback_variant_selects_delivery_before_wires_exist() {
+    use crate::operations::{Output, OutputUnary};
+    use prebindgen_declarations::{Declarations, SequenceDelivery};
+
+    let mut flat = flat("pub fn f()->Option<Vec<i64>>{}");
+    let defaults = Declarations::new(&flat, vec![], vec![], vec![]).unwrap();
+    let variant = defaults
+        .callback_variant(&mut flat, &JniCodec::raw(), &fun!(f), "f_fold", &())
+        .unwrap();
+    assert!(flat.function("f_fold").unwrap().ret.slot.is_none());
+    let tree = defaults
+        .resolve_output(
+            &flat,
+            &JniCodec::raw(),
+            &flat.function("f_fold").unwrap().ret.ty,
+            variant.ret.as_ref().unwrap(),
+            &(),
+        )
+        .unwrap();
+    let Output::Unary {
+        operation: OutputUnary::Optional,
+        child,
+    } = tree
+    else {
+        panic!("missing callback description")
+    };
+    assert!(matches!(
+        *child,
+        Output::Unary {
+            operation: OutputUnary::Sequence {
+                delivery: SequenceDelivery::Callback,
+                ..
+            },
+            ..
+        }
+    ));
+}
+#[test]
+fn callback_delivery_is_selected_before_bulk_promotion() {
+    use crate::operations::{Output, OutputUnary};
+    use prebindgen_declarations::{Declarations, SequenceDelivery};
+
+    let mut flat = flat("pub fn values()->Option<Vec<i64>>{}");
+    let defaults = Declarations::new(
+        &flat,
+        vec![],
+        vec![expand_return!(i64).field_self().bulk().into()],
+        vec![],
+    )
+    .unwrap();
+    let ty = flat.function("values").unwrap().ret.ty.clone();
+    let ordinary = defaults
+        .resolve_output(
+            &flat,
+            &JniCodec::raw(),
+            &ty,
+            &prebindgen_declarations::DeclarationOutput::auto(),
+            &(),
+        )
+        .unwrap();
+    assert!(matches!(
+        ordinary,
+        Output::Unary {
+            operation: OutputUnary::Bulk,
+            child: _
+        }
+    ));
+    let variant = defaults
+        .callback_variant(
+            &mut flat,
+            &JniCodec::raw(),
+            &fun!(values),
+            "values_fold",
+            &(),
+        )
+        .unwrap();
+    let callback = defaults
+        .resolve_output(
+            &flat,
+            &JniCodec::raw(),
+            &ty,
+            variant.ret.as_ref().unwrap(),
+            &(),
+        )
+        .unwrap();
+    let Output::Unary {
+        operation: OutputUnary::Optional,
+        child,
+    } = callback
+    else {
+        panic!("callback presence moved into a whole-collection bulk frame")
+    };
+    assert!(
+        matches!(*child,Output::Unary { operation: OutputUnary::Sequence { delivery: SequenceDelivery::Callback, .. }, child: element, .. } if matches!(*element,Output::Unary { operation: OutputUnary::Bulk, child: _ }))
+    );
+}
+#[test]
+fn callback_return_preserves_defaults_for_the_full_reference_type() {
+    use prebindgen_declarations::{frontend::OutputLeafOp, DeclarationOutput, Declarations};
+    let mut model = flat("pub fn values()->&Vec<i64>{}");
+    let defaults = Declarations::new(
+        &model,
+        vec![],
+        vec![expand_return!(&Vec<i64>)
+            .view(DeclarationOutput::Leaf(OutputLeafOp::Discard))
+            .into()],
+        vec![],
+    )
+    .unwrap();
+    let codec = JniCodec::raw();
+    let variant = defaults
+        .callback_variant(&mut model, &codec, &fun!(values), "values_fold", &())
+        .unwrap();
+    let error = defaults
+        .resolve_output(
+            &model,
+            &codec,
+            &model.function("values_fold").unwrap().ret.ty,
+            variant.ret.as_ref().unwrap(),
+            &(),
+        )
+        .unwrap_err();
+    assert!(
+        error.contains("requires exactly one outer sequence"),
+        "{error}"
+    );
 }

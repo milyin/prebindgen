@@ -8,7 +8,7 @@ pub(crate) struct ErrorBinding {
     pub name: String,
     pub ty: syn::Type,
     pub plan: Option<OutputPlan<CWire>>,
-    recipe: Option<prebindgen_declarations::Output>,
+    recipe: Option<crate::operations::Output>,
     pub fields: Vec<String>,
 }
 pub(crate) fn helper(name: &str) -> syn::Ident {

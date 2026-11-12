@@ -16,8 +16,8 @@ pub enum ResolvedSlot<T, P> {
 /// Schema with request-free input/output trees and the adapter's source metadata.
 pub struct Resolved<C: Codec>(std::marker::PhantomData<C>);
 impl<C: Codec> Schema for Resolved<C> {
-    type Input = ResolvedSlot<Input, <C::Schema as Schema>::Input>;
-    type Output = ResolvedSlot<Output, <C::Schema as Schema>::Output>;
+    type Input = ResolvedSlot<ResolvedInput<C>, <C::Schema as Schema>::Input>;
+    type Output = ResolvedSlot<ResolvedOutput<C>, <C::Schema as Schema>::Output>;
     type Module = ResolvedModule<C>;
     type Function = <C::Schema as Schema>::Function;
     type Type = <C::Schema as Schema>::Type;
@@ -31,6 +31,16 @@ pub struct ResolvedModule<C: Codec> {
     pub source: <C::Schema as Schema>::Module,
     compilation: Option<(C, C::Extra)>,
 }
+impl<C: Codec> ResolvedModule<C> {
+    /// Own the adapter and occurrence settings needed to compile this model.
+    /// Language generators can build resolved trees directly without Declarations.
+    pub fn new(source: <C::Schema as Schema>::Module, codec: C, extra: C::Extra) -> Self {
+        Self {
+            source,
+            compilation: Some((codec, extra)),
+        }
+    }
+}
 impl<C: Codec> Default for ResolvedModule<C> {
     fn default() -> Self {
         Self {
@@ -40,9 +50,9 @@ impl<C: Codec> Default for ResolvedModule<C> {
     }
 }
 
-pub(crate) struct FunctionRecipe {
-    pub inputs: Vec<Option<Input>>,
-    pub output: Option<Output>,
+pub(crate) struct FunctionRecipe<C: Codec> {
+    pub inputs: Vec<Option<ResolvedInput<C>>>,
+    pub output: Option<ResolvedOutput<C>>,
 }
 
 impl Declarations {
@@ -51,7 +61,7 @@ impl Declarations {
     /// Defaults and local overrides are consumed here. The returned model owns
     /// its compiler policy and occurrence settings; drop this Declarations value
     /// before calling [`compile_resolved`] if desired.
-    pub fn resolve<C: Codec>(
+    pub fn resolve<C: DeclarationCodec>(
         &self,
         flat: Flat<C::Schema>,
         codec: C,
@@ -194,7 +204,7 @@ pub(crate) fn compile_function<C: Codec>(
     flat: &mut Flat<C::Schema>,
     codec: &C,
     name: &str,
-    recipe: FunctionRecipe,
+    recipe: FunctionRecipe<C>,
     extra: &C::Extra,
 ) -> Result<()> {
     let source = flat.function(name)?;
@@ -204,7 +214,7 @@ pub(crate) fn compile_function<C: Codec>(
             let compiler = Compiler::new(flat, codec, format!("p{index}"));
             let wire = format_ident!("p{index}_callback");
             let value = format_ident!("p{index}_callback_value");
-            let names = matches!(tree, Input::Arrow { .. }).then_some((&wire, &value));
+            let names = matches!(tree, InputNode::Arrow { .. }).then_some((&wire, &value));
             let plan =
                 compiler.input_named(&p.ty.ty, &tree, extra, &Condition::default(), names)?;
             Some(plan)

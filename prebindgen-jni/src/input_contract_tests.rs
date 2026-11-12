@@ -1,6 +1,6 @@
 use super::*;
 use prebindgen_conversions::InputFragment;
-use prebindgen_declarations::{InputLeafOp, InputUnary};
+use prebindgen_declarations::{frontend::InputLeafOp, frontend::InputUnary};
 use prebindgen_flat::{Function, InputConversion, Param, TypeUse};
 use std::{cell::Cell, rc::Rc};
 

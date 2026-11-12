@@ -1,6 +1,6 @@
 //! Reproducible source-shape and generation checks for payload enum support.
 mod zenoh;
-use prebindgen_declarations::{fun, Input, Output};
+use prebindgen_declarations::{fun, DeclarationInput as Input, DeclarationOutput as Output};
 use prebindgen_flat::{Flat, Result};
 use prebindgen_jni::{callback, enum_class, package, sealed_class, JniGen};
 fn items(source: &str) -> Vec<(syn::Item, prebindgen::SourceLocation)> {

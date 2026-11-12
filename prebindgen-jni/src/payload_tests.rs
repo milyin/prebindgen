@@ -1,6 +1,8 @@
 use super::*;
-use prebindgen_declarations::{convert, fields, Output};
-use prebindgen_declarations::{InputUnary, OutputBranch, OutputLeafOp};
+use prebindgen_declarations::{convert, fields, DeclarationOutput as Output};
+use prebindgen_declarations::{
+    frontend::InputUnary, frontend::OutputBranch, frontend::OutputLeafOp,
+};
 
 fn build(source: &str) -> JniGenBuilder {
     JniGen::builder()

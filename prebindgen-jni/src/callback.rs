@@ -1,7 +1,8 @@
 //! Preparation and emission of retained source callbacks.
 use super::*;
+use crate::operations::OutputParts;
+use crate::operations::{Input, InputBranch};
 use prebindgen_conversions::{InputFragment, OutputFragment, TemplateContext};
-use prebindgen_declarations::InputBranch;
 use prebindgen_flat::{callback_signature, InputConversion, Wire, WireNode};
 use std::rc::Rc;
 

@@ -1,5 +1,5 @@
 use super::*;
-use prebindgen_declarations::OutputLeafOp;
+use prebindgen_declarations::frontend::OutputLeafOp;
 
 const SOURCE: &str = "
 pub type Value=String;

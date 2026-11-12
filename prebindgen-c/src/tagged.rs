@@ -663,7 +663,9 @@ fn tag_stem(ty: &syn::Type) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use prebindgen_declarations::{convert, from, fun, into, Output, ProjectionMode};
+    use prebindgen_declarations::{
+        convert, from, fun, into, DeclarationOutput as Output, ProjectionMode,
+    };
     fn flat(source: &str) -> Bindings {
         Bindings::parse(
             syn::parse_file(source)

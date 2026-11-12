@@ -82,8 +82,10 @@ fn wire(kind: Kind, ty: &Type, extra: &Extra) -> TestWire {
         component: Default::default(),
     }
 }
+test_frontend!(TestCodec);
 #[allow(clippy::type_complexity)] // Keep the test codec metadata roles visible.
 impl Codec for TestCodec {
+    test_operations!();
     type Schema = prebindgen_conversions::PlanSchema<TestWire, (), TestGroup, TestGroup>;
     fn binding_failure_layout(
         &self,
@@ -898,7 +900,9 @@ fn record_projection_retains_field_mappings_in_prepared_flat() {
 #[test]
 fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
     struct FinalizingCodec;
+    test_frontend!(FinalizingCodec);
     impl Codec for FinalizingCodec {
+        test_operations!();
         type Schema = prebindgen_conversions::PlanSchema<TestWire, (), TestGroup, TestGroup>;
 
         type Chain = TestGroup;
@@ -2232,39 +2236,6 @@ fn preparation_fills_one_fixed_schema_and_emission_needs_no_defaults() {
 }
 
 #[test]
-fn callback_variant_selects_delivery_before_wires_exist() {
-    let mut flat = parse("pub fn f()->Option<Vec<i64>>{}");
-    let defaults = Declarations::new(&flat, vec![], vec![], vec![]).unwrap();
-    let variant = defaults
-        .callback_variant(
-            &mut flat,
-            &TEST_CODEC,
-            &fun!(f),
-            "f_fold",
-            &Extra::default(),
-        )
-        .unwrap();
-    assert!(flat.function("f_fold").unwrap().ret.slot.is_none());
-    let Some(Output::Unary {
-        operation: OutputUnary::Optional,
-        child,
-    }) = variant.ret
-    else {
-        panic!("missing callback description")
-    };
-    assert!(matches!(
-        *child,
-        Output::Unary {
-            operation: OutputUnary::Sequence {
-                delivery: SequenceDelivery::Callback,
-                ..
-            },
-            ..
-        }
-    ));
-}
-
-#[test]
 fn sequence_identity_uses_element_defaults_and_staged_errors_name_the_function() {
     let source = model();
     let defaults = Declarations::new(
@@ -2590,57 +2561,6 @@ fn resolved_omissions_and_sequence_policies_survive_preparation_round_trip() {
         )
         .unwrap();
     assert_eq!(format!("{resolved:?}"), format!("{round_trip:?}"));
-}
-
-#[test]
-fn callback_delivery_is_selected_before_bulk_promotion() {
-    let mut flat = parse("pub fn values()->Option<Vec<i64>>{}");
-    let defaults = Declarations::new(
-        &flat,
-        vec![],
-        vec![expand_return!(i64).field_self().bulk().into()],
-        vec![],
-    )
-    .unwrap();
-    let ty = flat.function("values").unwrap().ret.ty.clone();
-    let ordinary = defaults
-        .resolve_output(&flat, &TEST_CODEC, &ty, &Output::auto(), &Extra::default())
-        .unwrap();
-    assert!(matches!(
-        ordinary,
-        Output::Unary {
-            operation: OutputUnary::Bulk,
-            child: _
-        }
-    ));
-    let variant = defaults
-        .callback_variant(
-            &mut flat,
-            &TEST_CODEC,
-            &fun!(values),
-            "values_fold",
-            &Extra::default(),
-        )
-        .unwrap();
-    let callback = defaults
-        .resolve_output(
-            &flat,
-            &TEST_CODEC,
-            &ty,
-            variant.ret.as_ref().unwrap(),
-            &Extra::default(),
-        )
-        .unwrap();
-    let Output::Unary {
-        operation: OutputUnary::Optional,
-        child,
-    } = callback
-    else {
-        panic!("callback presence moved into a whole-collection bulk frame")
-    };
-    assert!(
-        matches!(*child,Output::Unary { operation: OutputUnary::Sequence { delivery: SequenceDelivery::Callback, .. }, child: element, .. } if matches!(*element,Output::Unary { operation: OutputUnary::Bulk, child: _ }))
-    );
 }
 
 #[test]

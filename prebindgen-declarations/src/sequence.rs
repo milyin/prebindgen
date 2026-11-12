@@ -117,7 +117,8 @@ fn replace(code: &TokenStream, values: &[(syn::Ident, TokenStream)]) -> Result<T
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn input<C: Codec>(
+/// Assemble one sequence input from a prepared row conversion.
+pub fn input<C: Codec>(
     codec: &C,
     ty: &Type,
     extra: &C::Extra,
@@ -265,7 +266,8 @@ pub(crate) fn input<C: Codec>(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn output<C: Codec>(
+/// Assemble one sequence output with the selected transport and delivery.
+pub fn output<C: Codec>(
     codec: &C,
     ty: &Type,
     extra: &C::Extra,

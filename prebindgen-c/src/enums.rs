@@ -172,7 +172,7 @@ mod tests {
                 &codec,
                 "echo",
                 "value",
-                &prebindgen_declarations::Input::auto(),
+                &prebindgen_declarations::DeclarationInput::auto(),
                 &(),
             )
             .unwrap();
@@ -180,7 +180,7 @@ mod tests {
                 &mut model,
                 &codec,
                 "echo",
-                &prebindgen_declarations::Output::auto(),
+                &prebindgen_declarations::DeclarationOutput::auto(),
                 &(),
             )
             .unwrap();

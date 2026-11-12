@@ -1,7 +1,7 @@
 //! JNI error channels reuse ordinary output conversions. User callbacks run in Kotlin.
 use super::*;
+use crate::operations::OutputLeafOp;
 use prebindgen_conversions::OutputFragment;
-use prebindgen_declarations::OutputLeafOp;
 use prebindgen_flat::Conversion;
 use prebindgen_flat::OutputConversion;
 
@@ -10,7 +10,7 @@ pub(crate) struct ErrorBinding {
     pub(crate) helper: syn::Ident,
     ty: syn::Type,
     pub output: Option<JniOutput>,
-    recipe: Option<prebindgen_declarations::Output>,
+    recipe: Option<crate::operations::Output>,
     pub handler: String,
 }
 impl ErrorBinding {
@@ -136,7 +136,7 @@ pub(crate) fn resolve(
         let (ty, recipe) = if mapped {
             (
                 syn::parse_quote!(String),
-                prebindgen_declarations::Output::Leaf(OutputLeafOp::Value),
+                crate::operations::Output::Leaf(OutputLeafOp::Value),
             )
         } else {
             (
