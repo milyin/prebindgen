@@ -65,10 +65,10 @@ impl Codec for DomainCodec {
     type Chain = DomainGroup;
     type Branch = DomainGroup;
 
-    fn validate_input(&self, plan: &CodecInput<Self>) -> Result<()> {
+    fn validate_input(&self, plan: &CodecInputPlan<Self>) -> Result<()> {
         DomainAbi::validate(&plan.node)
     }
-    fn validate_output(&self, plan: &CodecOutput<Self>) -> Result<()> {
+    fn validate_output(&self, plan: &CodecOutputPlan<Self>) -> Result<()> {
         DomainAbi::validate(&plan.outcomes.success)?;
         prebindgen_conversions::match_output_fields(
             DomainAbi::wires(&plan.outcomes.success),

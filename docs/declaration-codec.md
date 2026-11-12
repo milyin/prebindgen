@@ -1,19 +1,62 @@
 # Implementing a language conversion compiler
 
-`InputNode<I, O>` and `OutputNode<I, O>` describe composition: a leaf, a unary
+`InputNode<InOps, OutOps>` and `OutputNode<InOps, OutOps>` describe composition: a leaf, a unary
 operation, a branch, or an arrow. `None` represents unit. An arrow's domain uses
 the opposite conversion direction and its codomain uses the enclosing direction.
-The adapter supplies the meanings of all operations through the separate `I`
-and `O` implementations of `Operations`.
+The adapter supplies the meanings of all operations through the separate
+`InputOps` and `OutputOps` traits. The first operation parameter requires
+`InputOps`; the second requires `OutputOps`. Each built-in operation set implements its corresponding trait.
 
 C and JNI define their own operation enums in their `operations` modules. For
 example, JNI has bulk packing and JVM object-record operations; C has neither.
 An adapter can introduce a different operation without extending a common enum
 or teaching a shared interpreter its meaning.
 
+## Names and direction parameters
+
+Each representation has an explicit prefix:
+
+| Role | C | JNI | Declaration syntax |
+| --- | --- | --- | --- |
+| Input tree | `CInput` | `JniInput` | `DeclInput` |
+| Output tree | `COutput` | `JniOutput` | `DeclOutput` |
+| Input operations | `CInputOps` | `JniInputOps` | `DeclInputOps` |
+| Output operations | `COutputOps` | `JniOutputOps` | `DeclOutputOps` |
+| Prepared converter | `CInputConverter` / `COutputConverter` | `JniInputConverter` / `JniOutputConverter` | — |
+| Binding model | `CBindings` | `JniBindings` | — |
+
+C converters are concrete plan aliases. JNI converters are containers that can
+retain independent converter implementations. Both serve the corresponding
+schema’s input/output slots.
+
+`CBindings` uses `CSchema`; `JniBindings<InConverter, OutConverter>` uses
+`JniSchema<InConverter, OutConverter>`. Generic plans use `PlanBindings` and
+`PlanSchema`. The intermediate model uses `Flat<ResolvedSchema<C>>`.
+
+Both tree directions keep the same parameter order:
+
+```rust,ignore
+InputNode<InOps, OutOps, InRequest, OutRequest>
+OutputNode<InOps, OutOps, InRequest, OutRequest>
+DeclInput<DeclInputRequest, DeclOutputRequest>
+DeclOutput<DeclInputRequest, DeclOutputRequest>
+```
+
+Callbacks reverse the node direction while retaining that parameter order.
+
+Shared declaration builders use names such as `DeclFunction`, `DeclCallback`,
+`DeclExpandParam` and `DeclExpandReturn`. JNI-specific declaration builders use
+`DeclJniPackage`, `DeclJniPtrClass`, `DeclJniDataClass`, `DeclJniEnumClass` and
+`DeclJniSealedClass`.
+
+Migration: former prepared converter names `JniInput::new(...)` and
+`JniOutput::new(...)` become `JniInputConverter::new(...)` and
+`JniOutputConverter::new(...)`. `JniInput` and `JniOutput` now name resolved trees;
+they are not converter containers.
+
 ## Resolving and compiling
 
-A `Flat<Resolved<C>>` stores the adapter's request-free conversion trees, source
+A `Flat<ResolvedSchema<C>>` stores the adapter's request-free conversion trees, source
 metadata, codec and occurrence settings. `compile_resolved(flat)` consumes that
 model and produces `Flat<C::Schema>` containing conversion plans for wrapper
 emission. It needs no configuration registry outside the model. Standalone
@@ -34,19 +77,19 @@ An adapter can construct the resolved model directly using
 `ResolvedModule::new`. The executable test
 [`independent_operation_vocabularies_compile_without_declaration_frontend`](../prebindgen-declarations/src/operation_tests.rs)
 builds and runs a wrapper with custom arithmetic input/output operations and
-never implements `DeclarationCodec`.
+never implements `DeclCodec`.
 
 ## The optional declaration frontend
 
-`Declarations` implements the existing expansion, conversion and callback
-configuration language. Its `DeclarationInput` / `DeclarationOutput` trees
+`DeclDefaults` implements the existing expansion, conversion and callback
+configuration language. Its `DeclInput` / `DeclOutput` trees
 are configuration syntax, distinct from the adapter trees stored in resolved
 Flat. The syntax enums are in `prebindgen_declarations::frontend`.
 
-Adapters using that syntax also implement `DeclarationCodec`. Resolution applies
+Adapters using that syntax also implement `DeclCodec`. Resolution applies
 defaults and local overrides recursively, interpreting each syntax operation
 into the adapter's vocabulary. `expand_input` and `expand_output` can return
-adapter-specific trees directly. Their `Resolve` context resolves nested values
+adapter-specific trees directly. Their `DeclResolve` context resolves nested values
 with the same defaults, recursion stack and occurrence policy. For example, a
 JNI record expansion resolves each field before constructing its JVM-record
 node. A callback's arguments and result use this same process in opposite
@@ -57,9 +100,9 @@ JNI owns bulk promotion here. Per-element callback delivery is selected before
 this promotion, preserving the callback element boundary.
 
 Application authors normally use `Cbindgen` or `JniGen` declarations.
-`Declarations::fill` remains available for individual functions and uses the
+`DeclDefaults::fill` remains available for individual functions and uses the
 same resolution and compilation pipeline. Direct compiler callers supply
-`prebindgen_c::operations::{Input, Output}` or the corresponding JNI types;
+`prebindgen_c::{CInput, COutput}` or `prebindgen_jni::{JniInput, JniOutput}`;
 declaration syntax cannot accidentally be passed as a resolved adapter tree.
 
 ## Leaf and wire helpers

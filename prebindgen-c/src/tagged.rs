@@ -243,13 +243,13 @@ fn slots(
 }
 
 pub(crate) fn input(
-    flat: &Bindings,
+    flat: &CBindings,
     ty: &syn::Type,
     wire: syn::Ident,
-    mut plan: InputPlan<CWire>,
+    mut plan: CInputPlan<CWire>,
     active: &Condition,
     role: InputRole,
-) -> Result<InputPlan<CWire>> {
+) -> Result<CInputPlan<CWire>> {
     let (value, layout) = shape(flat, ty, &plan.node)?;
     let carrier = format_ident!("{wire}_carrier");
     let by_value = role == InputRole::CallbackResult || !value.owned;
@@ -337,11 +337,11 @@ pub(crate) fn input(
     Ok(plan)
 }
 pub(crate) fn output(
-    flat: &Bindings,
+    flat: &CBindings,
     ty: &syn::Type,
     wire: syn::Ident,
-    mut plan: OutputPlan<CWire>,
-) -> Result<OutputPlan<CWire>> {
+    mut plan: COutputPlan<CWire>,
+) -> Result<COutputPlan<CWire>> {
     let (value, layout) = shape(flat, ty, &plan.outcomes.success)?;
     let native = &value.rust;
     let WireNode::Branch {
@@ -663,9 +663,9 @@ fn tag_stem(ty: &syn::Type) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use prebindgen_declarations::{convert, from, fun, into, DeclarationOutput, ProjectionMode};
-    fn flat(source: &str) -> Bindings {
-        Bindings::parse(
+    use prebindgen_declarations::{convert, from, fun, into, DeclOutput, ProjectionMode};
+    fn flat(source: &str) -> CBindings {
+        CBindings::parse(
             syn::parse_file(source)
                 .unwrap()
                 .items
@@ -690,7 +690,7 @@ mod tests {
         let generated=Cbindgen::new(flat("pub struct Child{pub n:i64}pub struct Holder{pub child:Child}pub enum Event{One(Holder),Empty}pub fn child(value:&Holder)->&Child{}pub fn make()->Event{}"))
             .opaque_ptr("child",syn::parse_quote!(Child))
             .tagged_union("event",syn::parse_quote!(Event))
-            .function(fun!(make).expand_return(DeclarationOutput::enum_variants(vec![vec![DeclarationOutput::Unary { operation: OutputUnary::Getter { function: "child".into() }, child: Box::new(DeclarationOutput::Leaf(OutputLeafOp::Value)),  }],vec![]], true, Some(ProjectionMode::Borrowed)))).panic().build();
+            .function(fun!(make).expand_return(DeclOutput::enum_variants(vec![vec![DeclOutput::Unary { operation: DeclOutputUnary::Getter { function: "child".into() }, child: Box::new(DeclOutput::Leaf(DeclOutputLeafOp::Value)),  }],vec![]], true, Some(ProjectionMode::Borrowed)))).panic().build();
         let error = generated.err().unwrap();
         assert!(error.contains("temporary"), "{error}");
     }

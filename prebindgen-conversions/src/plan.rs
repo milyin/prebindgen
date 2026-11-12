@@ -8,23 +8,23 @@ use quote::quote;
 /// `code` binds the caller's target and evaluates its continuation exactly once.
 /// `storage` contains only enclosing declarations with inert initializers. Recipe
 /// composition can hoist those declarations outside optional/selector branches.
-pub struct InputPlan<W: WireKind, C = (), N = (), B = ()> {
+pub struct InputPlan<Wire: WireKind, Context = (), Chain = (), Branch = ()> {
     /// Whether conversion can return a binding error, excluding panics/aborts.
     pub fallible: bool,
     /// Context supplied by the language adapter during emission.
-    pub context: std::marker::PhantomData<fn(&C)>,
+    pub context: std::marker::PhantomData<fn(&Context)>,
     /// Authoritative incoming representation, including adapter access metadata.
-    pub node: prebindgen_flat::WireNode<W, N, B>,
+    pub node: prebindgen_flat::WireNode<Wire, Chain, Branch>,
     /// Backing-storage declarations, without wire reads or ownership takes.
     pub storage: TokenStream,
     /// Complete scoped conversion with target and continuation markers.
     pub code: TokenStream,
 }
-impl<W: WireKind, C, N, B> InputPlan<W, C, N, B> {
+impl<Wire: WireKind, Context, Chain, Branch> InputPlan<Wire, Context, Chain, Branch> {
     /// Prepare conversion statements and their value as one scoped operation.
     /// Supporting owners needed outside conditional branches belong in `storage`.
     pub fn new(
-        node: prebindgen_flat::WireNode<W, N, B>,
+        node: prebindgen_flat::WireNode<Wire, Chain, Branch>,
         code: TokenStream,
         value: TokenStream,
     ) -> Self {
@@ -54,17 +54,17 @@ impl<W: WireKind, C, N, B> InputPlan<W, C, N, B> {
 ///
 /// Optional concrete storage implementing [`prebindgen_flat::Conversion`].
 /// Delivery and ownership commit are separate requests.
-pub struct OutputPlan<W: WireKind, C = (), N = (), B = ()> {
+pub struct OutputPlan<Wire: WireKind, Context = (), Chain = (), Branch = ()> {
     /// Whether preparation or delivery can return a binding error, excluding
     /// panics and allocation aborts. Adapters must mark custom fallible code.
     pub fallible: bool,
     /// Context type supplied by the language generator at emission.
-    pub context: std::marker::PhantomData<fn(&C)>,
+    pub context: std::marker::PhantomData<fn(&Context)>,
     /// Delivery and return code prepared with this result slot.
     pub delivery: Delivery,
     /// Authoritative success/error value tree. Adapter metadata on its nodes
     /// records explicit native encodings without duplicating payload subtrees.
-    pub outcomes: prebindgen_flat::Outcomes<prebindgen_flat::WireNode<W, N, B>>,
+    pub outcomes: prebindgen_flat::Outcomes<prebindgen_flat::WireNode<Wire, Chain, Branch>>,
     /// Complete transfers for the selected protocol. Buffered outputs commit after
     /// foreign delivery succeeds; explicit visitor protocols can commit each
     /// element at callback entry during preparation.
@@ -124,7 +124,7 @@ pub fn source_result_expr() -> TokenStream {
 
 macro_rules! plan_traits {
     ($plan:ident; $($field:ident),* $(,)?) => {
-        impl<W: WireKind + Clone, C, N: Clone, B: Clone> Clone for $plan<W, C, N, B> {
+        impl<Wire: WireKind + Clone, Context, Chain: Clone, Branch: Clone> Clone for $plan<Wire, Context, Chain, Branch> {
             fn clone(&self) -> Self {
                 Self {
                     context: self.context,
@@ -132,8 +132,8 @@ macro_rules! plan_traits {
                 }
             }
         }
-        impl<W: WireKind + std::fmt::Debug, C, N: std::fmt::Debug, B: std::fmt::Debug> std::fmt::Debug
-            for $plan<W, C, N, B>
+        impl<Wire: WireKind + std::fmt::Debug, Context, Chain: std::fmt::Debug, Branch: std::fmt::Debug> std::fmt::Debug
+            for $plan<Wire, Context, Chain, Branch>
         {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 f.debug_struct(stringify!($plan))
@@ -149,10 +149,10 @@ plan_traits!(OutputPlan; fallible, outcomes, delivery, commit, statements, value
 /// Match prepared expressions to the fields of a concrete result packet or row.
 /// The caller supplies destination fields in ABI order. Names, rather than the
 /// expression list's order, establish correspondence; missing/extra names fail.
-pub fn match_output_fields<'a, W: WireKind + 'a>(
-    fields: impl IntoIterator<Item = &'a prebindgen_flat::Wire<W>>,
+pub fn match_output_fields<'a, Wire: WireKind + 'a>(
+    fields: impl IntoIterator<Item = &'a prebindgen_flat::Wire<Wire>>,
     bindings: &'a [(syn::Ident, TokenStream)],
-) -> prebindgen_flat::Result<Vec<(&'a prebindgen_flat::Wire<W>, &'a TokenStream)>> {
+) -> prebindgen_flat::Result<Vec<(&'a prebindgen_flat::Wire<Wire>, &'a TokenStream)>> {
     validate_value_bindings(bindings)?;
     let mut remaining = bindings
         .iter()

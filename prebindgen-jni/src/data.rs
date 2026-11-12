@@ -34,13 +34,13 @@ use std::rc::Rc;
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 #[derive(Clone)]
-pub struct DataClassDecl {
+pub struct DeclJniDataClass {
     /// Source record type, resolved against the selected flat model.
     pub ty: syn::Type,
     /// Literal Kotlin short name, or the source type's last path segment.
     pub name: Option<String>,
 }
-impl DataClassDecl {
+impl DeclJniDataClass {
     /// Declare a data class for the source record `ty`.
     pub fn new(ty: syn::Type) -> Self {
         Self { ty, name: None }
@@ -51,46 +51,46 @@ impl DataClassDecl {
         self
     }
 }
-/// A class declaration placed in a [`PackageDecl`].
+/// A class declaration placed in a [`DeclJniPackage`].
 #[derive(Clone)]
-pub enum ClassDecl {
+pub enum DeclJniClass {
     /// An owning native handle.
-    Ptr(PtrClassDecl),
+    Ptr(DeclJniPtrClass),
     /// A record mapped to a Kotlin data class.
-    Data(DataClassDecl),
+    Data(DeclJniDataClass),
     /// A fieldless enum mapped to a Kotlin enum class.
-    Enum(EnumClassDecl),
+    Enum(DeclJniEnumClass),
     /// A source payload enum represented as a sealed interface.
-    Sealed(SealedClassDecl),
+    Sealed(DeclJniSealedClass),
     /// A retained callback interface and its signature defaults.
-    Callback(prebindgen_declarations::CallbackDecl),
+    Callback(prebindgen_declarations::DeclCallback),
 }
-impl From<PtrClassDecl> for ClassDecl {
-    fn from(value: PtrClassDecl) -> Self {
+impl From<DeclJniPtrClass> for DeclJniClass {
+    fn from(value: DeclJniPtrClass) -> Self {
         Self::Ptr(value)
     }
 }
-impl From<DataClassDecl> for ClassDecl {
-    fn from(value: DataClassDecl) -> Self {
+impl From<DeclJniDataClass> for DeclJniClass {
+    fn from(value: DeclJniDataClass) -> Self {
         Self::Data(value)
     }
 }
-impl From<SealedClassDecl> for ClassDecl {
-    fn from(value: SealedClassDecl) -> Self {
+impl From<DeclJniSealedClass> for DeclJniClass {
+    fn from(value: DeclJniSealedClass) -> Self {
         Self::Sealed(value)
     }
 }
-impl From<EnumClassDecl> for ClassDecl {
-    fn from(value: EnumClassDecl) -> Self {
+impl From<DeclJniEnumClass> for DeclJniClass {
+    fn from(value: DeclJniEnumClass) -> Self {
         Self::Enum(value)
     }
 }
-impl From<prebindgen_declarations::CallbackDecl> for ClassDecl {
-    fn from(value: prebindgen_declarations::CallbackDecl) -> Self {
+impl From<prebindgen_declarations::DeclCallback> for DeclJniClass {
+    fn from(value: prebindgen_declarations::DeclCallback) -> Self {
         Self::Callback(value)
     }
 }
-impl ClassDecl {
+impl DeclJniClass {
     pub(crate) fn ty(&self) -> &syn::Type {
         match self {
             Self::Ptr(c) => &c.ty,
@@ -113,9 +113,9 @@ impl ClassDecl {
 #[macro_export]
 /// Declare a Kotlin data class from Rust type syntax.
 ///
-/// Returns [`DataClassDecl`]. The source type need not be in scope. Invalid type
+/// Returns [`DeclJniDataClass`]. The source type need not be in scope. Invalid type
 /// syntax panics; unsupported record fields are diagnosed during build.
-macro_rules! data_class {($($ty:tt)+)=>{$crate::DataClassDecl::new($crate::__type(stringify!($($ty)+)))};}
+macro_rules! data_class {($($ty:tt)+)=>{$crate::DeclJniDataClass::new($crate::__type(stringify!($($ty)+)))};}
 
 /// Prepared Kotlin property metadata stored on its source field.
 #[derive(Clone, Debug, Default)]
@@ -130,7 +130,7 @@ pub struct JniField {
 }
 /// Kotlin record information attached to a parent node in the wire tree.
 #[derive(Clone, Debug)]
-pub struct DataGroup {
+pub struct JniDataGroup {
     pub(crate) root: String,
     pub(crate) class_name: String,
     pub(crate) condition: String,
@@ -139,7 +139,7 @@ pub struct DataGroup {
 // Resolve the Rust type describing one public value, independently of boundary
 // expansions. Function slots still retain the actual domain type and conversion.
 fn value_type(
-    flat: &Bindings,
+    flat: &JniBindings,
     ty: &syn::Type,
     input: bool,
     stack: &mut Vec<String>,
@@ -200,9 +200,9 @@ fn value_type(
 }
 
 /// Complete class and enum declarations already attached to their source types.
-pub(crate) fn prepare(flat: &mut Bindings) -> Result<()> {
+pub(crate) fn prepare(flat: &mut JniBindings) -> Result<()> {
     fn element(
-        flat: &mut Bindings,
+        flat: &mut JniBindings,
         ty: &syn::Type,
         stack: &mut Vec<String>,
         resolved: &mut BTreeSet<String>,
@@ -252,7 +252,7 @@ pub(crate) fn prepare(flat: &mut Bindings) -> Result<()> {
         ))
     }
     fn resolve(
-        flat: &mut Bindings,
+        flat: &mut JniBindings,
         key: &str,
         stack: &mut Vec<String>,
         resolved: &mut BTreeSet<String>,
@@ -499,7 +499,7 @@ pub(crate) fn prepare(flat: &mut Bindings) -> Result<()> {
 impl JniCodec {
     pub(super) fn enum_type<'a>(
         &self,
-        flat: &'a Bindings,
+        flat: &'a JniBindings,
         ty: &syn::Type,
     ) -> Option<&'a Rc<JniEnum>> {
         if !self.declared {
@@ -642,7 +642,7 @@ impl Class {
         if !matches!(metadata, JniGroup::Fields(None)) {
             return Err("record annotation requires a field collection".into());
         }
-        *metadata = JniGroup::Fields(Some(DataGroup {
+        *metadata = JniGroup::Fields(Some(JniDataGroup {
             root,
             class_name: self.fqn(),
             condition,
@@ -670,7 +670,7 @@ pub(crate) fn fields(nodes: &[kotlin::JniNode]) -> Result<Vec<FieldNode<'_>>> {
 }
 pub(crate) fn input_kotlin(
     nodes: &[kotlin::JniNode],
-    d: &DataGroup,
+    d: &JniDataGroup,
     context: &KotlinContext<'_>,
     active: &str,
 ) -> Result<KotlinInput> {
@@ -790,7 +790,7 @@ pub(crate) fn input_kotlin(
 }
 pub(crate) fn output_kotlin(
     nodes: &[kotlin::JniNode],
-    d: &DataGroup,
+    d: &JniDataGroup,
     context: &KotlinContext<'_>,
     owners: Option<&str>,
 ) -> Result<KotlinOutput> {
@@ -812,7 +812,7 @@ mod group_tests {
 
     #[test]
     fn codec_reads_current_enum_metadata_without_a_preparation_cache() {
-        let mut flat = Bindings::parse(
+        let mut flat = JniBindings::parse(
             syn::parse_file("pub enum E{A,B}")
                 .unwrap()
                 .items
@@ -849,7 +849,7 @@ mod group_tests {
     }
     #[test]
     fn resolved_record_projection_survives_preparation_round_trip() {
-        let mut flat = Bindings::parse(
+        let mut flat = JniBindings::parse(
             syn::parse_file("pub struct Record{pub n:i64}pub fn items()->Vec<Record>{}")
                 .unwrap()
                 .items
@@ -869,13 +869,13 @@ mod group_tests {
         prepare(&mut flat).unwrap();
         let codec = JniCodec::declared();
         let defaults =
-            prebindgen_declarations::Declarations::new(&flat, vec![], vec![], vec![]).unwrap();
-        let request = DeclarationOutput::Unary {
-            operation: OutputUnary::Sequence {
+            prebindgen_declarations::DeclDefaults::new(&flat, vec![], vec![], vec![]).unwrap();
+        let request = DeclOutput::Unary {
+            operation: DeclOutputUnary::Sequence {
                 delivery: prebindgen_declarations::SequenceDelivery::Callback,
                 mode: Some(ProjectionMode::Owned),
             },
-            child: Box::new(DeclarationOutput::Leaf(OutputLeafOp::Projected(
+            child: Box::new(DeclOutput::Leaf(DeclOutputLeafOp::Projected(
                 Projection::owned(),
             ))),
         };
@@ -889,7 +889,7 @@ mod group_tests {
             )
             .unwrap();
         assert!(
-            matches!(&resolved,crate::operations::Output::Unary { operation: crate::operations::OutputUnary::Sequence { .. }, child: element, .. } if matches!(element.as_ref(),crate::operations::Output::Branch { operation: crate::operations::OutputBranch::Record { mode: Some(ProjectionMode::Owned) }, children: fields,  } if matches!(fields.as_slice(),[crate::operations::Output::Leaf(crate::operations::OutputLeafOp::Projected(_))])))
+            matches!(&resolved,crate::operations::JniOutput::Unary { operation: crate::operations::JniOutputUnary::Sequence { .. }, child: element, .. } if matches!(element.as_ref(),crate::operations::JniOutput::Branch { operation: crate::operations::JniOutputBranch::Record { mode: Some(ProjectionMode::Owned) }, children: fields,  } if matches!(fields.as_slice(),[crate::operations::JniOutput::Leaf(crate::operations::JniOutputLeafOp::Projected(_))])))
         );
         drop(defaults);
         let plan = prebindgen_declarations::compile_output(&flat, &codec, "items", &resolved, &())
@@ -900,7 +900,7 @@ mod group_tests {
     fn record(root: &str) -> WireNode<JniWire, crate::JniChain, crate::JniBranch> {
         WireNode::Branch {
             controls: vec![],
-            meta: JniBranch::Group(JniGroup::Fields(Some(DataGroup {
+            meta: JniBranch::Group(JniGroup::Fields(Some(JniDataGroup {
                 root: root.into(),
                 class_name: "example.Empty".into(),
                 condition: "true".into(),
@@ -958,7 +958,7 @@ mod group_tests {
         };
         field = prebindgen_flat::WireNode::Branch {
             controls: vec![],
-            meta: JniBranch::Group(JniGroup::Fields(Some(DataGroup {
+            meta: JniBranch::Group(JniGroup::Fields(Some(JniDataGroup {
                 root: "point".into(),
                 class_name: "example.Point".into(),
                 condition: "true".into(),

@@ -1,7 +1,7 @@
 //! Preparation and emission of retained source callbacks.
 use super::*;
-use crate::operations::OutputParts;
-use crate::operations::{Input, InputBranch};
+use crate::operations::JniOutputParts;
+use crate::operations::{JniInput, JniInputBranch};
 use prebindgen_conversions::{InputFragment, OutputFragment, TemplateContext};
 use prebindgen_flat::{callback_signature, InputConversion, Wire, WireNode};
 use std::rc::Rc;
@@ -22,13 +22,13 @@ pub struct JniCallback {
 struct CallbackReturn {
     package: String,
     source_type: syn::Type,
-    input: JniInput,
+    input: JniInputConverter,
 }
 #[derive(Clone, Debug)]
 struct Argument {
     source_type: syn::Type,
     value: TokenStream,
-    output: JniOutput,
+    output: JniOutputConverter,
     scoped: bool,
 }
 /// Retain source callback occurrences before filtering to exported functions/helpers.
@@ -57,7 +57,7 @@ pub(crate) fn source_parameters(
 
 /// A declaration configures a source occurrence, rather than inventing a signature.
 pub(crate) fn validate_source_occurrence(
-    flat: &Bindings,
+    flat: &JniBindings,
     declaration: &prebindgen_declarations::CallbackOperation,
     sources: &[syn::Type],
 ) -> Result<()> {
@@ -93,7 +93,7 @@ pub(crate) fn validate_source_occurrence(
 /// Compile one callback occurrence, including a source constructor's argument.
 pub(crate) fn input(
     request: prebindgen_declarations::InputArrow<'_, JniCodec>,
-) -> Result<InputPlan<JniWire>> {
+) -> Result<JniInputPlan<JniWire>> {
     let prebindgen_declarations::InputArrow {
         flat,
         operation: configuration,
@@ -109,8 +109,8 @@ pub(crate) fn input(
     let signature = callback_signature(ty)?.ok_or("expected source callback")?;
     let returns_unit = matches!(&signature.return_type, syn::Type::Tuple(t) if t.elems.is_empty());
     if returns_unit
-        && !matches!(codomain, Input::None)
-        && !matches!(codomain, Input::Branch { operation: InputBranch::Fields, children } if children.is_empty())
+        && !matches!(codomain, JniInput::None)
+        && !matches!(codomain, JniInput::Branch { operation: JniInputBranch::Fields, children } if children.is_empty())
     {
         return Err("unit callback returns require an empty unit input representation".into());
     }
@@ -257,7 +257,7 @@ impl JniCallback {
             .get_mut(index)
             .ok_or("callback argument index out of range")?;
         sequence::validate_buffered(&output.output_outcomes().success)?;
-        argument.output = JniOutput::new(output);
+        argument.output = JniOutputConverter::new(output);
         Ok(())
     }
     /// Replace Kotlin-to-Rust conversion of the callback's owned return value.
@@ -269,13 +269,13 @@ impl JniCallback {
             .return_value
             .as_mut()
             .ok_or("unit callback has no return converter")?;
-        value.input = JniInput::new(input);
+        value.input = JniInputConverter::new(input);
         Ok(())
     }
     /// Compile this configured retained callback as one ordinary function input.
     /// Call after changing argument/return converters so the Rust closure and
     /// Kotlin interface are prepared from the same authoritative description.
-    pub fn into_input(self, wire: syn::Ident, target: syn::Ident) -> Result<JniInput> {
+    pub fn into_input(self, wire: syn::Ident, target: syn::Ident) -> Result<JniInputConverter> {
         Rc::new(self)
             .input(wire, target, &prebindgen_declarations::Condition::default())
             .map(Into::into)
@@ -312,7 +312,7 @@ impl JniCallback {
         wire: syn::Ident,
         var: syn::Ident,
         active: &prebindgen_declarations::Condition,
-    ) -> Result<InputPlan<JniWire>> {
+    ) -> Result<JniInputPlan<JniWire>> {
         prebindgen_conversions::validate_wire_names(self.arguments.iter().flat_map(|arg| {
             prebindgen_flat::wire_definitions(std::iter::once(
                 &arg.output.output_outcomes().success,
@@ -431,7 +431,7 @@ impl JniCallback {
         } else {
             quote!(#retained.with_env(#capacity, |#environment| { let mut #environment = #environment; #source_bindings #invoke });)
         };
-        let mut plan = InputPlan::new(
+        let mut plan = JniInputPlan::new(
             WireNode::Leaf(vec![Wire {
                 name: wire.clone(),
                 kind: JniWire::Callback {
@@ -1105,7 +1105,7 @@ mod preflight_tests {
                 &prebindgen_declarations::Condition::default(),
             ))
             .unwrap();
-        let input = JniInput::from(plan);
+        let input = JniInputConverter::from(plan);
         let callback = Rc::new(JniCallback {
             package: "test".into(),
             name: "ReturnHandle".into(),

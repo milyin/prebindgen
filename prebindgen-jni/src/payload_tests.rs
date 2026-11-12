@@ -1,7 +1,7 @@
 use super::*;
-use prebindgen_declarations::{convert, fields, DeclarationOutput};
+use prebindgen_declarations::{convert, fields, DeclOutput};
 use prebindgen_declarations::{
-    frontend::InputUnary, frontend::OutputBranch, frontend::OutputLeafOp,
+    frontend::DeclInputUnary, frontend::DeclOutputBranch, frontend::DeclOutputLeafOp,
 };
 
 fn build(source: &str) -> JniGenBuilder {
@@ -53,11 +53,11 @@ fn recovery_config_nests_optional_enum_with_canonical_duration() {
 fn fields_only_callback_inherits_owned_payload_expansion_without_classes() {
     let source="pub struct Sample{pub n:i64}pub enum ReplyResult{Sample(Sample),Error(String)}pub struct ReplyStruct{pub result:ReplyResult,pub replier_id:Option<i64>}pub type Reply=String;pub fn reply_into_struct(value:Reply)->ReplyStruct{}pub fn receive(cb:impl Fn(Reply)){}";
     let generated = build(source)
-        .expand(expand_return!(Sample).view(DeclarationOutput::Branch {
-            operation: OutputBranch::OwnedFields,
-            children: vec![DeclarationOutput::auto()],
+        .expand(expand_return!(Sample).view(DeclOutput::Branch {
+            operation: DeclOutputBranch::OwnedFields,
+            children: vec![DeclOutput::auto()],
         }))
-        .expand(expand_return!(ReplyResult).view(DeclarationOutput::enum_fields([])))
+        .expand(expand_return!(ReplyResult).view(DeclOutput::enum_fields([])))
         .expand(expand_return!(Reply).fields_into(fields!(reply_into_struct)))
         .package(package!().fun(fun!(receive)))
         .build()
@@ -95,8 +95,8 @@ fn local_field_expansion_needs_no_value_class_and_publishes_source_tags() {
         .package(
             package!().fun(
                 fun!(echo)
-                    .expand_param("value", DeclarationInput::enum_fields([]))
-                    .expand_return(DeclarationOutput::enum_fields([])),
+                    .expand_param("value", DeclInput::enum_fields([]))
+                    .expand_return(DeclOutput::enum_fields([])),
             ),
         )
         .build()
@@ -137,7 +137,7 @@ fn enum_override_keys_are_checked_against_source_members() {
     let error = build("pub enum Event{Idle,Count(i64)}pub fn echo(value:Event)->Event{value}")
         .package(package!().fun(fun!(echo).expand_param(
             "value",
-            DeclarationInput::enum_fields([("Count", vec![("missing", DeclarationInput::auto())])]),
+            DeclInput::enum_fields([("Count", vec![("missing", DeclInput::auto())])]),
         )))
         .build()
         .err()
@@ -166,7 +166,7 @@ fn canonical_output_helper_can_return_result_as_data() {
 #[test]
 fn bulk_enums_use_target_union_offsets() {
     let generated=build("pub enum Event{Idle,Count(u64),Packet{id:u64,bytes:Vec<u8>}}pub fn echo(values:Vec<Event>)->Vec<Event>{values}")
-        .package(package!().class(sealed_class!(Event)).fun(fun!(echo).expand_param("values",DeclarationInput::Unary { operation: InputUnary::Sequence, child: Box::new(DeclarationInput::value()) }.bulk()))).build().unwrap();
+        .package(package!().class(sealed_class!(Event)).fun(fun!(echo).expand_param("values",DeclInput::Unary { operation: DeclInputUnary::Sequence, child: Box::new(DeclInput::value()) }.bulk()))).build().unwrap();
     syn::parse_file(&generated.rust).unwrap();
     assert!(generated.rust.contains("pub union __PbBulk_"));
     assert!(generated.rust.contains("offset_of!"));
@@ -193,13 +193,13 @@ fn grouped_enum_fields_reject_multiple_logical_output_values() {
         .package(
             package!()
                 .class(sealed_class!(Event))
-                .fun(fun!(echo).expand_return(DeclarationOutput::enum_variants(
+                .fun(fun!(echo).expand_return(DeclOutput::enum_variants(
                     vec![
-                        vec![DeclarationOutput::Branch {
-                            operation: OutputBranch::Combine,
+                        vec![DeclOutput::Branch {
+                            operation: DeclOutputBranch::Combine,
                             children: vec![
-                                DeclarationOutput::Leaf(OutputLeafOp::Value),
-                                DeclarationOutput::Leaf(OutputLeafOp::Value),
+                                DeclOutput::Leaf(DeclOutputLeafOp::Value),
+                                DeclOutput::Leaf(DeclOutputLeafOp::Value),
                             ],
                         }],
                         vec![],

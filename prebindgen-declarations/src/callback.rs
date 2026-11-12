@@ -1,5 +1,5 @@
 //! Signature defaults and occurrence overrides for source callbacks.
-use crate::{DeclarationInput, DeclarationOutput, InputRequest, OutputRequest};
+use crate::{DeclInput, DeclInputRequest, DeclOutput, DeclOutputRequest};
 use prebindgen_flat::{callback_signature, Flat, Result, Schema};
 use std::collections::BTreeMap;
 use syn::Type;
@@ -20,7 +20,7 @@ use syn::Type;
 /// let registration = fun!(register).expand_param("callback", handler);
 /// ```
 #[derive(Clone, Debug)]
-pub struct CallbackDecl {
+pub struct DeclCallback {
     /// Source `impl Fn(...) -> R` signature; marker bounds do not identify defaults.
     pub ty: Type,
     /// Literal destination interface name.
@@ -28,11 +28,11 @@ pub struct CallbackDecl {
     /// Destination namespace, supplied by the language adapter's placement declaration.
     pub namespace: Option<String>,
     /// Argument output overrides, indexed in source invocation order.
-    pub params: BTreeMap<usize, DeclarationOutput<OutputRequest, InputRequest>>,
+    pub params: BTreeMap<usize, DeclOutput<DeclInputRequest, DeclOutputRequest>>,
     /// Returned-value input override.
-    pub ret: Option<DeclarationInput<InputRequest, OutputRequest>>,
+    pub ret: Option<DeclInput<DeclInputRequest, DeclOutputRequest>>,
 }
-impl CallbackDecl {
+impl DeclCallback {
     /// Declare defaults or an occurrence override for a source callback signature.
     pub fn new(ty: Type) -> Self {
         Self {
@@ -55,7 +55,7 @@ impl CallbackDecl {
     pub fn expand_param(
         mut self,
         index: usize,
-        output: impl Into<DeclarationOutput<OutputRequest, InputRequest>>,
+        output: impl Into<DeclOutput<DeclInputRequest, DeclOutputRequest>>,
     ) -> Self {
         assert!(
             self.params.insert(index, output.into()).is_none(),
@@ -66,17 +66,17 @@ impl CallbackDecl {
     /// Override the callback result's foreign-to-Rust conversion.
     pub fn expand_return(
         mut self,
-        input: impl Into<DeclarationInput<InputRequest, OutputRequest>>,
+        input: impl Into<DeclInput<DeclInputRequest, DeclOutputRequest>>,
     ) -> Self {
         self.ret = Some(input.into());
         self
     }
 }
-impl From<CallbackDecl> for DeclarationInput<InputRequest, OutputRequest> {
-    fn from(decl: CallbackDecl) -> Self {
+impl From<DeclCallback> for DeclInput<DeclInputRequest, DeclOutputRequest> {
+    fn from(decl: DeclCallback) -> Self {
         Self::for_type(
             decl.ty.clone(),
-            Self::Request(InputRequest::Callback(Box::new(decl))),
+            Self::Request(DeclInputRequest::Callback(Box::new(decl))),
         )
     }
 }
@@ -111,7 +111,7 @@ impl CallbackOperation {
 /// Declare a callback interface, defaults, or a callback occurrence override.
 #[macro_export]
 macro_rules! callback {
-    ($($ty:tt)+) => { $crate::CallbackDecl::new($crate::declarations::parse_type(stringify!($($ty)+))) };
+    ($($ty:tt)+) => { $crate::DeclCallback::new($crate::declarations::parse_type(stringify!($($ty)+))) };
 }
 
 /// Resolve a callback signature for configuration identity, excluding marker bounds.

@@ -41,24 +41,27 @@ fn validate_overrides<V, F, T>(
     Ok(())
 }
 
-impl Declarations {
+impl DeclDefaults {
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn enum_input_recipe<C: DeclarationCodec>(
+    pub(crate) fn enum_input_recipe<C: DeclCodec>(
         &self,
         flat: &Flat<C::Schema>,
         codec: &C,
         ty: &Type,
         extra: &C::Extra,
-        entries: &BTreeMap<String, BTreeMap<String, DeclarationInput<InputRequest, OutputRequest>>>,
+        entries: &BTreeMap<
+            String,
+            BTreeMap<String, DeclInput<DeclInputRequest, DeclOutputRequest>>,
+        >,
         value: bool,
         stack: &mut Vec<String>,
     ) -> Result<crate::ResolvedInput<C>> {
         let source = flat.payload_enum(ty)?;
         validate_overrides(source, entries)?;
         let default = if value {
-            DeclarationInput::value()
+            DeclInput::value()
         } else {
-            DeclarationInput::auto()
+            DeclInput::auto()
         };
         let variants = source
             .variants
@@ -85,7 +88,7 @@ impl Declarations {
         crate::resolution::resolve_input_enum(codec, variants, value)
     }
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn enum_output_recipe<C: DeclarationCodec>(
+    pub(crate) fn enum_output_recipe<C: DeclCodec>(
         &self,
         flat: &Flat<C::Schema>,
         codec: &C,
@@ -93,7 +96,7 @@ impl Declarations {
         extra: &C::Extra,
         entries: &BTreeMap<
             String,
-            BTreeMap<String, DeclarationOutput<OutputRequest, InputRequest>>,
+            BTreeMap<String, DeclOutput<DeclInputRequest, DeclOutputRequest>>,
         >,
         value: bool,
         stack: &mut Vec<String>,
@@ -102,9 +105,9 @@ impl Declarations {
         let source = flat.payload_enum(ty)?;
         validate_overrides(source, entries)?;
         let default = if value {
-            DeclarationOutput::value()
+            DeclOutput::value()
         } else {
-            DeclarationOutput::auto()
+            DeclOutput::auto()
         };
         let variants = source
             .variants

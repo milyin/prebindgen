@@ -11,7 +11,7 @@ pub enum JniChain {
     /// Zero or more element occurrences.
     Sequence(JniSequence),
     /// Expanded fields grouped into one C-representation bulk frame.
-    Bulk(std::rc::Rc<crate::bulk::BulkRecord>),
+    Bulk(std::rc::Rc<crate::bulk::JniBulkRecord>),
 }
 /// Meaning of an ordered collection of child descriptions.
 #[derive(Clone, Debug)]
@@ -33,7 +33,7 @@ pub enum JniGroup {
     /// An explicitly named output view.
     Named(String),
     /// Source record fields. JNI may associate the record with a Kotlin data class.
-    Fields(Option<DataGroup>),
+    Fields(Option<JniDataGroup>),
     /// One named source field.
     Field(syn::Ident),
 }
@@ -775,7 +775,7 @@ mod tests {
     fn malformed_metadata_is_rejected_before_final_slots_are_installed() {
         let mut input = JniCodec::raw()
             .input_leaf(prebindgen_declarations::InputLeaf::new(
-                &Bindings::parse([]).unwrap(),
+                &JniBindings::parse([]).unwrap(),
                 &syn::parse_quote!(i32),
                 &(),
                 syn::parse_quote!(wire),
@@ -794,7 +794,7 @@ mod tests {
             .contains("direct child"));
         let mut output = JniCodec::raw()
             .output_leaf(prebindgen_declarations::OutputLeaf::new(
-                &Bindings::parse([]).unwrap(),
+                &JniBindings::parse([]).unwrap(),
                 &syn::parse_quote!(i32),
                 &(),
                 syn::parse_quote!(wire),
@@ -834,7 +834,7 @@ mod tests {
     fn incompatible_direct_wire_state_is_rejected_at_finalization() {
         let mut input = JniCodec::raw()
             .input_leaf(prebindgen_declarations::InputLeaf::new(
-                &Bindings::parse([]).unwrap(),
+                &JniBindings::parse([]).unwrap(),
                 &syn::parse_quote!(i64),
                 &(),
                 syn::parse_quote!(wire),
@@ -855,7 +855,7 @@ mod tests {
             .contains("incompatible"));
         let mut output = JniCodec::raw()
             .output_leaf(prebindgen_declarations::OutputLeaf::new(
-                &Bindings::parse([]).unwrap(),
+                &JniBindings::parse([]).unwrap(),
                 &syn::parse_quote!(i64),
                 &(),
                 syn::parse_quote!(wire),
@@ -954,11 +954,11 @@ mod abi_tests {
         assert_eq!(result_packet(&result.success, &packet).unwrap().len(), 1);
         assert!(result_packet(&result.success, &bindings).is_err());
         let source = syn::parse_file("pub fn f(value:i32){}").unwrap();
-        let mut flat: Bindings =
+        let mut flat: JniBindings =
             Flat::parse(source.items.into_iter().map(|i| (i, Default::default()))).unwrap();
         let mut input = JniCodec::raw()
             .input_leaf(prebindgen_declarations::InputLeaf::new(
-                &Bindings::parse([]).unwrap(),
+                &JniBindings::parse([]).unwrap(),
                 &syn::parse_quote!(i32),
                 &(),
                 syn::parse_quote!(raw),

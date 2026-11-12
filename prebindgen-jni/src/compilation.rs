@@ -1,8 +1,8 @@
 //! Interpretation of this adapter's resolved conversion operations.
 #![allow(missing_docs)]
 use super::operations::{
-    Input, InputBranch, InputLeafOp, InputOperations, InputParts, InputUnary, Output, OutputBranch,
-    OutputLeafOp, OutputOperations, OutputParts, OutputUnary,
+    JniInput, JniInputBranch, JniInputLeafOp, JniInputOps, JniInputParts, JniInputUnary, JniOutput,
+    JniOutputBranch, JniOutputLeafOp, JniOutputOps, JniOutputParts, JniOutputUnary,
 };
 use prebindgen_declarations::*;
 use prebindgen_flat::{Flat, Result};
@@ -10,14 +10,14 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use syn::Type;
 #[derive(Default)]
-pub struct State {
+pub struct JniCompileState {
     bulk: std::cell::Cell<bool>,
     ordinary_collections: std::cell::Cell<bool>,
 }
-pub(crate) struct LanguageCompiler<'a, 'b, C: Codec> {
+pub(crate) struct JniCompiler<'a, 'b, C: Codec> {
     pub(crate) cx: &'a Compiler<'b, C>,
 }
-impl<'b, C: Codec> std::ops::Deref for LanguageCompiler<'_, 'b, C> {
+impl<'b, C: Codec> std::ops::Deref for JniCompiler<'_, 'b, C> {
     type Target = Compiler<'b, C>;
     fn deref(&self) -> &Self::Target {
         self.cx
@@ -25,11 +25,7 @@ impl<'b, C: Codec> std::ops::Deref for LanguageCompiler<'_, 'b, C> {
 }
 trait Consumes {
     fn consumes<
-        C: Codec<
-            InputOperations = InputOperations,
-            OutputOperations = OutputOperations,
-            CompileState = State,
-        >,
+        C: Codec<InOps = JniInputOps, OutOps = JniOutputOps, CompileState = JniCompileState>,
     >(
         &self,
         flat: &Flat<C::Schema>,
@@ -39,13 +35,9 @@ trait Consumes {
         borrowed: bool,
     ) -> bool;
 }
-impl Consumes for Output {
+impl Consumes for JniOutput {
     fn consumes<
-        C: Codec<
-            InputOperations = InputOperations,
-            OutputOperations = OutputOperations,
-            CompileState = State,
-        >,
+        C: Codec<InOps = JniInputOps, OutOps = JniOutputOps, CompileState = JniCompileState>,
     >(
         &self,
         flat: &prebindgen_flat::Flat<C::Schema>,
@@ -55,8 +47,8 @@ impl Consumes for Output {
         borrowed: bool,
     ) -> bool {
         match self {
-            Output::Unary {
-                operation: OutputUnary::Convert { conversion, .. },
+            JniOutput::Unary {
+                operation: JniOutputUnary::Convert { conversion, .. },
                 ..
             } => match &conversion.source {
                 prebindgen_flat::ValueSource::Function(name) => {
@@ -68,57 +60,57 @@ impl Consumes for Output {
                 }
                 prebindgen_flat::ValueSource::Into { .. } => true,
             },
-            Output::Unary {
-                operation: OutputUnary::Sequence { mode, .. },
+            JniOutput::Unary {
+                operation: JniOutputUnary::Sequence { mode, .. },
                 ..
             } => match mode {
                 Some(mode) => *mode == ProjectionMode::Owned,
                 None => !borrowed && sequence_parts(ty).is_some_and(|(_, view)| view.is_owned()),
             },
-            Output::Unary {
-                operation: OutputUnary::Bulk,
+            JniOutput::Unary {
+                operation: JniOutputUnary::Bulk,
                 child,
             } => child.consumes(flat, ty, extra, codec, borrowed),
-            Output::Unary {
-                operation: OutputUnary::Named { .. },
+            JniOutput::Unary {
+                operation: JniOutputUnary::Named { .. },
                 child,
                 ..
             } => child.consumes(flat, ty, extra, codec, borrowed),
-            Output::Unary {
-                operation: OutputUnary::Optional,
+            JniOutput::Unary {
+                operation: JniOutputUnary::Optional,
                 child,
             } => child.consumes(flat, option_inner(ty).unwrap_or(ty), extra, codec, borrowed),
-            Output::Leaf(OutputLeafOp::Value) => {
+            JniOutput::Leaf(JniOutputLeafOp::Value) => {
                 !borrowed && output_referent(ty).is_none() && codec.output_consumes(flat, ty, extra)
             }
-            Output::Leaf(OutputLeafOp::Projected(p)) => p.mode == ProjectionMode::Owned,
-            Output::Branch {
-                operation: OutputBranch::OwnedFields,
+            JniOutput::Leaf(JniOutputLeafOp::Projected(p)) => p.mode == ProjectionMode::Owned,
+            JniOutput::Branch {
+                operation: JniOutputBranch::OwnedFields,
                 children: _,
             }
-            | Output::Unary {
-                operation: OutputUnary::Into { .. },
+            | JniOutput::Unary {
+                operation: JniOutputUnary::Into { .. },
                 ..
             }
-            | Output::Unary {
-                operation: OutputUnary::Result { .. },
+            | JniOutput::Unary {
+                operation: JniOutputUnary::Result { .. },
                 ..
             } => true,
-            Output::Branch {
-                operation: OutputBranch::Record { mode, .. },
+            JniOutput::Branch {
+                operation: JniOutputBranch::Record { mode, .. },
                 ..
             } => mode.map_or(!borrowed && output_referent(ty).is_none(), |m| {
                 m == ProjectionMode::Owned
             }),
-            Output::Branch {
-                operation: OutputBranch::Enum { mode, .. },
+            JniOutput::Branch {
+                operation: JniOutputBranch::Enum { mode, .. },
                 ..
             } => mode.map_or(!borrowed && output_referent(ty).is_none(), |m| {
                 m == ProjectionMode::Owned
             }),
-            Output::Request(never) => match *never {},
-            Output::Branch {
-                operation: OutputBranch::Combine,
+            JniOutput::Request(never) => match *never {},
+            JniOutput::Branch {
+                operation: JniOutputBranch::Combine,
                 children: p,
             } => p
                 .iter()
@@ -127,37 +119,32 @@ impl Consumes for Output {
         }
     }
 }
-impl<
-        C: Codec<
-            InputOperations = InputOperations,
-            OutputOperations = OutputOperations,
-            CompileState = State,
-        >,
-    > LanguageCompiler<'_, '_, C>
+impl<C: Codec<InOps = JniInputOps, OutOps = JniOutputOps, CompileState = JniCompileState>>
+    JniCompiler<'_, '_, C>
 {
     pub(crate) fn input_named(
         &self,
         ty: &Type,
-        recipe: &Input,
+        recipe: &JniInput,
         extra: &C::Extra,
         active: &Condition,
         names: Option<(&syn::Ident, &syn::Ident)>,
-    ) -> Result<CodecInput<C>> {
+    ) -> Result<CodecInputPlan<C>> {
         self.input_unprepared_named(ty, recipe, extra, active, names)
     }
 
     pub(crate) fn input_unprepared_named(
         &self,
         ty: &Type,
-        recipe: &Input,
+        recipe: &JniInput,
         extra: &C::Extra,
         active: &Condition,
         names: Option<(&syn::Ident, &syn::Ident)>,
-    ) -> Result<CodecInput<C>> {
+    ) -> Result<CodecInputPlan<C>> {
         if prebindgen_flat::callback_signature(ty)?.is_some()
             && !matches!(
                 recipe,
-                Input::Leaf(InputLeafOp::Value) | Input::Arrow { .. }
+                JniInput::Leaf(JniInputLeafOp::Value) | JniInput::Arrow { .. }
             )
         {
             return Err("source callback parameters only support leaf inputs".into());
@@ -166,13 +153,13 @@ impl<
             .map(|(_, var)| var.clone())
             .unwrap_or_else(|| self.name());
         match recipe {
-            Input::None => self.cx.input_unit(ty),
-            Input::Branch {
-                operation: InputBranch::Variant,
+            JniInput::None => self.cx.input_unit(ty),
+            JniInput::Branch {
+                operation: JniInputBranch::Variant,
                 ..
             } => Err("variant branch requires an enum parent".into()),
-            Input::Branch {
-                operation: InputBranch::Enum { value },
+            JniInput::Branch {
+                operation: JniInputBranch::Enum { value },
                 children: variants,
             } => self.cx.enum_input(
                 ty,
@@ -185,16 +172,16 @@ impl<
                 active,
                 names,
             ),
-            Input::Unary {
-                operation: InputUnary::Convert { conversion },
+            JniInput::Unary {
+                operation: JniInputUnary::Convert { conversion },
                 child: input,
             } => self.input_conversion(ty, conversion, input, extra, active, names),
-            Input::Unary {
-                operation: InputUnary::Temporary,
+            JniInput::Unary {
+                operation: JniInputUnary::Temporary,
                 child: inner,
             } => self.cx.input_temporary(ty, extra, active, names, inner),
-            Input::Unary {
-                operation: InputUnary::Bulk,
+            JniInput::Unary {
+                operation: JniInputUnary::Bulk,
                 child: inner,
             } => {
                 require_bulk(self.codec, Direction::Input)?;
@@ -208,7 +195,7 @@ impl<
                 self.codec
                     .bulk_input(self.flat, ty, extra, wire, child?, active)
             }
-            Input::Arrow {
+            JniInput::Arrow {
                 operation: callback,
                 domain,
                 codomain,
@@ -232,22 +219,22 @@ impl<
                     active,
                 })
             }
-            Input::Unary {
-                operation: InputUnary::Sequence,
+            JniInput::Unary {
+                operation: JniInputUnary::Sequence,
                 child: element_recipe,
             } => {
                 if !self.state.bulk.get() {
-                    if let Input::Unary {
-                        operation: InputUnary::Bulk,
+                    if let JniInput::Unary {
+                        operation: JniInputUnary::Bulk,
                         child: inner,
                     } = element_recipe.as_ref()
                     {
                         return self.input_named(
                             ty,
-                            &Input::Unary {
-                                operation: InputUnary::Bulk,
-                                child: Box::new(Input::Unary {
-                                    operation: InputUnary::Sequence,
+                            &JniInput::Unary {
+                                operation: JniInputUnary::Bulk,
+                                child: Box::new(JniInput::Unary {
+                                    operation: JniInputUnary::Sequence,
                                     child: inner.clone(),
                                 }),
                             },
@@ -267,11 +254,11 @@ impl<
                     self.state.bulk.get(),
                 )
             }
-            Input::Unary {
-                operation: InputUnary::Optional,
+            JniInput::Unary {
+                operation: JniInputUnary::Optional,
                 child: inner,
             } => self.cx.input_optional(ty, extra, active, names, var, inner),
-            Input::Leaf(InputLeafOp::Value) => {
+            JniInput::Leaf(JniInputLeafOp::Value) => {
                 let w = names
                     .map(|(wire, _)| wire.clone())
                     .unwrap_or_else(|| self.name());
@@ -294,13 +281,13 @@ impl<
                     role: self.input_role.get(),
                 })
             }
-            Input::Request(never) => match *never {},
-            Input::Branch {
-                operation: InputBranch::Fields,
+            JniInput::Request(never) => match *never {},
+            JniInput::Branch {
+                operation: JniInputBranch::Fields,
                 children,
             }
-            | Input::Branch {
-                operation: InputBranch::Record,
+            | JniInput::Branch {
+                operation: JniInputBranch::Record,
                 children,
             } => self.cx.input_fields(
                 ty,
@@ -311,20 +298,20 @@ impl<
                 children,
                 matches!(
                     recipe,
-                    Input::Branch {
-                        operation: InputBranch::Record,
+                    JniInput::Branch {
+                        operation: JniInputBranch::Record,
                         ..
                     }
                 ),
             ),
-            Input::Branch {
-                operation: InputBranch::Constructor { function },
+            JniInput::Branch {
+                operation: JniInputBranch::Constructor { function },
                 children: args,
             } => self
                 .cx
                 .input_constructor(ty, extra, active, var, function, args),
-            Input::Branch {
-                operation: InputBranch::Selector,
+            JniInput::Branch {
+                operation: JniInputBranch::Selector,
                 children: arms,
             } => self.cx.input_selector(ty, extra, active, var, arms),
         }
@@ -333,14 +320,14 @@ impl<
     pub(crate) fn output_root(
         &self,
         ty: &Type,
-        recipe: &Output,
+        recipe: &JniOutput,
         extra: &C::Extra,
         value: TokenStream,
         borrowed: bool,
         reference_return: bool,
-    ) -> Result<CodecOutput<C>> {
-        if let Output::Unary {
-            operation: OutputUnary::Result { error },
+    ) -> Result<CodecOutputPlan<C>> {
+        if let JniOutput::Unary {
+            operation: JniOutputUnary::Result { error },
             child: ok,
         } = recipe
         {
@@ -359,22 +346,24 @@ impl<
     pub(crate) fn output_return(
         &self,
         ty: &Type,
-        recipe: &Output,
+        recipe: &JniOutput,
         extra: &C::Extra,
         value: TokenStream,
         borrowed: bool,
-    ) -> Result<CodecOutput<C>> {
+    ) -> Result<CodecOutputPlan<C>> {
         if !borrowed {
             if matches!(ty, Type::Reference(_)) {
-                if let Output::Branch {
-                    operation: OutputBranch::Combine,
+                if let JniOutput::Branch {
+                    operation: JniOutputBranch::Combine,
                     children: parts,
                 } = recipe
                 {
                     return self.cx.output_reference_views(ty, parts, extra, value);
                 }
             }
-            if let (Type::Reference(reference), Output::Leaf(OutputLeafOp::Value)) = (ty, recipe) {
+            if let (Type::Reference(reference), JniOutput::Leaf(JniOutputLeafOp::Value)) =
+                (ty, recipe)
+            {
                 let wire = self.name();
                 if let Some(plan) = self.codec.output_return_reference(
                     self.flat,
@@ -389,8 +378,8 @@ impl<
             }
             if let (
                 Some(payload_ty),
-                Output::Unary {
-                    operation: OutputUnary::Optional,
+                JniOutput::Unary {
+                    operation: JniOutputUnary::Optional,
                     child: inner,
                 },
             ) = (option_inner(ty), recipe)
@@ -407,24 +396,24 @@ impl<
     fn output(
         &self,
         ty: &Type,
-        recipe: &Output,
+        recipe: &JniOutput,
         extra: &C::Extra,
         value: TokenStream,
         borrowed: bool,
-    ) -> Result<CodecOutput<C>> {
+    ) -> Result<CodecOutputPlan<C>> {
         self.output_named(ty, recipe, extra, value, borrowed, None)
     }
     pub(crate) fn output_named(
         &self,
         ty: &Type,
-        recipe: &Output,
+        recipe: &JniOutput,
         extra: &C::Extra,
         value: TokenStream,
         borrowed: bool,
         wire_name: Option<&syn::Ident>,
-    ) -> Result<CodecOutput<C>> {
+    ) -> Result<CodecOutputPlan<C>> {
         if let Some(referent) = output_referent(ty) {
-            if matches ! (recipe , Output :: Leaf (OutputLeafOp :: Projected (p)) if p . mode == ProjectionMode :: Owned)
+            if matches ! (recipe , JniOutput :: Leaf (JniOutputLeafOp :: Projected (p)) if p . mode == ProjectionMode :: Owned)
             {
                 return Err("owned projection cannot consume a reference payload".into());
             }
@@ -437,21 +426,21 @@ impl<
         }
         let mut out = self.cx.empty_output()?;
         match recipe {
-            Output::Unary {
-                operation: OutputUnary::CallbackArgument { .. },
+            JniOutput::Unary {
+                operation: JniOutputUnary::CallbackArgument { .. },
                 ..
             } => return Err("callback argument ownership requires an arrow domain".into()),
-            Output::None => {
+            JniOutput::None => {
                 return self.cx.output_unit(ty, out);
             }
-            Output::Arrow { operation, .. } => match *operation {},
-            Output::Branch {
-                operation: OutputBranch::Variant | OutputBranch::Arguments,
+            JniOutput::Arrow { operation, .. } => match *operation {},
+            JniOutput::Branch {
+                operation: JniOutputBranch::Variant | JniOutputBranch::Arguments,
                 ..
             } => return Err("variant/argument branch requires its parent operation".into()),
-            Output::Branch {
+            JniOutput::Branch {
                 operation:
-                    OutputBranch::Enum {
+                    JniOutputBranch::Enum {
                         value: grouped,
                         mode,
                     },
@@ -471,12 +460,12 @@ impl<
                     wire_name,
                 );
             }
-            Output::Unary {
-                operation: OutputUnary::Convert { conversion },
+            JniOutput::Unary {
+                operation: JniOutputUnary::Convert { conversion },
                 child: output,
             } => return self.output_conversion(ty, conversion, output, extra, value, borrowed),
-            Output::Unary {
-                operation: OutputUnary::Bulk,
+            JniOutput::Unary {
+                operation: JniOutputUnary::Bulk,
                 child: inner,
             } => {
                 require_bulk(self.codec, Direction::Output)?;
@@ -489,17 +478,17 @@ impl<
                 self.state.bulk.set(false);
                 return self.codec.bulk_output(self.flat, ty, extra, wire, child?);
             }
-            Output::Leaf(OutputLeafOp::Discard) => return Ok(out),
-            Output::Unary {
-                operation: OutputUnary::Named { name },
+            JniOutput::Leaf(JniOutputLeafOp::Discard) => return Ok(out),
+            JniOutput::Unary {
+                operation: JniOutputUnary::Named { name },
                 child: output,
             } => {
                 return self
                     .cx
                     .output_named_view(ty, extra, value, borrowed, wire_name, name, output);
             }
-            Output::Unary {
-                operation: OutputUnary::Sequence { delivery, mode },
+            JniOutput::Unary {
+                operation: JniOutputUnary::Sequence { delivery, mode },
                 child: element,
             } => {
                 if self.state.bulk.get() && *delivery == SequenceDelivery::Callback {
@@ -512,8 +501,8 @@ impl<
                 {
                     return self.output_named(
                         ty,
-                        &Output::Unary {
-                            operation: OutputUnary::Bulk,
+                        &JniOutput::Unary {
+                            operation: JniOutputUnary::Bulk,
                             child: Box::new(recipe.clone()),
                         },
                         extra,
@@ -523,17 +512,17 @@ impl<
                     );
                 }
                 if !self.state.bulk.get() && *delivery != SequenceDelivery::Callback {
-                    if let Output::Unary {
-                        operation: OutputUnary::Bulk,
+                    if let JniOutput::Unary {
+                        operation: JniOutputUnary::Bulk,
                         child: inner,
                     } = element.as_ref()
                     {
                         return self.output_named(
                             ty,
-                            &Output::Unary {
-                                operation: OutputUnary::Bulk,
-                                child: Box::new(Output::Unary {
-                                    operation: OutputUnary::Sequence {
+                            &JniOutput::Unary {
+                                operation: JniOutputUnary::Bulk,
+                                child: Box::new(JniOutput::Unary {
+                                    operation: JniOutputUnary::Sequence {
                                         delivery: *delivery,
                                         mode: *mode,
                                     },
@@ -563,22 +552,22 @@ impl<
                 self.state.ordinary_collections.set(ordinary);
                 return result;
             }
-            Output::Unary {
-                operation: OutputUnary::Result { .. },
+            JniOutput::Unary {
+                operation: JniOutputUnary::Result { .. },
                 ..
             } => {
                 return Err("Result error routing is supported only at the outermost return".into())
             }
-            Output::Unary {
-                operation: OutputUnary::Optional,
+            JniOutput::Unary {
+                operation: JniOutputUnary::Optional,
                 child: inner,
             } => {
                 return self
                     .cx
                     .output_optional(ty, extra, value, borrowed, wire_name, inner);
             }
-            Output::Request(never) => match *never {},
-            Output::Leaf(OutputLeafOp::Value) => {
+            JniOutput::Request(never) => match *never {},
+            JniOutput::Leaf(JniOutputLeafOp::Value) => {
                 let representation = if self.state.bulk.get() {
                     Representation::Bulk
                 } else {
@@ -588,7 +577,7 @@ impl<
                     .cx
                     .output_value(ty, extra, value, borrowed, wire_name, representation);
             }
-            Output::Leaf(OutputLeafOp::Projected(projection)) => {
+            JniOutput::Leaf(JniOutputLeafOp::Projected(projection)) => {
                 let representation = if self.state.bulk.get() {
                     Representation::Bulk
                 } else {
@@ -604,41 +593,41 @@ impl<
                     representation,
                 );
             }
-            Output::Branch {
-                operation: OutputBranch::Fields,
+            JniOutput::Branch {
+                operation: JniOutputBranch::Fields,
                 children,
             }
-            | Output::Branch {
-                operation: OutputBranch::OwnedFields,
+            | JniOutput::Branch {
+                operation: JniOutputBranch::OwnedFields,
                 children,
             }
-            | Output::Branch {
-                operation: OutputBranch::Record { .. },
+            | JniOutput::Branch {
+                operation: JniOutputBranch::Record { .. },
                 children,
                 ..
             } => {
                 let grouped = matches!(
                     recipe,
-                    Output::Branch {
-                        operation: OutputBranch::Record { .. },
+                    JniOutput::Branch {
+                        operation: JniOutputBranch::Record { .. },
                         ..
                     }
                 );
                 let owned = match recipe {
-                    Output::Branch {
-                        operation: OutputBranch::OwnedFields,
+                    JniOutput::Branch {
+                        operation: JniOutputBranch::OwnedFields,
                         ..
                     } => true,
-                    Output::Branch {
-                        operation: OutputBranch::Record { mode },
+                    JniOutput::Branch {
+                        operation: JniOutputBranch::Record { mode },
                         ..
                     } => mode.map_or(!borrowed, |m| m == ProjectionMode::Owned),
                     _ => false,
                 };
                 let explicit_copy = matches!(
                     recipe,
-                    Output::Branch {
-                        operation: OutputBranch::Record {
+                    JniOutput::Branch {
+                        operation: JniOutputBranch::Record {
                             mode: Some(ProjectionMode::Borrowed)
                         },
                         ..
@@ -657,18 +646,18 @@ impl<
                     out,
                 );
             }
-            Output::Unary {
-                operation: OutputUnary::Getter { function },
+            JniOutput::Unary {
+                operation: JniOutputUnary::Getter { function },
                 child: output,
             }
-            | Output::Unary {
-                operation: OutputUnary::Into { function },
+            | JniOutput::Unary {
+                operation: JniOutputUnary::Into { function },
                 child: output,
             } => {
                 let consuming = matches!(
                     recipe,
-                    Output::Unary {
-                        operation: OutputUnary::Into { .. },
+                    JniOutput::Unary {
+                        operation: JniOutputUnary::Into { .. },
                         ..
                     }
                 );
@@ -676,8 +665,8 @@ impl<
                     .cx
                     .output_getter(ty, extra, value, borrowed, function, output, consuming, out);
             }
-            Output::Branch {
-                operation: OutputBranch::Combine,
+            JniOutput::Branch {
+                operation: JniOutputBranch::Combine,
                 children: parts,
             } => {
                 if parts.is_empty() {
@@ -723,14 +712,14 @@ impl<
     fn output_owner_views(
         &self,
         ty: &Type,
-        parts: &[Output],
+        parts: &[JniOutput],
         extra: &C::Extra,
         value: TokenStream,
-    ) -> Result<Option<CodecOutput<C>>> {
+    ) -> Result<Option<CodecOutputPlan<C>>> {
         let owner = parts.iter().position(|part| {
             matches!(part,
-            Output::Leaf(OutputLeafOp::Projected(p)) if p.mode == ProjectionMode::Owned && p.fields.is_empty())
-                || matches!(part, Output::Leaf(OutputLeafOp::Value)) && self.codec.output_consumes(self.flat, ty, extra)
+            JniOutput::Leaf(JniOutputLeafOp::Projected(p)) if p.mode == ProjectionMode::Owned && p.fields.is_empty())
+                || matches!(part, JniOutput::Leaf(JniOutputLeafOp::Value)) && self.codec.output_consumes(self.flat, ty, extra)
         });
         let Some(owner) = owner else {
             return Ok(None);
@@ -742,15 +731,15 @@ impl<
         // do not require an address-preserving loan from the delivered owner.
         if parts
             .iter()
-            .any(|part| matches!(part,Output::Leaf(OutputLeafOp::Projected(p)) if p.mode==ProjectionMode::Borrowed))
+            .any(|part| matches!(part,JniOutput::Leaf(JniOutputLeafOp::Projected(p)) if p.mode==ProjectionMode::Borrowed))
         {
             return Ok(None);
         }
         let views = parts
             .iter()
             .map(|part| match part {
-                Output::Unary {
-                    operation: OutputUnary::Getter { function },
+                JniOutput::Unary {
+                    operation: JniOutputUnary::Getter { function },
                     child,
                 } => Some((function.as_str(), child.as_ref())),
                 _ => None,

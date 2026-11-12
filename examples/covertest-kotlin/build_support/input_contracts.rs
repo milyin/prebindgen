@@ -1,8 +1,8 @@
-//! An independently implemented input, without a JniInput or InputPlan.
+//! An independently implemented input, without a JniInputConverter or InputPlan.
 use prebindgen_conversions::InputFragment;
 use prebindgen_flat::{Conversion, Flat, InputConversion, Primitive, Result, Wire, WireNode};
 use prebindgen_jni::{
-    Bindings, JniBranch, JniChain, JniContext, JniFunction, JniGen, JniSchema, JniWire,
+    JniBindings, JniBranch, JniChain, JniContext, JniFunction, JniGen, JniSchema, JniWire,
     KotlinContext, KotlinInput, KotlinInputConversion,
 };
 use proc_macro2::TokenStream;
@@ -56,10 +56,12 @@ pub fn generate() -> Result<JniGen> {
     placement.name = "durationMillis".into();
     // Output conversion remains the standard implementation in this stage.
     let output = prebindgen_declarations::compile_output_value(
-        &Bindings::parse([])?,
+        &JniBindings::parse([])?,
         &prebindgen_jni::JniCodec::raw(),
         &syn::parse_quote!(i64),
-        &prebindgen_jni::operations::Output::Leaf(prebindgen_jni::operations::OutputLeafOp::Value),
+        &prebindgen_jni::operations::JniOutput::Leaf(
+            prebindgen_jni::operations::JniOutputLeafOp::Value,
+        ),
         &(),
     )?;
     let function = flat.function_mut("duration_millis")?;

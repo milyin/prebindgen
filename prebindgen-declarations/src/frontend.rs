@@ -1,54 +1,61 @@
 //! Optional expansion/conversion declaration syntax.
 //!
 //! This is binding-author configuration, not the operation vocabulary stored in
-//! a resolved Flat. DeclarationCodec lowers it into the adapter's own operations.
-use crate::{InputNode, Operations, OutputNode, Projection, ProjectionMode, SequenceDelivery};
+//! a resolved Flat. DeclCodec lowers it into the adapter's own operations.
+use crate::{
+    InputNode, InputOps, OutputNode, OutputOps, Projection, ProjectionMode, SequenceDelivery,
+};
 use std::convert::Infallible;
 /// Input syntax accepted by the optional declaration frontend.
 #[derive(Clone, Debug)]
-pub struct InputOperations;
+pub struct DeclInputOps;
 /// Output syntax accepted by the optional declaration frontend.
 #[derive(Clone, Debug)]
-pub struct OutputOperations;
-impl Operations for InputOperations {
-    type Leaf = InputLeafOp;
-    type Unary = InputUnary;
-    type Branch = InputBranch;
+pub struct DeclOutputOps;
+impl InputOps for DeclInputOps {
+    type Leaf = DeclInputLeafOp;
+    type Unary = DeclInputUnary;
+    type Branch = DeclInputBranch;
     type Arrow = Box<crate::CallbackOperation>;
 }
-impl Operations for OutputOperations {
-    type Leaf = OutputLeafOp;
-    type Unary = OutputUnary;
-    type Branch = OutputBranch;
+impl OutputOps for DeclOutputOps {
+    type Leaf = DeclOutputLeafOp;
+    type Unary = DeclOutputUnary;
+    type Branch = DeclOutputBranch;
     type Arrow = Infallible;
 }
 /// Input syntax before adapter lowering.
 ///
-/// Preparation uses `DeclarationInput<InputRequest, OutputRequest>`.
-/// Plain `DeclarationInput` uses `Infallible` for both directions, including
+/// Preparation uses `DeclInput<DeclInputRequest, DeclOutputRequest>`.
+/// Plain `DeclInput` uses `Infallible` for both directions, including
 /// reverse-direction arrow domains.
 /// ```compile_fail
-/// use prebindgen_declarations::{DeclarationInput, frontend::InputBranch, InputRequest};
-/// let resolved: DeclarationInput = DeclarationInput::Branch {
-///     operation: InputBranch::Constructor { function: "make".into() },
-///     children: vec![DeclarationInput::Request(InputRequest::Auto)],
+/// use prebindgen_declarations::{DeclInput, frontend::DeclInputBranch, DeclInputRequest};
+/// let resolved: DeclInput = DeclInput::Branch {
+///     operation: DeclInputBranch::Constructor { function: "make".into() },
+///     children: vec![DeclInput::Request(DeclInputRequest::Auto)],
 /// };
 /// ```
-pub type DeclarationInput<P = Infallible, Q = Infallible> =
-    InputNode<InputOperations, OutputOperations, P, Q>;
-/// Output declaration tree; both request parameters must be uninhabited after resolution.
-pub type DeclarationOutput<P = Infallible, Q = Infallible> =
-    OutputNode<InputOperations, OutputOperations, Q, P>;
+pub type DeclInput<InRequest = Infallible, OutRequest = Infallible> =
+    InputNode<DeclInputOps, DeclOutputOps, InRequest, OutRequest>;
+/// Output declaration tree, with input requests first and output requests second.
+/// ```
+/// use prebindgen_declarations::{DeclInput, DeclOutput, DeclInputRequest, DeclOutputRequest};
+/// let _: DeclInput<DeclInputRequest, DeclOutputRequest> = DeclInput::auto();
+/// let _: DeclOutput<DeclInputRequest, DeclOutputRequest> = DeclOutput::auto();
+/// ```
+pub type DeclOutput<InRequest = Infallible, OutRequest = Infallible> =
+    OutputNode<DeclInputOps, DeclOutputOps, InRequest, OutRequest>;
 
 /// Terminal input operations.
 #[derive(Clone, Debug)]
-pub enum InputLeafOp {
+pub enum DeclInputLeafOp {
     /// Convert the occurrence using its declared value representation.
     Value,
 }
 /// Single-child input operations.
 #[derive(Clone, Debug)]
-pub enum InputUnary {
+pub enum DeclInputUnary {
     /// Apply an explicitly selected Rust value conversion.
     Convert {
         /// Checked source/representation conversion.
@@ -65,7 +72,7 @@ pub enum InputUnary {
 }
 /// Multiple-child input operations.
 #[derive(Clone, Debug)]
-pub enum InputBranch {
+pub enum DeclInputBranch {
     /// Convert source record fields in declaration order.
     Fields,
     /// Group converted fields into the declared foreign record representation.
@@ -87,7 +94,7 @@ pub enum InputBranch {
 }
 /// Terminal output operations.
 #[derive(Clone, Debug)]
-pub enum OutputLeafOp {
+pub enum DeclOutputLeafOp {
     /// Convert the occurrence using its declared value representation.
     Value,
     /// Omit a value while preserving its ordinary Rust destruction.
@@ -97,7 +104,7 @@ pub enum OutputLeafOp {
 }
 /// Single-child output operations.
 #[derive(Clone, Debug)]
-pub enum OutputUnary {
+pub enum DeclOutputUnary {
     /// Ownership contract of one callable argument; interpreted by its arrow.
     CallbackArgument {
         /// Whether produced foreign owners expire at the end of invocation.
@@ -142,7 +149,7 @@ pub enum OutputUnary {
 }
 /// Multiple-child output operations.
 #[derive(Clone, Debug)]
-pub enum OutputBranch {
+pub enum DeclOutputBranch {
     /// Convert source record fields in declaration order.
     Fields,
     /// Move source record fields into their conversions.
@@ -167,14 +174,14 @@ pub enum OutputBranch {
     Arguments,
 }
 
-impl<P, Q> DeclarationOutput<P, Q> {
+impl<InRequest, OutRequest> DeclOutput<InRequest, OutRequest> {
     /// Group a callable's domain in source parameter order.
     pub fn arguments(children: Vec<Self>) -> Self {
         if children.is_empty() {
             Self::None
         } else {
             Self::Branch {
-                operation: OutputBranch::Arguments,
+                operation: DeclOutputBranch::Arguments,
                 children,
             }
         }
@@ -184,7 +191,7 @@ impl<P, Q> DeclarationOutput<P, Q> {
         match self {
             Self::None => Ok(&[]),
             Self::Branch {
-                operation: OutputBranch::Arguments,
+                operation: DeclOutputBranch::Arguments,
                 children,
             } => Ok(children),
             _ => Err("callback domain requires an argument branch or None".into()),
@@ -192,15 +199,15 @@ impl<P, Q> DeclarationOutput<P, Q> {
     }
 }
 
-impl<P, Q> DeclarationInput<P, Q> {
+impl<InRequest, OutRequest> DeclInput<InRequest, OutRequest> {
     /// Describe source variants, each with an ordinary branch of field conversions.
     pub fn enum_variants(variants: Vec<Vec<Self>>, value: bool) -> Self {
         Self::Branch {
-            operation: InputBranch::Enum { value },
+            operation: DeclInputBranch::Enum { value },
             children: variants
                 .into_iter()
                 .map(|children| Self::Branch {
-                    operation: InputBranch::Variant,
+                    operation: DeclInputBranch::Variant,
                     children,
                 })
                 .collect(),
@@ -210,7 +217,7 @@ impl<P, Q> DeclarationInput<P, Q> {
     pub fn variant_fields(&self) -> crate::Result<&[Self]> {
         match self {
             Self::Branch {
-                operation: InputBranch::Variant,
+                operation: DeclInputBranch::Variant,
                 children,
             } => Ok(children),
             _ => Err("enum children must be variant branches".into()),
@@ -218,7 +225,7 @@ impl<P, Q> DeclarationInput<P, Q> {
     }
 }
 
-impl<P, Q> DeclarationOutput<P, Q> {
+impl<InRequest, OutRequest> DeclOutput<InRequest, OutRequest> {
     /// Describe source variants, each with an ordinary branch of field conversions.
     pub fn enum_variants(
         variants: Vec<Vec<Self>>,
@@ -226,11 +233,11 @@ impl<P, Q> DeclarationOutput<P, Q> {
         mode: Option<ProjectionMode>,
     ) -> Self {
         Self::Branch {
-            operation: OutputBranch::Enum { value, mode },
+            operation: DeclOutputBranch::Enum { value, mode },
             children: variants
                 .into_iter()
                 .map(|children| Self::Branch {
-                    operation: OutputBranch::Variant,
+                    operation: DeclOutputBranch::Variant,
                     children,
                 })
                 .collect(),
@@ -240,7 +247,7 @@ impl<P, Q> DeclarationOutput<P, Q> {
     pub fn variant_fields(&self) -> crate::Result<&[Self]> {
         match self {
             Self::Branch {
-                operation: OutputBranch::Variant,
+                operation: DeclOutputBranch::Variant,
                 children,
             } => Ok(children),
             _ => Err("enum children must be variant branches".into()),
@@ -248,21 +255,21 @@ impl<P, Q> DeclarationOutput<P, Q> {
     }
 }
 
-impl<P, Q> DeclarationInput<P, Q> {
+impl<InRequest, OutRequest> DeclInput<InRequest, OutRequest> {
     /// Convert each incoming collection element using the supplied subtree.
     pub fn sequence(element: Self) -> Self {
         Self::Unary {
-            operation: InputUnary::Sequence,
+            operation: DeclInputUnary::Sequence,
             child: Box::new(element),
         }
     }
 }
 
-impl<P, Q> DeclarationOutput<P, Q> {
+impl<InRequest, OutRequest> DeclOutput<InRequest, OutRequest> {
     /// Attach the lifetime of produced foreign owners to this callable argument.
     pub fn callback_argument(self, ownership: crate::CallbackArgumentOwnership) -> Self {
         Self::Unary {
-            operation: OutputUnary::CallbackArgument { ownership },
+            operation: DeclOutputUnary::CallbackArgument { ownership },
             child: Box::new(self),
         }
     }
@@ -272,7 +279,7 @@ impl<P, Q> DeclarationOutput<P, Q> {
     ) -> crate::Result<(crate::CallbackArgumentOwnership, &Self)> {
         match self {
             Self::Unary {
-                operation: OutputUnary::CallbackArgument { ownership },
+                operation: DeclOutputUnary::CallbackArgument { ownership },
                 child,
             } => Ok((*ownership, child)),
             _ => Err("callback argument requires an explicit ownership contract".into()),

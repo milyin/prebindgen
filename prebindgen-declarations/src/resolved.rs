@@ -14,8 +14,8 @@ pub enum ResolvedSlot<T, P> {
 }
 
 /// Schema with request-free input/output trees and the adapter's source metadata.
-pub struct Resolved<C: Codec>(std::marker::PhantomData<C>);
-impl<C: Codec> Schema for Resolved<C> {
+pub struct ResolvedSchema<C: Codec>(std::marker::PhantomData<C>);
+impl<C: Codec> Schema for ResolvedSchema<C> {
     type Input = ResolvedSlot<ResolvedInput<C>, <C::Schema as Schema>::Input>;
     type Output = ResolvedSlot<ResolvedOutput<C>, <C::Schema as Schema>::Output>;
     type Module = ResolvedModule<C>;
@@ -33,7 +33,7 @@ pub struct ResolvedModule<C: Codec> {
 }
 impl<C: Codec> ResolvedModule<C> {
     /// Own the adapter and occurrence settings needed to compile this model.
-    /// Language generators can build resolved trees directly without Declarations.
+    /// Language generators can build resolved trees directly without DeclDefaults.
     pub fn new(source: <C::Schema as Schema>::Module, codec: C, extra: C::Extra) -> Self {
         Self {
             source,
@@ -55,19 +55,19 @@ pub(crate) struct FunctionRecipe<C: Codec> {
     pub output: Option<ResolvedOutput<C>>,
 }
 
-impl Declarations {
+impl DeclDefaults {
     /// Resolve function occurrences into an independently compilable Flat.
     ///
     /// Defaults and local overrides are consumed here. The returned model owns
-    /// its compiler policy and occurrence settings; drop this Declarations value
+    /// its compiler policy and occurrence settings; drop this DeclDefaults value
     /// before calling [`compile_resolved`] if desired.
-    pub fn resolve<C: DeclarationCodec>(
+    pub fn resolve<C: DeclCodec>(
         &self,
         flat: Flat<C::Schema>,
         codec: C,
-        declarations: &[FunctionDecl],
+        declarations: &[DeclFunction],
         extra: C::Extra,
-    ) -> Result<Flat<Resolved<C>>> {
+    ) -> Result<Flat<ResolvedSchema<C>>> {
         let mut recipes = BTreeMap::new();
         for decl in declarations {
             let recipe = self
@@ -135,7 +135,7 @@ impl Declarations {
 
 /// Compile a resolved Flat without any external configuration or default registry.
 /// Source metadata and custom converters are moved into the result unchanged.
-pub fn compile_resolved<C: Codec>(flat: Flat<Resolved<C>>) -> Result<Flat<C::Schema>> {
+pub fn compile_resolved<C: Codec>(flat: Flat<ResolvedSchema<C>>) -> Result<Flat<C::Schema>> {
     let (codec, extra) = flat
         .metadata
         .compilation

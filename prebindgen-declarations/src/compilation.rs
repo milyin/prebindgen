@@ -40,7 +40,7 @@ impl<C: Codec> Compiler<'_, C> {
     ) {
         self.codec.prefix_layout(wires, segment);
     }
-    pub fn empty_output(&self) -> Result<CodecOutput<C>> {
+    pub fn empty_output(&self) -> Result<CodecOutputPlan<C>> {
         let out = OutputPlan {
             fallible: false,
             context: Default::default(),
@@ -60,7 +60,7 @@ impl<C: Codec> Compiler<'_, C> {
         };
         Ok(out)
     }
-    pub fn input_unit(&self, ty: &Type) -> Result<CodecInput<C>> {
+    pub fn input_unit(&self, ty: &Type) -> Result<CodecInputPlan<C>> {
         {
             if type_key(ty) != "()" {
                 return Err("None input requires unit".into());
@@ -83,7 +83,7 @@ impl<C: Codec> Compiler<'_, C> {
         active: &Condition,
         names: Option<(&syn::Ident, &syn::Ident)>,
         inner: &ResolvedInput<C>,
-    ) -> Result<CodecInput<C>> {
+    ) -> Result<CodecInputPlan<C>> {
         {
             let owned = temporary_input_type(ty)?;
             let mut child = self.input_named(&owned, inner, extra, active, names)?;
@@ -125,7 +125,7 @@ impl<C: Codec> Compiler<'_, C> {
         names: Option<(&syn::Ident, &syn::Ident)>,
         var: syn::Ident,
         inner: &ResolvedInput<C>,
-    ) -> Result<CodecInput<C>> {
+    ) -> Result<CodecInputPlan<C>> {
         {
             let ty = option_inner(ty).ok_or("optional recipe requires Option<T>")?;
             let tag = names
@@ -154,7 +154,7 @@ impl<C: Codec> Compiler<'_, C> {
         var: syn::Ident,
         children: &[ResolvedInput<C>],
         grouped: bool,
-    ) -> Result<CodecInput<C>> {
+    ) -> Result<CodecInputPlan<C>> {
         {
             if type_key(ty) == "()" && children.is_empty() {
                 return Ok(InputPlan::new(
@@ -219,7 +219,7 @@ impl<C: Codec> Compiler<'_, C> {
         var: syn::Ident,
         function: &String,
         args: &[ResolvedInput<C>],
-    ) -> Result<CodecInput<C>> {
+    ) -> Result<CodecInputPlan<C>> {
         {
             let f = self.flat.function(function)?;
             if !same_type(&f.ret.ty, ty) {
@@ -278,7 +278,7 @@ impl<C: Codec> Compiler<'_, C> {
         active: &Condition,
         var: syn::Ident,
         arms: &[ResolvedInput<C>],
-    ) -> Result<CodecInput<C>> {
+    ) -> Result<CodecInputPlan<C>> {
         {
             let mut fallible = self.codec.validates_inputs();
             let mut storage = TokenStream::new();
@@ -345,7 +345,11 @@ impl<C: Codec> Compiler<'_, C> {
             Ok(plan)
         }
     }
-    pub fn output_unit(&self, ty: &Type, mut out: CodecOutput<C>) -> Result<CodecOutput<C>> {
+    pub fn output_unit(
+        &self,
+        ty: &Type,
+        mut out: CodecOutputPlan<C>,
+    ) -> Result<CodecOutputPlan<C>> {
         {
             if type_key(ty) != "()" {
                 return Err("None output requires unit".into());
@@ -367,7 +371,7 @@ impl<C: Codec> Compiler<'_, C> {
         wire_name: Option<&syn::Ident>,
         name: &str,
         output: &ResolvedOutput<C>,
-    ) -> Result<CodecOutput<C>> {
+    ) -> Result<CodecOutputPlan<C>> {
         {
             let mut plan = self.output_named(ty, output, extra, value, borrowed, wire_name)?;
             plan.outcomes.success = WireNode::Branch {
@@ -386,7 +390,7 @@ impl<C: Codec> Compiler<'_, C> {
         borrowed: bool,
         wire_name: Option<&syn::Ident>,
         inner: &ResolvedOutput<C>,
-    ) -> Result<CodecOutput<C>> {
+    ) -> Result<CodecOutputPlan<C>> {
         {
             let ty = option_inner(ty).ok_or("optional recipe requires Option<T>")?;
             let tag = wire_name
@@ -415,7 +419,7 @@ impl<C: Codec> Compiler<'_, C> {
         borrowed: bool,
         wire_name: Option<&syn::Ident>,
         representation: Representation,
-    ) -> Result<CodecOutput<C>> {
+    ) -> Result<CodecOutputPlan<C>> {
         {
             let request = OutputLeaf {
                 flat: self.flat,
@@ -447,7 +451,7 @@ impl<C: Codec> Compiler<'_, C> {
         wire_name: Option<&syn::Ident>,
         projection: &Projection,
         representation: Representation,
-    ) -> Result<CodecOutput<C>> {
+    ) -> Result<CodecOutputPlan<C>> {
         {
             if borrowed && projection.mode == ProjectionMode::Owned {
                 return Err("owned projection cannot consume a shared-reference occurrence".into());
@@ -486,8 +490,8 @@ impl<C: Codec> Compiler<'_, C> {
         grouped: bool,
         owned: bool,
         explicit_copy: bool,
-        mut out: CodecOutput<C>,
-    ) -> Result<CodecOutput<C>> {
+        mut out: CodecOutputPlan<C>,
+    ) -> Result<CodecOutputPlan<C>> {
         {
             let wire = grouped.then(|| wire_name.cloned().unwrap_or_else(|| self.name()));
             if owned && borrowed {
@@ -557,8 +561,8 @@ impl<C: Codec> Compiler<'_, C> {
         function: &String,
         output: &ResolvedOutput<C>,
         consuming: bool,
-        mut out: CodecOutput<C>,
-    ) -> Result<CodecOutput<C>> {
+        mut out: CodecOutputPlan<C>,
+    ) -> Result<CodecOutputPlan<C>> {
         {
             if consuming && borrowed {
                 return Err(
@@ -615,7 +619,7 @@ impl<C: Codec> Compiler<'_, C> {
         extra: &C::Extra,
         active: &Condition,
         names: Option<(&syn::Ident, &syn::Ident)>,
-    ) -> Result<CodecInput<C>> {
+    ) -> Result<CodecInputPlan<C>> {
         crate::convert::validate_conversion(self.flat, ty, conversion, true)?;
         let target = names.map(|(_, v)| v.clone()).unwrap_or_else(|| self.name());
         let repr = format_ident!("{target}_repr");
@@ -657,7 +661,7 @@ impl<C: Codec> Compiler<'_, C> {
         } else {
             expr
         };
-        let rest: CodecInput<C> = prebindgen_conversions::InputPlan::new(
+        let rest: CodecInputPlan<C> = prebindgen_conversions::InputPlan::new(
             child.node.clone(),
             quote!(let #target:#ty=#expr;),
             quote!(#target),
@@ -680,7 +684,7 @@ impl<C: Codec> Compiler<'_, C> {
         extra: &C::Extra,
         value: TokenStream,
         borrowed: bool,
-    ) -> Result<CodecOutput<C>> {
+    ) -> Result<CodecOutputPlan<C>> {
         crate::convert::validate_conversion(self.flat, ty, conversion, false)?;
         let borrowed = borrowed || matches!(ty, Type::Reference(_));
         let source = self.name();
@@ -758,7 +762,7 @@ impl<C: Codec> Compiler<'_, C> {
         extra: &C::Extra,
         active: &Condition,
         names: Option<(&syn::Ident, &syn::Ident)>,
-    ) -> Result<CodecInput<C>> {
+    ) -> Result<CodecInputPlan<C>> {
         if matches!(ty, Type::Reference(_)) {
             return Err("enum-field input constructs an owned value; select reconstruct() to borrow a temporary".into());
         }
@@ -893,7 +897,7 @@ impl<C: Codec> Compiler<'_, C> {
         value: TokenStream,
         borrowed: bool,
         wire: Option<&syn::Ident>,
-    ) -> Result<CodecOutput<C>> {
+    ) -> Result<CodecOutputPlan<C>> {
         let owned = mode.map_or(!borrowed, |m| m == ProjectionMode::Owned);
         if owned && borrowed {
             return Err("owned enum fields cannot consume a shared-reference occurrence".into());
@@ -1123,7 +1127,7 @@ impl<C: Codec> Compiler<'_, C> {
         value: TokenStream,
         borrowed: bool,
         reference_return: bool,
-    ) -> Result<CodecOutput<C>> {
+    ) -> Result<CodecOutputPlan<C>> {
         if borrowed {
             return Err("Result error routing requires an owned Result occurrence".into());
         }
@@ -1180,7 +1184,7 @@ impl<C: Codec> Compiler<'_, C> {
         names: Option<(&syn::Ident, &syn::Ident)>,
         var: syn::Ident,
         bulk: bool,
-    ) -> Result<CodecInput<C>> {
+    ) -> Result<CodecInputPlan<C>> {
         {
             if matches!(ty, Type::Reference(_)) {
                 let next = self.next.get();
@@ -1222,7 +1226,7 @@ impl<C: Codec> Compiler<'_, C> {
         delivery: &SequenceDelivery,
         mode: &Option<ProjectionMode>,
         bulk: bool,
-    ) -> Result<CodecOutput<C>> {
+    ) -> Result<CodecOutputPlan<C>> {
         {
             let (element_type, _) =
                 sequence_parts(ty).ok_or("sequence output requires a collection")?;
@@ -1297,7 +1301,7 @@ impl<C: Codec> Compiler<'_, C> {
         owner: usize,
         extra: &C::Extra,
         value: TokenStream,
-    ) -> Result<Option<CodecOutput<C>>> {
+    ) -> Result<Option<CodecOutputPlan<C>>> {
         {
             let next = self.next.get();
             let wire = self.name();
@@ -1402,7 +1406,7 @@ impl<C: Codec> Compiler<'_, C> {
         parts: &[ResolvedOutput<C>],
         extra: &C::Extra,
         value: TokenStream,
-    ) -> Result<CodecOutput<C>> {
+    ) -> Result<CodecOutputPlan<C>> {
         if parts.is_empty() {
             return Err("an output combination needs at least one part".into());
         }

@@ -1,6 +1,6 @@
 //! Typed C callbacks retained by source closures.
 use super::*;
-use crate::operations::OutputParts;
+use crate::operations::COutputParts;
 use prebindgen_conversions::{InputFragment, OutputFragment, TemplateContext};
 use prebindgen_flat::{callback_signature, type_key, InputConversion, WireNode};
 use std::{
@@ -14,12 +14,12 @@ pub struct CCallback {
     pub(crate) name: String,
     pub(crate) signature: String,
     pub(crate) arguments: Vec<Argument>,
-    pub(crate) returned: Option<(syn::Type, InputPlan<CWire>)>,
+    pub(crate) returned: Option<(syn::Type, CInputPlan<CWire>)>,
 }
 #[derive(Clone, Debug)]
 pub(crate) struct Argument {
     ty: syn::Type,
-    pub(crate) output: OutputPlan<CWire>,
+    pub(crate) output: COutputPlan<CWire>,
 }
 
 // Stable wire semantics, without spans, generated local names or recipe Debug.
@@ -117,7 +117,7 @@ fn schema(node: &WireNode<CWire, CChain, CBranch>, out: &mut String) {
 
 pub(crate) fn input(
     request: prebindgen_declarations::InputArrow<'_, CCodec>,
-) -> Result<InputPlan<CWire>> {
+) -> Result<CInputPlan<CWire>> {
     let prebindgen_declarations::InputArrow {
         flat,
         operation: configuration,
@@ -237,7 +237,7 @@ pub(crate) fn input(
         }))
     };
     let transfer = prebindgen_conversions::record_input_transfer(quote!(1usize));
-    Ok(InputPlan::new(
+    Ok(CInputPlan::new(
         WireNode::Leaf(vec![Wire {
             name: wire.clone(),
             kind: CWire::Callback { callback },

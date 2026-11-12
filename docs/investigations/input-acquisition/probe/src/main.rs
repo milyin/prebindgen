@@ -1,13 +1,13 @@
 //! Regression controls for the former mixed-input generation restriction.
-use prebindgen_c::{Bindings, CCodec, Cbindgen};
+use prebindgen_c::{CBindings, CCodec, Cbindgen};
 use prebindgen_declarations::{fun, Codec, Condition, InputLeaf};
 use prebindgen_flat::Result;
 use quote::format_ident;
 
-fn model(source: &str) -> Result<Bindings> {
+fn model(source: &str) -> Result<CBindings> {
     let source = format!("pub struct Packet {{ pub id:u32 }} {source}");
     let source = syn::parse_file(&source).map_err(|e| e.to_string())?;
-    let flat = Bindings::parse(
+    let flat = CBindings::parse(
         source
             .items
             .into_iter()
@@ -20,7 +20,7 @@ fn model(source: &str) -> Result<Bindings> {
         .panic()
         .prepare()
 }
-fn replace_with_leaf(flat: &mut Bindings, index: usize) -> Result<()> {
+fn replace_with_leaf(flat: &mut CBindings, index: usize) -> Result<()> {
     let ty = flat.function("use_both")?.params[index].ty.ty.clone();
     let wire = format_ident!("manual_wire_{index}");
     let target = format_ident!("manual_value_{index}");

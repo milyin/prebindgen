@@ -1,7 +1,7 @@
 use super::*;
 use prebindgen_declarations::{convert, from, into, try_from, try_into};
 
-fn model(source: &str) -> Bindings {
+fn model(source: &str) -> JniBindings {
     Flat::parse(
         syn::parse_file(source)
             .unwrap()
@@ -17,7 +17,7 @@ fn builder(source: &str) -> JniGenBuilder {
         .set_package_prefix("test")
 }
 const VALUE: &str = "pub struct Value{pub n:i64} pub fn make(n:i64)->Value{} pub fn read(v:&Value)->i64{} pub fn echo(v:Value)->Value{}";
-fn conversion() -> prebindgen_declarations::ConvertDecl {
+fn conversion() -> prebindgen_declarations::DeclConvert {
     convert!(Value).input(fun!(make)).output(fun!(read))
 }
 #[test]
@@ -101,13 +101,14 @@ fn invalid_and_unused_canonical_declarations_are_diagnosed() {
         syn::parse_quote!(Option<Value>),
         syn::parse_quote!(Vec<Value>),
     ] {
-        let error = builder(VALUE)
-            .convert(
-                convert!(Value).output(prebindgen_declarations::ConvertSource::output(repr, false)),
-            )
-            .build()
-            .err()
-            .unwrap();
+        let error =
+            builder(VALUE)
+                .convert(convert!(Value).output(
+                    prebindgen_declarations::DeclConvertSource::output(repr, false),
+                ))
+                .build()
+                .err()
+                .unwrap();
         assert!(
             error.contains("recursive") || error.contains("different representation"),
             "{error}"
@@ -239,6 +240,6 @@ fn source_selection_includes_local_trait_representations() {
     .collect::<Vec<_>>();
     let function = fun!(echo).expand_param("v", convert!(Value).input(from!(crate::Repr)));
     let names = prebindgen_declarations::declarations::source_items(&[], &[], &[], [&function]);
-    let selected = Bindings::parse_selected(items, &names, &[]).unwrap();
+    let selected: JniBindings = JniBindings::parse_selected(items, &names, &[]).unwrap();
     assert!(selected.type_info(&syn::parse_quote!(crate::Repr)).is_ok());
 }

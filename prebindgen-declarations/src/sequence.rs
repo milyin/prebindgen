@@ -127,9 +127,9 @@ pub fn input<C: Codec>(
     length: syn::Ident,
     index: syn::Ident,
     active: &Condition,
-    child: CodecInput<C>,
+    child: CodecInputPlan<C>,
     bulk: bool,
-) -> Result<CodecInput<C>> {
+) -> Result<CodecInputPlan<C>> {
     let (element, view) = prebindgen_flat::sequence_parts(ty)
         .ok_or("sequence recipe requires Vec<T>, &[T] or &Vec<T>")?;
     if view == SequenceView::Mutable {
@@ -278,10 +278,10 @@ pub fn output<C: Codec>(
     value: TokenStream,
     borrowed: bool,
     mode: ProjectionMode,
-    child: CodecOutput<C>,
+    child: CodecOutputPlan<C>,
     delivery: crate::SequenceDelivery,
     bulk: bool,
-) -> Result<CodecOutput<C>> {
+) -> Result<CodecOutputPlan<C>> {
     let (element_type, view) =
         prebindgen_flat::sequence_parts(ty).ok_or("sequence recipe requires a collection")?;
     if matches!(element_type, Type::Reference(_)) {
@@ -403,7 +403,7 @@ pub fn output<C: Codec>(
     } else {
         quote!(for commit in #commits {commit();})
     };
-    let out: CodecOutput<C> = OutputPlan {
+    let out: CodecOutputPlan<C> = OutputPlan {
         fallible: child.fallible || fallible,
         context: Default::default(),
         delivery: Default::default(),

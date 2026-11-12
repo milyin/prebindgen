@@ -1,5 +1,5 @@
 use super::*;
-use prebindgen_declarations::frontend::OutputLeafOp;
+use prebindgen_declarations::frontend::DeclOutputLeafOp;
 
 const SOURCE: &str = "
 pub type Value=String;
@@ -26,7 +26,7 @@ fn builder() -> JniGenBuilder {
         )
         .set_package_prefix("example")
 }
-fn declaration() -> CallbackDecl {
+fn declaration() -> DeclCallback {
     callback!(impl Fn(Value, i64) -> Value)
         .name("Handler")
         .expand_param(0, expand_return!(Value).field(fun!(number)))
@@ -88,9 +88,9 @@ fn local_result_and_nested_constructor_overrides_inherit_arguments() {
                 .fun(
                     fun!(nested).expand_param(
                         "handlers",
-                        DeclarationInput::for_type(
+                        DeclInput::for_type(
                             syn::parse_quote!(Handler),
-                            DeclarationInput::constructor(
+                            DeclInput::constructor(
                                 "make",
                                 [callback!(impl Fn(Value, i64) -> Value)
                                     .name("Nested")
@@ -208,7 +208,7 @@ fn callback_source_matching_preserves_opaque_alias_identity() {
             let builder = JniGen::builder().set_package_prefix("example");
             let builder = if use_flat {
                 builder.flat(
-                    Bindings::parse(
+                    JniBindings::parse(
                         source
                             .items
                             .into_iter()
@@ -257,7 +257,7 @@ fn callback_source_matching_works_with_flat_models_and_constructor_helpers() {
             ""
         };
         let source = syn::parse_file(source).unwrap();
-        let flat = Bindings::parse(
+        let flat = JniBindings::parse(
             source
                 .items
                 .into_iter()
@@ -323,7 +323,7 @@ fn callback_overrides_validate_positions_types_and_foreign_names() {
     for (local, expected) in [
         (
             callback!(impl Fn(Value, i64) -> Value)
-                .expand_param(2, DeclarationOutput::Leaf(OutputLeafOp::Value)),
+                .expand_param(2, DeclOutput::Leaf(DeclOutputLeafOp::Value)),
             "out of range",
         ),
         (
@@ -497,7 +497,7 @@ fn callback_interfaces_cannot_shadow_handle_classes() {
 fn c_preserves_automatic_callbacks_and_rejects_callback_specific_settings() {
     for configured in [false, true] {
         let source = syn::parse_file("pub fn f(cb:impl Fn(i64)->i64)->i64{}").unwrap();
-        let flat = prebindgen_c::Bindings::parse(
+        let flat = prebindgen_c::CBindings::parse(
             source
                 .items
                 .into_iter()

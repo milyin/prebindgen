@@ -43,7 +43,7 @@ impl TestAbi {
         prebindgen_conversions::validate_wire_names(Self::wires(node))
     }
 }
-type Bindings<W> = super::Bindings<W, (), TestGroup, TestGroup>;
+type TestBindings<W> = super::PlanBindings<W, (), TestGroup, TestGroup>;
 type InputPlan<W> = prebindgen_conversions::InputPlan<W, (), TestGroup, TestGroup>;
 type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, (), TestGroup, TestGroup>;
 use prebindgen_conversions::value::{self, Value};
@@ -112,10 +112,10 @@ impl Codec for TestCodec {
     type Chain = TestGroup;
     type Branch = TestGroup;
 
-    fn validate_input(&self, plan: &CodecInput<Self>) -> Result<()> {
+    fn validate_input(&self, plan: &CodecInputPlan<Self>) -> Result<()> {
         TestAbi::validate(&plan.node)
     }
-    fn validate_output(&self, plan: &CodecOutput<Self>) -> Result<()> {
+    fn validate_output(&self, plan: &CodecOutputPlan<Self>) -> Result<()> {
         for node in std::iter::once(&plan.outcomes.success)
             .chain(plan.outcomes.source_error.iter())
             .chain(plan.outcomes.binding_failure.iter())
@@ -304,7 +304,7 @@ impl TestCodec {
     }
 }
 
-fn parse(source: &str) -> Bindings<TestWire> {
+fn parse(source: &str) -> TestBindings<TestWire> {
     Flat::parse(
         syn::parse_file(source)
             .unwrap()
@@ -314,14 +314,14 @@ fn parse(source: &str) -> Bindings<TestWire> {
     )
     .unwrap()
 }
-fn model() -> Bindings<TestWire> {
+fn model() -> TestBindings<TestWire> {
     parse("pub struct Payload { pub data: Vec<u8> } pub fn make(s: String) -> Payload {} pub fn foo(x: Payload, y: Payload) -> Payload {}")
 }
 fn extra(name: &'static str) -> Extra {
     Extra { name, copy: false }
 }
-fn fill(flat: &mut Bindings<TestWire>, decl: &FunctionDecl) -> Result<()> {
-    Declarations::new(flat, vec![], vec![], vec![])?.fill(
+fn fill(flat: &mut TestBindings<TestWire>, decl: &DeclFunction) -> Result<()> {
+    DeclDefaults::new(flat, vec![], vec![], vec![])?.fill(
         flat,
         &TEST_CODEC,
         decl,
@@ -336,9 +336,9 @@ fn different_occurrences_have_different_converters() {
         &TEST_CODEC,
         "foo",
         "x",
-        &DeclarationInput::selector([
-            DeclarationInput::Leaf(InputLeafOp::Value),
-            DeclarationInput::constructor("make", [DeclarationInput::Leaf(InputLeafOp::Value)]),
+        &DeclInput::selector([
+            DeclInput::Leaf(DeclInputLeafOp::Value),
+            DeclInput::constructor("make", [DeclInput::Leaf(DeclInputLeafOp::Value)]),
         ]),
         &extra("x"),
     )
@@ -348,7 +348,7 @@ fn different_occurrences_have_different_converters() {
         &TEST_CODEC,
         "foo",
         "y",
-        &DeclarationInput::Leaf(InputLeafOp::Value),
+        &DeclInput::Leaf(DeclInputLeafOp::Value),
         &extra("y"),
     )
     .unwrap();
@@ -356,7 +356,7 @@ fn different_occurrences_have_different_converters() {
         &mut flat,
         &TEST_CODEC,
         "foo",
-        &DeclarationOutput::Leaf(OutputLeafOp::Value),
+        &DeclOutput::Leaf(DeclOutputLeafOp::Value),
         &extra("result"),
     )
     .unwrap();
@@ -376,7 +376,7 @@ fn rejects_incomplete_slots() {
         &mut flat,
         &TEST_CODEC,
         "foo",
-        &DeclarationOutput::Leaf(OutputLeafOp::Value),
+        &DeclOutput::Leaf(DeclOutputLeafOp::Value),
         &Extra::default(),
     )
     .unwrap();
@@ -390,7 +390,7 @@ fn rejects_inputs_without_a_result_converter() {
         &TEST_CODEC,
         "foo",
         "x",
-        &DeclarationInput::Leaf(InputLeafOp::Value),
+        &DeclInput::Leaf(DeclInputLeafOp::Value),
         &Extra::default(),
     )
     .unwrap();
@@ -429,20 +429,20 @@ fn failed_rebinding_preserves_existing_converter() {
         &TEST_CODEC,
         "foo",
         "x",
-        &DeclarationInput::constructor("foo", []),
+        &DeclInput::constructor("foo", []),
         &Extra::default(),
     )
     .unwrap_err();
     assert!(error.contains("argument count"));
     assert_eq!(format!("{flat:?}"), before);
     for output in [
-        DeclarationOutput::combine([
-            DeclarationOutput::Leaf(OutputLeafOp::Value),
-            DeclarationOutput::Leaf(OutputLeafOp::Value),
+        DeclOutput::combine([
+            DeclOutput::Leaf(DeclOutputLeafOp::Value),
+            DeclOutput::Leaf(DeclOutputLeafOp::Value),
         ]),
-        DeclarationOutput::fields([
-            DeclarationOutput::Leaf(OutputLeafOp::Value),
-            DeclarationOutput::Leaf(OutputLeafOp::Value),
+        DeclOutput::fields([
+            DeclOutput::Leaf(DeclOutputLeafOp::Value),
+            DeclOutput::Leaf(DeclOutputLeafOp::Value),
         ]),
     ] {
         assert!(bind_output(&mut flat, &TEST_CODEC, "foo", &output, &Extra::default()).is_err());
@@ -453,7 +453,7 @@ fn failed_rebinding_preserves_existing_converter() {
         &TEST_CODEC,
         "foo",
         "missing",
-        &DeclarationInput::Leaf(InputLeafOp::Value),
+        &DeclInput::Leaf(DeclInputLeafOp::Value),
         &Extra::default()
     )
     .unwrap_err()
@@ -466,9 +466,9 @@ fn observations_precede_move_but_wires_keep_order() {
         &mut flat,
         &TEST_CODEC,
         "foo",
-        &DeclarationOutput::combine([
-            DeclarationOutput::Leaf(OutputLeafOp::Value),
-            DeclarationOutput::fields([DeclarationOutput::Leaf(OutputLeafOp::Value)]),
+        &DeclOutput::combine([
+            DeclOutput::Leaf(DeclOutputLeafOp::Value),
+            DeclOutput::fields([DeclOutput::Leaf(DeclOutputLeafOp::Value)]),
         ]),
         &Extra::default(),
     )
@@ -518,9 +518,9 @@ fn declarations_preserve_converters_and_replace_explicit_overrides() {
         &TEST_CODEC,
         "foo",
         "x",
-        &DeclarationInput::selector([
-            DeclarationInput::constructor("make", [DeclarationInput::Leaf(InputLeafOp::Value)]),
-            DeclarationInput::Leaf(InputLeafOp::Value),
+        &DeclInput::selector([
+            DeclInput::constructor("make", [DeclInput::Leaf(DeclInputLeafOp::Value)]),
+            DeclInput::Leaf(DeclInputLeafOp::Value),
         ]),
         &extra("x"),
     )
@@ -529,11 +529,11 @@ fn declarations_preserve_converters_and_replace_explicit_overrides() {
         &mut flat,
         &TEST_CODEC,
         "foo",
-        &DeclarationOutput::Leaf(OutputLeafOp::Value),
+        &DeclOutput::Leaf(DeclOutputLeafOp::Value),
         &extra("result"),
     )
     .unwrap();
-    let declarations = Declarations::new(
+    let declarations = DeclDefaults::new(
         &flat,
         vec![expand_param!(Payload)
             .variant(fun!(make))
@@ -613,7 +613,7 @@ fn independent_binding_and_rebinding_keeps_names_unique_and_stable() {
                 &TEST_CODEC,
                 "foo",
                 parameter,
-                &DeclarationInput::Leaf(InputLeafOp::Value),
+                &DeclInput::Leaf(DeclInputLeafOp::Value),
                 &Extra::default(),
             )
             .unwrap();
@@ -622,7 +622,7 @@ fn independent_binding_and_rebinding_keeps_names_unique_and_stable() {
             model,
             &TEST_CODEC,
             "foo",
-            &DeclarationOutput::Leaf(OutputLeafOp::Value),
+            &DeclOutput::Leaf(DeclOutputLeafOp::Value),
             &Extra::default(),
         )
         .unwrap();
@@ -634,9 +634,9 @@ fn independent_binding_and_rebinding_keeps_names_unique_and_stable() {
         &TEST_CODEC,
         "foo",
         "x",
-        &DeclarationInput::selector([
-            DeclarationInput::Leaf(InputLeafOp::Value),
-            DeclarationInput::constructor("make", [DeclarationInput::Leaf(InputLeafOp::Value)]),
+        &DeclInput::selector([
+            DeclInput::Leaf(DeclInputLeafOp::Value),
+            DeclInput::constructor("make", [DeclInput::Leaf(DeclInputLeafOp::Value)]),
         ]),
         &Extra::default(),
     )
@@ -662,7 +662,7 @@ fn independent_binding_and_rebinding_keeps_names_unique_and_stable() {
 #[test]
 fn field_defaults_follow_type_expansions() {
     let mut flat = parse("pub type Key=String; pub struct Payload { pub key: Key, pub data: Vec<u8> } pub fn parts(p: &Payload) -> Payload {} pub fn key_text(k: &Key) -> String {} pub fn read(p: Payload) -> Payload {}");
-    Declarations::new(
+    DeclDefaults::new(
         &flat,
         vec![],
         vec![expand_return!(Key).field(fun!(key_text)).into()],
@@ -713,7 +713,7 @@ fn field_defaults_follow_type_expansions() {
 #[test]
 fn explicit_scalar_identity_is_a_value_conversion() {
     let mut flat = parse("pub fn f(x:i64)->i64{}");
-    let defaults = Declarations::new(
+    let defaults = DeclDefaults::new(
         &flat,
         vec![expand_param!(i64).variant_self().into()],
         vec![expand_return!(i64).field_self().into()],
@@ -772,7 +772,7 @@ fn nested_recipes_use_only_the_callers_extra() {
         &TEST_CODEC,
         "make",
         "k",
-        &DeclarationInput::Leaf(InputLeafOp::Value),
+        &DeclInput::Leaf(DeclInputLeafOp::Value),
         &extra("constructor declaration"),
     )
     .unwrap();
@@ -780,7 +780,7 @@ fn nested_recipes_use_only_the_callers_extra() {
         &mut flat,
         &TEST_CODEC,
         "parts",
-        &DeclarationOutput::Leaf(OutputLeafOp::Value),
+        &DeclOutput::Leaf(DeclOutputLeafOp::Value),
         &extra("getter declaration"),
     )
     .unwrap();
@@ -789,9 +789,9 @@ fn nested_recipes_use_only_the_callers_extra() {
         &TEST_CODEC,
         "foo",
         "x",
-        &DeclarationInput::selector([
-            DeclarationInput::Leaf(InputLeafOp::Value),
-            DeclarationInput::constructor("make", [DeclarationInput::Leaf(InputLeafOp::Value)]),
+        &DeclInput::selector([
+            DeclInput::Leaf(DeclInputLeafOp::Value),
+            DeclInput::constructor("make", [DeclInput::Leaf(DeclInputLeafOp::Value)]),
         ]),
         &extra("x"),
     )
@@ -801,7 +801,7 @@ fn nested_recipes_use_only_the_callers_extra() {
         &TEST_CODEC,
         "foo",
         "y",
-        &DeclarationInput::fields([DeclarationInput::Leaf(InputLeafOp::Value)]),
+        &DeclInput::fields([DeclInput::Leaf(DeclInputLeafOp::Value)]),
         &extra("y"),
     )
     .unwrap();
@@ -809,11 +809,11 @@ fn nested_recipes_use_only_the_callers_extra() {
         &mut flat,
         &TEST_CODEC,
         "foo",
-        &DeclarationOutput::combine([
-            DeclarationOutput::Leaf(OutputLeafOp::Value),
-            DeclarationOutput::getter(
+        &DeclOutput::combine([
+            DeclOutput::Leaf(DeclOutputLeafOp::Value),
+            DeclOutput::getter(
                 "parts",
-                DeclarationOutput::fields([DeclarationOutput::Leaf(OutputLeafOp::Value)]),
+                DeclOutput::fields([DeclOutput::Leaf(DeclOutputLeafOp::Value)]),
             ),
         ]),
         &Extra {
@@ -852,9 +852,9 @@ fn nested_recipes_use_only_the_callers_extra() {
 }
 #[test]
 fn extra_controls_consumption_without_changing_the_recipe() {
-    let recipe = DeclarationOutput::combine([
-        DeclarationOutput::Leaf(OutputLeafOp::Value),
-        DeclarationOutput::Leaf(OutputLeafOp::Value),
+    let recipe = DeclOutput::combine([
+        DeclOutput::Leaf(DeclOutputLeafOp::Value),
+        DeclOutput::Leaf(DeclOutputLeafOp::Value),
     ]);
     for copy in [false, true] {
         let mut flat = model();
@@ -883,9 +883,9 @@ fn record_projection_retains_field_mappings_in_prepared_flat() {
         &mut flat,
         &TEST_CODEC,
         "point",
-        &DeclarationOutput::fields([
-            DeclarationOutput::Leaf(OutputLeafOp::Value),
-            DeclarationOutput::Leaf(OutputLeafOp::Value),
+        &DeclOutput::fields([
+            DeclOutput::Leaf(DeclOutputLeafOp::Value),
+            DeclOutput::Leaf(DeclOutputLeafOp::Value),
         ]),
         &Extra::default(),
     )
@@ -911,10 +911,10 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
         type Chain = TestGroup;
         type Branch = TestGroup;
 
-        fn validate_input(&self, plan: &CodecInput<Self>) -> Result<()> {
+        fn validate_input(&self, plan: &CodecInputPlan<Self>) -> Result<()> {
             TestAbi::validate(&plan.node)
         }
-        fn validate_output(&self, plan: &CodecOutput<Self>) -> Result<()> {
+        fn validate_output(&self, plan: &CodecOutputPlan<Self>) -> Result<()> {
             for node in std::iter::once(&plan.outcomes.success)
                 .chain(plan.outcomes.source_error.iter())
                 .chain(plan.outcomes.binding_failure.iter())
@@ -1057,11 +1057,11 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
         &FinalizingCodec,
         "take",
         "p",
-        &DeclarationInput::constructor(
+        &DeclInput::constructor(
             "pair",
             [
-                DeclarationInput::Leaf(InputLeafOp::Value),
-                DeclarationInput::Leaf(InputLeafOp::Value)
+                DeclInput::Leaf(DeclInputLeafOp::Value),
+                DeclInput::Leaf(DeclInputLeafOp::Value)
             ]
         ),
         &Extra {
@@ -1081,11 +1081,11 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
         &FinalizingCodec,
         "take",
         "p",
-        &DeclarationInput::constructor(
+        &DeclInput::constructor(
             "pair",
             [
-                DeclarationInput::Leaf(InputLeafOp::Value),
-                DeclarationInput::Leaf(InputLeafOp::Value),
+                DeclInput::Leaf(DeclInputLeafOp::Value),
+                DeclInput::Leaf(DeclInputLeafOp::Value),
             ],
         ),
         &Extra::default(),
@@ -1107,17 +1107,17 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
         &mut direct,
         &FinalizingCodec,
         "take",
-        &DeclarationOutput::fields([]),
+        &DeclOutput::fields([]),
         &Extra::default(),
     )
     .unwrap();
-    let declarations = Declarations::new(&direct, vec![], vec![], vec![]).unwrap();
-    let decl = FunctionDecl::new(syn::parse_quote!(take)).input(
+    let declarations = DeclDefaults::new(&direct, vec![], vec![], vec![]).unwrap();
+    let decl = DeclFunction::new(syn::parse_quote!(take)).input(
         "p",
-        DeclarationInput::for_type(
+        DeclInput::for_type(
             syn::parse_quote!(Pair),
-            DeclarationInput::Branch {
-                operation: InputBranch::Selector,
+            DeclInput::Branch {
+                operation: DeclInputBranch::Selector,
                 children: vec![],
             },
         )
@@ -1172,9 +1172,9 @@ fn generation_needs_no_preparation_registry_or_record_lookup() {
         &mut flat,
         &TEST_CODEC,
         "point",
-        &DeclarationOutput::fields([
-            DeclarationOutput::Leaf(OutputLeafOp::Value),
-            DeclarationOutput::Leaf(OutputLeafOp::Value),
+        &DeclOutput::fields([
+            DeclOutput::Leaf(DeclOutputLeafOp::Value),
+            DeclOutput::Leaf(DeclOutputLeafOp::Value),
         ]),
         &Extra::default(),
     )
@@ -1396,7 +1396,7 @@ fn owned_record_cleanup_covers_partial_conversion_and_failed_delivery() {
 #[test]
 fn consuming_field_accessors_validate_signatures_and_order_observers() {
     let mut flat = parse("pub struct Pair { pub first:i64, pub second:i64 } pub fn make()->Pair {} pub fn into_pair(value:Pair)->Pair {} pub fn copy_pair(value:&Pair)->Pair {} pub fn count(value:&Pair)->i64 {}");
-    let declarations = Declarations::new(&flat, vec![], vec![], vec![]).unwrap();
+    let declarations = DeclDefaults::new(&flat, vec![], vec![], vec![]).unwrap();
     declarations
         .fill(
             &mut flat,
@@ -1519,22 +1519,22 @@ fn optional_output_drops_prepared_owners_on_failure_and_skips_absent_payloads() 
 fn field_groups_preserve_empty_and_multiwire_fields_in_both_directions() {
     use prebindgen_flat::WireNode;
     let mut flat = parse("pub struct Empty {} pub struct Pair { pub x: i32, pub y: i32 } pub struct Record { pub maybe: Option<i32>, pub empty: Empty, pub pair: Pair } pub fn echo(value: Record) -> Record { value }");
-    let input = DeclarationInput::Branch {
-        operation: InputBranch::Fields,
+    let input = DeclInput::Branch {
+        operation: DeclInputBranch::Fields,
         children: vec![
-            DeclarationInput::Unary {
-                operation: InputUnary::Optional,
-                child: Box::new(DeclarationInput::Leaf(InputLeafOp::Value)),
+            DeclInput::Unary {
+                operation: DeclInputUnary::Optional,
+                child: Box::new(DeclInput::Leaf(DeclInputLeafOp::Value)),
             },
-            DeclarationInput::Branch {
-                operation: InputBranch::Fields,
+            DeclInput::Branch {
+                operation: DeclInputBranch::Fields,
                 children: vec![],
             },
-            DeclarationInput::Branch {
-                operation: InputBranch::Fields,
+            DeclInput::Branch {
+                operation: DeclInputBranch::Fields,
                 children: vec![
-                    DeclarationInput::Leaf(InputLeafOp::Value),
-                    DeclarationInput::Leaf(InputLeafOp::Value),
+                    DeclInput::Leaf(DeclInputLeafOp::Value),
+                    DeclInput::Leaf(DeclInputLeafOp::Value),
                 ],
             },
         ],
@@ -1594,30 +1594,30 @@ fn field_groups_preserve_empty_and_multiwire_fields_in_both_directions() {
     );
     for owned in [false, true] {
         let fields = vec![
-            DeclarationOutput::Unary {
-                operation: OutputUnary::Optional,
-                child: Box::new(DeclarationOutput::Leaf(OutputLeafOp::Value)),
+            DeclOutput::Unary {
+                operation: DeclOutputUnary::Optional,
+                child: Box::new(DeclOutput::Leaf(DeclOutputLeafOp::Value)),
             },
-            DeclarationOutput::Branch {
-                operation: OutputBranch::Fields,
+            DeclOutput::Branch {
+                operation: DeclOutputBranch::Fields,
                 children: vec![],
             },
-            DeclarationOutput::Branch {
-                operation: OutputBranch::Fields,
+            DeclOutput::Branch {
+                operation: DeclOutputBranch::Fields,
                 children: vec![
-                    DeclarationOutput::Leaf(OutputLeafOp::Value),
-                    DeclarationOutput::Leaf(OutputLeafOp::Value),
+                    DeclOutput::Leaf(DeclOutputLeafOp::Value),
+                    DeclOutput::Leaf(DeclOutputLeafOp::Value),
                 ],
             },
         ];
         let output = if owned {
-            DeclarationOutput::Branch {
-                operation: OutputBranch::OwnedFields,
+            DeclOutput::Branch {
+                operation: DeclOutputBranch::OwnedFields,
                 children: fields,
             }
         } else {
-            DeclarationOutput::Branch {
-                operation: OutputBranch::Fields,
+            DeclOutput::Branch {
+                operation: DeclOutputBranch::Fields,
                 children: fields,
             }
         };
@@ -1690,7 +1690,7 @@ fn record_helpers_check_source_field_names_without_reading_group_metadata() {
 #[test]
 fn result_defaults_overrides_and_borrowed_error_mappers_reuse_success_plans() {
     let mut flat = parse("pub type E=String; pub fn message(e:&E)->String{} pub fn other(e:E)->String{} pub fn echo(x:i64)->Result<Option<i64>,E>{}");
-    let defaults = Declarations::new(
+    let defaults = DeclDefaults::new(
         &flat,
         vec![],
         vec![],
@@ -1775,16 +1775,16 @@ fn result_data_occurrences_are_not_implicitly_error_channels() {
     for (source, recipe) in [
         (
             "pub fn f()->Option<Result<i64,String>>{}",
-            DeclarationOutput::Unary {
-                operation: OutputUnary::Optional,
-                child: Box::new(DeclarationOutput::Leaf(OutputLeafOp::Value)),
+            DeclOutput::Unary {
+                operation: DeclOutputUnary::Optional,
+                child: Box::new(DeclOutput::Leaf(DeclOutputLeafOp::Value)),
             },
         ),
         (
             "pub struct R{pub value:Result<i64,String>}pub fn f()->R{}",
-            DeclarationOutput::Branch {
-                operation: OutputBranch::OwnedFields,
-                children: vec![DeclarationOutput::Leaf(OutputLeafOp::Value)],
+            DeclOutput::Branch {
+                operation: DeclOutputBranch::OwnedFields,
+                children: vec![DeclOutput::Leaf(DeclOutputLeafOp::Value)],
             },
         ),
     ] {
@@ -1814,14 +1814,14 @@ fn result_data_occurrences_are_not_implicitly_error_channels() {
         .outcomes
         .source_error
         .is_some());
-    assert!(Declarations::new(
+    assert!(DeclDefaults::new(
         &flat,
         vec![],
         vec![expand_return!(Result<i64,String>).field_self().into()],
         vec![]
     )
     .is_ok());
-    assert!(Declarations::new(
+    assert!(DeclDefaults::new(
         &flat,
         vec![expand_param!(Result<i64,String>).variant_self().into()],
         vec![],
@@ -1833,7 +1833,7 @@ fn result_data_occurrences_are_not_implicitly_error_channels() {
 #[test]
 fn result_error_defaults_are_explicit_unique_and_selected_with_helpers() {
     let flat = parse("pub type E=String;pub fn message(e:E)->String{}pub fn f()->Result<i64,E>{}");
-    assert!(Declarations::new(
+    assert!(DeclDefaults::new(
         &flat,
         vec![],
         vec![],
@@ -1857,9 +1857,9 @@ fn selector_schema_separates_control_from_mutually_exclusive_payloads() {
         &TEST_CODEC,
         "take",
         "v",
-        &DeclarationInput::selector([
-            DeclarationInput::constructor("empty", []),
-            DeclarationInput::constructor("numbered", [DeclarationInput::Leaf(InputLeafOp::Value)]),
+        &DeclInput::selector([
+            DeclInput::constructor("empty", []),
+            DeclInput::constructor("numbered", [DeclInput::Leaf(DeclInputLeafOp::Value)]),
         ]),
         &Extra::default(),
     )
@@ -2009,10 +2009,7 @@ fn constructor_and_output_components_keep_groups_at_every_arity() {
             &TEST_CODEC,
             "f",
             "value",
-            &DeclarationInput::constructor(
-                name,
-                vec![DeclarationInput::Leaf(InputLeafOp::Value); count],
-            ),
+            &DeclInput::constructor(name, vec![DeclInput::Leaf(DeclInputLeafOp::Value); count]),
             &Extra::default(),
         )
         .unwrap();
@@ -2031,10 +2028,10 @@ fn constructor_and_output_components_keep_groups_at_every_arity() {
             &mut flat,
             &TEST_CODEC,
             "f",
-            &DeclarationOutput::combine(vec![
-                DeclarationOutput::getter(
+            &DeclOutput::combine(vec![
+                DeclOutput::getter(
                     "observe",
-                    DeclarationOutput::Leaf(OutputLeafOp::Value)
+                    DeclOutput::Leaf(DeclOutputLeafOp::Value)
                 );
                 count
             ]),
@@ -2055,7 +2052,7 @@ fn malformed_error_channel_is_rejected_before_replacing_output() {
         &mut flat,
         &TEST_CODEC,
         "f",
-        &DeclarationOutput::Leaf(OutputLeafOp::Value),
+        &DeclOutput::Leaf(DeclOutputLeafOp::Value),
         &Extra::default(),
     )
     .unwrap();
@@ -2072,7 +2069,7 @@ fn malformed_error_channel_is_rejected_before_replacing_output() {
         &mut flat,
         &TEST_CODEC,
         "f",
-        &DeclarationOutput::Leaf(OutputLeafOp::Value),
+        &DeclOutput::Leaf(DeclOutputLeafOp::Value),
         &Extra {
             name: "malformed_binding_failure",
             ..Extra::default()
@@ -2088,9 +2085,9 @@ fn malformed_error_channel_is_rejected_before_replacing_output() {
 #[test]
 fn failed_metadata_construction_preserves_installed_conversions() {
     let mut flat=parse("pub fn empty()->Option<i64>{} pub fn some(v:i64)->Option<i64>{} pub fn f(v:Option<i64>)->Option<i64>{}");
-    let optional = DeclarationInput::Unary {
-        operation: InputUnary::Optional,
-        child: Box::new(DeclarationInput::Leaf(InputLeafOp::Value)),
+    let optional = DeclInput::Unary {
+        operation: DeclInputUnary::Optional,
+        child: Box::new(DeclInput::Leaf(DeclInputLeafOp::Value)),
     };
     bind_input(
         &mut flat,
@@ -2105,9 +2102,9 @@ fn failed_metadata_construction_preserves_installed_conversions() {
         &mut flat,
         &TEST_CODEC,
         "f",
-        &DeclarationOutput::Unary {
-            operation: OutputUnary::Optional,
-            child: Box::new(DeclarationOutput::Leaf(OutputLeafOp::Value)),
+        &DeclOutput::Unary {
+            operation: DeclOutputUnary::Optional,
+            child: Box::new(DeclOutput::Leaf(DeclOutputLeafOp::Value)),
         },
         &Extra::default(),
     )
@@ -2135,9 +2132,9 @@ fn failed_metadata_construction_preserves_installed_conversions() {
             "optional metadata rejected",
         ),
         (
-            DeclarationInput::selector([
-                DeclarationInput::constructor("empty", []),
-                DeclarationInput::constructor("some", [DeclarationInput::Leaf(InputLeafOp::Value)]),
+            DeclInput::selector([
+                DeclInput::constructor("empty", []),
+                DeclInput::constructor("some", [DeclInput::Leaf(DeclInputLeafOp::Value)]),
             ]),
             "reject_alternative_metadata",
             "alternative metadata rejected",
@@ -2171,9 +2168,9 @@ fn failed_metadata_construction_preserves_installed_conversions() {
         &mut flat,
         &TEST_CODEC,
         "f",
-        &DeclarationOutput::Unary {
-            operation: OutputUnary::Optional,
-            child: Box::new(DeclarationOutput::Leaf(OutputLeafOp::Value)),
+        &DeclOutput::Unary {
+            operation: DeclOutputUnary::Optional,
+            child: Box::new(DeclOutput::Leaf(DeclOutputLeafOp::Value)),
         },
         &Extra {
             name: "reject_optional_metadata",
@@ -2198,7 +2195,7 @@ fn failed_metadata_construction_preserves_installed_conversions() {
 #[test]
 fn preparation_fills_one_fixed_schema_and_emission_needs_no_defaults() {
     let source = parse("pub struct R { pub n:i64 } pub fn make(n:i64)->R{} pub fn inspect(r:&R)->i64{} pub fn echo(r:Option<R>)->Option<R>{}");
-    let defaults = Declarations::new(
+    let defaults = DeclDefaults::new(
         &source,
         vec![expand_param!(R).variant(fun!(make)).into()],
         vec![expand_return!(R).field(fun!(inspect)).into()],
@@ -2211,7 +2208,7 @@ fn preparation_fills_one_fixed_schema_and_emission_needs_no_defaults() {
             &source,
             &TEST_CODEC,
             &source.function("echo").unwrap().params[0].ty.ty,
-            &DeclarationInput::auto(),
+            &DeclInput::auto(),
             &Extra::default(),
         )
         .unwrap();
@@ -2220,15 +2217,15 @@ fn preparation_fills_one_fixed_schema_and_emission_needs_no_defaults() {
             &source,
             &TEST_CODEC,
             &source.function("echo").unwrap().ret.ty,
-            &DeclarationOutput::auto(),
+            &DeclOutput::auto(),
             &Extra::default(),
         )
         .unwrap();
     assert!(
-        matches!(&input,DeclarationInput::Unary { operation: InputUnary::Optional, child } if matches!(child.as_ref(),DeclarationInput::Branch { operation: InputBranch::Constructor { function, .. }, .. } if function=="make"))
+        matches!(&input,DeclInput::Unary { operation: DeclInputUnary::Optional, child } if matches!(child.as_ref(),DeclInput::Branch { operation: DeclInputBranch::Constructor { function, .. }, .. } if function=="make"))
     );
     assert!(
-        matches!(&output,DeclarationOutput::Unary { operation: OutputUnary::Optional, child } if matches!(child.as_ref(),DeclarationOutput::Unary { operation: OutputUnary::Getter { function, .. }, .. } if function=="inspect"))
+        matches!(&output,DeclOutput::Unary { operation: DeclOutputUnary::Optional, child } if matches!(child.as_ref(),DeclOutput::Unary { operation: DeclOutputUnary::Getter { function, .. }, .. } if function=="inspect"))
     );
     assert!(source.function("echo").unwrap().ret.slot.is_none());
     defaults
@@ -2244,7 +2241,7 @@ fn preparation_fills_one_fixed_schema_and_emission_needs_no_defaults() {
 #[test]
 fn sequence_identity_uses_element_defaults_and_staged_errors_name_the_function() {
     let source = model();
-    let defaults = Declarations::new(
+    let defaults = DeclDefaults::new(
         &source,
         vec![
             expand_param!(Payload).variant(fun!(make)).into(),
@@ -2261,19 +2258,19 @@ fn sequence_identity_uses_element_defaults_and_staged_errors_name_the_function()
             &source
                 .resolve_type(&syn::parse_quote!(Vec<Payload>))
                 .unwrap(),
-            &DeclarationInput::auto(),
+            &DeclInput::auto(),
             &Extra::default(),
         )
         .unwrap();
     assert!(
-        matches!(resolved,DeclarationInput::Unary { operation: InputUnary::Sequence, child } if matches!(&*child,DeclarationInput::Branch { operation: InputBranch::Constructor { function, .. }, .. } if function=="make"))
+        matches!(resolved,DeclInput::Unary { operation: DeclInputUnary::Sequence, child } if matches!(&*child,DeclInput::Branch { operation: DeclInputBranch::Constructor { function, .. }, .. } if function=="make"))
     );
     let mut source = source;
     let error = defaults
         .fill(
             &mut source,
             &TEST_CODEC,
-            &fun!(foo).input("x", DeclarationInput::call("missing")),
+            &fun!(foo).input("x", DeclInput::call("missing")),
             &Extra::default(),
         )
         .unwrap_err();
@@ -2283,9 +2280,9 @@ fn sequence_identity_uses_element_defaults_and_staged_errors_name_the_function()
         .fill(
             &mut invalid,
             &TEST_CODEC,
-            &fun!(broken).output(DeclarationOutput::Unary {
-                operation: OutputUnary::Optional,
-                child: Box::new(DeclarationOutput::Leaf(OutputLeafOp::Value)),
+            &fun!(broken).output(DeclOutput::Unary {
+                operation: DeclOutputUnary::Optional,
+                child: Box::new(DeclOutput::Leaf(DeclOutputLeafOp::Value)),
             }),
             &Extra::default(),
         )
@@ -2296,7 +2293,7 @@ fn sequence_identity_uses_element_defaults_and_staged_errors_name_the_function()
 #[test]
 fn omitted_typed_fields_drop_all_enclosing_option_and_sequence_wires() {
     let mut model = parse("pub type Hidden=String;pub type Other=u32;pub struct Record{pub optional:Option<Hidden>,pub nested:Option<Vec<Option<Hidden>>>,pub visible:i64}pub fn parts(value:Record)->Record{}pub fn read()->Record{}");
-    let output: DeclarationOutput<OutputRequest, InputRequest> = expand_return!(Record)
+    let output: DeclOutput<DeclInputRequest, DeclOutputRequest> = expand_return!(Record)
         .fields_into(
             fields!(parts)
                 .field("optional", expand_return!(Hidden))
@@ -2310,7 +2307,7 @@ fn omitted_typed_fields_drop_all_enclosing_option_and_sequence_wires() {
         1
     );
     assert_eq!(plan.values.len(), 1);
-    let invalid: DeclarationOutput<OutputRequest, InputRequest> = expand_return!(Record)
+    let invalid: DeclOutput<DeclInputRequest, DeclOutputRequest> = expand_return!(Record)
         .fields_into(fields!(parts).field("optional", expand_return!(Other)))
         .into();
     assert!(bind_output(&mut model, &TEST_CODEC, "read", &invalid, &Extra::default()).is_err());
@@ -2319,8 +2316,8 @@ fn omitted_typed_fields_drop_all_enclosing_option_and_sequence_wires() {
 #[test]
 fn named_getter_resolution_preserves_the_selected_name_in_the_tree() {
     let model = parse("pub type T=String;pub fn length(value:&T)->i64{}");
-    let defaults = Declarations::new(&model, vec![], vec![], vec![]).unwrap();
-    let tree: DeclarationOutput<OutputRequest, InputRequest> =
+    let defaults = DeclDefaults::new(&model, vec![], vec![], vec![]).unwrap();
+    let tree: DeclOutput<DeclInputRequest, DeclOutputRequest> =
         expand_return!(T).field(fun!(length).name("size")).into();
     let tree = defaults
         .resolve_output(
@@ -2332,7 +2329,7 @@ fn named_getter_resolution_preserves_the_selected_name_in_the_tree() {
         )
         .unwrap();
     assert!(
-        matches!(tree,DeclarationOutput::Unary { operation: OutputUnary::Named { name }, child: output,  } if name=="size" && matches!(output.as_ref(),DeclarationOutput::Unary { operation: OutputUnary::Getter { function }, child: output,  } if function=="length"&&matches!(output.as_ref(),DeclarationOutput::Leaf(OutputLeafOp::Value))))
+        matches!(tree,DeclOutput::Unary { operation: DeclOutputUnary::Named { name }, child: output,  } if name=="size" && matches!(output.as_ref(),DeclOutput::Unary { operation: DeclOutputUnary::Getter { function }, child: output,  } if function=="length"&&matches!(output.as_ref(),DeclOutput::Leaf(DeclOutputLeafOp::Value))))
     );
 }
 
@@ -2351,24 +2348,24 @@ fn helper_references_reject_binding_only_decorations() {
 #[test]
 fn nested_requests_resolve_into_strict_schemas_before_compilation() {
     let source = parse("pub type R=String;pub fn make(a:i32,b:Option<i64>)->R{}pub fn narrow(v:i16)->i64{}pub fn run(value:R)->i64{}");
-    let defaults = Declarations::new(
+    let defaults = DeclDefaults::new(
         &source,
         vec![expand_param!(i64).variant(fun!(narrow)).into()],
         vec![],
         vec![],
     )
     .unwrap();
-    let requested: DeclarationInput<InputRequest, OutputRequest> = DeclarationInput::constructor(
+    let requested: DeclInput<DeclInputRequest, DeclOutputRequest> = DeclInput::constructor(
         "make",
         [
-            DeclarationInput::Leaf(InputLeafOp::Value),
-            DeclarationInput::Unary {
-                operation: InputUnary::Optional,
-                child: Box::new(DeclarationInput::auto()),
+            DeclInput::Leaf(DeclInputLeafOp::Value),
+            DeclInput::Unary {
+                operation: DeclInputUnary::Optional,
+                child: Box::new(DeclInput::auto()),
             },
         ],
     );
-    let resolved: DeclarationInput = defaults
+    let resolved: DeclInput = defaults
         .resolve_input(
             &source,
             &TEST_CODEC,
@@ -2377,20 +2374,17 @@ fn nested_requests_resolve_into_strict_schemas_before_compilation() {
             &Extra::default(),
         )
         .unwrap();
-    let DeclarationInput::Branch {
-        operation: InputBranch::Constructor { .. },
+    let DeclInput::Branch {
+        operation: DeclInputBranch::Constructor { .. },
         children: args,
         ..
     } = &resolved
     else {
         panic!("constructor not resolved")
     };
-    assert!(matches!(
-        &args[0],
-        DeclarationInput::Leaf(InputLeafOp::Value)
-    ));
+    assert!(matches!(&args[0], DeclInput::Leaf(DeclInputLeafOp::Value)));
     assert!(
-        matches!(&args[1],DeclarationInput::Unary { operation: InputUnary::Optional, child } if matches!(child.as_ref(),DeclarationInput::Branch { operation: InputBranch::Constructor { function }, children: args,  } if function=="narrow"&&matches!(args.as_slice(),[DeclarationInput::Leaf(InputLeafOp::Value)])))
+        matches!(&args[1],DeclInput::Unary { operation: DeclInputUnary::Optional, child } if matches!(child.as_ref(),DeclInput::Branch { operation: DeclInputBranch::Constructor { function }, children: args,  } if function=="narrow"&&matches!(args.as_slice(),[DeclInput::Leaf(DeclInputLeafOp::Value)])))
     );
     compile_input(
         &source,
@@ -2407,17 +2401,17 @@ fn nested_requests_resolve_into_strict_schemas_before_compilation() {
 #[test]
 fn completed_subtrees_keep_explicit_choices_when_used_in_preparation() {
     let source=parse("pub type R=String;pub fn direct(v:i64)->R{}pub fn narrow(v:i16)->i64{}pub fn observe(r:&R)->i64{}pub fn sign(v:&i64)->i8{}pub fn run(value:R,count:i64)->R{}");
-    let defaults = Declarations::new(
+    let defaults = DeclDefaults::new(
         &source,
         vec![expand_param!(i64).variant(fun!(narrow)).into()],
         vec![expand_return!(i64).field(fun!(sign)).into()],
         vec![],
     )
     .unwrap();
-    let input: DeclarationInput =
-        DeclarationInput::constructor("direct", [DeclarationInput::Leaf(InputLeafOp::Value)]);
-    let output: DeclarationOutput =
-        DeclarationOutput::getter("observe", DeclarationOutput::Leaf(OutputLeafOp::Value));
+    let input: DeclInput =
+        DeclInput::constructor("direct", [DeclInput::Leaf(DeclInputLeafOp::Value)]);
+    let output: DeclOutput =
+        DeclOutput::getter("observe", DeclOutput::Leaf(DeclOutputLeafOp::Value));
     let decl = fun!(run)
         .input("value", input.into_preparation())
         .output(output.into_preparation());
@@ -2436,7 +2430,7 @@ fn completed_subtrees_keep_explicit_choices_when_used_in_preparation() {
             &source,
             &TEST_CODEC,
             &run.params[1].ty.ty,
-            &DeclarationInput::auto(),
+            &DeclInput::auto(),
             &Extra::default(),
         )
         .unwrap();
@@ -2450,13 +2444,13 @@ fn completed_subtrees_keep_explicit_choices_when_used_in_preparation() {
         )
         .unwrap();
     assert!(
-        matches!(&input,DeclarationInput::Branch { operation: InputBranch::Constructor { function }, children: args,  } if function=="direct"&&matches!(args.as_slice(),[DeclarationInput::Leaf(InputLeafOp::Value)]))
+        matches!(&input,DeclInput::Branch { operation: DeclInputBranch::Constructor { function }, children: args,  } if function=="direct"&&matches!(args.as_slice(),[DeclInput::Leaf(DeclInputLeafOp::Value)]))
     );
     assert!(
-        matches!(&count,DeclarationInput::Branch { operation: InputBranch::Constructor { function, .. }, .. } if function=="narrow")
+        matches!(&count,DeclInput::Branch { operation: DeclInputBranch::Constructor { function, .. }, .. } if function=="narrow")
     );
     assert!(
-        matches!(&output,DeclarationOutput::Unary { operation: OutputUnary::Getter { function }, child: output,  } if function=="observe"&&matches!(output.as_ref(),DeclarationOutput::Leaf(OutputLeafOp::Value)))
+        matches!(&output,DeclOutput::Unary { operation: DeclOutputUnary::Getter { function }, child: output,  } if function=="observe"&&matches!(output.as_ref(),DeclOutput::Leaf(DeclOutputLeafOp::Value)))
     );
     let mut source = source;
     defaults
@@ -2467,23 +2461,23 @@ fn completed_subtrees_keep_explicit_choices_when_used_in_preparation() {
 #[test]
 fn result_resolution_consumes_nested_requests_and_preserves_error_mapper() {
     let source = parse("pub type E=String;pub fn message(e:&E)->String{}pub fn sign(v:&i64)->i8{}pub fn run()->Result<Option<i64>,E>{}");
-    let defaults = Declarations::new(
+    let defaults = DeclDefaults::new(
         &source,
         vec![],
         vec![expand_return!(i64).field(fun!(sign)).into()],
         vec![],
     )
     .unwrap();
-    let request = DeclarationOutput::Unary {
-        operation: OutputUnary::Result {
+    let request = DeclOutput::Unary {
+        operation: DeclOutputUnary::Result {
             error: Some("message".into()),
         },
-        child: Box::new(DeclarationOutput::Unary {
-            operation: OutputUnary::Optional,
-            child: Box::new(DeclarationOutput::auto()),
+        child: Box::new(DeclOutput::Unary {
+            operation: DeclOutputUnary::Optional,
+            child: Box::new(DeclOutput::auto()),
         }),
     };
-    let resolved: DeclarationOutput = defaults
+    let resolved: DeclOutput = defaults
         .resolve_output(
             &source,
             &TEST_CODEC,
@@ -2492,8 +2486,8 @@ fn result_resolution_consumes_nested_requests_and_preserves_error_mapper() {
             &Extra::default(),
         )
         .unwrap();
-    let DeclarationOutput::Unary {
-        operation: OutputUnary::Result { error },
+    let DeclOutput::Unary {
+        operation: DeclOutputUnary::Result { error },
         child: ok,
     } = &resolved
     else {
@@ -2501,7 +2495,7 @@ fn result_resolution_consumes_nested_requests_and_preserves_error_mapper() {
     };
     assert_eq!(error.as_deref(), Some("message"));
     assert!(
-        matches!(ok.as_ref(),DeclarationOutput::Unary { operation: OutputUnary::Optional, child } if matches!(child.as_ref(),DeclarationOutput::Unary { operation: OutputUnary::Getter { function }, child: output,  } if function=="sign" && matches!(output.as_ref(),DeclarationOutput::Leaf(OutputLeafOp::Value))))
+        matches!(ok.as_ref(),DeclOutput::Unary { operation: DeclOutputUnary::Optional, child } if matches!(child.as_ref(),DeclOutput::Unary { operation: DeclOutputUnary::Getter { function }, child: output,  } if function=="sign" && matches!(output.as_ref(),DeclOutput::Leaf(DeclOutputLeafOp::Value))))
     );
     compile_output(&source, &TEST_CODEC, "run", &resolved, &Extra::default()).unwrap();
     let mut source = source;
@@ -2510,9 +2504,9 @@ fn result_resolution_consumes_nested_requests_and_preserves_error_mapper() {
             &mut source,
             &TEST_CODEC,
             &fun!(run)
-                .output(DeclarationOutput::Unary {
-                    operation: OutputUnary::Optional,
-                    child: Box::new(DeclarationOutput::auto()),
+                .output(DeclOutput::Unary {
+                    operation: DeclOutputUnary::Optional,
+                    child: Box::new(DeclOutput::auto()),
                 })
                 .on_error(fun!(message)),
             &Extra::default(),
@@ -2533,20 +2527,20 @@ fn result_resolution_consumes_nested_requests_and_preserves_error_mapper() {
 #[test]
 fn resolved_omissions_and_sequence_policies_survive_preparation_round_trip() {
     let source = parse("pub type Hidden=String;pub struct R{pub hidden:Option<Vec<Option<Hidden>>>,pub rows:Vec<i64>}pub fn read()->R{}");
-    let defaults = Declarations::new(&source, vec![], vec![], vec![]).unwrap();
-    let tree = DeclarationOutput::Branch {
-        operation: OutputBranch::OwnedFields,
+    let defaults = DeclDefaults::new(&source, vec![], vec![], vec![]).unwrap();
+    let tree = DeclOutput::Branch {
+        operation: DeclOutputBranch::OwnedFields,
         children: vec![
-            DeclarationOutput::for_type(
+            DeclOutput::for_type(
                 syn::parse_quote!(Hidden),
-                DeclarationOutput::Leaf(OutputLeafOp::Discard),
+                DeclOutput::Leaf(DeclOutputLeafOp::Discard),
             ),
-            DeclarationOutput::Unary {
-                operation: OutputUnary::Sequence {
+            DeclOutput::Unary {
+                operation: DeclOutputUnary::Sequence {
                     delivery: SequenceDelivery::Callback,
                     mode: Some(ProjectionMode::Owned),
                 },
-                child: Box::new(DeclarationOutput::auto()),
+                child: Box::new(DeclOutput::auto()),
             },
         ],
     };
@@ -2560,7 +2554,7 @@ fn resolved_omissions_and_sequence_policies_survive_preparation_round_trip() {
         )
         .unwrap();
     assert!(
-        matches!(&resolved,DeclarationOutput::Branch { operation: OutputBranch::OwnedFields, children: fields } if matches!(fields.as_slice(),[DeclarationOutput::Leaf(OutputLeafOp::Discard),DeclarationOutput::Unary { operation: OutputUnary::Sequence { delivery: SequenceDelivery::Callback, mode: Some(ProjectionMode::Owned), .. }, .. }]))
+        matches!(&resolved,DeclOutput::Branch { operation: DeclOutputBranch::OwnedFields, children: fields } if matches!(fields.as_slice(),[DeclOutput::Leaf(DeclOutputLeafOp::Discard),DeclOutput::Unary { operation: DeclOutputUnary::Sequence { delivery: SequenceDelivery::Callback, mode: Some(ProjectionMode::Owned), .. }, .. }]))
     );
     let round_trip = defaults
         .resolve_output(
@@ -2577,16 +2571,16 @@ fn resolved_omissions_and_sequence_policies_survive_preparation_round_trip() {
 #[test]
 fn bulk_normalization_preserves_callback_boundaries_inside_structural_nodes() {
     let flat = parse("pub fn values()->Vec<Vec<i64>>{}");
-    let defaults = Declarations::new(&flat, vec![], vec![], vec![]).unwrap();
-    let callback = DeclarationOutput::Unary {
-        operation: OutputUnary::Sequence {
+    let defaults = DeclDefaults::new(&flat, vec![], vec![], vec![]).unwrap();
+    let callback = DeclOutput::Unary {
+        operation: DeclOutputUnary::Sequence {
             delivery: SequenceDelivery::Callback,
             mode: None,
         },
-        child: Box::new(DeclarationOutput::Leaf(OutputLeafOp::Value).bulk()),
+        child: Box::new(DeclOutput::Leaf(DeclOutputLeafOp::Value).bulk()),
     };
-    let recipe = DeclarationOutput::Unary {
-        operation: OutputUnary::Sequence {
+    let recipe = DeclOutput::Unary {
+        operation: DeclOutputUnary::Sequence {
             delivery: SequenceDelivery::Value,
             mode: None,
         },
@@ -2602,21 +2596,21 @@ fn bulk_normalization_preserves_callback_boundaries_inside_structural_nodes() {
         )
         .unwrap();
     assert!(
-        matches!(resolved,DeclarationOutput::Unary { operation: OutputUnary::Sequence { .. }, child: element, .. } if matches!(*element,DeclarationOutput::Unary { operation: OutputUnary::Sequence { delivery: SequenceDelivery::Callback, .. }, .. }))
+        matches!(resolved,DeclOutput::Unary { operation: DeclOutputUnary::Sequence { .. }, child: element, .. } if matches!(*element,DeclOutput::Unary { operation: DeclOutputUnary::Sequence { delivery: SequenceDelivery::Callback, .. }, .. }))
     );
 }
 
 #[test]
 fn unsupported_bulk_is_diagnosed_before_adapter_lowering() {
     let flat = parse("pub fn values()->Option<Vec<i64>>{}");
-    let recipe = DeclarationOutput::Unary {
-        operation: OutputUnary::Optional,
-        child: Box::new(DeclarationOutput::Unary {
-            operation: OutputUnary::Sequence {
+    let recipe = DeclOutput::Unary {
+        operation: DeclOutputUnary::Optional,
+        child: Box::new(DeclOutput::Unary {
+            operation: DeclOutputUnary::Sequence {
                 delivery: SequenceDelivery::Callback,
                 mode: None,
             },
-            child: Box::new(DeclarationOutput::Leaf(OutputLeafOp::Value)),
+            child: Box::new(DeclOutput::Leaf(DeclOutputLeafOp::Value)),
         }),
     }
     .bulk();
@@ -2640,12 +2634,12 @@ fn optional_fields_have_one_continuation_and_linear_generated_code_size() {
         let flat = parse(&format!(
             "pub struct Wide{{{fields}}} pub fn consume(value:Wide){{}}"
         ));
-        let recipe = DeclarationInput::Branch {
-            operation: InputBranch::Fields,
+        let recipe = DeclInput::Branch {
+            operation: DeclInputBranch::Fields,
             children: (0..width)
-                .map(|_| DeclarationInput::Unary {
-                    operation: InputUnary::Optional,
-                    child: Box::new(DeclarationInput::Leaf(InputLeafOp::Value)),
+                .map(|_| DeclInput::Unary {
+                    operation: DeclInputUnary::Optional,
+                    child: Box::new(DeclInput::Leaf(DeclInputLeafOp::Value)),
                 })
                 .collect(),
         };
@@ -2670,11 +2664,11 @@ fn optional_fields_have_one_continuation_and_linear_generated_code_size() {
 #[test]
 fn optional_temporary_borrows_survive_through_the_next_parameter_and_source_call() {
     let flat = parse("pub fn combine(first:Option<&str>,second:Option<&str>)->usize{}");
-    let recipe = DeclarationInput::Unary {
-        operation: InputUnary::Optional,
-        child: Box::new(DeclarationInput::Unary {
-            operation: InputUnary::Temporary,
-            child: Box::new(DeclarationInput::Leaf(InputLeafOp::Value)),
+    let recipe = DeclInput::Unary {
+        operation: DeclInputUnary::Optional,
+        child: Box::new(DeclInput::Unary {
+            operation: DeclInputUnary::Temporary,
+            child: Box::new(DeclInput::Leaf(DeclInputLeafOp::Value)),
         }),
     };
     let first = compile_input(

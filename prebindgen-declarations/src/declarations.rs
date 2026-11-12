@@ -1,94 +1,97 @@
 //! Direct Input/Output descriptions, defaults and function export choices.
 use crate::{
-    option_inner, result_parts, sequence_parts, DeclarationCodec, DeclarationInput,
-    DeclarationOutput, InputRequest, OutputRequest, ProjectionMode, Schema, SequenceDelivery,
+    option_inner, result_parts, sequence_parts, DeclCodec, DeclInput, DeclInputRequest, DeclOutput,
+    DeclOutputRequest, ProjectionMode, Schema, SequenceDelivery,
 };
-use crate::{InputBranch, InputLeafOp, InputUnary, OutputBranch, OutputLeafOp, OutputUnary};
+use crate::{
+    DeclInputBranch, DeclInputLeafOp, DeclInputUnary, DeclOutputBranch, DeclOutputLeafOp,
+    DeclOutputUnary,
+};
 use crate::{InputNode, OutputNode};
 use prebindgen_flat::{same_type, type_key, Flat, Result};
 use std::collections::BTreeMap;
 
 #[macro_export]
 /// Start a typed input declaration using the production builder API.
-macro_rules! expand_param {($($ty:tt)+)=>{$crate::ExpandParamDecl::new($crate::declarations::parse_type(stringify!($($ty)+)))};}
+macro_rules! expand_param {($($ty:tt)+)=>{$crate::DeclExpandParam::new($crate::declarations::parse_type(stringify!($($ty)+)))};}
 #[macro_export]
 /// Start a typed output declaration using the production builder API.
-macro_rules! expand_return {($($ty:tt)+)=>{$crate::ExpandReturnDecl::new($crate::declarations::parse_type(stringify!($($ty)+)))};}
+macro_rules! expand_return {($($ty:tt)+)=>{$crate::DeclExpandReturn::new($crate::declarations::parse_type(stringify!($($ty)+)))};}
 #[macro_export]
 /// Decompose a source getter's returned record into named field views.
 macro_rules! fields {
     ($name:ident) => {
-        $crate::FieldsDecl::new($crate::ident(stringify!($name)).expect("function identifier"))
+        $crate::DeclFields::new($crate::ident(stringify!($name)).expect("function identifier"))
     };
 }
 #[macro_export]
 /// Reference a source function and configure its exported binding.
 macro_rules! fun {
     ($name:ident) => {
-        $crate::FunctionDecl::new($crate::ident(stringify!($name)).expect("function identifier"))
+        $crate::DeclFunction::new($crate::ident(stringify!($name)).expect("function identifier"))
     };
 }
 
 /// Conversion defaults indexed by canonical Rust type during preparation.
 /// Values are the same Input/Output trees accepted by per-function overrides.
 /// This environment is discarded after prepared conversions have been installed.
-pub struct Declarations {
+pub struct DeclDefaults {
     pub(crate) input_role: std::cell::Cell<crate::InputRole>,
-    inputs: BTreeMap<String, DeclarationInput<InputRequest, OutputRequest>>,
-    outputs: BTreeMap<String, DeclarationOutput<OutputRequest, InputRequest>>,
+    inputs: BTreeMap<String, DeclInput<DeclInputRequest, DeclOutputRequest>>,
+    outputs: BTreeMap<String, DeclOutput<DeclInputRequest, DeclOutputRequest>>,
     errors: BTreeMap<String, String>,
 }
 fn input_body(
-    input: DeclarationInput<InputRequest, OutputRequest>,
-) -> DeclarationInput<InputRequest, OutputRequest> {
+    input: DeclInput<DeclInputRequest, DeclOutputRequest>,
+) -> DeclInput<DeclInputRequest, DeclOutputRequest> {
     match input {
-        DeclarationInput::Branch {
-            operation: InputBranch::Selector,
+        DeclInput::Branch {
+            operation: DeclInputBranch::Selector,
             children: mut arms,
         } if arms.len() == 1 => arms.remove(0),
-        DeclarationInput::Unary {
-            operation: InputUnary::Bulk,
+        DeclInput::Unary {
+            operation: DeclInputUnary::Bulk,
             child,
-        } => DeclarationInput::Unary {
-            operation: InputUnary::Bulk,
+        } => DeclInput::Unary {
+            operation: DeclInputUnary::Bulk,
             child: Box::new(input_body(*child)),
         },
-        DeclarationInput::Unary {
-            operation: InputUnary::Temporary,
+        DeclInput::Unary {
+            operation: DeclInputUnary::Temporary,
             child,
-        } => DeclarationInput::Unary {
-            operation: InputUnary::Temporary,
+        } => DeclInput::Unary {
+            operation: DeclInputUnary::Temporary,
             child: Box::new(input_body(*child)),
         },
         other => other,
     }
 }
 fn output_body(
-    output: DeclarationOutput<OutputRequest, InputRequest>,
-) -> DeclarationOutput<OutputRequest, InputRequest> {
+    output: DeclOutput<DeclInputRequest, DeclOutputRequest>,
+) -> DeclOutput<DeclInputRequest, DeclOutputRequest> {
     match output {
-        DeclarationOutput::Branch {
-            operation: OutputBranch::Combine,
+        DeclOutput::Branch {
+            operation: DeclOutputBranch::Combine,
             children: mut parts,
         } if parts.len() == 1 => parts.remove(0),
-        DeclarationOutput::Unary {
-            operation: OutputUnary::Bulk,
+        DeclOutput::Unary {
+            operation: DeclOutputUnary::Bulk,
             child,
-        } => DeclarationOutput::Unary {
-            operation: OutputUnary::Bulk,
+        } => DeclOutput::Unary {
+            operation: DeclOutputUnary::Bulk,
             child: Box::new(output_body(*child)),
         },
         other => other,
     }
 }
-impl Declarations {
+impl DeclDefaults {
     /// Register typed Input/Output defaults and explicit error-message functions.
     /// Typed trees use Input::for_type / Output::for_type. Production declaration
     /// builders also convert directly into these trees with `.into()`.
     pub fn new<M: prebindgen_flat::Schema>(
         flat: &Flat<M>,
-        inputs: Vec<DeclarationInput<InputRequest, OutputRequest>>,
-        outputs: Vec<DeclarationOutput<OutputRequest, InputRequest>>,
+        inputs: Vec<DeclInput<DeclInputRequest, DeclOutputRequest>>,
+        outputs: Vec<DeclOutput<DeclInputRequest, DeclOutputRequest>>,
         errors: Vec<(syn::Type, String)>,
     ) -> Result<Self> {
         let mut out = Self {
@@ -98,7 +101,7 @@ impl Declarations {
             errors: BTreeMap::new(),
         };
         for input in inputs {
-            let DeclarationInput::Request(InputRequest::ForType { ty, input }) = input else {
+            let DeclInput::Request(DeclInputRequest::ForType { ty, input }) = input else {
                 return Err("input defaults require a source type".into());
             };
             let key = type_key(&crate::callback::input_type(flat, &ty)?);
@@ -107,7 +110,7 @@ impl Declarations {
             }
         }
         for output in outputs {
-            let DeclarationOutput::Request(OutputRequest::ForType { ty, output }) = output else {
+            let DeclOutput::Request(DeclOutputRequest::ForType { ty, output }) = output else {
                 return Err("output defaults require a source type".into());
             };
             let key = type_key(&flat.resolve_type(&ty)?);
@@ -125,14 +128,14 @@ impl Declarations {
     }
     /// Clone a source binding for a second explicit sequence delivery policy.
     /// The adapter selects and validates the sequence while resolving the returned declaration.
-    pub fn callback_variant<C: DeclarationCodec>(
+    pub fn callback_variant<C: DeclCodec>(
         &self,
         flat: &mut Flat<C::Schema>,
         _codec: &C,
-        decl: &FunctionDecl,
+        decl: &DeclFunction,
         name: &str,
         _extra: &C::Extra,
-    ) -> Result<FunctionDecl>
+    ) -> Result<DeclFunction>
     where
         <C::Schema as Schema>::Input: Clone,
         <C::Schema as Schema>::Output: Clone,
@@ -149,21 +152,19 @@ impl Declarations {
         variant.name = name.into();
         variant.foreign = None;
         variant.callback_return = None;
-        variant.ret = Some(DeclarationOutput::Request(
-            OutputRequest::SequenceCallback {
-                output: Box::new(decl.ret.clone().unwrap_or_else(DeclarationOutput::auto)),
-                structural: decl.ret.is_none(),
-            },
-        ));
+        variant.ret = Some(DeclOutput::Request(DeclOutputRequest::SequenceCallback {
+            output: Box::new(decl.ret.clone().unwrap_or_else(DeclOutput::auto)),
+            structural: decl.ret.is_none(),
+        }));
         Ok(variant)
     }
     /// Resolve source-dependent operations, compile them, and atomically install one binding.
     /// Existing converters are preserved unless explicitly replaced.
-    pub fn fill<C: DeclarationCodec>(
+    pub fn fill<C: DeclCodec>(
         &self,
         flat: &mut Flat<C::Schema>,
         codec: &C,
-        decl: &FunctionDecl,
+        decl: &DeclFunction,
         extra: &C::Extra,
     ) -> Result<()> {
         let recipe = self
@@ -173,11 +174,11 @@ impl Declarations {
         crate::resolved::compile_function(flat, codec, &decl.name, recipe, extra)
             .map_err(|e| format!("{}: {e}", decl.name))
     }
-    pub(crate) fn resolve_function<C: DeclarationCodec>(
+    pub(crate) fn resolve_function<C: DeclCodec>(
         &self,
         flat: &Flat<C::Schema>,
         codec: &C,
-        decl: &FunctionDecl,
+        decl: &DeclFunction,
         extra: &C::Extra,
     ) -> Result<crate::resolved::FunctionRecipe<C>> {
         let source = flat.function(&decl.name)?;
@@ -201,7 +202,7 @@ impl Declarations {
                     flat,
                     codec,
                     &p.ty.ty,
-                    explicit.unwrap_or(&DeclarationInput::auto()),
+                    explicit.unwrap_or(&DeclInput::auto()),
                     extra,
                 )?;
                 Some(tree)
@@ -225,30 +226,30 @@ impl Declarations {
         };
         Ok(crate::resolved::FunctionRecipe { inputs, output })
     }
-    fn function_output<C: DeclarationCodec>(
+    fn function_output<C: DeclCodec>(
         &self,
         flat: &Flat<C::Schema>,
         codec: &C,
         ty: &syn::Type,
-        decl: &FunctionDecl,
+        decl: &DeclFunction,
         extra: &C::Extra,
     ) -> Result<crate::ResolvedOutput<C>> {
         let tree = if let Some((_, error)) = result_parts(ty).filter(|_| !decl.result_value) {
-            DeclarationOutput::Unary {
-                operation: OutputUnary::Result {
+            DeclOutput::Unary {
+                operation: DeclOutputUnary::Result {
                     error: self.error_mapper_for(decl, error).map(str::to_owned),
                 },
-                child: Box::new(decl.ret.clone().unwrap_or_else(DeclarationOutput::auto)),
+                child: Box::new(decl.ret.clone().unwrap_or_else(DeclOutput::auto)),
             }
         } else {
-            decl.ret.clone().unwrap_or_else(DeclarationOutput::auto)
+            decl.ret.clone().unwrap_or_else(DeclOutput::auto)
         };
         self.resolve_output(flat, codec, ty, &tree, extra)
     }
     /// Select a function-specific or type-wide explicit error message mapper.
     pub fn error_mapper_for<'a>(
         &'a self,
-        decl: &'a FunctionDecl,
+        decl: &'a DeclFunction,
         ty: &syn::Type,
     ) -> Option<&'a str> {
         decl.error
@@ -256,7 +257,7 @@ impl Declarations {
             .or_else(|| self.errors.get(&type_key(ty)).map(String::as_str))
     }
     /// Prepare owned source-field decomposition, retaining each field's conversion default.
-    pub fn owned_record_output<C: DeclarationCodec>(
+    pub fn owned_record_output<C: DeclCodec>(
         &self,
         flat: &Flat<C::Schema>,
         codec: &C,
@@ -267,7 +268,7 @@ impl Declarations {
             flat,
             codec,
             ty,
-            &DeclarationOutput::Request(OutputRequest::NamedFields {
+            &DeclOutput::Request(DeclOutputRequest::NamedFields {
                 overrides: BTreeMap::new(),
                 mode: ProjectionMode::Owned,
             }),
@@ -275,58 +276,58 @@ impl Declarations {
         )
     }
     /// Resolve a type's default output tree, for example for a typed error channel.
-    pub fn output_recipe<C: DeclarationCodec>(
+    pub fn output_recipe<C: DeclCodec>(
         &self,
         flat: &Flat<C::Schema>,
         codec: &C,
         ty: &syn::Type,
         extra: &C::Extra,
     ) -> Result<crate::ResolvedOutput<C>> {
-        self.resolve_output(flat, codec, ty, &DeclarationOutput::auto(), extra)
+        self.resolve_output(flat, codec, ty, &DeclOutput::auto(), extra)
     }
     /// Resolve every input operation against canonical source declarations before compilation.
-    pub fn resolve_input<C: DeclarationCodec>(
+    pub fn resolve_input<C: DeclCodec>(
         &self,
         flat: &Flat<C::Schema>,
         codec: &C,
         ty: &syn::Type,
-        tree: &DeclarationInput<InputRequest, OutputRequest>,
+        tree: &DeclInput<DeclInputRequest, DeclOutputRequest>,
         extra: &C::Extra,
     ) -> Result<crate::ResolvedInput<C>> {
         self.input(flat, codec, ty, tree, extra, &mut vec![])
             .and_then(|tree| codec.finish_input_tree(tree))
     }
-    pub(crate) fn input<C: DeclarationCodec>(
+    pub(crate) fn input<C: DeclCodec>(
         &self,
         flat: &Flat<C::Schema>,
         codec: &C,
         ty: &syn::Type,
-        tree: &DeclarationInput<InputRequest, OutputRequest>,
+        tree: &DeclInput<DeclInputRequest, DeclOutputRequest>,
         extra: &C::Extra,
         stack: &mut Vec<String>,
     ) -> Result<crate::ResolvedInput<C>> {
         let resolve = |ty: &syn::Type,
-                       tree: &DeclarationInput<InputRequest, OutputRequest>,
+                       tree: &DeclInput<DeclInputRequest, DeclOutputRequest>,
                        stack: &mut Vec<String>| {
             self.input(flat, codec, ty, tree, extra, stack)
         };
         match tree {
-            DeclarationInput::None => {
+            DeclInput::None => {
                 if type_key(ty) == "()" {
                     Ok(InputNode::None)
                 } else {
                     Err("None input requires unit".into())
                 }
             }
-            DeclarationInput::Branch {
-                operation: InputBranch::Variant,
+            DeclInput::Branch {
+                operation: DeclInputBranch::Variant,
                 ..
             } => Err("variant branch requires an enum parent".into()),
-            DeclarationInput::Request(InputRequest::EnumFields(entries)) => {
+            DeclInput::Request(DeclInputRequest::EnumFields(entries)) => {
                 self.enum_input_recipe(flat, codec, ty, extra, entries, false, stack)
             }
-            DeclarationInput::Branch {
-                operation: InputBranch::Enum { value },
+            DeclInput::Branch {
+                operation: DeclInputBranch::Enum { value },
                 children: variants,
             } => {
                 let source = flat.payload_enum(ty)?;
@@ -361,10 +362,10 @@ impl Declarations {
                     codec, variants, *value,
                 )?)
             }
-            DeclarationInput::Request(InputRequest::Value) => {
+            DeclInput::Request(DeclInputRequest::Value) => {
                 self.resolve_input_value(flat, codec, ty, extra, stack)
             }
-            DeclarationInput::Request(InputRequest::Conversion(decl)) => {
+            DeclInput::Request(DeclInputRequest::Conversion(decl)) => {
                 decl.validate()?;
                 let source = decl
                     .input
@@ -376,13 +377,13 @@ impl Declarations {
                     codec,
                     ty,
                     conversion,
-                    &DeclarationInput::value(),
+                    &DeclInput::value(),
                     extra,
                     stack,
                 )
             }
-            DeclarationInput::Unary {
-                operation: InputUnary::Convert { conversion },
+            DeclInput::Unary {
+                operation: DeclInputUnary::Convert { conversion },
                 child: input,
             } => self.resolve_input_conversion(
                 flat,
@@ -393,25 +394,25 @@ impl Declarations {
                 extra,
                 stack,
             ),
-            DeclarationInput::Unary {
-                operation: InputUnary::Temporary,
+            DeclInput::Unary {
+                operation: DeclInputUnary::Temporary,
                 child,
             } => Ok(InputNode::Unary {
-                operation: codec.resolve_input_unary(InputUnary::Temporary)?,
+                operation: codec.resolve_input_unary(DeclInputUnary::Temporary)?,
                 child: Box::new(resolve(
                     &crate::temporary_input_type(ty)?,
                     &input_body((**child).clone()),
                     stack,
                 )?),
             }),
-            DeclarationInput::Unary {
-                operation: InputUnary::Bulk,
+            DeclInput::Unary {
+                operation: DeclInputUnary::Bulk,
                 child,
             } => Ok(InputNode::Unary {
-                operation: codec.resolve_input_unary(InputUnary::Bulk)?,
+                operation: codec.resolve_input_unary(DeclInputUnary::Bulk)?,
                 child: Box::new(resolve(ty, &input_body((**child).clone()), stack)?),
             }),
-            DeclarationInput::Request(InputRequest::Auto) => {
+            DeclInput::Request(DeclInputRequest::Auto) => {
                 let key = crate::callback::input_key(flat, ty)?;
                 if let Some(tree) = self.inputs.get(&key) {
                     if stack.contains(&key) {
@@ -424,43 +425,43 @@ impl Declarations {
                 }
                 if let Some(inner) = option_inner(ty) {
                     return Ok(InputNode::Unary {
-                        operation: codec.resolve_input_unary(InputUnary::Optional)?,
-                        child: Box::new(resolve(inner, &DeclarationInput::auto(), stack)?),
+                        operation: codec.resolve_input_unary(DeclInputUnary::Optional)?,
+                        child: Box::new(resolve(inner, &DeclInput::auto(), stack)?),
                     });
                 }
                 if let Some((element, _)) = sequence_parts(ty).filter(|_| {
                     !codec.input_collection_is_leaf(flat, ty, self.input_role.get(), extra)
                 }) {
                     return Ok(InputNode::Unary {
-                        operation: codec.resolve_input_unary(InputUnary::Sequence)?,
-                        child: Box::new(resolve(element, &DeclarationInput::auto(), stack)?),
+                        operation: codec.resolve_input_unary(DeclInputUnary::Sequence)?,
+                        child: Box::new(resolve(element, &DeclInput::auto(), stack)?),
                     });
                 }
                 if type_key(ty) == "()" {
                     return Ok(InputNode::None);
                 }
-                resolve(ty, &DeclarationInput::Leaf(InputLeafOp::Value), stack)
+                resolve(ty, &DeclInput::Leaf(DeclInputLeafOp::Value), stack)
             }
-            DeclarationInput::Request(InputRequest::ForType { ty: target, input }) => {
+            DeclInput::Request(DeclInputRequest::ForType { ty: target, input }) => {
                 let target = crate::callback::input_type(flat, target)?;
                 if crate::callback::input_key(flat, ty)? == type_key(&target) {
                     return resolve(ty, &input_body((**input).clone()), stack);
                 }
                 if let Some(inner) = option_inner(ty) {
                     return Ok(InputNode::Unary {
-                        operation: codec.resolve_input_unary(InputUnary::Optional)?,
+                        operation: codec.resolve_input_unary(DeclInputUnary::Optional)?,
                         child: Box::new(resolve(inner, tree, stack)?),
                     });
                 }
                 if let Some((element, _)) = sequence_parts(ty) {
                     return Ok(InputNode::Unary {
-                        operation: codec.resolve_input_unary(InputUnary::Sequence)?,
+                        operation: codec.resolve_input_unary(DeclInputUnary::Sequence)?,
                         child: Box::new(resolve(element, tree, stack)?),
                     });
                 }
                 Err("input expansion type does not match occurrence".into())
             }
-            DeclarationInput::Leaf(InputLeafOp::Value) => {
+            DeclInput::Leaf(DeclInputLeafOp::Value) => {
                 if flat
                     .type_info(ty)
                     .ok()
@@ -481,7 +482,7 @@ impl Declarations {
                         codec,
                         ty,
                         conversion,
-                        &DeclarationInput::value(),
+                        &DeclInput::value(),
                         extra,
                         stack,
                     );
@@ -490,18 +491,18 @@ impl Declarations {
                 if prebindgen_flat::callback_signature(ty)?.is_some() {
                     return resolve(
                         ty,
-                        &DeclarationInput::Request(InputRequest::Callback(Box::new(
-                            crate::CallbackDecl::new(ty.clone()),
+                        &DeclInput::Request(DeclInputRequest::Callback(Box::new(
+                            crate::DeclCallback::new(ty.clone()),
                         ))),
                         stack,
                     );
                 }
                 if let Some(inner) = option_inner(ty) {
                     return Ok(InputNode::Unary {
-                        operation: codec.resolve_input_unary(InputUnary::Optional)?,
+                        operation: codec.resolve_input_unary(DeclInputUnary::Optional)?,
                         child: Box::new(resolve(
                             inner,
-                            &DeclarationInput::Leaf(InputLeafOp::Value),
+                            &DeclInput::Leaf(DeclInputLeafOp::Value),
                             stack,
                         )?),
                     });
@@ -510,12 +511,12 @@ impl Declarations {
                     !codec.input_collection_is_leaf(flat, ty, self.input_role.get(), extra)
                 }) {
                     return Ok(InputNode::Unary {
-                        operation: codec.resolve_input_unary(InputUnary::Sequence)?,
-                        child: Box::new(resolve(element, &DeclarationInput::auto(), stack)?),
+                        operation: codec.resolve_input_unary(DeclInputUnary::Sequence)?,
+                        child: Box::new(resolve(element, &DeclInput::auto(), stack)?),
                     });
                 }
                 if let Some(replacement) = codec.expand_input(
-                    &mut crate::resolution::Resolve {
+                    &mut crate::resolution::DeclResolve {
                         declarations: self,
                         flat,
                         codec,
@@ -529,10 +530,10 @@ impl Declarations {
                     return Ok(replacement);
                 }
                 Ok(InputNode::Leaf(
-                    codec.resolve_input_leaf(InputLeafOp::Value)?,
+                    codec.resolve_input_leaf(DeclInputLeafOp::Value)?,
                 ))
             }
-            DeclarationInput::Arrow {
+            DeclInput::Arrow {
                 operation: callback,
                 domain,
                 codomain,
@@ -559,7 +560,7 @@ impl Declarations {
                     codomain: Box::new(resolve(&signature.return_type, codomain, stack)?),
                 })
             }
-            DeclarationInput::Request(InputRequest::Callback(declaration)) => {
+            DeclInput::Request(DeclInputRequest::Callback(declaration)) => {
                 let canonical = crate::callback::input_type(flat, ty)?;
                 if !same_type(
                     &canonical,
@@ -576,10 +577,10 @@ impl Declarations {
                     let signature = prebindgen_flat::callback_signature(&canonical)?
                         .ok_or("callback declaration requires impl Fn(...) -> R")?;
                     let mut selected = match self.inputs.get(&type_key(&canonical)) {
-                        Some(DeclarationInput::Request(InputRequest::Callback(default))) => {
+                        Some(DeclInput::Request(DeclInputRequest::Callback(default))) => {
                             (**default).clone()
                         }
-                        _ => crate::CallbackDecl::new(canonical.clone()),
+                        _ => crate::DeclCallback::new(canonical.clone()),
                     };
                     if declaration.foreign.is_some() {
                         selected.foreign = declaration.foreign.clone();
@@ -624,10 +625,7 @@ impl Declarations {
                                 flat,
                                 codec,
                                 source,
-                                selected
-                                    .params
-                                    .get(&index)
-                                    .unwrap_or(&DeclarationOutput::auto()),
+                                selected.params.get(&index).unwrap_or(&DeclOutput::auto()),
                                 extra,
                                 &mut vec![],
                                 true,
@@ -637,7 +635,7 @@ impl Declarations {
                     }
                     let ret = resolve(
                         &signature.return_type,
-                        selected.ret.as_ref().unwrap_or(&DeclarationInput::auto()),
+                        selected.ret.as_ref().unwrap_or(&DeclInput::auto()),
                         stack,
                     )?;
                     Ok(InputNode::Arrow {
@@ -658,21 +656,21 @@ impl Declarations {
                 stack.pop();
                 result
             }
-            DeclarationInput::Request(InputRequest::Call(function)) => {
+            DeclInput::Request(DeclInputRequest::Call(function)) => {
                 let f = flat.function(function)?;
                 resolve(
                     ty,
-                    &DeclarationInput::Branch {
-                        operation: InputBranch::Constructor {
+                    &DeclInput::Branch {
+                        operation: DeclInputBranch::Constructor {
                             function: function.clone(),
                         },
-                        children: vec![DeclarationInput::auto(); f.params.len()],
+                        children: vec![DeclInput::auto(); f.params.len()],
                     },
                     stack,
                 )
             }
-            DeclarationInput::Branch {
-                operation: InputBranch::Constructor { function },
+            DeclInput::Branch {
+                operation: DeclInputBranch::Constructor { function },
                 children: args,
             } => {
                 let f = flat.function(function)?;
@@ -687,7 +685,7 @@ impl Declarations {
                     return Err(format!("constructor `{function}`: wrong argument count"));
                 }
                 Ok(InputNode::Branch {
-                    operation: codec.resolve_input_branch(InputBranch::Constructor {
+                    operation: codec.resolve_input_branch(DeclInputBranch::Constructor {
                         function: function.clone(),
                     })?,
                     children: f
@@ -698,33 +696,33 @@ impl Declarations {
                         .collect::<Result<_>>()?,
                 })
             }
-            DeclarationInput::Unary {
-                operation: InputUnary::Optional,
+            DeclInput::Unary {
+                operation: DeclInputUnary::Optional,
                 child,
             } => {
                 let inner = option_inner(ty).ok_or("optional recipe requires Option<T>")?;
                 Ok(InputNode::Unary {
-                    operation: codec.resolve_input_unary(InputUnary::Optional)?,
+                    operation: codec.resolve_input_unary(DeclInputUnary::Optional)?,
                     child: Box::new(resolve(inner, child, stack)?),
                 })
             }
-            DeclarationInput::Unary {
-                operation: InputUnary::Sequence,
+            DeclInput::Unary {
+                operation: DeclInputUnary::Sequence,
                 child,
             } => {
                 let (element, _) =
                     sequence_parts(ty).ok_or("sequence input requires Vec<T>, &[T] or &Vec<T>")?;
                 Ok(InputNode::Unary {
-                    operation: codec.resolve_input_unary(InputUnary::Sequence)?,
+                    operation: codec.resolve_input_unary(DeclInputUnary::Sequence)?,
                     child: Box::new(resolve(element, child, stack)?),
                 })
             }
-            DeclarationInput::Branch {
-                operation: InputBranch::Fields,
+            DeclInput::Branch {
+                operation: DeclInputBranch::Fields,
                 children,
             }
-            | DeclarationInput::Branch {
-                operation: InputBranch::Record,
+            | DeclInput::Branch {
+                operation: DeclInputBranch::Record,
                 children,
             } => {
                 if type_key(ty) == "()" && children.is_empty() {
@@ -747,32 +745,32 @@ impl Declarations {
                 Ok(
                     if matches!(
                         tree,
-                        DeclarationInput::Branch {
-                            operation: InputBranch::Record,
+                        DeclInput::Branch {
+                            operation: DeclInputBranch::Record,
                             children: _
                         }
                     ) {
                         InputNode::Branch {
-                            operation: codec.resolve_input_branch(InputBranch::Record)?,
+                            operation: codec.resolve_input_branch(DeclInputBranch::Record)?,
                             children,
                         }
                     } else {
                         InputNode::Branch {
-                            operation: codec.resolve_input_branch(InputBranch::Fields)?,
+                            operation: codec.resolve_input_branch(DeclInputBranch::Fields)?,
                             children,
                         }
                     },
                 )
             }
-            DeclarationInput::Branch {
-                operation: InputBranch::Selector,
+            DeclInput::Branch {
+                operation: DeclInputBranch::Selector,
                 children: arms,
             } => {
                 if arms.is_empty() {
                     return Err("an input selector needs at least one alternative".into());
                 }
                 Ok(InputNode::Branch {
-                    operation: codec.resolve_input_branch(InputBranch::Selector)?,
+                    operation: codec.resolve_input_branch(DeclInputBranch::Selector)?,
                     children: arms
                         .iter()
                         .map(|child| resolve(ty, child, stack))
@@ -782,41 +780,41 @@ impl Declarations {
         }
     }
     /// Resolve every output operation, source reference and ownership choice before compilation.
-    pub fn resolve_output<C: DeclarationCodec>(
+    pub fn resolve_output<C: DeclCodec>(
         &self,
         flat: &Flat<C::Schema>,
         codec: &C,
         ty: &syn::Type,
-        tree: &DeclarationOutput<OutputRequest, InputRequest>,
+        tree: &DeclOutput<DeclInputRequest, DeclOutputRequest>,
         extra: &C::Extra,
     ) -> Result<crate::ResolvedOutput<C>> {
         self.output(flat, codec, ty, tree, extra, &mut vec![], false)
             .and_then(|tree| codec.finish_output_tree(tree))
     }
     #[allow(clippy::too_many_arguments)] // Getter defaults differ from the existing plain-reference ABI.
-    pub(crate) fn output<C: DeclarationCodec>(
+    pub(crate) fn output<C: DeclCodec>(
         &self,
         flat: &Flat<C::Schema>,
         codec: &C,
         ty: &syn::Type,
-        tree: &DeclarationOutput<OutputRequest, InputRequest>,
+        tree: &DeclOutput<DeclInputRequest, DeclOutputRequest>,
         extra: &C::Extra,
         stack: &mut Vec<String>,
         getter_result: bool,
     ) -> Result<crate::ResolvedOutput<C>> {
         let resolve = |ty: &syn::Type,
-                       tree: &DeclarationOutput<OutputRequest, InputRequest>,
+                       tree: &DeclOutput<DeclInputRequest, DeclOutputRequest>,
                        stack: &mut Vec<String>| {
             self.output(flat, codec, ty, tree, extra, stack, getter_result)
         };
         if let Some(referent) = crate::output_referent(ty) {
-            if (getter_result || !matches!(tree, DeclarationOutput::Leaf(OutputLeafOp::Value)))
+            if (getter_result || !matches!(tree, DeclOutput::Leaf(DeclOutputLeafOp::Value)))
                 && !matches!(
                     tree,
-                    DeclarationOutput::Request(
-                        OutputRequest::Auto
-                            | OutputRequest::ForType { .. }
-                            | OutputRequest::SequenceCallback { .. }
+                    DeclOutput::Request(
+                        DeclOutputRequest::Auto
+                            | DeclOutputRequest::ForType { .. }
+                            | DeclOutputRequest::SequenceCallback { .. }
                     )
                 )
             {
@@ -824,10 +822,10 @@ impl Declarations {
             }
         }
         match tree {
-            DeclarationOutput::Request(OutputRequest::SequenceCallback { output, structural }) => {
+            DeclOutput::Request(DeclOutputRequest::SequenceCallback { output, structural }) => {
                 let output = resolve(ty, output, stack)?;
                 codec.sequence_callback(
-                    &mut crate::resolution::Resolve {
+                    &mut crate::resolution::DeclResolve {
                         declarations: self,
                         flat,
                         codec,
@@ -841,39 +839,38 @@ impl Declarations {
                 )
             }
 
-            DeclarationOutput::Unary {
-                operation: OutputUnary::CallbackArgument { ownership },
+            DeclOutput::Unary {
+                operation: DeclOutputUnary::CallbackArgument { ownership },
                 child,
             } => Ok(crate::resolution::resolve_callback_argument(
                 codec,
                 resolve(ty, child, stack)?,
                 *ownership,
             )?),
-            DeclarationOutput::None => {
+            DeclOutput::None => {
                 if type_key(ty) == "()" {
                     Ok(OutputNode::None)
                 } else {
                     Err("None output requires unit".into())
                 }
             }
-            DeclarationOutput::Arrow { operation, .. } => match *operation {},
-            DeclarationOutput::Branch {
-                operation: OutputBranch::Variant | OutputBranch::Arguments,
+            DeclOutput::Arrow { operation, .. } => match *operation {},
+            DeclOutput::Branch {
+                operation: DeclOutputBranch::Variant | DeclOutputBranch::Arguments,
                 ..
             } => Err("variant/argument branch requires its parent operation".into()),
-            DeclarationOutput::Request(OutputRequest::EnumFields(entries)) => self
-                .enum_output_recipe(
-                    flat,
-                    codec,
-                    crate::output_referent(ty).unwrap_or(ty),
-                    extra,
-                    entries,
-                    false,
-                    stack,
-                    getter_result,
-                ),
-            DeclarationOutput::Branch {
-                operation: OutputBranch::Enum { value, mode },
+            DeclOutput::Request(DeclOutputRequest::EnumFields(entries)) => self.enum_output_recipe(
+                flat,
+                codec,
+                crate::output_referent(ty).unwrap_or(ty),
+                extra,
+                entries,
+                false,
+                stack,
+                getter_result,
+            ),
+            DeclOutput::Branch {
+                operation: DeclOutputBranch::Enum { value, mode },
                 children: variants,
             } => {
                 let source = flat.payload_enum(crate::output_referent(ty).unwrap_or(ty))?;
@@ -900,7 +897,7 @@ impl Declarations {
                     codec, variants, *value, *mode,
                 )?)
             }
-            DeclarationOutput::Request(OutputRequest::Value { projection }) => self
+            DeclOutput::Request(DeclOutputRequest::Value { projection }) => self
                 .resolve_output_value(
                     flat,
                     codec,
@@ -910,7 +907,7 @@ impl Declarations {
                     getter_result,
                     projection.as_ref(),
                 ),
-            DeclarationOutput::Request(OutputRequest::Conversion(decl)) => {
+            DeclOutput::Request(DeclOutputRequest::Conversion(decl)) => {
                 decl.validate()?;
                 let source = decl
                     .output
@@ -922,13 +919,13 @@ impl Declarations {
                     codec,
                     ty,
                     conversion,
-                    &DeclarationOutput::value(),
+                    &DeclOutput::value(),
                     extra,
                     stack,
                 )
             }
-            DeclarationOutput::Unary {
-                operation: OutputUnary::Convert { conversion },
+            DeclOutput::Unary {
+                operation: DeclOutputUnary::Convert { conversion },
                 child: output,
             } => self.resolve_output_conversion(
                 flat,
@@ -939,24 +936,25 @@ impl Declarations {
                 extra,
                 stack,
             ),
-            DeclarationOutput::Unary {
-                operation: OutputUnary::Bulk,
+            DeclOutput::Unary {
+                operation: DeclOutputUnary::Bulk,
                 child,
             } => Ok(OutputNode::Unary {
-                operation: codec.resolve_output_unary(OutputUnary::Bulk)?,
+                operation: codec.resolve_output_unary(DeclOutputUnary::Bulk)?,
                 child: Box::new(resolve(ty, &output_body((**child).clone()), stack)?),
             }),
-            DeclarationOutput::Leaf(OutputLeafOp::Discard) => Ok(OutputNode::Leaf(
-                codec.resolve_output_leaf(OutputLeafOp::Discard)?,
+            DeclOutput::Leaf(DeclOutputLeafOp::Discard) => Ok(OutputNode::Leaf(
+                codec.resolve_output_leaf(DeclOutputLeafOp::Discard)?,
             )),
-            DeclarationOutput::Unary {
-                operation: OutputUnary::Named { name },
+            DeclOutput::Unary {
+                operation: DeclOutputUnary::Named { name },
                 child: output,
             } => Ok(OutputNode::Unary {
-                operation: codec.resolve_output_unary(OutputUnary::Named { name: name.clone() })?,
+                operation: codec
+                    .resolve_output_unary(DeclOutputUnary::Named { name: name.clone() })?,
                 child: Box::new(resolve(ty, output, stack)?),
             }),
-            DeclarationOutput::Request(OutputRequest::Auto) => {
+            DeclOutput::Request(DeclOutputRequest::Auto) => {
                 let key = type_key(ty);
                 if let Some(tree) = self.outputs.get(&key) {
                     if stack.contains(&key) {
@@ -974,27 +972,27 @@ impl Declarations {
                 }
                 if let Some(inner) = option_inner(ty) {
                     return Ok(OutputNode::Unary {
-                        operation: codec.resolve_output_unary(OutputUnary::Optional)?,
-                        child: Box::new(resolve(inner, &DeclarationOutput::auto(), stack)?),
+                        operation: codec.resolve_output_unary(DeclOutputUnary::Optional)?,
+                        child: Box::new(resolve(inner, &DeclOutput::auto(), stack)?),
                     });
                 }
                 if let Some((element, _)) =
                     sequence_parts(ty).filter(|_| !codec.output_collection_is_leaf(flat, ty, extra))
                 {
                     return Ok(OutputNode::Unary {
-                        operation: codec.resolve_output_unary(OutputUnary::Sequence {
+                        operation: codec.resolve_output_unary(DeclOutputUnary::Sequence {
                             delivery: SequenceDelivery::Auto,
                             mode: None,
                         })?,
-                        child: Box::new(resolve(element, &DeclarationOutput::auto(), stack)?),
+                        child: Box::new(resolve(element, &DeclOutput::auto(), stack)?),
                     });
                 }
                 if type_key(ty) == "()" {
                     return Ok(OutputNode::None);
                 }
-                resolve(ty, &DeclarationOutput::Leaf(OutputLeafOp::Value), stack)
+                resolve(ty, &DeclOutput::Leaf(DeclOutputLeafOp::Value), stack)
             }
-            DeclarationOutput::Request(OutputRequest::ForType { ty: target, output }) => {
+            DeclOutput::Request(DeclOutputRequest::ForType { ty: target, output }) => {
                 let target = flat.resolve_type(target)?;
                 if same_type(ty, &target) {
                     return resolve(ty, &output_body((**output).clone()), stack);
@@ -1005,10 +1003,10 @@ impl Declarations {
                 if let Some(inner) = option_inner(ty) {
                     let child = resolve(inner, tree, stack)?;
                     return Ok(if codec.is_discarded_output(&child) {
-                        OutputNode::Leaf(codec.resolve_output_leaf(OutputLeafOp::Discard)?)
+                        OutputNode::Leaf(codec.resolve_output_leaf(DeclOutputLeafOp::Discard)?)
                     } else {
                         OutputNode::Unary {
-                            operation: codec.resolve_output_unary(OutputUnary::Optional)?,
+                            operation: codec.resolve_output_unary(DeclOutputUnary::Optional)?,
                             child: Box::new(child),
                         }
                     });
@@ -1016,10 +1014,10 @@ impl Declarations {
                 if let Some((element, _)) = sequence_parts(ty) {
                     let child = resolve(element, tree, stack)?;
                     return Ok(if codec.is_discarded_output(&child) {
-                        OutputNode::Leaf(codec.resolve_output_leaf(OutputLeafOp::Discard)?)
+                        OutputNode::Leaf(codec.resolve_output_leaf(DeclOutputLeafOp::Discard)?)
                     } else {
                         OutputNode::Unary {
-                            operation: codec.resolve_output_unary(OutputUnary::Sequence {
+                            operation: codec.resolve_output_unary(DeclOutputUnary::Sequence {
                                 delivery: SequenceDelivery::Auto,
                                 mode: None,
                             })?,
@@ -1029,8 +1027,8 @@ impl Declarations {
                 }
                 Err("output expansion type does not match occurrence".into())
             }
-            DeclarationOutput::Leaf(OutputLeafOp::Value)
-            | DeclarationOutput::Leaf(OutputLeafOp::Projected(_)) => {
+            DeclOutput::Leaf(DeclOutputLeafOp::Value)
+            | DeclOutput::Leaf(DeclOutputLeafOp::Projected(_)) => {
                 let conversion_type = crate::output_referent(ty).unwrap_or(ty);
                 if flat
                     .type_info(conversion_type)
@@ -1052,7 +1050,7 @@ impl Declarations {
                             .and_then(|i| i.conversion.output.clone())
                     });
                 if let Some(conversion) = converted {
-                    if let DeclarationOutput::Leaf(OutputLeafOp::Projected(policy)) = tree {
+                    if let DeclOutput::Leaf(DeclOutputLeafOp::Projected(policy)) = tree {
                         return self.resolve_output_value(
                             flat,
                             codec,
@@ -1068,7 +1066,7 @@ impl Declarations {
                         codec,
                         ty,
                         conversion,
-                        &DeclarationOutput::value(),
+                        &DeclOutput::value(),
                         extra,
                         stack,
                     );
@@ -1076,14 +1074,14 @@ impl Declarations {
 
                 if let Some(inner) = option_inner(ty) {
                     return Ok(OutputNode::Unary {
-                        operation: codec.resolve_output_unary(OutputUnary::Optional)?,
+                        operation: codec.resolve_output_unary(DeclOutputUnary::Optional)?,
                         child: Box::new(resolve(inner, tree, stack)?),
                     });
                 }
                 if let Some((element, _)) =
                     sequence_parts(ty).filter(|_| !codec.output_collection_is_leaf(flat, ty, extra))
                 {
-                    let mode = if let DeclarationOutput::Leaf(OutputLeafOp::Projected(p)) = tree {
+                    let mode = if let DeclOutput::Leaf(DeclOutputLeafOp::Projected(p)) = tree {
                         if !p.fields.is_empty() {
                             return Err(
                                 "collection field projections belong on the element type".into()
@@ -1094,15 +1092,15 @@ impl Declarations {
                         None
                     };
                     return Ok(OutputNode::Unary {
-                        operation: codec.resolve_output_unary(OutputUnary::Sequence {
+                        operation: codec.resolve_output_unary(DeclOutputUnary::Sequence {
                             delivery: SequenceDelivery::Value,
                             mode,
                         })?,
-                        child: Box::new(resolve(element, &DeclarationOutput::auto(), stack)?),
+                        child: Box::new(resolve(element, &DeclOutput::auto(), stack)?),
                     });
                 }
                 if let Some(replacement) = codec.expand_output(
-                    &mut crate::resolution::Resolve {
+                    &mut crate::resolution::DeclResolve {
                         declarations: self,
                         flat,
                         codec,
@@ -1116,40 +1114,40 @@ impl Declarations {
                     return Ok(replacement);
                 }
                 Ok(match tree {
-                    DeclarationOutput::Leaf(OutputLeafOp::Value) => {
-                        OutputNode::Leaf(codec.resolve_output_leaf(OutputLeafOp::Value)?)
+                    DeclOutput::Leaf(DeclOutputLeafOp::Value) => {
+                        OutputNode::Leaf(codec.resolve_output_leaf(DeclOutputLeafOp::Value)?)
                     }
-                    DeclarationOutput::Leaf(OutputLeafOp::Projected(policy)) => OutputNode::Leaf(
-                        codec.resolve_output_leaf(OutputLeafOp::Projected(policy.clone()))?,
+                    DeclOutput::Leaf(DeclOutputLeafOp::Projected(policy)) => OutputNode::Leaf(
+                        codec.resolve_output_leaf(DeclOutputLeafOp::Projected(policy.clone()))?,
                     ),
                     _ => unreachable!(),
                 })
             }
-            DeclarationOutput::Unary {
-                operation: OutputUnary::Optional,
+            DeclOutput::Unary {
+                operation: DeclOutputUnary::Optional,
                 child,
             } => {
                 let inner = option_inner(ty).ok_or("optional recipe requires Option<T>")?;
                 Ok(OutputNode::Unary {
-                    operation: codec.resolve_output_unary(OutputUnary::Optional)?,
+                    operation: codec.resolve_output_unary(DeclOutputUnary::Optional)?,
                     child: Box::new(resolve(inner, child, stack)?),
                 })
             }
-            DeclarationOutput::Unary {
-                operation: OutputUnary::Sequence { delivery, mode },
+            DeclOutput::Unary {
+                operation: DeclOutputUnary::Sequence { delivery, mode },
                 child: element,
             } => {
                 let (ty, _) =
                     sequence_parts(ty).ok_or("sequence output requires a collection source")?;
                 Ok(OutputNode::Unary {
-                    operation: codec.resolve_output_unary(OutputUnary::Sequence {
+                    operation: codec.resolve_output_unary(DeclOutputUnary::Sequence {
                         delivery: *delivery,
                         mode: *mode,
                     })?,
                     child: Box::new(resolve(ty, element, stack)?),
                 })
             }
-            DeclarationOutput::Request(OutputRequest::NamedFields { overrides, mode }) => {
+            DeclOutput::Request(DeclOutputRequest::NamedFields { overrides, mode }) => {
                 let fields = &flat.record(ty)?.fields;
                 for name in overrides.keys() {
                     if !fields.iter().any(|f| f.name == name.as_str()) {
@@ -1163,33 +1161,33 @@ impl Declarations {
                             &f.ty,
                             overrides
                                 .get(&f.name.to_string())
-                                .unwrap_or(&DeclarationOutput::auto()),
+                                .unwrap_or(&DeclOutput::auto()),
                             stack,
                         )
                     })
                     .collect::<Result<_>>()?;
                 Ok(if *mode == ProjectionMode::Owned {
                     OutputNode::Branch {
-                        operation: codec.resolve_output_branch(OutputBranch::OwnedFields)?,
+                        operation: codec.resolve_output_branch(DeclOutputBranch::OwnedFields)?,
                         children,
                     }
                 } else {
                     OutputNode::Branch {
-                        operation: codec.resolve_output_branch(OutputBranch::Fields)?,
+                        operation: codec.resolve_output_branch(DeclOutputBranch::Fields)?,
                         children,
                     }
                 })
             }
-            DeclarationOutput::Branch {
-                operation: OutputBranch::Fields,
+            DeclOutput::Branch {
+                operation: DeclOutputBranch::Fields,
                 children,
             }
-            | DeclarationOutput::Branch {
-                operation: OutputBranch::OwnedFields,
+            | DeclOutput::Branch {
+                operation: DeclOutputBranch::OwnedFields,
                 children,
             }
-            | DeclarationOutput::Branch {
-                operation: OutputBranch::Record { .. },
+            | DeclOutput::Branch {
+                operation: DeclOutputBranch::Record { .. },
                 children,
                 ..
             } => {
@@ -1206,44 +1204,44 @@ impl Declarations {
                     .map(|(f, c)| resolve(&f.ty, c, stack))
                     .collect::<Result<_>>()?;
                 Ok(match tree {
-                    DeclarationOutput::Branch {
-                        operation: OutputBranch::Fields,
+                    DeclOutput::Branch {
+                        operation: DeclOutputBranch::Fields,
                         children: _,
                     } => OutputNode::Branch {
-                        operation: codec.resolve_output_branch(OutputBranch::Fields)?,
+                        operation: codec.resolve_output_branch(DeclOutputBranch::Fields)?,
                         children,
                     },
-                    DeclarationOutput::Branch {
-                        operation: OutputBranch::OwnedFields,
+                    DeclOutput::Branch {
+                        operation: DeclOutputBranch::OwnedFields,
                         children: _,
                     } => OutputNode::Branch {
-                        operation: codec.resolve_output_branch(OutputBranch::OwnedFields)?,
+                        operation: codec.resolve_output_branch(DeclOutputBranch::OwnedFields)?,
                         children,
                     },
-                    DeclarationOutput::Branch {
-                        operation: OutputBranch::Record { mode, .. },
+                    DeclOutput::Branch {
+                        operation: DeclOutputBranch::Record { mode, .. },
                         ..
                     } => OutputNode::Branch {
                         operation: codec
-                            .resolve_output_branch(OutputBranch::Record { mode: *mode })?,
+                            .resolve_output_branch(DeclOutputBranch::Record { mode: *mode })?,
                         children,
                     },
                     _ => unreachable!(),
                 })
             }
-            DeclarationOutput::Unary {
-                operation: OutputUnary::Getter { function },
+            DeclOutput::Unary {
+                operation: DeclOutputUnary::Getter { function },
                 child: output,
             }
-            | DeclarationOutput::Unary {
-                operation: OutputUnary::Into { function },
+            | DeclOutput::Unary {
+                operation: DeclOutputUnary::Into { function },
                 child: output,
             } => {
                 let f = flat.function(function)?;
                 let expected = if matches!(
                     tree,
-                    DeclarationOutput::Unary {
-                        operation: OutputUnary::Into { .. },
+                    DeclOutput::Unary {
+                        operation: DeclOutputUnary::Into { .. },
                         ..
                     }
                 ) {
@@ -1267,20 +1265,20 @@ impl Declarations {
                 Ok(
                     if matches!(
                         tree,
-                        DeclarationOutput::Unary {
-                            operation: OutputUnary::Into { .. },
+                        DeclOutput::Unary {
+                            operation: DeclOutputUnary::Into { .. },
                             ..
                         }
                     ) {
                         OutputNode::Unary {
-                            operation: codec.resolve_output_unary(OutputUnary::Into {
+                            operation: codec.resolve_output_unary(DeclOutputUnary::Into {
                                 function: function.clone(),
                             })?,
                             child: output,
                         }
                     } else {
                         OutputNode::Unary {
-                            operation: codec.resolve_output_unary(OutputUnary::Getter {
+                            operation: codec.resolve_output_unary(DeclOutputUnary::Getter {
                                 function: function.clone(),
                             })?,
                             child: output,
@@ -1288,23 +1286,23 @@ impl Declarations {
                     },
                 )
             }
-            DeclarationOutput::Branch {
-                operation: OutputBranch::Combine,
+            DeclOutput::Branch {
+                operation: DeclOutputBranch::Combine,
                 children: parts,
             } => {
                 if parts.is_empty() {
                     return Err("an output combination needs at least one part".into());
                 }
                 Ok(OutputNode::Branch {
-                    operation: codec.resolve_output_branch(OutputBranch::Combine)?,
+                    operation: codec.resolve_output_branch(DeclOutputBranch::Combine)?,
                     children: parts
                         .iter()
                         .map(|child| resolve(ty, child, stack))
                         .collect::<Result<_>>()?,
                 })
             }
-            DeclarationOutput::Unary {
-                operation: OutputUnary::Result { error },
+            DeclOutput::Unary {
+                operation: DeclOutputUnary::Result { error },
                 child: ok,
             } => {
                 let (success, failure) =
@@ -1322,7 +1320,7 @@ impl Declarations {
                     }
                 }
                 Ok(OutputNode::Unary {
-                    operation: codec.resolve_output_unary(OutputUnary::Result {
+                    operation: codec.resolve_output_unary(DeclOutputUnary::Result {
                         error: error.clone(),
                     })?,
                     child: Box::new(resolve(success, ok, stack)?),
@@ -1344,7 +1342,7 @@ pub enum CallbackReturn {
 
 /// A source callable to export, with optional destination name and occurrence overrides.
 #[derive(Clone, Debug)]
-pub struct FunctionDecl {
+pub struct DeclFunction {
     /// Treat an outer standard Result as ordinary variant data.
     pub result_value: bool,
     /// Also emit an explicit callback-delivery variant for a sequence return.
@@ -1354,13 +1352,13 @@ pub struct FunctionDecl {
     /// Explicit destination name; supported by JNI, currently rejected by C.
     pub foreign: Option<String>,
     /// Input expansion overrides keyed by source parameter name.
-    pub params: BTreeMap<String, DeclarationInput<InputRequest, OutputRequest>>,
+    pub params: BTreeMap<String, DeclInput<DeclInputRequest, DeclOutputRequest>>,
     /// Result expansion override, replacing the type default.
-    pub ret: Option<DeclarationOutput<OutputRequest, InputRequest>>,
+    pub ret: Option<DeclOutput<DeclInputRequest, DeclOutputRequest>>,
     /// Source mapper for a top-level Result error; it takes E or &E and returns String.
     pub error: Option<String>,
 }
-impl FunctionDecl {
+impl DeclFunction {
     /// Reference a source function without overriding names or conversions.
     ///
     /// `name` is the function's unqualified source name.
@@ -1399,14 +1397,14 @@ impl FunctionDecl {
     pub fn expand_param(
         self,
         name: impl AsRef<str>,
-        decl: impl Into<DeclarationInput<InputRequest, OutputRequest>>,
+        decl: impl Into<DeclInput<DeclInputRequest, DeclOutputRequest>>,
     ) -> Self {
         self.input(name, decl)
     }
     /// Replace this return's default conversion using the production API.
     pub fn expand_return(
         self,
-        decl: impl Into<DeclarationOutput<OutputRequest, InputRequest>>,
+        decl: impl Into<DeclOutput<DeclInputRequest, DeclOutputRequest>>,
     ) -> Self {
         self.output(decl)
     }
@@ -1469,7 +1467,7 @@ impl FunctionDecl {
     /// source name is accepted; it is selected for capture but is not exported.
     /// The success value uses normal return defaults and `expand_return` overrides.
     /// Replaces any previously selected mapper. Non-Result returns reject this option.
-    pub fn on_error(mut self, mapper: impl Into<FunctionDecl>) -> Self {
+    pub fn on_error(mut self, mapper: impl Into<DeclFunction>) -> Self {
         self.error = Some(mapper.into().reference_name(false));
         self
     }
@@ -1493,7 +1491,7 @@ impl FunctionDecl {
     pub fn input(
         mut self,
         name: impl AsRef<str>,
-        decl: impl Into<DeclarationInput<InputRequest, OutputRequest>>,
+        decl: impl Into<DeclInput<DeclInputRequest, DeclOutputRequest>>,
     ) -> Self {
         assert!(
             self.params
@@ -1506,31 +1504,31 @@ impl FunctionDecl {
     /// Replace the result expansion, including any previously assigned override.
     ///
     /// Raw declaration syntax infers the request types automatically. Syntax with
-    /// uninhabited request types uses [`crate::DeclarationOutput::into_preparation`] before
+    /// uninhabited request types uses [`crate::DeclOutput::into_preparation`] before
     /// registration. Adapter-resolved trees instead go directly to [`crate::compile_output`].
     /// ```
-    /// use prebindgen_declarations::{fun,fields,expand_return,DeclarationInput,DeclarationOutput};
-    /// let _ = fun!(run).input("x", DeclarationInput::fields([])).output(DeclarationOutput::Leaf(prebindgen_declarations::frontend::OutputLeafOp::Value));
-    /// let _ = fields!(parts).field_override("hidden", DeclarationOutput::Leaf(prebindgen_declarations::frontend::OutputLeafOp::Discard));
-    /// let _ = expand_return!(Value).view(DeclarationOutput::getter("length", DeclarationOutput::Leaf(prebindgen_declarations::frontend::OutputLeafOp::Value)));
-    /// let resolved: DeclarationOutput = DeclarationOutput::getter("length", DeclarationOutput::Leaf(prebindgen_declarations::frontend::OutputLeafOp::Value));
+    /// use prebindgen_declarations::{fun,fields,expand_return,DeclInput,DeclOutput};
+    /// let _ = fun!(run).input("x", DeclInput::fields([])).output(DeclOutput::Leaf(prebindgen_declarations::frontend::DeclOutputLeafOp::Value));
+    /// let _ = fields!(parts).field_override("hidden", DeclOutput::Leaf(prebindgen_declarations::frontend::DeclOutputLeafOp::Discard));
+    /// let _ = expand_return!(Value).view(DeclOutput::getter("length", DeclOutput::Leaf(prebindgen_declarations::frontend::DeclOutputLeafOp::Value)));
+    /// let resolved: DeclOutput = DeclOutput::getter("length", DeclOutput::Leaf(prebindgen_declarations::frontend::DeclOutputLeafOp::Value));
     /// let _ = fun!(run).output(resolved.into_preparation());
     /// ```
     pub fn output(
         mut self,
-        decl: impl Into<DeclarationOutput<OutputRequest, InputRequest>>,
+        decl: impl Into<DeclOutput<DeclInputRequest, DeclOutputRequest>>,
     ) -> Self {
         self.ret = Some(decl.into());
         self
     }
 }
 
-impl From<&str> for FunctionDecl {
+impl From<&str> for DeclFunction {
     fn from(name: &str) -> Self {
         Self::new(crate::ident(name).expect("source function identifier"))
     }
 }
-impl From<String> for FunctionDecl {
+impl From<String> for DeclFunction {
     fn from(name: String) -> Self {
         Self::from(name.as_str())
     }
@@ -1538,12 +1536,12 @@ impl From<String> for FunctionDecl {
 
 /// Collect source helper and representation-type names needed by `Flat::parse_selected`.
 pub fn source_items<'a>(
-    inputs: &[DeclarationInput<InputRequest, OutputRequest>],
-    outputs: &[DeclarationOutput<OutputRequest, InputRequest>],
+    inputs: &[DeclInput<DeclInputRequest, DeclOutputRequest>],
+    outputs: &[DeclOutput<DeclInputRequest, DeclOutputRequest>],
     errors: &[(syn::Type, String)],
-    functions: impl IntoIterator<Item = &'a FunctionDecl>,
+    functions: impl IntoIterator<Item = &'a DeclFunction>,
 ) -> Vec<String> {
-    fn representation_types(decl: &crate::ConvertDecl, names: &mut Vec<String>) {
+    fn representation_types(decl: &crate::DeclConvert, names: &mut Vec<String>) {
         struct References<'a>(&'a mut Vec<String>);
         impl syn::visit_mut::VisitMut for References<'_> {
             fn visit_type_path_mut(&mut self, path: &mut syn::TypePath) {
@@ -1559,19 +1557,19 @@ pub fn source_items<'a>(
             syn::visit_mut::VisitMut::visit_type_mut(&mut References(names), &mut ty);
         }
     }
-    fn input(tree: &DeclarationInput<InputRequest, OutputRequest>, names: &mut Vec<String>) {
+    fn input(tree: &DeclInput<DeclInputRequest, DeclOutputRequest>, names: &mut Vec<String>) {
         match tree {
-            DeclarationInput::None => {}
-            DeclarationInput::Branch {
-                operation: InputBranch::Variant,
+            DeclInput::None => {}
+            DeclInput::Branch {
+                operation: DeclInputBranch::Variant,
                 children,
             } => {
                 for child in children {
                     input(child, names);
                 }
             }
-            DeclarationInput::Branch {
-                operation: InputBranch::Enum { .. },
+            DeclInput::Branch {
+                operation: DeclInputBranch::Enum { .. },
                 children: variants,
                 ..
             } => {
@@ -1579,17 +1577,17 @@ pub fn source_items<'a>(
                     input(tree, names);
                 }
             }
-            DeclarationInput::Request(InputRequest::EnumFields(variants)) => {
+            DeclInput::Request(DeclInputRequest::EnumFields(variants)) => {
                 for tree in variants.values().flat_map(|v| v.values()) {
                     input(tree, names);
                 }
             }
-            DeclarationInput::Request(InputRequest::Conversion(d)) => {
+            DeclInput::Request(DeclInputRequest::Conversion(d)) => {
                 names.extend(d.functions());
                 representation_types(d, names);
             }
-            DeclarationInput::Unary {
-                operation: InputUnary::Convert { conversion },
+            DeclInput::Unary {
+                operation: DeclInputUnary::Convert { conversion },
                 child,
             } => {
                 if let prebindgen_flat::ValueSource::Function(f) = &conversion.source {
@@ -1597,7 +1595,7 @@ pub fn source_items<'a>(
                 }
                 input(child, names);
             }
-            DeclarationInput::Arrow {
+            DeclInput::Arrow {
                 operation: callback,
                 domain,
                 codomain,
@@ -1606,7 +1604,7 @@ pub fn source_items<'a>(
                 output(domain, names);
                 input(codomain, names);
             }
-            DeclarationInput::Request(InputRequest::Callback(declaration)) => {
+            DeclInput::Request(DeclInputRequest::Callback(declaration)) => {
                 for tree in declaration.params.values() {
                     output(tree, names);
                 }
@@ -1614,9 +1612,9 @@ pub fn source_items<'a>(
                     input(tree, names);
                 }
             }
-            DeclarationInput::Request(InputRequest::Call(name)) => names.push(name.clone()),
-            DeclarationInput::Branch {
-                operation: InputBranch::Constructor { function },
+            DeclInput::Request(DeclInputRequest::Call(name)) => names.push(name.clone()),
+            DeclInput::Branch {
+                operation: DeclInputBranch::Constructor { function },
                 children: args,
             } => {
                 names.push(function.clone());
@@ -1624,65 +1622,65 @@ pub fn source_items<'a>(
                     input(child, names);
                 }
             }
-            DeclarationInput::Request(InputRequest::ForType { input: child, .. })
-            | DeclarationInput::Unary {
-                operation: InputUnary::Optional,
+            DeclInput::Request(DeclInputRequest::ForType { input: child, .. })
+            | DeclInput::Unary {
+                operation: DeclInputUnary::Optional,
                 child,
             }
-            | DeclarationInput::Unary {
-                operation: InputUnary::Sequence,
+            | DeclInput::Unary {
+                operation: DeclInputUnary::Sequence,
                 child,
             }
-            | DeclarationInput::Unary {
-                operation: InputUnary::Bulk,
+            | DeclInput::Unary {
+                operation: DeclInputUnary::Bulk,
                 child,
             }
-            | DeclarationInput::Unary {
-                operation: InputUnary::Temporary,
+            | DeclInput::Unary {
+                operation: DeclInputUnary::Temporary,
                 child,
             } => input(child, names),
-            DeclarationInput::Branch {
-                operation: InputBranch::Fields,
+            DeclInput::Branch {
+                operation: DeclInputBranch::Fields,
                 children,
             }
-            | DeclarationInput::Branch {
-                operation: InputBranch::Record,
+            | DeclInput::Branch {
+                operation: DeclInputBranch::Record,
                 children,
             }
-            | DeclarationInput::Branch {
-                operation: InputBranch::Selector,
+            | DeclInput::Branch {
+                operation: DeclInputBranch::Selector,
                 children,
             } => {
                 for child in children {
                     input(child, names)
                 }
             }
-            DeclarationInput::Leaf(InputLeafOp::Value)
-            | DeclarationInput::Request(InputRequest::Auto)
-            | DeclarationInput::Request(InputRequest::Value) => {}
+            DeclInput::Leaf(DeclInputLeafOp::Value)
+            | DeclInput::Request(DeclInputRequest::Auto)
+            | DeclInput::Request(DeclInputRequest::Value) => {}
         }
     }
-    fn output(tree: &DeclarationOutput<OutputRequest, InputRequest>, names: &mut Vec<String>) {
+    fn output(tree: &DeclOutput<DeclInputRequest, DeclOutputRequest>, names: &mut Vec<String>) {
         match tree {
-            DeclarationOutput::Request(OutputRequest::SequenceCallback {
-                output: child, ..
-            }) => output(child, names),
-            DeclarationOutput::Unary {
-                operation: OutputUnary::CallbackArgument { .. },
+            DeclOutput::Request(DeclOutputRequest::SequenceCallback { output: child, .. }) => {
+                output(child, names)
+            }
+            DeclOutput::Unary {
+                operation: DeclOutputUnary::CallbackArgument { .. },
                 child,
             } => output(child, names),
-            DeclarationOutput::None => {}
-            DeclarationOutput::Arrow { operation, .. } => match *operation {},
-            DeclarationOutput::Branch {
-                operation: OutputBranch::Variant | OutputBranch::Arguments,
+            DeclOutput::None => {}
+            DeclOutput::Arrow { operation, .. } => match *operation {},
+            DeclOutput::Branch {
+                operation: DeclOutputBranch::Variant | DeclOutputBranch::Arguments,
                 children,
             } => {
                 for child in children {
                     output(child, names);
                 }
             }
-            DeclarationOutput::Branch {
-                operation: OutputBranch::Enum { .. },
+            DeclOutput::Branch {
+                operation: DeclOutputBranch::Enum { .. },
                 children: variants,
                 ..
             } => {
@@ -1690,17 +1688,17 @@ pub fn source_items<'a>(
                     output(tree, names);
                 }
             }
-            DeclarationOutput::Request(OutputRequest::EnumFields(variants)) => {
+            DeclOutput::Request(DeclOutputRequest::EnumFields(variants)) => {
                 for tree in variants.values().flat_map(|v| v.values()) {
                     output(tree, names);
                 }
             }
-            DeclarationOutput::Request(OutputRequest::Conversion(d)) => {
+            DeclOutput::Request(DeclOutputRequest::Conversion(d)) => {
                 names.extend(d.functions());
                 representation_types(d, names);
             }
-            DeclarationOutput::Unary {
-                operation: OutputUnary::Convert { conversion },
+            DeclOutput::Unary {
+                operation: DeclOutputUnary::Convert { conversion },
                 child,
             } => {
                 if let prebindgen_flat::ValueSource::Function(f) = &conversion.source {
@@ -1708,39 +1706,39 @@ pub fn source_items<'a>(
                 }
                 output(child, names);
             }
-            DeclarationOutput::Unary {
-                operation: OutputUnary::Named { .. },
+            DeclOutput::Unary {
+                operation: DeclOutputUnary::Named { .. },
                 child,
                 ..
             } => output(child, names),
-            DeclarationOutput::Leaf(OutputLeafOp::Discard) => {}
-            DeclarationOutput::Unary {
-                operation: OutputUnary::Getter { function },
+            DeclOutput::Leaf(DeclOutputLeafOp::Discard) => {}
+            DeclOutput::Unary {
+                operation: DeclOutputUnary::Getter { function },
                 child,
             }
-            | DeclarationOutput::Unary {
-                operation: OutputUnary::Into { function },
+            | DeclOutput::Unary {
+                operation: DeclOutputUnary::Into { function },
                 child,
             } => {
                 names.push(function.clone());
                 output(child, names);
             }
-            DeclarationOutput::Request(OutputRequest::ForType { output: child, .. })
-            | DeclarationOutput::Unary {
-                operation: OutputUnary::Optional,
+            DeclOutput::Request(DeclOutputRequest::ForType { output: child, .. })
+            | DeclOutput::Unary {
+                operation: DeclOutputUnary::Optional,
                 child,
             }
-            | DeclarationOutput::Unary {
-                operation: OutputUnary::Sequence { .. },
+            | DeclOutput::Unary {
+                operation: DeclOutputUnary::Sequence { .. },
                 child,
                 ..
             }
-            | DeclarationOutput::Unary {
-                operation: OutputUnary::Bulk,
+            | DeclOutput::Unary {
+                operation: DeclOutputUnary::Bulk,
                 child,
             } => output(child, names),
-            DeclarationOutput::Unary {
-                operation: OutputUnary::Result { error },
+            DeclOutput::Unary {
+                operation: DeclOutputUnary::Result { error },
                 child: ok,
             } => {
                 output(ok, names);
@@ -1748,36 +1746,36 @@ pub fn source_items<'a>(
                     names.push(name.clone());
                 }
             }
-            DeclarationOutput::Branch {
-                operation: OutputBranch::Fields,
+            DeclOutput::Branch {
+                operation: DeclOutputBranch::Fields,
                 children,
             }
-            | DeclarationOutput::Branch {
-                operation: OutputBranch::OwnedFields,
+            | DeclOutput::Branch {
+                operation: DeclOutputBranch::OwnedFields,
                 children,
             }
-            | DeclarationOutput::Branch {
-                operation: OutputBranch::Record { .. },
+            | DeclOutput::Branch {
+                operation: DeclOutputBranch::Record { .. },
                 children,
                 ..
             }
-            | DeclarationOutput::Branch {
-                operation: OutputBranch::Combine,
+            | DeclOutput::Branch {
+                operation: DeclOutputBranch::Combine,
                 children,
             } => {
                 for child in children {
                     output(child, names)
                 }
             }
-            DeclarationOutput::Request(OutputRequest::NamedFields { overrides, .. }) => {
+            DeclOutput::Request(DeclOutputRequest::NamedFields { overrides, .. }) => {
                 for child in overrides.values() {
                     output(child, names)
                 }
             }
-            DeclarationOutput::Request(OutputRequest::Auto)
-            | DeclarationOutput::Request(OutputRequest::Value { .. })
-            | DeclarationOutput::Leaf(OutputLeafOp::Value)
-            | DeclarationOutput::Leaf(OutputLeafOp::Projected(_)) => {}
+            DeclOutput::Request(DeclOutputRequest::Auto)
+            | DeclOutput::Request(DeclOutputRequest::Value { .. })
+            | DeclOutput::Leaf(DeclOutputLeafOp::Value)
+            | DeclOutput::Leaf(DeclOutputLeafOp::Projected(_)) => {}
         }
     }
     let mut names = vec![];

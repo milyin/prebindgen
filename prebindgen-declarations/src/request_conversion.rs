@@ -1,14 +1,14 @@
 //! Embed request-free trees without hiding reverse-direction subtrees.
-use crate::{DeclarationInput, DeclarationOutput, InputRequest, OutputRequest};
-impl DeclarationInput {
+use crate::{DeclInput, DeclInputRequest, DeclOutput, DeclOutputRequest};
+impl DeclInput {
     /// Embed all nodes, including arrow domains, into a preparation tree.
-    pub fn into_preparation(self) -> DeclarationInput<InputRequest, OutputRequest> {
+    pub fn into_preparation(self) -> DeclInput<DeclInputRequest, DeclOutputRequest> {
         self.map_requests(&mut |never| match never {}, &mut |never| match never {})
     }
 }
-impl DeclarationOutput {
+impl DeclOutput {
     /// Embed all nodes, including arrow domains, into a preparation tree.
-    pub fn into_preparation(self) -> DeclarationOutput<OutputRequest, InputRequest> {
+    pub fn into_preparation(self) -> DeclOutput<DeclInputRequest, DeclOutputRequest> {
         self.map_requests(&mut |never| match never {}, &mut |never| match never {})
     }
 }

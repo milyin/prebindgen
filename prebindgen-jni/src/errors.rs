@@ -1,6 +1,6 @@
 //! JNI error channels reuse ordinary output conversions. User callbacks run in Kotlin.
 use super::*;
-use crate::operations::OutputLeafOp;
+use crate::operations::JniOutputLeafOp;
 use prebindgen_conversions::OutputFragment;
 use prebindgen_flat::Conversion;
 use prebindgen_flat::OutputConversion;
@@ -9,12 +9,12 @@ use prebindgen_flat::OutputConversion;
 pub(crate) struct ErrorBinding {
     pub(crate) helper: syn::Ident,
     ty: syn::Type,
-    pub output: Option<JniOutput>,
-    recipe: Option<crate::operations::Output>,
+    pub output: Option<JniOutputConverter>,
+    recipe: Option<crate::operations::JniOutput>,
     pub handler: String,
 }
 impl ErrorBinding {
-    pub(crate) fn output(&self) -> Result<&JniOutput> {
+    pub(crate) fn output(&self) -> Result<&JniOutputConverter> {
         self.output
             .as_ref()
             .ok_or_else(|| format!("JNI error `{}` has no compiled output", self.handler))
@@ -71,7 +71,7 @@ pub fn bind_error_output<I, O>(
         .ok_or("domain-error handler has no package")?
         .0;
     error.handler = format!("{package}.LocalErrorHandler_{label}_{hash:016x}");
-    error.output = Some(JniOutput::new(output));
+    error.output = Some(JniOutputConverter::new(output));
     metadata.error = Some(std::rc::Rc::new(error));
     Ok(())
 }
@@ -89,10 +89,10 @@ fn helper_name(names: &mut names::Names, ty: &syn::Type, mapped: bool) -> Result
 
 /// Prepare each error once on its type and attach each function's selected binding.
 pub(crate) fn resolve(
-    flat: &mut Bindings,
+    flat: &mut JniBindings,
     codec: &JniCodec,
-    declarations: &prebindgen_declarations::Declarations,
-    functions: &[FunctionDecl],
+    declarations: &prebindgen_declarations::DeclDefaults,
+    functions: &[DeclFunction],
 ) -> Result<()> {
     let mut names = names::Names::default();
     for ty in flat.types.values() {
@@ -136,7 +136,7 @@ pub(crate) fn resolve(
         let (ty, recipe) = if mapped {
             (
                 syn::parse_quote!(String),
-                crate::operations::Output::Leaf(OutputLeafOp::Value),
+                crate::operations::JniOutput::Leaf(JniOutputLeafOp::Value),
             )
         } else {
             (
@@ -203,7 +203,7 @@ pub(crate) fn resolve(
     Ok(())
 }
 
-pub(crate) fn compile(flat: &mut Bindings, codec: &JniCodec) -> Result<()> {
+pub(crate) fn compile(flat: &mut JniBindings, codec: &JniCodec) -> Result<()> {
     let pending = flat
         .types
         .iter()

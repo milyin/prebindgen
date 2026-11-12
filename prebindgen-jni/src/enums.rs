@@ -4,7 +4,7 @@ use prebindgen_declarations::{Condition, EnumMapping};
 
 /// A Kotlin enum class preserving a fieldless Rust enum's integer discriminants.
 #[derive(Clone)]
-pub struct EnumClassDecl {
+pub struct DeclJniEnumClass {
     /// Source enum type, resolved against the selected source.
     pub ty: syn::Type,
     /// Literal Kotlin class name, or the source type's last path segment.
@@ -12,7 +12,7 @@ pub struct EnumClassDecl {
     /// Explicit Kotlin entry-name overrides keyed by source variant name.
     pub variant_names: Vec<(String, String)>,
 }
-impl EnumClassDecl {
+impl DeclJniEnumClass {
     /// Declare a fieldless enum class from its source type syntax.
     pub fn new(ty: syn::Type) -> Self {
         Self {
@@ -36,7 +36,7 @@ impl EnumClassDecl {
 }
 #[macro_export]
 /// Declare a fieldless Kotlin enum class without requiring the Rust type in scope.
-macro_rules! enum_class {($($ty:tt)+)=>{$crate::EnumClassDecl::new($crate::__type(stringify!($($ty)+)))};}
+macro_rules! enum_class {($($ty:tt)+)=>{$crate::DeclJniEnumClass::new($crate::__type(stringify!($($ty)+)))};}
 
 /// A JNI enum's checked integer mapping and Kotlin class identity.
 #[derive(Clone, Debug)]
@@ -140,14 +140,14 @@ impl JniEnum {
         w: syn::Ident,
         v: syn::Ident,
         active: &Condition,
-    ) -> Result<InputPlan<JniWire>> {
+    ) -> Result<JniInputPlan<JniWire>> {
         prebindgen_declarations::enum_input(&self.mapping, ty, w, v, active, self.wire())
     }
     pub(crate) fn output(
         self: &std::rc::Rc<Self>,
         w: syn::Ident,
         v: TokenStream,
-    ) -> OutputPlan<JniWire> {
+    ) -> JniOutputPlan<JniWire> {
         prebindgen_declarations::enum_output(&self.mapping, w, v, self.wire())
     }
     pub(crate) fn render(&self, class: &Class) -> Result<String> {
@@ -173,7 +173,7 @@ impl JniEnum {
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn flat(source: &str) -> Bindings {
+    fn flat(source: &str) -> JniBindings {
         Flat::parse(
             syn::parse_file(source)
                 .unwrap()
@@ -271,7 +271,7 @@ mod tests {
 #[cfg(test)]
 mod naming_tests {
     use super::*;
-    fn build(decl: EnumClassDecl) -> Result<JniGen> {
+    fn build(decl: DeclJniEnumClass) -> Result<JniGen> {
         let items = syn::parse_file("pub enum E { name=1, ordinal=2, entries=3 }")
             .unwrap()
             .items;

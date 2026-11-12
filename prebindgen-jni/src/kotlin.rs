@@ -351,12 +351,12 @@ pub trait KotlinOutputConversion:
 /// Prepared JNI input, with a logical schema and a native plan shared by Rust/Kotlin emission.
 #[derive(Clone, Debug)]
 pub(crate) struct PlanInput {
-    pub(crate) rust: InputPlan<JniWire>,
+    pub(crate) rust: JniInputPlan<JniWire>,
 }
 /// Prepared JNI output, with logical outcomes and a native plan shared by Rust/Kotlin emission.
 #[derive(Clone, Debug)]
 pub(crate) struct PlanOutput {
-    pub(crate) rust: OutputPlan<JniWire>,
+    pub(crate) rust: JniOutputPlan<JniWire>,
 }
 impl Conversion for PlanInput {
     type Wire = JniWire;
@@ -1092,7 +1092,7 @@ mod tests {
         // This condition is arbitrary Kotlin code, not a declaration selector path.
         let mut plan = JniCodec::raw()
             .input_leaf(prebindgen_declarations::InputLeaf::new(
-                &Bindings::parse([]).unwrap(),
+                &JniBindings::parse([]).unwrap(),
                 &syn::parse_quote!(Counter),
                 &(),
                 syn::parse_quote!(incoming),
@@ -1110,7 +1110,7 @@ mod tests {
         };
         *condition = "isEnabled() && count > 3".into();
         JniCodec::raw().finish_input(&mut plan, &()).unwrap();
-        let input = JniInput::from(plan);
+        let input = JniInputConverter::from(plan);
         // A handle and an ordinary i64 expose identical transport information.
         let scalar = JniWire::scalar(Primitive::I64);
         assert_eq!(
@@ -1143,7 +1143,7 @@ mod tests {
 
         let plan = JniCodec::raw()
             .output_leaf(prebindgen_declarations::OutputLeaf::new(
-                &Bindings::parse([]).unwrap(),
+                &JniBindings::parse([]).unwrap(),
                 &syn::parse_quote!(Counter),
                 &(),
                 syn::parse_quote!(wire),
@@ -1151,7 +1151,7 @@ mod tests {
                 prebindgen_declarations::ValueAccess::Owned,
             ))
             .unwrap();
-        let output = JniOutput::from(plan).kotlin(&context).unwrap();
+        let output = JniOutputConverter::from(plan).kotlin(&context).unwrap();
         assert_eq!(output.delivered, ["requireNotNull(wrapped_0)"]);
         assert!(output
             .materialize

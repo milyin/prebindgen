@@ -133,10 +133,10 @@ impl Codec for CodecImpl {
     type Chain = PacketChain;
     type Branch = Metadata;
 
-    fn validate_input(&self, plan: &CodecInput<Self>) -> Result<()> {
+    fn validate_input(&self, plan: &CodecInputPlan<Self>) -> Result<()> {
         PointerLenAbi::validate(&plan.node)
     }
-    fn validate_output(&self, plan: &CodecOutput<Self>) -> Result<()> {
+    fn validate_output(&self, plan: &CodecOutputPlan<Self>) -> Result<()> {
         PointerLenAbi::validate(&plan.outcomes.success)?;
         PointerLenAbi::result_packet(&plan.outcomes.success, &plan.values)?;
         Ok(())
@@ -157,7 +157,7 @@ impl Codec for CodecImpl {
     ) -> bool {
         false
     }
-    fn input_leaf(&self, request: InputLeaf<'_, Self>) -> Result<CodecInput<Self>> {
+    fn input_leaf(&self, request: InputLeaf<'_, Self>) -> Result<CodecInputPlan<Self>> {
         let InputLeaf {
             flat: _flat,
             ty,
@@ -173,7 +173,7 @@ impl Codec for CodecImpl {
         }
         Ok(input)
     }
-    fn output_leaf(&self, request: OutputLeaf<'_, Self>) -> Result<CodecOutput<Self>> {
+    fn output_leaf(&self, request: OutputLeaf<'_, Self>) -> Result<CodecOutputPlan<Self>> {
         let OutputLeaf {
             flat: _flat,
             ty,
@@ -284,7 +284,7 @@ impl Codec for CodecImpl {
             commit: quote!(let _=Box::into_raw(#wire);),
         })
     }
-    fn finish_output(&self, plan: &mut CodecOutput<Self>, _: &()) -> Result<()> {
+    fn finish_output(&self, plan: &mut CodecOutputPlan<Self>, _: &()) -> Result<()> {
         let values = PointerLenAbi::result_packet(&plan.outcomes.success, &plan.values)?;
         // The result packet contains presence, data and length; preparation owns
         // the buffer until these expressions have been saved for delivery.
@@ -388,7 +388,7 @@ fn pointer_length_round_trip(reverse: bool, row_only: bool) {
         source.items.into_iter().map(|i| (i, Default::default())),
     )
     .unwrap();
-    let defaults = Declarations::new(&flat, vec![], vec![], vec![]).unwrap();
+    let defaults = DeclDefaults::new(&flat, vec![], vec![], vec![]).unwrap();
     let filled = defaults.fill(
         &mut flat,
         &CodecImpl {
@@ -412,7 +412,7 @@ fn pointer_length_round_trip(reverse: bool, row_only: bool) {
     let output = f.output_conversion().unwrap();
     assert_eq!(PointerLenAbi::parameters(input.input_node()).len(), 3);
     assert_eq!(output.values.len(), 3);
-    let cloned: CodecOutput<CodecImpl> = output.clone();
+    let cloned: CodecOutputPlan<CodecImpl> = output.clone();
     assert_eq!(cloned.values.len(), 3);
     let parameters = PointerLenAbi::parameters(&input.node)
         .map(|w| {
@@ -477,17 +477,17 @@ fn malformed_nested_sequence_bindings_are_rejected_before_installation() {
         bad_sequence: true,
         ..Default::default()
     };
-    let recipe = DeclarationOutput::Unary {
-        operation: OutputUnary::Sequence {
+    let recipe = DeclOutput::Unary {
+        operation: DeclOutputUnary::Sequence {
             delivery: SequenceDelivery::Value,
             mode: None,
         },
-        child: Box::new(DeclarationOutput::Unary {
-            operation: OutputUnary::Sequence {
+        child: Box::new(DeclOutput::Unary {
+            operation: DeclOutputUnary::Sequence {
                 delivery: SequenceDelivery::Value,
                 mode: None,
             },
-            child: Box::new(DeclarationOutput::Leaf(OutputLeafOp::Value)),
+            child: Box::new(DeclOutput::Leaf(DeclOutputLeafOp::Value)),
         }),
     };
     let error = bind_output(&mut flat, &bad, "output", &recipe, &()).unwrap_err();
@@ -502,9 +502,9 @@ fn malformed_nested_sequence_bindings_are_rejected_before_installation() {
         &bad,
         "input",
         "values",
-        &DeclarationInput::Unary {
-            operation: InputUnary::Sequence,
-            child: Box::new(DeclarationInput::Leaf(InputLeafOp::Value)),
+        &DeclInput::Unary {
+            operation: DeclInputUnary::Sequence,
+            child: Box::new(DeclInput::Leaf(DeclInputLeafOp::Value)),
         },
         &(),
     )
@@ -524,13 +524,13 @@ fn rows_lend_temporary_values_and_construct_once() {
     )
     .unwrap();
     let codec = CodecImpl::default();
-    let recipe = DeclarationInput::Unary {
-        operation: InputUnary::Sequence,
-        child: Box::new(DeclarationInput::constructor(
+    let recipe = DeclInput::Unary {
+        operation: DeclInputUnary::Sequence,
+        child: Box::new(DeclInput::constructor(
             "row",
-            [DeclarationInput::Unary {
-                operation: InputUnary::Temporary,
-                child: Box::new(DeclarationInput::Leaf(InputLeafOp::Value)),
+            [DeclInput::Unary {
+                operation: DeclInputUnary::Temporary,
+                child: Box::new(DeclInput::Leaf(DeclInputLeafOp::Value)),
             }],
         )),
     };

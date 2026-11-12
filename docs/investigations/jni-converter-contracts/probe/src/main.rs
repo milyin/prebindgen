@@ -3,7 +3,7 @@ use prebindgen_conversions::{InputFragment, OutputFragment};
 use prebindgen_declarations::{Codec, Condition};
 use prebindgen_flat::{Conversion, InputConversion, OutputConversion, Result, Schema};
 use prebindgen_jni::{
-    fun, package, JniBranch, JniChain, JniContext, JniGen, JniInput, JniOutput, JniSchema, JniWire,
+    fun, package, JniBranch, JniChain, JniContext, JniGen, JniInputConverter, JniOutputConverter, JniSchema, JniWire,
     KotlinContext, KotlinInput, KotlinInputConversion, KotlinOutput, KotlinOutputConversion,
 };
 use proc_macro2::TokenStream;
@@ -11,7 +11,7 @@ use quote::quote;
 
 // Forward exactly the existing behavior: rejection cannot be attributed to a
 // different wire representation, native protocol or Kotlin implementation.
-struct IndependentInput(JniInput);
+struct IndependentInput(JniInputConverter);
 impl Conversion for IndependentInput {
     type Wire = JniWire;
     type Chain = JniChain;
@@ -37,7 +37,7 @@ impl KotlinInputConversion for IndependentInput {
     }
 }
 
-struct IndependentOutput(JniOutput);
+struct IndependentOutput(JniOutputConverter);
 impl Conversion for IndependentOutput {
     type Wire = JniWire;
     type Chain = JniChain;
@@ -84,7 +84,7 @@ fn independent_input(flat: &prebindgen_flat::Flat<JniSchema<IndependentInput>>) 
 
 #[cfg(feature = "independent-output")]
 fn independent_output(
-    flat: &prebindgen_flat::Flat<JniSchema<JniInput, IndependentOutput>>,
+    flat: &prebindgen_flat::Flat<JniSchema<JniInputConverter, IndependentOutput>>,
 ) -> Result<JniGen> {
     prebindgen_jni::generate(flat)
 }
@@ -95,7 +95,7 @@ fn main() -> Result<()> {
         as fn(&prebindgen_flat::Flat<JniSchema<IndependentInput>>) -> Result<JniGen>;
     #[cfg(feature = "independent-output")]
     let _ = independent_output
-        as fn(&prebindgen_flat::Flat<JniSchema<JniInput, IndependentOutput>>) -> Result<JniGen>;
+        as fn(&prebindgen_flat::Flat<JniSchema<JniInputConverter, IndependentOutput>>) -> Result<JniGen>;
     fn input_contract<T: InputConversion + KotlinInputConversion>() {}
     fn output_contract<T: OutputConversion + KotlinOutputConversion>() {}
     input_contract::<IndependentInput>();

@@ -1,9 +1,9 @@
 //! Declaration language and composition for preparing conversion slots.
 //!
-//! [`Declarations::resolve`] produces a request-free [`Flat<Resolved<C>>`](Resolved)
+//! [`DeclDefaults::resolve`] produces a request-free [`Flat<ResolvedSchema<C>>`](ResolvedSchema)
 //! that owns all data needed by [`compile_resolved`]. Input and output trees keep
 //! separate operation vocabularies; [`InputNode::Arrow`] and [`OutputNode::Arrow`]
-//! expose reverse-direction domains structurally. [`Declarations::fill`],
+//! expose reverse-direction domains structurally. [`DeclDefaults::fill`],
 //! [`bind_input`] and [`bind_output`] use the same resolver and compiler for
 //! individual occurrences. Compiled slots retain wires and Rust code for emission.
 //! Generation is owned by the language generator;
@@ -12,7 +12,7 @@
 //! Reusable value and boxed-allocation leaves live in `prebindgen-conversions`.
 #![warn(missing_docs)]
 mod convert;
-pub use convert::{prepare_value_conversions, ConvertDecl, ConvertSource};
+pub use convert::{prepare_value_conversions, DeclConvert, DeclConvertSource};
 
 use prebindgen_conversions::{InputPlan, OutputPlan};
 use prebindgen_flat::{same_type, type_key, Flat, Result, Wire};
@@ -22,20 +22,20 @@ use quote::{format_ident, quote};
 use syn::Type;
 mod builders;
 mod callback;
-pub use callback::{CallbackArgumentOwnership, CallbackDecl, CallbackOperation};
+pub use callback::{CallbackArgumentOwnership, CallbackOperation, DeclCallback};
 pub mod frontend;
 mod node;
-pub use frontend::{DeclarationInput, DeclarationOutput};
-use frontend::{InputBranch, InputLeafOp, InputUnary, OutputBranch, OutputLeafOp, OutputUnary};
-#[cfg(test)]
-use frontend::{InputOperations, OutputOperations};
+pub use frontend::{
+    DeclInput, DeclInputBranch, DeclInputLeafOp, DeclInputOps, DeclInputUnary, DeclOutput,
+    DeclOutputBranch, DeclOutputLeafOp, DeclOutputOps, DeclOutputUnary,
+};
 mod request_conversion;
 mod resolution;
 mod resolved;
-pub use builders::{ErrorDecl, ExpandDecl, ExpandParamDecl, ExpandReturnDecl, FieldsDecl};
+pub use builders::{DeclError, DeclExpand, DeclExpandParam, DeclExpandReturn, DeclFields};
 pub use node::*;
-pub use resolution::Resolve;
-pub use resolved::{compile_resolved, Resolved, ResolvedModule, ResolvedSlot};
+pub use resolution::DeclResolve;
+pub use resolved::{compile_resolved, ResolvedModule, ResolvedSchema, ResolvedSlot};
 mod enums;
 pub use enums::{enum_input, enum_output, EnumMapping};
 mod optional;
@@ -64,7 +64,7 @@ pub fn output_referent(ty: &Type) -> Option<&Type> {
         _ => None,
     }
 }
-// The owned value deliberately constructed by InputUnary::Temporary. A Vec/String
+// The owned value deliberately constructed by DeclInputUnary::Temporary. A Vec/String
 // descriptor must never be fabricated over memory merely borrowed from C.
 /// Owned backing type reconstructed for an explicitly requested temporary borrow.
 pub fn temporary_input_type(ty: &Type) -> Result<Type> {
@@ -98,10 +98,10 @@ mod component;
 pub use component::{ComponentPath, ComponentSegment};
 
 /// Input preparation plan, including the codec's composition metadata.
-pub type CodecInput<C> =
+pub type CodecInputPlan<C> =
     InputPlan<<C as Codec>::Wire, <C as Codec>::Context, <C as Codec>::Chain, <C as Codec>::Branch>;
 /// Output preparation plan, including the codec's composition metadata.
-pub type CodecOutput<C> = OutputPlan<
+pub type CodecOutputPlan<C> = OutputPlan<
     <C as Codec>::Wire,
     <C as Codec>::Context,
     <C as Codec>::Chain,
@@ -123,59 +123,59 @@ pub enum SequenceDelivery {
 
 /// Source-dependent choices accepted only while preparing an input tree.
 #[derive(Clone, Debug)]
-pub enum InputRequest {
+pub enum DeclInputRequest {
     /// Expand enum fields, inheriting defaults for fields not explicitly overridden.
     EnumFields(
         std::collections::BTreeMap<
             String,
-            std::collections::BTreeMap<String, DeclarationInput<InputRequest, OutputRequest>>,
+            std::collections::BTreeMap<String, DeclInput<DeclInputRequest, DeclOutputRequest>>,
         >,
     ),
     /// Resolve only the canonical value form, independently of boundary defaults.
     Value,
     /// Select a local single-value conversion.
-    Conversion(Box<ConvertDecl>),
+    Conversion(Box<DeclConvert>),
     /// Select the configured default for this source occurrence.
     Auto,
     /// Select or override a callback signature's argument and result conversions.
-    Callback(Box<CallbackDecl>),
+    Callback(Box<DeclCallback>),
     /// Apply a type-specific override, including inside optional/sequence sources.
     ForType {
         /// Source type targeted by the override.
         ty: Box<Type>,
         /// The requested conversion for that type.
-        input: Box<DeclarationInput<InputRequest, OutputRequest>>,
+        input: Box<DeclInput<DeclInputRequest, DeclOutputRequest>>,
     },
     /// Infer a constructor's argument conversions from its source signature.
     Call(String),
 }
 
-impl DeclarationInput<InputRequest, OutputRequest> {
+impl DeclInput<DeclInputRequest, DeclOutputRequest> {
     /// Expand the tag and selected fields. Keys are source variant and field
     /// names (or tuple indices). Unspecified fields inherit boundary defaults.
     pub fn enum_fields<'a>(
         overrides: impl IntoIterator<Item = (&'a str, Vec<(&'a str, Self)>)>,
     ) -> Self {
-        DeclarationInput::Request(InputRequest::EnumFields(variants::overrides(overrides)))
+        DeclInput::Request(DeclInputRequest::EnumFields(variants::overrides(overrides)))
     }
     /// Request the canonical value representation, bypassing boundary defaults.
     pub fn value() -> Self {
-        DeclarationInput::Request(InputRequest::Value)
+        DeclInput::Request(DeclInputRequest::Value)
     }
     /// Request this source type's configured default during preparation.
     pub fn auto() -> Self {
-        DeclarationInput::Request(InputRequest::Auto)
+        DeclInput::Request(DeclInputRequest::Auto)
     }
     /// Associate a conversion with a source type for a default or nested override.
     pub fn for_type(ty: Type, input: Self) -> Self {
-        DeclarationInput::Request(InputRequest::ForType {
+        DeclInput::Request(DeclInputRequest::ForType {
             ty: Box::new(ty),
             input: Box::new(input),
         })
     }
     /// Infer a source constructor's argument conversions from registered defaults.
     pub fn call(name: impl Into<String>) -> Self {
-        DeclarationInput::Request(InputRequest::Call(name.into()))
+        DeclInput::Request(DeclInputRequest::Call(name.into()))
     }
     /// Explicitly reconstruct an owned temporary for a shared-reference input.
     /// Slices construct a Vec, str constructs a String, and sized references
@@ -183,56 +183,54 @@ impl DeclarationInput<InputRequest, OutputRequest> {
     /// semantics; this operation authorizes the temporary's allocation/copying.
     pub fn reconstruct(self) -> Self {
         match self {
-            DeclarationInput::Request(InputRequest::ForType { ty, input }) => {
-                DeclarationInput::for_type(
-                    *ty,
-                    DeclarationInput::Unary {
-                        operation: InputUnary::Temporary,
-                        child: input,
-                    },
-                )
-            }
-            other => DeclarationInput::Unary {
-                operation: InputUnary::Temporary,
+            DeclInput::Request(DeclInputRequest::ForType { ty, input }) => DeclInput::for_type(
+                *ty,
+                DeclInput::Unary {
+                    operation: DeclInputUnary::Temporary,
+                    child: input,
+                },
+            ),
+            other => DeclInput::Unary {
+                operation: DeclInputUnary::Temporary,
                 child: Box::new(other),
             },
         }
     }
     /// Add a constructor alternative to this conversion tree.
     pub fn variant(self, name: impl Into<String>) -> Self {
-        self.add_alternative(DeclarationInput::call(name))
+        self.add_alternative(DeclInput::call(name))
     }
     /// Add a direct codec alternative, bypassing this type's expansion default.
     pub fn variant_self(self) -> Self {
-        self.add_alternative(DeclarationInput::Leaf(InputLeafOp::Value))
+        self.add_alternative(DeclInput::Leaf(DeclInputLeafOp::Value))
     }
     fn add_alternative(self, arm: Self) -> Self {
         match self {
-            DeclarationInput::Request(InputRequest::ForType { ty, input }) => {
-                DeclarationInput::for_type(*ty, input.add_alternative(arm))
+            DeclInput::Request(DeclInputRequest::ForType { ty, input }) => {
+                DeclInput::for_type(*ty, input.add_alternative(arm))
             }
-            DeclarationInput::Branch {
-                operation: InputBranch::Selector,
+            DeclInput::Branch {
+                operation: DeclInputBranch::Selector,
                 children: mut arms,
             } => {
                 arms.push(arm);
-                DeclarationInput::Branch {
-                    operation: InputBranch::Selector,
+                DeclInput::Branch {
+                    operation: DeclInputBranch::Selector,
                     children: arms,
                 }
             }
-            other => DeclarationInput::Branch {
-                operation: InputBranch::Selector,
+            other => DeclInput::Branch {
+                operation: DeclInputBranch::Selector,
                 children: vec![other, arm],
             },
         }
     }
 }
-impl<P, Q> DeclarationInput<P, Q> {
+impl<InRequest, OutRequest> DeclInput<InRequest, OutRequest> {
     /// Group this explicit expansion into a bulk carrier.
     pub fn bulk(self) -> Self {
-        DeclarationInput::Unary {
-            operation: InputUnary::Bulk,
+        DeclInput::Unary {
+            operation: DeclInputUnary::Bulk,
             child: Box::new(self),
         }
     }
@@ -240,9 +238,9 @@ impl<P, Q> DeclarationInput<P, Q> {
     ///
     /// `fields` holds one recipe per field of the source record, in declaration
     /// order. Binding verifies the count against the record.
-    pub fn fields(fields: impl IntoIterator<Item = DeclarationInput<P, Q>>) -> Self {
-        DeclarationInput::Branch {
-            operation: InputBranch::Fields,
+    pub fn fields(fields: impl IntoIterator<Item = DeclInput<InRequest, OutRequest>>) -> Self {
+        DeclInput::Branch {
+            operation: DeclInputBranch::Fields,
             children: fields.into_iter().collect(),
         }
     }
@@ -258,10 +256,10 @@ impl<P, Q> DeclarationInput<P, Q> {
     /// * `args` — one recipe per parameter of that function, in order.
     pub fn constructor(
         name: impl Into<String>,
-        args: impl IntoIterator<Item = DeclarationInput<P, Q>>,
+        args: impl IntoIterator<Item = DeclInput<InRequest, OutRequest>>,
     ) -> Self {
-        DeclarationInput::Branch {
-            operation: InputBranch::Constructor {
+        DeclInput::Branch {
+            operation: DeclInputBranch::Constructor {
                 function: name.into(),
             },
             children: args.into_iter().collect(),
@@ -275,20 +273,20 @@ impl<P, Q> DeclarationInput<P, Q> {
     ///
     /// Requires at least one arm. Each arm retains its own wires; this does not
     /// merge equivalent wire parameters or generate destination-language overloads.
-    pub fn selector(arms: impl IntoIterator<Item = DeclarationInput<P, Q>>) -> Self {
-        DeclarationInput::Branch {
-            operation: InputBranch::Selector,
+    pub fn selector(arms: impl IntoIterator<Item = DeclInput<InRequest, OutRequest>>) -> Self {
+        DeclInput::Branch {
+            operation: DeclInputBranch::Selector,
             children: arms.into_iter().collect(),
         }
     }
 }
 /// Source-dependent choices accepted only while preparing an output tree.
 #[derive(Clone, Debug)]
-pub enum OutputRequest {
+pub enum DeclOutputRequest {
     /// Select per-element delivery after resolving defaults and local expansion.
     SequenceCallback {
         /// Expansion whose outer sequence supplies callback elements.
-        output: Box<DeclarationOutput<OutputRequest, InputRequest>>,
+        output: Box<DeclOutput<DeclInputRequest, DeclOutputRequest>>,
         /// Allow structural decomposition of a default collection identity.
         structural: bool,
     },
@@ -296,7 +294,7 @@ pub enum OutputRequest {
     EnumFields(
         std::collections::BTreeMap<
             String,
-            std::collections::BTreeMap<String, DeclarationOutput<OutputRequest, InputRequest>>,
+            std::collections::BTreeMap<String, DeclOutput<DeclInputRequest, DeclOutputRequest>>,
         >,
     ),
     /// Resolve only the canonical value form, independently of boundary defaults.
@@ -305,7 +303,7 @@ pub enum OutputRequest {
         projection: Option<Projection>,
     },
     /// Select a local single-value conversion.
-    Conversion(Box<ConvertDecl>),
+    Conversion(Box<DeclConvert>),
     /// Select the configured output default for this source occurrence.
     Auto,
     /// Apply a type-specific override, including inside optional/sequence sources.
@@ -313,36 +311,38 @@ pub enum OutputRequest {
         /// Source type targeted by the override.
         ty: Box<Type>,
         /// Requested conversion for the matching type.
-        output: Box<DeclarationOutput<OutputRequest, InputRequest>>,
+        output: Box<DeclOutput<DeclInputRequest, DeclOutputRequest>>,
     },
     /// Resolve source record fields by name and fill unspecified conversions.
     NamedFields {
         /// Explicit conversions keyed by source field name.
         overrides:
-            std::collections::BTreeMap<String, DeclarationOutput<OutputRequest, InputRequest>>,
+            std::collections::BTreeMap<String, DeclOutput<DeclInputRequest, DeclOutputRequest>>,
         /// Ownership of field decomposition.
         mode: ProjectionMode,
     },
 }
 
-impl DeclarationOutput<OutputRequest, InputRequest> {
+impl DeclOutput<DeclInputRequest, DeclOutputRequest> {
     /// Expand an enum's tag and active fields using source variant/member keys.
     pub fn enum_fields<'a>(
         overrides: impl IntoIterator<Item = (&'a str, Vec<(&'a str, Self)>)>,
     ) -> Self {
-        DeclarationOutput::Request(OutputRequest::EnumFields(variants::overrides(overrides)))
+        DeclOutput::Request(DeclOutputRequest::EnumFields(variants::overrides(
+            overrides,
+        )))
     }
     /// Request the canonical value representation, bypassing boundary defaults.
     pub fn value() -> Self {
-        DeclarationOutput::Request(OutputRequest::Value { projection: None })
+        DeclOutput::Request(DeclOutputRequest::Value { projection: None })
     }
     /// Request this source type's configured output default during preparation.
     pub fn auto() -> Self {
-        DeclarationOutput::Request(OutputRequest::Auto)
+        DeclOutput::Request(DeclOutputRequest::Auto)
     }
     /// Associate a conversion with a source type for a default or nested override.
     pub fn for_type(ty: Type, output: Self) -> Self {
-        DeclarationOutput::Request(OutputRequest::ForType {
+        DeclOutput::Request(DeclOutputRequest::ForType {
             ty: Box::new(ty),
             output: Box::new(output),
         })
@@ -351,32 +351,32 @@ impl DeclarationOutput<OutputRequest, InputRequest> {
     pub fn view(self, view: impl Into<Self>) -> Self {
         let view = view.into();
         match self {
-            DeclarationOutput::Request(OutputRequest::ForType { ty, output }) => {
-                DeclarationOutput::for_type(*ty, output.view(view))
+            DeclOutput::Request(DeclOutputRequest::ForType { ty, output }) => {
+                DeclOutput::for_type(*ty, output.view(view))
             }
-            DeclarationOutput::Branch {
-                operation: OutputBranch::Combine,
+            DeclOutput::Branch {
+                operation: DeclOutputBranch::Combine,
                 children: mut parts,
             } => {
                 parts.push(view);
-                DeclarationOutput::Branch {
-                    operation: OutputBranch::Combine,
+                DeclOutput::Branch {
+                    operation: DeclOutputBranch::Combine,
                     children: parts,
                 }
             }
-            other => DeclarationOutput::Branch {
-                operation: OutputBranch::Combine,
+            other => DeclOutput::Branch {
+                operation: DeclOutputBranch::Combine,
                 children: vec![other, view],
             },
         }
     }
     /// Append a source getter whose result uses its registered conversion default.
     pub fn field(self, name: impl Into<String>) -> Self {
-        self.view(DeclarationOutput::getter(name, DeclarationOutput::auto()))
+        self.view(DeclOutput::getter(name, DeclOutput::auto()))
     }
     /// Append the direct codec representation, bypassing this type's expansion default.
     pub fn field_self(self) -> Self {
-        self.view(DeclarationOutput::Leaf(OutputLeafOp::Value))
+        self.view(DeclOutput::Leaf(DeclOutputLeafOp::Value))
     }
     /// Append an explicit borrowed projection.
     pub fn field_self_ref(self) -> Self {
@@ -388,30 +388,29 @@ impl DeclarationOutput<OutputRequest, InputRequest> {
     }
     /// Append a projection with explicit ownership and nested field policies.
     pub fn project_self(self, policy: Projection) -> Self {
-        self.view(DeclarationOutput::Leaf(OutputLeafOp::Projected(policy)))
+        self.view(DeclOutput::Leaf(DeclOutputLeafOp::Projected(policy)))
     }
     /// Append a consuming accessor followed by owned field decomposition.
     pub fn fields_into(self, view: Self) -> Self {
-        let DeclarationOutput::Unary {
-            operation: OutputUnary::Getter { function },
+        let DeclOutput::Unary {
+            operation: DeclOutputUnary::Getter { function },
             child: output,
         } = view
         else {
             panic!("fields_into requires a fields! accessor")
         };
-        let DeclarationOutput::Request(OutputRequest::NamedFields { overrides, .. }) = *output
-        else {
+        let DeclOutput::Request(DeclOutputRequest::NamedFields { overrides, .. }) = *output else {
             panic!("fields_into requires named fields")
         };
-        self.view(DeclarationOutput::Unary {
-            operation: OutputUnary::Into { function },
-            child: Box::new(DeclarationOutput::Request(OutputRequest::NamedFields {
+        self.view(DeclOutput::Unary {
+            operation: DeclOutputUnary::Into { function },
+            child: Box::new(DeclOutput::Request(DeclOutputRequest::NamedFields {
                 overrides,
                 mode: ProjectionMode::Owned,
             })),
         })
     }
-    /// Deprecated spelling of [`DeclarationOutput::fields_into`].
+    /// Deprecated spelling of [`DeclOutput::fields_into`].
     #[deprecated(note = "use fields_into instead")]
     pub fn fields_self_into(self, view: Self) -> Self {
         self.fields_into(view)
@@ -419,24 +418,24 @@ impl DeclarationOutput<OutputRequest, InputRequest> {
     /// Override one named source field, preserving defaults for its siblings.
     pub fn field_override(mut self, name: impl Into<String>, output: Self) -> Self {
         match &mut self {
-            DeclarationOutput::Request(OutputRequest::NamedFields { overrides, .. }) => {
+            DeclOutput::Request(DeclOutputRequest::NamedFields { overrides, .. }) => {
                 assert!(
                     overrides.insert(name.into(), output).is_none(),
                     "duplicate field override"
                 );
             }
-            DeclarationOutput::Unary {
-                operation: OutputUnary::Getter { .. },
+            DeclOutput::Unary {
+                operation: DeclOutputUnary::Getter { .. },
                 child: inner,
                 ..
             }
-            | DeclarationOutput::Unary {
-                operation: OutputUnary::Into { .. },
+            | DeclOutput::Unary {
+                operation: DeclOutputUnary::Into { .. },
                 child: inner,
                 ..
             }
-            | DeclarationOutput::Request(OutputRequest::ForType { output: inner, .. }) => {
-                let old = std::mem::replace(inner, Box::new(DeclarationOutput::auto()));
+            | DeclOutput::Request(DeclOutputRequest::ForType { output: inner, .. }) => {
+                let old = std::mem::replace(inner, Box::new(DeclOutput::auto()));
                 **inner = old.field_override(name, output);
             }
             _ => panic!("field override requires named field decomposition"),
@@ -444,20 +443,20 @@ impl DeclarationOutput<OutputRequest, InputRequest> {
         self
     }
 }
-impl<P, Q> DeclarationOutput<P, Q> {
+impl<InRequest, OutRequest> DeclOutput<InRequest, OutRequest> {
     /// Group this explicit expansion into a bulk carrier.
     pub fn bulk(self) -> Self {
-        DeclarationOutput::Unary {
-            operation: OutputUnary::Bulk,
+        DeclOutput::Unary {
+            operation: DeclOutputUnary::Bulk,
             child: Box::new(self),
         }
     }
     /// Observe record fields in declaration order; use an empty list for unit.
     ///
     /// `fields` holds one recipe per field of the source record, in declaration order.
-    pub fn fields(fields: impl IntoIterator<Item = DeclarationOutput<P, Q>>) -> Self {
-        DeclarationOutput::Branch {
-            operation: OutputBranch::Fields,
+    pub fn fields(fields: impl IntoIterator<Item = DeclOutput<InRequest, OutRequest>>) -> Self {
+        DeclOutput::Branch {
+            operation: DeclOutputBranch::Fields,
             children: fields.into_iter().collect(),
         }
     }
@@ -471,9 +470,9 @@ impl<P, Q> DeclarationOutput<P, Q> {
     ///
     /// * `name` — unqualified name of the source getter.
     /// * `output` — recipe for the getter's result.
-    pub fn getter(name: impl Into<String>, output: DeclarationOutput<P, Q>) -> Self {
-        DeclarationOutput::Unary {
-            operation: OutputUnary::Getter {
+    pub fn getter(name: impl Into<String>, output: DeclOutput<InRequest, OutRequest>) -> Self {
+        DeclOutput::Unary {
+            operation: DeclOutputUnary::Getter {
                 function: name.into(),
             },
             child: Box::new(output),
@@ -485,9 +484,9 @@ impl<P, Q> DeclarationOutput<P, Q> {
     /// order. Binding rejects an empty list or more than one consuming part. The
     /// framework uses [`Codec::output_consumes`] to order observations before a move,
     /// unless [`Codec::output_owner`] first retains the final output allocation.
-    pub fn combine(parts: impl IntoIterator<Item = DeclarationOutput<P, Q>>) -> Self {
-        DeclarationOutput::Branch {
-            operation: OutputBranch::Combine,
+    pub fn combine(parts: impl IntoIterator<Item = DeclOutput<InRequest, OutRequest>>) -> Self {
+        DeclOutput::Branch {
+            operation: DeclOutputBranch::Combine,
             children: parts.into_iter().collect(),
         }
     }
@@ -498,7 +497,7 @@ mod codec;
 #[macro_use]
 mod test_codec;
 mod compilation;
-pub use codec::{prepare_mapped_source_error, Codec, DeclarationCodec};
+pub use codec::{prepare_mapped_source_error, Codec, DeclCodec};
 mod operations;
 pub use operations::*;
 
@@ -511,20 +510,21 @@ pub use operations::*;
 ///
 /// Output conversion data cannot be attached to an input position:
 /// ```compile_fail
-/// use prebindgen_declarations::Bindings;
-/// fn swap(flat: &mut Bindings<syn::Type>) {
+/// use prebindgen_declarations::PlanBindings;
+/// fn swap(flat: &mut PlanBindings<syn::Type>) {
 ///     let function = flat.function_mut("foo").unwrap();
 ///     function.params[0].ty.slot = function.ret.slot.clone();
 /// }
 /// ```
 /// Nor can a recipe be stored in a slot:
 /// ```compile_fail
-/// use prebindgen_declarations::{Bindings, DeclarationInput};
-/// fn configure(flat: &mut Bindings<syn::Type>) {
-///     flat.function_mut("foo").unwrap().params[0].ty.slot = Some(DeclarationInput::Leaf(prebindgen_declarations::frontend::InputLeafOp::Value));
+/// use prebindgen_declarations::{PlanBindings, DeclInput};
+/// fn configure(flat: &mut PlanBindings<syn::Type>) {
+///     flat.function_mut("foo").unwrap().params[0].ty.slot = Some(DeclInput::Leaf(prebindgen_declarations::frontend::DeclInputLeafOp::Value));
 /// }
 /// ```
-pub type Bindings<W, C = (), N = (), B = ()> = Flat<prebindgen_conversions::PlanSchema<W, C, N, B>>;
+pub type PlanBindings<Wire, Context = (), Chain = (), Branch = ()> =
+    Flat<prebindgen_conversions::PlanSchema<Wire, Context, Chain, Branch>>;
 
 /// Compile a request-free description for one named source parameter.
 /// The model keeps its fixed schema; this returns a converter without modifying its slot.
@@ -536,10 +536,10 @@ pub type Bindings<W, C = (), N = (), B = ()> = Flat<prebindgen_conversions::Plan
 /// }
 /// ```
 /// ```compile_fail
-/// use prebindgen_declarations::{compile_input,Codec,DeclarationInput};
+/// use prebindgen_declarations::{compile_input,Codec,DeclInput};
 /// use prebindgen_flat::Flat;
 /// fn pending<C:Codec>(flat:&Flat<C::Schema>,codec:&C,extra:&C::Extra) {
-///     compile_input(flat,codec,"f","x",&DeclarationInput::auto(),extra).unwrap();
+///     compile_input(flat,codec,"f","x",&DeclInput::auto(),extra).unwrap();
 /// }
 /// ```
 pub fn compile_input<C: Codec>(
@@ -576,10 +576,10 @@ pub fn compile_input<C: Codec>(
 /// }
 /// ```
 /// ```compile_fail
-/// use prebindgen_declarations::{compile_output,Codec,DeclarationOutput};
+/// use prebindgen_declarations::{compile_output,Codec,DeclOutput};
 /// use prebindgen_flat::Flat;
 /// fn pending<C:Codec>(flat:&Flat<C::Schema>,codec:&C,extra:&C::Extra) {
-///     compile_output(flat,codec,"f",&DeclarationOutput::auto(),extra).unwrap();
+///     compile_output(flat,codec,"f",&DeclOutput::auto(),extra).unwrap();
 /// }
 /// ```
 pub fn compile_output<C: Codec>(
@@ -721,18 +721,18 @@ fn compile_output_at<C: Codec>(
 ///
 /// Input binding rejects output recipes:
 /// ```compile_fail
-/// use prebindgen_declarations::{bind_input, DeclarationCodec, DeclarationOutput};
+/// use prebindgen_declarations::{bind_input, DeclCodec, DeclOutput};
 /// use prebindgen_flat::Flat;
-/// fn wrong<C: DeclarationCodec>(flat: &mut Flat<C::Schema>, codec: &C, extra: &C::Extra) {
-///     bind_input(flat, codec, "foo", "x", &DeclarationOutput::value(), extra).unwrap();
+/// fn wrong<C: DeclCodec>(flat: &mut Flat<C::Schema>, codec: &C, extra: &C::Extra) {
+///     bind_input(flat, codec, "foo", "x", &DeclOutput::value(), extra).unwrap();
 /// }
 /// ```
-pub fn bind_input<C: DeclarationCodec>(
+pub fn bind_input<C: DeclCodec>(
     flat: &mut Flat<C::Schema>,
     codec: &C,
     function: &str,
     parameter: &str,
-    recipe: &DeclarationInput<InputRequest, OutputRequest>,
+    recipe: &DeclInput<DeclInputRequest, DeclOutputRequest>,
     extra: &C::Extra,
 ) -> Result<()> {
     let f = flat.function(function)?;
@@ -741,7 +741,7 @@ pub fn bind_input<C: DeclarationCodec>(
         .iter()
         .position(|p| p.name == parameter)
         .ok_or_else(|| format!("`{function}`: unknown parameter `{parameter}`"))?;
-    let defaults = Declarations::new(flat, vec![], vec![], vec![])?;
+    let defaults = DeclDefaults::new(flat, vec![], vec![], vec![])?;
     let recipe = defaults.resolve_input(flat, codec, &f.params[index].ty.ty, recipe, extra)?;
     let conversion = compile_input(flat, codec, function, parameter, &recipe, extra)?;
     flat.function_mut(function)?.params[index].ty.slot = Some(conversion);
@@ -753,7 +753,7 @@ pub fn bind_input<C: DeclarationCodec>(
 /// Uses the same construction and failure rules as [`bind_input`]. Output code
 /// uses [`prebindgen_conversions::source_result_expr`] for the source call's result local.
 /// The recipe is checked for compatible types and signatures, and for repeated
-/// consumption of the same value. Unit results use `DeclarationOutput::fields([])`.
+/// consumption of the same value. Unit results use `DeclOutput::fields([])`.
 ///
 /// # Arguments
 ///
@@ -766,20 +766,20 @@ pub fn bind_input<C: DeclarationCodec>(
 ///
 /// Output binding rejects input recipes:
 /// ```compile_fail
-/// use prebindgen_declarations::{bind_output, DeclarationCodec, DeclarationInput};
+/// use prebindgen_declarations::{bind_output, DeclCodec, DeclInput};
 /// use prebindgen_flat::Flat;
-/// fn wrong<C: DeclarationCodec>(flat: &mut Flat<C::Schema>, codec: &C, extra: &C::Extra) {
-///     bind_output(flat, codec, "foo", &DeclarationInput::value(), extra).unwrap();
+/// fn wrong<C: DeclCodec>(flat: &mut Flat<C::Schema>, codec: &C, extra: &C::Extra) {
+///     bind_output(flat, codec, "foo", &DeclInput::value(), extra).unwrap();
 /// }
 /// ```
-pub fn bind_output<C: DeclarationCodec>(
+pub fn bind_output<C: DeclCodec>(
     flat: &mut Flat<C::Schema>,
     codec: &C,
     function: &str,
-    recipe: &DeclarationOutput<OutputRequest, InputRequest>,
+    recipe: &DeclOutput<DeclInputRequest, DeclOutputRequest>,
     extra: &C::Extra,
 ) -> Result<()> {
-    let defaults = Declarations::new(flat, vec![], vec![], vec![])?;
+    let defaults = DeclDefaults::new(flat, vec![], vec![], vec![])?;
     let recipe =
         defaults.resolve_output(flat, codec, &flat.function(function)?.ret.ty, recipe, extra)?;
     let conversion = compile_output(flat, codec, function, &recipe, extra)?;
@@ -789,7 +789,7 @@ pub fn bind_output<C: DeclarationCodec>(
 
 fn finalize_output_schema<C: Codec>(
     codec: &C,
-    plan: &mut CodecOutput<C>,
+    plan: &mut CodecOutputPlan<C>,
     extra: &C::Extra,
 ) -> Result<()> {
     if let Some(error) = codec.binding_failure_layout(extra)? {
@@ -834,7 +834,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
         recipe: &ResolvedInput<C>,
         extra: &C::Extra,
         active: &Condition,
-    ) -> Result<CodecInput<C>> {
+    ) -> Result<CodecInputPlan<C>> {
         self.input_named(ty, recipe, extra, active, None)
     }
     pub fn input_named(
@@ -844,7 +844,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
         extra: &C::Extra,
         active: &Condition,
         names: Option<(&syn::Ident, &syn::Ident)>,
-    ) -> Result<CodecInput<C>> {
+    ) -> Result<CodecInputPlan<C>> {
         self.codec
             .compile_input_tree(self, ty, recipe, extra, active, names)
     }
@@ -856,7 +856,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
         value: TokenStream,
         borrowed: bool,
         reference_return: bool,
-    ) -> Result<CodecOutput<C>> {
+    ) -> Result<CodecOutputPlan<C>> {
         self.codec
             .compile_output_root(self, ty, recipe, extra, value, borrowed, reference_return)
     }
@@ -867,7 +867,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
         extra: &C::Extra,
         value: TokenStream,
         borrowed: bool,
-    ) -> Result<CodecOutput<C>> {
+    ) -> Result<CodecOutputPlan<C>> {
         self.codec
             .compile_output_return(self, ty, recipe, extra, value, borrowed)
     }
@@ -878,7 +878,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
         extra: &C::Extra,
         value: TokenStream,
         borrowed: bool,
-    ) -> Result<CodecOutput<C>> {
+    ) -> Result<CodecOutputPlan<C>> {
         self.output_named(ty, recipe, extra, value, borrowed, None)
     }
     pub fn output_named(
@@ -889,17 +889,15 @@ impl<'a, C: Codec> Compiler<'a, C> {
         value: TokenStream,
         borrowed: bool,
         wire: Option<&syn::Ident>,
-    ) -> Result<CodecOutput<C>> {
+    ) -> Result<CodecOutputPlan<C>> {
         self.codec
             .compile_output_tree(self, ty, recipe, extra, value, borrowed, wire)
     }
 }
 /// Adapter-specific input operations stored in a resolved Flat.
-pub type ResolvedInput<C> =
-    InputNode<<C as Codec>::InputOperations, <C as Codec>::OutputOperations>;
+pub type ResolvedInput<C> = InputNode<<C as Codec>::InOps, <C as Codec>::OutOps>;
 /// Adapter-specific output operations stored in a resolved Flat.
-pub type ResolvedOutput<C> =
-    OutputNode<<C as Codec>::InputOperations, <C as Codec>::OutputOperations>;
+pub type ResolvedOutput<C> = OutputNode<<C as Codec>::InOps, <C as Codec>::OutOps>;
 fn mutable_reference(ty: &Type) -> bool {
     matches!(ty, Type::Reference(r) if r.mutability.is_some())
         || option_inner(ty).is_some_and(mutable_reference)
@@ -957,7 +955,7 @@ mod packet_tests;
 mod tests;
 
 pub mod declarations;
-pub use declarations::{CallbackReturn, Declarations, FunctionDecl};
+pub use declarations::{CallbackReturn, DeclDefaults, DeclFunction};
 
 /// Parse one Rust identifier used by a declaration.
 ///

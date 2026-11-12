@@ -1,8 +1,8 @@
 //! Interpretation of this adapter's resolved conversion operations.
 #![allow(missing_docs)]
 use super::operations::{
-    Input, InputBranch, InputLeafOp, InputOperations, InputParts, InputUnary, Output, OutputBranch,
-    OutputLeafOp, OutputOperations, OutputParts, OutputUnary,
+    CInput, CInputBranch, CInputLeafOp, CInputOps, CInputParts, CInputUnary, COutput,
+    COutputBranch, COutputLeafOp, COutputOps, COutputParts, COutputUnary,
 };
 use prebindgen_declarations::*;
 use prebindgen_flat::{Flat, Result};
@@ -10,24 +10,18 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use syn::Type;
 #[derive(Default)]
-pub struct State;
-pub(crate) struct LanguageCompiler<'a, 'b, C: Codec> {
+pub struct CCompileState;
+pub(crate) struct CCompiler<'a, 'b, C: Codec> {
     pub(crate) cx: &'a Compiler<'b, C>,
 }
-impl<'b, C: Codec> std::ops::Deref for LanguageCompiler<'_, 'b, C> {
+impl<'b, C: Codec> std::ops::Deref for CCompiler<'_, 'b, C> {
     type Target = Compiler<'b, C>;
     fn deref(&self) -> &Self::Target {
         self.cx
     }
 }
 trait Consumes {
-    fn consumes<
-        C: Codec<
-            InputOperations = InputOperations,
-            OutputOperations = OutputOperations,
-            CompileState = State,
-        >,
-    >(
+    fn consumes<C: Codec<InOps = CInputOps, OutOps = COutputOps, CompileState = CCompileState>>(
         &self,
         flat: &Flat<C::Schema>,
         ty: &Type,
@@ -36,14 +30,8 @@ trait Consumes {
         borrowed: bool,
     ) -> bool;
 }
-impl Consumes for Output {
-    fn consumes<
-        C: Codec<
-            InputOperations = InputOperations,
-            OutputOperations = OutputOperations,
-            CompileState = State,
-        >,
-    >(
+impl Consumes for COutput {
+    fn consumes<C: Codec<InOps = CInputOps, OutOps = COutputOps, CompileState = CCompileState>>(
         &self,
         flat: &prebindgen_flat::Flat<C::Schema>,
         ty: &Type,
@@ -52,8 +40,8 @@ impl Consumes for Output {
         borrowed: bool,
     ) -> bool {
         match self {
-            Output::Unary {
-                operation: OutputUnary::Convert { conversion, .. },
+            COutput::Unary {
+                operation: COutputUnary::Convert { conversion, .. },
                 ..
             } => match &conversion.source {
                 prebindgen_flat::ValueSource::Function(name) => {
@@ -65,47 +53,47 @@ impl Consumes for Output {
                 }
                 prebindgen_flat::ValueSource::Into { .. } => true,
             },
-            Output::Unary {
-                operation: OutputUnary::Sequence { mode, .. },
+            COutput::Unary {
+                operation: COutputUnary::Sequence { mode, .. },
                 ..
             } => match mode {
                 Some(mode) => *mode == ProjectionMode::Owned,
                 None => !borrowed && sequence_parts(ty).is_some_and(|(_, view)| view.is_owned()),
             },
-            Output::Unary {
-                operation: OutputUnary::Named { .. },
+            COutput::Unary {
+                operation: COutputUnary::Named { .. },
                 child,
                 ..
             } => child.consumes(flat, ty, extra, codec, borrowed),
-            Output::Unary {
-                operation: OutputUnary::Optional,
+            COutput::Unary {
+                operation: COutputUnary::Optional,
                 child,
             } => child.consumes(flat, option_inner(ty).unwrap_or(ty), extra, codec, borrowed),
-            Output::Leaf(OutputLeafOp::Value) => {
+            COutput::Leaf(COutputLeafOp::Value) => {
                 !borrowed && output_referent(ty).is_none() && codec.output_consumes(flat, ty, extra)
             }
-            Output::Leaf(OutputLeafOp::Projected(p)) => p.mode == ProjectionMode::Owned,
-            Output::Branch {
-                operation: OutputBranch::OwnedFields,
+            COutput::Leaf(COutputLeafOp::Projected(p)) => p.mode == ProjectionMode::Owned,
+            COutput::Branch {
+                operation: COutputBranch::OwnedFields,
                 children: _,
             }
-            | Output::Unary {
-                operation: OutputUnary::Into { .. },
+            | COutput::Unary {
+                operation: COutputUnary::Into { .. },
                 ..
             }
-            | Output::Unary {
-                operation: OutputUnary::Result { .. },
+            | COutput::Unary {
+                operation: COutputUnary::Result { .. },
                 ..
             } => true,
-            Output::Branch {
-                operation: OutputBranch::Enum { mode, .. },
+            COutput::Branch {
+                operation: COutputBranch::Enum { mode, .. },
                 ..
             } => mode.map_or(!borrowed && output_referent(ty).is_none(), |m| {
                 m == ProjectionMode::Owned
             }),
-            Output::Request(never) => match *never {},
-            Output::Branch {
-                operation: OutputBranch::Combine,
+            COutput::Request(never) => match *never {},
+            COutput::Branch {
+                operation: COutputBranch::Combine,
                 children: p,
             } => p
                 .iter()
@@ -114,37 +102,32 @@ impl Consumes for Output {
         }
     }
 }
-impl<
-        C: Codec<
-            InputOperations = InputOperations,
-            OutputOperations = OutputOperations,
-            CompileState = State,
-        >,
-    > LanguageCompiler<'_, '_, C>
+impl<C: Codec<InOps = CInputOps, OutOps = COutputOps, CompileState = CCompileState>>
+    CCompiler<'_, '_, C>
 {
     pub(crate) fn input_named(
         &self,
         ty: &Type,
-        recipe: &Input,
+        recipe: &CInput,
         extra: &C::Extra,
         active: &Condition,
         names: Option<(&syn::Ident, &syn::Ident)>,
-    ) -> Result<CodecInput<C>> {
+    ) -> Result<CodecInputPlan<C>> {
         self.input_unprepared_named(ty, recipe, extra, active, names)
     }
 
     pub(crate) fn input_unprepared_named(
         &self,
         ty: &Type,
-        recipe: &Input,
+        recipe: &CInput,
         extra: &C::Extra,
         active: &Condition,
         names: Option<(&syn::Ident, &syn::Ident)>,
-    ) -> Result<CodecInput<C>> {
+    ) -> Result<CodecInputPlan<C>> {
         if prebindgen_flat::callback_signature(ty)?.is_some()
             && !matches!(
                 recipe,
-                Input::Leaf(InputLeafOp::Value) | Input::Arrow { .. }
+                CInput::Leaf(CInputLeafOp::Value) | CInput::Arrow { .. }
             )
         {
             return Err("source callback parameters only support leaf inputs".into());
@@ -153,13 +136,13 @@ impl<
             .map(|(_, var)| var.clone())
             .unwrap_or_else(|| self.name());
         match recipe {
-            Input::None => self.cx.input_unit(ty),
-            Input::Branch {
-                operation: InputBranch::Variant,
+            CInput::None => self.cx.input_unit(ty),
+            CInput::Branch {
+                operation: CInputBranch::Variant,
                 ..
             } => Err("variant branch requires an enum parent".into()),
-            Input::Branch {
-                operation: InputBranch::Enum { value },
+            CInput::Branch {
+                operation: CInputBranch::Enum { value },
                 children: variants,
             } => self.cx.enum_input(
                 ty,
@@ -172,15 +155,15 @@ impl<
                 active,
                 names,
             ),
-            Input::Unary {
-                operation: InputUnary::Convert { conversion },
+            CInput::Unary {
+                operation: CInputUnary::Convert { conversion },
                 child: input,
             } => self.input_conversion(ty, conversion, input, extra, active, names),
-            Input::Unary {
-                operation: InputUnary::Temporary,
+            CInput::Unary {
+                operation: CInputUnary::Temporary,
                 child: inner,
             } => self.cx.input_temporary(ty, extra, active, names, inner),
-            Input::Arrow {
+            CInput::Arrow {
                 operation: callback,
                 domain,
                 codomain,
@@ -204,17 +187,17 @@ impl<
                     active,
                 })
             }
-            Input::Unary {
-                operation: InputUnary::Sequence,
+            CInput::Unary {
+                operation: CInputUnary::Sequence,
                 child: element_recipe,
             } => self
                 .cx
                 .input_sequence(ty, element_recipe, extra, active, names, var, false),
-            Input::Unary {
-                operation: InputUnary::Optional,
+            CInput::Unary {
+                operation: CInputUnary::Optional,
                 child: inner,
             } => self.cx.input_optional(ty, extra, active, names, var, inner),
-            Input::Leaf(InputLeafOp::Value) => {
+            CInput::Leaf(CInputLeafOp::Value) => {
                 let w = names
                     .map(|(wire, _)| wire.clone())
                     .unwrap_or_else(|| self.name());
@@ -230,21 +213,21 @@ impl<
                     role: self.input_role.get(),
                 })
             }
-            Input::Request(never) => match *never {},
-            Input::Branch {
-                operation: InputBranch::Fields,
+            CInput::Request(never) => match *never {},
+            CInput::Branch {
+                operation: CInputBranch::Fields,
                 children,
             } => self
                 .cx
                 .input_fields(ty, extra, active, names, var, children, false),
-            Input::Branch {
-                operation: InputBranch::Constructor { function },
+            CInput::Branch {
+                operation: CInputBranch::Constructor { function },
                 children: args,
             } => self
                 .cx
                 .input_constructor(ty, extra, active, var, function, args),
-            Input::Branch {
-                operation: InputBranch::Selector,
+            CInput::Branch {
+                operation: CInputBranch::Selector,
                 children: arms,
             } => self.cx.input_selector(ty, extra, active, var, arms),
         }
@@ -253,14 +236,14 @@ impl<
     pub(crate) fn output_root(
         &self,
         ty: &Type,
-        recipe: &Output,
+        recipe: &COutput,
         extra: &C::Extra,
         value: TokenStream,
         borrowed: bool,
         reference_return: bool,
-    ) -> Result<CodecOutput<C>> {
-        if let Output::Unary {
-            operation: OutputUnary::Result { error },
+    ) -> Result<CodecOutputPlan<C>> {
+        if let COutput::Unary {
+            operation: COutputUnary::Result { error },
             child: ok,
         } = recipe
         {
@@ -279,22 +262,23 @@ impl<
     pub(crate) fn output_return(
         &self,
         ty: &Type,
-        recipe: &Output,
+        recipe: &COutput,
         extra: &C::Extra,
         value: TokenStream,
         borrowed: bool,
-    ) -> Result<CodecOutput<C>> {
+    ) -> Result<CodecOutputPlan<C>> {
         if !borrowed {
             if matches!(ty, Type::Reference(_)) {
-                if let Output::Branch {
-                    operation: OutputBranch::Combine,
+                if let COutput::Branch {
+                    operation: COutputBranch::Combine,
                     children: parts,
                 } = recipe
                 {
                     return self.cx.output_reference_views(ty, parts, extra, value);
                 }
             }
-            if let (Type::Reference(reference), Output::Leaf(OutputLeafOp::Value)) = (ty, recipe) {
+            if let (Type::Reference(reference), COutput::Leaf(COutputLeafOp::Value)) = (ty, recipe)
+            {
                 let wire = self.name();
                 if let Some(plan) = self.codec.output_return_reference(
                     self.flat,
@@ -309,8 +293,8 @@ impl<
             }
             if let (
                 Some(payload_ty),
-                Output::Unary {
-                    operation: OutputUnary::Optional,
+                COutput::Unary {
+                    operation: COutputUnary::Optional,
                     child: inner,
                 },
             ) = (option_inner(ty), recipe)
@@ -327,24 +311,24 @@ impl<
     fn output(
         &self,
         ty: &Type,
-        recipe: &Output,
+        recipe: &COutput,
         extra: &C::Extra,
         value: TokenStream,
         borrowed: bool,
-    ) -> Result<CodecOutput<C>> {
+    ) -> Result<CodecOutputPlan<C>> {
         self.output_named(ty, recipe, extra, value, borrowed, None)
     }
     pub(crate) fn output_named(
         &self,
         ty: &Type,
-        recipe: &Output,
+        recipe: &COutput,
         extra: &C::Extra,
         value: TokenStream,
         borrowed: bool,
         wire_name: Option<&syn::Ident>,
-    ) -> Result<CodecOutput<C>> {
+    ) -> Result<CodecOutputPlan<C>> {
         if let Some(referent) = output_referent(ty) {
-            if matches ! (recipe , Output :: Leaf (OutputLeafOp :: Projected (p)) if p . mode == ProjectionMode :: Owned)
+            if matches ! (recipe , COutput :: Leaf (COutputLeafOp :: Projected (p)) if p . mode == ProjectionMode :: Owned)
             {
                 return Err("owned projection cannot consume a reference payload".into());
             }
@@ -357,21 +341,21 @@ impl<
         }
         let mut out = self.cx.empty_output()?;
         match recipe {
-            Output::Unary {
-                operation: OutputUnary::CallbackArgument { .. },
+            COutput::Unary {
+                operation: COutputUnary::CallbackArgument { .. },
                 ..
             } => return Err("callback argument ownership requires an arrow domain".into()),
-            Output::None => {
+            COutput::None => {
                 return self.cx.output_unit(ty, out);
             }
-            Output::Arrow { operation, .. } => match *operation {},
-            Output::Branch {
-                operation: OutputBranch::Variant | OutputBranch::Arguments,
+            COutput::Arrow { operation, .. } => match *operation {},
+            COutput::Branch {
+                operation: COutputBranch::Variant | COutputBranch::Arguments,
                 ..
             } => return Err("variant/argument branch requires its parent operation".into()),
-            Output::Branch {
+            COutput::Branch {
                 operation:
-                    OutputBranch::Enum {
+                    COutputBranch::Enum {
                         value: grouped,
                         mode,
                     },
@@ -391,49 +375,49 @@ impl<
                     wire_name,
                 );
             }
-            Output::Unary {
-                operation: OutputUnary::Convert { conversion },
+            COutput::Unary {
+                operation: COutputUnary::Convert { conversion },
                 child: output,
             } => return self.output_conversion(ty, conversion, output, extra, value, borrowed),
-            Output::Leaf(OutputLeafOp::Discard) => return Ok(out),
-            Output::Unary {
-                operation: OutputUnary::Named { name },
+            COutput::Leaf(COutputLeafOp::Discard) => return Ok(out),
+            COutput::Unary {
+                operation: COutputUnary::Named { name },
                 child: output,
             } => {
                 return self
                     .cx
                     .output_named_view(ty, extra, value, borrowed, wire_name, name, output);
             }
-            Output::Unary {
-                operation: OutputUnary::Sequence { delivery, mode },
+            COutput::Unary {
+                operation: COutputUnary::Sequence { delivery, mode },
                 child: element,
             } => {
                 return self
                     .cx
                     .output_sequence(ty, element, extra, value, borrowed, delivery, mode, false);
             }
-            Output::Unary {
-                operation: OutputUnary::Result { .. },
+            COutput::Unary {
+                operation: COutputUnary::Result { .. },
                 ..
             } => {
                 return Err("Result error routing is supported only at the outermost return".into())
             }
-            Output::Unary {
-                operation: OutputUnary::Optional,
+            COutput::Unary {
+                operation: COutputUnary::Optional,
                 child: inner,
             } => {
                 return self
                     .cx
                     .output_optional(ty, extra, value, borrowed, wire_name, inner);
             }
-            Output::Request(never) => match *never {},
-            Output::Leaf(OutputLeafOp::Value) => {
+            COutput::Request(never) => match *never {},
+            COutput::Leaf(COutputLeafOp::Value) => {
                 let representation = Representation::Ordinary;
                 return self
                     .cx
                     .output_value(ty, extra, value, borrowed, wire_name, representation);
             }
-            Output::Leaf(OutputLeafOp::Projected(projection)) => {
+            COutput::Leaf(COutputLeafOp::Projected(projection)) => {
                 let representation = Representation::Ordinary;
                 return self.cx.output_projection(
                     ty,
@@ -445,12 +429,12 @@ impl<
                     representation,
                 );
             }
-            Output::Branch {
-                operation: OutputBranch::Fields,
+            COutput::Branch {
+                operation: COutputBranch::Fields,
                 children,
             }
-            | Output::Branch {
-                operation: OutputBranch::OwnedFields,
+            | COutput::Branch {
+                operation: COutputBranch::OwnedFields,
                 children,
             } => {
                 return self.cx.output_fields(
@@ -463,8 +447,8 @@ impl<
                     false,
                     matches!(
                         recipe,
-                        Output::Branch {
-                            operation: OutputBranch::OwnedFields,
+                        COutput::Branch {
+                            operation: COutputBranch::OwnedFields,
                             ..
                         }
                     ),
@@ -472,18 +456,18 @@ impl<
                     out,
                 );
             }
-            Output::Unary {
-                operation: OutputUnary::Getter { function },
+            COutput::Unary {
+                operation: COutputUnary::Getter { function },
                 child: output,
             }
-            | Output::Unary {
-                operation: OutputUnary::Into { function },
+            | COutput::Unary {
+                operation: COutputUnary::Into { function },
                 child: output,
             } => {
                 let consuming = matches!(
                     recipe,
-                    Output::Unary {
-                        operation: OutputUnary::Into { .. },
+                    COutput::Unary {
+                        operation: COutputUnary::Into { .. },
                         ..
                     }
                 );
@@ -491,8 +475,8 @@ impl<
                     .cx
                     .output_getter(ty, extra, value, borrowed, function, output, consuming, out);
             }
-            Output::Branch {
-                operation: OutputBranch::Combine,
+            COutput::Branch {
+                operation: COutputBranch::Combine,
                 children: parts,
             } => {
                 if parts.is_empty() {
@@ -538,14 +522,14 @@ impl<
     fn output_owner_views(
         &self,
         ty: &Type,
-        parts: &[Output],
+        parts: &[COutput],
         extra: &C::Extra,
         value: TokenStream,
-    ) -> Result<Option<CodecOutput<C>>> {
+    ) -> Result<Option<CodecOutputPlan<C>>> {
         let owner = parts.iter().position(|part| {
             matches!(part,
-            Output::Leaf(OutputLeafOp::Projected(p)) if p.mode == ProjectionMode::Owned && p.fields.is_empty())
-                || matches!(part, Output::Leaf(OutputLeafOp::Value)) && self.codec.output_consumes(self.flat, ty, extra)
+            COutput::Leaf(COutputLeafOp::Projected(p)) if p.mode == ProjectionMode::Owned && p.fields.is_empty())
+                || matches!(part, COutput::Leaf(COutputLeafOp::Value)) && self.codec.output_consumes(self.flat, ty, extra)
         });
         let Some(owner) = owner else {
             return Ok(None);
@@ -557,15 +541,15 @@ impl<
         // do not require an address-preserving loan from the delivered owner.
         if parts
             .iter()
-            .any(|part| matches!(part,Output::Leaf(OutputLeafOp::Projected(p)) if p.mode==ProjectionMode::Borrowed))
+            .any(|part| matches!(part,COutput::Leaf(COutputLeafOp::Projected(p)) if p.mode==ProjectionMode::Borrowed))
         {
             return Ok(None);
         }
         let views = parts
             .iter()
             .map(|part| match part {
-                Output::Unary {
-                    operation: OutputUnary::Getter { function },
+                COutput::Unary {
+                    operation: COutputUnary::Getter { function },
                     child,
                 } => Some((function.as_str(), child.as_ref())),
                 _ => None,

@@ -37,13 +37,15 @@ pub(crate) fn nodes<I: KotlinInputConversion, O: KotlinOutputConversion>(
 }
 
 /// Metadata schema for a Kotlin/JNI binding model.
-/// `I` and `O` select occurrence converter types while declaration metadata keeps
+/// `InConverter` and `OutConverter` select occurrence converter types while declaration metadata keeps
 /// the JNI representation. Defaults also accept custom converters through their
 /// owned containers. No schema value is needed to construct Flat.
-pub struct JniSchema<I = JniInput, O = JniOutput>(std::marker::PhantomData<fn() -> (I, O)>);
-impl<I, O> prebindgen_flat::Schema for JniSchema<I, O> {
-    type Input = I;
-    type Output = O;
+pub struct JniSchema<InConverter = JniInputConverter, OutConverter = JniOutputConverter>(
+    std::marker::PhantomData<fn() -> (InConverter, OutConverter)>,
+);
+impl<InConverter, OutConverter> prebindgen_flat::Schema for JniSchema<InConverter, OutConverter> {
+    type Input = InConverter;
+    type Output = OutConverter;
     type Module = JniModule;
     type Function = Option<JniFunction>;
     type Type = JniType;
@@ -58,9 +60,9 @@ pub struct JniModule {
     /// Kotlin initialization statements in JNINative.
     pub native_init: String,
     /// Prepared callback declarations, including interfaces unused by exported functions.
-    pub callbacks: Vec<JniInput>,
+    pub callbacks: Vec<JniInputConverter>,
     /// Resolved standalone callback roots, consumed when plans are compiled.
-    pub callback_recipes: Vec<crate::operations::Input>,
+    pub callback_recipes: Vec<crate::operations::JniInput>,
     /// Use bulk for materialized collection outputs with automatic transport.
     pub bulk_collection_outputs: bool,
 }

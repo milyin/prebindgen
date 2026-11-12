@@ -5,28 +5,29 @@
 //! Declaration processing fills occurrence slots before wrappers are generated.
 #![warn(missing_docs)]
 use prebindgen_declarations::{
-    frontend::InputBranch, frontend::InputLeafOp, frontend::OutputBranch, frontend::OutputLeafOp,
+    frontend::DeclInputBranch, frontend::DeclInputLeafOp, frontend::DeclOutputBranch,
+    frontend::DeclOutputLeafOp,
 };
 #[cfg(test)]
-use prebindgen_declarations::{frontend::InputUnary, frontend::OutputUnary};
+use prebindgen_declarations::{frontend::DeclInputUnary, frontend::DeclOutputUnary};
 use prebindgen_flat::{type_key, Conversion, Flat, OutputConversion, Result, WireKind};
 
 pub use prebindgen_declarations::{
-    callback, convert, from, into, try_from, try_into, CallbackDecl, ConvertDecl, ConvertSource,
-    Projection, ProjectionMode,
+    callback, convert, from, into, try_from, try_into, DeclCallback, DeclConvert,
+    DeclConvertSource, Projection, ProjectionMode,
 };
 mod bulk;
 mod metadata;
-pub use bulk::BulkRecord;
+pub use bulk::JniBulkRecord;
 pub use metadata::{JniFunction, JniModule, JniSchema, JniType};
 mod data;
 mod enums;
 mod sealed;
 mod selected;
-pub use sealed::SealedClassDecl;
+pub use sealed::DeclJniSealedClass;
 #[cfg(test)]
 mod payload_tests;
-pub use enums::{EnumClassDecl, JniEnum};
+pub use enums::{DeclJniEnumClass, JniEnum};
 mod callback;
 mod callback_rows;
 #[cfg(test)]
@@ -41,7 +42,7 @@ pub use optional::JniNiche;
 mod group;
 mod returns;
 mod scalar;
-pub use data::{ClassDecl, DataClassDecl, DataGroup, JniField};
+pub use data::{DeclJniClass, DeclJniDataClass, JniDataGroup, JniField};
 pub use group::{JniBranch, JniChain, JniGroup, JniOptional};
 use prebindgen_conversions::boxed::BoxedWire;
 use prebindgen_conversions::value::Value;
@@ -62,12 +63,12 @@ mod handles;
 mod names;
 mod parameter_names;
 pub use emission::JniContext;
-type InputPlan<W> =
-    prebindgen_conversions::InputPlan<W, JniContext, crate::JniChain, crate::JniBranch>;
-type OutputPlan<W> =
-    prebindgen_conversions::OutputPlan<W, JniContext, crate::JniChain, crate::JniBranch>;
+type JniInputPlan<Wire> =
+    prebindgen_conversions::InputPlan<Wire, JniContext, crate::JniChain, crate::JniBranch>;
+type JniOutputPlan<Wire> =
+    prebindgen_conversions::OutputPlan<Wire, JniContext, crate::JniChain, crate::JniBranch>;
 mod converters;
-pub use converters::{JniInput, JniOutput};
+pub use converters::{JniInputConverter, JniOutputConverter};
 mod kotlin;
 pub use kotlin::{
     JniReturnDelivery, KotlinBinding, KotlinClass, KotlinContext, KotlinHandleInput, KotlinInput,
@@ -75,7 +76,7 @@ pub use kotlin::{
 };
 /// Flat source model with JNI conversion data for wrapper emission.
 ///
-/// Defaults retain [`JniInput`] and [`JniOutput`] containers. Their `new`
+/// Defaults retain [`JniInputConverter`] and [`JniOutputConverter`] containers. Their `new`
 /// constructors accept independent implementations of the same conversion
 /// contracts, including per-function overrides in a builder's configure hook.
 /// `Flat<JniSchema<MyInput, MyOutput>>` also supports concrete occurrence types;
@@ -84,27 +85,28 @@ pub use kotlin::{
 /// Use [`JniCodec`] when binding conversions. Rust rejects a C codec because its
 /// wire type belongs to a different adapter:
 /// ```compile_fail
-/// use prebindgen_jni::Bindings;
-/// use prebindgen_declarations::{bind_input, DeclarationInput};
-/// fn wrong(flat: &mut Bindings) {
-///     bind_input(flat, &prebindgen_c::CCodec::raw(), "echo", "x", &DeclarationInput::Leaf(prebindgen_declarations::frontend::InputLeafOp::Value), &()).unwrap();
+/// use prebindgen_jni::JniBindings;
+/// use prebindgen_declarations::{bind_input, DeclInput};
+/// fn wrong(flat: &mut JniBindings) {
+///     bind_input(flat, &prebindgen_c::CCodec::raw(), "echo", "x", &DeclInput::Leaf(prebindgen_declarations::frontend::DeclInputLeafOp::Value), &()).unwrap();
 /// }
 /// ```
 /// A completed JNI model also cannot be passed to the C generator:
 /// ```compile_fail
-/// fn wrong(flat: prebindgen_jni::Bindings) {
+/// fn wrong(flat: prebindgen_jni::JniBindings) {
 ///     prebindgen_c::Cbindgen::new(flat);
 /// }
 /// ```
-pub type Bindings = Flat<JniSchema>;
+pub type JniBindings<InConverter = JniInputConverter, OutConverter = JniOutputConverter> =
+    Flat<JniSchema<InConverter, OutConverter>>;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use std::collections::{BTreeMap, BTreeSet};
 
 pub use prebindgen_declarations::{
-    expand_param, expand_return, fields, fun, DeclarationInput, DeclarationOutput, ErrorDecl,
-    ExpandDecl, ExpandParamDecl, ExpandReturnDecl, FieldsDecl, FunctionDecl, InputRequest,
-    OutputRequest,
+    expand_param, expand_return, fields, fun, DeclError, DeclExpand, DeclExpandParam,
+    DeclExpandReturn, DeclFields, DeclFunction, DeclInput, DeclInputRequest, DeclOutput,
+    DeclOutputRequest,
 };
 /// A Kotlin owning handle class for one nonzero-sized source type.
 ///
@@ -113,7 +115,7 @@ pub use prebindgen_declarations::{
 /// share or exclusively borrow the source value. Borrowed opaque outputs require
 /// an explicit owning-copy projection or a field expansion.
 #[derive(Clone)]
-pub struct PtrClassDecl {
+pub struct DeclJniPtrClass {
     /// Source type, resolved against the selected flat model.
     pub ty: syn::Type,
     /// Literal Kotlin class name; absent means the last segment of the source type.
@@ -121,7 +123,7 @@ pub struct PtrClassDecl {
     /// Release abandoned native allocations with a JVM Cleaner; disabled by default.
     pub gc_managed: bool,
 }
-impl PtrClassDecl {
+impl DeclJniPtrClass {
     /// Declare a handle class with a name derived from the source type.
     ///
     /// `ty` is the source type the class owns, as written in the source crate.
@@ -159,15 +161,15 @@ impl PtrClassDecl {
 ///
 /// Its name is relative to [`JniGenBuilder::set_package_prefix`].
 #[derive(Clone, Default)]
-pub struct PackageDecl {
+pub struct DeclJniPackage {
     /// Relative dotted package name; empty means the root package prefix.
     pub name: String,
     /// Handle and data classes to emit in this package.
-    pub classes: Vec<ClassDecl>,
+    pub classes: Vec<DeclJniClass>,
     /// Source functions to export as top-level Kotlin functions.
-    pub functions: Vec<FunctionDecl>,
+    pub functions: Vec<DeclFunction>,
 }
-impl PackageDecl {
+impl DeclJniPackage {
     /// Create an empty package relative to the configured root prefix.
     ///
     /// `name` is a dotted package name relative to that prefix, or empty for the
@@ -179,14 +181,14 @@ impl PackageDecl {
         }
     }
     /// Add a handle or data class. Duplicate source types or names fail during build.
-    pub fn class(mut self, class: impl Into<ClassDecl>) -> Self {
+    pub fn class(mut self, class: impl Into<DeclJniClass>) -> Self {
         self.classes.push(class.into());
         self
     }
     /// Add a top-level Kotlin function with optional occurrence overrides.
     ///
-    /// Names default to camel case; [`FunctionDecl::name`] overrides that spelling.
-    pub fn fun(mut self, f: FunctionDecl) -> Self {
+    /// Names default to camel case; [`DeclFunction::name`] overrides that spelling.
+    pub fn fun(mut self, f: DeclFunction) -> Self {
         self.functions.push(f);
         self
     }
@@ -194,17 +196,17 @@ impl PackageDecl {
 #[macro_export]
 /// Declare a handle class from Rust type syntax, without requiring that type in scope.
 ///
-/// Returns [`PtrClassDecl`]. Invalid type syntax panics. See [`JniGen`] for an example.
-macro_rules! ptr_class {($($ty:tt)+)=>{$crate::PtrClassDecl::new($crate::__type(stringify!($($ty)+)))};}
+/// Returns [`DeclJniPtrClass`]. Invalid type syntax panics. See [`JniGen`] for an example.
+macro_rules! ptr_class {($($ty:tt)+)=>{$crate::DeclJniPtrClass::new($crate::__type(stringify!($($ty)+)))};}
 #[macro_export]
-/// Create a [`PackageDecl`] at the root prefix (`package!()`) or a relative
+/// Create a [`DeclJniPackage`] at the root prefix (`package!()`) or a relative
 /// dotted package (`package!("example.api")`).
 macro_rules! package {
     () => {
-        $crate::PackageDecl::new("")
+        $crate::DeclJniPackage::new("")
     };
     ($name:expr) => {
-        $crate::PackageDecl::new($name)
+        $crate::DeclJniPackage::new($name)
     };
 }
 #[doc(hidden)]
@@ -259,7 +261,7 @@ impl JniGen {
         JniGenBuilder::default()
     }
 }
-type Configure = Box<dyn FnOnce(&mut Bindings) -> Result<()>>;
+type Configure = Box<dyn FnOnce(&mut JniBindings) -> Result<()>>;
 /// Collect declarations before resolving a JNI/Kotlin binding.
 ///
 /// Supply exactly one of [`Self::source`], [`Self::items`] or [`Self::flat`], plus
@@ -268,16 +270,16 @@ type Configure = Box<dyn FnOnce(&mut Bindings) -> Result<()>>;
 #[derive(Default)]
 pub struct JniGenBuilder {
     configure: Vec<Configure>,
-    flat: Option<Bindings>,
+    flat: Option<JniBindings>,
     source: Option<std::path::PathBuf>,
     items: Option<Vec<(syn::Item, prebindgen::SourceLocation)>>,
-    conversions: Vec<prebindgen_declarations::ConvertDecl>,
-    inputs: Vec<prebindgen_declarations::DeclarationInput<InputRequest, OutputRequest>>,
-    outputs: Vec<prebindgen_declarations::DeclarationOutput<OutputRequest, InputRequest>>,
+    conversions: Vec<prebindgen_declarations::DeclConvert>,
+    inputs: Vec<prebindgen_declarations::DeclInput<DeclInputRequest, DeclOutputRequest>>,
+    outputs: Vec<prebindgen_declarations::DeclOutput<DeclInputRequest, DeclOutputRequest>>,
     error_mappers: Vec<(syn::Type, String)>,
     prefix: String,
     init: String,
-    packages: Vec<PackageDecl>,
+    packages: Vec<DeclJniPackage>,
     error_classes: Vec<(syn::Type, String)>,
     bulk_collection_outputs: Option<bool>,
 }
@@ -315,24 +317,24 @@ impl JniGenBuilder {
     /// handler package; it does not relocate already declared classes or functions.
     ///
     /// ```
-    /// use prebindgen_jni::{Bindings, JniGen, JniCodec, fun, package};
-    /// use prebindgen_declarations::{bind_input, bind_output, DeclarationInput, DeclarationOutput};
+    /// use prebindgen_jni::{JniBindings, JniGen, JniCodec, fun, package};
+    /// use prebindgen_declarations::{bind_input, bind_output, DeclInput, DeclOutput};
     /// let source = syn::parse_file("pub fn echo(x: i64) -> i64 { x }")?;
-    /// let flat = Bindings::parse(
+    /// let flat = JniBindings::parse(
     ///     source.items.into_iter().map(|item| (item, Default::default())),
     /// )?;
     /// let generated = JniGen::builder().flat(flat)
     ///     .set_package_prefix("example")
     ///     .configure(|flat| {
-    ///         bind_input(flat, &JniCodec::raw(), "echo", "x", &DeclarationInput::Leaf(prebindgen_declarations::frontend::InputLeafOp::Value), &())?;
-    ///         bind_output(flat, &JniCodec::raw(), "echo", &DeclarationOutput::Leaf(prebindgen_declarations::frontend::OutputLeafOp::Value), &())
+    ///         bind_input(flat, &JniCodec::raw(), "echo", "x", &DeclInput::Leaf(prebindgen_declarations::frontend::DeclInputLeafOp::Value), &())?;
+    ///         bind_output(flat, &JniCodec::raw(), "echo", &DeclOutput::Leaf(prebindgen_declarations::frontend::DeclOutputLeafOp::Value), &())
     ///     })
     ///     .package(package!().fun(fun!(echo)))
     ///     .build()?;
     /// syn::parse_file(&generated.rust)?;
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
-    pub fn configure(mut self, f: impl FnOnce(&mut Bindings) -> Result<()> + 'static) -> Self {
+    pub fn configure(mut self, f: impl FnOnce(&mut JniBindings) -> Result<()> + 'static) -> Self {
         self.configure.push(Box::new(f));
         self
     }
@@ -362,18 +364,18 @@ impl JniGenBuilder {
         self
     }
     /// Select a type's canonical single-value input/output representations.
-    pub fn convert(mut self, declaration: prebindgen_declarations::ConvertDecl) -> Self {
+    pub fn convert(mut self, declaration: prebindgen_declarations::DeclConvert) -> Self {
         self.conversions.push(declaration);
         self
     }
     /// Register a boundary expansion using the declaration syntax.
     /// The builder is consumed directly into its Input/Output tree.
-    pub fn expand(self, decl: impl Into<prebindgen_declarations::ExpandDecl>) -> Self {
-        use prebindgen_declarations::ExpandDecl;
+    pub fn expand(self, decl: impl Into<prebindgen_declarations::DeclExpand>) -> Self {
+        use prebindgen_declarations::DeclExpand;
         match decl.into() {
-            ExpandDecl::Param(decl) => self.input(decl),
-            ExpandDecl::Return(decl) => self.output(decl),
-            ExpandDecl::Error(decl) => self.error_mapper(decl.ty, decl.mapper),
+            DeclExpand::Param(decl) => self.input(decl),
+            DeclExpand::Return(decl) => self.output(decl),
+            DeclExpand::Error(decl) => self.error_mapper(decl.ty, decl.mapper),
         }
     }
     /// Register a type-wide explicit input tree, or a convertible input builder.
@@ -382,7 +384,7 @@ impl JniGenBuilder {
     /// type and direction are rejected during build.
     pub fn input(
         mut self,
-        tree: impl Into<prebindgen_declarations::DeclarationInput<InputRequest, OutputRequest>>,
+        tree: impl Into<prebindgen_declarations::DeclInput<DeclInputRequest, DeclOutputRequest>>,
     ) -> Self {
         self.inputs.push(tree.into());
         self
@@ -390,7 +392,7 @@ impl JniGenBuilder {
     /// Register a type-wide direct output conversion tree.
     pub fn output(
         mut self,
-        tree: impl Into<prebindgen_declarations::DeclarationOutput<OutputRequest, InputRequest>>,
+        tree: impl Into<prebindgen_declarations::DeclOutput<DeclInputRequest, DeclOutputRequest>>,
     ) -> Self {
         self.outputs.push(tree.into());
         self
@@ -401,7 +403,7 @@ impl JniGenBuilder {
     pub fn error_mapper(
         mut self,
         ty: syn::Type,
-        mapper: impl Into<prebindgen_declarations::FunctionDecl>,
+        mapper: impl Into<prebindgen_declarations::DeclFunction>,
     ) -> Self {
         self.error_mappers.push((ty, mapper.into().source_name()));
         self
@@ -411,7 +413,7 @@ impl JniGenBuilder {
     ///
     /// Bound functions still need a Kotlin package declaration. Mutually
     /// exclusive with source and item input.
-    pub fn flat(mut self, flat: Bindings) -> Self {
+    pub fn flat(mut self, flat: JniBindings) -> Self {
         self.flat = Some(flat);
         self
     }
@@ -436,7 +438,7 @@ impl JniGenBuilder {
     /// nested classes (for example `example.Errors$Rejected`). The class must exist at
     /// Kotlin compile time, extend Throwable, and provide a public String constructor.
     /// Result-returning functions also require `error_mapper` or
-    /// `FunctionDecl::on_error` to select their message mapper. Kotlin invokes this
+    /// `DeclFunction::on_error` to select their message mapper. Kotlin invokes this
     /// default after JNI and handle locks finish; callers can replace `onError`
     /// with a recovering callback. Without this setting `onError` is required.
     /// Binding failures use the separate `onBindingError` callback.
@@ -448,7 +450,7 @@ impl JniGenBuilder {
     /// Append a package's class and function declarations.
     ///
     /// Multiple declarations may share a package, but their exported names must be unique.
-    pub fn package(mut self, package: PackageDecl) -> Self {
+    pub fn package(mut self, package: DeclJniPackage) -> Self {
         self.packages.push(package);
         self
     }
@@ -458,7 +460,7 @@ impl JniGenBuilder {
     /// recipes, undeclared handle types and signatures exceeding JVM parameter limits.
     /// Layout, Rust trait bounds and injected Kotlin syntax are checked by the
     /// respective compilers when consuming the generated output.
-    pub fn prepare(mut self) -> Result<Bindings> {
+    pub fn prepare(mut self) -> Result<JniBindings> {
         for package in &self.packages {
             let namespace = if package.name.is_empty() {
                 self.prefix.clone()
@@ -466,7 +468,7 @@ impl JniGenBuilder {
                 format!("{}.{}", self.prefix, package.name)
             };
             for class in &package.classes {
-                if let ClassDecl::Callback(declaration) = class {
+                if let DeclJniClass::Callback(declaration) = class {
                     let mut declaration = declaration.clone();
                     declaration.namespace = Some(namespace.clone());
                     self.inputs.push(declaration.into());
@@ -525,7 +527,7 @@ impl JniGenBuilder {
             };
             validate_package(&pkg)?;
             for c in p.classes {
-                if let ClassDecl::Callback(declaration) = c {
+                if let DeclJniClass::Callback(declaration) = c {
                     callback_types.push(declaration.ty);
                     continue;
                 }
@@ -537,7 +539,7 @@ impl JniGenBuilder {
                         _ => return Err("class needs a name".into()),
                     },
                 };
-                if matches!(&c,ClassDecl::Sealed(d) if d.name.is_none())
+                if matches!(&c,DeclJniClass::Sealed(d) if d.name.is_none())
                     && matches!(&ty,syn::Type::Path(p) if p.path.segments.iter().any(|s|!matches!(s.arguments,syn::PathArguments::None)))
                 {
                     return Err(
@@ -552,17 +554,17 @@ impl JniGenBuilder {
                     pkg: pkg.clone(),
                     name,
                     kind: match &c {
-                        ClassDecl::Ptr(_) => ClassKind::Handle,
-                        ClassDecl::Data(_) => ClassKind::Data,
-                        ClassDecl::Enum(_) => ClassKind::Enum,
-                        ClassDecl::Sealed(_) => ClassKind::Sealed,
-                        ClassDecl::Callback(_) => unreachable!(),
+                        DeclJniClass::Ptr(_) => ClassKind::Handle,
+                        DeclJniClass::Data(_) => ClassKind::Data,
+                        DeclJniClass::Enum(_) => ClassKind::Enum,
+                        DeclJniClass::Sealed(_) => ClassKind::Sealed,
+                        DeclJniClass::Callback(_) => unreachable!(),
                     },
                     has_handles: false,
-                    gc_managed: matches!(&c, ClassDecl::Ptr(c) if c.gc_managed),
+                    gc_managed: matches!(&c, DeclJniClass::Ptr(c) if c.gc_managed),
                     variant_names: match c {
-                        ClassDecl::Enum(c) => c.variant_names,
-                        ClassDecl::Sealed(c) => c.variant_names,
+                        DeclJniClass::Enum(c) => c.variant_names,
+                        DeclJniClass::Sealed(c) => c.variant_names,
                         _ => Vec::new(),
                     },
                 };
@@ -624,7 +626,7 @@ impl JniGenBuilder {
         validate_declaration_names(&flat)?;
         prebindgen_declarations::prepare_value_conversions(&mut flat, self.conversions)?;
         data::prepare(&mut flat)?;
-        let defaults = prebindgen_declarations::Declarations::new(
+        let defaults = prebindgen_declarations::DeclDefaults::new(
             &flat,
             self.inputs,
             self.outputs,
@@ -632,9 +634,8 @@ impl JniGenBuilder {
         )?;
         errors::resolve(&mut flat, &codec, &defaults, &declarations)?;
         for ty in callback_types {
-            let recipe =
-                defaults.resolve_input(&flat, &codec, &ty, &DeclarationInput::auto(), &())?;
-            let operations::Input::Arrow {
+            let recipe = defaults.resolve_input(&flat, &codec, &ty, &DeclInput::auto(), &())?;
+            let operations::JniInput::Arrow {
                 operation: configuration,
                 ..
             } = &recipe
@@ -741,7 +742,7 @@ impl Class {
     }
 }
 /// Validate the declarations currently held by Flat, including configuration edits.
-fn validate_declaration_names(flat: &Bindings) -> Result<()> {
+fn validate_declaration_names(flat: &JniBindings) -> Result<()> {
     let mut names = BTreeSet::new();
     for ty in flat.types.values() {
         if let Some(class) = &ty.metadata.class {
@@ -765,7 +766,7 @@ fn validate_declaration_names(flat: &Bindings) -> Result<()> {
     Ok(())
 }
 /// Check a prospective generated declaration against canonical class, function and handler names.
-fn foreign_name_exists(flat: &Bindings, name: &str) -> bool {
+fn foreign_name_exists(flat: &JniBindings, name: &str) -> bool {
     flat.types.values().any(|t| {
         t.metadata.class.as_ref().is_some_and(|c| c.fqn() == name)
             || t.metadata.errors.values().any(|e| e.handler == name)
@@ -780,7 +781,7 @@ fn foreign_name_exists(flat: &Bindings, name: &str) -> bool {
 /// and ownership acknowledgement parameter. Output delivery owns its result local.
 /// The writer supplies the error boundary and matching Kotlin protocol.
 /// Use with [`prebindgen_declarations::bind_input`] and [`prebindgen_declarations::bind_output`]
-/// to fill [`Bindings`] manually.
+/// to fill [`JniBindings`] manually.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct JniCodec {
     declared: bool,
@@ -796,44 +797,44 @@ impl JniCodec {
     }
 }
 impl Codec for JniCodec {
-    type InputOperations = operations::InputOperations;
-    type OutputOperations = operations::OutputOperations;
-    type CompileState = compilation::State;
+    type InOps = operations::JniInputOps;
+    type OutOps = operations::JniOutputOps;
+    type CompileState = compilation::JniCompileState;
 
     fn compile_input_tree(
         &self,
         cx: &prebindgen_declarations::Compiler<'_, Self>,
         ty: &syn::Type,
-        tree: &operations::Input,
+        tree: &operations::JniInput,
         extra: &Self::Extra,
         active: &prebindgen_declarations::Condition,
         names: Option<(&syn::Ident, &syn::Ident)>,
-    ) -> Result<prebindgen_declarations::CodecInput<Self>> {
-        compilation::LanguageCompiler { cx }.input_named(ty, tree, extra, active, names)
+    ) -> Result<prebindgen_declarations::CodecInputPlan<Self>> {
+        compilation::JniCompiler { cx }.input_named(ty, tree, extra, active, names)
     }
     fn compile_output_tree(
         &self,
         cx: &prebindgen_declarations::Compiler<'_, Self>,
         ty: &syn::Type,
-        tree: &operations::Output,
+        tree: &operations::JniOutput,
         extra: &Self::Extra,
         value: TokenStream,
         borrowed: bool,
         wire: Option<&syn::Ident>,
-    ) -> Result<prebindgen_declarations::CodecOutput<Self>> {
-        compilation::LanguageCompiler { cx }.output_named(ty, tree, extra, value, borrowed, wire)
+    ) -> Result<prebindgen_declarations::CodecOutputPlan<Self>> {
+        compilation::JniCompiler { cx }.output_named(ty, tree, extra, value, borrowed, wire)
     }
     fn compile_output_root(
         &self,
         cx: &prebindgen_declarations::Compiler<'_, Self>,
         ty: &syn::Type,
-        tree: &operations::Output,
+        tree: &operations::JniOutput,
         extra: &Self::Extra,
         value: TokenStream,
         borrowed: bool,
         reference_return: bool,
-    ) -> Result<prebindgen_declarations::CodecOutput<Self>> {
-        compilation::LanguageCompiler { cx }.output_root(
+    ) -> Result<prebindgen_declarations::CodecOutputPlan<Self>> {
+        compilation::JniCompiler { cx }.output_root(
             ty,
             tree,
             extra,
@@ -846,18 +847,18 @@ impl Codec for JniCodec {
         &self,
         cx: &prebindgen_declarations::Compiler<'_, Self>,
         ty: &syn::Type,
-        tree: &operations::Output,
+        tree: &operations::JniOutput,
         extra: &Self::Extra,
         value: TokenStream,
         borrowed: bool,
-    ) -> Result<prebindgen_declarations::CodecOutput<Self>> {
-        compilation::LanguageCompiler { cx }.output_return(ty, tree, extra, value, borrowed)
+    ) -> Result<prebindgen_declarations::CodecOutputPlan<Self>> {
+        compilation::JniCompiler { cx }.output_return(ty, tree, extra, value, borrowed)
     }
 
-    fn compile_declarations(&self, flat: &mut Bindings, _: &()) -> Result<()> {
+    fn compile_declarations(&self, flat: &mut JniBindings, _: &()) -> Result<()> {
         errors::compile(flat, self)?;
         for recipe in std::mem::take(&mut flat.metadata.callback_recipes) {
-            let operations::Input::Arrow { operation, .. } = &recipe else {
+            let operations::JniInput::Arrow { operation, .. } = &recipe else {
                 return Err("callback declaration requires an arrow".into());
             };
             let plan = prebindgen_declarations::compile_input_value(
@@ -880,23 +881,23 @@ impl Codec for JniCodec {
     }
     fn bulk_input(
         &self,
-        _: &Bindings,
+        _: &JniBindings,
         _: &syn::Type,
         _: &(),
         w: syn::Ident,
-        child: InputPlan<JniWire>,
+        child: JniInputPlan<JniWire>,
         active: &prebindgen_declarations::Condition,
-    ) -> Result<InputPlan<JniWire>> {
+    ) -> Result<JniInputPlan<JniWire>> {
         bulk::input(w, child, active)
     }
     fn bulk_output(
         &self,
-        _: &Bindings,
+        _: &JniBindings,
         _: &syn::Type,
         _: &(),
         w: syn::Ident,
-        child: OutputPlan<JniWire>,
-    ) -> Result<OutputPlan<JniWire>> {
+        child: JniOutputPlan<JniWire>,
+    ) -> Result<JniOutputPlan<JniWire>> {
         bulk::output(w, child)
     }
 
@@ -933,10 +934,10 @@ impl Codec for JniCodec {
     type Extra = ();
     type Wire = JniWire;
     type Context = JniContext;
-    fn finish_input(&self, plan: &mut InputPlan<JniWire>, _: &()) -> Result<()> {
+    fn finish_input(&self, plan: &mut JniInputPlan<JniWire>, _: &()) -> Result<()> {
         group::validate_layout(&plan.node)
     }
-    fn finish_output(&self, plan: &mut OutputPlan<JniWire>, _: &()) -> Result<()> {
+    fn finish_output(&self, plan: &mut JniOutputPlan<JniWire>, _: &()) -> Result<()> {
         plan.fallible = true;
         group::validate_layout(&plan.outcomes.success)?;
         plan.commit
@@ -947,7 +948,7 @@ impl Codec for JniCodec {
         Ok(())
     }
 
-    fn default_output_sequence_is_bulk(&self, flat: &Bindings, _: &()) -> bool {
+    fn default_output_sequence_is_bulk(&self, flat: &JniBindings, _: &()) -> bool {
         flat.metadata.bulk_collection_outputs
     }
     fn sequence_input(
@@ -1038,11 +1039,11 @@ impl Codec for JniCodec {
         // before that move and reject two consuming views, as for opaque objects.
         !matches!(ty, syn::Type::Reference(_)) && !matches!(Value::of(ty), Some(Value::Scalar(_)))
     }
-    fn input_leaf(&self, request: InputLeaf<'_, Self>) -> Result<InputPlan<JniWire>> {
+    fn input_leaf(&self, request: InputLeaf<'_, Self>) -> Result<JniInputPlan<JniWire>> {
         self.input_value(request)
     }
 
-    fn output_leaf(&self, request: OutputLeaf<'_, Self>) -> Result<OutputPlan<JniWire>> {
+    fn output_leaf(&self, request: OutputLeaf<'_, Self>) -> Result<JniOutputPlan<JniWire>> {
         let OutputLeaf {
             flat: _flat,
             ty,
@@ -1065,7 +1066,7 @@ impl Codec for JniCodec {
         if self.declared {
             if Self::source_record(_flat, ty)?.is_some() {
                 return Err(
-                    "resolve the data-class OutputBranch::Record before leaf compilation".into(),
+                    "resolve the data-class JniOutputBranch::Record before leaf compilation".into(),
                 );
             }
             if let Some(e) = self.enum_type(_flat, ty) {
@@ -1097,7 +1098,7 @@ impl Codec for JniCodec {
                 ),
                 Value::Scalar(_) => unreachable!(),
             };
-            return Ok(OutputPlan {
+            return Ok(JniOutputPlan {
                 fallible: true,
                 context: Default::default(),
                 delivery: Default::default(),
@@ -1157,7 +1158,7 @@ impl Codec for JniCodec {
         &self,
         request: OutputLeaf<'_, Self>,
         projection: &Projection,
-    ) -> Result<OutputPlan<JniWire>> {
+    ) -> Result<JniOutputPlan<JniWire>> {
         let OutputLeaf {
             flat,
             ty,
@@ -1270,11 +1271,11 @@ impl Codec for JniCodec {
         }
     }
 
-    fn validate_input(&self, plan: &prebindgen_declarations::CodecInput<Self>) -> Result<()> {
+    fn validate_input(&self, plan: &prebindgen_declarations::CodecInputPlan<Self>) -> Result<()> {
         sequence::validate_buffered(&plan.node)?;
         crate::group::validate_layout(&plan.node)
     }
-    fn validate_output(&self, plan: &prebindgen_declarations::CodecOutput<Self>) -> Result<()> {
+    fn validate_output(&self, plan: &prebindgen_declarations::CodecOutputPlan<Self>) -> Result<()> {
         sequence::callback_delivery(&plan.outcomes.success)?;
         for error in plan
             .outcomes
@@ -1300,7 +1301,7 @@ impl Codec for JniCodec {
         ty: &syn::Type,
         wire: &syn::Ident,
         active: &Condition,
-        plan: &mut InputPlan<JniWire>,
+        plan: &mut JniInputPlan<JniWire>,
         _: &(),
     ) -> Result<()> {
         if !self.declared {
@@ -1316,7 +1317,7 @@ impl Codec for JniCodec {
         flat: &prebindgen_flat::Flat<Self::Schema>,
         ty: &syn::Type,
         wire: &syn::Ident,
-        plan: &mut OutputPlan<JniWire>,
+        plan: &mut JniOutputPlan<JniWire>,
         _: &(),
     ) -> Result<()> {
         if !self.declared {
@@ -1377,7 +1378,7 @@ impl Codec for JniCodec {
     fn input_arrow(
         &self,
         request: prebindgen_declarations::InputArrow<'_, Self>,
-    ) -> Result<InputPlan<JniWire>> {
+    ) -> Result<JniInputPlan<JniWire>> {
         if !self.declared {
             return Err("configured callbacks are unsupported by this codec".into());
         }
@@ -1386,7 +1387,7 @@ impl Codec for JniCodec {
 }
 
 impl JniCodec {
-    fn input_value(&self, request: InputLeaf<'_, Self>) -> Result<InputPlan<JniWire>> {
+    fn input_value(&self, request: InputLeaf<'_, Self>) -> Result<JniInputPlan<JniWire>> {
         let InputLeaf {
             flat,
             ty,
@@ -1409,7 +1410,7 @@ impl JniCodec {
             }
             if Self::source_record(flat, ty)?.is_some() {
                 return Err(
-                    "resolve the data-class InputBranch::Record before leaf compilation".into(),
+                    "resolve the data-class JniInputBranch::Record before leaf compilation".into(),
                 );
             }
             if let Some(e) = self.enum_type(flat, ty) {
@@ -1473,7 +1474,7 @@ fn storage() -> prebindgen_conversions::boxed::Storage {
     ))
 }
 /// Another name for the generated Rust and Kotlin sources in [`JniGen`].
-pub type Generation = JniGen;
+pub type JniGeneration = JniGen;
 impl JniGen {
     /// Write native Rust source, returning the destination path.
     ///
@@ -2524,185 +2525,191 @@ mod compilation;
 /// Resolved conversion operations interpreted by this adapter.
 pub mod operations;
 
-impl prebindgen_declarations::DeclarationCodec for JniCodec {
+impl prebindgen_declarations::DeclCodec for JniCodec {
     fn sequence_callback(
         &self,
-        cx: &mut prebindgen_declarations::Resolve<'_, Self>,
+        cx: &mut prebindgen_declarations::DeclResolve<'_, Self>,
         ty: &syn::Type,
-        tree: operations::Output,
+        tree: operations::JniOutput,
         structural: bool,
-    ) -> Result<operations::Output> {
+    ) -> Result<operations::JniOutput> {
         operations::sequence_callback(cx, ty, tree, structural)
     }
 
-    fn is_discarded_output(&self, tree: &operations::Output) -> bool {
+    fn is_discarded_output(&self, tree: &operations::JniOutput) -> bool {
         matches!(
             tree,
-            operations::Output::Leaf(operations::OutputLeafOp::Discard)
+            operations::JniOutput::Leaf(operations::JniOutputLeafOp::Discard)
         )
     }
 
     fn resolve_input_leaf(
         &self,
-        operation: prebindgen_declarations::frontend::InputLeafOp,
-    ) -> Result<<Self::InputOperations as prebindgen_declarations::Operations>::Leaf> {
+        operation: prebindgen_declarations::frontend::DeclInputLeafOp,
+    ) -> Result<<Self::InOps as prebindgen_declarations::InputOps>::Leaf> {
         Ok(match operation {
-            prebindgen_declarations::frontend::InputLeafOp::Value => operations::InputLeafOp::Value,
+            prebindgen_declarations::frontend::DeclInputLeafOp::Value => {
+                operations::JniInputLeafOp::Value
+            }
         })
     }
     fn resolve_input_unary(
         &self,
-        operation: prebindgen_declarations::frontend::InputUnary,
-    ) -> Result<<Self::InputOperations as prebindgen_declarations::Operations>::Unary> {
+        operation: prebindgen_declarations::frontend::DeclInputUnary,
+    ) -> Result<<Self::InOps as prebindgen_declarations::InputOps>::Unary> {
         Ok(match operation {
-            prebindgen_declarations::frontend::InputUnary::Convert { conversion } => {
-                operations::InputUnary::Convert { conversion }
+            prebindgen_declarations::frontend::DeclInputUnary::Convert { conversion } => {
+                operations::JniInputUnary::Convert { conversion }
             }
-            prebindgen_declarations::frontend::InputUnary::Sequence => {
-                operations::InputUnary::Sequence
+            prebindgen_declarations::frontend::DeclInputUnary::Sequence => {
+                operations::JniInputUnary::Sequence
             }
-            prebindgen_declarations::frontend::InputUnary::Temporary => {
-                operations::InputUnary::Temporary
+            prebindgen_declarations::frontend::DeclInputUnary::Temporary => {
+                operations::JniInputUnary::Temporary
             }
-            prebindgen_declarations::frontend::InputUnary::Bulk => operations::InputUnary::Bulk,
-            prebindgen_declarations::frontend::InputUnary::Optional => {
-                operations::InputUnary::Optional
+            prebindgen_declarations::frontend::DeclInputUnary::Bulk => {
+                operations::JniInputUnary::Bulk
+            }
+            prebindgen_declarations::frontend::DeclInputUnary::Optional => {
+                operations::JniInputUnary::Optional
             }
         })
     }
     fn resolve_input_branch(
         &self,
-        operation: prebindgen_declarations::frontend::InputBranch,
-    ) -> Result<<Self::InputOperations as prebindgen_declarations::Operations>::Branch> {
+        operation: prebindgen_declarations::frontend::DeclInputBranch,
+    ) -> Result<<Self::InOps as prebindgen_declarations::InputOps>::Branch> {
         Ok(match operation {
-            prebindgen_declarations::frontend::InputBranch::Fields => {
-                operations::InputBranch::Fields
+            prebindgen_declarations::frontend::DeclInputBranch::Fields => {
+                operations::JniInputBranch::Fields
             }
-            prebindgen_declarations::frontend::InputBranch::Record => {
-                operations::InputBranch::Record
+            prebindgen_declarations::frontend::DeclInputBranch::Record => {
+                operations::JniInputBranch::Record
             }
-            prebindgen_declarations::frontend::InputBranch::Selector => {
-                operations::InputBranch::Selector
+            prebindgen_declarations::frontend::DeclInputBranch::Selector => {
+                operations::JniInputBranch::Selector
             }
-            prebindgen_declarations::frontend::InputBranch::Constructor { function } => {
-                operations::InputBranch::Constructor { function }
+            prebindgen_declarations::frontend::DeclInputBranch::Constructor { function } => {
+                operations::JniInputBranch::Constructor { function }
             }
-            prebindgen_declarations::frontend::InputBranch::Enum { value } => {
-                operations::InputBranch::Enum { value }
+            prebindgen_declarations::frontend::DeclInputBranch::Enum { value } => {
+                operations::JniInputBranch::Enum { value }
             }
-            prebindgen_declarations::frontend::InputBranch::Variant => {
-                operations::InputBranch::Variant
+            prebindgen_declarations::frontend::DeclInputBranch::Variant => {
+                operations::JniInputBranch::Variant
             }
         })
     }
     fn resolve_input_arrow(
         &self,
         operation: Box<prebindgen_declarations::CallbackOperation>,
-    ) -> Result<<Self::InputOperations as prebindgen_declarations::Operations>::Arrow> {
+    ) -> Result<<Self::InOps as prebindgen_declarations::InputOps>::Arrow> {
         Ok(operation)
     }
-    fn finish_input_tree(&self, tree: operations::Input) -> Result<operations::Input> {
+    fn finish_input_tree(&self, tree: operations::JniInput) -> Result<operations::JniInput> {
         Ok(operations::lift_input_bulk(tree))
     }
     fn resolve_output_leaf(
         &self,
-        operation: prebindgen_declarations::frontend::OutputLeafOp,
-    ) -> Result<<Self::OutputOperations as prebindgen_declarations::Operations>::Leaf> {
+        operation: prebindgen_declarations::frontend::DeclOutputLeafOp,
+    ) -> Result<<Self::OutOps as prebindgen_declarations::OutputOps>::Leaf> {
         Ok(match operation {
-            prebindgen_declarations::frontend::OutputLeafOp::Value => {
-                operations::OutputLeafOp::Value
+            prebindgen_declarations::frontend::DeclOutputLeafOp::Value => {
+                operations::JniOutputLeafOp::Value
             }
-            prebindgen_declarations::frontend::OutputLeafOp::Discard => {
-                operations::OutputLeafOp::Discard
+            prebindgen_declarations::frontend::DeclOutputLeafOp::Discard => {
+                operations::JniOutputLeafOp::Discard
             }
-            prebindgen_declarations::frontend::OutputLeafOp::Projected(projection) => {
-                operations::OutputLeafOp::Projected(projection)
+            prebindgen_declarations::frontend::DeclOutputLeafOp::Projected(projection) => {
+                operations::JniOutputLeafOp::Projected(projection)
             }
         })
     }
     fn resolve_output_unary(
         &self,
-        operation: prebindgen_declarations::frontend::OutputUnary,
-    ) -> Result<<Self::OutputOperations as prebindgen_declarations::Operations>::Unary> {
+        operation: prebindgen_declarations::frontend::DeclOutputUnary,
+    ) -> Result<<Self::OutOps as prebindgen_declarations::OutputOps>::Unary> {
         Ok(match operation {
-            prebindgen_declarations::frontend::OutputUnary::CallbackArgument { ownership } => {
-                operations::OutputUnary::CallbackArgument { ownership }
+            prebindgen_declarations::frontend::DeclOutputUnary::CallbackArgument { ownership } => {
+                operations::JniOutputUnary::CallbackArgument { ownership }
             }
-            prebindgen_declarations::frontend::OutputUnary::Bulk => operations::OutputUnary::Bulk,
-            prebindgen_declarations::frontend::OutputUnary::Named { name } => {
-                operations::OutputUnary::Named { name }
+            prebindgen_declarations::frontend::DeclOutputUnary::Bulk => {
+                operations::JniOutputUnary::Bulk
             }
-            prebindgen_declarations::frontend::OutputUnary::Convert { conversion } => {
-                operations::OutputUnary::Convert { conversion }
+            prebindgen_declarations::frontend::DeclOutputUnary::Named { name } => {
+                operations::JniOutputUnary::Named { name }
             }
-            prebindgen_declarations::frontend::OutputUnary::Sequence { delivery, mode } => {
-                operations::OutputUnary::Sequence { delivery, mode }
+            prebindgen_declarations::frontend::DeclOutputUnary::Convert { conversion } => {
+                operations::JniOutputUnary::Convert { conversion }
             }
-            prebindgen_declarations::frontend::OutputUnary::Result { error } => {
-                operations::OutputUnary::Result { error }
+            prebindgen_declarations::frontend::DeclOutputUnary::Sequence { delivery, mode } => {
+                operations::JniOutputUnary::Sequence { delivery, mode }
             }
-            prebindgen_declarations::frontend::OutputUnary::Optional => {
-                operations::OutputUnary::Optional
+            prebindgen_declarations::frontend::DeclOutputUnary::Result { error } => {
+                operations::JniOutputUnary::Result { error }
             }
-            prebindgen_declarations::frontend::OutputUnary::Into { function } => {
-                operations::OutputUnary::Into { function }
+            prebindgen_declarations::frontend::DeclOutputUnary::Optional => {
+                operations::JniOutputUnary::Optional
             }
-            prebindgen_declarations::frontend::OutputUnary::Getter { function } => {
-                operations::OutputUnary::Getter { function }
+            prebindgen_declarations::frontend::DeclOutputUnary::Into { function } => {
+                operations::JniOutputUnary::Into { function }
+            }
+            prebindgen_declarations::frontend::DeclOutputUnary::Getter { function } => {
+                operations::JniOutputUnary::Getter { function }
             }
         })
     }
     fn resolve_output_branch(
         &self,
-        operation: prebindgen_declarations::frontend::OutputBranch,
-    ) -> Result<<Self::OutputOperations as prebindgen_declarations::Operations>::Branch> {
+        operation: prebindgen_declarations::frontend::DeclOutputBranch,
+    ) -> Result<<Self::OutOps as prebindgen_declarations::OutputOps>::Branch> {
         Ok(match operation {
-            prebindgen_declarations::frontend::OutputBranch::Fields => {
-                operations::OutputBranch::Fields
+            prebindgen_declarations::frontend::DeclOutputBranch::Fields => {
+                operations::JniOutputBranch::Fields
             }
-            prebindgen_declarations::frontend::OutputBranch::OwnedFields => {
-                operations::OutputBranch::OwnedFields
+            prebindgen_declarations::frontend::DeclOutputBranch::OwnedFields => {
+                operations::JniOutputBranch::OwnedFields
             }
-            prebindgen_declarations::frontend::OutputBranch::Record { mode } => {
-                operations::OutputBranch::Record { mode }
+            prebindgen_declarations::frontend::DeclOutputBranch::Record { mode } => {
+                operations::JniOutputBranch::Record { mode }
             }
-            prebindgen_declarations::frontend::OutputBranch::Combine => {
-                operations::OutputBranch::Combine
+            prebindgen_declarations::frontend::DeclOutputBranch::Combine => {
+                operations::JniOutputBranch::Combine
             }
-            prebindgen_declarations::frontend::OutputBranch::Enum { value, mode } => {
-                operations::OutputBranch::Enum { value, mode }
+            prebindgen_declarations::frontend::DeclOutputBranch::Enum { value, mode } => {
+                operations::JniOutputBranch::Enum { value, mode }
             }
-            prebindgen_declarations::frontend::OutputBranch::Variant => {
-                operations::OutputBranch::Variant
+            prebindgen_declarations::frontend::DeclOutputBranch::Variant => {
+                operations::JniOutputBranch::Variant
             }
-            prebindgen_declarations::frontend::OutputBranch::Arguments => {
-                operations::OutputBranch::Arguments
+            prebindgen_declarations::frontend::DeclOutputBranch::Arguments => {
+                operations::JniOutputBranch::Arguments
             }
         })
     }
     fn resolve_output_arrow(
         &self,
         operation: std::convert::Infallible,
-    ) -> Result<<Self::OutputOperations as prebindgen_declarations::Operations>::Arrow> {
+    ) -> Result<<Self::OutOps as prebindgen_declarations::OutputOps>::Arrow> {
         Ok(operation)
     }
-    fn finish_output_tree(&self, tree: operations::Output) -> Result<operations::Output> {
+    fn finish_output_tree(&self, tree: operations::JniOutput) -> Result<operations::JniOutput> {
         Ok(operations::lift_output_bulk(tree))
     }
 
     fn expand_input(
         &self,
-        cx: &mut prebindgen_declarations::Resolve<'_, Self>,
+        cx: &mut prebindgen_declarations::DeclResolve<'_, Self>,
         ty: &syn::Type,
-        tree: &DeclarationInput<InputRequest, OutputRequest>,
-    ) -> Result<Option<operations::Input>> {
+        tree: &DeclInput<DeclInputRequest, DeclOutputRequest>,
+    ) -> Result<Option<operations::JniInput>> {
         let flat = cx.flat;
         let replacement = (|| {
             if !self.declared {
                 return Ok(None);
             }
 
-            if !matches!(tree, DeclarationInput::Leaf(InputLeafOp::Value)) {
+            if !matches!(tree, DeclInput::Leaf(DeclInputLeafOp::Value)) {
                 return Ok(None);
             }
             if flat.payload_enums.contains_key(&type_key(ty))
@@ -2723,11 +2730,11 @@ impl prebindgen_declarations::DeclarationCodec for JniCodec {
                 .and_then(|t| t.metadata.class.as_ref())
                 .is_some_and(|c| c.kind == ClassKind::Sealed)
             {
-                return Ok(Some(DeclarationInput::enum_variants(
+                return Ok(Some(DeclInput::enum_variants(
                     flat.payload_enum(ty)?
                         .variants
                         .iter()
-                        .map(|v| vec![DeclarationInput::value(); v.fields.len()])
+                        .map(|v| vec![DeclInput::value(); v.fields.len()])
                         .collect(),
                     true,
                 )));
@@ -2741,19 +2748,19 @@ impl prebindgen_declarations::DeclarationCodec for JniCodec {
                     record.fqn()
                 ));
             }
-            Ok(Some(DeclarationInput::Branch {
-                operation: InputBranch::Record,
-                children: vec![DeclarationInput::value(); flat.record(ty)?.fields.len()],
+            Ok(Some(DeclInput::Branch {
+                operation: DeclInputBranch::Record,
+                children: vec![DeclInput::value(); flat.record(ty)?.fields.len()],
             }))
         })();
         replacement?.map(|tree| cx.input(ty, &tree)).transpose()
     }
     fn expand_output(
         &self,
-        cx: &mut prebindgen_declarations::Resolve<'_, Self>,
+        cx: &mut prebindgen_declarations::DeclResolve<'_, Self>,
         ty: &syn::Type,
-        tree: &DeclarationOutput<OutputRequest, InputRequest>,
-    ) -> Result<Option<operations::Output>> {
+        tree: &DeclOutput<DeclInputRequest, DeclOutputRequest>,
+    ) -> Result<Option<operations::JniOutput>> {
         let flat = cx.flat;
         let replacement = (|| {
             if !self.declared {
@@ -2761,8 +2768,8 @@ impl prebindgen_declarations::DeclarationCodec for JniCodec {
             }
 
             let policy = match tree {
-                DeclarationOutput::Leaf(OutputLeafOp::Value) => None,
-                DeclarationOutput::Leaf(OutputLeafOp::Projected(p)) => Some(p.clone()),
+                DeclOutput::Leaf(DeclOutputLeafOp::Value) => None,
+                DeclOutput::Leaf(DeclOutputLeafOp::Projected(p)) => Some(p.clone()),
                 _ => return Ok(None),
             };
             if flat.payload_enums.contains_key(&type_key(ty))
@@ -2783,11 +2790,11 @@ impl prebindgen_declarations::DeclarationCodec for JniCodec {
                 .and_then(|t| t.metadata.class.as_ref())
                 .is_some_and(|c| c.kind == ClassKind::Sealed)
             {
-                return Ok(Some(DeclarationOutput::enum_variants(
+                return Ok(Some(DeclOutput::enum_variants(
                     flat.payload_enum(ty)?
                         .variants
                         .iter()
-                        .map(|v| vec![DeclarationOutput::value(); v.fields.len()])
+                        .map(|v| vec![DeclOutput::value(); v.fields.len()])
                         .collect(),
                     true,
                     policy.as_ref().map(|p| p.mode),
@@ -2811,15 +2818,15 @@ impl prebindgen_declarations::DeclarationCodec for JniCodec {
             let inherited = policy.as_ref().map(Projection::inherited);
             let children = fields.iter().map(|field| {
             let name = field.name.to_string();
-            let Some(policy) = &policy else { return Ok(DeclarationOutput::value()); };
+            let Some(policy) = &policy else { return Ok(DeclOutput::value()); };
             let child = policy.fields.get(name.trim_start_matches("r#")).unwrap_or(inherited.as_ref().unwrap());
             if policy.mode == ProjectionMode::Borrowed && child.mode == ProjectionMode::Owned {
                 return Err(format!("data class `{}` field `{name}`: owned projection cannot consume a shared-reference occurrence", record.fqn()));
             }
-            Ok(DeclarationOutput::Request(OutputRequest::Value {projection:Some(child.clone())}))
+            Ok(DeclOutput::Request(DeclOutputRequest::Value {projection:Some(child.clone())}))
         }).collect::<Result<Vec<_>>>()?;
-            Ok(Some(DeclarationOutput::Branch {
-                operation: OutputBranch::Record {
+            Ok(Some(DeclOutput::Branch {
+                operation: DeclOutputBranch::Record {
                     mode: policy.map(|p| p.mode),
                 },
                 children,
@@ -2828,3 +2835,8 @@ impl prebindgen_declarations::DeclarationCodec for JniCodec {
         replacement?.map(|tree| cx.output(ty, &tree)).transpose()
     }
 }
+
+pub use operations::{
+    JniInput, JniInputBranch, JniInputLeafOp, JniInputOps, JniInputUnary, JniOutput,
+    JniOutputBranch, JniOutputLeafOp, JniOutputOps, JniOutputUnary,
+};

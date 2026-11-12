@@ -1,6 +1,6 @@
 use super::*;
 use prebindgen_conversions::InputFragment;
-use prebindgen_declarations::{frontend::InputLeafOp, frontend::InputUnary};
+use prebindgen_declarations::{frontend::DeclInputLeafOp, frontend::DeclInputUnary};
 use prebindgen_flat::{Function, InputConversion, Param, TypeUse};
 use std::{cell::Cell, rc::Rc};
 
@@ -8,7 +8,7 @@ use std::{cell::Cell, rc::Rc};
 // Forwarding native behavior makes complete output equality a useful control.
 #[derive(Clone)]
 struct ExternalInput {
-    native: JniInput,
+    native: JniInputConverter,
     preparations: Rc<Cell<usize>>,
     omit_handles: bool,
     omit_consumption: bool,
@@ -49,7 +49,7 @@ impl KotlinInputConversion for ExternalInput {
     }
 }
 
-fn external(flat: Bindings) -> Flat<JniSchema<ExternalInput>> {
+fn external(flat: JniBindings) -> JniBindings<ExternalInput> {
     // Test fixture: preserve every declaration and metadata value while changing
     // just the input implementation. Production preparation chooses its schema
     // before filling slots; this does not add a schema-changing API.
@@ -92,11 +92,11 @@ fn external(flat: Bindings) -> Flat<JniSchema<ExternalInput>> {
     }
 }
 
-fn handles() -> Bindings {
+fn handles() -> JniBindings {
     JniGen::builder()
         .items(syn::parse_file("pub type Handle=String;pub fn mixed(shared:&Handle,maybe:Option<&Handle>,owned:Handle,rows:Vec<Handle>)->i64{}").unwrap().items.into_iter().map(|item|(item,Default::default())))
         .set_package_prefix("test")
-        .package(package!().class(ptr_class!(Handle)).fun(fun!(mixed).expand_param("rows", DeclarationInput::Unary { operation: InputUnary::Sequence, child: Box::new(DeclarationInput::Leaf(InputLeafOp::Value)) }.bulk())))
+        .package(package!().class(ptr_class!(Handle)).fun(fun!(mixed).expand_param("rows", DeclInput::Unary { operation: DeclInputUnary::Sequence, child: Box::new(DeclInput::Leaf(DeclInputLeafOp::Value)) }.bulk())))
         .prepare().unwrap()
 }
 

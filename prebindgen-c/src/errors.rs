@@ -7,8 +7,8 @@ use prebindgen_flat::Conversion;
 pub(crate) struct ErrorBinding {
     pub name: String,
     pub ty: syn::Type,
-    pub plan: Option<OutputPlan<CWire>>,
-    recipe: Option<crate::operations::Output>,
+    pub plan: Option<COutputPlan<CWire>>,
+    recipe: Option<crate::operations::COutput>,
     pub fields: Vec<String>,
 }
 pub(crate) fn helper(name: &str) -> syn::Ident {
@@ -24,7 +24,7 @@ impl ErrorBinding {
             fields: Vec::new(),
         }
     }
-    pub(crate) fn plan(&self) -> Result<&OutputPlan<CWire>> {
+    pub(crate) fn plan(&self) -> Result<&COutputPlan<CWire>> {
         self.plan
             .as_ref()
             .ok_or_else(|| format!("C error `{}` has no prepared conversion", self.name))
@@ -32,9 +32,9 @@ impl ErrorBinding {
 }
 /// Fill the conversions of error declarations already attached to their source types.
 pub(crate) fn resolve(
-    flat: &mut Bindings,
+    flat: &mut CBindings,
     codec: &CCodec,
-    declarations: &prebindgen_declarations::Declarations,
+    declarations: &prebindgen_declarations::DeclDefaults,
 ) -> Result<()> {
     let mut types = flat
         .types
@@ -56,7 +56,7 @@ pub(crate) fn resolve(
     Ok(())
 }
 
-pub(crate) fn compile(flat: &mut Bindings, codec: &CCodec) -> Result<()> {
+pub(crate) fn compile(flat: &mut CBindings, codec: &CCodec) -> Result<()> {
     let mut types = flat
         .types
         .values()

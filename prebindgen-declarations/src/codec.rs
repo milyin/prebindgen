@@ -8,9 +8,9 @@ use super::*;
 #[allow(clippy::type_complexity)]
 pub trait Codec {
     /// Input vocabulary interpreted by this adapter.
-    type InputOperations: Operations;
+    type InOps: InputOps;
     /// Output vocabulary interpreted by this adapter.
-    type OutputOperations: Operations;
+    type OutOps: OutputOps;
     /// Adapter-owned state scoped to one conversion compilation.
     type CompileState: Default;
 
@@ -24,7 +24,7 @@ pub trait Codec {
         extra: &Self::Extra,
         active: &Condition,
         names: Option<(&syn::Ident, &syn::Ident)>,
-    ) -> Result<CodecInput<Self>>
+    ) -> Result<CodecInputPlan<Self>>
     where
         Self: Sized;
     /// Interpret one resolved output operation.
@@ -38,7 +38,7 @@ pub trait Codec {
         value: TokenStream,
         borrowed: bool,
         wire: Option<&syn::Ident>,
-    ) -> Result<CodecOutput<Self>>
+    ) -> Result<CodecOutputPlan<Self>>
     where
         Self: Sized;
     /// Interpret a function or callback result, including its error channel.
@@ -52,7 +52,7 @@ pub trait Codec {
         value: TokenStream,
         borrowed: bool,
         reference_return: bool,
-    ) -> Result<CodecOutput<Self>>
+    ) -> Result<CodecOutputPlan<Self>>
     where
         Self: Sized,
     {
@@ -71,7 +71,7 @@ pub trait Codec {
         extra: &Self::Extra,
         value: TokenStream,
         borrowed: bool,
-    ) -> Result<CodecOutput<Self>>
+    ) -> Result<CodecOutputPlan<Self>>
     where
         Self: Sized,
     {
@@ -80,8 +80,8 @@ pub trait Codec {
 
     /// Fixed converter and declaration metadata types, selected before parsing.
     type Schema: Schema<
-        Input: prebindgen_flat::InputConversion + From<CodecInput<Self>>,
-        Output: prebindgen_flat::OutputConversion + From<CodecOutput<Self>>,
+        Input: prebindgen_flat::InputConversion + From<CodecInputPlan<Self>>,
+        Output: prebindgen_flat::OutputConversion + From<CodecOutputPlan<Self>>,
     >;
     /// Complete description of one foreign wire value.
     type Wire: prebindgen_flat::WireKind + Clone + std::fmt::Debug;
@@ -105,9 +105,9 @@ pub trait Codec {
     }
 
     /// Decode a leaf in the compiler-selected physical representation and scope.
-    fn input_leaf(&self, request: InputLeaf<'_, Self>) -> Result<CodecInput<Self>>;
+    fn input_leaf(&self, request: InputLeaf<'_, Self>) -> Result<CodecInputPlan<Self>>;
     /// Prepare the source expression and defer owned output transfers until commit.
-    fn output_leaf(&self, request: OutputLeaf<'_, Self>) -> Result<CodecOutput<Self>>;
+    fn output_leaf(&self, request: OutputLeaf<'_, Self>) -> Result<CodecOutputPlan<Self>>;
     /// Whether a leaf moves its source. Must agree with output_leaf and is needed
     /// before ordering observations and moves of the same source value.
     fn output_consumes(&self, flat: &Flat<Self::Schema>, ty: &Type, extra: &Self::Extra) -> bool;
@@ -144,10 +144,10 @@ pub trait Codec {
         _ty: &Type,
         _extra: &Self::Extra,
         _wire: syn::Ident,
-        plan: CodecInput<Self>,
+        plan: CodecInputPlan<Self>,
         _active: &Condition,
         _role: InputRole,
-    ) -> Result<CodecInput<Self>> {
+    ) -> Result<CodecInputPlan<Self>> {
         Ok(plan)
     }
     /// Wrap an ordinary enum output in the adapter's public value carrier.
@@ -157,8 +157,8 @@ pub trait Codec {
         _ty: &Type,
         _extra: &Self::Extra,
         _wire: syn::Ident,
-        plan: CodecOutput<Self>,
-    ) -> Result<CodecOutput<Self>> {
+        plan: CodecOutputPlan<Self>,
+    ) -> Result<CodecOutputPlan<Self>> {
         Ok(plan)
     }
     /// Choose ordinary or bulk input row transport; preserve row-local lifetimes.
@@ -204,9 +204,9 @@ pub trait Codec {
         _ty: &Type,
         _extra: &Self::Extra,
         _wire: syn::Ident,
-        _child: CodecInput<Self>,
+        _child: CodecInputPlan<Self>,
         _active: &Condition,
-    ) -> Result<CodecInput<Self>> {
+    ) -> Result<CodecInputPlan<Self>> {
         Err("bulk inputs are unsupported by this codec".into())
     }
 
@@ -217,13 +217,13 @@ pub trait Codec {
         _ty: &Type,
         _extra: &Self::Extra,
         _wire: syn::Ident,
-        _child: CodecOutput<Self>,
-    ) -> Result<CodecOutput<Self>> {
+        _child: CodecOutputPlan<Self>,
+    ) -> Result<CodecOutputPlan<Self>> {
         Err("bulk outputs are unsupported by this codec".into())
     }
 
     /// Compile a callback whose two conversion directions are already resolved.
-    fn input_arrow(&self, _request: InputArrow<'_, Self>) -> Result<CodecInput<Self>> {
+    fn input_arrow(&self, _request: InputArrow<'_, Self>) -> Result<CodecInputPlan<Self>> {
         Err("configured callbacks are unsupported by this codec".into())
     }
 
@@ -244,7 +244,7 @@ pub trait Codec {
         _ty: &Type,
         _wire: &syn::Ident,
         _active: &Condition,
-        _plan: &mut CodecInput<Self>,
+        _plan: &mut CodecInputPlan<Self>,
         _extra: &Self::Extra,
     ) -> Result<()> {
         Err("foreign record inputs are unsupported by this codec".into())
@@ -256,7 +256,7 @@ pub trait Codec {
         _flat: &prebindgen_flat::Flat<Self::Schema>,
         _ty: &Type,
         _wire: &syn::Ident,
-        _plan: &mut CodecOutput<Self>,
+        _plan: &mut CodecOutputPlan<Self>,
         _extra: &Self::Extra,
     ) -> Result<()> {
         Err("foreign record outputs are unsupported by this codec".into())
@@ -276,7 +276,7 @@ pub trait Codec {
         _var: syn::Ident,
         _element: &ResolvedInput<Self>,
         _active: &Condition,
-    ) -> Result<Option<CodecInput<Self>>> {
+    ) -> Result<Option<CodecInputPlan<Self>>> {
         Ok(None)
     }
 
@@ -292,12 +292,12 @@ pub trait Codec {
     /// Validate a prepared input before installing it or embedding it in a sequence.
     /// The default accepts every structural shape. Adapters interpret their own
     /// metadata and enforce semantic rules, such as requiring nonempty alternatives.
-    fn validate_input(&self, _plan: &CodecInput<Self>) -> Result<()> {
+    fn validate_input(&self, _plan: &CodecInputPlan<Self>) -> Result<()> {
         Ok(())
     }
 
     /// Validate named success expressions against the adapter's output representation.
-    fn validate_output(&self, plan: &CodecOutput<Self>) -> Result<()> {
+    fn validate_output(&self, plan: &CodecOutputPlan<Self>) -> Result<()> {
         prebindgen_conversions::validate_value_bindings(&plan.values)
     }
 
@@ -316,7 +316,7 @@ pub trait Codec {
     /// tree is complete when this hook runs. Edits to it or its metadata are
     /// immediately visible to adapter operations; no secondary layout needs refreshing.
     /// The compiler validates the tree before installing the finished slot.
-    fn finish_input(&self, _plan: &mut CodecInput<Self>, _extra: &Self::Extra) -> Result<()> {
+    fn finish_input(&self, _plan: &mut CodecInputPlan<Self>, _extra: &Self::Extra) -> Result<()> {
         Ok(())
     }
 
@@ -324,7 +324,7 @@ pub trait Codec {
     /// Install call-level delivery here, after all output expressions are known.
     /// The logical schema already includes the composed payload and error channels.
     /// Edits to the tree or its adapter metadata are preserved and validated.
-    fn finish_output(&self, _plan: &mut CodecOutput<Self>, _extra: &Self::Extra) -> Result<()> {
+    fn finish_output(&self, _plan: &mut CodecOutputPlan<Self>, _extra: &Self::Extra) -> Result<()> {
         Ok(())
     }
 
@@ -348,7 +348,7 @@ pub trait Codec {
         _extra: &Self::Extra,
         _wire: syn::Ident,
         _value: TokenStream,
-    ) -> Result<Option<CodecOutput<Self>>> {
+    ) -> Result<Option<CodecOutputPlan<Self>>> {
         Ok(None)
     }
 
@@ -373,7 +373,7 @@ pub trait Codec {
         _element: &ResolvedOutput<Self>,
         _delivery: SequenceDelivery,
         _temporary: bool,
-    ) -> Result<Option<CodecOutput<Self>>> {
+    ) -> Result<Option<CodecOutputPlan<Self>>> {
         Ok(None)
     }
 
@@ -391,7 +391,7 @@ pub trait Codec {
         _extra: &Self::Extra,
         _wire: syn::Ident,
         _value: TokenStream,
-    ) -> Result<Option<(CodecOutput<Self>, TokenStream)>> {
+    ) -> Result<Option<(CodecOutputPlan<Self>, TokenStream)>> {
         Ok(None)
     }
 
@@ -401,7 +401,7 @@ pub trait Codec {
         _flat: &Flat<Self::Schema>,
         _owner: &Type,
         _getter: &str,
-        _plan: &CodecOutput<Self>,
+        _plan: &CodecOutputPlan<Self>,
     ) -> Result<()> {
         Ok(())
     }
@@ -414,7 +414,7 @@ pub trait Codec {
         _receiver: &Type,
         _borrowed: bool,
         _ty: &Type,
-        _plan: &CodecOutput<Self>,
+        _plan: &CodecOutputPlan<Self>,
         _extra: &Self::Extra,
     ) -> Result<()> {
         Ok(())
@@ -426,7 +426,7 @@ pub trait Codec {
         &self,
         mut request: OutputLeaf<'_, Self>,
         projection: &Projection,
-    ) -> Result<CodecOutput<Self>> {
+    ) -> Result<CodecOutputPlan<Self>> {
         if !projection.fields.is_empty() {
             return Err("this output converter does not support field projection overrides".into());
         }
@@ -483,7 +483,7 @@ pub fn prepare_mapped_source_error<C: Codec + ?Sized>(
 
 /// Optional frontend for resolving expansion and conversion declarations.
 /// Adapters with another configuration language can implement Codec directly.
-pub trait DeclarationCodec: Codec {
+pub trait DeclCodec: Codec {
     /// Whether a type-targeted expansion deliberately omits its payload.
     fn is_discarded_output(&self, _tree: &ResolvedOutput<Self>) -> bool {
         false
@@ -491,7 +491,7 @@ pub trait DeclarationCodec: Codec {
     /// Select per-element callback delivery in this adapter's resolved output.
     fn sequence_callback(
         &self,
-        _cx: &mut Resolve<'_, Self>,
+        _cx: &mut DeclResolve<'_, Self>,
         _ty: &Type,
         _tree: ResolvedOutput<Self>,
         _structural: bool,
@@ -505,23 +505,23 @@ pub trait DeclarationCodec: Codec {
     /// Interpret one input declaration operation after resolving its children.
     fn resolve_input_leaf(
         &self,
-        operation: InputLeafOp,
-    ) -> Result<<Self::InputOperations as Operations>::Leaf>;
+        operation: DeclInputLeafOp,
+    ) -> Result<<Self::InOps as InputOps>::Leaf>;
     /// Interpret one input declaration operation after resolving its children.
     fn resolve_input_unary(
         &self,
-        operation: InputUnary,
-    ) -> Result<<Self::InputOperations as Operations>::Unary>;
+        operation: DeclInputUnary,
+    ) -> Result<<Self::InOps as InputOps>::Unary>;
     /// Interpret one input declaration operation after resolving its children.
     fn resolve_input_branch(
         &self,
-        operation: InputBranch,
-    ) -> Result<<Self::InputOperations as Operations>::Branch>;
+        operation: DeclInputBranch,
+    ) -> Result<<Self::InOps as InputOps>::Branch>;
     /// Interpret one input declaration operation after resolving its children.
     fn resolve_input_arrow(
         &self,
         operation: Box<CallbackOperation>,
-    ) -> Result<<Self::InputOperations as Operations>::Arrow>;
+    ) -> Result<<Self::InOps as InputOps>::Arrow>;
     /// Normalize the adapter tree after all nested requests have been resolved.
     fn finish_input_tree(&self, tree: ResolvedInput<Self>) -> Result<ResolvedInput<Self>> {
         Ok(tree)
@@ -529,23 +529,23 @@ pub trait DeclarationCodec: Codec {
     /// Interpret one output declaration operation after resolving its children.
     fn resolve_output_leaf(
         &self,
-        operation: OutputLeafOp,
-    ) -> Result<<Self::OutputOperations as Operations>::Leaf>;
+        operation: DeclOutputLeafOp,
+    ) -> Result<<Self::OutOps as OutputOps>::Leaf>;
     /// Interpret one output declaration operation after resolving its children.
     fn resolve_output_unary(
         &self,
-        operation: OutputUnary,
-    ) -> Result<<Self::OutputOperations as Operations>::Unary>;
+        operation: DeclOutputUnary,
+    ) -> Result<<Self::OutOps as OutputOps>::Unary>;
     /// Interpret one output declaration operation after resolving its children.
     fn resolve_output_branch(
         &self,
-        operation: OutputBranch,
-    ) -> Result<<Self::OutputOperations as Operations>::Branch>;
+        operation: DeclOutputBranch,
+    ) -> Result<<Self::OutOps as OutputOps>::Branch>;
     /// Interpret one output declaration operation after resolving its children.
     fn resolve_output_arrow(
         &self,
         operation: std::convert::Infallible,
-    ) -> Result<<Self::OutputOperations as Operations>::Arrow>;
+    ) -> Result<<Self::OutOps as OutputOps>::Arrow>;
     /// Normalize the adapter tree after all nested requests have been resolved.
     fn finish_output_tree(&self, tree: ResolvedOutput<Self>) -> Result<ResolvedOutput<Self>> {
         Ok(tree)
@@ -554,9 +554,9 @@ pub trait DeclarationCodec: Codec {
     /// Return an explicit operation tree for a language-specific representation.
     fn expand_input(
         &self,
-        _cx: &mut Resolve<'_, Self>,
+        _cx: &mut DeclResolve<'_, Self>,
         _ty: &Type,
-        _tree: &DeclarationInput<InputRequest, OutputRequest>,
+        _tree: &DeclInput<DeclInputRequest, DeclOutputRequest>,
     ) -> Result<Option<ResolvedInput<Self>>>
     where
         Self: Sized,
@@ -566,9 +566,9 @@ pub trait DeclarationCodec: Codec {
     /// Source-aware output normalization, called before conversion compilation.
     fn expand_output(
         &self,
-        _cx: &mut Resolve<'_, Self>,
+        _cx: &mut DeclResolve<'_, Self>,
         _ty: &Type,
-        _tree: &DeclarationOutput<OutputRequest, InputRequest>,
+        _tree: &DeclOutput<DeclInputRequest, DeclOutputRequest>,
     ) -> Result<Option<ResolvedOutput<Self>>>
     where
         Self: Sized,
@@ -576,7 +576,7 @@ pub trait DeclarationCodec: Codec {
         Ok(None)
     }
     /// Keep a collection occurrence in one native input leaf instead of
-    /// decomposing it into element rows. Explicit `InputUnary::Sequence` overrides
+    /// decomposing it into element rows. Explicit `DeclInputUnary::Sequence` overrides
     /// this preference; input defaults and whole-collection identities use it.
     fn input_collection_is_leaf(
         &self,
@@ -588,7 +588,7 @@ pub trait DeclarationCodec: Codec {
         false
     }
     /// Keep a collection occurrence in one native output leaf. Explicit
-    /// `OutputUnary::Sequence` and element-targeted expansions still produce rows.
+    /// `DeclOutputUnary::Sequence` and element-targeted expansions still produce rows.
     fn output_collection_is_leaf(
         &self,
         _flat: &Flat<Self::Schema>,

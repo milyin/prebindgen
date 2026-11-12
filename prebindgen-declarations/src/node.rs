@@ -1,93 +1,136 @@
 //! Structural conversion trees. Operations describe meaning; children describe composition.
 use std::convert::Infallible;
 
-/// Adapter-selected meanings for the structural nodes of one conversion direction.
-pub trait Operations: Clone + std::fmt::Debug {
-    /// A terminal conversion.
+/// Operations used when foreign values enter Rust.
+pub trait InputOps: Clone + std::fmt::Debug {
+    /// Terminal input conversion.
     type Leaf: Clone + std::fmt::Debug;
-    /// An operation on one conversion.
+    /// Operation on one input conversion.
     type Unary: Clone + std::fmt::Debug;
-    /// An operation combining conversions.
+    /// Operation combining input conversions.
     type Branch: Clone + std::fmt::Debug;
-    /// A callable representation. Its domain reverses conversion direction.
+    /// Incoming callable representation; its domain reverses direction.
+    type Arrow: Clone + std::fmt::Debug;
+}
+/// Operations used when Rust values leave Rust.
+pub trait OutputOps: Clone + std::fmt::Debug {
+    /// Terminal output conversion.
+    type Leaf: Clone + std::fmt::Debug;
+    /// Operation on one output conversion.
+    type Unary: Clone + std::fmt::Debug;
+    /// Operation combining output conversions.
+    type Branch: Clone + std::fmt::Debug;
+    /// Outgoing callable representation; its domain reverses direction.
     type Arrow: Clone + std::fmt::Debug;
 }
 
 /// A foreign-to-Rust conversion, with structurally visible reverse-direction domains.
+/// The first operation set must implement InputOps:
+/// ```compile_fail
+/// use prebindgen_declarations::{InputNode, frontend::DeclOutputOps};
+/// let _: InputNode<DeclOutputOps, DeclOutputOps> = InputNode::None;
+/// ```
+/// The second operation set must implement OutputOps:
+/// ```compile_fail
+/// use prebindgen_declarations::{InputNode, frontend::DeclInputOps};
+/// let _: InputNode<DeclInputOps, DeclInputOps> = InputNode::None;
+/// ```
 #[derive(Clone, Debug)]
-pub enum InputNode<I: Operations, O: Operations, IR = Infallible, OR = Infallible> {
+pub enum InputNode<
+    InOps: InputOps,
+    OutOps: OutputOps,
+    InRequest = Infallible,
+    OutRequest = Infallible,
+> {
     /// Unit: no values cross the boundary.
     None,
     /// A choice to resolve before compilation. Resolved trees use Infallible.
-    Request(IR),
+    Request(InRequest),
     /// An adapter-defined terminal conversion.
-    Leaf(I::Leaf),
+    Leaf(InOps::Leaf),
     /// One conversion in the same direction.
     Unary {
         /// Interpretation of the child conversion.
-        operation: I::Unary,
+        operation: InOps::Unary,
         /// Operand, in the enclosing conversion direction.
         child: Box<Self>,
     },
     /// Multiple conversions in the same direction.
     Branch {
         /// Interpretation of the child group.
-        operation: I::Branch,
+        operation: InOps::Branch,
         /// Components in operation-defined order.
         children: Vec<Self>,
     },
     /// A callable whose arguments leave Rust and whose result enters Rust.
     Arrow {
         /// Callable representation and invocation policy.
-        operation: I::Arrow,
+        operation: InOps::Arrow,
         /// Argument conversion, in the opposite direction.
-        domain: Box<OutputNode<I, O, IR, OR>>,
+        domain: Box<OutputNode<InOps, OutOps, InRequest, OutRequest>>,
         /// Result conversion, in the enclosing direction.
         codomain: Box<Self>,
     },
 }
 
 /// A Rust-to-foreign conversion, with structurally visible reverse-direction domains.
+/// The first operation set must implement InputOps:
+/// ```compile_fail
+/// use prebindgen_declarations::{OutputNode, frontend::DeclOutputOps};
+/// let _: OutputNode<DeclOutputOps, DeclOutputOps> = OutputNode::None;
+/// ```
+/// The second operation set must implement OutputOps:
+/// ```compile_fail
+/// use prebindgen_declarations::{OutputNode, frontend::DeclInputOps};
+/// let _: OutputNode<DeclInputOps, DeclInputOps> = OutputNode::None;
+/// ```
 #[derive(Clone, Debug)]
-pub enum OutputNode<I: Operations, O: Operations, IR = Infallible, OR = Infallible> {
+pub enum OutputNode<
+    InOps: InputOps,
+    OutOps: OutputOps,
+    InRequest = Infallible,
+    OutRequest = Infallible,
+> {
     /// Unit: no values cross the boundary.
     None,
     /// A choice to resolve before compilation. Resolved trees use Infallible.
-    Request(OR),
+    Request(OutRequest),
     /// An adapter-defined terminal conversion.
-    Leaf(O::Leaf),
+    Leaf(OutOps::Leaf),
     /// One conversion in the same direction.
     Unary {
         /// Interpretation of the child conversion.
-        operation: O::Unary,
+        operation: OutOps::Unary,
         /// Operand, in the enclosing conversion direction.
         child: Box<Self>,
     },
     /// Multiple conversions in the same direction.
     Branch {
         /// Interpretation of the child group.
-        operation: O::Branch,
+        operation: OutOps::Branch,
         /// Components in operation-defined order.
         children: Vec<Self>,
     },
     /// A callable whose arguments enter Rust and whose result leaves Rust.
     Arrow {
         /// Callable representation and invocation policy.
-        operation: O::Arrow,
+        operation: OutOps::Arrow,
         /// Argument conversion, in the opposite direction.
-        domain: Box<InputNode<I, O, IR, OR>>,
+        domain: Box<InputNode<InOps, OutOps, InRequest, OutRequest>>,
         /// Result conversion, in the enclosing direction.
         codomain: Box<Self>,
     },
 }
 
-impl<I: Operations, O: Operations, IR, OR> InputNode<I, O, IR, OR> {
+impl<InOps: InputOps, OutOps: OutputOps, InRequest, OutRequest>
+    InputNode<InOps, OutOps, InRequest, OutRequest>
+{
     /// Transform requests throughout the tree, including reverse-direction domains.
-    pub fn map_requests<IR2, OR2>(
+    pub fn map_requests<InRequest2, OutRequest2>(
         self,
-        input: &mut impl FnMut(IR) -> IR2,
-        output: &mut impl FnMut(OR) -> OR2,
-    ) -> InputNode<I, O, IR2, OR2> {
+        input: &mut impl FnMut(InRequest) -> InRequest2,
+        output: &mut impl FnMut(OutRequest) -> OutRequest2,
+    ) -> InputNode<InOps, OutOps, InRequest2, OutRequest2> {
         match self {
             Self::None => InputNode::None,
             Self::Request(r) => InputNode::Request(input(r)),
@@ -119,13 +162,15 @@ impl<I: Operations, O: Operations, IR, OR> InputNode<I, O, IR, OR> {
     }
 }
 
-impl<I: Operations, O: Operations, IR, OR> OutputNode<I, O, IR, OR> {
+impl<InOps: InputOps, OutOps: OutputOps, InRequest, OutRequest>
+    OutputNode<InOps, OutOps, InRequest, OutRequest>
+{
     /// Transform requests throughout the tree, including reverse-direction domains.
-    pub fn map_requests<IR2, OR2>(
+    pub fn map_requests<InRequest2, OutRequest2>(
         self,
-        input: &mut impl FnMut(IR) -> IR2,
-        output: &mut impl FnMut(OR) -> OR2,
-    ) -> OutputNode<I, O, IR2, OR2> {
+        input: &mut impl FnMut(InRequest) -> InRequest2,
+        output: &mut impl FnMut(OutRequest) -> OutRequest2,
+    ) -> OutputNode<InOps, OutOps, InRequest2, OutRequest2> {
         match self {
             Self::None => OutputNode::None,
             Self::Request(r) => OutputNode::Request(output(r)),
@@ -164,13 +209,13 @@ mod tests {
     struct Incoming;
     #[derive(Clone, Debug)]
     struct Outgoing;
-    impl Operations for Incoming {
+    impl InputOps for Incoming {
         type Leaf = u8;
         type Unary = bool;
         type Branch = usize;
         type Arrow = &'static str;
     }
-    impl Operations for Outgoing {
+    impl OutputOps for Outgoing {
         type Leaf = &'static str;
         type Unary = usize;
         type Branch = bool;

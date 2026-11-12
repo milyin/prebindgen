@@ -1,42 +1,42 @@
 //! Adapter-owned conversion operations, after declaration requests have been resolved.
 use prebindgen_declarations::{
-    CallbackArgumentOwnership, CallbackOperation, InputNode, Operations, OutputNode, Projection,
-    ProjectionMode, SequenceDelivery,
+    CallbackArgumentOwnership, CallbackOperation, InputNode, InputOps, OutputNode, OutputOps,
+    Projection, ProjectionMode, SequenceDelivery,
 };
 use prebindgen_flat::Result;
 use std::convert::Infallible;
 /// Input operations for this adapter.
 #[derive(Clone, Debug)]
-pub struct InputOperations;
+pub struct JniInputOps;
 /// Output operations for this adapter.
 #[derive(Clone, Debug)]
-pub struct OutputOperations;
-impl Operations for InputOperations {
-    type Leaf = InputLeafOp;
-    type Unary = InputUnary;
-    type Branch = InputBranch;
+pub struct JniOutputOps;
+impl InputOps for JniInputOps {
+    type Leaf = JniInputLeafOp;
+    type Unary = JniInputUnary;
+    type Branch = JniInputBranch;
     type Arrow = Box<CallbackOperation>;
 }
-impl Operations for OutputOperations {
-    type Leaf = OutputLeafOp;
-    type Unary = OutputUnary;
-    type Branch = OutputBranch;
+impl OutputOps for JniOutputOps {
+    type Leaf = JniOutputLeafOp;
+    type Unary = JniOutputUnary;
+    type Branch = JniOutputBranch;
     type Arrow = Infallible;
 }
 /// Resolved input conversion for this adapter.
-pub type Input = InputNode<InputOperations, OutputOperations>;
+pub type JniInput = InputNode<JniInputOps, JniOutputOps>;
 /// Resolved output conversion for this adapter.
-pub type Output = OutputNode<InputOperations, OutputOperations>;
+pub type JniOutput = OutputNode<JniInputOps, JniOutputOps>;
 
 /// Terminal input operations.
 #[derive(Clone, Debug)]
-pub enum InputLeafOp {
+pub enum JniInputLeafOp {
     /// Convert the occurrence using its declared value representation.
     Value,
 }
 /// Single-child input operations.
 #[derive(Clone, Debug)]
-pub enum InputUnary {
+pub enum JniInputUnary {
     /// Apply an explicitly selected Rust value conversion.
     Convert {
         /// Checked source/representation conversion.
@@ -53,7 +53,7 @@ pub enum InputUnary {
 }
 /// Multiple-child input operations.
 #[derive(Clone, Debug)]
-pub enum InputBranch {
+pub enum JniInputBranch {
     /// Convert source record fields in declaration order.
     Fields,
     /// Group converted fields into the declared foreign record representation.
@@ -75,7 +75,7 @@ pub enum InputBranch {
 }
 /// Terminal output operations.
 #[derive(Clone, Debug)]
-pub enum OutputLeafOp {
+pub enum JniOutputLeafOp {
     /// Convert the occurrence using its declared value representation.
     Value,
     /// Omit a value while preserving its ordinary Rust destruction.
@@ -85,7 +85,7 @@ pub enum OutputLeafOp {
 }
 /// Single-child output operations.
 #[derive(Clone, Debug)]
-pub enum OutputUnary {
+pub enum JniOutputUnary {
     /// Ownership contract of one callable argument; interpreted by its arrow.
     CallbackArgument {
         /// Whether produced foreign owners expire at the end of invocation.
@@ -130,7 +130,7 @@ pub enum OutputUnary {
 }
 /// Multiple-child output operations.
 #[derive(Clone, Debug)]
-pub enum OutputBranch {
+pub enum JniOutputBranch {
     /// Convert source record fields in declaration order.
     Fields,
     /// Move source record fields into their conversions.
@@ -155,23 +155,23 @@ pub enum OutputBranch {
     Arguments,
 }
 
-pub(crate) trait InputParts {
+pub(crate) trait JniInputParts {
     fn variant_fields(&self) -> Result<&[Self]>
     where
         Self: Sized;
 }
-impl InputParts for Input {
+impl JniInputParts for JniInput {
     fn variant_fields(&self) -> Result<&[Self]> {
         match self {
             Self::Branch {
-                operation: InputBranch::Variant,
+                operation: JniInputBranch::Variant,
                 children,
             } => Ok(children),
             _ => Err("enum children must be variant branches".into()),
         }
     }
 }
-pub(crate) trait OutputParts {
+pub(crate) trait JniOutputParts {
     #[cfg(test)]
     fn bulk(self) -> Self
     where
@@ -184,18 +184,18 @@ pub(crate) trait OutputParts {
         Self: Sized;
     fn callback_argument_parts(&self) -> Result<(CallbackArgumentOwnership, &Self)>;
 }
-impl OutputParts for Output {
+impl JniOutputParts for JniOutput {
     #[cfg(test)]
     fn bulk(self) -> Self {
         Self::Unary {
-            operation: OutputUnary::Bulk,
+            operation: JniOutputUnary::Bulk,
             child: Box::new(self),
         }
     }
     fn variant_fields(&self) -> Result<&[Self]> {
         match self {
             Self::Branch {
-                operation: OutputBranch::Variant,
+                operation: JniOutputBranch::Variant,
                 children,
             } => Ok(children),
             _ => Err("enum children must be variant branches".into()),
@@ -205,7 +205,7 @@ impl OutputParts for Output {
         match self {
             Self::None => Ok(&[]),
             Self::Branch {
-                operation: OutputBranch::Arguments,
+                operation: JniOutputBranch::Arguments,
                 children,
             } => Ok(children),
             _ => Err("callback domain requires an argument branch or None".into()),
@@ -214,7 +214,7 @@ impl OutputParts for Output {
     fn callback_argument_parts(&self) -> Result<(CallbackArgumentOwnership, &Self)> {
         match self {
             Self::Unary {
-                operation: OutputUnary::CallbackArgument { ownership },
+                operation: JniOutputUnary::CallbackArgument { ownership },
                 child,
             } => Ok((*ownership, child)),
             _ => Err("callback argument requires an ownership contract".into()),
@@ -222,235 +222,235 @@ impl OutputParts for Output {
     }
 }
 
-pub(crate) fn lift_input_bulk(tree: Input) -> Input {
+pub(crate) fn lift_input_bulk(tree: JniInput) -> JniInput {
     match tree {
-        Input::Branch {
-            operation: InputBranch::Enum { value },
+        JniInput::Branch {
+            operation: JniInputBranch::Enum { value },
             children: variants,
-        } => Input::Branch {
-            operation: InputBranch::Enum { value },
+        } => JniInput::Branch {
+            operation: JniInputBranch::Enum { value },
             children: variants.into_iter().map(lift_input_bulk).collect(),
         },
-        Input::Unary {
-            operation: InputUnary::Convert { conversion },
+        JniInput::Unary {
+            operation: JniInputUnary::Convert { conversion },
             child: input,
-        } => Input::Unary {
-            operation: InputUnary::Convert { conversion },
+        } => JniInput::Unary {
+            operation: JniInputUnary::Convert { conversion },
             child: Box::new(lift_input_bulk(*input)),
         },
-        Input::Unary {
-            operation: InputUnary::Bulk,
+        JniInput::Unary {
+            operation: JniInputUnary::Bulk,
             child: c,
-        } => Input::Unary {
-            operation: InputUnary::Bulk,
+        } => JniInput::Unary {
+            operation: JniInputUnary::Bulk,
             child: Box::new(lift_input_bulk(*c)),
         },
-        Input::Unary {
-            operation: InputUnary::Temporary,
+        JniInput::Unary {
+            operation: JniInputUnary::Temporary,
             child: c,
-        } => Input::Unary {
-            operation: InputUnary::Temporary,
+        } => JniInput::Unary {
+            operation: JniInputUnary::Temporary,
             child: Box::new(lift_input_bulk(*c)),
         },
-        Input::Unary {
-            operation: InputUnary::Sequence,
+        JniInput::Unary {
+            operation: JniInputUnary::Sequence,
             child: c,
         } => {
             let child = lift_input_bulk(*c);
             if input_has_bulk(&child) {
-                Input::Unary {
-                    operation: InputUnary::Bulk,
-                    child: Box::new(Input::Unary {
-                        operation: InputUnary::Sequence,
+                JniInput::Unary {
+                    operation: JniInputUnary::Bulk,
+                    child: Box::new(JniInput::Unary {
+                        operation: JniInputUnary::Sequence,
                         child: Box::new(child),
                     }),
                 }
             } else {
-                Input::Unary {
-                    operation: InputUnary::Sequence,
+                JniInput::Unary {
+                    operation: JniInputUnary::Sequence,
                     child: Box::new(child),
                 }
             }
         }
-        Input::Unary {
-            operation: InputUnary::Optional,
+        JniInput::Unary {
+            operation: JniInputUnary::Optional,
             child: c,
         } => match lift_input_bulk(*c) {
-            Input::Unary {
-                operation: InputUnary::Bulk,
+            JniInput::Unary {
+                operation: JniInputUnary::Bulk,
                 child: c,
-            } => Input::Unary {
-                operation: InputUnary::Bulk,
-                child: Box::new(Input::Unary {
-                    operation: InputUnary::Optional,
+            } => JniInput::Unary {
+                operation: JniInputUnary::Bulk,
+                child: Box::new(JniInput::Unary {
+                    operation: JniInputUnary::Optional,
                     child: c,
                 }),
             },
-            c => Input::Unary {
-                operation: InputUnary::Optional,
+            c => JniInput::Unary {
+                operation: JniInputUnary::Optional,
                 child: Box::new(c),
             },
         },
-        Input::Branch {
-            operation: InputBranch::Fields,
+        JniInput::Branch {
+            operation: JniInputBranch::Fields,
             children: c,
-        } => Input::Branch {
-            operation: InputBranch::Fields,
+        } => JniInput::Branch {
+            operation: JniInputBranch::Fields,
             children: c.into_iter().map(lift_input_bulk).collect(),
         },
-        Input::Branch {
-            operation: InputBranch::Record,
+        JniInput::Branch {
+            operation: JniInputBranch::Record,
             children: c,
-        } => Input::Branch {
-            operation: InputBranch::Record,
+        } => JniInput::Branch {
+            operation: JniInputBranch::Record,
             children: c.into_iter().map(lift_input_bulk).collect(),
         },
-        Input::Branch {
-            operation: InputBranch::Selector,
+        JniInput::Branch {
+            operation: JniInputBranch::Selector,
             children: c,
-        } => Input::Branch {
-            operation: InputBranch::Selector,
+        } => JniInput::Branch {
+            operation: JniInputBranch::Selector,
             children: c.into_iter().map(lift_input_bulk).collect(),
         },
-        Input::Branch {
-            operation: InputBranch::Constructor { function },
+        JniInput::Branch {
+            operation: JniInputBranch::Constructor { function },
             children: args,
-        } => Input::Branch {
-            operation: InputBranch::Constructor { function },
+        } => JniInput::Branch {
+            operation: JniInputBranch::Constructor { function },
             children: args.into_iter().map(lift_input_bulk).collect(),
         },
-        Input::Branch {
+        JniInput::Branch {
             operation,
             children,
-        } => Input::Branch {
+        } => JniInput::Branch {
             operation,
             children: children.into_iter().map(lift_input_bulk).collect(),
         },
         c => c,
     }
 }
-pub(crate) fn lift_output_bulk(tree: Output) -> Output {
+pub(crate) fn lift_output_bulk(tree: JniOutput) -> JniOutput {
     match tree {
-        Output::Branch {
-            operation: OutputBranch::Enum { value, mode },
+        JniOutput::Branch {
+            operation: JniOutputBranch::Enum { value, mode },
             children: variants,
-        } => Output::Branch {
-            operation: OutputBranch::Enum { value, mode },
+        } => JniOutput::Branch {
+            operation: JniOutputBranch::Enum { value, mode },
             children: variants.into_iter().map(lift_output_bulk).collect(),
         },
-        Output::Unary {
-            operation: OutputUnary::Convert { conversion },
+        JniOutput::Unary {
+            operation: JniOutputUnary::Convert { conversion },
             child: output,
-        } => Output::Unary {
-            operation: OutputUnary::Convert { conversion },
+        } => JniOutput::Unary {
+            operation: JniOutputUnary::Convert { conversion },
             child: Box::new(lift_output_bulk(*output)),
         },
-        Output::Unary {
-            operation: OutputUnary::Bulk,
+        JniOutput::Unary {
+            operation: JniOutputUnary::Bulk,
             child: c,
-        } => Output::Unary {
-            operation: OutputUnary::Bulk,
+        } => JniOutput::Unary {
+            operation: JniOutputUnary::Bulk,
             child: Box::new(lift_output_bulk(*c)),
         },
-        Output::Unary {
-            operation: OutputUnary::Sequence { delivery, mode },
+        JniOutput::Unary {
+            operation: JniOutputUnary::Sequence { delivery, mode },
             child: element,
         } => {
             let child = lift_output_bulk(*element);
             if delivery != SequenceDelivery::Callback && output_has_bulk(&child) {
-                Output::Unary {
-                    operation: OutputUnary::Bulk,
-                    child: Box::new(Output::Unary {
-                        operation: OutputUnary::Sequence { delivery, mode },
+                JniOutput::Unary {
+                    operation: JniOutputUnary::Bulk,
+                    child: Box::new(JniOutput::Unary {
+                        operation: JniOutputUnary::Sequence { delivery, mode },
                         child: Box::new(child),
                     }),
                 }
             } else {
-                Output::Unary {
-                    operation: OutputUnary::Sequence { delivery, mode },
+                JniOutput::Unary {
+                    operation: JniOutputUnary::Sequence { delivery, mode },
                     child: Box::new(child),
                 }
             }
         }
-        Output::Unary {
-            operation: OutputUnary::Optional,
+        JniOutput::Unary {
+            operation: JniOutputUnary::Optional,
             child: c,
         } => match lift_output_bulk(*c) {
-            Output::Unary {
-                operation: OutputUnary::Bulk,
+            JniOutput::Unary {
+                operation: JniOutputUnary::Bulk,
                 child: c,
-            } => Output::Unary {
-                operation: OutputUnary::Bulk,
-                child: Box::new(Output::Unary {
-                    operation: OutputUnary::Optional,
+            } => JniOutput::Unary {
+                operation: JniOutputUnary::Bulk,
+                child: Box::new(JniOutput::Unary {
+                    operation: JniOutputUnary::Optional,
                     child: c,
                 }),
             },
-            c => Output::Unary {
-                operation: OutputUnary::Optional,
+            c => JniOutput::Unary {
+                operation: JniOutputUnary::Optional,
                 child: Box::new(c),
             },
         },
-        Output::Branch {
-            operation: OutputBranch::Fields,
+        JniOutput::Branch {
+            operation: JniOutputBranch::Fields,
             children: c,
-        } => Output::Branch {
-            operation: OutputBranch::Fields,
+        } => JniOutput::Branch {
+            operation: JniOutputBranch::Fields,
             children: c.into_iter().map(lift_output_bulk).collect(),
         },
-        Output::Branch {
-            operation: OutputBranch::OwnedFields,
+        JniOutput::Branch {
+            operation: JniOutputBranch::OwnedFields,
             children: c,
-        } => Output::Branch {
-            operation: OutputBranch::OwnedFields,
+        } => JniOutput::Branch {
+            operation: JniOutputBranch::OwnedFields,
             children: c.into_iter().map(lift_output_bulk).collect(),
         },
-        Output::Branch {
-            operation: OutputBranch::Record { mode },
+        JniOutput::Branch {
+            operation: JniOutputBranch::Record { mode },
             children: fields,
-        } => Output::Branch {
-            operation: OutputBranch::Record { mode },
+        } => JniOutput::Branch {
+            operation: JniOutputBranch::Record { mode },
             children: fields.into_iter().map(lift_output_bulk).collect(),
         },
-        Output::Branch {
-            operation: OutputBranch::Combine,
+        JniOutput::Branch {
+            operation: JniOutputBranch::Combine,
             children: c,
-        } => Output::Branch {
-            operation: OutputBranch::Combine,
+        } => JniOutput::Branch {
+            operation: JniOutputBranch::Combine,
             children: c.into_iter().map(lift_output_bulk).collect(),
         },
-        Output::Unary {
-            operation: OutputUnary::Result { error },
+        JniOutput::Unary {
+            operation: JniOutputUnary::Result { error },
             child: ok,
-        } => Output::Unary {
-            operation: OutputUnary::Result { error },
+        } => JniOutput::Unary {
+            operation: JniOutputUnary::Result { error },
             child: Box::new(lift_output_bulk(*ok)),
         },
-        Output::Unary {
-            operation: OutputUnary::Getter { function },
+        JniOutput::Unary {
+            operation: JniOutputUnary::Getter { function },
             child: output,
-        } => Output::Unary {
-            operation: OutputUnary::Getter { function },
+        } => JniOutput::Unary {
+            operation: JniOutputUnary::Getter { function },
             child: Box::new(lift_output_bulk(*output)),
         },
-        Output::Unary {
-            operation: OutputUnary::Into { function },
+        JniOutput::Unary {
+            operation: JniOutputUnary::Into { function },
             child: output,
-        } => Output::Unary {
-            operation: OutputUnary::Into { function },
+        } => JniOutput::Unary {
+            operation: JniOutputUnary::Into { function },
             child: Box::new(lift_output_bulk(*output)),
         },
-        Output::Unary {
-            operation: OutputUnary::Named { name },
+        JniOutput::Unary {
+            operation: JniOutputUnary::Named { name },
             child: output,
-        } => Output::Unary {
-            operation: OutputUnary::Named { name },
+        } => JniOutput::Unary {
+            operation: JniOutputUnary::Named { name },
             child: Box::new(lift_output_bulk(*output)),
         },
-        Output::Branch {
+        JniOutput::Branch {
             operation,
             children,
-        } => Output::Branch {
+        } => JniOutput::Branch {
             operation,
             children: children.into_iter().map(lift_output_bulk).collect(),
         },
@@ -458,180 +458,180 @@ pub(crate) fn lift_output_bulk(tree: Output) -> Output {
     }
 }
 
-fn input_has_bulk(tree: &Input) -> bool {
+fn input_has_bulk(tree: &JniInput) -> bool {
     match tree {
-        Input::Branch {
-            operation: InputBranch::Enum { .. },
+        JniInput::Branch {
+            operation: JniInputBranch::Enum { .. },
             children: variants,
             ..
         } => variants.iter().any(input_has_bulk),
-        Input::Unary {
-            operation: InputUnary::Convert { .. },
+        JniInput::Unary {
+            operation: JniInputUnary::Convert { .. },
             child: input,
             ..
         } => input_has_bulk(input),
-        Input::Unary {
-            operation: InputUnary::Bulk,
+        JniInput::Unary {
+            operation: JniInputUnary::Bulk,
             child: _,
         } => true,
-        Input::Unary {
-            operation: InputUnary::Optional,
+        JniInput::Unary {
+            operation: JniInputUnary::Optional,
             child: c,
         }
-        | Input::Unary {
-            operation: InputUnary::Sequence,
+        | JniInput::Unary {
+            operation: JniInputUnary::Sequence,
             child: c,
         } => input_has_bulk(c),
-        Input::Branch {
-            operation: InputBranch::Fields,
+        JniInput::Branch {
+            operation: JniInputBranch::Fields,
             children: c,
         }
-        | Input::Branch {
-            operation: InputBranch::Record,
+        | JniInput::Branch {
+            operation: JniInputBranch::Record,
             children: c,
         }
-        | Input::Branch {
-            operation: InputBranch::Selector,
+        | JniInput::Branch {
+            operation: JniInputBranch::Selector,
             children: c,
         } => c.iter().any(input_has_bulk),
-        Input::Branch {
-            operation: InputBranch::Constructor { .. },
+        JniInput::Branch {
+            operation: JniInputBranch::Constructor { .. },
             children: args,
             ..
         } => args.iter().any(input_has_bulk),
-        Input::Branch { children, .. } => children.iter().any(input_has_bulk),
+        JniInput::Branch { children, .. } => children.iter().any(input_has_bulk),
         _ => false,
     }
 }
-fn output_has_bulk(tree: &Output) -> bool {
+fn output_has_bulk(tree: &JniOutput) -> bool {
     match tree {
-        Output::Branch {
-            operation: OutputBranch::Enum { .. },
+        JniOutput::Branch {
+            operation: JniOutputBranch::Enum { .. },
             children: variants,
             ..
         } => variants.iter().any(output_has_bulk),
         // Frames inside callback elements belong to those elements, including
         // when the callback sequence is nested in another structural node.
-        Output::Unary {
+        JniOutput::Unary {
             operation:
-                OutputUnary::Sequence {
+                JniOutputUnary::Sequence {
                     delivery: SequenceDelivery::Callback,
                     ..
                 },
             ..
         } => false,
-        Output::Unary {
-            operation: OutputUnary::Convert { .. },
+        JniOutput::Unary {
+            operation: JniOutputUnary::Convert { .. },
             child: output,
             ..
         } => output_has_bulk(output),
-        Output::Unary {
-            operation: OutputUnary::Bulk,
+        JniOutput::Unary {
+            operation: JniOutputUnary::Bulk,
             child: _,
         } => true,
-        Output::Unary {
-            operation: OutputUnary::Optional,
+        JniOutput::Unary {
+            operation: JniOutputUnary::Optional,
             child: c,
         }
-        | Output::Unary {
-            operation: OutputUnary::Named { .. },
-            child: c,
-            ..
-        }
-        | Output::Unary {
-            operation: OutputUnary::Getter { .. },
+        | JniOutput::Unary {
+            operation: JniOutputUnary::Named { .. },
             child: c,
             ..
         }
-        | Output::Unary {
-            operation: OutputUnary::Into { .. },
+        | JniOutput::Unary {
+            operation: JniOutputUnary::Getter { .. },
             child: c,
             ..
         }
-        | Output::Unary {
-            operation: OutputUnary::Sequence { .. },
+        | JniOutput::Unary {
+            operation: JniOutputUnary::Into { .. },
+            child: c,
+            ..
+        }
+        | JniOutput::Unary {
+            operation: JniOutputUnary::Sequence { .. },
             child: c,
             ..
         } => output_has_bulk(c),
-        Output::Branch {
-            operation: OutputBranch::Fields,
+        JniOutput::Branch {
+            operation: JniOutputBranch::Fields,
             children: c,
         }
-        | Output::Branch {
-            operation: OutputBranch::OwnedFields,
+        | JniOutput::Branch {
+            operation: JniOutputBranch::OwnedFields,
             children: c,
         }
-        | Output::Branch {
-            operation: OutputBranch::Combine,
+        | JniOutput::Branch {
+            operation: JniOutputBranch::Combine,
             children: c,
         }
-        | Output::Branch {
-            operation: OutputBranch::Record { .. },
+        | JniOutput::Branch {
+            operation: JniOutputBranch::Record { .. },
             children: c,
             ..
         } => c.iter().any(output_has_bulk),
-        Output::Branch { children, .. } => children.iter().any(output_has_bulk),
+        JniOutput::Branch { children, .. } => children.iter().any(output_has_bulk),
         _ => false,
     }
 }
 
 pub(crate) fn sequence_callback(
-    cx: &mut prebindgen_declarations::Resolve<'_, crate::JniCodec>,
+    cx: &mut prebindgen_declarations::DeclResolve<'_, crate::JniCodec>,
     ty: &syn::Type,
-    mut output: Output,
+    mut output: JniOutput,
     structural_default: bool,
-) -> Result<Output> {
-    fn select(output: &mut Output) -> usize {
+) -> Result<JniOutput> {
+    fn select(output: &mut JniOutput) -> usize {
         match output {
-            Output::Unary {
-                operation: OutputUnary::Sequence { delivery, .. },
+            JniOutput::Unary {
+                operation: JniOutputUnary::Sequence { delivery, .. },
                 ..
             } => {
                 *delivery = SequenceDelivery::Callback;
                 1
             }
-            Output::Unary {
-                operation: OutputUnary::Optional,
+            JniOutput::Unary {
+                operation: JniOutputUnary::Optional,
                 child,
             }
-            | Output::Unary {
-                operation: OutputUnary::Bulk,
+            | JniOutput::Unary {
+                operation: JniOutputUnary::Bulk,
                 child,
             }
-            | Output::Unary {
-                operation: OutputUnary::Named { .. },
-                child,
-                ..
-            }
-            | Output::Unary {
-                operation: OutputUnary::Getter { .. },
+            | JniOutput::Unary {
+                operation: JniOutputUnary::Named { .. },
                 child,
                 ..
             }
-            | Output::Unary {
-                operation: OutputUnary::Into { .. },
+            | JniOutput::Unary {
+                operation: JniOutputUnary::Getter { .. },
                 child,
                 ..
             }
-            | Output::Unary {
-                operation: OutputUnary::Convert { .. },
+            | JniOutput::Unary {
+                operation: JniOutputUnary::Into { .. },
+                child,
+                ..
+            }
+            | JniOutput::Unary {
+                operation: JniOutputUnary::Convert { .. },
                 child,
                 ..
             } => select(child),
-            Output::Branch {
-                operation: OutputBranch::Combine,
+            JniOutput::Branch {
+                operation: JniOutputBranch::Combine,
                 children,
             }
-            | Output::Branch {
-                operation: OutputBranch::Fields,
+            | JniOutput::Branch {
+                operation: JniOutputBranch::Fields,
                 children,
             }
-            | Output::Branch {
-                operation: OutputBranch::OwnedFields,
+            | JniOutput::Branch {
+                operation: JniOutputBranch::OwnedFields,
                 children,
             }
-            | Output::Branch {
-                operation: OutputBranch::Record { .. },
+            | JniOutput::Branch {
+                operation: JniOutputBranch::Record { .. },
                 children,
                 ..
             } => children.iter_mut().map(select).sum(),
@@ -641,30 +641,30 @@ pub(crate) fn sequence_callback(
     if select(&mut output) != 1 {
         fn structural(
             ty: &syn::Type,
-            output: &Output,
+            output: &JniOutput,
         ) -> Option<
-            prebindgen_declarations::DeclarationOutput<
-                prebindgen_declarations::OutputRequest,
-                prebindgen_declarations::InputRequest,
+            prebindgen_declarations::DeclOutput<
+                prebindgen_declarations::DeclInputRequest,
+                prebindgen_declarations::DeclOutputRequest,
             >,
         > {
             match output {
-                Output::Leaf(OutputLeafOp::Value)
+                JniOutput::Leaf(JniOutputLeafOp::Value)
                     if prebindgen_flat::sequence_parts(ty).is_some() =>
                 {
-                    Some(prebindgen_declarations::DeclarationOutput::Unary {
-                        operation: prebindgen_declarations::frontend::OutputUnary::Sequence {
+                    Some(prebindgen_declarations::DeclOutput::Unary {
+                        operation: prebindgen_declarations::frontend::DeclOutputUnary::Sequence {
                             delivery: SequenceDelivery::Callback,
                             mode: None,
                         },
-                        child: Box::new(prebindgen_declarations::DeclarationOutput::auto()),
+                        child: Box::new(prebindgen_declarations::DeclOutput::auto()),
                     })
                 }
-                Output::Unary {
-                    operation: OutputUnary::Optional,
+                JniOutput::Unary {
+                    operation: JniOutputUnary::Optional,
                     child,
-                } => Some(prebindgen_declarations::DeclarationOutput::Unary {
-                    operation: prebindgen_declarations::frontend::OutputUnary::Optional,
+                } => Some(prebindgen_declarations::DeclOutput::Unary {
+                    operation: prebindgen_declarations::frontend::DeclOutputUnary::Optional,
                     child: Box::new(structural(prebindgen_flat::option_inner(ty)?, child)?),
                 }),
                 _ => None,

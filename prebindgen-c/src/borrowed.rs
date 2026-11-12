@@ -1,6 +1,6 @@
 //! Non-owning numeric collection views, with no per-element output conversion.
 use super::*;
-use crate::operations::{InputLeafOp, Output, OutputLeafOp};
+use crate::operations::{CInputLeafOp, COutput, COutputLeafOp};
 use prebindgen_declarations::SequenceDelivery;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -44,14 +44,14 @@ pub(crate) fn c_name(element: Primitive, prefix: &str) -> String {
 }
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn sequence(
-    flat: &Bindings,
+    flat: &CBindings,
     ty: &syn::Type,
     wire: syn::Ident,
     value: TokenStream,
-    recipe: &Output,
+    recipe: &COutput,
     delivery: SequenceDelivery,
     temporary: bool,
-) -> Result<Option<OutputPlan<CWire>>> {
+) -> Result<Option<COutputPlan<CWire>>> {
     // An explicitly requested visitor does not allocate row storage. Its leaves
     // still enforce their own ownership/copy policies.
     if delivery == SequenceDelivery::Callback {
@@ -68,14 +68,14 @@ pub(crate) fn sequence(
         return Err("mutable C collection views are unsupported".into());
     }
     let primitive = primitive(element_type, &flat.types);
-    let Some(element) = primitive.filter(|_| matches!(recipe, Output::Leaf(OutputLeafOp::Value)))
+    let Some(element) = primitive.filter(|_| matches!(recipe, COutput::Leaf(COutputLeafOp::Value)))
     else {
         return Err(format!("borrowed C collection `{}` cannot allocate converted rows implicitly; use an address-preserving numeric element representation or explicitly permit a collection-level copy with expand_return!(&[T]).field_self_ref() (not an element-only expansion)", prebindgen_flat::type_key(ty)));
     };
     let element_type = native_element_type(element);
     let carrier = ident(element);
     let source = format_ident!("{wire}_source");
-    Ok(Some(OutputPlan {
+    Ok(Some(COutputPlan {
         fallible: false,
         context: Default::default(),
         delivery: Default::default(),
@@ -98,13 +98,13 @@ pub(crate) fn sequence(
 }
 /// A directly borrowed foreign slice, without reconstructing a Rust Vec owner.
 pub(crate) fn input_sequence(
-    flat: &Bindings,
+    flat: &CBindings,
     ty: &syn::Type,
     wire: syn::Ident,
     var: syn::Ident,
-    recipe: &crate::operations::Input,
+    recipe: &crate::operations::CInput,
     active: &prebindgen_declarations::Condition,
-) -> Result<InputPlan<CWire>> {
+) -> Result<CInputPlan<CWire>> {
     let syn::Type::Reference(reference) = ty else {
         return Err("borrowed C input requires a reference".into());
     };
@@ -125,7 +125,7 @@ pub(crate) fn input_sequence(
         _ => return Err(format!("shared C input `{}` cannot reconstruct an owning collection implicitly; declare a native opaque owner input or explicitly select expand_param!({}).reconstruct()",prebindgen_flat::type_key(ty),prebindgen_flat::type_key(ty))),
     };
     let Some(element) = primitive(source_element, &flat.types)
-        .filter(|_| matches!(recipe, crate::operations::Input::Leaf(InputLeafOp::Value)))
+        .filter(|_| matches!(recipe, crate::operations::CInput::Leaf(CInputLeafOp::Value)))
     else {
         return Err(format!("shared C input `{}` cannot allocate converted elements implicitly; use a compatible numeric slice, a native opaque owner, or explicitly select expand_param!({}).reconstruct()",prebindgen_flat::type_key(ty),prebindgen_flat::type_key(ty)));
     };
@@ -138,7 +138,7 @@ pub(crate) fn input_sequence(
     } else {
         quote!(#slice)
     };
-    Ok(InputPlan::new(
+    Ok(CInputPlan::new(
         prebindgen_flat::WireNode::Leaf(vec![Wire {
             name: wire.clone(),
             kind: CWire::SliceView { element },
@@ -202,8 +202,8 @@ pub(crate) fn emit(
 mod tests {
     use super::*;
     use prebindgen_declarations::{expand_return, fun, ProjectionMode};
-    fn model(source: &str) -> Bindings {
-        Bindings::parse(
+    fn model(source: &str) -> CBindings {
+        CBindings::parse(
             syn::parse_file(source)
                 .unwrap()
                 .items
@@ -214,10 +214,10 @@ mod tests {
     }
     fn sequence(
         copy: bool,
-        element: prebindgen_declarations::DeclarationOutput<OutputRequest, InputRequest>,
-    ) -> prebindgen_declarations::DeclarationOutput<OutputRequest, InputRequest> {
-        prebindgen_declarations::DeclarationOutput::Unary {
-            operation: OutputUnary::Sequence {
+        element: prebindgen_declarations::DeclOutput<DeclInputRequest, DeclOutputRequest>,
+    ) -> prebindgen_declarations::DeclOutput<DeclInputRequest, DeclOutputRequest> {
+        prebindgen_declarations::DeclOutput::Unary {
+            operation: DeclOutputUnary::Sequence {
                 delivery: SequenceDelivery::Value,
                 mode: copy.then_some(ProjectionMode::Borrowed),
             },
@@ -269,10 +269,9 @@ mod tests {
             );
         }
         let g = Cbindgen::new(model("pub fn values()->&'static [bool]{}"))
-            .function(fun!(values).output(sequence(
-                true,
-                prebindgen_declarations::DeclarationOutput::auto(),
-            )))
+            .function(
+                fun!(values).output(sequence(true, prebindgen_declarations::DeclOutput::auto())),
+            )
             .build()
             .unwrap();
         assert!(g.rust.contains("OutputRows"));
@@ -308,12 +307,9 @@ mod tests {
         assert!(g.header.contains("pb_i64_slice_view *out1"));
         let error = Cbindgen::new(model(source))
             .function(
-                fun!(make).output(prebindgen_declarations::DeclarationOutput::Branch {
-                    operation: OutputBranch::Fields,
-                    children: vec![sequence(
-                        false,
-                        prebindgen_declarations::DeclarationOutput::auto(),
-                    )],
+                fun!(make).output(prebindgen_declarations::DeclOutput::Branch {
+                    operation: DeclOutputBranch::Fields,
+                    children: vec![sequence(false, prebindgen_declarations::DeclOutput::auto())],
                 }),
             )
             .build()
@@ -334,10 +330,9 @@ mod tests {
             .unwrap();
         assert!(error.contains("reconstructed reference input"), "{error}");
         let g = Cbindgen::new(model("pub fn echo(v:&[i64])->&[i64]{}"))
-            .function(fun!(echo).output(sequence(
-                true,
-                prebindgen_declarations::DeclarationOutput::auto(),
-            )))
+            .function(
+                fun!(echo).output(sequence(true, prebindgen_declarations::DeclOutput::auto())),
+            )
             .panic()
             .build()
             .unwrap();
@@ -348,7 +343,7 @@ mod tests {
         let g = Cbindgen::new(model("pub fn values()->&'static [Vec<i64>]{}"))
             .function(fun!(values).output(sequence(
                 true,
-                sequence(false, prebindgen_declarations::DeclarationOutput::auto()),
+                sequence(false, prebindgen_declarations::DeclOutput::auto()),
             )))
             .build()
             .unwrap();
@@ -498,9 +493,7 @@ mod tests {
     #[test]
     fn unsupported_c_bulk_does_not_bypass_borrow_rules() {
         let error = Cbindgen::new(model("pub fn values()->&'static [i64]{}"))
-            .function(
-                fun!(values).output(prebindgen_declarations::DeclarationOutput::auto().bulk()),
-            )
+            .function(fun!(values).output(prebindgen_declarations::DeclOutput::auto().bulk()))
             .build()
             .err()
             .unwrap();
@@ -639,7 +632,7 @@ mod tests {
     }
     #[test]
     fn reconstruction_is_explicit_and_can_be_global_local_optional_or_nested() {
-        use prebindgen_declarations::{expand_param, DeclarationInput};
+        use prebindgen_declarations::{expand_param, DeclInput};
         for ty in [
             "&[i64]",
             "&Vec<i64>",
@@ -651,7 +644,7 @@ mod tests {
         ] {
             let source = format!("pub fn inspect(values:{ty})->usize{{}}");
             let declaration =
-                prebindgen_declarations::ExpandParamDecl::new(syn::parse_str(ty).unwrap())
+                prebindgen_declarations::DeclExpandParam::new(syn::parse_str(ty).unwrap())
                     .reconstruct();
             let g = Cbindgen::new(model(&source))
                 .function(fun!(inspect).expand_param("values", declaration))
@@ -668,7 +661,7 @@ mod tests {
         assert!(!g.rust.contains("_prepared"));
         assert!(
             Cbindgen::new(model("pub fn inspect(values:&String)->usize{}"))
-                .function(fun!(inspect).input("values", DeclarationInput::auto().reconstruct()))
+                .function(fun!(inspect).input("values", DeclInput::auto().reconstruct()))
                 .panic()
                 .build()
                 .is_ok()
@@ -717,7 +710,7 @@ mod tests {
                 .function(
                     fun!(echo).expand_param(
                         "values",
-                        prebindgen_declarations::ExpandParamDecl::new(syn::parse_str(ty).unwrap())
+                        prebindgen_declarations::DeclExpandParam::new(syn::parse_str(ty).unwrap())
                             .reconstruct(),
                     ),
                 )
@@ -736,7 +729,7 @@ mod tests {
                 .function(
                     fun!(inspect).expand_param(
                         "values",
-                        prebindgen_declarations::ExpandParamDecl::new(syn::parse_str(ty).unwrap())
+                        prebindgen_declarations::DeclExpandParam::new(syn::parse_str(ty).unwrap())
                             .reconstruct(),
                     ),
                 )
@@ -784,7 +777,7 @@ mod tests {
             &syn::parse_quote!(&'static [i64]),
             syn::parse_quote!(wire),
             syn::parse_quote!(value),
-            &crate::operations::Input::Leaf(InputLeafOp::Value),
+            &crate::operations::CInput::Leaf(CInputLeafOp::Value),
             &Default::default(),
         )
         .err()
@@ -803,10 +796,9 @@ mod tests {
             .unwrap()
             .contains("'static reference lifetime"));
         let error = Cbindgen::new(model("pub fn inspect(values:&[i64])->usize{}"))
-            .function(fun!(inspect).input(
-                "values",
-                prebindgen_declarations::DeclarationInput::auto().bulk(),
-            ))
+            .function(
+                fun!(inspect).input("values", prebindgen_declarations::DeclInput::auto().bulk()),
+            )
             .panic()
             .build()
             .err()

@@ -48,26 +48,26 @@ impl<T: KotlinInputConversion> InputProvider for T {
 /// An owned prepared input converter, usable in default bindings and callbacks.
 /// Cloning shares immutable generator data; no wrapper allocation is emitted.
 #[derive(Clone)]
-pub struct JniInput(Rc<dyn InputProvider>);
-impl JniInput {
+pub struct JniInputConverter(Rc<dyn InputProvider>);
+impl JniInputConverter {
     /// Retain an independent converter through the same contracts as built-in inputs.
     pub fn new(input: impl KotlinInputConversion + 'static) -> Self {
         Self(Rc::new(input))
     }
 }
-impl std::fmt::Debug for JniInput {
+impl std::fmt::Debug for JniInputConverter {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("JniInput")
+        f.debug_struct("JniInputConverter")
             .field("node", self.input_node())
             .finish()
     }
 }
-impl From<InputPlan<JniWire>> for JniInput {
-    fn from(rust: InputPlan<JniWire>) -> Self {
+impl From<JniInputPlan<JniWire>> for JniInputConverter {
+    fn from(rust: JniInputPlan<JniWire>) -> Self {
         Self::new(kotlin::PlanInput { rust })
     }
 }
-impl Conversion for JniInput {
+impl Conversion for JniInputConverter {
     type Wire = JniWire;
     type Chain = JniChain;
     type Branch = JniBranch;
@@ -80,12 +80,12 @@ impl Conversion for JniInput {
         self.0.fragment(request, expected)
     }
 }
-impl InputConversion for JniInput {
+impl InputConversion for JniInputConverter {
     fn input_node(&self) -> &kotlin::JniNode {
         self.0.node()
     }
 }
-impl KotlinInputConversion for JniInput {
+impl KotlinInputConversion for JniInputConverter {
     fn kotlin(&self, context: &KotlinContext<'_>) -> Result<KotlinInput> {
         self.0.kotlin(context)
     }
@@ -162,11 +162,11 @@ impl<T: KotlinOutputConversion> OutputProvider for T {
 
 /// An owned prepared output converter, usable in default bindings and callbacks.
 #[derive(Clone)]
-pub struct JniOutput {
+pub struct JniOutputConverter {
     provider: Rc<dyn OutputProvider>,
     packet_only: bool,
 }
-impl JniOutput {
+impl JniOutputConverter {
     /// Retain an independent converter, including its delivery and Kotlin projections.
     pub fn new(output: impl KotlinOutputConversion + 'static) -> Self {
         Self {
@@ -187,20 +187,20 @@ impl JniOutput {
         Ok(group::result_packet_fields(&self.output_outcomes().success))
     }
 }
-impl std::fmt::Debug for JniOutput {
+impl std::fmt::Debug for JniOutputConverter {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("JniOutput")
+        f.debug_struct("JniOutputConverter")
             .field("outcomes", self.output_outcomes())
             .field("packet_only", &self.packet_only)
             .finish()
     }
 }
-impl From<OutputPlan<JniWire>> for JniOutput {
-    fn from(rust: OutputPlan<JniWire>) -> Self {
+impl From<JniOutputPlan<JniWire>> for JniOutputConverter {
+    fn from(rust: JniOutputPlan<JniWire>) -> Self {
         Self::new(kotlin::PlanOutput { rust })
     }
 }
-impl Conversion for JniOutput {
+impl Conversion for JniOutputConverter {
     type Wire = JniWire;
     type Chain = JniChain;
     type Branch = JniBranch;
@@ -213,12 +213,12 @@ impl Conversion for JniOutput {
         self.provider.fragment(request, expected)
     }
 }
-impl OutputConversion for JniOutput {
+impl OutputConversion for JniOutputConverter {
     fn output_outcomes(&self) -> &Outcomes<kotlin::JniNode> {
         self.provider.outcomes()
     }
 }
-impl KotlinOutputConversion for JniOutput {
+impl KotlinOutputConversion for JniOutputConverter {
     fn kotlin(&self, context: &KotlinContext<'_>) -> Result<KotlinOutput> {
         self.provider.kotlin(context)
     }

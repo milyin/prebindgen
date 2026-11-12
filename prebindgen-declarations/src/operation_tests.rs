@@ -13,14 +13,14 @@ impl Codec for Scalars {
     type Chain = ();
     type Branch = ();
 
-    fn input_leaf(&self, r: InputLeaf<'_, Self>) -> Result<CodecInput<Self>> {
+    fn input_leaf(&self, r: InputLeaf<'_, Self>) -> Result<CodecInputPlan<Self>> {
         if !same_type(r.ty, &syn::parse_quote!(i64)) {
             return Err("this codec only supports i64".into());
         }
         let wire = &r.wire;
         value::input(r.ty, r.wire.clone(), r.target, quote!(#wire), r.ty.clone())
     }
-    fn output_leaf(&self, r: OutputLeaf<'_, Self>) -> Result<CodecOutput<Self>> {
+    fn output_leaf(&self, r: OutputLeaf<'_, Self>) -> Result<CodecOutputPlan<Self>> {
         if !same_type(r.ty, &syn::parse_quote!(i64)) {
             return Err("this codec only supports i64".into());
         }
@@ -56,7 +56,7 @@ fn model() -> Flat<<Scalars as Codec>::Schema> {
 #[test]
 fn declaration_helpers_compile_and_execute_a_complete_call() {
     let mut flat = model();
-    Declarations::new(&flat, vec![], vec![], vec![])
+    DeclDefaults::new(&flat, vec![], vec![], vec![])
         .unwrap()
         .fill(&mut flat, &Scalars, &fun!(add), &())
         .unwrap();
@@ -116,28 +116,28 @@ fn minimal_codec_rejects_optional_features_and_bulk_before_decoding() {
     for (source, input) in [
         (
             ty.clone(),
-            DeclarationInput::Unary {
-                operation: InputUnary::Bulk,
-                child: Box::new(DeclarationInput::Leaf(InputLeafOp::Value)),
+            DeclInput::Unary {
+                operation: DeclInputUnary::Bulk,
+                child: Box::new(DeclInput::Leaf(DeclInputLeafOp::Value)),
             },
         ),
         (
             syn::parse_quote!(()),
-            DeclarationInput::Unary {
-                operation: InputUnary::Bulk,
-                child: Box::new(DeclarationInput::Branch {
-                    operation: InputBranch::Fields,
+            DeclInput::Unary {
+                operation: DeclInputUnary::Bulk,
+                child: Box::new(DeclInput::Branch {
+                    operation: DeclInputBranch::Fields,
                     children: vec![],
                 }),
             },
         ),
         (
             syn::parse_quote!(Vec<i64>),
-            DeclarationInput::Unary {
-                operation: InputUnary::Bulk,
-                child: Box::new(DeclarationInput::Unary {
-                    operation: InputUnary::Sequence,
-                    child: Box::new(DeclarationInput::Leaf(InputLeafOp::Value)),
+            DeclInput::Unary {
+                operation: DeclInputUnary::Bulk,
+                child: Box::new(DeclInput::Unary {
+                    operation: DeclInputUnary::Sequence,
+                    child: Box::new(DeclInput::Leaf(DeclInputLeafOp::Value)),
                 }),
             },
         ),
@@ -148,40 +148,40 @@ fn minimal_codec_rejects_optional_features_and_bulk_before_decoding() {
     for (source, output) in [
         (
             ty.clone(),
-            DeclarationOutput::Unary {
-                operation: OutputUnary::Bulk,
-                child: Box::new(DeclarationOutput::Leaf(OutputLeafOp::Value)),
+            DeclOutput::Unary {
+                operation: DeclOutputUnary::Bulk,
+                child: Box::new(DeclOutput::Leaf(DeclOutputLeafOp::Value)),
             },
         ),
         (
             ty.clone(),
-            DeclarationOutput::Unary {
-                operation: OutputUnary::Bulk,
-                child: Box::new(DeclarationOutput::Leaf(OutputLeafOp::Projected(
+            DeclOutput::Unary {
+                operation: DeclOutputUnary::Bulk,
+                child: Box::new(DeclOutput::Leaf(DeclOutputLeafOp::Projected(
                     Projection::owned(),
                 ))),
             },
         ),
         (
             syn::parse_quote!(()),
-            DeclarationOutput::Unary {
-                operation: OutputUnary::Bulk,
-                child: Box::new(DeclarationOutput::Branch {
-                    operation: OutputBranch::Fields,
+            DeclOutput::Unary {
+                operation: DeclOutputUnary::Bulk,
+                child: Box::new(DeclOutput::Branch {
+                    operation: DeclOutputBranch::Fields,
                     children: vec![],
                 }),
             },
         ),
         (
             syn::parse_quote!(Vec<i64>),
-            DeclarationOutput::Unary {
-                operation: OutputUnary::Bulk,
-                child: Box::new(DeclarationOutput::Unary {
-                    operation: OutputUnary::Sequence {
+            DeclOutput::Unary {
+                operation: DeclOutputUnary::Bulk,
+                child: Box::new(DeclOutput::Unary {
+                    operation: DeclOutputUnary::Sequence {
                         delivery: SequenceDelivery::Value,
                         mode: None,
                     },
-                    child: Box::new(DeclarationOutput::Leaf(OutputLeafOp::Value)),
+                    child: Box::new(DeclOutput::Leaf(DeclOutputLeafOp::Value)),
                 }),
             },
         ),
@@ -193,9 +193,9 @@ fn minimal_codec_rejects_optional_features_and_bulk_before_decoding() {
         &flat,
         &Scalars,
         &syn::parse_quote!(Option<i64>),
-        &DeclarationInput::Unary {
-            operation: InputUnary::Optional,
-            child: Box::new(DeclarationInput::Leaf(InputLeafOp::Value)),
+        &DeclInput::Unary {
+            operation: DeclInputUnary::Optional,
+            child: Box::new(DeclInput::Leaf(DeclInputLeafOp::Value)),
         },
         &(),
     )
@@ -270,7 +270,7 @@ impl Codec for Probe {
     type Extra = ();
     type Chain = ();
     type Branch = ();
-    fn input_leaf(&self, r: InputLeaf<'_, Self>) -> Result<CodecInput<Self>> {
+    fn input_leaf(&self, r: InputLeaf<'_, Self>) -> Result<CodecInputPlan<Self>> {
         self.0.borrow_mut().push((r.representation, r.role));
         Scalars.input_leaf(InputLeaf {
             flat: r.flat,
@@ -283,7 +283,7 @@ impl Codec for Probe {
             role: r.role,
         })
     }
-    fn output_leaf(&self, r: OutputLeaf<'_, Self>) -> Result<CodecOutput<Self>> {
+    fn output_leaf(&self, r: OutputLeaf<'_, Self>) -> Result<CodecOutputPlan<Self>> {
         Scalars.output_leaf(OutputLeaf {
             flat: r.flat,
             ty: r.ty,
@@ -322,7 +322,7 @@ fn input_context_preserves_all_dispatch_cases_and_callback_roles() {
             compiler
                 .input(
                     &ty,
-                    &DeclarationInput::Leaf(InputLeafOp::Value),
+                    &DeclInput::Leaf(DeclInputLeafOp::Value),
                     &(),
                     &Condition::default(),
                 )
@@ -335,8 +335,8 @@ fn input_context_preserves_all_dispatch_cases_and_callback_roles() {
         &flat,
         &codec,
         &syn::parse_quote!(()),
-        &DeclarationInput::Branch {
-            operation: InputBranch::Fields,
+        &DeclInput::Branch {
+            operation: DeclInputBranch::Fields,
             children: vec![],
         },
         &(),
@@ -346,11 +346,11 @@ fn input_context_preserves_all_dispatch_cases_and_callback_roles() {
         &flat,
         &codec,
         &ty,
-        &DeclarationInput::constructor(
+        &DeclInput::constructor(
             "add",
             [
-                DeclarationInput::Leaf(InputLeafOp::Value),
-                DeclarationInput::Leaf(InputLeafOp::Value),
+                DeclInput::Leaf(DeclInputLeafOp::Value),
+                DeclInput::Leaf(DeclInputLeafOp::Value),
             ],
         ),
         &(),
@@ -366,9 +366,9 @@ fn input_context_preserves_all_dispatch_cases_and_callback_roles() {
         &flat,
         &codec,
         &ty,
-        &DeclarationOutput::Unary {
-            operation: OutputUnary::Bulk,
-            child: Box::new(DeclarationOutput::Leaf(OutputLeafOp::Value)),
+        &DeclOutput::Unary {
+            operation: DeclOutputUnary::Bulk,
+            child: Box::new(DeclOutput::Leaf(DeclOutputLeafOp::Value)),
         },
         &(),
     )
@@ -386,12 +386,12 @@ impl Codec for MalformedOptional {
     type Extra = ();
     type Chain = ();
     type Branch = ();
-    fn input_leaf(&self, r: InputLeaf<'_, Self>) -> Result<CodecInput<Self>> {
+    fn input_leaf(&self, r: InputLeaf<'_, Self>) -> Result<CodecInputPlan<Self>> {
         Scalars.input_leaf(InputLeaf::new(
             r.flat, r.ty, r.extra, r.wire, r.target, r.active,
         ))
     }
-    fn output_leaf(&self, r: OutputLeaf<'_, Self>) -> Result<CodecOutput<Self>> {
+    fn output_leaf(&self, r: OutputLeaf<'_, Self>) -> Result<CodecOutputPlan<Self>> {
         Scalars.output_leaf(OutputLeaf::new(
             r.flat, r.ty, r.extra, r.wire, r.value, r.access,
         ))
@@ -460,9 +460,9 @@ fn malformed_optional_encodings_are_rejected_before_installing_a_slot() {
                 &MalformedOptional(mode),
                 "f",
                 "value",
-                &DeclarationInput::Unary {
-                    operation: InputUnary::Optional,
-                    child: Box::new(DeclarationInput::Leaf(InputLeafOp::Value)),
+                &DeclInput::Unary {
+                    operation: DeclInputUnary::Optional,
+                    child: Box::new(DeclInput::Leaf(DeclInputLeafOp::Value)),
                 },
                 &(),
             )
@@ -471,9 +471,9 @@ fn malformed_optional_encodings_are_rejected_before_installing_a_slot() {
                 &mut flat,
                 &MalformedOptional(mode),
                 "f",
-                &DeclarationOutput::Unary {
-                    operation: OutputUnary::Optional,
-                    child: Box::new(DeclarationOutput::Leaf(OutputLeafOp::Value)),
+                &DeclOutput::Unary {
+                    operation: DeclOutputUnary::Optional,
+                    child: Box::new(DeclOutput::Leaf(DeclOutputLeafOp::Value)),
                 },
                 &(),
             )
@@ -490,14 +490,14 @@ fn enabled_bulk_still_rejects_enclosing_callback_delivery_before_element_lowerin
     let flat = model();
     let codec = Probe::default();
     codec.1.set(true);
-    let recipe = DeclarationOutput::Unary {
-        operation: OutputUnary::Bulk,
-        child: Box::new(DeclarationOutput::Unary {
-            operation: OutputUnary::Sequence {
+    let recipe = DeclOutput::Unary {
+        operation: DeclOutputUnary::Bulk,
+        child: Box::new(DeclOutput::Unary {
+            operation: DeclOutputUnary::Sequence {
                 delivery: SequenceDelivery::Callback,
                 mode: None,
             },
-            child: Box::new(DeclarationOutput::Leaf(OutputLeafOp::Value)),
+            child: Box::new(DeclOutput::Leaf(DeclOutputLeafOp::Value)),
         }),
     };
     let error = compile_output_value(&flat, &codec, &syn::parse_quote!(Vec<i64>), &recipe, &())
@@ -511,7 +511,7 @@ fn enabled_bulk_still_rejects_enclosing_callback_delivery_before_element_lowerin
 #[test]
 fn resolved_flat_compiles_after_its_configuration_is_dropped() {
     let flat = model();
-    let declarations = Declarations::new(&flat, vec![], vec![], vec![]).unwrap();
+    let declarations = DeclDefaults::new(&flat, vec![], vec![], vec![]).unwrap();
     let configuration = vec![fun!(add)];
     let resolved = declarations
         .resolve(flat, Scalars, &configuration, ())
@@ -520,7 +520,7 @@ fn resolved_flat_compiles_after_its_configuration_is_dropped() {
     drop(declarations);
     assert!(matches!(
         resolved.function("add").unwrap().params[0].ty.slot,
-        Some(ResolvedSlot::Tree(DeclarationInput::Leaf(_)))
+        Some(ResolvedSlot::Tree(DeclInput::Leaf(_)))
     ));
     let compiled = compile_resolved(resolved).unwrap();
     prebindgen_flat::validate_bindings(&compiled).unwrap();
@@ -530,13 +530,13 @@ fn resolved_flat_compiles_after_its_configuration_is_dropped() {
 #[test]
 fn none_is_unit_and_cannot_silently_discard_non_unit_values() {
     let source = model();
-    let defaults = Declarations::new(&source, vec![], vec![], vec![]).unwrap();
+    let defaults = DeclDefaults::new(&source, vec![], vec![], vec![]).unwrap();
     assert!(defaults
         .resolve_input(
             &source,
             &Scalars,
             &syn::parse_quote!(i64),
-            &DeclarationInput::None,
+            &DeclInput::None,
             &()
         )
         .is_err());
@@ -545,37 +545,29 @@ fn none_is_unit_and_cannot_silently_discard_non_unit_values() {
             &source,
             &Scalars,
             &syn::parse_quote!(i64),
-            &DeclarationOutput::None,
+            &DeclOutput::None,
             &()
         )
         .is_err());
-    for tree in [
-        DeclarationInput::auto(),
-        DeclarationInput::fields([]),
-        DeclarationInput::None,
-    ] {
+    for tree in [DeclInput::auto(), DeclInput::fields([]), DeclInput::None] {
         assert!(matches!(
             defaults
                 .resolve_input(&source, &Scalars, &syn::parse_quote!(()), &tree, &())
                 .unwrap(),
-            DeclarationInput::None
+            DeclInput::None
         ));
     }
-    for tree in [
-        DeclarationOutput::auto(),
-        DeclarationOutput::fields([]),
-        DeclarationOutput::None,
-    ] {
+    for tree in [DeclOutput::auto(), DeclOutput::fields([]), DeclOutput::None] {
         assert!(matches!(
             defaults
                 .resolve_output(&source, &Scalars, &syn::parse_quote!(()), &tree, &())
                 .unwrap(),
-            DeclarationOutput::None
+            DeclOutput::None
         ));
     }
 }
 
-// This adapter deliberately does not implement DeclarationCodec. Its operations
+// This adapter deliberately does not implement DeclCodec. Its operations
 // cannot be represented by the optional declaration frontend's fixed vocabulary.
 #[derive(Clone, Debug)]
 struct ArithmeticInputs;
@@ -585,13 +577,13 @@ struct ArithmeticOutputs;
 struct AddInput(i64);
 #[derive(Clone, Debug)]
 struct ScaleOutput(i64);
-impl Operations for ArithmeticInputs {
+impl InputOps for ArithmeticInputs {
     type Leaf = ();
     type Unary = AddInput;
     type Branch = std::convert::Infallible;
     type Arrow = std::convert::Infallible;
 }
-impl Operations for ArithmeticOutputs {
+impl OutputOps for ArithmeticOutputs {
     type Leaf = ScaleOutput;
     type Unary = std::convert::Infallible;
     type Branch = std::convert::Infallible;
@@ -599,13 +591,13 @@ impl Operations for ArithmeticOutputs {
 }
 struct Arithmetic;
 impl Codec for Arithmetic {
-    fn finish_output(&self, plan: &mut CodecOutput<Self>, _: &()) -> Result<()> {
+    fn finish_output(&self, plan: &mut CodecOutputPlan<Self>, _: &()) -> Result<()> {
         plan.delivery.result = plan.values[0].1.clone();
         Ok(())
     }
 
-    type InputOperations = ArithmeticInputs;
-    type OutputOperations = ArithmeticOutputs;
+    type InOps = ArithmeticInputs;
+    type OutOps = ArithmeticOutputs;
     type CompileState = ();
     type Schema = prebindgen_conversions::PlanSchema<Type>;
     type Wire = Type;
@@ -613,11 +605,11 @@ impl Codec for Arithmetic {
     type Extra = ();
     type Chain = ();
     type Branch = ();
-    fn input_leaf(&self, r: InputLeaf<'_, Self>) -> Result<CodecInput<Self>> {
+    fn input_leaf(&self, r: InputLeaf<'_, Self>) -> Result<CodecInputPlan<Self>> {
         let wire = &r.wire;
         value::input(r.ty, r.wire.clone(), r.target, quote!(#wire), r.ty.clone())
     }
-    fn output_leaf(&self, r: OutputLeaf<'_, Self>) -> Result<CodecOutput<Self>> {
+    fn output_leaf(&self, r: OutputLeaf<'_, Self>) -> Result<CodecOutputPlan<Self>> {
         value::output(
             r.ty,
             r.wire,
@@ -641,7 +633,7 @@ impl Codec for Arithmetic {
         extra: &(),
         active: &Condition,
         names: Option<(&syn::Ident, &syn::Ident)>,
-    ) -> Result<CodecInput<Self>> {
+    ) -> Result<CodecInputPlan<Self>> {
         match tree {
             InputNode::Leaf(()) => self.input_leaf(InputLeaf::new(
                 cx.flat,
@@ -672,7 +664,7 @@ impl Codec for Arithmetic {
         value: TokenStream,
         borrowed: bool,
         wire: Option<&syn::Ident>,
-    ) -> Result<CodecOutput<Self>> {
+    ) -> Result<CodecOutputPlan<Self>> {
         let OutputNode::Leaf(ScaleOutput(scale)) = tree else {
             return Err("unsupported arithmetic output".into());
         };
@@ -692,7 +684,7 @@ impl Codec for Arithmetic {
 }
 #[test]
 fn independent_operation_vocabularies_compile_without_declaration_frontend() {
-    let mut model = Flat::<Resolved<Arithmetic>>::parse(
+    let mut model = Flat::<ResolvedSchema<Arithmetic>>::parse(
         syn::parse_file("pub fn add(a:i64,b:i64)->i64{}")
             .unwrap()
             .items
