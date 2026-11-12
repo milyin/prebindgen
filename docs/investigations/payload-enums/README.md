@@ -56,6 +56,10 @@ renaming uses `.variant_name("Packet", "Message")`, matching #808's
 `enum_class!` naming override. Names do not determine variant tags.
 Generate content-based byte-array equality/hash helpers as for current data
 classes, rather than inheriting Kotlin's reference equality for array properties.
+The source fields determine the Kotlin properties, even when a field needs no
+wire storage: `Ok(())` becomes `data class Ok(val v0: Unit)`, constructed with
+`Unit`. A genuinely fieldless variant, including `B()` or `C {}`, is a data
+object. Never generate an illegal zero-property Kotlin data class.
 
 The C surface is a tag plus a union of converted payloads, conceptually:
 
@@ -131,6 +135,11 @@ Relevant source locations are listed at the end for checking these claims.
 
 ## One source description, shared recursive compilation
 
+Here **Flat** is the source model. A **wire** is an individual native field after
+conversion, such as an integer or buffer descriptor. The shared declaration
+compiler walks conversion recipes and emits their Rust construction/matching;
+an adapter's **codec** supplies the foreign storage and language-specific pieces.
+
 The proposed pipeline is:
 
 ```text
@@ -181,8 +190,12 @@ change the declared Kotlin type of `Event.Packet.id`.
 Whenever the ordinary representation of an enum or concrete Result needs a
 foreign type, require its explicit `sealed_class!`/`tagged_union` declaration.
 Missing declarations are build errors naming the required type; do not invent
-public class names. Canonical conversions to already-declared representations
-or explicit field expansions can avoid needing that ordinary foreign type.
+public domain class names. Explicit enum-field expansions also require this
+declaration, so their source tag mapping and destination names are unambiguous.
+A complete canonical conversion to an already-declared representation may avoid
+the enum declaration because no enum tags/properties then cross the boundary.
+Concrete generic types such as Result require an explicit Kotlin `.name(...)`;
+do not derive a potentially conflicting class named `Result`.
 
 Add explicit enum-field expansions to the existing Input/Output tree API:
 
@@ -204,9 +217,17 @@ once to `syn::Member`. Omitted variants/fields use canonical field conversions.
 Reject unknown/duplicate keys; named recipes must not silently change meaning
 when source fields are reordered. An output recipe may explicitly discard a
 field; an input recipe must still construct every Rust field. An empty override
-list selects canonical recipes for all variants. Here "enum variant" always
+list selects canonical recipes for all variants. Explicit omission uses the
+existing `Output::Discard` node. Here "enum variant" always
 means a source Rust variant; `.variant(fun!(...))` still means a constructor
 alternative and is unchanged.
+
+Keep builder inference predictable: add `enum_fields` on `Input<InputRequest>`
+and `Output<OutputRequest>` with the fixed item shape
+`(&str, Vec<(&str, Self)>)`, copying keys during resolution. An arbitrary
+`IntoIterator` of this concrete item shape is accepted; keys are not generic
+`Into<String>` arguments. `Input::enum_fields([])` and its Output equivalent
+must compile without type annotations.
 
 Type-wide boundary defaults apply in the same places as today's expansion
 defaults, including recursively expanded optional/sequence occurrences. Ordinary
@@ -214,6 +235,12 @@ sealed properties and ordinary enum payloads request canonical value conversions
 not boundary defaults. Explicit field recipes can deliberately choose an
 expansion there. A local function/callback override replaces that occurrence's
 tree and does not mutate the foreign type declaration.
+The explicit Kotlin field form exposes a tag `Int` followed by separately named
+variant-field values, like existing constructor-selector expansions. Inactive
+reference slots are nullable and ignored; an active required value must be
+present. Expanded outputs use the existing Kotlin builder callback with those
+tag/field arguments. `.bulk()` changes native storage, not those public
+arguments. Only the ordinary value form accepts/returns one sealed Event.
 
 These nodes support `.bulk()`, type-wide expansion registration, function
 overrides and callback argument/result overrides through the existing entry
@@ -242,6 +269,7 @@ template pass, runtime conversion registry or per-type dispatch map is needed.
 | Occurrence | Default meaning |
 | --- | --- |
 | Outermost result of an exported source function | Existing success/domain-error routing |
+| Exported function parameter of type Result | Ordinary enum data |
 | Callback argument or callback result | Enum data: `Ok(T)` or `Err(E)` |
 | Record property, enum payload, optional or collection element | Ordinary enum data |
 | Explicit function `.result_as_value()` | Whole Result is enum data instead of function-error routing |
@@ -270,6 +298,11 @@ without this setting it keeps configuring the successful `T`, as today.
 Combining `.result_as_value()` with `.on_error(...)` is a declaration error.
 The setting is order-independent and requires a top-level standard Result.
 `Output::value()` alone keeps its current meaning and does not opt in.
+This also deliberately changes which representation is selected *when that
+setting is chosen*: ordinary Result data uses canonical payloads, whereas an
+ordinary function outcome applies return-boundary defaults to its successful
+`T`. Specify a local enum-field recipe when the data payload should instead
+use an expansion. Type-wide error mappers are not invoked in data mode.
 
 Apply the function-error rule once at the exported source call. For
 `Result<Result<T, E>, F>`, only the outer layer routes `F`; the inner Result is
@@ -297,7 +330,10 @@ same move, borrow, canonical conversion and cleanup rules as record fields.
 | Inactive variant storage | Never convert, dereference, acquire or drop it |
 
 Rust's restrictions on moving fields out of a type with a custom `Drop` remain
-in force. Such a type needs an explicit consuming helper if direct field moves
+in force. Flat does not capture Drop implementations: an unsupported direct
+move fails when rustc compiles the generated Rust (E0509), without another
+build-time tracking registry. Such a type needs an explicit consuming helper if
+direct field moves
 are unavailable. A borrowed enum does not authorize a temporary owning copy:
 borrowed inputs use a native reference representation or explicit reconstruction.
 General lifetime-bearing enum views are outside this task.
@@ -344,8 +380,10 @@ Records compose their children's empty states; optional payloads retain a
 drop-safe state for any already-taken child. Unsupported ownership forms fail
 generation. Retain actual-transfer reporting so callback/array cleanup skips
 the taken prefix. Reserve `-1` exclusively for enum lifecycle emptiness;
-optional absence must use a different available tag (initially `-2`), with
-further nested optional reservations allocated distinctly. A consumed enum
+the existing niche allocator must exclude that reservation for payload enums.
+Optional absence uses another unused negative tag, normally `-2`, with further
+nested optional reservations allocated distinctly. Existing fieldless enums
+have no lifecycle tag and keep their current niche allocation. A consumed enum
 must never be mistaken for an ordinary `None` argument.
 
 For C callbacks, an owned Rust enum argument transfers as a by-value carrier:
@@ -357,6 +395,9 @@ fields on failure through its callback-result guard. Existing `release_result`
 releases only returned row/buffer storage, never moved owners. Borrowed arguments
 require explicit nonowning field/view conversions and live only during `run`.
 Borrowed callback returns remain unsupported.
+There is no separate C `run` binding-failure return: a returned Result's `Err`
+is data. A Rust-side failure decoding a returned carrier invokes the untaken
+active-field cleanup above before applying the existing callback failure policy.
 
 For JNI callbacks, argument handles remain scoped unless the existing explicit
 transfer/retention mechanism is used. Returned handles transfer into Rust as
@@ -384,6 +425,12 @@ pointers; a function outcome keeps its existing success/error delivery. The
 ordinary C enum representation is instead one carrier, returned by value. With
 the initial example, its non-fallible signature is conceptually
 `pb_event pb_exchange(pb_event *event)`.
+For C field expansions, **only active payload output slots are written and may
+be read/dropped**. The header documents those tag-dependent obligations; unused
+output pointers are not dereferenced. On input, C callers pass the tag and
+side-by-side raw slots themselves; inactive slots are ignored and may use
+zero/null raw values. The Kotlin wrapper supplies its raw inactive defaults.
+Neither adapter constructs inactive owners just to obtain defaults.
 
 A grouped C carrier or JNI bulk row can instead store the largest payload in a
 union. This saves space when many variants have different fields. The logical
@@ -394,10 +441,21 @@ representations instead of embedding Java objects or Rust Vec internals.
 C keeps its existing whole-Vec owner by default; element conversion applies
 when a collection is explicitly expanded. Adding enums must not silently replace
 that owner with a row array. JNI retains its current eligible-array bulk defaults.
+An ordinary C `Vec<Event>` owner can be passed/returned as an opaque whole value;
+this task adds no implicit element getter or vector constructor. C callers that
+need to build/read individual Event rows use an explicit sequence expansion with
+the enum-value element recipe. Required C sequence coverage uses that expansion,
+including owning elements, while checking that whole-vector round trips remain
+unchanged. It does not imply that a borrowed owning enum can be copied out.
 This task does not enable the `.bulk()` modifier in C; C continues using its
 native carrier/row conventions. When a C row's enum recipes are canonical, reuse
 the declared tagged carrier rather than generating a second equivalent layout.
 Only genuinely different explicit field recipes need a distinct carrier shape.
+Such ABI helper names follow the existing readable type/shape plus stable-hash
+scheme; they are not new unnamed public domain classes. Derived C tag/body/field
+names must pass current identifier/keyword checks and be unique after mangling.
+Reject collisions with source paths in the diagnostic. Per-variant C renaming
+remains with the naming-policy backlog; do not silently emit invalid identifiers.
 
 Extend `prebindgen-reprc` with target-measured tagged/union layout generation,
 reusing its field/layout infrastructure. Both adapters use that definition.
@@ -413,6 +471,9 @@ do not require a new compiler feature for nested union-field offsets. Keep Rust
 If every active variant has zero wire fields, emit a tag-only carrier and omit
 the union; do not manufacture an empty C struct/union or an unsupported empty
 `prebindgen_reprc::Record`.
+Apply that rule per arm as well: a zero-wire arm has no union member or payload
+record to measure, even when other arms have storage. The tag alone identifies
+that arm; zero-wire Rust fields are reconstructed by their child recipes.
 
 This requires a real decoder change: today's flat bulk reader loads fields
 before child conversion. A union reader must load the tag first, check it on
