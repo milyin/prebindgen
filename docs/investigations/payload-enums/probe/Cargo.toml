@@ -1,0 +1,15 @@
+[package]
+name = "payload-enums-probe"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# Standalone investigation fixture, outside the production workspace.
+[workspace]
+
+[dependencies]
+prebindgen-c = { path = "../../../../prebindgen-c" }
+prebindgen-declarations = { path = "../../../../prebindgen-declarations" }
+prebindgen-flat = { path = "../../../../prebindgen-flat" }
+prebindgen-jni = { path = "../../../../prebindgen-jni" }
+syn = { version = "2.0", features = ["full"] }
