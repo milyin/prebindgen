@@ -1,9 +1,9 @@
 (function() {
-    const implementors = Object.fromEntries([["prebindgen_declarations",[]]]);
+    const implementors = Object.fromEntries([["prebindgen_c",[["impl <a class=\"trait\" href=\"prebindgen_declarations/node/trait.Operations.html\" title=\"trait prebindgen_declarations::node::Operations\">Operations</a> for <a class=\"struct\" href=\"prebindgen_c/operations/struct.InputOperations.html\" title=\"struct prebindgen_c::operations::InputOperations\">InputOperations</a>",0],["impl <a class=\"trait\" href=\"prebindgen_declarations/node/trait.Operations.html\" title=\"trait prebindgen_declarations::node::Operations\">Operations</a> for <a class=\"struct\" href=\"prebindgen_c/operations/struct.OutputOperations.html\" title=\"struct prebindgen_c::operations::OutputOperations\">OutputOperations</a>",0]]],["prebindgen_declarations",[]],["prebindgen_jni",[["impl <a class=\"trait\" href=\"prebindgen_declarations/node/trait.Operations.html\" title=\"trait prebindgen_declarations::node::Operations\">Operations</a> for <a class=\"struct\" href=\"prebindgen_jni/operations/struct.InputOperations.html\" title=\"struct prebindgen_jni::operations::InputOperations\">InputOperations</a>",0],["impl <a class=\"trait\" href=\"prebindgen_declarations/node/trait.Operations.html\" title=\"trait prebindgen_declarations::node::Operations\">Operations</a> for <a class=\"struct\" href=\"prebindgen_jni/operations/struct.OutputOperations.html\" title=\"struct prebindgen_jni::operations::OutputOperations\">OutputOperations</a>",0]]]]);
     if (window.register_implementors) {
         window.register_implementors(implementors);
     } else {
         window.pending_implementors = implementors;
     }
 })()
-//{"start":59,"fragment_lengths":[30]}
+//{"start":59,"fragment_lengths":[675,31,686]}

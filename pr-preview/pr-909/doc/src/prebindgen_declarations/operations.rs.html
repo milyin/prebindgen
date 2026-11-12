@@ -13,9 +13,9 @@
 <a href=#13 id=13 data-nosnippet>13</a>    <span class="doccomment">/// Callable representation and invocation policy.
 <a href=#14 id=14 data-nosnippet>14</a>    </span><span class="kw">pub </span>operation: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>CallbackOperation,
 <a href=#15 id=15 data-nosnippet>15</a>    <span class="doccomment">/// Reverse-direction argument tree.
-<a href=#16 id=16 data-nosnippet>16</a>    </span><span class="kw">pub </span>domain: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>Output,
+<a href=#16 id=16 data-nosnippet>16</a>    </span><span class="kw">pub </span>domain: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>ResolvedOutput&lt;C&gt;,
 <a href=#17 id=17 data-nosnippet>17</a>    <span class="doccomment">/// Same-direction result tree.
-<a href=#18 id=18 data-nosnippet>18</a>    </span><span class="kw">pub </span>codomain: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>Input,
+<a href=#18 id=18 data-nosnippet>18</a>    </span><span class="kw">pub </span>codomain: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>ResolvedInput&lt;C&gt;,
 <a href=#19 id=19 data-nosnippet>19</a>    <span class="doccomment">/// Occurrence settings owned by the resolved model.
 <a href=#20 id=20 data-nosnippet>20</a>    </span><span class="kw">pub </span>extra: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>C::Extra,
 <a href=#21 id=21 data-nosnippet>21</a>    <span class="doccomment">/// Incoming foreign callable binding.
