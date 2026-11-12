@@ -1,9 +1,15 @@
-use prebindgen_declarations::{OutputUnary};
 use prebindgen_declarations::{
-    expand_param, expand_return, fields, fun, Output, OutputRequest, SequenceDelivery,
+    expand_param, expand_return, fields, fun, InputRequest, Output, OutputRequest, OutputUnary,
+    SequenceDelivery,
 };
 fn rows(element: Output<OutputRequest, InputRequest>) -> Output<OutputRequest, InputRequest> {
-    Output::Unary { operation: OutputUnary::Sequence { delivery: SequenceDelivery::Value, mode: None }, child: Box::new(element),  }
+    Output::Unary {
+        operation: OutputUnary::Sequence {
+            delivery: SequenceDelivery::Value,
+            mode: None,
+        },
+        child: Box::new(element),
+    }
 }
 fn main() {
     let builder = prebindgen_c::Cbindgen::builder()
