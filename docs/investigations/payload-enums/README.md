@@ -161,10 +161,14 @@ by `syn::Member`, so a named member and a tuple position use the same recursive
 field machinery. Refactor shared field operations accordingly; this does not
 claim general tuple-struct support as part of this task.
 
-Classify an enum as payload-carrying if any variant has fields. Preserve spelling
-for zero-field `A`, `B()` and `C {}` when generating Rust construction/matching.
-An enum made entirely of these zero-field forms uses the fieldless integer
-mapping; extend that mapping's construction/guards to preserve their spelling.
+Keep the existing integer-enum path for unit-syntax variants only. An enum with
+any tuple/named constructor syntax uses the new variant model, even if that
+constructor has zero fields. Preserve `A`, `B()` and `C {}` spelling when
+generating Rust construction/matching. Thus an all-empty `enum E { A(), B {} }`
+uses sealed/tagged variants. This differs from production's field-count
+classification deliberately: numeric casts are not uniformly legal for these
+forms (Rust 1.85 rejects them with explicit non-unit discriminants). Do not
+weaken existing integer-enum guards or guess source discriminant layout.
 Do not read or reproduce the memory layout of the source Rust enum, even if the
 source uses `#[repr(C)]`. The foreign carrier contains *converted* field types.
 Payload wire tags are signed 32-bit indices `0..N-1`; generation rejects overflow.
