@@ -97,10 +97,26 @@ needs no payload storage. A scalar-only enum needs no destructor.
 | C adapter | Fieldless integer enums, inline owners and opaque pointers | Tagged carriers with active-payload ownership |
 | Bulk layout | Target-measured named structures | Union payload layouts and tag-first decoding |
 
-`Input::Selector` is not a source enum: two constructors may both produce
-`Event::Packet`, and one constructor could produce any variant. Reusing that
-selector as the source model would lose the enum's structure on output and in
-properties. Its existing behavior and `.variant(fun!(...))` API stay intact.
+The existing input-expansion API already uses the word `variant`, for a choice
+of constructor functions:
+
+```rust,ignore
+expand_param!(Event)
+    .variant(fun!(event_from_bytes))
+    .variant(fun!(event_from_text))
+```
+
+This configuration lets the foreign caller choose which function constructs an
+Event. Internally, that choice is represented by `Input::Selector`. Both helpers
+could return `Event::Packet`; a helper could also choose `Event::Idle` depending
+on its arguments. Their signatures therefore do not describe the Rust enum's
+variants or payload fields.
+
+The proposed enum model records the actual Rust alternatives—`Idle`, `Count`
+and `Packet`—and their fields. Output conversion needs this information to match
+an existing Event and extract its active payload, including when Event is a
+record property. Constructor selection remains a separate input operation;
+the existing `.variant(fun!(...))` API keeps its current meaning.
 
 The baseline probe rejects tuple and named payload enums with "only fieldless
 enum variants are supported". It also demonstrates that callback `Result`
