@@ -1,4 +1,7 @@
 use super::*;
+use prebindgen_declarations::{
+    InputBranch, InputLeafOp, InputUnary, OutputBranch, OutputLeafOp, OutputUnary,
+};
 use prebindgen_flat::InputConversion;
 fn flat(source: &str) -> Bindings {
     Flat::parse(
@@ -14,7 +17,13 @@ fn flat(source: &str) -> Bindings {
 #[test]
 fn kotlin_preflight_removes_native_row_staging_for_both_transports() {
     let source = "pub type Handle=String;pub enum Kind{A,B}pub struct Row{pub h:Handle,pub text:Option<String>,pub bytes:Option<Vec<u8>>,pub kind:Option<Kind>}pub fn rows(values:Vec<Row>)->usize{}";
-    let recipe = Input::Sequence(Box::new(Input::Record(vec![Input::Leaf; 4])));
+    let recipe = Input::Unary {
+        operation: InputUnary::Sequence,
+        child: Box::new(Input::Branch {
+            operation: InputBranch::Record,
+            children: vec![Input::Leaf(InputLeafOp::Value); 4],
+        }),
+    };
     for bulk in [false, true] {
         let input = if bulk {
             recipe.clone().bulk()
@@ -47,18 +56,29 @@ fn nested_bulk_modifiers_do_not_force_prepared_handle_rows() {
     let source = "pub type Handle=String;pub struct Row{pub h:Handle,pub tag:i64}pub fn make(h:Handle)->Handle{}pub fn nested(values:Vec<Vec<Row>>){}";
     for bulk in [false, true] {
         let handle = if bulk {
-            Input::Leaf.bulk()
+            Input::Leaf(InputLeafOp::Value).bulk()
         } else {
-            Input::Leaf
+            Input::Leaf(InputLeafOp::Value)
         };
-        let row = Input::Record(vec![
-            Input::Constructor {
-                function: "make".into(),
-                args: vec![handle],
-            },
-            Input::Leaf,
-        ]);
-        let input = Input::Sequence(Box::new(Input::Sequence(Box::new(row))));
+        let row = Input::Branch {
+            operation: InputBranch::Record,
+            children: vec![
+                Input::Branch {
+                    operation: InputBranch::Constructor {
+                        function: "make".into(),
+                    },
+                    children: vec![handle],
+                },
+                Input::Leaf(InputLeafOp::Value),
+            ],
+        };
+        let input = Input::Unary {
+            operation: InputUnary::Sequence,
+            child: Box::new(Input::Unary {
+                operation: InputUnary::Sequence,
+                child: Box::new(row),
+            }),
+        };
         let input = if bulk { input.bulk() } else { input };
         let generated = JniGen::builder()
             .flat(flat(source))
@@ -708,7 +728,7 @@ fn explicit_data_expansion_replaces_a_configured_handle_slot() {
                     &JniCodec::raw(),
                     "echo",
                     "value",
-                    &prebindgen_declarations::Input::Leaf,
+                    &prebindgen_declarations::Input::Leaf(InputLeafOp::Value),
                     &(),
                 )
             })
@@ -920,9 +940,16 @@ fn scalar_niches_exhaust_at_the_carrier_limit() {
 fn optional_unannotated_fields_keep_outer_presence_in_both_directions() {
     use prebindgen_declarations::{bind_input, Input};
     let mut source = flat("pub struct Wrapped { pub value: Option<i64> } pub fn wrapped_fields(x: &Wrapped) -> Wrapped {} pub fn echo(value: Option<Wrapped>) -> Option<Wrapped> {}");
-    let input = Input::Optional(Box::new(Input::Fields(vec![Input::Optional(Box::new(
-        Input::Leaf,
-    ))])));
+    let input = Input::Unary {
+        operation: InputUnary::Optional,
+        child: Box::new(Input::Branch {
+            operation: InputBranch::Fields,
+            children: vec![Input::Unary {
+                operation: InputUnary::Optional,
+                child: Box::new(Input::Leaf(InputLeafOp::Value)),
+            }],
+        }),
+    };
     bind_input(&mut source, &JniCodec::raw(), "echo", "value", &input, &()).unwrap();
     let generated =
         JniGen::builder()
@@ -1033,15 +1060,21 @@ fn nested_optional_selectors_reserve_distinct_tags_and_disable_arm_niches() {
     use prebindgen_declarations::{bind_input, Input};
     let mut source = flat("pub fn echo(x:Option<Option<char>>)->char {} pub fn first(x:char)->char{} pub fn second(x:char)->char{}");
     let selector = Input::selector([
-        Input::constructor("first", [Input::Leaf]),
-        Input::constructor("second", [Input::Leaf]),
+        Input::constructor("first", [Input::Leaf(InputLeafOp::Value)]),
+        Input::constructor("second", [Input::Leaf(InputLeafOp::Value)]),
     ]);
     bind_input(
         &mut source,
         &JniCodec::raw(),
         "echo",
         "x",
-        &Input::Optional(Box::new(Input::Optional(Box::new(selector)))),
+        &Input::Unary {
+            operation: InputUnary::Optional,
+            child: Box::new(Input::Unary {
+                operation: InputUnary::Optional,
+                child: Box::new(selector),
+            }),
+        },
         &(),
     )
     .unwrap();
@@ -1238,10 +1271,12 @@ fn callback_returns_do_not_guess_prebound_or_extra_output_projections() {
         &mut model,
         &JniCodec::raw(),
         "values",
-        &prebindgen_declarations::Output::Sequence {
-            delivery: prebindgen_declarations::SequenceDelivery::Value,
-            element: Box::new(prebindgen_declarations::Output::Leaf),
-            mode: None,
+        &prebindgen_declarations::Output::Unary {
+            operation: OutputUnary::Sequence {
+                delivery: prebindgen_declarations::SequenceDelivery::Value,
+                mode: None,
+            },
+            child: Box::new(prebindgen_declarations::Output::Leaf(OutputLeafOp::Value)),
         },
         &(),
     )
@@ -1345,7 +1380,7 @@ fn logical_outcomes_keep_typed_errors_and_match_both_jni_sequence_deliveries() {
         vec![],
     )
     .unwrap();
-    let codec = JniCodec::declared(None);
+    let codec = JniCodec::declared();
     let decl = fun!(f).callback_return();
     flat.metadata.package = "test".into();
     flat.function_mut("f").unwrap().metadata = Some(JniFunction {
@@ -1354,7 +1389,7 @@ fn logical_outcomes_keep_typed_errors_and_match_both_jni_sequence_deliveries() {
         order: 0,
         error: None,
     });
-    errors::prepare(&mut flat, &codec, &defaults, std::slice::from_ref(&decl)).unwrap();
+    errors::resolve(&mut flat, &codec, &defaults, std::slice::from_ref(&decl)).unwrap();
     assert!(flat
         .function("f")
         .unwrap()
@@ -2117,8 +2152,13 @@ fn c_supports_callbacks_in_direct_and_constructor_parameters() {
 
 #[test]
 fn callback_constructor_rejects_a_selector_for_the_callable_itself() {
-    let recipe: Input<InputRequest> =
-        Input::constructor("make", [Input::selector([Input::Leaf, Input::Leaf])]);
+    let recipe: Input<InputRequest, OutputRequest> = Input::constructor(
+        "make",
+        [Input::selector([
+            Input::Leaf(InputLeafOp::Value),
+            Input::Leaf(InputLeafOp::Value),
+        ])],
+    );
     let error = fail(JniGen::builder()
         .flat(flat("pub type Handler=String; pub fn make(cb:impl Fn(i64))->Handler{} pub fn use_handler(value:Handler){}"))
         .set_package_prefix("test")
@@ -2329,12 +2369,15 @@ fn default_record_outputs_follow_source_ownership_and_allow_copy_overrides() {
     // Two views of optional references are observations, never two moves.
     let source =
         format!("{records}pub type Owner=String;pub fn maybe(owner:&Owner)->Option<&Bundle>{{}}");
-    let view = prebindgen_declarations::Output::Optional(Box::new(
-        prebindgen_declarations::Output::Record {
-            mode: Some(prebindgen_declarations::ProjectionMode::Borrowed),
-            fields: vec![prebindgen_declarations::Output::Leaf; 4],
-        },
-    ));
+    let view = prebindgen_declarations::Output::Unary {
+        operation: OutputUnary::Optional,
+        child: Box::new(prebindgen_declarations::Output::Branch {
+            operation: OutputBranch::Record {
+                mode: Some(prebindgen_declarations::ProjectionMode::Borrowed),
+            },
+            children: vec![prebindgen_declarations::Output::Leaf(OutputLeafOp::Value); 4],
+        }),
+    };
     JniGen::builder()
         .flat(flat(&source))
         .set_package_prefix("test")
@@ -3497,17 +3540,24 @@ fn resolved_callback_elements_can_keep_optional_presence_outside_a_bulk_frame() 
         .unwrap();
     // Preserve support for direct request-free trees as well as the public
     // declaration spelling, which normalizes this to Bulk(Optional(...)).
-    let recipe = Output::Sequence {
-        delivery: SequenceDelivery::Callback,
-        mode: None,
-        element: Box::new(Output::Optional(Box::new(
-            Output::Sequence {
-                delivery: SequenceDelivery::Value,
-                mode: None,
-                element: Box::new(Output::Leaf),
-            }
-            .bulk(),
-        ))),
+    let recipe = Output::Unary {
+        operation: OutputUnary::Sequence {
+            delivery: SequenceDelivery::Callback,
+            mode: None,
+        },
+        child: Box::new(Output::Unary {
+            operation: OutputUnary::Optional,
+            child: Box::new(
+                Output::Unary {
+                    operation: OutputUnary::Sequence {
+                        delivery: SequenceDelivery::Value,
+                        mode: None,
+                    },
+                    child: Box::new(Output::Leaf(OutputLeafOp::Value)),
+                }
+                .bulk(),
+            ),
+        }),
     };
     let conversion = prebindgen_declarations::compile_output(
         &model,
@@ -4064,7 +4114,13 @@ fn raw_borrowed_leaf_composes_with_declared_inputs_using_wire_access() {
 #[test]
 fn callback_results_and_arguments_omit_all_native_alias_history() {
     for bulk in [false, true] {
-        let rows = Input::Sequence(Box::new(Input::Record(vec![Input::Leaf; 2])));
+        let rows = Input::Unary {
+            operation: InputUnary::Sequence,
+            child: Box::new(Input::Branch {
+                operation: InputBranch::Record,
+                children: vec![Input::Leaf(InputLeafOp::Value); 2],
+            }),
+        };
         let rows = if bulk { rows.bulk() } else { rows };
         let generated = JniGen::builder()
             .flat(flat("pub struct A{pub n:i64}pub struct B{pub n:i64}pub struct Row{pub a:A,pub b:B}pub fn call(values:Vec<Row>,cb:impl Fn()->Vec<Row>){}"))
@@ -4092,17 +4148,37 @@ fn callback_results_and_arguments_omit_all_native_alias_history() {
 fn callback_results_defer_ownership_tracking_through_ordinary_result_trees() {
     let source="pub type Handle=String; pub struct Reply{pub first:Handle,pub optional:Option<Handle>,pub marker:char,pub last:Handle} pub fn fixed(cb:impl Fn()->Reply){} pub fn rows(cb:impl Fn()->Vec<Reply>){}pub fn nested(cb:impl Fn()->Vec<Vec<Reply>>){}";
     for (function, returned, deferred) in [
-        ("fixed", Input::Record(vec![Input::Leaf; 4]), true),
+        (
+            "fixed",
+            Input::Branch {
+                operation: InputBranch::Record,
+                children: vec![Input::Leaf(InputLeafOp::Value); 4],
+            },
+            true,
+        ),
         (
             "rows",
-            Input::Sequence(Box::new(Input::Record(vec![Input::Leaf; 4]))),
+            Input::Unary {
+                operation: InputUnary::Sequence,
+                child: Box::new(Input::Branch {
+                    operation: InputBranch::Record,
+                    children: vec![Input::Leaf(InputLeafOp::Value); 4],
+                }),
+            },
             true,
         ),
         (
             "nested",
-            Input::Sequence(Box::new(Input::Sequence(Box::new(Input::Record(
-                vec![Input::Leaf; 4],
-            ))))),
+            Input::Unary {
+                operation: InputUnary::Sequence,
+                child: Box::new(Input::Unary {
+                    operation: InputUnary::Sequence,
+                    child: Box::new(Input::Branch {
+                        operation: InputBranch::Record,
+                        children: vec![Input::Leaf(InputLeafOp::Value); 4],
+                    }),
+                }),
+            },
             true,
         ),
     ] {
@@ -4150,10 +4226,23 @@ fn callback_results_defer_ownership_tracking_through_ordinary_result_trees() {
 
 #[test]
 fn ordinary_callback_with_a_packed_child_uses_failure_only_cleanup() {
-    let returned = Input::Sequence(Box::new(Input::Record(vec![
-        Input::Leaf,
-        Input::Sequence(Box::new(Input::Record(vec![Input::Leaf; 4]))).bulk(),
-    ])));
+    let returned = Input::Unary {
+        operation: InputUnary::Sequence,
+        child: Box::new(Input::Branch {
+            operation: InputBranch::Record,
+            children: vec![
+                Input::Leaf(InputLeafOp::Value),
+                Input::Unary {
+                    operation: InputUnary::Sequence,
+                    child: Box::new(Input::Branch {
+                        operation: InputBranch::Record,
+                        children: vec![Input::Leaf(InputLeafOp::Value); 4],
+                    }),
+                }
+                .bulk(),
+            ],
+        }),
+    };
     let generated = JniGen::builder()
         .flat(flat("pub type Handle=String;pub struct Reply{pub first:Handle,pub optional:Option<Handle>,pub marker:char,pub last:Handle}pub struct Batch{pub first:Handle,pub packed:Vec<Reply>}pub fn mixed(cb:impl Fn()->Vec<Batch>){}"))
         .set_package_prefix("test")
@@ -4207,10 +4296,29 @@ fn data_class_collection_fields_reuse_logical_types_and_check_recursion() {
 
 #[test]
 fn mixed_callback_rows_reject_multi_argument_constructor_alternatives() {
-    let returned = Input::Sequence(Box::new(Input::Record(vec![
-        Input::Selector(vec![Input::Leaf, Input::Leaf]),
-        Input::Sequence(Box::new(Input::Record(vec![Input::Leaf; 2]))).bulk(),
-    ])));
+    let returned = Input::Unary {
+        operation: InputUnary::Sequence,
+        child: Box::new(Input::Branch {
+            operation: InputBranch::Record,
+            children: vec![
+                Input::Branch {
+                    operation: InputBranch::Selector,
+                    children: vec![
+                        Input::Leaf(InputLeafOp::Value),
+                        Input::Leaf(InputLeafOp::Value),
+                    ],
+                },
+                Input::Unary {
+                    operation: InputUnary::Sequence,
+                    child: Box::new(Input::Branch {
+                        operation: InputBranch::Record,
+                        children: vec![Input::Leaf(InputLeafOp::Value); 2],
+                    }),
+                }
+                .bulk(),
+            ],
+        }),
+    };
     let error = JniGen::builder()
         .flat(flat("pub type Handle=String;pub struct Row{pub h:Handle,pub tag:i64}pub struct Batch{pub first:Handle,pub packed:Vec<Row>}pub fn mixed(cb:impl Fn()->Vec<Batch>){}"))
         .set_package_prefix("test")
@@ -4226,11 +4334,11 @@ fn mixed_callback_rows_reject_multi_argument_constructor_alternatives() {
 #[test]
 fn named_output_groups_keep_name_validation_in_both_codec_policies() {
     let model = flat("pub fn value()->i64{}");
-    for codec in [JniCodec::raw(), JniCodec::declared(None)] {
+    for codec in [JniCodec::raw(), JniCodec::declared()] {
         for name in ["", "1bad", "bad-name", "line\nbreak"] {
-            let recipe = prebindgen_declarations::Output::Named {
-                name: name.into(),
-                output: Box::new(prebindgen_declarations::Output::Leaf),
+            let recipe = prebindgen_declarations::Output::Unary {
+                operation: OutputUnary::Named { name: name.into() },
+                child: Box::new(prebindgen_declarations::Output::Leaf(OutputLeafOp::Value)),
             };
             assert!(
                 prebindgen_declarations::compile_output(&model, &codec, "value", &recipe, &())
@@ -4239,5 +4347,51 @@ fn named_output_groups_keep_name_validation_in_both_codec_policies() {
             );
         }
         assert!(codec.group(GroupKind::NamedOutput("count")).is_ok());
+    }
+}
+
+#[test]
+fn resolved_callback_owns_its_conversions_and_cleanup_policy() {
+    use prebindgen_declarations::{compile_resolved, CallbackDecl, Declarations, ResolvedSlot};
+    let mut source =
+        flat("pub fn scoped(cb:impl Fn(i64)->i64){} pub fn owned(cb:impl Fn(i64)->i64){}");
+    source.metadata.package = "example".into();
+    let defaults = Declarations::new(&source, vec![], vec![], vec![]).unwrap();
+    let declarations = vec![
+        fun!(scoped),
+        fun!(owned).expand_param(
+            "cb",
+            CallbackDecl::new(syn::parse_quote!(impl Fn(i64) -> i64))
+                .expand_param(0, prebindgen_declarations::Output::value()),
+        ),
+    ];
+    let resolved = defaults
+        .resolve(source, JniCodec::declared(), &declarations, ())
+        .unwrap();
+    drop(defaults);
+    drop(declarations);
+    for (name, scoped) in [("scoped", true), ("owned", false)] {
+        let Some(ResolvedSlot::Tree(Input::Arrow {
+            operation,
+            domain,
+            codomain,
+        })) = &resolved.function(name).unwrap().params[0].ty.slot
+        else {
+            panic!("expected arrow")
+        };
+        let _ = operation;
+        let (ownership, _) = domain.argument_nodes().unwrap()[0]
+            .callback_argument_parts()
+            .unwrap();
+        assert_eq!(
+            ownership == prebindgen_declarations::CallbackArgumentOwnership::Scoped,
+            scoped
+        );
+        assert_eq!(domain.argument_nodes().unwrap().len(), 1);
+        assert!(matches!(codomain.as_ref(), Input::Leaf(_)));
+    }
+    let compiled = compile_resolved(resolved).unwrap();
+    for name in ["scoped", "owned"] {
+        assert!(compiled.function(name).unwrap().params[0].ty.slot.is_some());
     }
 }

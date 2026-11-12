@@ -49,7 +49,7 @@ impl Declarations {
         codec: &C,
         ty: &Type,
         extra: &C::Extra,
-        entries: &BTreeMap<String, BTreeMap<String, Input<InputRequest>>>,
+        entries: &BTreeMap<String, BTreeMap<String, Input<InputRequest, OutputRequest>>>,
         value: bool,
         stack: &mut Vec<String>,
     ) -> Result<Input> {
@@ -78,7 +78,7 @@ impl Declarations {
                     .collect::<Result<Vec<_>>>()
             })
             .collect::<Result<Vec<_>>>()?;
-        Ok(Input::Enum { variants, value })
+        Ok(Input::enum_variants(variants, value))
     }
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn enum_output_recipe<C: Codec>(
@@ -87,7 +87,7 @@ impl Declarations {
         codec: &C,
         ty: &Type,
         extra: &C::Extra,
-        entries: &BTreeMap<String, BTreeMap<String, Output<OutputRequest>>>,
+        entries: &BTreeMap<String, BTreeMap<String, Output<OutputRequest, InputRequest>>>,
         value: bool,
         stack: &mut Vec<String>,
         getter: bool,
@@ -116,11 +116,7 @@ impl Declarations {
                     .collect::<Result<Vec<_>>>()
             })
             .collect::<Result<Vec<_>>>()?;
-        Ok(Output::Enum {
-            variants,
-            value,
-            mode: None,
-        })
+        Ok(Output::enum_variants(variants, value, None))
     }
 }
 
@@ -129,7 +125,7 @@ impl<C: Codec> Compiler<'_, C> {
     pub(crate) fn enum_input(
         &self,
         ty: &Type,
-        recipes: &[Vec<Input>],
+        recipes: &[Input],
         value: bool,
         extra: &C::Extra,
         active: &Condition,
@@ -155,6 +151,7 @@ impl<C: Codec> Compiler<'_, C> {
         let mut storage = TokenStream::new();
         let mut fallible = self.codec.validates_inputs();
         for (index, (arm, recipes)) in source.variants.iter().zip(recipes).enumerate() {
+            let recipes = recipes.variant_fields()?;
             if arm.fields.len() != recipes.len() {
                 return Err("wrong enum field count".into());
             }
@@ -261,7 +258,7 @@ impl<C: Codec> Compiler<'_, C> {
     pub(crate) fn enum_output(
         &self,
         ty: &Type,
-        recipes: &[Vec<Output>],
+        recipes: &[Output],
         grouped: bool,
         mode: Option<ProjectionMode>,
         extra: &C::Extra,
@@ -303,6 +300,7 @@ impl<C: Codec> Compiler<'_, C> {
         let mut plans = vec![];
         let mut patterns = vec![];
         for (index, (arm, recipes)) in source.variants.iter().zip(recipes).enumerate() {
+            let recipes = recipes.variant_fields()?;
             if arm.fields.len() != recipes.len() {
                 return Err("wrong enum field count".into());
             }

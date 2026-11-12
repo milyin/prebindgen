@@ -1,6 +1,7 @@
 //! JNI error channels reuse ordinary output conversions. User callbacks run in Kotlin.
 use super::*;
 use prebindgen_conversions::OutputFragment;
+use prebindgen_declarations::OutputLeafOp;
 use prebindgen_flat::Conversion;
 use prebindgen_flat::OutputConversion;
 
@@ -8,10 +9,17 @@ use prebindgen_flat::OutputConversion;
 pub(crate) struct ErrorBinding {
     pub(crate) helper: syn::Ident,
     ty: syn::Type,
-    pub output: JniOutput,
+    pub output: Option<JniOutput>,
+    recipe: Option<prebindgen_declarations::Output>,
     pub handler: String,
 }
 impl ErrorBinding {
+    pub(crate) fn output(&self) -> Result<&JniOutput> {
+        self.output
+            .as_ref()
+            .ok_or_else(|| format!("JNI error `{}` has no compiled output", self.handler))
+    }
+
     pub fn throws(&self, exception: Option<&str>) -> String {
         exception.map_or_else(String::new, |class| {
             format!("@kotlin.jvm.Throws({}::class)\n", class.replace('$', "."))
@@ -63,7 +71,7 @@ pub fn bind_error_output<I, O>(
         .ok_or("domain-error handler has no package")?
         .0;
     error.handler = format!("{package}.LocalErrorHandler_{label}_{hash:016x}");
-    error.output = JniOutput::new(output);
+    error.output = Some(JniOutput::new(output));
     metadata.error = Some(std::rc::Rc::new(error));
     Ok(())
 }
@@ -80,9 +88,9 @@ fn helper_name(names: &mut names::Names, ty: &syn::Type, mapped: bool) -> Result
 }
 
 /// Prepare each error once on its type and attach each function's selected binding.
-pub(crate) fn prepare(
+pub(crate) fn resolve(
     flat: &mut Bindings,
-    codec: &JniCodec<'_>,
+    codec: &JniCodec,
     declarations: &prebindgen_declarations::Declarations,
     functions: &[FunctionDecl],
 ) -> Result<()> {
@@ -128,7 +136,7 @@ pub(crate) fn prepare(
         let (ty, recipe) = if mapped {
             (
                 syn::parse_quote!(String),
-                prebindgen_declarations::Output::Leaf,
+                prebindgen_declarations::Output::Leaf(OutputLeafOp::Value),
             )
         } else {
             (
@@ -137,14 +145,6 @@ pub(crate) fn prepare(
             )
         };
         let helper = helper_name(&mut names, &canonical_error, mapped)?;
-        let output = prebindgen_declarations::compile_output_value(flat, codec, &ty, &recipe, &())
-            .map_err(|e| {
-                format!(
-                    "JNI error `{}` in `{}`: {e}",
-                    type_key(error),
-                    function.name
-                )
-            })?;
         let pkg = flat
             .type_info(error)?
             .metadata
@@ -187,7 +187,8 @@ pub(crate) fn prepare(
         let binding = std::rc::Rc::new(ErrorBinding {
             helper,
             ty,
-            output,
+            output: None,
+            recipe: Some(recipe),
             handler,
         });
         flat.type_metadata_mut(error)?
@@ -198,6 +199,59 @@ pub(crate) fn prepare(
             .as_mut()
             .ok_or_else(|| format!("JNI function `{}` has no export metadata", function.name))?
             .error = Some(binding);
+    }
+    Ok(())
+}
+
+pub(crate) fn compile(flat: &mut Bindings, codec: &JniCodec) -> Result<()> {
+    let pending = flat
+        .types
+        .iter()
+        .flat_map(|(key, t)| {
+            t.metadata
+                .errors
+                .iter()
+                .filter(|(_, e)| e.recipe.is_some())
+                .map(|(mapped, e)| (key.clone(), *mapped, e.clone()))
+        })
+        .collect::<Vec<_>>();
+    for (key, mapped, old) in pending {
+        let mut binding = (*old).clone();
+        let recipe = binding.recipe.take().unwrap();
+        binding.output = Some(
+            prebindgen_declarations::compile_output_value(flat, codec, &binding.ty, &recipe, &())
+                .map_err(|error| {
+                let function = flat.functions.values().find(|function| {
+                    function
+                        .metadata
+                        .as_ref()
+                        .and_then(|m| m.error.as_ref())
+                        .is_some_and(|binding| std::rc::Rc::ptr_eq(binding, &old))
+                });
+                match function {
+                    Some(function) => format!("JNI error `{key}` in `{}`: {error}", function.name),
+                    None => format!("JNI error `{key}`: {error}"),
+                }
+            })?,
+        );
+        let binding = std::rc::Rc::new(binding);
+        flat.types
+            .get_mut(&key)
+            .unwrap()
+            .metadata
+            .errors
+            .insert(mapped, binding.clone());
+        for function in flat.functions.values_mut() {
+            if let Some(metadata) = &mut function.metadata {
+                if metadata
+                    .error
+                    .as_ref()
+                    .is_some_and(|e| std::rc::Rc::ptr_eq(e, &old))
+                {
+                    metadata.error = Some(binding.clone());
+                }
+            }
+        }
     }
     Ok(())
 }
@@ -224,16 +278,16 @@ pub(crate) fn emit(errors: &BTreeMap<String, &ErrorBinding>) -> Result<TokenStre
         };
         let body_for = |context: &JniContext| -> Result<TokenStream> {
             let mut prepared_context = context.clone();
-            returns::prepare(&error.output, &mut prepared_context)?;
+            returns::prepare(error.output()?, &mut prepared_context)?;
             let context = &prepared_context;
-            let commit = error.output.code_fragment_slot(
+            let commit = error.output()?.code_fragment_slot(
                 OutputFragment::Commit {
                     context,
                     source: &source,
                 },
                 &syn::parse_quote!(()),
             )?;
-            let body = error.output.code_fragment_slot(
+            let body = error.output()?.code_fragment_slot(
                 OutputFragment::Deliver {
                     context,
                     source: &source,
@@ -241,7 +295,7 @@ pub(crate) fn emit(errors: &BTreeMap<String, &ErrorBinding>) -> Result<TokenStre
                 },
                 &syn::parse_quote!(::prebindgen_runtime::Result<()>),
             )?;
-            error.output.code_fragment_slot(
+            error.output()?.code_fragment_slot(
                 OutputFragment::Prepare {
                     context,
                     source: &source,
@@ -259,7 +313,7 @@ pub(crate) fn emit(errors: &BTreeMap<String, &ErrorBinding>) -> Result<TokenStre
             output_committed: quote!(*reported = Some(std::ptr::null_mut());),
             ..context
         };
-        let callback_body = if returns::select(&error.output).is_some() {
+        let callback_body = if returns::select(error.output()?).is_some() {
             body_for(&callback_context)?
         } else {
             quote!(Err("custom error output requires packet delivery".into()))
@@ -293,7 +347,7 @@ pub(crate) fn handler_files(
             continue;
         }
         let (pkg, name) = error.handler.rsplit_once('.').unwrap();
-        let output = error.output.kotlin(context)?;
+        let output = error.output()?.kotlin(context)?;
         let slots: usize = output
             .result_types
             .iter()
@@ -328,13 +382,13 @@ pub(crate) fn delivery(error: &ErrorBinding, context: &KotlinContext<'_>) -> Res
         cleanup_failure: Some("cleanupFailure"),
         ..*context
     };
-    let mut output = error.output.kotlin(&context)?;
+    let mut output = error.output()?.kotlin(&context)?;
     kotlin::remap_output(
         &mut output,
         context.result,
         context.result,
         1,
-        crate::group::result_packet_fields(&error.output.output_outcomes().success).len(),
+        crate::group::result_packet_fields(&error.output()?.output_outcomes().success).len(),
     );
     let call = format!("onError.run({})", output.delivered.join(", "));
     if output.cleanup.is_empty() {

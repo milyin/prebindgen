@@ -1,5 +1,6 @@
 //! Custom projections through ordinary returns, retained callbacks and typed errors.
 use prebindgen_conversions::{Delivery, DeliveryPolicy, InputFragment, OutputFragment};
+use prebindgen_declarations::OutputLeafOp;
 use prebindgen_flat::{Conversion, InputConversion, OutputConversion, Result, WireNode};
 use prebindgen_jni::{
     expand_return, fun, package, ptr_class, Bindings, JniBranch, JniCallback, JniChain, JniContext,
@@ -186,7 +187,7 @@ pub fn generate() -> Result<JniGen> {
         &Bindings::parse([])?,
         &prebindgen_jni::JniCodec::raw(),
         &syn::parse_quote!(i64),
-        &prebindgen_declarations::Output::Leaf,
+        &prebindgen_declarations::Output::Leaf(OutputLeafOp::Value),
         &(),
     )?;
     prebindgen_jni::bind_error_output(&mut flat, "duration_result", DurationOutput(error_output))?;
@@ -212,7 +213,7 @@ pub fn generate() -> Result<JniGen> {
         &Bindings::parse([])?,
         &prebindgen_jni::JniCodec::raw(),
         &syn::parse_quote!(i64),
-        &prebindgen_declarations::Output::Leaf,
+        &prebindgen_declarations::Output::Leaf(OutputLeafOp::Value),
         &(),
     )?;
     callback.set_argument_converter(0, DurationOutput(native_output))?;

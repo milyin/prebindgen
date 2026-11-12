@@ -6,6 +6,26 @@ pub type CodecNode<C> = WireNode<<C as Codec>::Wire, <C as Codec>::Chain, <C as 
 /// Prepared expressions keyed by their wire binding names.
 pub type WireValues = Vec<(syn::Ident, TokenStream)>;
 
+/// Compile a callable input from its resolved domain, codomain and invocation policy.
+pub struct InputArrow<'a, C: Codec + ?Sized> {
+    /// Source types and resolved binding declarations.
+    pub flat: &'a Flat<C::Schema>,
+    /// Callable representation and invocation policy.
+    pub operation: &'a CallbackOperation,
+    /// Reverse-direction argument tree.
+    pub domain: &'a Output,
+    /// Same-direction result tree.
+    pub codomain: &'a Input,
+    /// Occurrence settings owned by the resolved model.
+    pub extra: &'a C::Extra,
+    /// Incoming foreign callable binding.
+    pub wire: syn::Ident,
+    /// Constructed Rust callable binding.
+    pub target: syn::Ident,
+    /// Condition under which the callable is present.
+    pub active: &'a Condition,
+}
+
 /// Direction in which a source value crosses the boundary.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Direction {

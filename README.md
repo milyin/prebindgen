@@ -336,7 +336,7 @@ are diagnosed rather than falling back to implicit child copies.
 
 A borrowed opaque getter output without a retained owner is rejected unless its
 source reference is `'static`. Use an explicit owning conversion such as
-`.view(Output::getter("owner_child", Output::Projected(Projection::borrowed())))`
+`.view(Output::getter("owner_child", Output::Leaf(OutputLeafOp::Projected(Projection::borrowed()))))`
 if an independent copy is intended. Direct pointer outputs of references supplied
 by a Rust function keep the existing borrow contract. Expanding those references
 with getters also requires an explicit owning conversion for opaque children;
@@ -380,12 +380,20 @@ Builders prepare one binding model, then emit from that model:
 
 ```text
 Source -> Flat<CSchema> or Flat<JniSchema> with empty conversion slots
-       -> prepare converters into the same Flat
+       -> resolve defaults and overrides into Flat<Resolved<Codec>>
+       -> compile_resolved(flat): Flat with compiled converters
        -> generate(&flat): Rust and C/Kotlin
 ```
 
-Preparation trees use `Input<InputRequest>` and `Output<OutputRequest>`: structural
-operations and pending choices share one tree. `Request` marks a choice that
+Preparation trees use `Input<InputRequest, OutputRequest>` and
+`Output<OutputRequest, InputRequest>`. These are aliases for the generic
+`InputNode<I, O, IR, OR>` and `OutputNode<I, O, IR, OR>` trees with the shared
+compiler's input and output operation sets. Each set independently defines
+`Leaf`, `Unary`, `Branch` and `Arrow` operations. `None` represents unit, and
+`Request` carries a pending choice. An `Arrow` keeps its callable arguments in
+one opposite-direction `domain` subtree and its result in a same-direction
+`codomain` subtree; callback conversions are visible to ordinary tree traversal.
+Resolved trees use `Infallible` for both request types. `Request` marks a choice that
 preparation must resolve: `Auto` selects a configured default, `Call` discovers
 constructor arguments, `ForType` applies a typed override, and `NamedFields`
 fills in source fields by name. The
@@ -546,21 +554,24 @@ stored plans nor template support.
 input/output plans and unit declaration metadata for simple codecs. `Codec::Context` selects the context
 type for the prepared slots; it defaults to `()` in the alias for
 conversions that need no generator-specific settings. `bind_input` and `bind_output`
-resolve and compile one preparation tree (`Input<InputRequest>` or
-`Output<OutputRequest>`); `Declarations::fill` compiles defaults and explicit overrides for a
-function. `Codec::finish_input` and `finish_output` attach glue after recursive
+resolve and compile one preparation tree (`Input<InputRequest, OutputRequest>` or
+`Output<OutputRequest, InputRequest>`); `Declarations::fill` compiles defaults and explicit overrides for a
+function using the same resolver and compiler. The high-level builders instead
+resolve the whole model with `Declarations::resolve` and compile it with
+`compile_resolved(flat)`. `Codec::finish_input` and `finish_output` attach glue after recursive
 composition, during preparation only; the latter also runs for unit results.
 Failed compilation preserves existing slots. Existing converters survive
-default filling; explicit overrides replace them. Recipes and `Codec::Extra` are
-construction inputs, never stored in Flat. Nested recipes use the enclosing
-occurrence's extra data.
+default filling; explicit overrides replace them. A resolved Flat owns its trees,
+codec policy and `Codec::Extra`, so compilation needs no external configuration.
+The compiled Flat retains converters instead of these function recipes. Nested
+recipes use the enclosing occurrence's extra data.
 
 A codec needs four operations: `input_leaf(InputLeaf)`, `output_leaf(OutputLeaf)`,
 `output_consumes`, and `group(GroupKind)`. Optional features reject unsupported
 requests by default. [The operation guide](docs/declaration-codec.md) describes
 the requests and migration from the former hooks. C and JNI each implement the
 trait once: `CCodec::raw()` / `JniCodec::raw()` preserve manual low-level
-conversion policy; `CCodec::declared()` / `JniCodec::declared(callback_outputs)`
+conversion policy; `CCodec::declared()` / `JniCodec::declared()`
 also apply language declarations already stored in Flat. Both `Default`
 implementations select raw policy. The high-level builders select declared policy.
 
@@ -575,9 +586,9 @@ adapter-supplied codecs.
 
 ### Preparation declarations and resolved field mapping
 
-Conversion choices are `Input<InputRequest>` and `Output<OutputRequest>` descriptions. Resolution
+Conversion choices are `Input<InputRequest, OutputRequest>` and `Output<OutputRequest, InputRequest>` descriptions. Resolution
 checks source fields, constructor/getter signatures and type defaults against
-`Flat`, producing temporary, request-free descriptions. Compilation then installs
+`Flat`, producing request-free descriptions stored in the resolved model. Compilation then installs
 the resulting converters in occurrence slots. Language declaration
 metadata belongs to the corresponding Flat type, function, field or variant.
 Compilation does not consult a separate representation registry. Custom `Codec`
@@ -609,7 +620,7 @@ all slots filled, including unit results. The current adapters additionally use
 
 A leaf is a source type the adapter converts itself rather than composing it
 from parts. Recipes mark where the leaves are (`Input::Leaf`, `Output::Leaf`);
-the codec chooses each leaf's conversion from its type. Its leaf methods are `input_leaf`, `output_leaf`, `consumes` and `selector`. `prebindgen-conversions` provides two
+the codec chooses each leaf's conversion from its type. The leaf operations are `input_leaf`, `output_leaf` and `output_consumes`. `prebindgen-conversions` provides two
 helpers for leaves:
 
 - `prebindgen_conversions::value` copies values across the boundary. `Value::of`
@@ -902,7 +913,7 @@ readable generated type names. Explicit declarations give the types predictable
 names and also select native ownership for inputs: `T` consumes an owner through
 a mutable pointer, while `&T`/`&mut T` borrow its storage. Without an explicit
 storage declaration, input buffers and input element conversions retain their
-ordinary forms. Explicit element expansions and `Output::Sequence` still request
+ordinary forms. Explicit element expansions and `OutputUnary::Sequence` still request
 row conversion; they take precedence over native collection defaults.
 
 `OpaqueLayout::auto::<T>()` measures the real Rust type available to the build
@@ -1041,7 +1052,7 @@ representations) likewise reject implicit reconstruction. An element constructor
 alone does not permit allocation of its enclosing borrowed collection.
 
 Use `.reconstruct()` to deliberately build an owned temporary and lend it to the
-source call. This is the `Input::Temporary` operation: slices build a Vec, str
+source call. This is the `InputUnary::Temporary` operation: slices build a Vec, str
 builds a String, and sized references build their referent. The child describes
 that **owned** value, retaining ordinary constructor/default/ownership rules.
 It may copy buffers or acquire owned handles; acquired values are dropped on
@@ -1056,13 +1067,13 @@ cloning opaque objects whose ordinary input conversion consumes them.
     "values", expand_param!(&[i64]).reconstruct()))
 // Explicit element constructors inside an explicitly reconstructed collection.
 .function(fun!(inspect_rows).input("values",
-    Input::Sequence(Box::new(Input::call("clone_row"))).reconstruct()))
+    Input::sequence(Input::call("clone_row")).reconstruct()))
 ```
 
 With no alternatives, `expand_param!(...).reconstruct()` selects the owned
 value's default input conversion. Alternatives selected on that declaration must
 return the owned referent; builder modifier order does not matter. For explicit
-Input trees use `Input::auto().reconstruct()` or `Input::Temporary(child)`.
+Input trees use `Input::auto().reconstruct()` or `child.reconstruct()`.
 Apply reconstruction to the reference payload, not its surrounding Option.
 Mutable and static-reference reconstruction are unsupported. Views into these
 temporaries cannot escape through returned references. Direct numeric input
@@ -1113,7 +1124,7 @@ collection input for an escaping return is rejected too.
 
 If conversion really needs an owning copy, authorize it at the collection:
 `expand_return!(&[T]).field_self_ref()`, globally or on the function's
-`.expand_return(...)`. A resolved `Output::Sequence` with
+`.expand_return(...)`. A resolved `OutputUnary::Sequence` with
 `mode: Some(ProjectionMode::Borrowed)` expresses the same explicit copy choice.
 An element-only expansion does not authorize copying its enclosing collection.
 Explicit copy permission on an enclosing record or collection applies to its
@@ -1867,7 +1878,7 @@ not yet supported. Spell both generic arguments explicitly using `Result`,
 `std::result::Result`, or `core::result::Result`; one-argument aliases such as
 `io::Result<T>` are not resolved. Named opaque aliases remain opaque.
 
-Adapter authors can use the shared `Output::Result` recipe through `bind_output`.
+Adapter authors can use the shared `OutputUnary::Result` recipe through `bind_output`.
 The declaration compiler validates any selected mapper and unwraps the result
 before preparing the success conversion. `Codec::source_error` receives
 the owned error and an optional mapper expression and returns a `SourceErrorPlan`

@@ -103,6 +103,9 @@
 //! `.ignore(matching(…))` predicate. Both suppress the per-item
 //! "skipping undeclared" build warning while emitting nothing.
 
+use prebindgen_declarations::{
+    InputBranch, InputLeafOp, InputUnary, OutputBranch, OutputLeafOp, OutputUnary,
+};
 /* Unsupported: imports and helpers for the disabled declarations.
 use prebindgen_jni::{
     constant, data_class, enum_class, matching, package, ptr_class, sealed_class, variant, JniGen,
@@ -137,13 +140,19 @@ use prebindgen_jni::{
 fn bulk_replay_input_with(
     redundant_bulk: bool,
     bulk_rows: bool,
-) -> prebindgen_declarations::Input<prebindgen_jni::InputRequest> {
+) -> prebindgen_declarations::Input<
+    prebindgen_jni::InputRequest,
+    prebindgen_declarations::OutputRequest,
+> {
     use prebindgen_declarations::Input;
-    let borrowed = |function: &str| {
-        Input::Optional(Box::new(Input::Constructor {
-            function: function.into(),
-            args: vec![Input::Leaf],
-        }))
+    let borrowed = |function: &str| Input::Unary {
+        operation: InputUnary::Optional,
+        child: Box::new(Input::Branch {
+            operation: InputBranch::Constructor {
+                function: function.into(),
+            },
+            children: vec![Input::Leaf(InputLeafOp::Value)],
+        }),
     };
     let buffer = |function: &str| {
         let input = borrowed(function);
@@ -153,17 +162,23 @@ fn bulk_replay_input_with(
             input.bulk()
         }
     };
-    let input = Input::Sequence(Box::new(Input::Record(vec![
-        Input::Leaf,
-        if redundant_bulk || !bulk_rows {
-            borrowed("bulk_replay_text").bulk()
-        } else {
-            borrowed("bulk_replay_text")
-        },
-        buffer("bulk_replay_bytes"),
-        borrowed("bulk_replay_kind"),
-        Input::Leaf,
-    ])));
+    let input = Input::Unary {
+        operation: InputUnary::Sequence,
+        child: Box::new(Input::Branch {
+            operation: InputBranch::Record,
+            children: vec![
+                Input::Leaf(InputLeafOp::Value),
+                if redundant_bulk || !bulk_rows {
+                    borrowed("bulk_replay_text").bulk()
+                } else {
+                    borrowed("bulk_replay_text")
+                },
+                buffer("bulk_replay_bytes"),
+                borrowed("bulk_replay_kind"),
+                Input::Leaf(InputLeafOp::Value),
+            ],
+        }),
+    };
     if bulk_rows {
         input.bulk()
     } else {
@@ -171,7 +186,10 @@ fn bulk_replay_input_with(
     }
 }
 
-fn bulk_replay_input() -> prebindgen_declarations::Input<prebindgen_jni::InputRequest> {
+fn bulk_replay_input() -> prebindgen_declarations::Input<
+    prebindgen_jni::InputRequest,
+    prebindgen_declarations::OutputRequest,
+> {
     bulk_replay_input_with(false, true)
 }
 
@@ -182,10 +200,12 @@ mod output_contracts;
 
 fn main() {
     use prebindgen_declarations::{Output, OutputRequest, SequenceDelivery};
-    let ordinary_rows = |element| Output::Sequence {
-        delivery: SequenceDelivery::Value,
-        mode: None,
-        element: Box::new(element),
+    let ordinary_rows = |element| Output::Unary {
+        operation: OutputUnary::Sequence {
+            delivery: SequenceDelivery::Value,
+            mode: None,
+        },
+        child: Box::new(element),
     };
     let row = || Output::Request(OutputRequest::Auto);
     let getter_views = || {
@@ -200,13 +220,22 @@ fn main() {
         views.field(fun!(jni_buffer_row_text))
     });
     let wide_return = (0..130).fold(expand_return!(i64), |views, _| views.field_self_ref());
-    let type_rows = || Input::Sequence(Box::new(Input::Record(vec![Input::Leaf; 2])));
-    let type_nested = || Input::Sequence(Box::new(type_rows()));
+    let type_rows = || Input::Unary {
+        operation: InputUnary::Sequence,
+        child: Box::new(Input::Branch {
+            operation: InputBranch::Record,
+            children: vec![Input::Leaf(InputLeafOp::Value); 2],
+        }),
+    };
+    let type_nested = || Input::Unary {
+        operation: InputUnary::Sequence,
+        child: Box::new(type_rows()),
+    };
     let binding = JniGen::builder()
         .convert(convert!(WireMarker).input(fun!(wire_marker_new)).output(fun!(wire_marker_value)))
         .expand(expand_return!(WireReply).fields_into(fields!(wire_reply_into_struct)))
         .expand(expand_return!(WireReplyResult).view(prebindgen_declarations::Output::enum_fields([])))
-        .expand(expand_return!(WireReplySample).view(prebindgen_declarations::Output::OwnedFields(vec![prebindgen_declarations::Output::auto();2])))
+        .expand(expand_return!(WireReplySample).view(prebindgen_declarations::Output::Branch { operation: OutputBranch::OwnedFields, children: vec![prebindgen_declarations::Output::auto();2] }))
         .expand(expand_return!(WireReplyError).fields(fields!(wire_reply_error_view)))
         .convert(convert!(WireDuration).input(fun!(wire_duration_new)).output(fun!(wire_duration_millis)))
         .package(package!("payloadenums")
@@ -228,7 +257,7 @@ fn main() {
             .fun(fun!(wire_bench_total))
             .fun(fun!(wire_bench_scalar_bulk).expand_param("value",Input::value().bulk()))
             .fun(fun!(wire_manual_total))
-            .fun(fun!(wire_bench_bulk).expand_param("values",Input::Sequence(Box::new(Input::value())).bulk()))
+            .fun(fun!(wire_bench_bulk).expand_param("values",Input::Unary { operation: InputUnary::Sequence, child: Box::new(Input::value()) }.bulk()))
             .fun(fun!(wire_bench_objects))
             .class(sealed_class!(WireCheckedEvent))
             .fun(fun!(wire_checked_new))
@@ -239,11 +268,11 @@ fn main() {
             .fun(fun!(wire_composite_owned_new))
             .class(data_class!(WireOptionalOwner))
             .class(sealed_class!(WireNicheEvent))
-            .fun(fun!(wire_niche_rows).expand_param("values",Input::Sequence(Box::new(Input::Enum { variants:vec![vec![],vec![Input::Optional(Box::new(Input::Record(vec![Input::value();2]))),Input::value()]],value:true })).bulk()))
+            .fun(fun!(wire_niche_rows).expand_param("values",Input::Unary { operation: InputUnary::Sequence, child: Box::new(Input::enum_variants(vec![vec![],vec![Input::Unary { operation: InputUnary::Optional, child: Box::new(Input::Branch { operation: InputBranch::Record, children: vec![Input::value();2] }) },Input::value()]], true)) }.bulk()))
             .fun(fun!(wire_owned_new))
             .fun(fun!(wire_owned_echo))
             .fun(fun!(wire_owned_callback))
-            .fun(fun!(wire_owned_rows).expand_param("values",Input::Sequence(Box::new(Input::value())).bulk()))
+            .fun(fun!(wire_owned_rows).expand_param("values",Input::Unary { operation: InputUnary::Sequence, child: Box::new(Input::value()) }.bulk()))
             .fun(fun!(wire_owned_rows_new))
             .class(sealed_class!(WireRecoveryMode))
             .class(data_class!(WireRecoveryConfig))
@@ -252,10 +281,10 @@ fn main() {
             .class(enum_class!(WireInterceptionPoint))
             .class(data_class!(WireTimestampStackRecord))
             .fun(fun!(wire_recovery_echo))
-            .fun(fun!(wire_timestamps).expand_param("values",Input::Sequence(Box::new(Input::value())).bulk()))
+            .fun(fun!(wire_timestamps).expand_param("values",Input::Unary { operation: InputUnary::Sequence, child: Box::new(Input::value()) }.bulk()))
             .class(sealed_class!(Result<i64,String>).name("WireDecision"))
             .class(sealed_class!(Result<(),String>).name("WireNotice"))
-            .fun(fun!(wire_event_rows).expand_param("values",Input::Sequence(Box::new(Input::value())).bulk()))
+            .fun(fun!(wire_event_rows).expand_param("values",Input::Unary { operation: InputUnary::Sequence, child: Box::new(Input::value()) }.bulk()))
             .fun(fun!(wire_event_rows_callback))
             .fun(fun!(wire_bare_echo).expand_param("value",Input::enum_fields([])).expand_return(prebindgen_declarations::Output::enum_fields([])))
             .fun(fun!(wire_event_echo))
@@ -323,7 +352,7 @@ fn main() {
                 .fun(fun!(canonical_settings))
                 .fun(
                     fun!(canonical_settings_rows)
-                        .expand_param("value", Input::Sequence(Box::new(Input::value())).bulk()),
+                        .expand_param("value", Input::Unary { operation: InputUnary::Sequence, child: Box::new(Input::value()) }.bulk()),
                 )
                 .fun(fun!(canonical_settings_callback))
                 .fun(fun!(canonical_view_echo))
@@ -333,11 +362,7 @@ fn main() {
                 .fun(fun!(canonical_live))
                 .fun(fun!(canonical_output_rows))
                 .fun(
-                    fun!(canonical_output_rows_plain).expand_return(Output::Sequence {
-                        element: Box::new(Output::value()),
-                        mode: None,
-                        delivery: SequenceDelivery::Value,
-                    }),
+                    fun!(canonical_output_rows_plain).expand_return(Output::Unary { operation: OutputUnary::Sequence { delivery: SequenceDelivery::Value, mode: None }, child: Box::new(Output::value()),  }),
                 )
                 .fun(fun!(canonical_output_notify))
                 .fun(fun!(canonical_consume_rows))
@@ -379,8 +404,8 @@ fn main() {
             .fun(fun!(type_input_mixed)
                 .expand_param("reads",expand_param!(i64).variant(fun!(type_input_a_read)).bulk())
                 .expand_param("writes",expand_param!(i64).variant(fun!(type_input_a_mut)).bulk()))
-            .fun(fun!(type_input_row).expand_param("value",Input::Record(vec![Input::Leaf;2])))
-            .fun(fun!(type_input_holder).expand_param("value",Input::Record(vec![Input::Optional(Box::new(Input::Record(vec![Input::Leaf;2])))])))
+            .fun(fun!(type_input_row).expand_param("value",Input::Branch { operation: InputBranch::Record, children: vec![Input::Leaf(InputLeafOp::Value);2] }))
+            .fun(fun!(type_input_holder).expand_param("value",Input::Branch { operation: InputBranch::Record, children: vec![Input::Unary { operation: InputUnary::Optional, child: Box::new(Input::Branch { operation: InputBranch::Record, children: vec![Input::Leaf(InputLeafOp::Value);2] }) }] }))
             .fun(fun!(type_input_rows).expand_param("values",type_rows().bulk()))
             .fun(fun!(type_input_rows_plain).expand_param("values",type_rows()))
             .fun(fun!(type_input_nested).expand_param("values",type_nested().bulk()))
@@ -460,31 +485,31 @@ fn main() {
             .class(data_class!(BulkReplayRow))
             .fun(fun!(bulk_replay_rows).expand_param("rows",bulk_replay_input()))
             .fun(fun!(bulk_replay_redundant_rows).expand_param("rows",bulk_replay_input_with(true, true)))
-            .fun(fun!(bulk_replay_nested_rows).expand_param("rows",Input::Sequence(Box::new(bulk_replay_input_with(true,true))).bulk()))
-            .fun(fun!(bulk_replay_nested_callback).expand_param("callback",callback!(impl Fn()->Vec<Vec<BulkReplayRow>>).name("BulkReplayNestedCallback").expand_return(Input::Sequence(Box::new(bulk_replay_input_with(true,true))).bulk())))
+            .fun(fun!(bulk_replay_nested_rows).expand_param("rows",Input::Unary { operation: InputUnary::Sequence, child: Box::new(bulk_replay_input_with(true,true)) }.bulk()))
+            .fun(fun!(bulk_replay_nested_callback).expand_param("callback",callback!(impl Fn()->Vec<Vec<BulkReplayRow>>).name("BulkReplayNestedCallback").expand_return(Input::Unary { operation: InputUnary::Sequence, child: Box::new(bulk_replay_input_with(true,true)) }.bulk())))
             .fun(fun!(bulk_replay_object_rows).expand_param("rows",bulk_replay_input_with(false, false)))
             .fun(fun!(bulk_replay_callback).expand_param("callback",callback!(impl Fn()->Vec<BulkReplayRow>).name("BulkReplayCallback").expand_return(bulk_replay_input())))
-            .fun(fun!(bulk_nested_handles_input).expand_param("values",Input::Sequence(Box::new(Input::Optional(Box::new(Input::Sequence(Box::new(Input::Optional(Box::new(Input::Leaf.bulk())))))))).bulk()))
+            .fun(fun!(bulk_nested_handles_input).expand_param("values",Input::Unary { operation: InputUnary::Sequence, child: Box::new(Input::Unary { operation: InputUnary::Optional, child: Box::new(Input::Unary { operation: InputUnary::Sequence, child: Box::new(Input::Unary { operation: InputUnary::Optional, child: Box::new(Input::Leaf(InputLeafOp::Value).bulk()) }) }) }) }.bulk()))
             .fun(fun!(bulk_cleanup_nested_callback).expand_param("callback",
                 callback!(impl Fn()->Vec<Option<Vec<Option<BulkHandle>>>> + Send + 'static).name("BulkCleanupNestedCallback")
-                    .expand_return(Input::Sequence(Box::new(Input::Optional(Box::new(Input::Sequence(Box::new(Input::Optional(Box::new(Input::Leaf.bulk())))))))).bulk())))
+                    .expand_return(Input::Unary { operation: InputUnary::Sequence, child: Box::new(Input::Unary { operation: InputUnary::Optional, child: Box::new(Input::Unary { operation: InputUnary::Sequence, child: Box::new(Input::Unary { operation: InputUnary::Optional, child: Box::new(Input::Leaf(InputLeafOp::Value).bulk()) }) }) }) }.bulk())))
             .fun(fun!(bulk_cleanup_pair_callback).expand_param("callback",
                 callback!(impl Fn()->BulkPairText).name("BulkCleanupPairCallback")
-                    .expand_return(Input::Record(vec![Input::Constructor {function:"bulk_handle_copy".into(),args:vec![Input::Leaf]},Input::Leaf,Input::Leaf]).bulk())))
+                    .expand_return(Input::Branch { operation: InputBranch::Record, children: vec![Input::Branch { operation: InputBranch::Constructor { function: "bulk_handle_copy".into() }, children: vec![Input::Leaf(InputLeafOp::Value)],  },Input::Leaf(InputLeafOp::Value),Input::Leaf(InputLeafOp::Value)] }.bulk())))
             .fun(fun!(bulk_replay_reset)).fun(fun!(bulk_replay_count))
-            .fun(fun!(bulk_patch_rows).expand_param("row",Input::Constructor{function:"bulk_patch_row_new".into(),args:vec![
-                Input::Optional(Box::new(Input::Leaf)),
-                Input::Optional(Box::new(Input::Sequence(Box::new(Input::Optional(Box::new(Input::Sequence(Box::new(Input::Optional(Box::new(Input::Leaf)))))))))),
-                Input::Leaf,
-            ]}.bulk()))
-            .fun(fun!(bulk_patch_callback).expand_param("callback",callback!(impl Fn()->Vec<Option<Vec<Option<BulkHandle>>>>).name("BulkPatchCallback").expand_return(Input::Sequence(Box::new(Input::Optional(Box::new(Input::Sequence(Box::new(Input::Optional(Box::new(Input::Leaf.bulk())))))))).bulk())))
-            .fun(fun!(bulk_nested_envelope).expand_param("values",Input::Sequence(Box::new(Input::Constructor{function:"bulk_input_envelope_new".into(),args:vec![Input::Sequence(Box::new(Input::Sequence(Box::new(Input::Leaf)))).bulk()]}))))
-            .fun(fun!(bulk_pair_text_callback).expand_param("callback",callback!(impl Fn()->Vec<BulkPairText>).name("BulkPairTextCallback").expand_return(Input::Sequence(Box::new(Input::Record(vec![Input::Constructor{function:"bulk_handle_copy".into(),args:vec![Input::Leaf]},Input::Leaf,Input::Leaf]))).bulk())))
-            .fun(fun!(bulk_handle_texts).expand_param("values",Input::Sequence(Box::new(Input::Record(vec![Input::Leaf;2]))).bulk()))
+            .fun(fun!(bulk_patch_rows).expand_param("row",Input::Branch { operation: InputBranch::Constructor { function: "bulk_patch_row_new".into() }, children: vec![
+                Input::Unary { operation: InputUnary::Optional, child: Box::new(Input::Leaf(InputLeafOp::Value)) },
+                Input::Unary { operation: InputUnary::Optional, child: Box::new(Input::Unary { operation: InputUnary::Sequence, child: Box::new(Input::Unary { operation: InputUnary::Optional, child: Box::new(Input::Unary { operation: InputUnary::Sequence, child: Box::new(Input::Unary { operation: InputUnary::Optional, child: Box::new(Input::Leaf(InputLeafOp::Value)) }) }) }) }) },
+                Input::Leaf(InputLeafOp::Value),
+            ],  }.bulk()))
+            .fun(fun!(bulk_patch_callback).expand_param("callback",callback!(impl Fn()->Vec<Option<Vec<Option<BulkHandle>>>>).name("BulkPatchCallback").expand_return(Input::Unary { operation: InputUnary::Sequence, child: Box::new(Input::Unary { operation: InputUnary::Optional, child: Box::new(Input::Unary { operation: InputUnary::Sequence, child: Box::new(Input::Unary { operation: InputUnary::Optional, child: Box::new(Input::Leaf(InputLeafOp::Value).bulk()) }) }) }) }.bulk())))
+            .fun(fun!(bulk_nested_envelope).expand_param("values",Input::Unary { operation: InputUnary::Sequence, child: Box::new(Input::Branch { operation: InputBranch::Constructor { function: "bulk_input_envelope_new".into() }, children: vec![Input::Unary { operation: InputUnary::Sequence, child: Box::new(Input::Unary { operation: InputUnary::Sequence, child: Box::new(Input::Leaf(InputLeafOp::Value)) }) }.bulk()],  }) }))
+            .fun(fun!(bulk_pair_text_callback).expand_param("callback",callback!(impl Fn()->Vec<BulkPairText>).name("BulkPairTextCallback").expand_return(Input::Unary { operation: InputUnary::Sequence, child: Box::new(Input::Branch { operation: InputBranch::Record, children: vec![Input::Branch { operation: InputBranch::Constructor { function: "bulk_handle_copy".into() }, children: vec![Input::Leaf(InputLeafOp::Value)],  },Input::Leaf(InputLeafOp::Value),Input::Leaf(InputLeafOp::Value)] }) }.bulk())))
+            .fun(fun!(bulk_handle_texts).expand_param("values",Input::Unary { operation: InputUnary::Sequence, child: Box::new(Input::Branch { operation: InputBranch::Record, children: vec![Input::Leaf(InputLeafOp::Value);2] }) }.bulk()))
             .fun(fun!(bulk_collection_lock_groups).expand_param("probe",callback!(impl Fn()->bool).name("CollectionLocksProbe")))
-            .fun(fun!(bulk_handle_nested).expand_param("values",Input::Sequence(Box::new(Input::Sequence(Box::new(Input::Leaf)).bulk()))))
-            .fun(fun!(bulk_handle_text_callback).expand_param("callback",callback!(impl Fn()->Vec<BulkHandleText>).name("BulkHandleTextCallback").expand_return(Input::Sequence(Box::new(Input::Record(vec![Input::Leaf;2]))).bulk())))
-            .fun(fun!(bulk_optional_borrow_pair).expand_param("value",Input::Optional(Box::new(Input::Constructor {function:"bulk_borrow_pair_new".into(),args:vec![Input::Leaf;2]})).bulk()))
+            .fun(fun!(bulk_handle_nested).expand_param("values",Input::Unary { operation: InputUnary::Sequence, child: Box::new(Input::Unary { operation: InputUnary::Sequence, child: Box::new(Input::Leaf(InputLeafOp::Value)) }.bulk()) }))
+            .fun(fun!(bulk_handle_text_callback).expand_param("callback",callback!(impl Fn()->Vec<BulkHandleText>).name("BulkHandleTextCallback").expand_return(Input::Unary { operation: InputUnary::Sequence, child: Box::new(Input::Branch { operation: InputBranch::Record, children: vec![Input::Leaf(InputLeafOp::Value);2] }) }.bulk())))
+            .fun(fun!(bulk_optional_borrow_pair).expand_param("value",Input::Unary { operation: InputUnary::Optional, child: Box::new(Input::Branch { operation: InputBranch::Constructor { function: "bulk_borrow_pair_new".into() }, children: vec![Input::Leaf(InputLeafOp::Value);2],  }) }.bulk()))
             .fun(fun!(bulk_select).expand_param("value",expand_param!(i64).variant(fun!(bulk_scalar)).variant_self().bulk()).expand_return(expand_return!(i64).field_self().bulk()))
             .fun(fun!(bulk_kinds).expand_param("value",expand_param!(BulkKind).variant_self().bulk()).expand_return(expand_return!(BulkKind).field_self().bulk()))
             .fun(fun!(bulk_units).expand_param("value",expand_param!(Vec<()>).variant_self().bulk()).expand_return(expand_return!(Vec<()>).field_self_into().bulk()))
@@ -605,8 +630,8 @@ fn main() {
             .fun(fun!(getter_two_clones_new).expand_return(expand_return!(GetterOwner)
                 .view(prebindgen_declarations::Output::getter("getter_owner_leaf",
                     prebindgen_declarations::Output::combine([
-                        prebindgen_declarations::Output::Projected(prebindgen_declarations::Projection::borrowed()),
-                        prebindgen_declarations::Output::Projected(prebindgen_declarations::Projection::borrowed())])))))
+                        prebindgen_declarations::Output::Leaf(OutputLeafOp::Projected(prebindgen_declarations::Projection::borrowed())),
+                        prebindgen_declarations::Output::Leaf(OutputLeafOp::Projected(prebindgen_declarations::Projection::borrowed()))])))))
             .fun(fun!(getter_fields_new).expand_return(expand_return!(GetterOwner)
                 .field_self_into().fields(fields!(getter_owner_details))))
             .fun(fun!(getter_callback).expand_param("callback",
@@ -619,7 +644,7 @@ fn main() {
         .package(package!("nativeoutputs")
             .fun(fun!(jni_output_optional)
                 .expand_return(expand_return!(CallbackRow).field_self_ref())
-                .output(ordinary_rows(Output::Optional(Box::new(ordinary_rows(row()))))))
+                .output(ordinary_rows(Output::Unary { operation: OutputUnary::Optional, child: Box::new(ordinary_rows(row())) })))
             .fun(fun!(jni_output_mixed))
             .fun(fun!(jni_output_mixed_frames).callback_return_only()
                 .expand_return(expand_return!(Vec<CallbackRowResource>).field_self_ref().bulk()))
@@ -632,7 +657,7 @@ fn main() {
                 .output(ordinary_rows(ordinary_rows(row()))))
             .fun(fun!(c_output_pair).name("jniOutputPair")
                 .expand_return(expand_return!(CallbackRow).field_self_ref())
-                .output(Output::OwnedFields(vec![ordinary_rows(row()); 2])))
+                .output(Output::Branch { operation: OutputBranch::OwnedFields, children: vec![ordinary_rows(row()); 2] }))
             .fun(fun!(jni_output_fold).name("jniOutput")
                 .expand_return(expand_return!(CallbackRow).field_self_ref()).callback_return_only()))
         .package(package!("callbackboundaries")
@@ -690,52 +715,52 @@ fn main() {
             .class(data_class!(CallbackOptionalBatch))
             .fun(fun!(callback_mixed_optional_batches).expand_param("callback",
                 callback!(impl Fn() -> Vec<CallbackOptionalBatch>).name("MixedOptionalBatchesCallback")
-                    .expand_return(Input::Sequence(Box::new(Input::Record(vec![Input::Leaf,
-                        Input::Sequence(Box::new(callback_result_row_input())).bulk(), Input::Leaf]))))))
+                    .expand_return(Input::Unary { operation: InputUnary::Sequence, child: Box::new(Input::Branch { operation: InputBranch::Record, children: vec![Input::Leaf(InputLeafOp::Value),
+                        Input::Unary { operation: InputUnary::Sequence, child: Box::new(callback_result_row_input()) }.bulk(), Input::Leaf(InputLeafOp::Value)] }) })))
             .class(data_class!(CallbackScalarBatch))
             .fun(fun!(callback_mixed_scalars).expand_param("callback",
                 callback!(impl Fn() -> Vec<CallbackScalarBatch>).name("MixedScalarBatchesCallback")
-                    .expand_return(Input::Sequence(Box::new(Input::Record(vec![Input::Leaf,
-                        Input::Sequence(Box::new(Input::Record(vec![Input::Leaf;2]))).bulk()]))))))
+                    .expand_return(Input::Unary { operation: InputUnary::Sequence, child: Box::new(Input::Branch { operation: InputBranch::Record, children: vec![Input::Leaf(InputLeafOp::Value),
+                        Input::Unary { operation: InputUnary::Sequence, child: Box::new(Input::Branch { operation: InputBranch::Record, children: vec![Input::Leaf(InputLeafOp::Value);2] }) }.bulk()] }) })))
             .fun(fun!(callback_return_resource_audit_start)).fun(fun!(callback_return_resource_audit_finish))
             .fun(fun!(callback_mixed_batch).expand_param("callback",
                 callback!(impl Fn() -> CallbackNestedBatch).name("MixedBatchCallback")
                     .expand_return(callback_mixed_batch_input(true, false))))
-            .fun(fun!(callback_mixed_batches_echo).expand_param("batches", Input::Sequence(Box::new(callback_mixed_batch_input(false, true)))))
+            .fun(fun!(callback_mixed_batches_echo).expand_param("batches", Input::Unary { operation: InputUnary::Sequence, child: Box::new(callback_mixed_batch_input(false, true)) }))
             .fun(fun!(callback_mixed_batches).expand_param("callback",
                 callback!(impl Fn() -> Vec<CallbackNestedBatch>).name("MixedBatchesCallback")
-                    .expand_return(Input::Sequence(Box::new(callback_mixed_batch_input(true, true))))))
-            .fun(fun!(callback_nested_batch_echo).expand_param("batch",Input::Record(vec![
-                Input::Leaf, Input::Leaf, callback_nested_rows_input(), Input::Leaf,
-                Input::Sequence(Box::new(callback_result_row_input())), Input::Leaf])))
+                    .expand_return(Input::Unary { operation: InputUnary::Sequence, child: Box::new(callback_mixed_batch_input(true, true)) })))
+            .fun(fun!(callback_nested_batch_echo).expand_param("batch",Input::Branch { operation: InputBranch::Record, children: vec![
+                Input::Leaf(InputLeafOp::Value), Input::Leaf(InputLeafOp::Value), callback_nested_rows_input(), Input::Leaf(InputLeafOp::Value),
+                Input::Unary { operation: InputUnary::Sequence, child: Box::new(callback_result_row_input()) }, Input::Leaf(InputLeafOp::Value)] }))
             .fun(fun!(callback_nested_results).expand_param("callback",
                 callback!(impl Fn() -> Vec<Option<Vec<CallbackFixedResult>>>).name("NestedResultsCallback")
                     .expand_return(callback_nested_rows_input())))
             .fun(fun!(callback_nested_batch).expand_param("callback",
                 callback!(impl Fn() -> CallbackNestedBatch).name("NestedBatchCallback")
-                    .expand_return(Input::Record(vec![Input::Leaf,
-                        Input::constructor("callback_return_resource_copy",[Input::Leaf]),
+                    .expand_return(Input::Branch { operation: InputBranch::Record, children: vec![Input::Leaf(InputLeafOp::Value),
+                        Input::constructor("callback_return_resource_copy",[Input::Leaf(InputLeafOp::Value)]),
                         callback_nested_rows_input(),
-                        Input::constructor("callback_fixed_marker",[Input::Leaf]),
-                        Input::Sequence(Box::new(callback_result_row_input())),Input::Leaf]))))
+                        Input::constructor("callback_fixed_marker",[Input::Leaf(InputLeafOp::Value)]),
+                        Input::Unary { operation: InputUnary::Sequence, child: Box::new(callback_result_row_input()) },Input::Leaf(InputLeafOp::Value)] })))
             .fun(fun!(callback_fixed_result).expand_param("callback",
                 callback!(impl Fn() -> CallbackFixedResult).name("FixedResultCallback")
-                    .expand_return(Input::Record(vec![Input::Leaf,Input::Leaf,
-                        Input::constructor("callback_fixed_marker",[Input::Leaf]),Input::Leaf]))))
+                    .expand_return(Input::Branch { operation: InputBranch::Record, children: vec![Input::Leaf(InputLeafOp::Value),Input::Leaf(InputLeafOp::Value),
+                        Input::constructor("callback_fixed_marker",[Input::Leaf(InputLeafOp::Value)]),Input::Leaf(InputLeafOp::Value)] })))
             .fun(fun!(callback_fixed_results).expand_param("callback",
                 callback!(impl Fn() -> Vec<CallbackFixedResult>).name("FixedResultsCallback")
-                    .expand_return(Input::Sequence(Box::new(Input::Record(vec![Input::Leaf,Input::Leaf,
-                        Input::constructor("callback_fixed_marker",[Input::Leaf]),Input::Leaf]))))))
+                    .expand_return(Input::Unary { operation: InputUnary::Sequence, child: Box::new(Input::Branch { operation: InputBranch::Record, children: vec![Input::Leaf(InputLeafOp::Value),Input::Leaf(InputLeafOp::Value),
+                        Input::constructor("callback_fixed_marker",[Input::Leaf(InputLeafOp::Value)]),Input::Leaf(InputLeafOp::Value)] }) })))
             .fun(fun!(callback_fixed_optional_results).expand_param("callback",
                 callback!(impl Fn() -> Option<Vec<CallbackFixedResult>>).name("OptionalFixedResultsCallback")
-                    .expand_return(Input::Optional(Box::new(Input::Sequence(Box::new(Input::Record(vec![Input::Leaf;4]))))))))
+                    .expand_return(Input::Unary { operation: InputUnary::Optional, child: Box::new(Input::Unary { operation: InputUnary::Sequence, child: Box::new(Input::Branch { operation: InputBranch::Record, children: vec![Input::Leaf(InputLeafOp::Value);4] }) }) })))
             .fun(fun!(callback_fixed_borrowed_results).expand_param("callback",
                 callback!(impl Fn() -> Vec<CallbackFixedResult>).name("BorrowedFixedResultsCallback")
-                    .expand_return(Input::Sequence(Box::new(Input::Record(vec![
-                        Input::constructor("callback_return_resource_copy",[Input::Leaf]),Input::Leaf,
-                        Input::constructor("callback_fixed_marker",[Input::Leaf]),Input::Leaf]))))))
-            .fun(fun!(callback_return_wire_rows_catch).expand_param("callback", callback!(impl Fn() -> Vec<CallbackWireRow>).expand_return(Input::Sequence(Box::new(Input::Record(vec![Input::Leaf; 2]))))))
-            .fun(fun!(callback_return_wire_row_catch).expand_param("callback", callback!(impl Fn() -> CallbackWireRow).expand_return(prebindgen_jni::Input::Record(vec![prebindgen_jni::Input::Leaf; 2]))))
+                    .expand_return(Input::Unary { operation: InputUnary::Sequence, child: Box::new(Input::Branch { operation: InputBranch::Record, children: vec![
+                        Input::constructor("callback_return_resource_copy",[Input::Leaf(InputLeafOp::Value)]),Input::Leaf(InputLeafOp::Value),
+                        Input::constructor("callback_fixed_marker",[Input::Leaf(InputLeafOp::Value)]),Input::Leaf(InputLeafOp::Value)] }) })))
+            .fun(fun!(callback_return_wire_rows_catch).expand_param("callback", callback!(impl Fn() -> Vec<CallbackWireRow>).expand_return(Input::Unary { operation: InputUnary::Sequence, child: Box::new(Input::Branch { operation: InputBranch::Record, children: vec![Input::Leaf(InputLeafOp::Value); 2] }) })))
+            .fun(fun!(callback_return_wire_row_catch).expand_param("callback", callback!(impl Fn() -> CallbackWireRow).expand_return(prebindgen_jni::Input::Branch { operation: InputBranch::Record, children: vec![prebindgen_jni::Input::Leaf(InputLeafOp::Value); 2] })))
             .class(data_class!(CallbackReturnRecord)).class(enum_class!(CallbackReturnChoice))
             .class(ptr_class!(CallbackReturnResource)).class(ptr_class!(CallbackReturnJob)).class(ptr_class!(CallbackReturnHandler))
             .fun(fun!(callback_return_i64)).fun(fun!(callback_return_i8)).fun(fun!(callback_return_i16)).fun(fun!(callback_return_f32)).fun(fun!(callback_return_u128)).fun(fun!(callback_return_zero)).fun(fun!(callback_return_bool))
@@ -819,30 +844,30 @@ fn main() {
             .class(data_class!(OutputCleanupRow))
             .fun(fun!(native_bulk_rows).expand_return(expand_return!(CallbackRow).field_self_ref().bulk()))
             .fun(fun!(native_bulk_nested).expand_return(expand_return!(CallbackRow).field_self_ref().bulk()))
-            .fun(fun!(native_bulk_pair).output(prebindgen_declarations::Output::OwnedFields(vec![prebindgen_declarations::Output::Request(prebindgen_declarations::OutputRequest::Auto); 2])))
+            .fun(fun!(native_bulk_pair).output(prebindgen_declarations::Output::Branch { operation: OutputBranch::OwnedFields, children: vec![prebindgen_declarations::Output::Request(prebindgen_declarations::OutputRequest::Auto); 2] }))
             .fun(fun!(native_bulk_callback).expand_param("callback", callback!(impl Fn(Vec<Vec<CallbackRow>>)).name("NativeBulkCallback")))
-            .fun(fun!(output_cleanup_surround).output(prebindgen_declarations::Output::OwnedFields(vec![
+            .fun(fun!(output_cleanup_surround).output(prebindgen_declarations::Output::Branch { operation: OutputBranch::OwnedFields, children: vec![
                 prebindgen_declarations::Output::Request(prebindgen_declarations::OutputRequest::Auto),
-                prebindgen_declarations::Output::Sequence {delivery: prebindgen_declarations::SequenceDelivery::Value,mode:None,element:Box::new(prebindgen_declarations::Output::Request(prebindgen_declarations::OutputRequest::Auto))},
+                prebindgen_declarations::Output::Unary { operation: OutputUnary::Sequence { delivery: prebindgen_declarations::SequenceDelivery::Value, mode: None }, child: Box::new(prebindgen_declarations::Output::Request(prebindgen_declarations::OutputRequest::Auto)),  },
                 prebindgen_declarations::Output::Request(prebindgen_declarations::OutputRequest::Auto),
-            ])))
-            .fun(fun!(output_cleanup_surround_bulk).output(prebindgen_declarations::Output::OwnedFields(vec![
+            ] }))
+            .fun(fun!(output_cleanup_surround_bulk).output(prebindgen_declarations::Output::Branch { operation: OutputBranch::OwnedFields, children: vec![
                 prebindgen_declarations::Output::Request(prebindgen_declarations::OutputRequest::Auto),
                 prebindgen_declarations::Output::Request(prebindgen_declarations::OutputRequest::Auto),
                 prebindgen_declarations::Output::Request(prebindgen_declarations::OutputRequest::Auto),
-            ])))
-            .fun(fun!(output_cleanup_rows).callback_return().output(prebindgen_declarations::Output::Sequence { delivery: prebindgen_declarations::SequenceDelivery::Value, mode: None, element: Box::new(prebindgen_declarations::Output::Request(prebindgen_declarations::OutputRequest::Auto)) }))
+            ] }))
+            .fun(fun!(output_cleanup_rows).callback_return().output(prebindgen_declarations::Output::Unary { operation: OutputUnary::Sequence { delivery: prebindgen_declarations::SequenceDelivery::Value, mode: None }, child: Box::new(prebindgen_declarations::Output::Request(prebindgen_declarations::OutputRequest::Auto)),  }))
             .fun(fun!(output_cleanup_rows_bulk).callback_return().expand_return(expand_return!(OutputCleanupRow).field_self_into().bulk()))
-            .fun(fun!(output_cleanup_nested).callback_return().output(prebindgen_declarations::Output::Sequence { delivery: prebindgen_declarations::SequenceDelivery::Value, mode: None, element: Box::new(prebindgen_declarations::Output::Request(prebindgen_declarations::OutputRequest::Auto)) }))
+            .fun(fun!(output_cleanup_nested).callback_return().output(prebindgen_declarations::Output::Unary { operation: OutputUnary::Sequence { delivery: prebindgen_declarations::SequenceDelivery::Value, mode: None }, child: Box::new(prebindgen_declarations::Output::Request(prebindgen_declarations::OutputRequest::Auto)),  }))
             .fun(fun!(output_cleanup_nested_bulk).callback_return().expand_return(expand_return!(OutputCleanupRow).field_self_into().bulk()))
-            .fun(fun!(output_cleanup_callback).expand_param("callback",callback!(impl Fn(Vec<Option<Vec<OutputCleanupRow>>>)).name("OutputCleanupCallback").expand_param(0, prebindgen_declarations::Output::Sequence { delivery: prebindgen_declarations::SequenceDelivery::Value, mode: None, element: Box::new(prebindgen_declarations::Output::Request(prebindgen_declarations::OutputRequest::Auto)) })))
+            .fun(fun!(output_cleanup_callback).expand_param("callback",callback!(impl Fn(Vec<Option<Vec<OutputCleanupRow>>>)).name("OutputCleanupCallback").expand_param(0, prebindgen_declarations::Output::Unary { operation: OutputUnary::Sequence { delivery: prebindgen_declarations::SequenceDelivery::Value, mode: None }, child: Box::new(prebindgen_declarations::Output::Request(prebindgen_declarations::OutputRequest::Auto)),  })))
             .fun(fun!(output_cleanup_callback_bulk).expand_param("callback",callback!(impl Fn(Vec<Option<Vec<OutputCleanupRow>>>)).name("OutputCleanupBulkCallback").expand_param(0,expand_return!(OutputCleanupRow).field_self_into().bulk()))))
         .configure(|flat| {
             use prebindgen_flat::{OutputConversion, Outcomes, WireNode};
             // Compile a mixed prepared tree directly: declaration defaults
             // deliberately lift inner bulk modifiers to the enclosing sequence.
-            let sequence = |element,mode| prebindgen_declarations::Output::Sequence {delivery:prebindgen_declarations::SequenceDelivery::Value,element:Box::new(element),mode};
-            let recipe=sequence(prebindgen_declarations::Output::Combine(vec![prebindgen_declarations::Output::Bulk(Box::new(sequence(prebindgen_declarations::Output::Leaf,Some(prebindgen_declarations::ProjectionMode::Borrowed))))]),None);
+            let sequence = |element,mode| prebindgen_declarations::Output::Unary { operation: OutputUnary::Sequence { delivery: prebindgen_declarations::SequenceDelivery::Value, mode }, child: Box::new(element),  };
+            let recipe=sequence(prebindgen_declarations::Output::Branch { operation: OutputBranch::Combine, children: vec![prebindgen_declarations::Output::Unary { operation: OutputUnary::Bulk, child: Box::new(sequence(prebindgen_declarations::Output::Leaf(OutputLeafOp::Value),Some(prebindgen_declarations::ProjectionMode::Borrowed))) }] },None);
             let conversion=prebindgen_declarations::compile_output(flat,&prebindgen_jni::JniCodec::raw(),"jni_output_mixed",&recipe,&())?;
             flat.function_mut("jni_output_mixed")?.ret.slot=Some(conversion);
             let mut probe = flat.clone();
@@ -2107,8 +2132,11 @@ fn main() {
                     Input::constructor(
                         "scoped_input_checked",
                         [
-                            Input::constructor("scoped_input_mode", [Input::Leaf]),
-                            Input::Leaf,
+                            Input::constructor(
+                                "scoped_input_mode",
+                                [Input::Leaf(InputLeafOp::Value)],
+                            ),
+                            Input::Leaf(InputLeafOp::Value),
                         ],
                     ),
                 )),
@@ -2202,38 +2230,63 @@ fn main() {
     jni.write_kotlin(&kotlin).unwrap();
 }
 
-fn callback_result_row_input() -> Input<prebindgen_jni::InputRequest> {
-    Input::Record(vec![
-        Input::Leaf,
-        Input::Leaf,
-        Input::constructor("callback_fixed_marker", [Input::Leaf]),
-        Input::Leaf,
-    ])
+fn callback_result_row_input(
+) -> Input<prebindgen_jni::InputRequest, prebindgen_declarations::OutputRequest> {
+    Input::Branch {
+        operation: InputBranch::Record,
+        children: vec![
+            Input::Leaf(InputLeafOp::Value),
+            Input::Leaf(InputLeafOp::Value),
+            Input::constructor("callback_fixed_marker", [Input::Leaf(InputLeafOp::Value)]),
+            Input::Leaf(InputLeafOp::Value),
+        ],
+    }
 }
-fn callback_nested_rows_input() -> Input<prebindgen_jni::InputRequest> {
-    Input::Sequence(Box::new(Input::Optional(Box::new(Input::Sequence(
-        Box::new(callback_result_row_input()),
-    )))))
+fn callback_nested_rows_input(
+) -> Input<prebindgen_jni::InputRequest, prebindgen_declarations::OutputRequest> {
+    Input::Unary {
+        operation: InputUnary::Sequence,
+        child: Box::new(Input::Unary {
+            operation: InputUnary::Optional,
+            child: Box::new(Input::Unary {
+                operation: InputUnary::Sequence,
+                child: Box::new(callback_result_row_input()),
+            }),
+        }),
+    }
 }
 
 fn callback_mixed_batch_input(
     borrowed: bool,
     bulk_tail: bool,
-) -> Input<prebindgen_jni::InputRequest> {
-    Input::Record(vec![
-        Input::Leaf,
-        if borrowed {
-            Input::constructor("callback_return_resource_copy", [Input::Leaf])
-        } else {
-            Input::Leaf
-        },
-        callback_nested_rows_input().bulk(),
-        Input::constructor("callback_fixed_marker", [Input::Leaf]),
-        if bulk_tail {
-            Input::Sequence(Box::new(callback_result_row_input())).bulk()
-        } else {
-            Input::Sequence(Box::new(callback_result_row_input()))
-        },
-        Input::Leaf,
-    ])
+) -> Input<prebindgen_jni::InputRequest, prebindgen_declarations::OutputRequest> {
+    Input::Branch {
+        operation: InputBranch::Record,
+        children: vec![
+            Input::Leaf(InputLeafOp::Value),
+            if borrowed {
+                Input::constructor(
+                    "callback_return_resource_copy",
+                    [Input::Leaf(InputLeafOp::Value)],
+                )
+            } else {
+                Input::Leaf(InputLeafOp::Value)
+            },
+            callback_nested_rows_input().bulk(),
+            Input::constructor("callback_fixed_marker", [Input::Leaf(InputLeafOp::Value)]),
+            if bulk_tail {
+                Input::Unary {
+                    operation: InputUnary::Sequence,
+                    child: Box::new(callback_result_row_input()),
+                }
+                .bulk()
+            } else {
+                Input::Unary {
+                    operation: InputUnary::Sequence,
+                    child: Box::new(callback_result_row_input()),
+                }
+            },
+            Input::Leaf(InputLeafOp::Value),
+        ],
+    }
 }

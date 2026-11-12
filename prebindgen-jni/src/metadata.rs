@@ -25,7 +25,9 @@ pub(crate) fn nodes<I: KotlinInputConversion, O: KotlinOutputConversion>(
             );
         }
         if let Some(error) = function.metadata.as_ref().and_then(|m| m.error.as_deref()) {
-            nodes.push((false, &error.output.output_outcomes().success));
+            if let Some(output) = &error.output {
+                nodes.push((false, &output.output_outcomes().success));
+            }
         }
     }
     for input in &flat.metadata.callbacks {
@@ -57,6 +59,8 @@ pub struct JniModule {
     pub native_init: String,
     /// Prepared callback declarations, including interfaces unused by exported functions.
     pub callbacks: Vec<JniInput>,
+    /// Resolved standalone callback roots, consumed when plans are compiled.
+    pub callback_recipes: Vec<prebindgen_declarations::Input>,
     /// Use bulk for materialized collection outputs with automatic transport.
     pub bulk_collection_outputs: bool,
 }

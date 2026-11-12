@@ -8,6 +8,7 @@ pub(crate) struct ErrorBinding {
     pub name: String,
     pub ty: syn::Type,
     pub plan: Option<OutputPlan<CWire>>,
+    recipe: Option<prebindgen_declarations::Output>,
     pub fields: Vec<String>,
 }
 pub(crate) fn helper(name: &str) -> syn::Ident {
@@ -19,6 +20,7 @@ impl ErrorBinding {
             name,
             ty,
             plan: None,
+            recipe: None,
             fields: Vec::new(),
         }
     }
@@ -29,7 +31,7 @@ impl ErrorBinding {
     }
 }
 /// Fill the conversions of error declarations already attached to their source types.
-pub(crate) fn prepare(
+pub(crate) fn resolve(
     flat: &mut Bindings,
     codec: &CCodec,
     declarations: &prebindgen_declarations::Declarations,
@@ -48,10 +50,33 @@ pub(crate) fn prepare(
     types.sort_by_key(|(order, _)| *order);
     for (_, ty) in types {
         let recipe = declarations.owned_record_output(flat, codec, &ty, &())?;
+        let error = flat.type_metadata_mut(&ty)?.error.as_mut().unwrap();
+        std::rc::Rc::make_mut(error).recipe = Some(recipe);
+    }
+    Ok(())
+}
+
+pub(crate) fn compile(flat: &mut Bindings, codec: &CCodec) -> Result<()> {
+    let mut types = flat
+        .types
+        .values()
+        .filter_map(|t| {
+            t.metadata
+                .error
+                .as_ref()
+                .filter(|e| e.recipe.is_some())
+                .map(|e| (t.metadata.error_order, e.ty.clone()))
+        })
+        .collect::<Vec<_>>();
+    types.sort_by_key(|(order, _)| *order);
+    for (_, ty) in types {
+        let recipe = std::rc::Rc::make_mut(flat.type_metadata_mut(&ty)?.error.as_mut().unwrap())
+            .recipe
+            .take()
+            .unwrap();
         let plan = prebindgen_declarations::compile_output_value(flat, codec, &ty, &recipe, &())?;
         let fields = field_names(&plan.outcomes.success);
-        let error = flat.type_metadata_mut(&ty)?.error.as_mut().unwrap();
-        let binding = std::rc::Rc::make_mut(error);
+        let binding = std::rc::Rc::make_mut(flat.type_metadata_mut(&ty)?.error.as_mut().unwrap());
         binding.plan = Some(plan);
         binding.fields = fields;
     }

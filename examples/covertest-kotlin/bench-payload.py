@@ -52,7 +52,7 @@ fn main() {
             .fun(fun!(wire_bench_scalar_bulk).expand_param("value",Input::value().bulk()))
             .fun(fun!(wire_manual_owned_bench)).fun(fun!(wire_owned_bench))
             .fun(fun!(wire_bench_objects))
-            .fun(fun!(wire_bench_bulk).expand_param("values",Input::Sequence(Box::new(Input::value())).bulk())))
+            .fun(fun!(wire_bench_bulk).expand_param("values",Input::sequence(Input::value()).bulk())))
         .build().unwrap();
     generated.write_rust("bindings.rs").unwrap();
     generated.write_kotlin(&std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap()).join("kotlin")).unwrap();

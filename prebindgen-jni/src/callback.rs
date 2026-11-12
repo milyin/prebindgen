@@ -1,7 +1,7 @@
 //! Preparation and emission of retained source callbacks.
 use super::*;
 use prebindgen_conversions::{InputFragment, OutputFragment, TemplateContext};
-use prebindgen_declarations::OutputRequest;
+use prebindgen_declarations::InputBranch;
 use prebindgen_flat::{callback_signature, InputConversion, Wire, WireNode};
 use std::rc::Rc;
 
@@ -57,7 +57,7 @@ pub(crate) fn source_parameters(
 /// A declaration configures a source occurrence, rather than inventing a signature.
 pub(crate) fn validate_source_occurrence(
     flat: &Bindings,
-    declaration: &prebindgen_declarations::CallbackInput,
+    declaration: &prebindgen_declarations::CallbackOperation,
     sources: &[syn::Type],
 ) -> Result<()> {
     let expected = callback_signature(&declaration.ty)?
@@ -89,34 +89,27 @@ pub(crate) fn validate_source_occurrence(
     Ok(())
 }
 
-pub(crate) fn declared_outputs(
-    flat: &Bindings,
-    outputs: &[Output<OutputRequest>],
-) -> Result<BTreeSet<String>> {
-    outputs
-        .iter()
-        .filter_map(|tree| match tree {
-            Output::Request(OutputRequest::ForType { ty, .. }) => {
-                Some(flat.resolve_type(ty).map(|ty| type_key(&ty)))
-            }
-            _ => None,
-        })
-        .collect()
-}
 /// Compile one callback occurrence, including a source constructor's argument.
 pub(crate) fn input(
-    flat: &Bindings,
-    configuration: &prebindgen_declarations::CallbackInput,
-    explicit_outputs: &BTreeSet<String>,
-    ty: &syn::Type,
-    wire: syn::Ident,
-    var: syn::Ident,
-    active: &prebindgen_declarations::Condition,
+    request: prebindgen_declarations::InputArrow<'_, JniCodec>,
 ) -> Result<InputPlan<JniWire>> {
+    let prebindgen_declarations::InputArrow {
+        flat,
+        operation: configuration,
+        domain,
+        codomain,
+        wire,
+        target: var,
+        active,
+        ..
+    } = request;
+    let ty = &configuration.ty;
+    let argument_recipes = domain.argument_nodes()?;
     let signature = callback_signature(ty)?.ok_or("expected source callback")?;
     let returns_unit = matches!(&signature.return_type, syn::Type::Tuple(t) if t.elems.is_empty());
     if returns_unit
-        && !matches!(configuration.return_value.as_ref(), Input::Fields(fields) if fields.is_empty())
+        && !matches!(codomain, Input::None)
+        && !matches!(codomain, Input::Branch { operation: InputBranch::Fields, children } if children.is_empty())
     {
         return Err("unit callback returns require an empty unit input representation".into());
     }
@@ -159,7 +152,7 @@ pub(crate) fn input(
             .unwrap_or_else(|| flat.metadata.package.clone())
     });
     validate_package(&package)?;
-    if configuration.arguments.len() != signature.arguments.len() {
+    if argument_recipes.len() != signature.arguments.len() {
         return Err("prepared callback has the wrong argument count".into());
     }
     if foreign_name_exists(flat, &format!("{package}.{name}")) {
@@ -173,12 +166,12 @@ pub(crate) fn input(
                 "callback return values must be owned; borrowed returns are unsupported".into(),
             );
         }
-        let codec = JniCodec::declared(None);
+        let codec = JniCodec::declared();
         let input = prebindgen_declarations::compile_callback_return(
             flat,
             &codec,
             &signature.return_type,
-            &configuration.return_value,
+            codomain,
             &(),
         )?;
         // A borrowed constructor input is used by Rust after the Kotlin callback
@@ -214,25 +207,11 @@ pub(crate) fn input(
         }
         let ty = source_type.clone();
         let value = quote!(#binding);
-        let recipe = &configuration.arguments[i];
-        // Copy permission for an exact reference type must not change the
-        // existing callback cleanup contract. Whole exposed-value defaults and
-        // explicit callback overrides still select author-owned delivery.
-        let exposed_type = match &source_type {
-            syn::Type::Reference(r)
-                if !matches!(r.elem.as_ref(), syn::Type::Slice(_))
-                    && !matches!(r.elem.as_ref(), syn::Type::Path(p) if p.path.is_ident("str")) =>
-            {
-                &*r.elem
-            }
-            _ => &source_type,
-        };
-        let scoped = !configuration.explicit_arguments.contains(&i)
-            && !explicit_outputs.contains(&type_key(exposed_type))
-            && !explicit_outputs.contains(&type_key(subject_type(exposed_type)));
+        let (ownership, recipe) = argument_recipes[i].callback_argument_parts()?;
+        let scoped = ownership == prebindgen_declarations::CallbackArgumentOwnership::Scoped;
         let output = prebindgen_declarations::compile_callback_argument(
             flat,
-            &JniCodec::declared(None),
+            &JniCodec::declared(),
             &ty,
             recipe,
             i,

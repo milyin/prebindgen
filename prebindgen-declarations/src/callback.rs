@@ -1,7 +1,7 @@
 //! Signature defaults and occurrence overrides for source callbacks.
 use crate::{Input, InputRequest, Output, OutputRequest};
 use prebindgen_flat::{callback_signature, Flat, Result, Schema};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use syn::Type;
 
 /// A retained callback's foreign declaration and independently selected conversions.
@@ -28,9 +28,9 @@ pub struct CallbackDecl {
     /// Destination namespace, supplied by the language adapter's placement declaration.
     pub namespace: Option<String>,
     /// Argument output overrides, indexed in source invocation order.
-    pub params: BTreeMap<usize, Output<OutputRequest>>,
+    pub params: BTreeMap<usize, Output<OutputRequest, InputRequest>>,
     /// Returned-value input override.
-    pub ret: Option<Input<InputRequest>>,
+    pub ret: Option<Input<InputRequest, OutputRequest>>,
 }
 impl CallbackDecl {
     /// Declare defaults or an occurrence override for a source callback signature.
@@ -52,7 +52,11 @@ impl CallbackDecl {
     ///
     /// Like a function parameter override, duplicate indices panic. Build checks
     /// that the index exists and the conversion matches the source argument type.
-    pub fn expand_param(mut self, index: usize, output: impl Into<Output<OutputRequest>>) -> Self {
+    pub fn expand_param(
+        mut self,
+        index: usize,
+        output: impl Into<Output<OutputRequest, InputRequest>>,
+    ) -> Self {
         assert!(
             self.params.insert(index, output.into()).is_none(),
             "duplicate callback parameter override"
@@ -60,12 +64,12 @@ impl CallbackDecl {
         self
     }
     /// Override the callback result's foreign-to-Rust conversion.
-    pub fn expand_return(mut self, input: impl Into<Input<InputRequest>>) -> Self {
+    pub fn expand_return(mut self, input: impl Into<Input<InputRequest, OutputRequest>>) -> Self {
         self.ret = Some(input.into());
         self
     }
 }
-impl From<CallbackDecl> for Input<InputRequest> {
+impl From<CallbackDecl> for Input<InputRequest, OutputRequest> {
     fn from(decl: CallbackDecl) -> Self {
         Self::for_type(
             decl.ty.clone(),
@@ -74,44 +78,28 @@ impl From<CallbackDecl> for Input<InputRequest> {
     }
 }
 
-/// Prepared conversions for one callback occurrence.
+/// Source identity and foreign declaration policy for one callback occurrence.
 ///
-/// Both directions are fully resolved before the adapter compiles the callback.
+/// The Arrow's domain and codomain own the conversions. Both directions are
+/// fully resolved before the adapter compiles the callback.
 #[derive(Clone, Debug)]
-pub struct CallbackInput {
+pub struct CallbackOperation {
     /// Canonical source callback signature, excluding marker bounds.
     pub ty: Type,
     /// Literal foreign interface name, if explicitly selected.
     pub foreign: Option<String>,
     /// Foreign namespace selected by the adapter.
     pub namespace: Option<String>,
-    /// Rust-to-foreign argument conversions in source order.
-    pub arguments: Vec<Output>,
-    /// Foreign-to-Rust returned-value conversion.
-    pub return_value: Box<Input>,
-    /// Arguments explicitly expanded by a callback declaration or occurrence override.
-    pub explicit_arguments: BTreeSet<usize>,
     /// Whether the callback result has an explicit callback-level conversion.
     pub explicit_return: bool,
 }
 
-impl CallbackInput {
+impl CallbackOperation {
     pub(crate) fn validate_for<M: Schema>(&self, flat: &Flat<M>, ty: &Type) -> Result<()> {
         if input_key(flat, ty)? != prebindgen_flat::type_key(&self.ty) {
             return Err("prepared callback type does not match occurrence".into());
         }
-        let signature =
-            callback_signature(&self.ty)?.ok_or("prepared callback requires impl Fn(...) -> R")?;
-        if self.arguments.len() != signature.arguments.len() {
-            return Err("prepared callback has the wrong argument count".into());
-        }
-        if self
-            .explicit_arguments
-            .iter()
-            .any(|&i| i >= self.arguments.len())
-        {
-            return Err("prepared callback parameter override index is out of range".into());
-        }
+        callback_signature(&self.ty)?.ok_or("prepared callback requires impl Fn(...) -> R")?;
         Ok(())
     }
 }
@@ -144,4 +132,13 @@ pub(crate) fn input_key<M: Schema>(flat: &Flat<M>, ty: &Type) -> Result<String> 
     } else {
         Ok(prebindgen_flat::type_key(ty))
     }
+}
+
+/// Ownership of foreign values delivered as a callable argument.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CallbackArgumentOwnership {
+    /// Generated wrappers release produced owners when the invocation ends.
+    Scoped,
+    /// The callback author receives the produced owners and releases them.
+    Transferred,
 }

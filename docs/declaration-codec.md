@@ -7,6 +7,13 @@ physical values and conversion code. All codec operations run during generation.
 The completed plans and language declarations remain in `Flat`; generation reads
 that model without consulting the original recipes or another binding registry.
 
+`Declarations::resolve` stores request-free trees in `Flat<Resolved<C>>`, together
+with the codec policy and occurrence settings. `compile_resolved(flat)` needs
+only that model. Standalone callback and typed error recipes also live in Flat;
+`Codec::compile_declarations` compiles them before the function conversions.
+`Declarations::fill` remains available for individual functions and uses the
+same resolver and compiler.
+
 The wrapper generator drives Rust emission. An adapter author implements
 conversion operations and invokes preparation; an application author normally
 uses `Cbindgen` or `JniGen` declarations instead of implementing a codec.
@@ -136,9 +143,11 @@ separate binding-error callback, with user handlers invoked after native return.
 | Unit values `CCodec` / `JniCodec` | `CCodec::raw()` / `JniCodec::raw()` (also `Default`). |
 
 Each language now implements `Codec` once. `CCodec::declared()` and
-`JniCodec::declared(callback_outputs)` apply enum, record, error and callback
-metadata from Flat; builders choose this policy. JNI's optional callback output
-set supplies preparation context for retained callback parameters. Raw policy
+`JniCodec::declared()` apply enum, record, error and callback
+metadata from Flat; builders choose this policy. Callback argument ownership
+is stored on each argument's output subtree. `input_arrow(InputArrow)` receives
+the callback metadata, opposite-direction domain and same-direction codomain;
+no external callback output set is needed. Raw policy
 preserves the former low-level conversion behavior; it still respects existing
 C opaque-pointer and inline-owner declarations. There is no legacy forwarding
 codec or second declaration implementation.

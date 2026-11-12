@@ -1,5 +1,6 @@
 use super::*;
 use prebindgen_conversions::{Delivery, DeliveryPolicy, OutputFragment};
+use prebindgen_declarations::{OutputLeafOp, OutputUnary};
 use prebindgen_flat::{Function, InputConversion, TypeUse};
 use std::{cell::Cell, rc::Rc};
 
@@ -198,7 +199,7 @@ fn local_error_override_rejects_an_incompatible_wire_description() {
         &Bindings::parse([]).unwrap(),
         &JniCodec::raw(),
         &syn::parse_quote!(String),
-        &Output::Leaf,
+        &Output::Leaf(OutputLeafOp::Value),
         &(),
     )
     .unwrap();
@@ -352,7 +353,8 @@ fn local_error_handlers_are_independent_for_overloads() {
             .error
             .as_ref()
             .unwrap()
-            .output
+            .output()
+            .unwrap()
             .clone();
         bind_error_output(&mut flat, name, native).unwrap();
     }
@@ -404,10 +406,12 @@ fn nested_error_layouts_must_match_even_with_the_same_outer_byte_array() {
         &catalogue,
         &JniCodec::raw(),
         &syn::parse_quote!(Vec<i32>),
-        &Output::Sequence {
-            delivery: prebindgen_declarations::SequenceDelivery::Value,
-            mode: None,
-            element: Box::new(Output::Leaf),
+        &Output::Unary {
+            operation: OutputUnary::Sequence {
+                delivery: prebindgen_declarations::SequenceDelivery::Value,
+                mode: None,
+            },
+            child: Box::new(Output::Leaf(OutputLeafOp::Value)),
         }
         .bulk(),
         &(),

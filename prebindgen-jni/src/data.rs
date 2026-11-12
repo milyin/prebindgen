@@ -496,7 +496,7 @@ pub(crate) fn prepare(flat: &mut Bindings) -> Result<()> {
     }
     Ok(())
 }
-impl JniCodec<'_> {
+impl JniCodec {
     pub(super) fn enum_type<'a>(
         &self,
         flat: &'a Bindings,
@@ -821,7 +821,7 @@ mod group_tests {
         )
         .unwrap();
         let ty = flat.resolve_type(&syn::parse_quote!(E)).unwrap();
-        let codec = JniCodec::declared(None);
+        let codec = JniCodec::declared();
         let mapping = Rc::new(
             prebindgen_declarations::EnumMapping::new(flat.enums.values().next().unwrap()).unwrap(),
         );
@@ -867,13 +867,15 @@ mod group_tests {
             variant_names: vec![],
         }));
         prepare(&mut flat).unwrap();
-        let codec = JniCodec::declared(None);
+        let codec = JniCodec::declared();
         let defaults =
             prebindgen_declarations::Declarations::new(&flat, vec![], vec![], vec![]).unwrap();
-        let request = Output::Sequence {
-            delivery: prebindgen_declarations::SequenceDelivery::Callback,
-            mode: Some(ProjectionMode::Owned),
-            element: Box::new(Output::Projected(Projection::owned())),
+        let request = Output::Unary {
+            operation: OutputUnary::Sequence {
+                delivery: prebindgen_declarations::SequenceDelivery::Callback,
+                mode: Some(ProjectionMode::Owned),
+            },
+            child: Box::new(Output::Leaf(OutputLeafOp::Projected(Projection::owned()))),
         };
         let resolved = defaults
             .resolve_output(
@@ -885,7 +887,7 @@ mod group_tests {
             )
             .unwrap();
         assert!(
-            matches!(&resolved,Output::Sequence{element,..} if matches!(element.as_ref(),Output::Record {mode:Some(ProjectionMode::Owned),fields} if matches!(fields.as_slice(),[Output::Projected(_)])))
+            matches!(&resolved,Output::Unary { operation: OutputUnary::Sequence { .. }, child: element, .. } if matches!(element.as_ref(),Output::Branch { operation: OutputBranch::Record { mode: Some(ProjectionMode::Owned) }, children: fields,  } if matches!(fields.as_slice(),[Output::Leaf(OutputLeafOp::Projected(_))])))
         );
         let round_trip = defaults
             .resolve_output(

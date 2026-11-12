@@ -3,6 +3,7 @@ use prebindgen_declarations::{
     convert, expand_param, expand_return, fields, from, fun, into, try_from, try_into, Output,
     SequenceDelivery,
 };
+use prebindgen_declarations::{InputLeafOp, InputUnary, OutputBranch, OutputLeafOp, OutputUnary};
 use syn::parse_quote as pq;
 
 fn main() {
@@ -39,16 +40,20 @@ fn main() {
         .panic()
         .function(fun!(wire_owned_callback))
         .panic()
-        .function(fun!(wire_owned_rows).expand_return(Output::Sequence {
-            element: Box::new(Output::value()),
-            mode: None,
-            delivery: SequenceDelivery::Value,
+        .function(fun!(wire_owned_rows).expand_return(Output::Unary {
+            operation: OutputUnary::Sequence {
+                delivery: SequenceDelivery::Value,
+                mode: None,
+            },
+            child: Box::new(Output::value()),
         }))
         .panic()
-        .function(fun!(wire_owned_rows_new).expand_return(Output::Sequence {
-            element: Box::new(Output::value()),
-            mode: None,
-            delivery: SequenceDelivery::Value,
+        .function(fun!(wire_owned_rows_new).expand_return(Output::Unary {
+            operation: OutputUnary::Sequence {
+                delivery: SequenceDelivery::Value,
+                mode: None,
+            },
+            child: Box::new(Output::value()),
         }))
         .panic()
         .tagged_union("wire_decision", pq!(Result<i64,String>))
@@ -93,10 +98,12 @@ fn main() {
         .panic()
         .function(fun!(canonical_millis_optional))
         .panic()
-        .function(fun!(canonical_millis_rows).expand_return(Output::Sequence {
-            element: Box::new(Output::value()),
-            mode: None,
-            delivery: SequenceDelivery::Value,
+        .function(fun!(canonical_millis_rows).expand_return(Output::Unary {
+            operation: OutputUnary::Sequence {
+                delivery: SequenceDelivery::Value,
+                mode: None,
+            },
+            child: Box::new(Output::value()),
         }))
         .panic()
         .function(fun!(canonical_millis_callback))
@@ -268,10 +275,10 @@ fn main() {
         .function(fun!(c_output_rows).output(c_output_rows()))
         .function(fun!(c_output_nested).output(c_output_nested_rows()))
         .function(
-            fun!(c_output_pair).output(prebindgen_declarations::Output::OwnedFields(vec![
-                c_output_rows(),
-                c_output_rows(),
-            ])),
+            fun!(c_output_pair).output(prebindgen_declarations::Output::Branch {
+                operation: OutputBranch::OwnedFields,
+                children: vec![c_output_rows(), c_output_rows()],
+            }),
         )
         .output(prebindgen_declarations::Output::for_type(
             pq!(Vec<CallbackRow>),
@@ -344,7 +351,7 @@ fn main() {
             expand_return!(GetterOwner).field_self_into().view(
                 prebindgen_declarations::Output::getter(
                     "getter_owner_child",
-                    prebindgen_declarations::Output::Leaf,
+                    prebindgen_declarations::Output::Leaf(OutputLeafOp::Value),
                 ),
             ),
         ))
@@ -354,7 +361,7 @@ fn main() {
                 expand_return!(GetterOwner)
                     .view(prebindgen_declarations::Output::getter(
                         "getter_owner_child",
-                        prebindgen_declarations::Output::Leaf,
+                        prebindgen_declarations::Output::Leaf(OutputLeafOp::Value),
                     ))
                     .field_self_into(),
             ),
@@ -364,7 +371,7 @@ fn main() {
             expand_return!(GetterOwner).field_self_into().view(
                 prebindgen_declarations::Output::getter(
                     "getter_owner_child_mut",
-                    prebindgen_declarations::Output::Leaf,
+                    prebindgen_declarations::Output::Leaf(OutputLeafOp::Value),
                 ),
             ),
         ))
@@ -373,7 +380,7 @@ fn main() {
             expand_return!(GetterOwner).field_self_into().view(
                 prebindgen_declarations::Output::getter(
                     "getter_owner_optional",
-                    prebindgen_declarations::Output::Leaf,
+                    prebindgen_declarations::Output::Leaf(OutputLeafOp::Value),
                 ),
             ),
         ))
@@ -382,7 +389,7 @@ fn main() {
             expand_return!(GetterOwner).field_self_into().view(
                 prebindgen_declarations::Output::getter(
                     "getter_owner_optional_mut",
-                    prebindgen_declarations::Output::Leaf,
+                    prebindgen_declarations::Output::Leaf(OutputLeafOp::Value),
                 ),
             ),
         ))
@@ -391,7 +398,7 @@ fn main() {
             expand_return!(GetterOwner).field_self_into().view(
                 prebindgen_declarations::Output::getter(
                     "getter_owner_child",
-                    prebindgen_declarations::Output::Leaf,
+                    prebindgen_declarations::Output::Leaf(OutputLeafOp::Value),
                 ),
             ),
         ))
@@ -400,7 +407,7 @@ fn main() {
             expand_return!(GetterOwner).field_self_into().view(
                 prebindgen_declarations::Output::getter(
                     "getter_owner_child",
-                    prebindgen_declarations::Output::Leaf,
+                    prebindgen_declarations::Output::Leaf(OutputLeafOp::Value),
                 ),
             ),
         ))
@@ -411,7 +418,7 @@ fn main() {
                     .field_self_into()
                     .view(prebindgen_declarations::Output::getter(
                         "getter_owner_child",
-                        prebindgen_declarations::Output::Leaf,
+                        prebindgen_declarations::Output::Leaf(OutputLeafOp::Value),
                     ))
                     .field(fun!(owner_view_check)),
             ),
@@ -422,7 +429,7 @@ fn main() {
                     .field_self_into()
                     .view(prebindgen_declarations::Output::getter(
                         "getter_owner_child",
-                        prebindgen_declarations::Output::Leaf,
+                        prebindgen_declarations::Output::Leaf(OutputLeafOp::Value),
                     ))
                     .field(fun!(owner_view_late)),
             ),
@@ -490,12 +497,12 @@ fn main() {
                 prebindgen_declarations::Output::getter(
                     "getter_owner_leaf",
                     prebindgen_declarations::Output::combine([
-                        prebindgen_declarations::Output::Projected(
+                        prebindgen_declarations::Output::Leaf(OutputLeafOp::Projected(
                             prebindgen_declarations::Projection::borrowed(),
-                        ),
-                        prebindgen_declarations::Output::Projected(
+                        )),
+                        prebindgen_declarations::Output::Leaf(OutputLeafOp::Projected(
                             prebindgen_declarations::Projection::borrowed(),
-                        ),
+                        )),
                     ]),
                 ),
             )),
@@ -701,10 +708,12 @@ fn main() {
             fun!(collection_numbers).expand_return(expand_return!(CollectionNumbers).fields(
                 fields!(collection_numbers_view).field_override(
                     "values",
-                    prebindgen_declarations::Output::Sequence {
-                        element: Box::new(prebindgen_declarations::Output::auto()),
-                        mode: Some(prebindgen_declarations::ProjectionMode::Borrowed),
-                        delivery: prebindgen_declarations::SequenceDelivery::Value,
+                    prebindgen_declarations::Output::Unary {
+                        operation: OutputUnary::Sequence {
+                            delivery: prebindgen_declarations::SequenceDelivery::Value,
+                            mode: Some(prebindgen_declarations::ProjectionMode::Borrowed),
+                        },
+                        child: Box::new(prebindgen_declarations::Output::auto()),
                     },
                 ),
             )),
@@ -713,9 +722,12 @@ fn main() {
         .function(
             fun!(collection_resource_ids).input(
                 "values",
-                prebindgen_declarations::Input::Sequence(Box::new(
-                    prebindgen_declarations::Input::call("collection_resource_clone"),
-                ))
+                prebindgen_declarations::Input::Unary {
+                    operation: InputUnary::Sequence,
+                    child: Box::new(prebindgen_declarations::Input::call(
+                        "collection_resource_clone",
+                    )),
+                }
                 .reconstruct(),
             ),
         )
@@ -997,9 +1009,10 @@ fn main() {
             expand_return!(Report)
                 .view(prebindgen_declarations::Output::getter(
                     "report_to_struct",
-                    prebindgen_declarations::Output::OwnedFields(
-                        vec![prebindgen_declarations::Output::auto(); 3],
-                    ),
+                    prebindgen_declarations::Output::Branch {
+                        operation: OutputBranch::OwnedFields,
+                        children: vec![prebindgen_declarations::Output::auto(); 3],
+                    },
                 ))
                 .field_self(),
         )
@@ -1190,10 +1203,12 @@ fn main() {
     ] {
         cbindgen = cbindgen.output(prebindgen_declarations::Output::for_type(
             ty,
-            prebindgen_declarations::Output::Sequence {
-                element: Box::new(prebindgen_declarations::Output::auto()),
-                mode: None,
-                delivery: prebindgen_declarations::SequenceDelivery::Value,
+            prebindgen_declarations::Output::Unary {
+                operation: OutputUnary::Sequence {
+                    delivery: prebindgen_declarations::SequenceDelivery::Value,
+                    mode: None,
+                },
+                child: Box::new(prebindgen_declarations::Output::auto()),
             },
         ));
     }
@@ -1353,10 +1368,12 @@ fn main() {
         prebindgen_declarations::Output::combine([
             prebindgen_declarations::Output::getter(
                 "inline_packets_getter",
-                prebindgen_declarations::Output::Sequence {
-                    element: Box::new(prebindgen_declarations::Output::auto()),
-                    mode: None,
-                    delivery: prebindgen_declarations::SequenceDelivery::Value,
+                prebindgen_declarations::Output::Unary {
+                    operation: OutputUnary::Sequence {
+                        delivery: prebindgen_declarations::SequenceDelivery::Value,
+                        mode: None,
+                    },
+                    child: Box::new(prebindgen_declarations::Output::auto()),
                 },
             ),
             prebindgen_declarations::Output::getter(
@@ -1398,9 +1415,9 @@ fn main() {
                 [
                     prebindgen_declarations::Input::constructor(
                         "scoped_input_mode",
-                        [prebindgen_declarations::Input::Leaf],
+                        [prebindgen_declarations::Input::Leaf(InputLeafOp::Value)],
                     ),
-                    prebindgen_declarations::Input::Leaf,
+                    prebindgen_declarations::Input::Leaf(InputLeafOp::Value),
                 ],
             ),
         ))
@@ -1458,18 +1475,27 @@ fn enum_inputs(generator: prebindgen_c::Cbindgen) -> prebindgen_c::Cbindgen {
         .panic()
 }
 
-fn c_output_rows() -> prebindgen_declarations::Output<prebindgen_declarations::OutputRequest> {
-    prebindgen_declarations::Output::Sequence {
-        element: Box::new(prebindgen_declarations::Output::auto()),
-        mode: None,
-        delivery: prebindgen_declarations::SequenceDelivery::Value,
+fn c_output_rows() -> prebindgen_declarations::Output<
+    prebindgen_declarations::OutputRequest,
+    prebindgen_declarations::InputRequest,
+> {
+    prebindgen_declarations::Output::Unary {
+        operation: OutputUnary::Sequence {
+            delivery: prebindgen_declarations::SequenceDelivery::Value,
+            mode: None,
+        },
+        child: Box::new(prebindgen_declarations::Output::auto()),
     }
 }
-fn c_output_nested_rows() -> prebindgen_declarations::Output<prebindgen_declarations::OutputRequest>
-{
-    prebindgen_declarations::Output::Sequence {
-        element: Box::new(c_output_rows()),
-        mode: None,
-        delivery: prebindgen_declarations::SequenceDelivery::Value,
+fn c_output_nested_rows() -> prebindgen_declarations::Output<
+    prebindgen_declarations::OutputRequest,
+    prebindgen_declarations::InputRequest,
+> {
+    prebindgen_declarations::Output::Unary {
+        operation: OutputUnary::Sequence {
+            delivery: prebindgen_declarations::SequenceDelivery::Value,
+            mode: None,
+        },
+        child: Box::new(c_output_rows()),
     }
 }

@@ -23,6 +23,16 @@ pub trait Codec {
     /// Adapter metadata for groups/alternatives, without duplicated children.
     type Branch: Clone;
 
+    /// Compile standalone callback declarations and typed error outputs stored in Flat.
+    /// Called before function plans; implementations consume only resolved model data.
+    fn compile_declarations(
+        &self,
+        _flat: &mut Flat<Self::Schema>,
+        _extra: &Self::Extra,
+    ) -> Result<()> {
+        Ok(())
+    }
+
     /// Decode a leaf in the compiler-selected physical representation and scope.
     fn input_leaf(&self, request: InputLeaf<'_, Self>) -> Result<CodecInput<Self>>;
     /// Prepare the source expression and defer owned output transfers until commit.
@@ -142,15 +152,7 @@ pub trait Codec {
     }
 
     /// Compile a callback whose two conversion directions are already resolved.
-    fn callback_input(
-        &self,
-        _flat: &Flat<Self::Schema>,
-        _callback: &CallbackInput,
-        _extra: &Self::Extra,
-        _wire: syn::Ident,
-        _var: syn::Ident,
-        _active: &Condition,
-    ) -> Result<CodecInput<Self>> {
+    fn input_arrow(&self, _request: InputArrow<'_, Self>) -> Result<CodecInput<Self>> {
         Err("configured callbacks are unsupported by this codec".into())
     }
 
@@ -160,9 +162,9 @@ pub trait Codec {
         &self,
         _flat: &Flat<Self::Schema>,
         _ty: &Type,
-        _tree: &Input<InputRequest>,
+        _tree: &Input<InputRequest, OutputRequest>,
         _extra: &Self::Extra,
-    ) -> Result<Option<Input<InputRequest>>> {
+    ) -> Result<Option<Input<InputRequest, OutputRequest>>> {
         Ok(None)
     }
 
@@ -171,9 +173,9 @@ pub trait Codec {
         &self,
         _flat: &Flat<Self::Schema>,
         _ty: &Type,
-        _tree: &Output<OutputRequest>,
+        _tree: &Output<OutputRequest, InputRequest>,
         _extra: &Self::Extra,
-    ) -> Result<Option<Output<OutputRequest>>> {
+    ) -> Result<Option<Output<OutputRequest, InputRequest>>> {
         Ok(None)
     }
 
@@ -188,7 +190,7 @@ pub trait Codec {
     }
 
     /// Keep a collection occurrence in one native input leaf instead of
-    /// decomposing it into element rows. Explicit `Input::Sequence` overrides
+    /// decomposing it into element rows. Explicit `InputUnary::Sequence` overrides
     /// this preference; input defaults and whole-collection identities use it.
     fn input_collection_is_leaf(
         &self,
@@ -201,7 +203,7 @@ pub trait Codec {
     }
 
     /// Keep a collection occurrence in one native output leaf. Explicit
-    /// `Output::Sequence` and element-targeted expansions still produce rows.
+    /// `OutputUnary::Sequence` and element-targeted expansions still produce rows.
     fn output_collection_is_leaf(
         &self,
         _flat: &Flat<Self::Schema>,

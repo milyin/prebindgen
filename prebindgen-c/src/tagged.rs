@@ -690,7 +690,7 @@ mod tests {
         let generated=Cbindgen::new(flat("pub struct Child{pub n:i64}pub struct Holder{pub child:Child}pub enum Event{One(Holder),Empty}pub fn child(value:&Holder)->&Child{}pub fn make()->Event{}"))
             .opaque_ptr("child",syn::parse_quote!(Child))
             .tagged_union("event",syn::parse_quote!(Event))
-            .function(fun!(make).expand_return(Output::Enum {variants:vec![vec![Output::Getter{function:"child".into(),output:Box::new(Output::Leaf)}],vec![]],value:true,mode:Some(ProjectionMode::Borrowed)})).panic().build();
+            .function(fun!(make).expand_return(Output::enum_variants(vec![vec![Output::Unary { operation: OutputUnary::Getter { function: "child".into() }, child: Box::new(Output::Leaf(OutputLeafOp::Value)),  }],vec![]], true, Some(ProjectionMode::Borrowed)))).panic().build();
         let error = generated.err().unwrap();
         assert!(error.contains("temporary"), "{error}");
     }

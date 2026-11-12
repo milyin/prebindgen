@@ -79,9 +79,7 @@ fn variant_names(class: &Class, names: &[String]) -> Result<Vec<String>> {
         .collect()
 }
 
-pub(crate) fn encoding<'c>(
-    request: EnumVariants<'_, JniCodec<'c>>,
-) -> Result<EnumEncoding<JniCodec<'c>>> {
+pub(crate) fn encoding(request: EnumVariants<'_, JniCodec>) -> Result<EnumEncoding<JniCodec>> {
     let source = request.flat.payload_enum(request.ty)?;
     let names = source
         .variants
@@ -716,13 +714,13 @@ pub(crate) fn emit_tags<I: KotlinInputConversion, O: KotlinOutputConversion>(
             }
             if let Some(error) = &metadata.error {
                 visit(
-                    &error.output.output_outcomes().success,
+                    &error.output()?.output_outcomes().success,
                     &metadata.package,
                     &mut packages,
                 )?;
                 if let Some((package, _)) = error.handler.rsplit_once('.') {
                     visit(
-                        &error.output.output_outcomes().success,
+                        &error.output()?.output_outcomes().success,
                         package,
                         &mut packages,
                     )?;

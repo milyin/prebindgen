@@ -1,5 +1,6 @@
 //! Single-value conversion declarations and preparation into Flat.
 use crate::{FunctionDecl, Input, InputRequest, Output, OutputRequest};
+use crate::{InputBranch, InputLeafOp, InputUnary, OutputBranch, OutputLeafOp, OutputUnary};
 use prebindgen_flat::{
     same_type, type_key, Flat, Primitive, Result, Schema, ValueConversion, ValueSource,
 };
@@ -186,7 +187,7 @@ impl ConvertDecl {
             .collect()
     }
 }
-impl From<ConvertDecl> for Input<InputRequest> {
+impl From<ConvertDecl> for Input<InputRequest, OutputRequest> {
     fn from(decl: ConvertDecl) -> Self {
         Self::for_type(
             decl.ty.clone(),
@@ -194,7 +195,7 @@ impl From<ConvertDecl> for Input<InputRequest> {
         )
     }
 }
-impl From<ConvertDecl> for Output<OutputRequest> {
+impl From<ConvertDecl> for Output<OutputRequest, InputRequest> {
     fn from(decl: ConvertDecl) -> Self {
         Self::for_type(
             decl.ty.clone(),
@@ -298,7 +299,7 @@ impl Declarations {
         codec: &C,
         ty: &Type,
         conversion: ValueConversion,
-        child: &Input<InputRequest>,
+        child: &Input<InputRequest, OutputRequest>,
         extra: &C::Extra,
         stack: &mut Vec<String>,
     ) -> Result<Input> {
@@ -309,9 +310,11 @@ impl Declarations {
         stack.push(key);
         let input = self.input(flat, codec, &conversion.representation, child, extra, stack);
         stack.pop();
-        Ok(Input::Convert {
-            conversion: Box::new(conversion),
-            input: Box::new(input?),
+        Ok(Input::Unary {
+            operation: InputUnary::Convert {
+                conversion: Box::new(conversion),
+            },
+            child: Box::new(input?),
         })
     }
     #[allow(clippy::too_many_arguments)]
@@ -321,7 +324,7 @@ impl Declarations {
         codec: &C,
         ty: &Type,
         conversion: ValueConversion,
-        child: &Output<OutputRequest>,
+        child: &Output<OutputRequest, InputRequest>,
         extra: &C::Extra,
         stack: &mut Vec<String>,
     ) -> Result<Output> {
@@ -340,9 +343,11 @@ impl Declarations {
             true,
         );
         stack.pop();
-        Ok(Output::Convert {
-            conversion: Box::new(conversion),
-            output: Box::new(output?),
+        Ok(Output::Unary {
+            operation: OutputUnary::Convert {
+                conversion: Box::new(conversion),
+            },
+            child: Box::new(output?),
         })
     }
     pub(crate) fn resolve_input_value<C: Codec>(
@@ -354,7 +359,10 @@ impl Declarations {
         stack: &mut Vec<String>,
     ) -> Result<Input> {
         if type_key(ty) == "()" {
-            return Ok(Input::Fields(vec![]));
+            return Ok(Input::Branch {
+                operation: InputBranch::Fields,
+                children: vec![],
+            });
         }
         if let Some(c) = flat
             .type_info(ty)
@@ -372,18 +380,27 @@ impl Declarations {
             );
         }
         if let Some(inner) = prebindgen_flat::option_inner(ty) {
-            return Ok(Input::Optional(Box::new(
-                self.resolve_input_value(flat, codec, inner, extra, stack)?,
-            )));
+            return Ok(Input::Unary {
+                operation: InputUnary::Optional,
+                child: Box::new(self.resolve_input_value(flat, codec, inner, extra, stack)?),
+            });
         }
         if let Some((inner, _)) = prebindgen_flat::sequence_parts(ty)
             .filter(|_| !codec.input_collection_is_leaf(flat, ty, self.input_role.get(), extra))
         {
-            return Ok(Input::Sequence(Box::new(
-                self.resolve_input_value(flat, codec, inner, extra, stack)?,
-            )));
+            return Ok(Input::Unary {
+                operation: InputUnary::Sequence,
+                child: Box::new(self.resolve_input_value(flat, codec, inner, extra, stack)?),
+            });
         }
-        self.input(flat, codec, ty, &Input::Leaf, extra, stack)
+        self.input(
+            flat,
+            codec,
+            ty,
+            &Input::Leaf(InputLeafOp::Value),
+            extra,
+            stack,
+        )
     }
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn resolve_output_value<C: Codec>(
@@ -397,7 +414,10 @@ impl Declarations {
         policy: Option<&crate::Projection>,
     ) -> Result<Output> {
         if type_key(ty) == "()" {
-            return Ok(Output::Fields(vec![]));
+            return Ok(Output::Branch {
+                operation: OutputBranch::Fields,
+                children: vec![],
+            });
         }
         let c = flat
             .type_info(ty)
@@ -432,26 +452,33 @@ impl Declarations {
             );
         }
         if let Some(inner) = prebindgen_flat::option_inner(ty) {
-            return Ok(Output::Optional(Box::new(self.resolve_output_value(
-                flat, codec, inner, extra, stack, getter, policy,
-            )?)));
+            return Ok(Output::Unary {
+                operation: OutputUnary::Optional,
+                child: Box::new(
+                    self.resolve_output_value(flat, codec, inner, extra, stack, getter, policy)?,
+                ),
+            });
         }
         if let Some((inner, _)) = prebindgen_flat::sequence_parts(ty)
             .filter(|_| !codec.output_collection_is_leaf(flat, ty, extra))
         {
-            return Ok(Output::Sequence {
-                element: Box::new(
+            return Ok(Output::Unary {
+                operation: OutputUnary::Sequence {
+                    delivery: crate::SequenceDelivery::Value,
+                    mode: policy.map(|p| p.mode),
+                },
+                child: Box::new(
                     self.resolve_output_value(flat, codec, inner, extra, stack, getter, policy)?,
                 ),
-                mode: policy.map(|p| p.mode),
-                delivery: crate::SequenceDelivery::Value,
             });
         }
         self.output(
             flat,
             codec,
             ty,
-            &policy.map_or(Output::Leaf, |p| Output::Projected(p.clone())),
+            &policy.map_or(Output::Leaf(OutputLeafOp::Value), |p| {
+                Output::Leaf(OutputLeafOp::Projected(p.clone()))
+            }),
             extra,
             stack,
             getter,

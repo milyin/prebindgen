@@ -27,10 +27,11 @@ pub type Result<T> = std::result::Result<T, String>;
 
 /// Types of data attached to every owner in a flat binding model.
 ///
-/// A generator chooses one fixed schema for occurrence converters, module settings,
-/// functions, source types, fields and variants. Parsing leaves occurrence slots
-/// empty; preparation fills them without changing the schema or copying source
-/// declarations. The unit schema supports source-only inspection.
+/// A generator chooses schemas for occurrence data, module settings, functions,
+/// source types, fields and variants. Parsing leaves occurrence slots empty.
+/// Resolution can fill them with conversion trees; compilation can move the same
+/// source declarations into a schema carrying compiled plans. The unit schema
+/// supports source-only inspection.
 pub trait Schema {
     /// Converter or other consumer data attached to one function parameter.
     type Input;

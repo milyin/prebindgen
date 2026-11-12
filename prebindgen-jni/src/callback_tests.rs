@@ -1,4 +1,5 @@
 use super::*;
+use prebindgen_declarations::OutputLeafOp;
 
 const SOURCE: &str = "
 pub type Value=String;
@@ -321,7 +322,8 @@ fn error_from_unit_defaults() -> String {
 fn callback_overrides_validate_positions_types_and_foreign_names() {
     for (local, expected) in [
         (
-            callback!(impl Fn(Value, i64) -> Value).expand_param(2, Output::Leaf),
+            callback!(impl Fn(Value, i64) -> Value)
+                .expand_param(2, Output::Leaf(OutputLeafOp::Value)),
             "out of range",
         ),
         (

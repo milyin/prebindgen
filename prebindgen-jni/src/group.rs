@@ -410,9 +410,9 @@ pub(crate) fn callback_parameters(
 ) -> std::vec::IntoIter<&Wire<JniWire>> {
     values(node)
 }
-pub(crate) fn prepare_optional<'cfg>(
-    request: Optional<'_, JniCodec<'cfg>>,
-) -> Result<OptionalEncoding<JniCodec<'cfg>>> {
+pub(crate) fn prepare_optional(
+    request: Optional<'_, JniCodec>,
+) -> Result<OptionalEncoding<JniCodec>> {
     let prepared = prebindgen_declarations::prepare_optional_payload(
         values_mut(request.payload),
         request.direction,

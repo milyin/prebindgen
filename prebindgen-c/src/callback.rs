@@ -1,7 +1,6 @@
 //! Typed C callbacks retained by source closures.
 use super::*;
 use prebindgen_conversions::{InputFragment, OutputFragment, TemplateContext};
-use prebindgen_declarations::{CallbackInput, Condition};
 use prebindgen_flat::{callback_signature, type_key, InputConversion, WireNode};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -116,12 +115,19 @@ fn schema(node: &WireNode<CWire, CChain, CBranch>, out: &mut String) {
 }
 
 pub(crate) fn input(
-    flat: &Bindings,
-    configuration: &CallbackInput,
-    wire: syn::Ident,
-    var: syn::Ident,
-    active: &Condition,
+    request: prebindgen_declarations::InputArrow<'_, CCodec>,
 ) -> Result<InputPlan<CWire>> {
+    let prebindgen_declarations::InputArrow {
+        flat,
+        operation: configuration,
+        domain,
+        codomain,
+        wire,
+        target: var,
+        active,
+        ..
+    } = request;
+    let argument_recipes = domain.argument_nodes()?;
     let signature = callback_signature(&configuration.ty)?.ok_or("expected source callback")?;
     let unit = matches!(&signature.return_type, syn::Type::Tuple(t) if t.elems.is_empty());
     let key = format!(
@@ -145,7 +151,7 @@ pub(crate) fn input(
             flat,
             &codec,
             &ty,
-            &configuration.arguments[index],
+            argument_recipes[index].callback_argument_parts()?.1,
             index,
             false,
             &(),
@@ -173,7 +179,7 @@ pub(crate) fn input(
                 flat,
                 &return_codec,
                 &signature.return_type,
-                &configuration.return_value,
+                codomain,
                 &(),
             )?,
         ))

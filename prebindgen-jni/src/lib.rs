@@ -4,6 +4,9 @@
 //! package prefix and native initialization.
 //! Declaration processing fills occurrence slots before wrappers are generated.
 #![warn(missing_docs)]
+use prebindgen_declarations::{InputBranch, InputLeafOp, OutputBranch, OutputLeafOp};
+#[cfg(test)]
+use prebindgen_declarations::{InputUnary, OutputUnary};
 use prebindgen_flat::{type_key, Conversion, Flat, OutputConversion, Result, WireKind};
 
 pub use prebindgen_declarations::{
@@ -82,7 +85,7 @@ pub use kotlin::{
 /// use prebindgen_jni::Bindings;
 /// use prebindgen_declarations::{bind_input, Input};
 /// fn wrong(flat: &mut Bindings) {
-///     bind_input(flat, &prebindgen_c::CCodec::raw(), "echo", "x", &Input::Leaf, &()).unwrap();
+///     bind_input(flat, &prebindgen_c::CCodec::raw(), "echo", "x", &Input::Leaf(prebindgen_declarations::InputLeafOp::Value), &()).unwrap();
 /// }
 /// ```
 /// A completed JNI model also cannot be passed to the C generator:
@@ -266,8 +269,8 @@ pub struct JniGenBuilder {
     source: Option<std::path::PathBuf>,
     items: Option<Vec<(syn::Item, prebindgen::SourceLocation)>>,
     conversions: Vec<prebindgen_declarations::ConvertDecl>,
-    inputs: Vec<prebindgen_declarations::Input<InputRequest>>,
-    outputs: Vec<prebindgen_declarations::Output<OutputRequest>>,
+    inputs: Vec<prebindgen_declarations::Input<InputRequest, OutputRequest>>,
+    outputs: Vec<prebindgen_declarations::Output<OutputRequest, InputRequest>>,
     error_mappers: Vec<(syn::Type, String)>,
     prefix: String,
     init: String,
@@ -318,8 +321,8 @@ impl JniGenBuilder {
     /// let generated = JniGen::builder().flat(flat)
     ///     .set_package_prefix("example")
     ///     .configure(|flat| {
-    ///         bind_input(flat, &JniCodec::raw(), "echo", "x", &Input::Leaf, &())?;
-    ///         bind_output(flat, &JniCodec::raw(), "echo", &Output::Leaf, &())
+    ///         bind_input(flat, &JniCodec::raw(), "echo", "x", &Input::Leaf(prebindgen_declarations::InputLeafOp::Value), &())?;
+    ///         bind_output(flat, &JniCodec::raw(), "echo", &Output::Leaf(prebindgen_declarations::OutputLeafOp::Value), &())
     ///     })
     ///     .package(package!().fun(fun!(echo)))
     ///     .build()?;
@@ -374,14 +377,17 @@ impl JniGenBuilder {
     ///
     /// Per-function overrides replace defaults. Duplicate declarations for the same
     /// type and direction are rejected during build.
-    pub fn input(mut self, tree: impl Into<prebindgen_declarations::Input<InputRequest>>) -> Self {
+    pub fn input(
+        mut self,
+        tree: impl Into<prebindgen_declarations::Input<InputRequest, OutputRequest>>,
+    ) -> Self {
         self.inputs.push(tree.into());
         self
     }
     /// Register a type-wide direct output conversion tree.
     pub fn output(
         mut self,
-        tree: impl Into<prebindgen_declarations::Output<OutputRequest>>,
+        tree: impl Into<prebindgen_declarations::Output<OutputRequest, InputRequest>>,
     ) -> Self {
         self.outputs.push(tree.into());
         self
@@ -501,6 +507,7 @@ impl JniGenBuilder {
             package: self.prefix,
             native_init: self.init,
             callbacks: Vec::new(),
+            callback_recipes: Vec::new(),
             bulk_collection_outputs: self.bulk_collection_outputs.unwrap_or(true),
         };
         let mut declarations = Vec::new();
@@ -591,7 +598,7 @@ impl JniGenBuilder {
                 return Err("duplicate exception class for source error type".into());
             }
         }
-        let codec = JniCodec::declared(None);
+        let codec = JniCodec::declared();
         for configure in self.configure {
             configure(&mut flat)?;
         }
@@ -611,7 +618,6 @@ impl JniGenBuilder {
                 ));
             }
         }
-        let output_defaults = callback::declared_outputs(&flat, &self.outputs)?;
         validate_declaration_names(&flat)?;
         prebindgen_declarations::prepare_value_conversions(&mut flat, self.conversions)?;
         data::prepare(&mut flat)?;
@@ -621,35 +627,26 @@ impl JniGenBuilder {
             self.outputs,
             self.error_mappers,
         )?;
-        errors::prepare(&mut flat, &codec, &defaults, &declarations)?;
-        let codec = JniCodec::declared(Some(&output_defaults));
+        errors::resolve(&mut flat, &codec, &defaults, &declarations)?;
         for ty in callback_types {
             let recipe = defaults.resolve_input(&flat, &codec, &ty, &Input::auto(), &())?;
-            let Input::Callback(configuration) = recipe else {
+            let Input::Arrow {
+                operation: configuration,
+                ..
+            } = &recipe
+            else {
                 return Err("callback declaration requires a callback conversion".into());
             };
-            callback::validate_source_occurrence(&flat, &configuration, &callback_sources)?;
-            let plan = callback::input(
-                &flat,
-                &configuration,
-                &output_defaults,
-                &configuration.ty,
-                format_ident!("declared_callback"),
-                format_ident!("declared_callback_value"),
-                &Default::default(),
-            )?;
-            flat.metadata.callbacks.push(plan.into());
+            callback::validate_source_occurrence(&flat, configuration, &callback_sources)?;
+            flat.metadata.callback_recipes.push(recipe);
         }
+
         let mut next_order = declarations.len();
+        let mut resolved_declarations = Vec::new();
+        let mut callback_variants = Vec::new();
         for declaration in declarations {
-            defaults.fill(&mut flat, &codec, &declaration, &())?;
             if declaration.callback_return.is_some() {
                 let variant_name = format!("{}_fold", declaration.name);
-                sequence::callback_target(
-                    &(flat.function(&declaration.name)?.output_conversion()?)
-                        .output_outcomes()
-                        .success,
-                )?;
                 let variant = defaults.callback_variant(
                     &mut flat,
                     &codec,
@@ -671,19 +668,38 @@ impl JniGenBuilder {
                 placement.order = next_order;
                 next_order += 1;
                 flat.function_mut(&variant_name)?.metadata = Some(placement);
-                defaults.fill(&mut flat, &codec, &variant, &())?;
-                if declaration.callback_return
-                    == Some(prebindgen_declarations::CallbackReturn::Only)
-                {
-                    let original = flat.functions.get_mut(&declaration.name).unwrap();
-                    original.metadata = None;
-                    original.ret.slot = None;
-                    for param in &mut original.params {
-                        param.ty.slot = None;
-                    }
+                callback_variants.push((
+                    declaration.name.clone(),
+                    variant_name,
+                    declaration.callback_return
+                        == Some(prebindgen_declarations::CallbackReturn::Only),
+                ));
+                resolved_declarations.push(variant);
+            }
+            resolved_declarations.push(declaration);
+        }
+        let resolved = defaults.resolve(flat, codec, &resolved_declarations, ())?;
+        drop(defaults);
+        let mut flat = prebindgen_declarations::compile_resolved(resolved)?;
+        for (original, variant, only) in callback_variants {
+            sequence::callback_target(
+                &flat
+                    .function(&original)?
+                    .output_conversion()?
+                    .output_outcomes()
+                    .success,
+            )?;
+            let _ = variant;
+            if only {
+                let source = flat.function_mut(&original)?;
+                source.metadata = None;
+                source.ret.slot = None;
+                for param in &mut source.params {
+                    param.ty.slot = None;
                 }
             }
         }
+
         prebindgen_flat::validate_bindings(&flat)?;
         for (name, f) in &flat.functions {
             if f.ret.slot.is_some() && f.metadata.is_none() {
@@ -762,31 +778,38 @@ fn foreign_name_exists(flat: &Bindings, name: &str) -> bool {
 /// Use with [`prebindgen_declarations::bind_input`] and [`prebindgen_declarations::bind_output`]
 /// to fill [`Bindings`] manually.
 #[derive(Clone, Copy, Debug, Default)]
-pub struct JniCodec<'a> {
+pub struct JniCodec {
     declared: bool,
-    callback_outputs: Option<&'a BTreeSet<String>>,
 }
-impl<'a> JniCodec<'a> {
+impl JniCodec {
     /// Preserve manual low-level conversion, without declaration reinterpretation.
     pub const fn raw() -> Self {
-        Self {
-            declared: false,
-            callback_outputs: None,
-        }
+        Self { declared: false }
     }
-    /// Honor declarations in Flat and borrow source-callback preparation policy.
-    /// The set contains `prebindgen_flat::type_key` values for generator-wide
-    /// output expansions. Those expansions transfer callback output ownership
-    /// to the callback author. None leaves retained callback input unsupported;
-    /// Some(empty_set) enables it with the default scoped output policy.
-    pub const fn declared(callback_outputs: Option<&'a BTreeSet<String>>) -> Self {
-        Self {
-            declared: true,
-            callback_outputs,
-        }
+    /// Honor representation declarations stored in Flat.
+    pub const fn declared() -> Self {
+        Self { declared: true }
     }
 }
-impl Codec for JniCodec<'_> {
+impl Codec for JniCodec {
+    fn compile_declarations(&self, flat: &mut Bindings, _: &()) -> Result<()> {
+        errors::compile(flat, self)?;
+        for recipe in std::mem::take(&mut flat.metadata.callback_recipes) {
+            let Input::Arrow { operation, .. } = &recipe else {
+                return Err("callback declaration requires an arrow".into());
+            };
+            let plan = prebindgen_declarations::compile_input_value(
+                flat,
+                self,
+                &operation.ty,
+                &recipe,
+                &(),
+            )?;
+            flat.metadata.callbacks.push(plan);
+        }
+        Ok(())
+    }
+
     fn enum_variants(
         &self,
         request: prebindgen_declarations::EnumVariants<'_, Self>,
@@ -979,7 +1002,9 @@ impl Codec for JniCodec<'_> {
         }
         if self.declared {
             if Self::source_record(_flat, ty)?.is_some() {
-                return Err("resolve the data-class Output::Record before leaf compilation".into());
+                return Err(
+                    "resolve the data-class OutputBranch::Record before leaf compilation".into(),
+                );
             }
             if let Some(e) = self.enum_type(_flat, ty) {
                 if matches!(ty,syn::Type::Reference(r) if r.mutability.is_some()) {
@@ -1210,14 +1235,14 @@ impl Codec for JniCodec<'_> {
         &self,
         flat: &Flat<JniSchema>,
         ty: &syn::Type,
-        tree: &Input<InputRequest>,
+        tree: &Input<InputRequest, OutputRequest>,
         _: &(),
-    ) -> Result<Option<Input<InputRequest>>> {
+    ) -> Result<Option<Input<InputRequest, OutputRequest>>> {
         if !self.declared {
             return Ok(None);
         }
 
-        if !matches!(tree, Input::Leaf) {
+        if !matches!(tree, Input::Leaf(InputLeafOp::Value)) {
             return Ok(None);
         }
         if flat.payload_enums.contains_key(&type_key(ty))
@@ -1238,15 +1263,14 @@ impl Codec for JniCodec<'_> {
             .and_then(|t| t.metadata.class.as_ref())
             .is_some_and(|c| c.kind == ClassKind::Sealed)
         {
-            return Ok(Some(Input::Enum {
-                variants: flat
-                    .payload_enum(ty)?
+            return Ok(Some(Input::enum_variants(
+                flat.payload_enum(ty)?
                     .variants
                     .iter()
                     .map(|v| vec![Input::value(); v.fields.len()])
                     .collect(),
-                value: true,
-            }));
+                true,
+            )));
         }
         let Some(record) = Self::source_record(flat, ty)? else {
             return Ok(None);
@@ -1257,25 +1281,25 @@ impl Codec for JniCodec<'_> {
                 record.fqn()
             ));
         }
-        Ok(Some(Input::Record(vec![
-            Input::value();
-            flat.record(ty)?.fields.len()
-        ])))
+        Ok(Some(Input::Branch {
+            operation: InputBranch::Record,
+            children: vec![Input::value(); flat.record(ty)?.fields.len()],
+        }))
     }
     fn expand_output(
         &self,
         flat: &Flat<JniSchema>,
         ty: &syn::Type,
-        tree: &Output<OutputRequest>,
+        tree: &Output<OutputRequest, InputRequest>,
         _: &(),
-    ) -> Result<Option<Output<OutputRequest>>> {
+    ) -> Result<Option<Output<OutputRequest, InputRequest>>> {
         if !self.declared {
             return Ok(None);
         }
 
         let policy = match tree {
-            Output::Leaf => None,
-            Output::Projected(p) => Some(p.clone()),
+            Output::Leaf(OutputLeafOp::Value) => None,
+            Output::Leaf(OutputLeafOp::Projected(p)) => Some(p.clone()),
             _ => return Ok(None),
         };
         if flat.payload_enums.contains_key(&type_key(ty))
@@ -1296,16 +1320,15 @@ impl Codec for JniCodec<'_> {
             .and_then(|t| t.metadata.class.as_ref())
             .is_some_and(|c| c.kind == ClassKind::Sealed)
         {
-            return Ok(Some(Output::Enum {
-                variants: flat
-                    .payload_enum(ty)?
+            return Ok(Some(Output::enum_variants(
+                flat.payload_enum(ty)?
                     .variants
                     .iter()
                     .map(|v| vec![Output::value(); v.fields.len()])
                     .collect(),
-                value: true,
-                mode: policy.as_ref().map(|p| p.mode),
-            }));
+                true,
+                policy.as_ref().map(|p| p.mode),
+            )));
         }
         let Some(record) = Self::source_record(flat, ty)? else {
             return Ok(None);
@@ -1332,9 +1355,11 @@ impl Codec for JniCodec<'_> {
             }
             Ok(Output::Request(OutputRequest::Value {projection:Some(child.clone())}))
         }).collect::<Result<Vec<_>>>()?;
-        Ok(Some(Output::Record {
-            fields: children,
-            mode: policy.map(|p| p.mode),
+        Ok(Some(Output::Branch {
+            operation: OutputBranch::Record {
+                mode: policy.map(|p| p.mode),
+            },
+            children,
         }))
     }
     fn input_record_metadata(
@@ -1413,38 +1438,22 @@ impl Codec for JniCodec<'_> {
         let sink = prebindgen_conversions::template_parameter("return_sink");
         let value = request.message.unwrap_or(request.value);
         Ok(SourceErrorPlan {
-            payload: binding.output.output_outcomes().success.clone(),
+            payload: binding.output()?.output_outcomes().success.clone(),
             propagate: quote!({#helper(&mut #env, #value, &mut #reported, #sink)?; String::new()}),
         })
     }
-    fn callback_input(
+    fn input_arrow(
         &self,
-        flat: &Bindings,
-        configuration: &prebindgen_declarations::CallbackInput,
-        _: &(),
-        wire: syn::Ident,
-        var: syn::Ident,
-        active: &prebindgen_declarations::Condition,
+        request: prebindgen_declarations::InputArrow<'_, Self>,
     ) -> Result<InputPlan<JniWire>> {
         if !self.declared {
             return Err("configured callbacks are unsupported by this codec".into());
         }
-        let outputs = self
-            .callback_outputs
-            .ok_or("source callback parameters require adapter callback preparation")?;
-        callback::input(
-            flat,
-            configuration,
-            outputs,
-            &configuration.ty,
-            wire,
-            var,
-            active,
-        )
+        callback::input(request)
     }
 }
 
-impl JniCodec<'_> {
+impl JniCodec {
     fn input_value(&self, request: InputLeaf<'_, Self>) -> Result<InputPlan<JniWire>> {
         let InputLeaf {
             flat,
@@ -1467,7 +1476,9 @@ impl JniCodec<'_> {
                 return Err("resolve Callback operations before leaf compilation".into());
             }
             if Self::source_record(flat, ty)?.is_some() {
-                return Err("resolve the data-class Input::Record before leaf compilation".into());
+                return Err(
+                    "resolve the data-class InputBranch::Record before leaf compilation".into(),
+                );
             }
             if let Some(e) = self.enum_type(flat, ty) {
                 return e.input(ty, wire, var, active);
@@ -1942,7 +1953,7 @@ pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
         let logical = &outcomes.success;
         if let (Some(declared), Some(error)) = (&outcomes.source_error, error) {
             if group::error_wire_shape(declared)
-                != group::error_wire_shape(&error.output.output_outcomes().success)
+                != group::error_wire_shape(&error.output()?.output_outcomes().success)
             {
                 return Err(format!(
                     "`{source}`: domain-error converter differs from the declared error wires"
@@ -1973,7 +1984,13 @@ pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
         // existing native parameter limit; previously valid signatures stay valid.
         let native_return = returns::select(f.output_conversion()?)
             .filter(|_| input_slots + acknowledgement + 2 * usize::from(callback) < 255)
-            .filter(|_| error.is_none_or(|e| returns::select(&e.output).is_some()));
+            .filter(|_| {
+                error.is_none_or(|e| {
+                    e.output
+                        .as_ref()
+                        .is_some_and(|output| returns::select(output).is_some())
+                })
+            });
         let native_result_type = native_return.as_ref().map_or_else(
             || syn::parse_quote!(::prebindgen_jni_runtime::jni::sys::jobjectArray),
             returns::NativeReturn::rust_type,
@@ -2465,7 +2482,7 @@ pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
             let mut delivery = errors::delivery(error, &kotlin_context)?;
             if native_return.is_some() {
                 let fields =
-                    crate::group::result_packet_fields(&error.output.output_outcomes().success)
+                    crate::group::result_packet_fields(&error.output()?.output_outcomes().success)
                         .collect::<Vec<_>>();
                 let values = (0..fields.len())
                     .map(|i| format!("returnCapture.d{i}"))

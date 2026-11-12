@@ -1,5 +1,6 @@
 //! Non-owning numeric collection views, with no per-element output conversion.
 use super::*;
+use prebindgen_declarations::{InputLeafOp, OutputLeafOp};
 use prebindgen_declarations::{Output, SequenceDelivery};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -67,7 +68,8 @@ pub(crate) fn sequence(
         return Err("mutable C collection views are unsupported".into());
     }
     let primitive = primitive(element_type, &flat.types);
-    let Some(element) = primitive.filter(|_| matches!(recipe, Output::Leaf)) else {
+    let Some(element) = primitive.filter(|_| matches!(recipe, Output::Leaf(OutputLeafOp::Value)))
+    else {
         return Err(format!("borrowed C collection `{}` cannot allocate converted rows implicitly; use an address-preserving numeric element representation or explicitly permit a collection-level copy with expand_return!(&[T]).field_self_ref() (not an element-only expansion)", prebindgen_flat::type_key(ty)));
     };
     let element_type = native_element_type(element);
@@ -122,9 +124,12 @@ pub(crate) fn input_sequence(
         syn::Type::Array(array) => (array.elem.as_ref(), Some(&array.len)),
         _ => return Err(format!("shared C input `{}` cannot reconstruct an owning collection implicitly; declare a native opaque owner input or explicitly select expand_param!({}).reconstruct()",prebindgen_flat::type_key(ty),prebindgen_flat::type_key(ty))),
     };
-    let Some(element) = primitive(source_element, &flat.types)
-        .filter(|_| matches!(recipe, prebindgen_declarations::Input::Leaf))
-    else {
+    let Some(element) = primitive(source_element, &flat.types).filter(|_| {
+        matches!(
+            recipe,
+            prebindgen_declarations::Input::Leaf(InputLeafOp::Value)
+        )
+    }) else {
         return Err(format!("shared C input `{}` cannot allocate converted elements implicitly; use a compatible numeric slice, a native opaque owner, or explicitly select expand_param!({}).reconstruct()",prebindgen_flat::type_key(ty),prebindgen_flat::type_key(ty)));
     };
     let native = native_element_type(element);
@@ -212,12 +217,14 @@ mod tests {
     }
     fn sequence(
         copy: bool,
-        element: prebindgen_declarations::Output<OutputRequest>,
-    ) -> prebindgen_declarations::Output<OutputRequest> {
-        prebindgen_declarations::Output::Sequence {
-            element: Box::new(element),
-            mode: copy.then_some(ProjectionMode::Borrowed),
-            delivery: SequenceDelivery::Value,
+        element: prebindgen_declarations::Output<OutputRequest, InputRequest>,
+    ) -> prebindgen_declarations::Output<OutputRequest, InputRequest> {
+        prebindgen_declarations::Output::Unary {
+            operation: OutputUnary::Sequence {
+                delivery: SequenceDelivery::Value,
+                mode: copy.then_some(ProjectionMode::Borrowed),
+            },
+            child: Box::new(element),
         }
     }
     #[test]
@@ -300,12 +307,10 @@ mod tests {
             .unwrap();
         assert!(g.header.contains("pb_i64_slice_view *out1"));
         let error = Cbindgen::new(model(source))
-            .function(
-                fun!(make).output(prebindgen_declarations::Output::Fields(vec![sequence(
-                    false,
-                    prebindgen_declarations::Output::auto(),
-                )])),
-            )
+            .function(fun!(make).output(prebindgen_declarations::Output::Branch {
+                operation: OutputBranch::Fields,
+                children: vec![sequence(false, prebindgen_declarations::Output::auto())],
+            }))
             .build()
             .err()
             .unwrap();
@@ -769,7 +774,7 @@ mod tests {
             &syn::parse_quote!(&'static [i64]),
             syn::parse_quote!(wire),
             syn::parse_quote!(value),
-            &prebindgen_declarations::Input::Leaf,
+            &prebindgen_declarations::Input::Leaf(InputLeafOp::Value),
             &Default::default(),
         )
         .err()

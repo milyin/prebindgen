@@ -1,5 +1,6 @@
 //! An independently implemented input, without a JniInput or InputPlan.
 use prebindgen_conversions::InputFragment;
+use prebindgen_declarations::OutputLeafOp;
 use prebindgen_flat::{Conversion, Flat, InputConversion, Primitive, Result, Wire, WireNode};
 use prebindgen_jni::{
     Bindings, JniBranch, JniChain, JniContext, JniFunction, JniGen, JniSchema, JniWire,
@@ -59,7 +60,7 @@ pub fn generate() -> Result<JniGen> {
         &Bindings::parse([])?,
         &prebindgen_jni::JniCodec::raw(),
         &syn::parse_quote!(i64),
-        &prebindgen_declarations::Output::Leaf,
+        &prebindgen_declarations::Output::Leaf(OutputLeafOp::Value),
         &(),
     )?;
     let function = flat.function_mut("duration_millis")?;

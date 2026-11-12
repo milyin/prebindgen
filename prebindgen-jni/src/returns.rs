@@ -365,7 +365,7 @@ mod tests {
             .as_mut()
             .unwrap();
         let binding = std::rc::Rc::make_mut(error);
-        binding.output = binding.output.clone().packet_only();
+        binding.output = Some(binding.output().unwrap().clone().packet_only());
         let generation = generate(&flat).unwrap();
         let functions = externs(&generation);
         let function = functions
@@ -404,7 +404,7 @@ mod tests {
             .as_mut()
             .unwrap();
         let binding = std::rc::Rc::make_mut(error);
-        binding.output = binding.output.clone().packet_only();
+        binding.output = Some(binding.output().unwrap().clone().packet_only());
         let generation = generate(&flat).unwrap();
         let functions = externs(&generation);
         let function = functions

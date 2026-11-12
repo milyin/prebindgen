@@ -631,10 +631,12 @@ mod tests {
             .opaque_ptr("inner", syn::parse_quote!(Inner))
             .function(fun!(borrow).output(Output::getter(
                 "list",
-                Output::Sequence {
-                    element: Box::new(Output::getter("name", Output::auto())),
-                    mode: Some(ProjectionMode::Borrowed),
-                    delivery: SequenceDelivery::Value,
+                Output::Unary {
+                    operation: OutputUnary::Sequence {
+                        delivery: SequenceDelivery::Value,
+                        mode: Some(ProjectionMode::Borrowed),
+                    },
+                    child: Box::new(Output::getter("name", Output::auto())),
                 },
             )))
             .panic()

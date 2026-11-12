@@ -475,14 +475,18 @@ fn malformed_nested_sequence_bindings_are_rejected_before_installation() {
         bad_sequence: true,
         ..Default::default()
     };
-    let recipe = Output::Sequence {
-        delivery: SequenceDelivery::Value,
-        element: Box::new(Output::Sequence {
+    let recipe = Output::Unary {
+        operation: OutputUnary::Sequence {
             delivery: SequenceDelivery::Value,
-            element: Box::new(Output::Leaf),
             mode: None,
+        },
+        child: Box::new(Output::Unary {
+            operation: OutputUnary::Sequence {
+                delivery: SequenceDelivery::Value,
+                mode: None,
+            },
+            child: Box::new(Output::Leaf(OutputLeafOp::Value)),
         }),
-        mode: None,
     };
     let error = bind_output(&mut flat, &bad, "output", &recipe, &()).unwrap_err();
     assert!(error.contains("missing output binding"), "{error}");
@@ -496,7 +500,10 @@ fn malformed_nested_sequence_bindings_are_rejected_before_installation() {
         &bad,
         "input",
         "values",
-        &Input::Sequence(Box::new(Input::Leaf)),
+        &Input::Unary {
+            operation: InputUnary::Sequence,
+            child: Box::new(Input::Leaf(InputLeafOp::Value)),
+        },
         &(),
     )
     .unwrap_err();
@@ -515,10 +522,16 @@ fn rows_lend_temporary_values_and_construct_once() {
     )
     .unwrap();
     let codec = CodecImpl::default();
-    let recipe = Input::Sequence(Box::new(Input::constructor(
-        "row",
-        [Input::Temporary(Box::new(Input::Leaf))],
-    )));
+    let recipe = Input::Unary {
+        operation: InputUnary::Sequence,
+        child: Box::new(Input::constructor(
+            "row",
+            [Input::Unary {
+                operation: InputUnary::Temporary,
+                child: Box::new(Input::Leaf(InputLeafOp::Value)),
+            }],
+        )),
+    };
     let plan = compile_input(&flat, &codec, "consume", "values", &recipe, &()).unwrap();
     let target = syn::parse_quote!(values);
     let conversion = plan.bind(&target, quote!(Ok(consume(#target)))).unwrap();
