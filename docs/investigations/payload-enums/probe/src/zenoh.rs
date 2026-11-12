@@ -107,11 +107,9 @@ pub fn run() -> Result<()> {
         ),
         ("ReplyStruct", syn::parse_quote!(ReplyStruct)),
     ] {
-        rejected(
-            &format!("Zenoh {name} source shape"),
-            Flat::<()>::parse_selected(items(source), &[], &[ty]),
-            "only fieldless enum variants are supported",
-        );
+        let flat = Flat::<()>::parse_selected(items(source), &[], &[ty])?;
+        assert!(!flat.payload_enums.is_empty());
+        println!("Zenoh {name} source shape: payload dependencies captured");
     }
 
     let timestamp =

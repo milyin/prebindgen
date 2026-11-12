@@ -173,6 +173,133 @@ size_t perftest_owned_vec_u8_672e72343c1b4cb4_len(const perftest_owned_vec_u8_67
 perftest_buffer_view perftest_owned_vec_u8_672e72343c1b4cb4_view(const perftest_owned_vec_u8_672e72343c1b4cb4 *value);
 /* Exclusive borrowed view; never free it. Keep the owner alive and preserve exclusive access until the view's last use. */
 perftest_buffer_view_mut perftest_owned_vec_u8_672e72343c1b4cb4_view_mut(perftest_owned_vec_u8_672e72343c1b4cb4 *value);
+#define perftest_WIRE_BARE_COUNT_TAG ((int32_t)0)
+#define perftest_WIRE_BARE_PACKET_TAG ((int32_t)1)
+#define perftest_WIRE_CHECKED_EVENT_EMPTY_TAG ((int32_t)0)
+#define perftest_WIRE_CHECKED_EVENT_DATA_TAG ((int32_t)1)
+#define perftest_wire_checked_event_Empty ((int32_t)0)
+#define perftest_wire_checked_event_Data ((int32_t)1)
+typedef struct {
+    int32_t tag;
+    union {
+    struct {
+        perftest_callback_return_resource * first;
+        int64_t marker;
+        perftest_callback_return_resource * last;
+    } Data;
+    } payload;
+ } perftest_wire_checked_event;
+/* Owning tagged value: never copy ownership. Tag -1 is empty. Drop releases only the selected payload. Take transfers the carrier and empties its old slot. */
+void perftest_drop_wire_checked_event(perftest_wire_checked_event *value);
+perftest_wire_checked_event perftest_take_wire_checked_event(perftest_wire_checked_event *value);
+#define perftest_WIRE_EMPTY_UNIT_TAG ((int32_t)0)
+#define perftest_WIRE_EMPTY_TUPLE_TAG ((int32_t)1)
+#define perftest_WIRE_EMPTY_NAMED_TAG ((int32_t)2)
+#define perftest_wire_empty_Unit ((int32_t)0)
+#define perftest_wire_empty_Tuple ((int32_t)1)
+#define perftest_wire_empty_Named ((int32_t)2)
+typedef struct {
+    int32_t tag;
+ } perftest_wire_empty;
+/* Owning tagged value: never copy ownership. Tag -1 is empty. Drop releases only the selected payload. Take transfers the carrier and empties its old slot. */
+void perftest_drop_wire_empty(perftest_wire_empty *value);
+perftest_wire_empty perftest_take_wire_empty(perftest_wire_empty *value);
+#define perftest_WIRE_EVENT_IDLE_TAG ((int32_t)0)
+#define perftest_WIRE_EVENT_COUNT_TAG ((int32_t)1)
+#define perftest_WIRE_EVENT_PACKET_TAG ((int32_t)2)
+#define perftest_WIRE_EVENT_EMPTY_TUPLE_TAG ((int32_t)3)
+#define perftest_WIRE_EVENT_EMPTY_RECORD_TAG ((int32_t)4)
+#define perftest_wire_event_Idle ((int32_t)0)
+#define perftest_wire_event_Count ((int32_t)1)
+#define perftest_wire_event_Packet ((int32_t)2)
+#define perftest_wire_event_EmptyTuple ((int32_t)3)
+#define perftest_wire_event_EmptyRecord ((int32_t)4)
+typedef struct {
+    int32_t tag;
+    union {
+    struct {
+        uint64_t v0;
+    } Count;
+    struct {
+        uint64_t id;
+        perftest_owned_vec_u8_672e72343c1b4cb4 bytes;
+    } Packet;
+    } payload;
+ } perftest_wire_event;
+/* Owning tagged value: never copy ownership. Tag -1 is empty. Drop releases only the selected payload. Take transfers the carrier and empties its old slot. */
+void perftest_drop_wire_event(perftest_wire_event *value);
+perftest_wire_event perftest_take_wire_event(perftest_wire_event *value);
+#define perftest_WIRE_OPTIONAL_EVENT_EMPTY_TAG ((int32_t)0)
+#define perftest_WIRE_OPTIONAL_EVENT_BYTES_TAG ((int32_t)1)
+#define perftest_wire_optional_event_Empty ((int32_t)0)
+#define perftest_wire_optional_event_Bytes ((int32_t)1)
+typedef struct {
+    int32_t tag;
+    union {
+    struct {
+        int32_t payload_v0;
+        perftest_owned_vec_u8_672e72343c1b4cb4 payload_v1;
+        perftest_callback_return_resource * tail;
+    } Bytes;
+    } payload;
+ } perftest_wire_optional_event;
+/* Owning tagged value: never copy ownership. Tag -1 is empty. Drop releases only the selected payload. Take transfers the carrier and empties its old slot. */
+void perftest_drop_wire_optional_event(perftest_wire_optional_event *value);
+perftest_wire_optional_event perftest_take_wire_optional_event(perftest_wire_optional_event *value);
+#define perftest_WIRE_OWNED_EVENT_EMPTY_TAG ((int32_t)0)
+#define perftest_WIRE_OWNED_EVENT_PAIR_TAG ((int32_t)1)
+#define perftest_WIRE_OWNED_EVENT_TEXT_TAG ((int32_t)2)
+#define perftest_wire_owned_event_Empty ((int32_t)0)
+#define perftest_wire_owned_event_Pair ((int32_t)1)
+#define perftest_wire_owned_event_Text ((int32_t)2)
+typedef struct {
+    int32_t tag;
+    union {
+    struct {
+        perftest_callback_return_resource * first;
+        perftest_callback_return_resource * second;
+    } Pair;
+    struct {
+        perftest_owned_string v0;
+    } Text;
+    } payload;
+ } perftest_wire_owned_event;
+/* Owning tagged value: never copy ownership. Tag -1 is empty. Drop releases only the selected payload. Take transfers the carrier and empties its old slot. */
+void perftest_drop_wire_owned_event(perftest_wire_owned_event *value);
+perftest_wire_owned_event perftest_take_wire_owned_event(perftest_wire_owned_event *value);
+#define perftest_RESULT_UNIT_STRING_EDA9924DF8301F5E_OK_TAG ((int32_t)0)
+#define perftest_RESULT_UNIT_STRING_EDA9924DF8301F5E_ERR_TAG ((int32_t)1)
+#define perftest_wire_notice_Ok ((int32_t)0)
+#define perftest_wire_notice_Err ((int32_t)1)
+typedef struct {
+    int32_t tag;
+    union {
+    struct {
+        perftest_owned_string v0;
+    } Err;
+    } payload;
+ } perftest_wire_notice;
+/* Owning tagged value: never copy ownership. Tag -1 is empty. Drop releases only the selected payload. Take transfers the carrier and empties its old slot. */
+void perftest_drop_wire_notice(perftest_wire_notice *value);
+perftest_wire_notice perftest_take_wire_notice(perftest_wire_notice *value);
+#define perftest_RESULT_I64_STRING_9A3B51DD1383E09C_OK_TAG ((int32_t)0)
+#define perftest_RESULT_I64_STRING_9A3B51DD1383E09C_ERR_TAG ((int32_t)1)
+#define perftest_wire_decision_Ok ((int32_t)0)
+#define perftest_wire_decision_Err ((int32_t)1)
+typedef struct {
+    int32_t tag;
+    union {
+    struct {
+        int64_t v0;
+    } Ok;
+    struct {
+        perftest_owned_string v0;
+    } Err;
+    } payload;
+ } perftest_wire_decision;
+/* Owning tagged value: never copy ownership. Tag -1 is empty. Drop releases only the selected payload. Take transfers the carrier and empties its old slot. */
+void perftest_drop_wire_decision(perftest_wire_decision *value);
+perftest_wire_decision perftest_take_wire_decision(perftest_wire_decision *value);
 /* Rust signature: (String)->String. The callback context transfers and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers, rows and descriptors must remain live and unchanged until Rust finishes decoding them, including source constructor invocations; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
 typedef struct {
     perftest_buffer (*run)(void *context, perftest_owned_string arg0);
@@ -429,6 +556,18 @@ typedef struct {
     void *context;
     void (*drop)(void *context);
 } perftest_callback_af8866ae3e4d0e12;
+/* Rust signature: ()->perftest_flat :: WireCheckedEvent. The callback context transfers and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers, rows and descriptors must remain live and unchanged until Rust finishes decoding them, including source constructor invocations; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
+typedef struct {
+    perftest_wire_checked_event (*run)(void *context);
+    void *context;
+    void (*drop)(void *context);
+} perftest_callback_b3a926c45f75675c;
+/* Rust signature: (:: core :: result :: Result < () , String >)->:: core :: result :: Result < i64 , String >. The callback context transfers and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers, rows and descriptors must remain live and unchanged until Rust finishes decoding them, including source constructor invocations; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
+typedef struct {
+    perftest_wire_decision (*run)(void *context, perftest_wire_notice arg0);
+    void *context;
+    void (*drop)(void *context);
+} perftest_callback_b7adf34facddaf10;
 typedef struct {
     perftest_c_output_resource * v0;
     perftest_owned_string v1;
@@ -473,6 +612,12 @@ typedef struct {
     void *context;
     void (*drop)(void *context);
 } perftest_callback_d47c7bdcce5eb73a;
+/* Rust signature: (perftest_flat :: WireEvent)->perftest_flat :: WireEvent. The callback context transfers and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers, rows and descriptors must remain live and unchanged until Rust finishes decoding them, including source constructor invocations; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
+typedef struct {
+    perftest_wire_event (*run)(void *context, perftest_wire_event arg0);
+    void *context;
+    void (*drop)(void *context);
+} perftest_callback_d67524396b65a6b2;
 /* Rust signature: (perftest_flat :: CanonOwned)->perftest_flat :: CanonOwned. The callback context transfers and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers, rows and descriptors must remain live and unchanged until Rust finishes decoding them, including source constructor invocations; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
 typedef struct {
     perftest_canonical_token * (*run)(void *context, perftest_canonical_token * arg0);
@@ -491,6 +636,12 @@ typedef struct {
     void *context;
     void (*drop)(void *context);
 } perftest_callback_e7c993c21d79dcc8;
+/* Rust signature: (perftest_flat :: WireOwnedEvent)->perftest_flat :: WireOwnedEvent. The callback context transfers and counts as one consumed input; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers, rows and descriptors must remain live and unchanged until Rust finishes decoding them, including source constructor invocations; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
+typedef struct {
+    perftest_wire_owned_event (*run)(void *context, perftest_wire_owned_event arg0);
+    void *context;
+    void (*drop)(void *context);
+} perftest_callback_f371ab967149fa90;
 typedef struct {
     perftest_callback_return_resource * v0;
     uint32_t v1;
@@ -600,6 +751,14 @@ typedef perftest_callback_0605b38a2f053a56_result perftest_cleanup_optional_call
 typedef perftest_callback_a7558edd85392388 perftest_fixed_cleanup_call_callback;
 typedef perftest_callback_a7558edd85392388_result perftest_fixed_cleanup_call_callback_return;
 typedef perftest_callback_3832b9cb035dc725 perftest_numeric_loan_emit_callback;
+typedef perftest_callback_b3a926c45f75675c perftest_wire_checked_callback_callback;
+typedef perftest_wire_checked_event perftest_wire_checked_callback_callback_return;
+typedef perftest_callback_d67524396b65a6b2 perftest_wire_event_callback_callback;
+typedef perftest_wire_event perftest_wire_event_callback_callback_return;
+typedef perftest_callback_f371ab967149fa90 perftest_wire_owned_callback_callback;
+typedef perftest_wire_owned_event perftest_wire_owned_callback_callback_return;
+typedef perftest_callback_b7adf34facddaf10 perftest_wire_result_callback_callback;
+typedef perftest_wire_decision perftest_wire_result_callback_callback_return;
 typedef struct {
     int32_t code;
 } perftest_canonical_error;
@@ -2140,6 +2299,46 @@ int32_t perftest_unsigned_data_maybe(const perftest_unsigned * p0_w1, uint64_t *
 int32_t perftest_unsigned_optional(int32_t p0_w1, uint64_t p0_w3, uint64_t *out1);
 /* Option option0: p4_w1: 0 = None, 1 = Some; other active flags are errors. */
 perftest_unsigned * perftest_unsigned_round_trip(uint8_t p0_w1, uint16_t p1_w1, uint32_t p2_w1, uint64_t p3_w1, int32_t p4_w1, uint64_t p4_w3);
+int32_t perftest_wire_bare_echo(int32_t p0_w1_tag, int64_t p0_w1_a0_f0, uint64_t p0_w1_a1_f0, double p0_w1_a1_f1, int64_t *out1, uint64_t *out2, double *out3);
+/* Result: true = success; false = failure. Success outputs are unchanged on failure. */
+/* ownership is required: the count of owned wire values consumed in argument/row/field order, including on failure. Consumed allocations and all their aliases must not be reused or destroyed. */
+/* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */
+bool perftest_wire_checked_callback(perftest_callback_b3a926c45f75675c p0_callback, int64_t *out0, size_t *ownership, char * *error);
+/* Result: true = success; false = failure. Success outputs are unchanged on failure. */
+/* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */
+bool perftest_wire_checked_new(int64_t p0_w1, perftest_wire_checked_event *out0, char * *error);
+perftest_wire_empty perftest_wire_empty_echo(perftest_wire_empty p0_w1);
+perftest_wire_event perftest_wire_event_callback(perftest_callback_d67524396b65a6b2 p0_callback);
+perftest_wire_event perftest_wire_event_echo(perftest_wire_event * p0_w1);
+perftest_wire_optional_event perftest_wire_optional_echo(perftest_wire_optional_event * p0_w1);
+perftest_wire_optional_event perftest_wire_optional_none(void);
+perftest_wire_owned_event perftest_wire_owned_callback(perftest_callback_f371ab967149fa90 p0_callback);
+perftest_wire_owned_event perftest_wire_owned_echo(perftest_wire_owned_event * p0_w1);
+perftest_wire_owned_event perftest_wire_owned_new(void);
+typedef struct {
+    perftest_wire_owned_event * v0;
+} perftest_wire_owned_rows_p0_w1_row;
+typedef struct { perftest_wire_owned_rows_p0_w1_row *data; size_t len; } perftest_wire_owned_rows_p0_w1_rows;
+/* Keep input rows and descriptors alive and unchanged for the whole call, including calls made by source constructors. This excludes pointed-to inline owner storage: each consumed owner is replaced with an empty value in its original slot. Discard that empty slot or call its typed drop; do not free consumed opaque pointer handles again. */
+typedef struct {
+    perftest_wire_owned_event v0;
+} perftest_wire_owned_rows_ret_w0_row;
+typedef struct { perftest_wire_owned_rows_ret_w0_row *data; size_t len; } perftest_wire_owned_rows_ret_w0_rows;
+/* Release only the row allocation. Free or transfer owned element fields separately. Only pass buffers returned by this library. */
+void perftest_wire_owned_rows_ret_w0_rows_free(perftest_wire_owned_rows_ret_w0_rows rows);
+/* Collection values: p0_w1 carries rows of 1 ABI fields; element-owned fields are released separately from row storage. */
+/* Collection return: ret_w0 carries rows of 1 ABI fields; element-owned fields are released separately from row storage. */
+perftest_wire_owned_rows_ret_w0_rows perftest_wire_owned_rows(perftest_wire_owned_rows_p0_w1_rows p0_w1);
+typedef struct {
+    perftest_wire_owned_event v0;
+} perftest_wire_owned_rows_new_ret_w0_row;
+typedef struct { perftest_wire_owned_rows_new_ret_w0_row *data; size_t len; } perftest_wire_owned_rows_new_ret_w0_rows;
+/* Release only the row allocation. Free or transfer owned element fields separately. Only pass buffers returned by this library. */
+void perftest_wire_owned_rows_new_ret_w0_rows_free(perftest_wire_owned_rows_new_ret_w0_rows rows);
+/* Collection return: ret_w0 carries rows of 1 ABI fields; element-owned fields are released separately from row storage. */
+perftest_wire_owned_rows_new_ret_w0_rows perftest_wire_owned_rows_new(void);
+perftest_wire_decision perftest_wire_result_callback(perftest_callback_b7adf34facddaf10 p0_callback);
+perftest_wire_decision perftest_wire_result_echo(perftest_wire_decision * p0_w1);
 #ifdef __cplusplus
 }
 #endif

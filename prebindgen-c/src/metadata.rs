@@ -45,6 +45,8 @@ pub struct CFunction {
 /// C representation information belonging to one named Rust type.
 #[derive(Clone, Debug, Default)]
 pub struct CType {
+    /// Ordinary tagged carrier of a source payload enum.
+    pub tagged: Option<String>,
     /// Unprefixed opaque C typedef name, when this type has a handle representation.
     pub pointer: Option<String>,
     /// Inline owning representation, when configured or selected for Vec/String outputs.

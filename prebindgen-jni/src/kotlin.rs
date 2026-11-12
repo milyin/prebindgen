@@ -716,7 +716,7 @@ pub(crate) fn has_optional(node: &JniNode) -> bool {
             ..
         } => true,
         JniNode::Branch {
-            meta: JniBranch::Alternatives,
+            meta: JniBranch::Alternatives | JniBranch::Enum(_),
             children: elements,
             ..
         } => elements.iter().any(has_optional),
@@ -767,6 +767,11 @@ pub(crate) fn input_kotlin_when(
     active: &str,
 ) -> Result<KotlinInput> {
     let mut out = match node {
+        JniNode::Branch {
+            meta: JniBranch::Enum(group),
+            children,
+            controls,
+        } => crate::sealed::input(children, controls, group, context, active),
         JniNode::Leaf(wires) => input_leaves(&wires.iter().collect::<Vec<_>>(), context, active),
         JniNode::Chain {
             meta: JniChain::Bulk(record),
@@ -870,7 +875,7 @@ fn input_components_when(
     Ok(out)
 }
 
-fn merge_input(out: &mut KotlinInput, mut child: KotlinInput) -> Result<()> {
+pub(crate) fn merge_input(out: &mut KotlinInput, mut child: KotlinInput) -> Result<()> {
     child.complete_parameter_paths()?;
     child.prepare_arguments(
         !child.locks.is_empty() || !child.lock_groups.is_empty() || !child.consumed.is_empty(),
@@ -930,6 +935,11 @@ pub(crate) fn output_kotlin_scoped(
     owners: Option<&str>,
 ) -> Result<KotlinOutput> {
     match node {
+        JniNode::Branch {
+            meta: JniBranch::Enum(group),
+            children,
+            controls,
+        } => crate::sealed::output(children, controls, group, context, owners),
         JniNode::Leaf(wires) => output_leaves(&wires.iter().collect::<Vec<_>>(), context, owners),
         JniNode::Chain {
             meta: JniChain::Bulk(record),

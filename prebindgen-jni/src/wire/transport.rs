@@ -82,7 +82,7 @@ impl JniWire {
     }
     pub(crate) fn kotlin_integer(&self, value: i64) -> String {
         if matches!(self.jvm_type(), JvmType::Long) {
-            format!("{value}L")
+            super::jvm::long_literal(value)
         } else {
             value.to_string()
         }

@@ -267,3 +267,11 @@ pub(crate) fn primitive_local_default(kotlin_type: &str) -> Option<&'static str>
         .find(|ty| ty.kotlin_type() == kotlin_type)
         .map(JvmType::kotlin_default)
 }
+/// Spell a signed JVM long without an out-of-range positive Kotlin token.
+pub(crate) fn long_literal(value: i64) -> String {
+    if value == i64::MIN {
+        "kotlin.Long.MIN_VALUE".into()
+    } else {
+        format!("{value}L")
+    }
+}

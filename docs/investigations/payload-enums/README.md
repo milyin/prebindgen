@@ -1,8 +1,10 @@
 # Payload enums: one variant model for C and Kotlin
 
-**Status: proposal for human review; no generator implementation in this PR.**
+**Status: implemented on this branch.**
+See the [implementation and verification notes](implementation.md) for code locations,
+remaining independent port prerequisites and measured transport costs.
 This is the payload-enum task from [#808](https://github.com/milyin/prebindgen/pull/808).
-The runnable [baseline probe](probe/src/main.rs) demonstrates the present restrictions.
+The runnable [generation probe](probe/src/main.rs) now checks the supported shapes.
 The [Zenoh usage audit](zenoh-usage.md) checks this plan against pinned source,
 JNI declarations and both SDKs. It makes expanded reply delivery, nested optional
 configuration and lists of instrumentation records concrete acceptance cases.
@@ -28,16 +30,16 @@ neither the enum nor its payload needs a new native heap object just because
 the enum crossed the boundary. The same conversion must work for a function
 argument, a record property, a collection element and a callback value.
 
-Proposed declarations in the consumer's `build.rs`:
+Declarations in the consumer's `build.rs`:
 
 ```rust,ignore
-// Kotlin/JNI: proposed sealed_class! addition, existing package/function API.
+// Kotlin/JNI: ordinary sealed value.
 .package(package!()
     .class(sealed_class!(Event))
     .fun(fun!(exchange))
     .fun(fun!(publish)))
 
-// C: proposed tagged_union addition, following enum_type(name, type).
+// C: ordinary tagged value, following enum_type(name, type).
 .tagged_union("event", syn::parse_quote!(Event))
 .function(fun!(exchange))
 .function(fun!(publish))
@@ -89,9 +91,9 @@ its target-specific storage and accessors. This is an illustrative header, not
 a proposed handwritten replacement for generated layout definitions. `Idle`
 needs no payload storage. A scalar-only enum needs no destructor.
 
-## What is missing today
+## Gaps addressed by this implementation
 
-| Current component | Existing capability | Missing operation |
+| Component | Previous capability | Added operation |
 | --- | --- | --- |
 | Flat source model | Named records and fieldless enums | Variant payload fields, including tuple positions |
 | Shared declarations | Record construction/projection, optional and sequence conversion | Match a source enum and construct its selected variant |
@@ -121,10 +123,9 @@ an existing Event and extract its active payload, including when Event is a
 record property. Constructor selection remains a separate input operation;
 the existing `.variant(fun!(...))` API keeps its current meaning.
 
-The baseline probe rejects tuple and named payload enums with "only fieldless
-enum variants are supported". It also demonstrates that callback `Result`
-arguments and results are rejected, even when explicitly requested as values.
-Fieldless enum generation is a positive control for both adapters.
+The original baseline probe demonstrated rejection of tuple/named payload enums
+and callback `Result` values. It now asserts successful generation for these
+cases. Fieldless enum generation remains a positive control for both adapters.
 
 ## Lessons from the production implementation
 
@@ -641,11 +642,12 @@ Measure scalar-only and owning-payload enums, single values and arrays, ordinary
 and bulk delivery, and callbacks. Compare against equivalent explicit
 tag/field conversions on the same base; report latency, allocation counts and
 large-arm carrier sizes. The design promises no extra mandatory cloning,
-native heap owners or per-row closures. It does not promise that a sealed Kotlin
+native heap owners or heap-allocated per-row plans. It does not promise that a sealed Kotlin
 object is free to allocate or that a compact union always beats expansion.
 
-This PR leaves the payload-enum checkbox open. Implementation is complete only
-when the composed boundaries above work, with reviews and CI passing.
+The implementation follows these stages in one compiler path; the generated C
+and JVM callers exercise their composition. Independent Zenoh port prerequisites
+remain listed in the usage audit.
 
 ## Reproduce and inspect
 
@@ -655,12 +657,11 @@ From the repository root:
 cargo run --manifest-path docs/investigations/payload-enums/probe/Cargo.toml
 ```
 
-The probe is generation-only; it checks the current rejections and parses the
-positive control's generated Rust. It does not compile/run a generated foreign
-boundary or benchmark an implementation that does not exist yet.
-It also contains 16 selected real Zenoh declaration shapes, tests their current
-rejections, and demonstrates why an explicit field expansion must not depend
-on declaring an ordinary foreign class. To verify the fixture against the pinned
+The probe is generation-only: it checks supported payload/Result conversions and
+parses the emitted Rust. Actual foreign-boundary tests and benchmarks live in the
+examples described in the implementation notes. The probe also contains 16
+selected real Zenoh declaration shapes and verifies field-only expansion without
+an ordinary foreign class. To verify the fixture against the pinned
 Zenoh Git object in a local checkout:
 
 ```sh

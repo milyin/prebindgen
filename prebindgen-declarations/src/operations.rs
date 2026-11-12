@@ -29,6 +29,8 @@ pub enum InputRole {
     Parameter,
     /// An owned value returned by a retained source callback.
     CallbackResult,
+    /// A payload member stored inside an ordinary enum carrier.
+    EnumField,
 }
 /// Access to the Rust expression supplied to an output leaf.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -177,6 +179,39 @@ pub struct Alternatives<'a, C: Codec + ?Sized> {
     pub selector: &'a Wire<C::Wire>,
     /// Prepared arm trees; retire offers in inactive values within each native scope.
     pub arms: &'a mut [CodecNode<C>],
+}
+
+/// Physical grouping requested for a source enum occurrence.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EnumForm {
+    /// One public foreign enum value.
+    Value,
+    /// An expanded tag and variant fields.
+    Fields,
+}
+/// Prepare the physical interpretation of already converted enum payloads.
+pub struct EnumVariants<'a, C: Codec + ?Sized> {
+    /// Source enum and adapter declarations.
+    pub flat: &'a Flat<C::Schema>,
+    /// Qualified source type.
+    pub ty: &'a Type,
+    /// Input/output occurrence settings.
+    pub extra: &'a C::Extra,
+    /// Tag wire; the adapter can reserve its remaining domain for options.
+    pub selector: &'a mut Wire<C::Wire>,
+    /// One active-arm description per source variant.
+    pub arms: &'a mut [CodecNode<C>],
+    /// Ordinary enum value or explicitly expanded fields.
+    pub form: EnumForm,
+    /// Input or output conversion.
+    pub direction: Direction,
+}
+/// Enum grouping metadata and safe raw values for inactive output slots.
+pub struct EnumEncoding<C: Codec + ?Sized> {
+    /// Adapter enum grouping, without duplicated child descriptions.
+    pub metadata: C::Branch,
+    /// One inactive-value list per output arm; empty on input.
+    pub inactive: Vec<WireValues>,
 }
 
 /// Choose the physical input transport for a prepared sequence element.

@@ -465,12 +465,14 @@ public fun typeInputOptional(values: kotlin.collections.List<io.prebindgen.cover
     val p0_w5_elements = try { if (values != null) (if (true) requireNotNull(values).toList() else null) else (null) } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
 val p0_w1_writer_state = try { if (true) run { val p0_w1_writer = io.prebindgen.covertest.BulkInputs.Input_i32_Range_ab3ae4944fbfb9e9()
 p0_w1_writer.int((0) + io.prebindgen.covertest.BulkLayouts.rab3ae4944fbfb9e9.offsets[0], io.prebindgen.covertest.InputValidation.value { (if (values != null) 1 else 0) })
+if (((if (values != null) 1 else 0)) == 1) {
 val p0_w5_bulkList = io.prebindgen.covertest.InputValidation.value { if (values != null) p0_w5_elements else null }
 if (p0_w5_bulkList == null) { p0_w1_writer.absent((0) + io.prebindgen.covertest.BulkLayouts.rab3ae4944fbfb9e9.offsets[1]) } else {
 val p0_w5_bulkStart = p0_w1_writer.rows(p0_w5_bulkList.size, io.prebindgen.covertest.BulkLayouts.rf3410c1e0e62c978)
 p0_w1_writer.range((0) + io.prebindgen.covertest.BulkLayouts.rab3ae4944fbfb9e9.offsets[1], p0_w5_bulkStart, p0_w5_bulkList.size)
 p0_w5_bulkList.forEachIndexed { p0_w5_bulkIndex, p0_w9 ->
 p0_w1_writer.handle((p0_w5_bulkStart + p0_w5_bulkIndex * io.prebindgen.covertest.BulkLayouts.rf3410c1e0e62c978.size) + io.prebindgen.covertest.BulkLayouts.rf3410c1e0e62c978.offsets[0], io.prebindgen.covertest.InputValidation.value { p0_w9 }, true, 0)
+}
 }
 }
 

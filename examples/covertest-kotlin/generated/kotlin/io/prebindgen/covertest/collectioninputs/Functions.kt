@@ -163,12 +163,14 @@ public fun collectionInputOptionalArrayBulk(values: kotlin.collections.List<Long
     val p0_w5_elements = try { if (values != null) (if (true) requireNotNull(values).toList() else null) else (null) } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
 val p0_w1_writer_state = try { if (true) run { val p0_w1_writer = io.prebindgen.covertest.BulkWriter(io.prebindgen.covertest.BulkLayouts.rc2b72962102e7ef8.size)
 p0_w1_writer.int((0) + io.prebindgen.covertest.BulkLayouts.rc2b72962102e7ef8.offsets[0], io.prebindgen.covertest.InputValidation.value { (if (values != null) 1 else 0) })
+if (((if (values != null) 1 else 0)) == 1) {
 val p0_w5_bulkList = io.prebindgen.covertest.InputValidation.value { if (values != null) p0_w5_elements else null }
 if (p0_w5_bulkList == null) { p0_w1_writer.absent((0) + io.prebindgen.covertest.BulkLayouts.rc2b72962102e7ef8.offsets[1]) } else {
 val p0_w5_bulkStart = p0_w1_writer.rows(p0_w5_bulkList.size, io.prebindgen.covertest.BulkLayouts.ra60d3960993b9a77)
 p0_w1_writer.range((0) + io.prebindgen.covertest.BulkLayouts.rc2b72962102e7ef8.offsets[1], p0_w5_bulkStart, p0_w5_bulkList.size)
 p0_w5_bulkList.forEachIndexed { p0_w5_bulkIndex, p0_w9 ->
 p0_w1_writer.long((p0_w5_bulkStart + p0_w5_bulkIndex * io.prebindgen.covertest.BulkLayouts.ra60d3960993b9a77.size) + io.prebindgen.covertest.BulkLayouts.ra60d3960993b9a77.offsets[0], io.prebindgen.covertest.InputValidation.value { p0_w9 })
+}
 }
 }
 
@@ -187,12 +189,14 @@ public fun collectionInputOptional(values: kotlin.collections.List<Long>?, onErr
     val p0_w5_elements = try { if (values != null) (if (true) requireNotNull(values).toList() else null) else (null) } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
 val p0_w1_writer_state = try { if (true) run { val p0_w1_writer = io.prebindgen.covertest.BulkWriter(io.prebindgen.covertest.BulkLayouts.rc2b72962102e7ef8.size)
 p0_w1_writer.int((0) + io.prebindgen.covertest.BulkLayouts.rc2b72962102e7ef8.offsets[0], io.prebindgen.covertest.InputValidation.value { (if (values != null) 1 else 0) })
+if (((if (values != null) 1 else 0)) == 1) {
 val p0_w5_bulkList = io.prebindgen.covertest.InputValidation.value { if (values != null) p0_w5_elements else null }
 if (p0_w5_bulkList == null) { p0_w1_writer.absent((0) + io.prebindgen.covertest.BulkLayouts.rc2b72962102e7ef8.offsets[1]) } else {
 val p0_w5_bulkStart = p0_w1_writer.rows(p0_w5_bulkList.size, io.prebindgen.covertest.BulkLayouts.ra60d3960993b9a77)
 p0_w1_writer.range((0) + io.prebindgen.covertest.BulkLayouts.rc2b72962102e7ef8.offsets[1], p0_w5_bulkStart, p0_w5_bulkList.size)
 p0_w5_bulkList.forEachIndexed { p0_w5_bulkIndex, p0_w9 ->
 p0_w1_writer.long((p0_w5_bulkStart + p0_w5_bulkIndex * io.prebindgen.covertest.BulkLayouts.ra60d3960993b9a77.size) + io.prebindgen.covertest.BulkLayouts.ra60d3960993b9a77.offsets[0], io.prebindgen.covertest.InputValidation.value { p0_w9 })
+}
 }
 }
 

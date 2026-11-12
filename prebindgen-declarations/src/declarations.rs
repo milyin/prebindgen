@@ -31,6 +31,7 @@ macro_rules! fun {
 /// Values are the same Input/Output trees accepted by per-function overrides.
 /// This environment is discarded after prepared conversions have been installed.
 pub struct Declarations {
+    pub(crate) input_role: std::cell::Cell<crate::InputRole>,
     inputs: BTreeMap<String, Input<InputRequest>>,
     outputs: BTreeMap<String, Output<OutputRequest>>,
     errors: BTreeMap<String, String>,
@@ -61,6 +62,7 @@ impl Declarations {
         errors: Vec<(syn::Type, String)>,
     ) -> Result<Self> {
         let mut out = Self {
+            input_role: std::cell::Cell::new(crate::InputRole::Parameter),
             inputs: BTreeMap::new(),
             outputs: BTreeMap::new(),
             errors: BTreeMap::new(),
@@ -69,9 +71,6 @@ impl Declarations {
             let Input::Request(InputRequest::ForType { ty, input }) = input else {
                 return Err("input defaults require a source type".into());
             };
-            if crate::contains_result(&ty) {
-                return Err("Result expansions are unsupported; configure success and error mapping separately".into());
-            }
             let key = type_key(&crate::callback::input_type(flat, &ty)?);
             if out.inputs.insert(key, input_body(*input)).is_some() {
                 return Err("duplicate input expansion".into());
@@ -81,9 +80,6 @@ impl Declarations {
             let Output::Request(OutputRequest::ForType { ty, output }) = output else {
                 return Err("output defaults require a source type".into());
             };
-            if crate::contains_result(&ty) {
-                return Err("Result expansions are unsupported; configure success and error mapping separately".into());
-            }
             let key = type_key(&flat.resolve_type(&ty)?);
             if out.outputs.insert(key, output_body(*output)).is_some() {
                 return Err("duplicate output expansion".into());
@@ -112,7 +108,9 @@ impl Declarations {
         <C::Schema as prebindgen_flat::Schema>::Function: Clone,
     {
         let source = flat.function(&decl.name)?;
-        let ty = result_parts(&source.ret.ty).map_or(&source.ret.ty, |(ok, _)| ok);
+        let ty = result_parts(&source.ret.ty)
+            .filter(|_| !decl.result_value)
+            .map_or(&source.ret.ty, |(ok, _)| ok);
         // Choose the delivery while expansion scopes are still intact. Bulk
         // promotion for an ordinary return must not erase the element boundary
         // before the callback variant selects that boundary.
@@ -242,6 +240,11 @@ impl Declarations {
                 None
             });
         }
+        if decl.result_value && (decl.error.is_some() || result_parts(&source.ret.ty).is_none()) {
+            return Err(
+                "result_as_value requires Result<T, E> and cannot combine with on_error".into(),
+            );
+        }
         if decl.error.is_some() && result_parts(&source.ret.ty).is_none() {
             return Err("on_error requires a top-level Result<T, E> return".into());
         }
@@ -287,7 +290,7 @@ impl Declarations {
         decl: &FunctionDecl,
         extra: &C::Extra,
     ) -> Result<Output> {
-        let tree = if let Some((_, error)) = result_parts(ty) {
+        let tree = if let Some((_, error)) = result_parts(ty).filter(|_| !decl.result_value) {
             Output::Result {
                 ok: Box::new(decl.ret.clone().unwrap_or_else(Output::auto)),
                 error: self.error_mapper_for(decl, error).map(str::to_owned),
@@ -361,6 +364,42 @@ impl Declarations {
             self.input(flat, codec, ty, tree, extra, stack)
         };
         match tree {
+            Input::Request(InputRequest::EnumFields(entries)) => {
+                self.enum_input_recipe(flat, codec, ty, extra, entries, false, stack)
+            }
+            Input::Enum { variants, value } => {
+                let source = flat.payload_enum(ty)?;
+                if variants.len() != source.variants.len() {
+                    return Err("wrong enum variant count".into());
+                }
+                let variants = source
+                    .variants
+                    .iter()
+                    .zip(variants)
+                    .map(|(arm, fields)| {
+                        if fields.len() != arm.fields.len() {
+                            return Err("wrong enum field count".into());
+                        }
+                        arm.fields
+                            .iter()
+                            .zip(fields)
+                            .map(|(f, r)| {
+                                let previous = self.input_role.get();
+                                if *value {
+                                    self.input_role.set(crate::InputRole::EnumField);
+                                }
+                                let result = resolve(&f.ty, r, stack);
+                                self.input_role.set(previous);
+                                result
+                            })
+                            .collect::<Result<Vec<_>>>()
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                Ok(Input::Enum {
+                    variants,
+                    value: *value,
+                })
+            }
             Input::Request(InputRequest::Value) => {
                 self.resolve_input_value(flat, codec, ty, extra, stack)
             }
@@ -418,9 +457,9 @@ impl Declarations {
                         stack,
                     )?)));
                 }
-                if let Some((element, _)) =
-                    sequence_parts(ty).filter(|_| !codec.input_collection_is_leaf(flat, ty, extra))
-                {
+                if let Some((element, _)) = sequence_parts(ty).filter(|_| {
+                    !codec.input_collection_is_leaf(flat, ty, self.input_role.get(), extra)
+                }) {
                     return Ok(Input::Sequence(Box::new(resolve(
                         element,
                         &Input::auto(),
@@ -488,9 +527,9 @@ impl Declarations {
                         stack,
                     )?)));
                 }
-                if let Some((element, _)) =
-                    sequence_parts(ty).filter(|_| !codec.input_collection_is_leaf(flat, ty, extra))
-                {
+                if let Some((element, _)) = sequence_parts(ty).filter(|_| {
+                    !codec.input_collection_is_leaf(flat, ty, self.input_role.get(), extra)
+                }) {
                     return Ok(Input::Sequence(Box::new(resolve(
                         element,
                         &Input::auto(),
@@ -693,6 +732,46 @@ impl Declarations {
             }
         }
         match tree {
+            Output::Request(OutputRequest::EnumFields(entries)) => self.enum_output_recipe(
+                flat,
+                codec,
+                crate::output_referent(ty).unwrap_or(ty),
+                extra,
+                entries,
+                false,
+                stack,
+                getter_result,
+            ),
+            Output::Enum {
+                variants,
+                value,
+                mode,
+            } => {
+                let source = flat.payload_enum(crate::output_referent(ty).unwrap_or(ty))?;
+                if variants.len() != source.variants.len() {
+                    return Err("wrong enum variant count".into());
+                }
+                let variants = source
+                    .variants
+                    .iter()
+                    .zip(variants)
+                    .map(|(arm, fields)| {
+                        if fields.len() != arm.fields.len() {
+                            return Err("wrong enum field count".into());
+                        }
+                        arm.fields
+                            .iter()
+                            .zip(fields)
+                            .map(|(f, r)| resolve(&f.ty, r, stack))
+                            .collect::<Result<Vec<_>>>()
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                Ok(Output::Enum {
+                    variants,
+                    value: *value,
+                    mode: *mode,
+                })
+            }
             Output::Request(OutputRequest::Value { projection }) => self.resolve_output_value(
                 flat,
                 codec,
@@ -1037,6 +1116,8 @@ pub enum CallbackReturn {
 /// A source callable to export, with optional destination name and occurrence overrides.
 #[derive(Clone, Debug)]
 pub struct FunctionDecl {
+    /// Treat an outer standard Result as ordinary variant data.
+    pub result_value: bool,
     /// Also emit an explicit callback-delivery variant for a sequence return.
     pub callback_return: Option<CallbackReturn>,
     /// Unqualified source function name in the flat namespace.
@@ -1056,6 +1137,7 @@ impl FunctionDecl {
     /// `name` is the function's unqualified source name.
     pub fn new(name: syn::Ident) -> Self {
         Self {
+            result_value: false,
             callback_return: None,
             name: name.to_string(),
             foreign: None,
@@ -1074,6 +1156,7 @@ impl FunctionDecl {
             self.params.is_empty()
                 && self.ret.is_none()
                 && self.error.is_none()
+                && !self.result_value
                 && self.callback_return.is_none(),
             "conversion helpers only support their source name and getter name override"
         );
@@ -1090,6 +1173,12 @@ impl FunctionDecl {
     /// Replace this return's default conversion using the production API.
     pub fn expand_return(self, decl: impl Into<Output<OutputRequest>>) -> Self {
         self.output(decl)
+    }
+    /// Deliver the whole source Result as data instead of routing its Err arm.
+    /// Return overrides then address the complete Result. Incompatible with on_error.
+    pub fn result_as_value(mut self) -> Self {
+        self.result_value = true;
+        self
     }
     /// Add callback delivery alongside the ordinary sequence return.
     ///
@@ -1228,6 +1317,16 @@ pub fn source_items<'a>(
     }
     fn input(tree: &Input<InputRequest>, names: &mut Vec<String>) {
         match tree {
+            Input::Enum { variants, .. } => {
+                for tree in variants.iter().flatten() {
+                    input(tree, names);
+                }
+            }
+            Input::Request(InputRequest::EnumFields(variants)) => {
+                for tree in variants.values().flat_map(|v| v.values()) {
+                    input(tree, names);
+                }
+            }
             Input::Request(InputRequest::Conversion(d)) => {
                 names.extend(d.functions());
                 representation_types(d, names);
@@ -1279,6 +1378,16 @@ pub fn source_items<'a>(
     }
     fn output(tree: &Output<OutputRequest>, names: &mut Vec<String>) {
         match tree {
+            Output::Enum { variants, .. } => {
+                for tree in variants.iter().flatten() {
+                    output(tree, names);
+                }
+            }
+            Output::Request(OutputRequest::EnumFields(variants)) => {
+                for tree in variants.values().flat_map(|v| v.values()) {
+                    output(tree, names);
+                }
+            }
             Output::Request(OutputRequest::Conversion(d)) => {
                 names.extend(d.functions());
                 representation_types(d, names);
@@ -1365,6 +1474,13 @@ pub fn parse_type(text: &str) -> syn::Type {
 
 fn lift_input_bulk(tree: Input) -> Input {
     match tree {
+        Input::Enum { variants, value } => Input::Enum {
+            variants: variants
+                .into_iter()
+                .map(|v| v.into_iter().map(lift_input_bulk).collect())
+                .collect(),
+            value,
+        },
         Input::Convert { conversion, input } => Input::Convert {
             conversion,
             input: Box::new(lift_input_bulk(*input)),
@@ -1395,6 +1511,18 @@ fn lift_input_bulk(tree: Input) -> Input {
 }
 fn lift_output_bulk(tree: Output) -> Output {
     match tree {
+        Output::Enum {
+            variants,
+            value,
+            mode,
+        } => Output::Enum {
+            variants: variants
+                .into_iter()
+                .map(|v| v.into_iter().map(lift_output_bulk).collect())
+                .collect(),
+            value,
+            mode,
+        },
         Output::Convert { conversion, output } => Output::Convert {
             conversion,
             output: Box::new(lift_output_bulk(*output)),
@@ -1455,6 +1583,7 @@ fn lift_output_bulk(tree: Output) -> Output {
 
 fn input_has_bulk(tree: &Input) -> bool {
     match tree {
+        Input::Enum { variants, .. } => variants.iter().flatten().any(input_has_bulk),
         Input::Convert { input, .. } => input_has_bulk(input),
         Input::Bulk(_) => true,
         Input::Optional(c) | Input::Sequence(c) => input_has_bulk(c),
@@ -1465,6 +1594,7 @@ fn input_has_bulk(tree: &Input) -> bool {
 }
 fn output_has_bulk(tree: &Output) -> bool {
     match tree {
+        Output::Enum { variants, .. } => variants.iter().flatten().any(output_has_bulk),
         // Frames inside callback elements belong to those elements, including
         // when the callback sequence is nested in another structural node.
         Output::Sequence {

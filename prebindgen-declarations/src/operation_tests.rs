@@ -268,7 +268,7 @@ fn input_context_preserves_all_dispatch_cases_and_callback_roles() {
             (true, Representation::Bulk),
         ] {
             let compiler = Compiler {
-                input_role: role,
+                input_role: role.into(),
                 ..Compiler::new(&flat, &codec, "arg".into())
             };
             compiler.bulk.set(bulk);

@@ -13,13 +13,13 @@ use std::{
 pub struct CCallback {
     pub(crate) name: String,
     pub(crate) signature: String,
-    arguments: Vec<Argument>,
-    returned: Option<(syn::Type, InputPlan<CWire>)>,
+    pub(crate) arguments: Vec<Argument>,
+    pub(crate) returned: Option<(syn::Type, InputPlan<CWire>)>,
 }
 #[derive(Clone, Debug)]
-struct Argument {
+pub(crate) struct Argument {
     ty: syn::Type,
-    output: OutputPlan<CWire>,
+    pub(crate) output: OutputPlan<CWire>,
 }
 
 // Stable wire semantics, without spans, generated local names or recipe Debug.
@@ -50,6 +50,7 @@ fn schema(node: &WireNode<CWire, CChain, CBranch>, out: &mut String) {
                     access(*mode),
                     by_value
                 ),
+                CWire::Tagged { value, by_value } => format!("tagged:{}:{by_value}", value.name),
                 CWire::Enum { name, .. } => format!("enum:{name}"),
                 CWire::Scalar { .. } => type_key(&wire.rust_type()),
                 CWire::Rows => "rows".into(),
@@ -77,6 +78,10 @@ fn schema(node: &WireNode<CWire, CChain, CBranch>, out: &mut String) {
             out.push('(');
             match meta {
                 CChain::Sequence(_) => out.push('S'),
+                CChain::Tagged(value) => {
+                    out.push('E');
+                    out.push_str(&value.name);
+                }
                 CChain::Optional(optional) => {
                     out.push('O');
                     match optional.niche() {
@@ -136,11 +141,6 @@ pub(crate) fn input(
             return Err("mutable callback arguments are unsupported".into());
         }
         let ty = source.clone();
-        if contains_result(&ty) {
-            return Err(
-                "Result callback arguments require an explicit value representation".into(),
-            );
-        }
         let output = prebindgen_declarations::compile_callback_argument(
             flat,
             &codec,
@@ -245,12 +245,7 @@ pub(crate) fn input(
         quote!(#var),
     ))
 }
-fn contains_result(ty: &syn::Type) -> bool {
-    prebindgen_flat::result_parts(ty).is_some()
-        || prebindgen_flat::option_inner(ty).is_some_and(contains_result)
-        || prebindgen_flat::sequence_parts(ty).is_some_and(|(t, _)| contains_result(t))
-        || matches!(ty,syn::Type::Reference(r) if contains_result(&r.elem))
-}
+
 fn has_mutable_reference(ty: &syn::Type) -> bool {
     match ty {
         syn::Type::Reference(reference) => {
@@ -356,7 +351,7 @@ impl CCallback {
         let Some((_, plan)) = &self.returned else {
             return Ok((quote!(), quote!()));
         };
-        for field in prebindgen_flat::wire_definitions(std::iter::once(&plan.node)) {
+        for field in group::row_fields(&plan.node) {
             if matches!(
                 field.kind,
                 CWire::Callback { .. }
@@ -371,12 +366,22 @@ impl CCallback {
                 );
             }
         }
-        let scan = receive_return_owners(&plan.node, context, &BTreeMap::new())?;
+        let mut locations = BTreeMap::new();
+        let mut snapshots = TokenStream::new();
+        for field in group::row_fields(&plan.node) {
+            if matches!(field.kind, CWire::Tagged { .. }) {
+                let name = &field.name;
+                let pointer = format_ident!("{name}_return_location");
+                snapshots.extend(quote!(let #pointer=::core::ptr::addr_of!(#name);));
+                locations.insert(name.to_string(), quote!(#pointer));
+            }
+        }
+        let scan = receive_return_owners(&plan.node, context, &locations)?;
         if scan.is_empty() {
             return Ok((quote!(), quote!()));
         }
         Ok((
-            quote!(let mut callback_return_cleanup=::prebindgen_runtime::CallbackReturnCleanup::new(|| {
+            quote!(#snapshots let mut callback_return_cleanup=::prebindgen_runtime::CallbackReturnCleanup::new(|| {
             let mut __pb_return_ordinal=0usize;
             #scan Ok(())
         });),
@@ -517,6 +522,14 @@ fn receive_return_owners(
                 None
             })
             .collect(),
+        WireNode::Chain {meta:CChain::Tagged(value),controls,..}=>{
+            if !value.owned {TokenStream::new()}else{
+                let name=&controls[0].name;let native=&value.rust;let drop=&value.destructor;
+                let pointer=locations.get(&name.to_string()).cloned().unwrap_or_else(||quote!(::core::ptr::addr_of!(#name)));
+                quote!({let ordinal=__pb_return_ordinal;__pb_return_ordinal+=1;
+                    if ordinal>=__prebindgen_input_consumed.get(){unsafe{#drop((#pointer as *const #native).cast_mut());}}})
+            }
+        }
         WireNode::Chain {
             meta: CChain::Optional(optional),
             child,
@@ -553,7 +566,7 @@ fn receive_return_owners(
             quote!(#[allow(clippy::explicit_counter_loop)] for index in 0..#carrier.len {#(#reads)* #scan})
         }
         WireNode::Branch {
-            meta: CBranch::Alternatives,
+            meta: CBranch::Alternatives | CBranch::Enum(_),
             controls,
             children,
         } => {

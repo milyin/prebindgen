@@ -12,7 +12,7 @@ use std::rc::Rc;
 /// function accepting that callback.
 #[derive(Clone, Debug)]
 pub struct JniCallback {
-    package: String,
+    pub(crate) package: String,
     name: String,
     arguments: Vec<Argument>,
     return_value: Option<CallbackReturn>,
@@ -214,11 +214,6 @@ pub(crate) fn input(
         }
         let ty = source_type.clone();
         let value = quote!(#binding);
-        if contains_result(&ty) {
-            return Err(
-                "Result-valued callback arguments require an explicit value representation".into(),
-            );
-        }
         let recipe = &configuration.arguments[i];
         // Copy permission for an exact reference type must not change the
         // existing callback cleanup contract. Whole exposed-value defaults and
@@ -839,6 +834,40 @@ fn returned_handle_cleanup(
         }
         WireNode::Chain { child, .. } => returned_handle_cleanup(child, value, prefix, next)?,
         WireNode::Branch {
+            meta: JniBranch::Enum(group),
+            children,
+            ..
+        } => {
+            let class = group
+                .class_name
+                .as_ref()
+                .ok_or("expanded enum callback result must expose one value")?;
+            let mut arms = String::new();
+            for (index, child) in children.iter().enumerate() {
+                let WireNode::Branch {
+                    children: fields, ..
+                } = child
+                else {
+                    return Err("expected enum fields".into());
+                };
+                let mut body = String::new();
+                for (field_index, (_, node)) in crate::data::fields(fields)?.iter().enumerate() {
+                    let property = kotlin_identifier(&group.fields[index][field_index]);
+                    body.push_str(&returned_handle_cleanup(
+                        node,
+                        &format!("{local}.{property}"),
+                        prefix,
+                        next,
+                    )?);
+                }
+                arms.push_str(&format!(
+                    "is {class}.{} -> {{ {body} }}\n",
+                    group.classes[index]
+                ));
+            }
+            format!("when(val {local}={value}) {{ {arms} else -> {{}} }}\n")
+        }
+        WireNode::Branch {
             meta: crate::JniBranch::Group(crate::JniGroup::Fields(Some(data))),
             children,
             ..
@@ -901,10 +930,10 @@ fn receive_native_return_owners(node: &kotlin::JniNode) -> Result<TokenStream> {
             if kotlin::input_handles(node, true) { return Err("callback ownership cleanup requires buffered ordinary rows or an enclosing bulk frame".into()); }
             quote!()
         }
-        WireNode::Branch { meta: JniBranch::Alternatives, controls, children } => {
+        WireNode::Branch { meta: JniBranch::Alternatives | JniBranch::Enum(_), controls, children } => {
             let selector=&controls[0].name;
             let scans=children.iter().enumerate().map(|(i,child)| {
-                let scan=receive_native_return_owners(child)?; let i=i as i32;
+                let scan=receive_native_return_owners(child)?; if scan.is_empty(){return Ok(TokenStream::new());} let i=i as i32;
                 Ok(quote!(if #selector==#i { #scan }))
             }).collect::<Result<Vec<_>>>()?;
             quote!(#(#scans)*)
@@ -1047,12 +1076,6 @@ fn subject_name(ty: &syn::Type) -> String {
     }
 }
 
-fn contains_result(ty: &syn::Type) -> bool {
-    prebindgen_flat::result_parts(ty).is_some()
-        || prebindgen_flat::option_inner(ty).is_some_and(contains_result)
-        || prebindgen_flat::sequence_parts(ty).is_some_and(|(ty, _)| contains_result(ty))
-        || matches!(ty,syn::Type::Reference(r) if contains_result(&r.elem))
-}
 fn argument_local(name: &str, ty: &str) -> String {
     let default = if ty.ends_with('?') {
         Some("null")

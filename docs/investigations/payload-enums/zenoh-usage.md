@@ -7,7 +7,8 @@ an ordinary sealed/tagged declaration. Otherwise the generator could require
 classes and handle conversions that the binding deliberately avoids.
 
 This is a source/configuration audit, with runnable generation controls. It is
-not a build of Zenoh against the proposed API, which is not implemented yet.
+not a full build of Zenoh against this branch. The [implementation notes](implementation.md)
+link the equivalent generated-boundary tests and distinguish the remaining port prerequisites.
 
 ## Sources checked
 
@@ -96,8 +97,8 @@ ReplyResult as an intermediate would change this path and can add an unwanted
 allocation before the SDK constructs its own value.
 
 The proposed enum operation should allow a cleaner configuration of the same
-kind, using the consuming source projection. This is **proposed** syntax with
-the existing expansion builders around the new enum-field operation:
+kind, using the consuming source projection. This configuration uses
+the existing expansion builders around the enum-field operation:
 
 ```rust,ignore
 .expand(expand_return!(ReplyResult).view(Output::enum_fields([])))
@@ -258,7 +259,8 @@ current expanded callback and the mixed instrumentation list against ordinary
 object delivery. Keep source-helper clones separate from generator clones and
 report allocation counts/native crossings alongside latency. Use local JNI
 artifacts explicitly in Gradle consumer runs; published Maven artifacts do not
-test this generator branch. No new measurements are claimed by this design PR.
+test this generator branch. Measurements of the implemented equivalent shapes are recorded in the implementation notes;
+they are not full SDK throughput measurements.
 
 ## Reproduce the checks
 
@@ -276,8 +278,7 @@ cargo run --manifest-path docs/investigations/payload-enums/probe/Cargo.toml -- 
 The checks confirm that:
 
 * All 16 fixture declarations match the pinned source after attribute removal.
-* The three nested source cases currently stop at the missing payload-enum
-  parser support.
+* The three nested source cases now generate through the payload-enum compiler.
 * The real Timestamp shape already generates ULong/ByteArray Kotlin properties.
 * ZenohId's fixed-array property remains unsupported by the current data-class
   adapter, independently of payload enums.
@@ -288,6 +289,7 @@ The checks confirm that:
   Enum-field expansion must preserve that existing distinction.
 
 These controls generate/parse Rust and inspect Kotlin source. They do not
-compile or run the full Zenoh/native/JVM boundary. The source audit and controls
-establish concrete requirements; full consumer compatibility remains an
-implementation acceptance gate.
+compile or run the full Zenoh/native/JVM boundary. The source audit and controls establish concrete requirements. Equivalent
+RecoveryConfig, instrumentation-list and expanded-reply cases run through JNI in
+this branch; a complete consumer port still requires the independent features
+listed above.

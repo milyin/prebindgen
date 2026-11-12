@@ -9,12 +9,13 @@ use std::{fmt::Write, rc::Rc};
 #[derive(Clone, Debug)]
 pub struct BulkRecord {
     pub(crate) name: syn::Ident,
-    pub(crate) definition: prebindgen_reprc::Record,
+    pub(crate) definitions: TokenStream,
+    pub(crate) offsets: Vec<TokenStream>,
     pub(crate) key: String,
     widths: Vec<usize>,
     active: Condition,
 }
-fn field_type(w: &JniWire) -> Result<syn::Type> {
+pub(crate) fn field_type(w: &JniWire) -> Result<syn::Type> {
     Ok(match w {
         JniWire::NativeBuffer{..}|JniWire::NativeRows{..}=>syn::parse_quote!(::prebindgen_jni_runtime::bulk::Range),
         JniWire::Native128{..}=>syn::parse_quote!([u8;16]),
@@ -57,10 +58,11 @@ pub(crate) fn record(node: &JniNode) -> Result<Rc<BulkRecord>> {
         label,
         prebindgen_reprc::schema_id(&key)
     );
-    let definition = prebindgen_reprc::Record::new(name.clone(), fields)?;
+    let (definitions, offsets) = physical_record(node, &name, fields)?;
     Ok(Rc::new(BulkRecord {
         name,
-        definition,
+        definitions,
+        offsets,
         key,
         widths,
         active: Condition::default(),
@@ -82,16 +84,14 @@ fn resolve(code: &TokenStream, key: &str, value: &TokenStream) -> Result<TokenSt
         &|count| Ok(prebindgen_conversions::record_input_transfer(count.clone())),
     )
 }
-fn native_read(
+pub(crate) fn native_read(
     w: &Wire<JniWire>,
     record: &BulkRecord,
     i: usize,
     base: TokenStream,
+    reader: TokenStream,
 ) -> Result<TokenStream> {
-    let reader = parameter("bulk_reader");
-    let row = &record.name;
-    let field = format_ident!("v{i}");
-    let field_offset = quote!(::core::mem::offset_of!(#row,#field));
+    let field_offset = record.offsets[i].clone();
     let offset = if base.to_string() == "0usize" {
         field_offset
     } else {
@@ -114,9 +114,7 @@ fn native_store(
     value: TokenStream,
 ) -> Result<TokenStream> {
     let writer = parameter("bulk_writer");
-    let row = &record.name;
-    let field = format_ident!("v{i}");
-    let field_offset = quote!(::core::mem::offset_of!(#row,#field));
+    let field_offset = record.offsets[i].clone();
     let offset = if base.to_string() == "0usize" {
         field_offset
     } else {
@@ -145,11 +143,22 @@ pub(crate) fn input(
     let bytes = format_ident!("{wire}_bytes");
     let reader = format_ident!("{wire}_reader");
     let mut bind = TokenStream::new();
-    for (i, w) in crate::group::row_fields(&child.node).enumerate() {
+    let wires = crate::group::row_fields(&child.node).collect::<Vec<_>>();
+    let selection = crate::selected::Selection::new(&child.node)?;
+    for i in selection.order()? {
+        let w = wires[i];
         let name = &w.name;
-        let read = native_read(w, &layout, i, quote!(0usize))?;
+        let read = native_read(w, &layout, i, quote!(0usize), parameter("bulk_reader"))?;
         let absent = crate::optional::absent(&w.kind, None, true)?;
-        let condition = active.rust();
+        let selected = selection.rust(i, |j| {
+            let n = &wires[j].name;
+            quote!(#n)
+        });
+        let condition = if selection.tests[i].is_empty() {
+            active.rust()
+        } else {
+            active.and(selected)
+        };
         bind.extend(quote!(let #name=if #condition {#read}else{#absent};));
     }
     let bind = resolve(&bind, "bulk_reader", &quote!(#reader))?;
@@ -205,8 +214,15 @@ pub(crate) fn output(
     let prepare = resolve(&child.statements, "bulk_writer", &quote!(#writer))?;
     let values = crate::group::row_values(&child.outcomes.success, &child.values)?;
     let mut store = TokenStream::new();
-    for (i, (w, value)) in values.into_iter().enumerate() {
-        store.extend(native_store(w, &layout, i, quote!(0usize), value.clone())?);
+    let selection = crate::selected::Selection::new(&child.outcomes.success)?;
+    for (i, (w, value)) in values.iter().enumerate() {
+        let condition = selection.rust(i, |j| values[j].1.clone());
+        let write = native_store(w, &layout, i, quote!(0usize), (*value).clone())?;
+        if selection.tests[i].is_empty() {
+            store.extend(write);
+        } else {
+            store.extend(quote!(if #condition {#write}));
+        }
     }
     let store = resolve(&store, "bulk_writer", &quote!(#writer))?;
     let env = parameter("environment");
@@ -246,10 +262,25 @@ pub(crate) fn sequence_input(
     let base = quote!(#start+#index*::core::mem::size_of::<#row>());
     let mut bind = TokenStream::new();
     let mut values = vec![];
-    for (i, w) in crate::group::row_fields(element).enumerate() {
+    let wires = crate::group::row_fields(element).collect::<Vec<_>>();
+    let selection = crate::selected::Selection::new(element)?;
+    for i in selection.order()? {
+        let w = wires[i];
         let name = &w.name;
-        let read = native_read(w, &layout, i, base.clone())?;
-        bind.extend(quote!(let #name=#read;));
+        let read = native_read(w, &layout, i, base.clone(), parameter("bulk_reader"))?;
+        let condition = selection.rust(i, |j| {
+            let n = &wires[j].name;
+            quote!(#n)
+        });
+        let absent = crate::optional::absent(&w.kind, None, true)?;
+        if selection.tests[i].is_empty() {
+            bind.extend(quote!(let #name=#read;));
+        } else {
+            bind.extend(quote!(let #name=if #condition {#read}else{#absent};));
+        }
+    }
+    for w in wires {
+        let name = &w.name;
         values.push((name.clone(), quote!(#name)));
     }
     Ok(SequenceInput {
@@ -285,17 +316,22 @@ pub(crate) fn sequence_output(
         quote!()
     };
     let mut store = TokenStream::new();
-    for (i, (w, value)) in crate::group::row_values(element, values)?
-        .into_iter()
-        .enumerate()
-    {
-        store.extend(native_store(
+    let values = crate::group::row_values(element, values)?;
+    let selection = crate::selected::Selection::new(element)?;
+    for (i, (w, value)) in values.iter().enumerate() {
+        let condition = selection.rust(i, |j| values[j].1.clone());
+        let write = native_store(
             w,
             &layout,
             i,
             quote!(#wire.offset as usize+#index*::core::mem::size_of::<#row>()),
-            value.clone(),
-        )?);
+            (*value).clone(),
+        )?;
+        if selection.tests[i].is_empty() {
+            store.extend(write);
+        } else {
+            store.extend(quote!(if #condition {#write}));
+        }
     }
     let commit_element = parameter("commit_element");
     store.extend(quote!(#commit_element));
@@ -471,9 +507,56 @@ fn patch_handles(
         "{package}.BulkLayouts.r{:016x}",
         prebindgen_reprc::schema_id(&layout.key)
     );
+    let selection = crate::selected::Selection::new(node)?;
+    let wires = group::row_fields(node).collect::<Vec<_>>();
     let mut code = String::new();
     for (field, wire) in crate::group::row_fields(node).enumerate() {
+        if !matches!(
+            wire.kind,
+            JniWire::Handle { .. } | JniWire::NativeRows { .. }
+        ) {
+            continue;
+        }
         let at = format!("({base}) + {layout}.offsets[{field}]");
+        let predicates = selection.tests[field]
+            .iter()
+            .map(|test| {
+                let i = test.index();
+                let at = format!("({base}) + {layout}.offsets[{i}]");
+                let kind = &wires[i].kind;
+                let accessor = match kind {
+                    JniWire::NativeBuffer { .. } | JniWire::NativeRows { .. } => "long",
+                    _ => kind.bulk_scalar_access()?.0,
+                };
+                let value = format!("{accessor}({at})");
+                if matches!(
+                    test,
+                    crate::selected::Test::Present(_, Some(JniNiche::Null))
+                ) {
+                    Ok(
+                        if matches!(
+                            kind,
+                            JniWire::NativeBuffer { .. } | JniWire::NativeRows { .. }
+                        ) {
+                            format!("{value} >= 0L")
+                        } else {
+                            format!("{value} != 0L")
+                        },
+                    )
+                } else {
+                    Ok(test.kotlin(&value))
+                }
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let condition = if predicates.is_empty() {
+            "true".into()
+        } else {
+            predicates.join(" && ")
+        };
+        let conditional = condition != "true";
+        if conditional {
+            code.push_str(&format!("if ({condition}) {{\n"));
+        }
         match &wire.kind {
             JniWire::Handle { handle, .. } => {
                 let group = kinds
@@ -487,6 +570,9 @@ fn patch_handles(
                 let child =
                     sequence_child(node, &wire.name).ok_or("missing bulk collection element")?;
                 if !crate::kotlin::input_handles(child, false) {
+                    if conditional {
+                        code.push_str("}\n");
+                    }
                     continue;
                 }
                 let child_layout = record(child)?;
@@ -510,6 +596,9 @@ fn patch_handles(
                 code.push_str(&format!("{index}++\n}}\n}}\n"));
             }
             _ => {}
+        }
+        if conditional {
+            code.push_str("}\n");
         }
     }
     Ok(code)
@@ -581,8 +670,14 @@ fn pack(
     if wires.len() != args.len() {
         return Err("bulk Kotlin input fields differ from the record schema".into());
     }
+    let selection = crate::selected::Selection::new(node)?;
     let mut code = String::new();
     for (i, (w, arg)) in wires.iter().zip(args).enumerate() {
+        let condition = selection.kotlin(i, |j| args[j].clone());
+        let conditional = condition != "true";
+        if conditional {
+            code.push_str(&format!("if ({condition}) {{\n"));
+        }
         let arg = format!("{}.InputValidation.value {{ {arg} }}", context.package);
         let at = format!("({base}) + {layout}.offsets[{i}]");
         match &w.kind {
@@ -650,6 +745,9 @@ fn pack(
                 ));
             }
             _ => return Err("unsupported field in bulk Kotlin writer".into()),
+        }
+        if conditional {
+            code.push_str("}\n");
         }
     }
     Ok(code)
@@ -966,12 +1064,14 @@ pub(crate) fn emit<I: KotlinInputConversion, O: KotlinOutputConversion>(
         .join("|");
     let hash = prebindgen_reprc::schema_id(&schema) as i64;
     let mut measurements = quote!(let mut data=vec![1i64,#hash,if cfg!(target_endian="big"){1}else{0},::core::mem::size_of::<usize>() as i64];);
-    let mut kotlin=format!("package {prefix}\n\ninternal object BulkLayouts {{\nprivate val data = JNINative.bulkLayouts()\ninit {{ require(data.size == {} && data[0] == 1L && data[1] == {hash}L && data[2] in 0L..1L && (data[3] == 4L || data[3] == 8L)) {{ \"incompatible bulk layout catalogue\" }} }}\nval byteOrder = if(data[2] == 0L) java.nio.ByteOrder.LITTLE_ENDIAN else java.nio.ByteOrder.BIG_ENDIAN\n",4+catalogue.values().map(|r|r.definition.fields().len()+2).sum::<usize>());
+    let mut kotlin=format!("package {prefix}\n\ninternal object BulkLayouts {{\nprivate val data = JNINative.bulkLayouts()\ninit {{ require(data.size == {} && data[0] == 1L && data[1] == {hash}L && data[2] in 0L..1L && (data[3] == 4L || data[3] == 8L)) {{ \"incompatible bulk layout catalogue\" }} }}\nval byteOrder = if(data[2] == 0L) java.nio.ByteOrder.LITTLE_ENDIAN else java.nio.ByteOrder.BIG_ENDIAN\n",4+catalogue.values().map(|r|r.offsets.len()+2).sum::<usize>());
     let mut offset = 4;
     for r in catalogue.values() {
-        let definition = r.definition.definition();
+        let definition = &r.definitions;
         rust.extend(quote!(#[allow(non_camel_case_types,dead_code)] #definition));
-        let layout = r.definition.layout();
+        let name = &r.name;
+        let offsets = &r.offsets;
+        let layout = quote!([::core::mem::size_of::<#name>(),::core::mem::align_of::<#name>(),#(#offsets),*]);
         measurements.extend(quote!(data.extend((#layout).into_iter().map(|v|v as i64));));
         let widths = r
             .widths
@@ -979,7 +1079,7 @@ pub(crate) fn emit<I: KotlinInputConversion, O: KotlinOutputConversion>(
             .map(|n| n.to_string())
             .collect::<Vec<_>>()
             .join(", ");
-        let count = r.definition.fields().len();
+        let count = r.offsets.len();
         let id = prebindgen_reprc::schema_id(&r.key);
         let end = offset + 2 + count;
         kotlin.push_str(&format!(
@@ -1110,6 +1210,7 @@ fn schema(node: &JniNode) -> Result<String> {
         } => {
             let kind = match meta {
                 JniBranch::Alternatives => "alternatives".into(),
+                JniBranch::Enum(e) => format!("enum:{}:{}", type_key(&e.ty), e.variants.join(";")),
                 JniBranch::Group(JniGroup::Field(name)) => format!("field:{name}"),
                 JniBranch::Group(JniGroup::Named(name)) => format!("view:{name}"),
                 JniBranch::Group(JniGroup::Fields(_)) => "fields".into(),
@@ -1262,7 +1363,7 @@ fn cleanup_native(
             .enumerate()
             .find(|(_, wire)| wire.name == *name)
             .ok_or_else(|| format!("missing bulk cleanup field `{name}`"))?;
-        native_read(wire, layout, i, base.clone())
+        native_read(wire, layout, i, base.clone(), parameter("bulk_reader"))
     };
     Ok(match node {
         WireNode::Leaf(fields) => {
@@ -1325,7 +1426,7 @@ fn cleanup_native(
         }
         WireNode::Chain { child, .. } => cleanup_native(child, row, layout, base)?,
         WireNode::Branch {
-            meta: JniBranch::Alternatives,
+            meta: JniBranch::Alternatives | JniBranch::Enum(_),
             controls,
             children,
         } => {
@@ -1346,4 +1447,174 @@ fn cleanup_native(
             .into_iter()
             .collect(),
     })
+}
+
+// Preserve ordinary flat records while grouping enum alternatives into target-
+// compiled unions. Offsets stay in logical wire order for both language sides.
+fn physical_record(
+    node: &JniNode,
+    name: &syn::Ident,
+    fields: Vec<(syn::Ident, syn::Type)>,
+) -> Result<(TokenStream, Vec<TokenStream>)> {
+    enum Piece {
+        Wire(usize),
+        Enum(usize, Vec<Vec<Piece>>),
+    }
+    fn pieces(node: &JniNode, next: &mut usize) -> Vec<Piece> {
+        let mut take = |n: usize| {
+            let start = *next;
+            *next += n;
+            (start..start + n).map(Piece::Wire).collect::<Vec<_>>()
+        };
+        match node {
+            WireNode::Leaf(w) => take(w.len()),
+            WireNode::Chain {
+                controls,
+                meta: JniChain::Sequence(_) | JniChain::Bulk(_),
+                ..
+            } => take(controls.len()),
+            WireNode::Chain {
+                controls, child, ..
+            } => {
+                let mut out = take(controls.len());
+                out.extend(pieces(child, next));
+                out
+            }
+            WireNode::Branch {
+                controls,
+                children,
+                meta: JniBranch::Enum(_),
+            } => {
+                debug_assert_eq!(controls.len(), 1);
+                let tag = *next;
+                *next += 1;
+                vec![Piece::Enum(
+                    tag,
+                    children.iter().map(|c| pieces(c, next)).collect(),
+                )]
+            }
+            WireNode::Branch {
+                controls, children, ..
+            } => {
+                let mut out = take(controls.len());
+                for child in children {
+                    out.extend(pieces(child, next));
+                }
+                out
+            }
+        }
+    }
+    fn compile(
+        name: syn::Ident,
+        pieces: &[Piece],
+        fields: &[(syn::Ident, syn::Type)],
+        definitions: &mut TokenStream,
+        offsets: &mut [TokenStream],
+    ) -> Result<prebindgen_reprc::Record> {
+        let mut members = vec![];
+        for piece in pieces {
+            match piece {
+                Piece::Wire(i) => {
+                    let (field, ty) = &fields[*i];
+                    members.push((field.clone(), ty.clone()));
+                    offsets[*i] = quote!(::core::mem::offset_of!(#name,#field));
+                }
+                Piece::Enum(tag, arms) => {
+                    let carrier = format_ident!("{name}_enum{tag}");
+                    let member = format_ident!("e{tag}");
+                    let prefix = quote!(::core::mem::offset_of!(#name,#member));
+                    let mut records = vec![];
+                    let mut indices = vec![];
+                    for (i, arm) in arms.iter().enumerate() {
+                        let mut local = vec![TokenStream::new(); fields.len()];
+                        let record = if arm.is_empty() {
+                            None
+                        } else {
+                            Some(compile(
+                                format_ident!("{carrier}_a{i}"),
+                                arm,
+                                fields,
+                                definitions,
+                                &mut local,
+                            )?)
+                        };
+                        indices.push(local);
+                        records.push(record);
+                    }
+                    let union = prebindgen_reprc::TaggedUnion::new(carrier.clone(), records)?;
+                    offsets[*tag] = quote!((#prefix)+::core::mem::offset_of!(#carrier,tag));
+                    for arm in indices {
+                        for (index, local) in arm.into_iter().enumerate() {
+                            if !local.is_empty() {
+                                offsets[index] = quote!((#prefix)+::core::mem::offset_of!(#carrier,payload)+(#local));
+                            }
+                        }
+                    }
+                    // compile() emitted nested dependencies, not these arm records.
+                    definitions.extend(union.definition());
+                    members.push((member, union.ty()));
+                }
+            }
+        }
+        if members.is_empty() {
+            members.push((syn::parse_quote!(unused), syn::parse_quote!(u8)));
+        }
+        prebindgen_reprc::Record::new(name, members)
+    }
+    let mut next = 0;
+    let parts = pieces(node, &mut next);
+    let mut offsets = vec![TokenStream::new(); fields.len()];
+    let mut definitions = TokenStream::new();
+    let record = compile(
+        name.clone(),
+        &parts,
+        &fields,
+        &mut definitions,
+        &mut offsets,
+    )?;
+    let definition = record.definition();
+    definitions.extend(quote!(#definition));
+    if next == 0 {
+        offsets[0] = quote!(0usize);
+    }
+    Ok((definitions, offsets))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn handle_patch_predicate_uses_the_64_bit_niche_donor() {
+        let handle = BoxedWire {
+            ty: syn::parse_quote!(Resource),
+            access: Access::Move,
+        };
+        let donor: syn::Ident = syn::parse_quote!(number);
+        let node = WireNode::Chain {
+            controls: vec![],
+            meta: JniChain::Optional(JniOptional::Niche {
+                presence: syn::parse_quote!(present),
+                reservation: prebindgen_declarations::NicheReservation {
+                    discriminator: donor.clone(),
+                    niche: JniNiche::Integer(i64::MIN),
+                },
+            }),
+            child: Box::new(WireNode::Leaf(vec![
+                Wire {
+                    name: donor,
+                    kind: JniWire::scalar(Primitive::U32),
+                },
+                Wire {
+                    name: syn::parse_quote!(resource),
+                    kind: JniWire::handle(handle.clone(), "true"),
+                },
+            ])),
+        };
+        // u32 uses a JVM long so excluded values can encode absence. Truncating
+        // MIN to 32 bits changes it to zero and wrongly patches an absent owner.
+        let code = patch_handles(&node, "test", "0", &mut 0, &[handle]).unwrap();
+        assert!(code.contains("long((0)"), "{code}");
+        assert!(code.contains("!= kotlin.Long.MIN_VALUE"), "{code}");
+        assert!(!code.contains("int((0)"), "{code}");
+    }
 }

@@ -30,6 +30,8 @@ impl From<prebindgen_conversions::boxed::BoxedWire> for CPointer {
         }
     }
 }
+mod tagged;
+pub use tagged::{CEnumGroup, CTagged};
 mod owned;
 pub use owned::COwned;
 mod layouts;
@@ -40,6 +42,7 @@ mod borrowed;
 mod enums;
 mod errors;
 mod group;
+mod selected;
 mod sequence;
 use group::validate_layout;
 pub use group::{CBranch, CChain, CGroup, COptional};
@@ -101,8 +104,15 @@ impl Codec for CCodec {
     type Schema = CSchema;
     type Chain = CChain;
     type Branch = CBranch;
-    fn input_collection_is_leaf(&self, flat: &Bindings, ty: &syn::Type, _: &()) -> bool {
+    fn input_collection_is_leaf(
+        &self,
+        flat: &Bindings,
+        ty: &syn::Type,
+        role: InputRole,
+        _: &(),
+    ) -> bool {
         owned::native_input(flat, ty)
+            || (role == InputRole::EnumField && owned::declaration(flat, ty).is_some())
     }
     fn output_collection_is_leaf(&self, flat: &Bindings, ty: &syn::Type, _: &()) -> bool {
         owned::native_output(flat, ty)
@@ -219,6 +229,127 @@ impl Codec for CCodec {
         )
     }
 
+    fn enum_variants(
+        &self,
+        request: prebindgen_declarations::EnumVariants<'_, Self>,
+    ) -> Result<prebindgen_declarations::EnumEncoding<Self>> {
+        tagged::encoding(request)
+    }
+    fn input_enum(
+        &self,
+        flat: &Bindings,
+        ty: &syn::Type,
+        _: &(),
+        wire: syn::Ident,
+        plan: InputPlan<CWire>,
+        active: &prebindgen_declarations::Condition,
+        role: InputRole,
+    ) -> Result<InputPlan<CWire>> {
+        tagged::input(flat, ty, wire, plan, active, role)
+    }
+    fn output_enum(
+        &self,
+        flat: &Bindings,
+        ty: &syn::Type,
+        _: &(),
+        wire: syn::Ident,
+        plan: OutputPlan<CWire>,
+    ) -> Result<OutputPlan<CWire>> {
+        tagged::output(flat, ty, wire, plan)
+    }
+    fn expand_input(
+        &self,
+        flat: &Bindings,
+        ty: &syn::Type,
+        tree: &prebindgen_declarations::Input<InputRequest>,
+        _: &(),
+    ) -> Result<Option<prebindgen_declarations::Input<InputRequest>>> {
+        if !self.declared || !matches!(tree, prebindgen_declarations::Input::Leaf) {
+            return Ok(None);
+        }
+        if flat
+            .payload_enums
+            .contains_key(&prebindgen_flat::type_key(ty))
+            && !flat.type_info(ty).ok().is_some_and(|t| {
+                t.metadata.tagged.is_some()
+                    || t.metadata.pointer.is_some()
+                    || t.metadata.owned.is_some()
+            })
+        {
+            return Err(format!(
+                "ordinary payload enum `{}` requires tagged_union or an explicit field expansion",
+                prebindgen_flat::type_key(ty)
+            ));
+        }
+        if flat
+            .type_info(ty)
+            .ok()
+            .is_some_and(|t| t.metadata.tagged.is_some())
+        {
+            let e = flat.payload_enum(ty)?;
+            return Ok(Some(prebindgen_declarations::Input::Enum {
+                variants: e
+                    .variants
+                    .iter()
+                    .map(|v| {
+                        v.fields
+                            .iter()
+                            .map(|_| prebindgen_declarations::Input::value())
+                            .collect()
+                    })
+                    .collect(),
+                value: true,
+            }));
+        }
+        Ok(None)
+    }
+    fn expand_output(
+        &self,
+        flat: &Bindings,
+        ty: &syn::Type,
+        tree: &prebindgen_declarations::Output<OutputRequest>,
+        _: &(),
+    ) -> Result<Option<prebindgen_declarations::Output<OutputRequest>>> {
+        if !self.declared || !matches!(tree, prebindgen_declarations::Output::Leaf) {
+            return Ok(None);
+        }
+        if flat
+            .payload_enums
+            .contains_key(&prebindgen_flat::type_key(ty))
+            && !flat.type_info(ty).ok().is_some_and(|t| {
+                t.metadata.tagged.is_some()
+                    || t.metadata.pointer.is_some()
+                    || t.metadata.owned.is_some()
+            })
+        {
+            return Err(format!(
+                "ordinary payload enum `{}` requires tagged_union or an explicit field expansion",
+                prebindgen_flat::type_key(ty)
+            ));
+        }
+        if flat
+            .type_info(ty)
+            .ok()
+            .is_some_and(|t| t.metadata.tagged.is_some())
+        {
+            let e = flat.payload_enum(ty)?;
+            return Ok(Some(prebindgen_declarations::Output::Enum {
+                variants: e
+                    .variants
+                    .iter()
+                    .map(|v| {
+                        v.fields
+                            .iter()
+                            .map(|_| prebindgen_declarations::Output::value())
+                            .collect()
+                    })
+                    .collect(),
+                value: true,
+                mode: None,
+            }));
+        }
+        Ok(None)
+    }
     fn selector(&self, _: &()) -> Result<CWire> {
         Ok(CWire::scalar(Primitive::I32))
     }
@@ -808,17 +939,33 @@ impl CCodec {
         if prebindgen_declarations::option_inner(ty).is_some() {
             return Err("resolve Optional operations before leaf compilation".into());
         }
-        if let Some(owner) = owned::declaration(_flat, ty).filter(|o| o.explicit) {
+        if let Some(owner) =
+            owned::declaration(_flat, ty).filter(|o| o.explicit || role == InputRole::EnumField)
+        {
             return owned::input(owner, ty, w, v, active, false);
         }
         if owned::pointer_declared(_flat, ty) {
-            return prebindgen_conversions::boxed::input(
+            let slot = format_ident!("{w}_enum_slot");
+            let mut plan = prebindgen_conversions::boxed::input(
                 &prebindgen_conversions::boxed::Storage::Direct,
                 ty,
                 w,
                 v,
                 |b| CWire::pointer(b.into()),
-            );
+            )?;
+            if role == InputRole::EnumField && !matches!(ty, syn::Type::Reference(_)) {
+                plan.code = prebindgen_conversions::render_template(
+                    &plan.code,
+                    &|name| Ok(prebindgen_conversions::template_parameter(name)),
+                    &|count| {
+                        let transfer = prebindgen_conversions::record_input_transfer(count.clone());
+                        Ok(
+                            quote!(unsafe{::core::ptr::write(#slot,::core::ptr::null_mut());} #transfer),
+                        )
+                    },
+                )?;
+            }
+            return Ok(plan);
         }
         if prebindgen_flat::sequence_parts(ty).is_some() {
             return Err("collections require a Sequence recipe, not an opaque leaf; use an alias for opaque storage".into());
@@ -966,6 +1113,7 @@ pub struct Cbindgen {
     layout_sources: Vec<prebindgen::Source>,
     target: Option<String>,
     enums: Vec<(String, syn::Type)>,
+    tagged: Vec<(String, syn::Type)>,
     errors: Vec<(String, syn::Type)>,
     panics: std::collections::BTreeSet<String>,
 }
@@ -988,6 +1136,7 @@ impl Cbindgen {
             layout_sources: Vec::new(),
             target: None,
             enums: Vec::new(),
+            tagged: Vec::new(),
             errors: Vec::new(),
             panics: Default::default(),
         }
@@ -1119,6 +1268,7 @@ impl Cbindgen {
             layout_sources: Vec::new(),
             target: None,
             enums: Vec::new(),
+            tagged: Vec::new(),
             errors: Vec::new(),
             panics: Default::default(),
         }
@@ -1209,9 +1359,15 @@ impl Cbindgen {
     pub fn owned_view_mut(name: &str) -> prebindgen_declarations::FunctionDecl {
         prebindgen_declarations::FunctionDecl::new(owned::helper(name, "view_mut"))
     }
-    /// Bind a fieldless source enum as a named `int32_t` C type and constants.
-    /// Source integer discriminants are preserved and must be valid on input. Register
-    /// the type explicitly; `name` is the unprefixed C typedef/constant prefix.
+    /// Declare an ordinary C tag/union carrier for a source payload enum or
+    /// concrete Result. Tags follow source order, independently of Rust discriminants.
+    /// Active owning payloads are moved through mutable caller slots; generated
+    /// take/drop functions transfer or reclaim only the selected payload.
+    pub fn tagged_union(mut self, name: &str, ty: syn::Type) -> Self {
+        self.tagged.push((name.into(), ty));
+        self
+    }
+    /// Declare a fieldless enum's integer representation.
     pub fn enum_type(mut self, name: &str, ty: syn::Type) -> Self {
         self.enums.push((name.into(), ty));
         self
@@ -1268,6 +1424,7 @@ impl Cbindgen {
                         .pointers
                         .iter()
                         .chain(&self.enums)
+                        .chain(&self.tagged)
                         .chain(&self.errors)
                         .map(|(_, ty)| ty.clone())
                         .chain(self.conversions.iter().flat_map(|c| {
@@ -1313,6 +1470,17 @@ impl Cbindgen {
                 return Err("duplicate C enum source type".into());
             }
         }
+        for (name, ty) in self.tagged {
+            prebindgen_declarations::ident(&name)?;
+            if !enum_names.insert(name.clone()) {
+                return Err("duplicate C enum name".into());
+            }
+            let ty = flat.resolve_type(&ty)?;
+            flat.payload_enum(&ty)?;
+            if flat.type_metadata_mut(&ty)?.tagged.replace(name).is_some() {
+                return Err("duplicate C tagged enum declaration".into());
+            }
+        }
         let mut error_names = std::collections::BTreeSet::new();
         for (order, (name, ty)) in self.errors.into_iter().enumerate() {
             prebindgen_declarations::ident(&name)?;
@@ -1344,9 +1512,9 @@ impl Cbindgen {
             let ty = flat.resolve_type(&ty)?;
             owned::validate_type(&ty)?;
             let info = flat.type_metadata_mut(&ty)?;
-            if info.owned.is_some() || info.enumeration.is_some() {
+            if info.owned.is_some() || info.enumeration.is_some() || info.tagged.is_some() {
                 return Err(
-                    "a source type cannot be both opaque_ptr and opaque_owned_struct".into(),
+                    "a source type must select only one of opaque_ptr, opaque_owned_struct and tagged_union".into(),
                 );
             }
             if info.pointer.replace(name).is_some() {
@@ -1372,7 +1540,11 @@ impl Cbindgen {
                 quote!(<#ty as ::core::default::Default>::default())
             };
             let info = flat.type_metadata_mut(&ty)?;
-            if info.pointer.is_some() || info.owned.is_some() || info.enumeration.is_some() {
+            if info.pointer.is_some()
+                || info.owned.is_some()
+                || info.enumeration.is_some()
+                || info.tagged.is_some()
+            {
                 return Err("duplicate or conflicting C owning representation".into());
             }
             info.owned = Some(std::rc::Rc::new(COwned {
@@ -1383,6 +1555,7 @@ impl Cbindgen {
                 explicit: true,
             }));
         }
+        prebindgen_declarations::prepare_value_conversions(&mut flat, self.conversions)?;
         let mut automatic = std::collections::BTreeMap::new();
         for f in flat.functions.values() {
             owned::collect(&f.ret.ty, &mut automatic);
@@ -1393,6 +1566,21 @@ impl Cbindgen {
         for record in flat.records.values() {
             for field in &record.fields {
                 owned::collect(&field.ty, &mut automatic);
+            }
+        }
+        for record in flat.payload_enums.values() {
+            for variant in &record.variants {
+                for field in &variant.fields {
+                    owned::collect(&field.ty, &mut automatic);
+                }
+            }
+        }
+        for named in flat.types.values() {
+            for conversion in [&named.conversion.input, &named.conversion.output]
+                .into_iter()
+                .flatten()
+            {
+                owned::collect(&conversion.representation, &mut automatic);
             }
         }
         for ty in automatic.into_values() {
@@ -1408,7 +1596,6 @@ impl Cbindgen {
             }
         }
         owned::accessors(&mut flat)?;
-        prebindgen_declarations::prepare_value_conversions(&mut flat, self.conversions)?;
         let declarations = prebindgen_declarations::Declarations::new(
             &flat,
             self.inputs,
@@ -1454,7 +1641,11 @@ impl Cbindgen {
         }
         prebindgen_flat::validate_bindings(&flat)?;
         for f in flat.functions.values().filter(|f| f.ret.slot.is_some()) {
-            let is_result = prebindgen_declarations::result_parts(&f.ret.ty).is_some();
+            let is_result = f
+                .output_conversion()?
+                .output_outcomes()
+                .source_error
+                .is_some();
             if !is_result
                 && !f.metadata.as_ref().is_some_and(|m| m.abort_on_failure)
                 && (f
@@ -1567,6 +1758,11 @@ fn c_ty(
     context: &CContext,
 ) -> String {
     match &wire.kind {
+        CWire::Tagged { value, by_value } => format!(
+            "{prefix}_{}{}",
+            value.name,
+            if *by_value { "" } else { " *" }
+        ),
         CWire::Callback { callback } => callback.name.clone(),
         CWire::Enum { name, .. } => format!("{prefix}_{name}"),
         CWire::Scalar { primitive: p, .. } => c_scalar(*p, prefix),
@@ -1765,7 +1961,10 @@ where
             .ok_or_else(|| format!("bound C function `{}` has no export metadata", f.name))?;
         if metadata.requires_abort
             && !metadata.abort_on_failure
-            && prebindgen_flat::result_parts(&f.ret.ty).is_none()
+            && f.output_conversion()?
+                .output_outcomes()
+                .source_error
+                .is_none()
         {
             return Err(format!(
                 "C function `{}` requires an explicit abort policy",
@@ -1789,7 +1988,11 @@ where
         if !symbols.insert(result_type.to_string()) {
             return Err("duplicate C result type symbol".into());
         }
-        let is_result = prebindgen_declarations::result_parts(&f.ret.ty).is_some();
+        let is_result = f
+            .output_conversion()?
+            .output_outcomes()
+            .source_error
+            .is_some();
         let outcomes = f.output_conversion()?.output_outcomes();
         validate_return_loans(f, &outcomes.success)?;
         for error in outcomes
@@ -1850,7 +2053,12 @@ where
             output_type: syn::parse_quote!(#result_type),
             error_pointer: format_ident!("error"),
             error_reported: format_ident!("error_reported"),
-            output_committed: if prebindgen_declarations::result_parts(&f.ret.ty).is_some() {
+            output_committed: if f
+                .output_conversion()?
+                .output_outcomes()
+                .source_error
+                .is_some()
+            {
                 quote!(success_committed = true;)
             } else {
                 TokenStream::new()
@@ -2021,6 +2229,27 @@ The pointer must be null or a live allocation of the declared type returned by t
             )?;
         }
     }
+    let mut tagged_seen = std::collections::BTreeMap::new();
+    for f in flat.functions.values().filter(|f| f.ret.slot.is_some()) {
+        for input in f.input_conversions()? {
+            tagged::emit(
+                flat,
+                input.input_node(),
+                &mut tagged_seen,
+                &mut symbols,
+                &mut tokens,
+                &mut header,
+            )?;
+        }
+        tagged::emit(
+            flat,
+            &f.output_conversion()?.output_outcomes().success,
+            &mut tagged_seen,
+            &mut symbols,
+            &mut tokens,
+            &mut header,
+        )?;
+    }
     let mut callbacks = std::collections::BTreeMap::new();
     for f in flat.functions.values().filter(|f| f.ret.slot.is_some()) {
         for wire in f.input_wire_definitions()? {
@@ -2181,7 +2410,11 @@ The pointer must be null or a live allocation of the declared type returned by t
                 ));
             }
         }
-        if prebindgen_declarations::result_parts(&f.ret.ty).is_none() {
+        if f.output_conversion()?
+            .output_outcomes()
+            .source_error
+            .is_none()
+        {
             if let Some(slot) = &f.ret.slot {
                 let mut comments = describe_groups(
                     &slot.output_outcomes().success,
@@ -2235,7 +2468,12 @@ The pointer must be null or a live allocation of the declared type returned by t
         } else {
             body
         };
-        if let Some((_, error_ty)) = prebindgen_declarations::result_parts(&f.ret.ty) {
+        if let Some((_, error_ty)) = prebindgen_declarations::result_parts(&f.ret.ty).filter(|_| {
+            f.ret
+                .slot
+                .as_ref()
+                .is_some_and(|s| s.output_outcomes().source_error.is_some())
+        }) {
             let fields = outputs
                 .iter()
                 .enumerate()
@@ -2454,6 +2692,15 @@ fn describe_groups(
         next_label: &mut usize,
         field_path: &mut Vec<String>,
     ) {
+        if matches!(
+            node,
+            prebindgen_flat::WireNode::Chain {
+                meta: CChain::Tagged(_),
+                ..
+            }
+        ) {
+            return;
+        }
         if let prebindgen_flat::WireNode::Branch {
             meta: CBranch::Alternatives,
             children: alternatives,
@@ -4102,6 +4349,7 @@ fn takes_input_owners(node: &prebindgen_flat::WireNode<CWire, CChain, CBranch>) 
         CWire::Pointer { pointer, .. } => pointer.access == Access::Move,
         CWire::Owned { access, .. } => *access == Access::Move,
         CWire::Callback { .. } => true,
+        CWire::Tagged { value, .. } => value.owned,
         _ => false,
     })
 }

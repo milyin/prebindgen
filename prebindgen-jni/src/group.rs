@@ -20,6 +20,8 @@ pub enum JniBranch {
     Group(JniGroup),
     /// Exactly one selected arm; at least one arm is required.
     Alternatives,
+    /// Source enum tag and selected payload, grouped or explicitly expanded.
+    Enum(std::rc::Rc<crate::sealed::JniEnumGroup>),
 }
 /// Relationships between the child values of a group.
 #[derive(Clone, Debug)]
@@ -105,7 +107,9 @@ impl JniOptional {
 }
 
 // Definitions in one native scope; sequence element definitions belong to row scopes.
-fn values(node: &WireNode<JniWire, JniChain, JniBranch>) -> std::vec::IntoIter<&Wire<JniWire>> {
+pub(crate) fn values(
+    node: &WireNode<JniWire, JniChain, JniBranch>,
+) -> std::vec::IntoIter<&Wire<JniWire>> {
     fn visit<'a>(
         node: &'a WireNode<JniWire, JniChain, JniBranch>,
         out: &mut Vec<&'a Wire<JniWire>>,
@@ -137,7 +141,7 @@ fn values(node: &WireNode<JniWire, JniChain, JniBranch>) -> std::vec::IntoIter<&
     visit(node, &mut out);
     out.into_iter()
 }
-fn values_mut(
+pub(crate) fn values_mut(
     node: &mut WireNode<JniWire, JniChain, JniBranch>,
 ) -> std::vec::IntoIter<&mut Wire<JniWire>> {
     fn visit<'a>(
@@ -205,7 +209,7 @@ pub(crate) fn validate_layout(
                 }
             }
             WireNode::Branch {
-                meta: JniBranch::Alternatives,
+                meta: JniBranch::Alternatives | JniBranch::Enum(_),
                 children: alternatives,
                 controls,
                 ..
@@ -1065,14 +1069,19 @@ pub(crate) fn error_wire_shape(node: &kotlin::JniNode) -> Vec<String> {
                         format!("optional:niche:{:?}:{index:?}", reservation.niche)
                     }
                     JniChain::Sequence(delivery) => format!("sequence:{delivery:?}"),
-                    JniChain::Bulk(record) => format!(
-                        "bulk:{:?}",
-                        record
-                            .definition
-                            .fields()
-                            .map(|(_, ty)| type_key(ty))
-                            .collect::<Vec<_>>()
-                    ),
+                    JniChain::Bulk(_) => {
+                        let mut fields = group::row_fields(child)
+                            .map(|w| {
+                                type_key(
+                                    &bulk::field_type(&w.kind).expect("prepared bulk storage type"),
+                                )
+                            })
+                            .collect::<Vec<_>>();
+                        if fields.is_empty() {
+                            fields.push("u8".into());
+                        }
+                        format!("bulk:{fields:?}")
+                    }
                 };
                 out.push(label);
                 out.push("[".into());

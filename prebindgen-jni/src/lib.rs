@@ -16,6 +16,11 @@ pub use bulk::BulkRecord;
 pub use metadata::{JniFunction, JniModule, JniSchema, JniType};
 mod data;
 mod enums;
+mod sealed;
+mod selected;
+pub use sealed::SealedClassDecl;
+#[cfg(test)]
+mod payload_tests;
 pub use enums::{EnumClassDecl, JniEnum};
 mod callback;
 mod callback_rows;
@@ -522,6 +527,13 @@ impl JniGenBuilder {
                         _ => return Err("class needs a name".into()),
                     },
                 };
+                if matches!(&c,ClassDecl::Sealed(d) if d.name.is_none())
+                    && matches!(&ty,syn::Type::Path(p) if p.path.segments.iter().any(|s|!matches!(s.arguments,syn::PathArguments::None)))
+                {
+                    return Err(
+                        "generic sealed_class declarations require an explicit .name(...)".into(),
+                    );
+                }
                 validate_class_name(&name)?;
                 if !class_types.insert(type_key(&ty)) {
                     return Err("duplicate class for source type".into());
@@ -529,12 +541,18 @@ impl JniGenBuilder {
                 let class = Class {
                     pkg: pkg.clone(),
                     name,
-                    data: matches!(c, ClassDecl::Data(_)),
-                    enumeration: matches!(c, ClassDecl::Enum(_)),
+                    kind: match &c {
+                        ClassDecl::Ptr(_) => ClassKind::Handle,
+                        ClassDecl::Data(_) => ClassKind::Data,
+                        ClassDecl::Enum(_) => ClassKind::Enum,
+                        ClassDecl::Sealed(_) => ClassKind::Sealed,
+                        ClassDecl::Callback(_) => unreachable!(),
+                    },
                     has_handles: false,
                     gc_managed: matches!(&c, ClassDecl::Ptr(c) if c.gc_managed),
                     variant_names: match c {
                         ClassDecl::Enum(c) => c.variant_names,
+                        ClassDecl::Sealed(c) => c.variant_names,
                         _ => Vec::new(),
                     },
                 };
@@ -681,12 +699,18 @@ impl JniGenBuilder {
         generate(&self.prepare()?)
     }
 }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ClassKind {
+    Handle,
+    Data,
+    Enum,
+    Sealed,
+}
 #[derive(Clone, Debug)]
 pub(crate) struct Class {
     pkg: String,
     name: String,
-    data: bool,
-    enumeration: bool,
+    kind: ClassKind,
     variant_names: Vec<(String, String)>,
     has_handles: bool,
     gc_managed: bool,
@@ -763,6 +787,12 @@ impl<'a> JniCodec<'a> {
     }
 }
 impl Codec for JniCodec<'_> {
+    fn enum_variants(
+        &self,
+        request: prebindgen_declarations::EnumVariants<'_, Self>,
+    ) -> Result<prebindgen_declarations::EnumEncoding<Self>> {
+        sealed::encoding(request)
+    }
     fn bulk_input(
         &self,
         _: &Bindings,
@@ -909,7 +939,7 @@ impl Codec for JniCodec<'_> {
                 .type_info(ty)
                 .ok()
                 .and_then(|t| t.metadata.class.as_ref())
-                .is_some_and(|c| c.data)
+                .is_some_and(|c| c.kind == ClassKind::Data)
                 || self.enum_type(_flat, ty).is_some()
             {
                 return false;
@@ -1190,6 +1220,34 @@ impl Codec for JniCodec<'_> {
         if !matches!(tree, Input::Leaf) {
             return Ok(None);
         }
+        if flat.payload_enums.contains_key(&type_key(ty))
+            && flat
+                .type_info(ty)
+                .ok()
+                .and_then(|t| t.metadata.class.as_ref())
+                .is_none()
+        {
+            return Err(format!(
+                "ordinary payload enum `{}` requires sealed_class! or an explicit field expansion",
+                type_key(ty)
+            ));
+        }
+        if flat
+            .type_info(ty)
+            .ok()
+            .and_then(|t| t.metadata.class.as_ref())
+            .is_some_and(|c| c.kind == ClassKind::Sealed)
+        {
+            return Ok(Some(Input::Enum {
+                variants: flat
+                    .payload_enum(ty)?
+                    .variants
+                    .iter()
+                    .map(|v| vec![Input::value(); v.fields.len()])
+                    .collect(),
+                value: true,
+            }));
+        }
         let Some(record) = Self::source_record(flat, ty)? else {
             return Ok(None);
         };
@@ -1220,6 +1278,35 @@ impl Codec for JniCodec<'_> {
             Output::Projected(p) => Some(p.clone()),
             _ => return Ok(None),
         };
+        if flat.payload_enums.contains_key(&type_key(ty))
+            && flat
+                .type_info(ty)
+                .ok()
+                .and_then(|t| t.metadata.class.as_ref())
+                .is_none()
+        {
+            return Err(format!(
+                "ordinary payload enum `{}` requires sealed_class! or an explicit field expansion",
+                type_key(ty)
+            ));
+        }
+        if flat
+            .type_info(ty)
+            .ok()
+            .and_then(|t| t.metadata.class.as_ref())
+            .is_some_and(|c| c.kind == ClassKind::Sealed)
+        {
+            return Ok(Some(Output::Enum {
+                variants: flat
+                    .payload_enum(ty)?
+                    .variants
+                    .iter()
+                    .map(|v| vec![Output::value(); v.fields.len()])
+                    .collect(),
+                value: true,
+                mode: policy.as_ref().map(|p| p.mode),
+            }));
+        }
         let Some(record) = Self::source_record(flat, ty)? else {
             return Ok(None);
         };
@@ -1709,7 +1796,7 @@ pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
             t.metadata
                 .class
                 .as_ref()
-                .filter(|c| !c.data && !c.enumeration)
+                .filter(|c| c.kind == ClassKind::Handle)
                 .map(|c| (type_key(&t.ty), (&t.ty, c)))
         })
         .collect::<BTreeMap<_, _>>();
@@ -1743,13 +1830,19 @@ pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
     let mut files = BTreeMap::new();
     for t in flat.types.values() {
         if let Some(class) = &t.metadata.class {
-            if class.data {
+            if class.kind == ClassKind::Data {
                 files.insert(
                     format!("{}/{}.kt", class.pkg.replace('.', "/"), class.name),
                     data::render_record(flat, class, &t.ty)?,
                 );
             }
-            if class.enumeration {
+            if class.kind == ClassKind::Sealed {
+                files.insert(
+                    format!("{}/{}.kt", class.pkg.replace('.', "/"), class.name),
+                    sealed::render(flat, class, &t.ty)?,
+                );
+            }
+            if class.kind == ClassKind::Enum {
                 files.insert(
                     format!("{}/{}.kt", class.pkg.replace('.', "/"), class.name),
                     t.metadata
@@ -1784,11 +1877,7 @@ pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
     let mut capacity_registered = false;
     for (ty, c) in classes.values() {
         let id = allocation_ids[&type_key(ty)];
-        let handle_type = if id == i64::MIN {
-            "kotlin.Long.MIN_VALUE".into()
-        } else {
-            format!("{id}L")
-        };
+        let handle_type = wire::jvm::long_literal(id);
         let method = names.name("drop", &names::type_label(ty), &[&names::type_identity(ty)])?;
         let sym = symbol(prefix, &method);
         rust.extend(quote!{#[doc = "# Safety\nOnly generated Kotlin ownership release paths may call this entry point. The pointer must be a live allocation of the declared type with no outstanding native access; an opted-in Cleaner may release an unreachable wrapper without its monitor."]
@@ -1824,6 +1913,7 @@ pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
         })
         .collect::<Result<_>>()?;
     typed_rows::emit(flat, &mut rust, &mut native, &mut names, &mut row_captures)?;
+    sealed::emit_tags(flat, &mut rust, &mut native, &mut files)?;
     bulk::emit(flat, &mut rust, &mut native, &mut files)?;
     rust.extend(cleanup::emit(flat)?);
     callback::files(flat, &kotlin_classes, &mut files)?;
