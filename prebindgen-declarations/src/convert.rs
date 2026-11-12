@@ -74,7 +74,7 @@ impl ConvertSource {
                     _ => param,
                 };
                 let result = prebindgen_flat::result_parts(&f.ret.ty)
-                    .filter(|_| !self.result_value && !(input && same_type(&f.ret.ty, ty)))
+                    .filter(|_| !(self.result_value || input && same_type(&f.ret.ty, ty)))
                     .map_or(&f.ret.ty, |(ok, _)| ok);
                 if input {
                     if !same_type(result, ty) {
