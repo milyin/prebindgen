@@ -2691,7 +2691,7 @@
 <a href=#2691 id=2691 data-nosnippet>2691</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
 <a href=#2692 id=2692 data-nosnippet>2692</a>        operation: std::convert::Infallible,
 <a href=#2693 id=2693 data-nosnippet>2693</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;&lt;<span class="self">Self</span>::OutOps <span class="kw">as </span>prebindgen_declarations::OutputOps&gt;::Arrow&gt; {
-<a href=#2694 id=2694 data-nosnippet>2694</a>        <span class="prelude-val">Ok</span>(operation)
+<a href=#2694 id=2694 data-nosnippet>2694</a>        <span class="kw">match </span>operation {}
 <a href=#2695 id=2695 data-nosnippet>2695</a>    }
 <a href=#2696 id=2696 data-nosnippet>2696</a>    <span class="kw">fn </span>finish_output_tree(<span class="kw-2">&amp;</span><span class="self">self</span>, tree: operations::JniOutput) -&gt; <span class="prelude-ty">Result</span>&lt;operations::JniOutput&gt; {
 <a href=#2697 id=2697 data-nosnippet>2697</a>        <span class="prelude-val">Ok</span>(operations::lift_output_bulk(tree))
