@@ -120,6 +120,7 @@ impl Declarations {
         Ok(out)
     }
     /// Clone a source binding for a second explicit sequence delivery policy.
+    /// The adapter selects and validates the sequence while resolving the returned declaration.
     pub fn callback_variant<C: DeclarationCodec>(
         &self,
         flat: &mut Flat<C::Schema>,
@@ -1484,8 +1485,9 @@ impl FunctionDecl {
     }
     /// Replace the result expansion, including any previously assigned override.
     ///
-    /// Raw structural nodes infer the preparation payload automatically. An explicitly
-    /// resolved tree must use [`Output::into_preparation`] before registration.
+    /// Raw declaration syntax infers the request types automatically. Syntax with
+    /// uninhabited request types uses [`crate::DeclarationOutput::into_preparation`] before
+    /// registration. Adapter-resolved trees instead go directly to [`crate::compile_output`].
     /// ```
     /// use prebindgen_declarations::{fun,fields,expand_return,DeclarationInput as Input,DeclarationOutput as Output};
     /// let _ = fun!(run).input("x", Input::fields([])).output(Output::Leaf(prebindgen_declarations::frontend::OutputLeafOp::Value));

@@ -589,6 +589,11 @@ impl Operations for ArithmeticOutputs {
 }
 struct Arithmetic;
 impl Codec for Arithmetic {
+    fn finish_output(&self, plan: &mut CodecOutput<Self>, _: &()) -> Result<()> {
+        plan.delivery.result = plan.values[0].1.clone();
+        Ok(())
+    }
+
     type InputOperations = ArithmeticInputs;
     type OutputOperations = ArithmeticOutputs;
     type CompileState = ();
@@ -694,15 +699,7 @@ fn independent_operation_vocabularies_compile_without_declaration_frontend() {
         }));
     }
     f.ret.slot = Some(ResolvedSlot::Tree(OutputNode::Leaf(ScaleOutput(2))));
-    let mut model = compile_resolved(model).unwrap();
-    let output = model
-        .function_mut("add")
-        .unwrap()
-        .ret
-        .slot
-        .as_mut()
-        .unwrap();
-    output.delivery.result = output.values[0].1.clone();
+    let model = compile_resolved(model).unwrap();
     let f = model.function("add").unwrap();
     let params = f
         .params

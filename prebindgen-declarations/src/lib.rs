@@ -710,15 +710,15 @@ fn compile_output_at<C: Codec>(
 /// * `function` — unqualified name of the source function.
 /// * `parameter` — name of the parameter, as written in the source.
 /// * `recipe` — preparation tree describing how to build the argument from boundary inputs.
-///   To bind an already resolved [`Input`], pass `&resolved.into_preparation()`.
+///   Adapter-resolved trees go directly to [`compile_input`].
 /// * `extra` — occurrence data passed to every codec call for this conversion.
 ///
 /// Input binding rejects output recipes:
 /// ```compile_fail
-/// use prebindgen_declarations::{bind_input, Codec, DeclarationOutput as Output};
+/// use prebindgen_declarations::{bind_input, DeclarationCodec, DeclarationOutput};
 /// use prebindgen_flat::Flat;
-/// fn wrong<C: Codec>(flat: &mut Flat<C::Schema>, codec: &C, extra: &C::Extra) {
-///     bind_input(flat, codec, "foo", "x", &ResolvedOutput<C>::Leaf(prebindgen_declarations::frontend::OutputLeafOp::Value), extra).unwrap();
+/// fn wrong<C: DeclarationCodec>(flat: &mut Flat<C::Schema>, codec: &C, extra: &C::Extra) {
+///     bind_input(flat, codec, "foo", "x", &DeclarationOutput::value(), extra).unwrap();
 /// }
 /// ```
 pub fn bind_input<C: DeclarationCodec>(
@@ -755,15 +755,15 @@ pub fn bind_input<C: DeclarationCodec>(
 /// * `codec` — the adapter's leaf conversions.
 /// * `function` — unqualified name of the source function.
 /// * `recipe` — preparation tree describing how to deliver the result as boundary outputs.
-///   To bind an already resolved [`Output`], pass `&resolved.into_preparation()`.
+///   Adapter-resolved trees go directly to [`compile_output`].
 /// * `extra` — occurrence data passed to every codec call for this conversion.
 ///
 /// Output binding rejects input recipes:
 /// ```compile_fail
-/// use prebindgen_declarations::{bind_output, Codec, DeclarationInput as Input};
+/// use prebindgen_declarations::{bind_output, DeclarationCodec, DeclarationInput};
 /// use prebindgen_flat::Flat;
-/// fn wrong<C: Codec>(flat: &mut Flat<C::Schema>, codec: &C, extra: &C::Extra) {
-///     bind_output(flat, codec, "foo", &Input::Leaf(prebindgen_declarations::frontend::InputLeafOp::Value), extra).unwrap();
+/// fn wrong<C: DeclarationCodec>(flat: &mut Flat<C::Schema>, codec: &C, extra: &C::Extra) {
+///     bind_output(flat, codec, "foo", &DeclarationInput::value(), extra).unwrap();
 /// }
 /// ```
 pub fn bind_output<C: DeclarationCodec>(

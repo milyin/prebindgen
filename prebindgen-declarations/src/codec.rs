@@ -113,8 +113,8 @@ pub trait Codec {
     fn output_consumes(&self, flat: &Flat<Self::Schema>, ty: &Type, extra: &Self::Extra) -> bool;
     /// Describe the requested structural group; reject unsupported kinds explicitly.
     fn group(&self, kind: GroupKind<'_>) -> Result<Self::Branch>;
-    /// Explicit opt-in to bulk conversion for this direction. The shared compiler
-    /// enforces this before calling bulk leaf, carrier or sequence operations.
+    /// Explicit opt-in to bulk conversion for this direction. JNI dispatch and
+    /// reusable sequence helpers check it before selecting bulk transport.
     fn supports_bulk(&self, _direction: Direction) -> bool {
         false
     }
