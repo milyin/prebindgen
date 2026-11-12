@@ -4599,7 +4599,7 @@ impl prebindgen_declarations::DeclCodec for CCodec {
         &self,
         operation: std::convert::Infallible,
     ) -> Result<<Self::OutOps as prebindgen_declarations::OutputOps>::Arrow> {
-        Ok(operation)
+        match operation {}
     }
 
     fn expand_input(

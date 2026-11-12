@@ -874,7 +874,7 @@ macro_rules! test_frontend {
                 &self,
                 operation: std::convert::Infallible,
             ) -> prebindgen_flat::Result<std::convert::Infallible> {
-                Ok(operation)
+                match operation {}
             }
         }
     };

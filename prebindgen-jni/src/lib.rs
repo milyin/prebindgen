@@ -2691,7 +2691,7 @@ impl prebindgen_declarations::DeclCodec for JniCodec {
         &self,
         operation: std::convert::Infallible,
     ) -> Result<<Self::OutOps as prebindgen_declarations::OutputOps>::Arrow> {
-        Ok(operation)
+        match operation {}
     }
     fn finish_output_tree(&self, tree: operations::JniOutput) -> Result<operations::JniOutput> {
         Ok(operations::lift_output_bulk(tree))
