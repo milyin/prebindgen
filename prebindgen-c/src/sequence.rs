@@ -493,6 +493,13 @@ fn release_condition(
     target: &syn::Ident,
     fields: &[(&Wire, TokenStream)],
 ) -> Option<TokenStream> {
+    fn enclose(predicate: TokenStream, child: TokenStream) -> TokenStream {
+        if child.to_string() == "true" {
+            predicate
+        } else {
+            quote!((#predicate) && (#child))
+        }
+    }
     let value = |name: &syn::Ident| {
         fields
             .iter()
@@ -523,7 +530,7 @@ fn release_condition(
                 .niche()
                 .map(|n| n.present(discriminator.clone()))
                 .unwrap_or_else(|| quote!(#discriminator==1));
-            Some(quote!((#present)&&(#child)))
+            Some(enclose(present, child))
         }
         WireNode::Branch {
             meta: CBranch::Enum(_) | CBranch::Alternatives,
@@ -534,7 +541,7 @@ fn release_condition(
             children.iter().enumerate().find_map(|(i, child)| {
                 let child = release_condition(child, target, fields)?;
                 let i = i as i32;
-                Some(quote!((#tag)==#i&&(#child)))
+                Some(enclose(quote!((#tag)==#i), child))
             })
         }
         WireNode::Branch { children, .. } => children

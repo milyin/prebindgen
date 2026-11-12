@@ -1298,7 +1298,7 @@ pub unsafe extern "C" fn perftest_drop_wire_optional_event(
         0i32 => {}
         1i32 => {
             #[allow(clippy::collapsible_if)]
-            if (::core::ptr::read(
+            if ::core::ptr::read(
                 (value)
                     .cast::<u8>()
                     .wrapping_add(
@@ -1310,7 +1310,7 @@ pub unsafe extern "C" fn perftest_drop_wire_optional_event(
                             ),
                     )
                     .cast::<i32>(),
-            ) == 1) && (true)
+            ) == 1
             {
                 drop(
                     (::core::ptr::read(
@@ -1330,7 +1330,7 @@ pub unsafe extern "C" fn perftest_drop_wire_optional_event(
                 );
             }
             #[allow(clippy::collapsible_if)]
-            if ((::core::ptr::read(
+            if (::core::ptr::read(
                 (value)
                     .cast::<u8>()
                     .wrapping_add(
@@ -1342,7 +1342,7 @@ pub unsafe extern "C" fn perftest_drop_wire_optional_event(
                             ),
                     )
                     .cast::<*mut perftest_flat::CallbackReturnResource>(),
-            ) as usize) != 0) && (true)
+            ) as usize) != 0
             {
                 if !(::core::ptr::read(
                     (value)
@@ -2537,7 +2537,7 @@ pub unsafe extern "C" fn perftest_drop_rich_error(error: *mut __PbError_rich_err
                 __PbOwned_owned_string::empty(),
             );
             #[allow(clippy::collapsible_if)]
-            if ((*error).v1 == 1) && (true) {
+            if (*error).v1 == 1 {
                 drop((owned_2).into_rust());
             }
         }
@@ -7974,7 +7974,7 @@ pub unsafe extern "C" fn perftest_c_result_optional_handle(
             if success_committed {
                 let value = storage.assume_init();
                 #[allow(clippy::collapsible_if)]
-                if ((value.v0 as usize) != 0) && (true) {
+                if (value.v0 as usize) != 0 {
                     if !(value.v0).is_null() {
                         let _ = ::prebindgen_runtime::boundary(|| {
                             drop(
@@ -19549,7 +19549,7 @@ pub unsafe extern "C" fn perftest_collection_result_optional(
             if success_committed {
                 let value = storage.assume_init();
                 #[allow(clippy::collapsible_if)]
-                if (value.v0 == 1) && (true) {
+                if value.v0 == 1 {
                     if (value.v1).len != 0 {
                         let rows = Box::from_raw(
                             std::ptr::slice_from_raw_parts_mut(
@@ -33461,7 +33461,7 @@ pub unsafe extern "C" fn perftest_wire_checked_callback(
                                     ::prebindgen_runtime::CallbackReturnCleanup::new(move || {
                                         unsafe {
                                             #[allow(clippy::collapsible_if)]
-                                            if (callback_return_w1_tag) == 1i32 && (true) {
+                                            if (callback_return_w1_tag) == 1i32 {
                                                 if !(::core::ptr::read(
                                                     (callback_return_w1_carrier)
                                                         .cast::<u8>()
@@ -33500,7 +33500,7 @@ pub unsafe extern "C" fn perftest_wire_checked_callback(
                                                 }
                                             }
                                             #[allow(clippy::collapsible_if)]
-                                            if (callback_return_w1_tag) == 1i32 && (true) {
+                                            if (callback_return_w1_tag) == 1i32 {
                                                 if !(::core::ptr::read(
                                                     (callback_return_w1_carrier)
                                                         .cast::<u8>()
@@ -34221,7 +34221,7 @@ pub unsafe extern "C" fn perftest_wire_event_callback(
                                 ::prebindgen_runtime::CallbackReturnCleanup::new(move || {
                                     unsafe {
                                         #[allow(clippy::collapsible_if)]
-                                        if (callback_return_w1_tag) == 2i32 && (true) {
+                                        if (callback_return_w1_tag) == 2i32 {
                                             let _ = ::prebindgen_runtime::boundary(|| {
                                                 drop(
                                                     (::core::ptr::read(
@@ -34562,7 +34562,7 @@ pub unsafe extern "C" fn perftest_wire_event_echo(
                     ::prebindgen_runtime::CallbackReturnCleanup::new(move || {
                         unsafe {
                             #[allow(clippy::collapsible_if)]
-                            if (p0_w1_tag) == 2i32 && (true) {
+                            if (p0_w1_tag) == 2i32 {
                                 let _ = ::prebindgen_runtime::boundary(|| {
                                     drop(
                                         (::core::ptr::read(
@@ -34899,9 +34899,7 @@ pub unsafe extern "C" fn perftest_wire_optional_echo(
                     ::prebindgen_runtime::CallbackReturnCleanup::new(move || {
                         unsafe {
                             #[allow(clippy::collapsible_if)]
-                            if (p0_w1_tag) == 1i32
-                                && ((p0_w1_a1_f0_present == 1) && (true))
-                            {
+                            if ((p0_w1_tag) == 1i32) && (p0_w1_a1_f0_present == 1) {
                                 let _ = ::prebindgen_runtime::boundary(|| {
                                     drop(
                                         (::core::ptr::read(
@@ -34923,8 +34921,8 @@ pub unsafe extern "C" fn perftest_wire_optional_echo(
                                 });
                             }
                             #[allow(clippy::collapsible_if)]
-                            if (p0_w1_tag) == 1i32
-                                && (((p0_w1_a1_f1_some as usize) != 0) && (true))
+                            if ((p0_w1_tag) == 1i32)
+                                && ((p0_w1_a1_f1_some as usize) != 0)
                             {
                                 if !(::core::ptr::read(
                                     (p0_w1_carrier)
@@ -35636,7 +35634,7 @@ pub unsafe extern "C" fn perftest_wire_owned_callback(
                                 ::prebindgen_runtime::CallbackReturnCleanup::new(move || {
                                     unsafe {
                                         #[allow(clippy::collapsible_if)]
-                                        if (callback_return_w1_tag) == 1i32 && (true) {
+                                        if (callback_return_w1_tag) == 1i32 {
                                             if !(::core::ptr::read(
                                                 (callback_return_w1_carrier)
                                                     .cast::<u8>()
@@ -35675,7 +35673,7 @@ pub unsafe extern "C" fn perftest_wire_owned_callback(
                                             }
                                         }
                                         #[allow(clippy::collapsible_if)]
-                                        if (callback_return_w1_tag) == 1i32 && (true) {
+                                        if (callback_return_w1_tag) == 1i32 {
                                             if !(::core::ptr::read(
                                                 (callback_return_w1_carrier)
                                                     .cast::<u8>()
@@ -35714,7 +35712,7 @@ pub unsafe extern "C" fn perftest_wire_owned_callback(
                                             }
                                         }
                                         #[allow(clippy::collapsible_if)]
-                                        if (callback_return_w1_tag) == 2i32 && (true) {
+                                        if (callback_return_w1_tag) == 2i32 {
                                             let _ = ::prebindgen_runtime::boundary(|| {
                                                 drop(
                                                     (::core::ptr::read(
@@ -36071,7 +36069,7 @@ pub unsafe extern "C" fn perftest_wire_owned_echo(
                     ::prebindgen_runtime::CallbackReturnCleanup::new(move || {
                         unsafe {
                             #[allow(clippy::collapsible_if)]
-                            if (p0_w1_tag) == 1i32 && (true) {
+                            if (p0_w1_tag) == 1i32 {
                                 if !(::core::ptr::read(
                                     (p0_w1_carrier)
                                         .cast::<u8>()
@@ -36110,7 +36108,7 @@ pub unsafe extern "C" fn perftest_wire_owned_echo(
                                 }
                             }
                             #[allow(clippy::collapsible_if)]
-                            if (p0_w1_tag) == 1i32 && (true) {
+                            if (p0_w1_tag) == 1i32 {
                                 if !(::core::ptr::read(
                                     (p0_w1_carrier)
                                         .cast::<u8>()
@@ -36149,7 +36147,7 @@ pub unsafe extern "C" fn perftest_wire_owned_echo(
                                 }
                             }
                             #[allow(clippy::collapsible_if)]
-                            if (p0_w1_tag) == 2i32 && (true) {
+                            if (p0_w1_tag) == 2i32 {
                                 let _ = ::prebindgen_runtime::boundary(|| {
                                     drop(
                                         (::core::ptr::read(
@@ -36658,7 +36656,7 @@ pub unsafe extern "C" fn perftest_wire_owned_rows(p0_w1: __PbRows) -> __PbRows {
                                     ::prebindgen_runtime::CallbackReturnCleanup::new(move || {
                                         unsafe {
                                             #[allow(clippy::collapsible_if)]
-                                            if (p0_w5_tag) == 1i32 && (true) {
+                                            if (p0_w5_tag) == 1i32 {
                                                 if !(::core::ptr::read(
                                                     (p0_w5_carrier)
                                                         .cast::<u8>()
@@ -36697,7 +36695,7 @@ pub unsafe extern "C" fn perftest_wire_owned_rows(p0_w1: __PbRows) -> __PbRows {
                                                 }
                                             }
                                             #[allow(clippy::collapsible_if)]
-                                            if (p0_w5_tag) == 1i32 && (true) {
+                                            if (p0_w5_tag) == 1i32 {
                                                 if !(::core::ptr::read(
                                                     (p0_w5_carrier)
                                                         .cast::<u8>()
@@ -36736,7 +36734,7 @@ pub unsafe extern "C" fn perftest_wire_owned_rows(p0_w1: __PbRows) -> __PbRows {
                                                 }
                                             }
                                             #[allow(clippy::collapsible_if)]
-                                            if (p0_w5_tag) == 2i32 && (true) {
+                                            if (p0_w5_tag) == 2i32 {
                                                 let _ = ::prebindgen_runtime::boundary(|| {
                                                     drop(
                                                         (::core::ptr::read(
@@ -37404,7 +37402,7 @@ pub unsafe extern "C" fn perftest_wire_result_callback(
                                 ::prebindgen_runtime::CallbackReturnCleanup::new(move || {
                                     unsafe {
                                         #[allow(clippy::collapsible_if)]
-                                        if (callback_return_w1_tag) == 1i32 && (true) {
+                                        if (callback_return_w1_tag) == 1i32 {
                                             let _ = ::prebindgen_runtime::boundary(|| {
                                                 drop(
                                                     (::core::ptr::read(
@@ -37636,7 +37634,7 @@ pub unsafe extern "C" fn perftest_wire_result_echo(
                     ::prebindgen_runtime::CallbackReturnCleanup::new(move || {
                         unsafe {
                             #[allow(clippy::collapsible_if)]
-                            if (p0_w1_tag) == 1i32 && (true) {
+                            if (p0_w1_tag) == 1i32 {
                                 let _ = ::prebindgen_runtime::boundary(|| {
                                     drop(
                                         (::core::ptr::read(
