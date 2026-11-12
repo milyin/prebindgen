@@ -3,6 +3,8 @@ use prebindgen_declarations::{fun, Input, Output};
 use prebindgen_flat::{Flat, Result};
 use prebindgen_jni::{callback, enum_class, package, JniGen};
 
+mod zenoh;
+
 fn items<L: Default>(source: &str) -> Vec<(syn::Item, L)> {
     syn::parse_file(source)
         .unwrap()
@@ -125,5 +127,6 @@ fn main() -> Result<()> {
         .build()?;
     syn::parse_file(&ordinary.rust).map_err(|e| e.to_string())?;
     println!("outer function Result control: existing error routing succeeds");
+    zenoh::run()?;
     Ok(())
 }

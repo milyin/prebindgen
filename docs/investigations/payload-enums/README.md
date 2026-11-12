@@ -3,6 +3,9 @@
 **Status: proposal for human review; no generator implementation in this PR.**
 This is the payload-enum task from [#808](https://github.com/milyin/prebindgen/pull/808).
 The runnable [baseline probe](probe/src/main.rs) demonstrates the present restrictions.
+The [Zenoh usage audit](zenoh-usage.md) checks this plan against pinned source,
+JNI declarations and both SDKs. It makes expanded reply delivery, nested optional
+configuration and lists of instrumentation records concrete acceptance cases.
 
 ## What a caller should be able to do
 
@@ -45,8 +48,8 @@ The Kotlin surface follows the existing production generator's convention:
 ```kotlin
 sealed interface Event {
     data object Idle : Event
-    data class Count(val v0: Long) : Event
-    data class Packet(val id: Long, val bytes: ByteArray) : Event
+    data class Count(val v0: ULong) : Event
+    data class Packet(val id: ULong, val bytes: ByteArray) : Event
 }
 ```
 
@@ -210,10 +213,25 @@ change the declared Kotlin type of `Event.Packet.id`.
 Whenever the ordinary representation of an enum or concrete Result needs a
 foreign type, require its explicit `sealed_class!`/`tagged_union` declaration.
 Missing declarations are build errors naming the required type; do not invent
-public domain class names. Explicit enum-field expansions also require this
-declaration, so their source tag mapping and destination names are unambiguous.
-A complete canonical conversion to an already-declared representation may avoid
-the enum declaration because no enum tags/properties then cross the boundary.
+public domain class names. An explicit enum-field expansion does not require
+that ordinary declaration: its children and tag come from Flat, and it creates
+no sealed object. This is necessary for expanded values whose payload types
+have no foreign class, including Rust-only error types. Do not infer unused
+ordinary payload-property types while preparing such an expansion.
+
+The expanded tag is an integer with generated named constants, even without a
+sealed/tagged declaration. For example, emit Kotlin top-level
+`REPLY_RESULT_SAMPLE_TAG` and `REPLY_RESULT_ERROR_TAG` constants in the
+occurrence's destination package and corresponding C prefixed macros. The SDK
+adapter uses those constants, not integer literals. Derive names from source
+type/variant names; concrete generic types use readable type arguments plus the
+existing stable type hash, independent of variant order. Deduplicate per package
+and reject name collisions. These constants create no domain object or enum
+instance. Include every used enum's tag mapping in JNI initialization checks,
+including field-only and callback occurrences, not just sealed declarations.
+C retains its header/library compatibility contract with no runtime check.
+Bulk/row storage helpers retain the existing stable naming scheme. A complete
+canonical conversion to another representation can also avoid the declaration.
 Concrete generic types such as Result require an explicit Kotlin `.name(...)`;
 do not derive a potentially conflicting class named `Result`.
 
@@ -233,11 +251,15 @@ fun!(exchange).expand_return(Output::enum_fields([
 
 Keys are **source** variant names and source field members, independent of
 foreign renaming. A member is a field name or a tuple index such as `"0"`, resolved
-once to `syn::Member`. Omitted variants/fields use canonical field conversions.
+once to `syn::Member`. In an explicit enum-field expansion, omitted fields use
+`Input::auto()` / `Output::auto()`, inheriting configured boundary defaults just
+like existing explicit record-field expansions. Ordinary sealed/tagged value
+properties continue using canonical conversions.
 Reject unknown/duplicate keys; named recipes must not silently change meaning
 when source fields are reordered. An output recipe may explicitly discard a
 field; an input recipe must still construct every Rust field. An empty override
-list selects canonical recipes for all variants. Explicit omission uses the
+list inherits defaults for all variants. `Input::value()` / `Output::value()`
+can explicitly select a field's canonical representation instead. Explicit discard uses the
 existing `Output::Discard` node. Here "enum variant" always
 means a source Rust variant; `.variant(fun!(...))` still means a constructor
 alternative and is unchanged.
@@ -252,8 +274,9 @@ must compile without type annotations.
 Type-wide boundary defaults apply in the same places as today's expansion
 defaults, including recursively expanded optional/sequence occurrences. Ordinary
 sealed properties and ordinary enum payloads request canonical value conversions,
-not boundary defaults. Explicit field recipes can deliberately choose an
-expansion there. A local function/callback override replaces that occurrence's
+not boundary defaults. Explicit enum-field expansions inherit boundary defaults;
+their field overrides can select a different expansion or a canonical value.
+A local function/callback override replaces that occurrence's
 tree and does not mutate the foreign type declaration.
 The explicit Kotlin field form exposes a tag `Int` followed by separately named
 variant-field values, like existing constructor-selector expansions. Inactive
@@ -261,6 +284,27 @@ reference slots are nullable and ignored; an active required value must be
 present. Expanded outputs use the existing Kotlin builder callback with those
 tag/field arguments. `.bulk()` changes native storage, not those public
 arguments. Only the ordinary value form accepts/returns one sealed Event.
+Derive expanded public field names from their structural path: enclosing field,
+source variant, payload member, then nested view/field names. A reply can expose
+`resultSamplePayload`, `resultSampleEncodingId`, `resultErrorPayload` and
+`resultErrorEncodingId` alongside `replierId`. Apply existing explicit naming
+overrides and reject remaining collisions for both adapters; wire identifiers
+retain the existing stable internal naming rules.
+For example, an expanded ReplyResult can inherit Sample's configured consuming
+field expansion instead of producing a Sample handle. Expanding a surrounding
+ReplyStruct must preserve its sibling replier id and branch over only the
+result field; see the [real reply example](zenoh-usage.md#2-reply-delivery-must-keep-the-expanded-callback-path).
+
+An ordinary sealed value nested in a data class uses tag-plus-field wires too:
+Kotlin extracts its selected properties on input and reconstructs the selected
+sealed value on output. Public grouping does not make the enum a JNI object
+leaf. This permits RecoveryConfig's input to retain the current flattened native
+shape. JNI reserves `-1` for payload-enum carrier emptiness as C does, although
+JNI has no C carrier to drop; it is invalid as an ordinary value. Optional
+absence can use another reserved tag (normally `-2`), falling back to the existing
+explicit presence flag when a niche cannot be used. Inactive raw primitive slots
+have zero defaults and reference slots null defaults; only selected fields are
+decoded. Bulk changes physical storage, not this logical grouping.
 
 These nodes support `.bulk()`, type-wide expansion registration, function
 overrides and callback argument/result overrides through the existing entry
@@ -323,6 +367,11 @@ setting is chosen*: ordinary Result data uses canonical payloads, whereas an
 ordinary function outcome applies return-boundary defaults to its successful
 `T`. Specify a local enum-field recipe when the data payload should instead
 use an expansion. Type-wide error mappers are not invoked in data mode.
+Here "error mappers" means the function outcome's `.on_error(...)` or
+`.error_mapper(...)` selection. A type-wide `expand_return!(Error)` is a normal
+boundary expansion, so an explicit enum-field expansion can inherit it for an
+Err payload like any other output default. An ordinary canonical enum property
+does not automatically inherit that boundary expansion.
 
 Apply the function-error rule once at the exported source call. For
 `Result<Result<T, E>, F>`, only the outer layer routes `F`; the inner Result is
@@ -418,6 +467,17 @@ Borrowed callback returns remain unsupported.
 There is no separate C `run` binding-failure return: a returned Result's `Err`
 is data. A Rust-side failure decoding a returned carrier invokes the untaken
 active-field cleanup above before applying the existing callback failure policy.
+These are #808's current C transfer defaults. Zenoh's existing C consumer uses
+scoped, takeable pointer callbacks, with cleanup by the trampoline after return.
+That adapter-wide ownership-policy gap is a separate migration prerequisite;
+enum support must not claim that those callers can be used unchanged. Keep
+variant conversion independent of the outer callback's scope/transfer policy.
+The carrier must provide the operations needed by that future policy: pass its
+address during a scoped callback, take the whole carrier into caller storage
+while leaving the source tag `-1`, and drop the active remainder afterward.
+A take destination must be uninitialized or resource-free; a typed move
+preserves payload ownership without interpreting inactive bytes/padding. Adding
+the outer scoped/takeable callback setting remains separate work.
 
 For JNI callbacks, argument handles remain scoped unless the existing explicit
 transfer/retention mechanism is used. Returned handles transfer into Rust as
@@ -451,6 +511,12 @@ output pointers are not dereferenced. On input, C callers pass the tag and
 side-by-side raw slots themselves; inactive slots are ignored and may use
 zero/null raw values. The Kotlin wrapper supplies its raw inactive defaults.
 Neither adapter constructs inactive owners just to obtain defaults.
+Expanded C callback arguments follow the same active-arm ownership rule. All
+by-value raw ABI arguments have initialized neutral storage in inactive slots
+(zero/null or a nested carrier's empty tag), without constructing inactive Rust
+owners. Only active slots represent transferred resources and may be decoded or
+dropped by the callback. Grouped tagged carriers still expose only their active
+union payload.
 
 A grouped C carrier or JNI bulk row can instead store the largest payload in a
 union. This saves space when many variants have different fields. The logical
@@ -519,8 +585,9 @@ are not part of the plan.
    selection through variants, value/field enum operations and expected-type
    helper handling. Test mixed unit/tuple/named variants and zero-wire unit fields.
 2. **Ordinary adapters:** sealed Kotlin values and C tagged carriers in both
-   directions, recursive fields, explicit naming, canonical conversions, local
-   overrides, active-arm drop and partial-consumption reporting.
+   directions, plus field expansions without an ordinary class declaration.
+   Cover recursive fields, naming, canonical conversions, inherited boundary
+   defaults, local overrides, active-arm drop and partial-consumption reporting.
 3. **Bulk and callbacks:** target-measured union layout, tag-first readers,
    Kotlin preflight of selected handle fields, sequences and callbacks using
    the same prepared trees and cleanup helpers.
@@ -533,6 +600,11 @@ owned non-Clone payloads, `Result<(), E>`, nested Results, callback Result data
 in both directions, and outer function typed errors remaining unchanged. Exercise
 failures after partial moves, selected-field conversion, Kotlin construction and
 callback return conversion. Unused bulk arm bytes must not be inspected.
+The Zenoh acceptance matrix adds RecoveryConfig's optional RecoveryMode with
+converted Duration, a TimestampStackRecord list with nested enum/record/bytes,
+and consuming Reply -> ReplyStruct -> ReplyResult callback expansion. Track
+the independent helper-signature, scalar-domain, fixed-array and callback-scope
+prerequisites explicitly; this proposal is not a full Zenoh consumer port.
 
 Measure scalar-only and owning-payload enums, single values and arrays, ordinary
 and bulk delivery, and callbacks. Compare against equivalent explicit
@@ -555,6 +627,15 @@ cargo run --manifest-path docs/investigations/payload-enums/probe/Cargo.toml
 The probe is generation-only; it checks the current rejections and parses the
 positive control's generated Rust. It does not compile/run a generated foreign
 boundary or benchmark an implementation that does not exist yet.
+It also contains 16 selected real Zenoh declaration shapes, tests their current
+rejections, and demonstrates why an explicit field expansion must not depend
+on declaring an ordinary foreign class. To verify the fixture against the pinned
+Zenoh Git object in a local checkout:
+
+```sh
+cargo run --manifest-path docs/investigations/payload-enums/probe/Cargo.toml -- \
+  --zenoh-flat ../zenoh-flat
+```
 
 Current #808 references:
 

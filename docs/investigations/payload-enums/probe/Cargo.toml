@@ -12,4 +12,5 @@ prebindgen-c = { path = "../../../../prebindgen-c" }
 prebindgen-declarations = { path = "../../../../prebindgen-declarations" }
 prebindgen-flat = { path = "../../../../prebindgen-flat" }
 prebindgen-jni = { path = "../../../../prebindgen-jni" }
+quote = "1.0"
 syn = { version = "2.0", features = ["full"] }
