@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["InputBranch","InputLeafOp","InputUnary","OutputBranch","OutputLeafOp","OutputUnary"],"struct":["InputOperations","OutputOperations"],"type":["Input","Output"]};
+window.SIDEBAR_ITEMS = {"enum":["CInputBranch","CInputLeafOp","CInputUnary","COutputBranch","COutputLeafOp","COutputUnary"],"struct":["CInputOps","COutputOps"],"type":["CInput","COutput"]};

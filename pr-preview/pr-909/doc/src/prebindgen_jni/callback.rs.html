@@ -1,7 +1,7 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `prebindgen-jni/src/callback.rs`."><title>callback.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-0c87338a.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="prebindgen_jni" data-themes="" data-resource-suffix="" data-rustdoc-version="1.99.1 (58cf8f9c3 2026-10-13)" data-channel="1.99.1" data-search-js="search-cf4fc35e.js" data-stringdex-js="stringdex-b5109af9.js" data-settings-js="settings-170eb4bf.js" ><script src="../../static.files/storage-41dd4d93.js"></script><script defer src="../../static.files/src-script-813739b1.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-417ebf0a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-9f56287d.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1><div class="sub-heading">prebindgen_jni/</div>callback.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-4"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="doccomment">//! Preparation and emission of retained source callbacks.
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `prebindgen-jni/src/callback.rs`."><title>callback.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-203241e4.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="prebindgen_jni" data-themes="" data-resource-suffix="" data-rustdoc-version="1.100.0 (0ef1bc386 2026-11-09)" data-channel="1.100.0" data-search-js="search-b167f383.js" data-stringdex-js="stringdex-b5109af9.js" data-settings-js="settings-170eb4bf.js" ><script src="../../static.files/storage-41dd4d93.js"></script><script defer src="../../static.files/src-script-813739b1.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-1814ead3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-9f56287d.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1><div class="sub-heading">prebindgen_jni/</div>callback.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-4"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="doccomment">//! Preparation and emission of retained source callbacks.
 <a href=#2 id=2 data-nosnippet>2</a></span><span class="kw">use super</span>::<span class="kw-2">*</span>;
-<a href=#3 id=3 data-nosnippet>3</a><span class="kw">use </span><span class="kw">crate</span>::operations::OutputParts;
-<a href=#4 id=4 data-nosnippet>4</a><span class="kw">use </span><span class="kw">crate</span>::operations::{Input, InputBranch};
+<a href=#3 id=3 data-nosnippet>3</a><span class="kw">use </span><span class="kw">crate</span>::operations::JniOutputParts;
+<a href=#4 id=4 data-nosnippet>4</a><span class="kw">use </span><span class="kw">crate</span>::operations::{JniInput, JniInputBranch};
 <a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>prebindgen_conversions::{InputFragment, OutputFragment, TemplateContext};
 <a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>prebindgen_flat::{callback_signature, InputConversion, Wire, WireNode};
 <a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>std::rc::Rc;
@@ -22,13 +22,13 @@
 <a href=#22 id=22 data-nosnippet>22</a></span><span class="kw">struct </span>CallbackReturn {
 <a href=#23 id=23 data-nosnippet>23</a>    package: String,
 <a href=#24 id=24 data-nosnippet>24</a>    source_type: syn::Type,
-<a href=#25 id=25 data-nosnippet>25</a>    input: JniInput,
+<a href=#25 id=25 data-nosnippet>25</a>    input: JniInputConverter,
 <a href=#26 id=26 data-nosnippet>26</a>}
 <a href=#27 id=27 data-nosnippet>27</a><span class="attr">#[derive(Clone, Debug)]
 <a href=#28 id=28 data-nosnippet>28</a></span><span class="kw">struct </span>Argument {
 <a href=#29 id=29 data-nosnippet>29</a>    source_type: syn::Type,
 <a href=#30 id=30 data-nosnippet>30</a>    value: TokenStream,
-<a href=#31 id=31 data-nosnippet>31</a>    output: JniOutput,
+<a href=#31 id=31 data-nosnippet>31</a>    output: JniOutputConverter,
 <a href=#32 id=32 data-nosnippet>32</a>    scoped: bool,
 <a href=#33 id=33 data-nosnippet>33</a>}
 <a href=#34 id=34 data-nosnippet>34</a><span class="doccomment">/// Retain source callback occurrences before filtering to exported functions/helpers.
@@ -57,7 +57,7 @@
 <a href=#57 id=57 data-nosnippet>57</a>
 <a href=#58 id=58 data-nosnippet>58</a><span class="doccomment">/// A declaration configures a source occurrence, rather than inventing a signature.
 <a href=#59 id=59 data-nosnippet>59</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>validate_source_occurrence(
-<a href=#60 id=60 data-nosnippet>60</a>    flat: <span class="kw-2">&amp;</span>Bindings,
+<a href=#60 id=60 data-nosnippet>60</a>    flat: <span class="kw-2">&amp;</span>JniBindings,
 <a href=#61 id=61 data-nosnippet>61</a>    declaration: <span class="kw-2">&amp;</span>prebindgen_declarations::CallbackOperation,
 <a href=#62 id=62 data-nosnippet>62</a>    sources: <span class="kw-2">&amp;</span>[syn::Type],
 <a href=#63 id=63 data-nosnippet>63</a>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
@@ -93,7 +93,7 @@
 <a href=#93 id=93 data-nosnippet>93</a><span class="doccomment">/// Compile one callback occurrence, including a source constructor's argument.
 <a href=#94 id=94 data-nosnippet>94</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>input(
 <a href=#95 id=95 data-nosnippet>95</a>    request: prebindgen_declarations::InputArrow&lt;<span class="lifetime">'_</span>, JniCodec&gt;,
-<a href=#96 id=96 data-nosnippet>96</a>) -&gt; <span class="prelude-ty">Result</span>&lt;InputPlan&lt;JniWire&gt;&gt; {
+<a href=#96 id=96 data-nosnippet>96</a>) -&gt; <span class="prelude-ty">Result</span>&lt;JniInputPlan&lt;JniWire&gt;&gt; {
 <a href=#97 id=97 data-nosnippet>97</a>    <span class="kw">let </span>prebindgen_declarations::InputArrow {
 <a href=#98 id=98 data-nosnippet>98</a>        flat,
 <a href=#99 id=99 data-nosnippet>99</a>        operation: configuration,
@@ -109,8 +109,8 @@
 <a href=#109 id=109 data-nosnippet>109</a>    <span class="kw">let </span>signature = callback_signature(ty)<span class="question-mark">?</span>.ok_or(<span class="string">"expected source callback"</span>)<span class="question-mark">?</span>;
 <a href=#110 id=110 data-nosnippet>110</a>    <span class="kw">let </span>returns_unit = <span class="macro">matches!</span>(<span class="kw-2">&amp;</span>signature.return_type, syn::Type::Tuple(t) <span class="kw">if </span>t.elems.is_empty());
 <a href=#111 id=111 data-nosnippet>111</a>    <span class="kw">if </span>returns_unit
-<a href=#112 id=112 data-nosnippet>112</a>        &amp;&amp; !<span class="macro">matches!</span>(codomain, Input::None)
-<a href=#113 id=113 data-nosnippet>113</a>        &amp;&amp; !<span class="macro">matches!</span>(codomain, Input::Branch { operation: InputBranch::Fields, children } <span class="kw">if </span>children.is_empty())
+<a href=#112 id=112 data-nosnippet>112</a>        &amp;&amp; !<span class="macro">matches!</span>(codomain, JniInput::None)
+<a href=#113 id=113 data-nosnippet>113</a>        &amp;&amp; !<span class="macro">matches!</span>(codomain, JniInput::Branch { operation: JniInputBranch::Fields, children } <span class="kw">if </span>children.is_empty())
 <a href=#114 id=114 data-nosnippet>114</a>    {
 <a href=#115 id=115 data-nosnippet>115</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"unit callback returns require an empty unit input representation"</span>.into());
 <a href=#116 id=116 data-nosnippet>116</a>    }
@@ -257,7 +257,7 @@
 <a href=#257 id=257 data-nosnippet>257</a>            .get_mut(index)
 <a href=#258 id=258 data-nosnippet>258</a>            .ok_or(<span class="string">"callback argument index out of range"</span>)<span class="question-mark">?</span>;
 <a href=#259 id=259 data-nosnippet>259</a>        sequence::validate_buffered(<span class="kw-2">&amp;</span>output.output_outcomes().success)<span class="question-mark">?</span>;
-<a href=#260 id=260 data-nosnippet>260</a>        argument.output = JniOutput::new(output);
+<a href=#260 id=260 data-nosnippet>260</a>        argument.output = JniOutputConverter::new(output);
 <a href=#261 id=261 data-nosnippet>261</a>        <span class="prelude-val">Ok</span>(())
 <a href=#262 id=262 data-nosnippet>262</a>    }
 <a href=#263 id=263 data-nosnippet>263</a>    <span class="doccomment">/// Replace Kotlin-to-Rust conversion of the callback's owned return value.
@@ -269,13 +269,13 @@
 <a href=#269 id=269 data-nosnippet>269</a>            </span>.return_value
 <a href=#270 id=270 data-nosnippet>270</a>            .as_mut()
 <a href=#271 id=271 data-nosnippet>271</a>            .ok_or(<span class="string">"unit callback has no return converter"</span>)<span class="question-mark">?</span>;
-<a href=#272 id=272 data-nosnippet>272</a>        value.input = JniInput::new(input);
+<a href=#272 id=272 data-nosnippet>272</a>        value.input = JniInputConverter::new(input);
 <a href=#273 id=273 data-nosnippet>273</a>        <span class="prelude-val">Ok</span>(())
 <a href=#274 id=274 data-nosnippet>274</a>    }
 <a href=#275 id=275 data-nosnippet>275</a>    <span class="doccomment">/// Compile this configured retained callback as one ordinary function input.
 <a href=#276 id=276 data-nosnippet>276</a>    /// Call after changing argument/return converters so the Rust closure and
 <a href=#277 id=277 data-nosnippet>277</a>    /// Kotlin interface are prepared from the same authoritative description.
-<a href=#278 id=278 data-nosnippet>278</a>    </span><span class="kw">pub fn </span>into_input(<span class="self">self</span>, wire: syn::Ident, target: syn::Ident) -&gt; <span class="prelude-ty">Result</span>&lt;JniInput&gt; {
+<a href=#278 id=278 data-nosnippet>278</a>    </span><span class="kw">pub fn </span>into_input(<span class="self">self</span>, wire: syn::Ident, target: syn::Ident) -&gt; <span class="prelude-ty">Result</span>&lt;JniInputConverter&gt; {
 <a href=#279 id=279 data-nosnippet>279</a>        Rc::new(<span class="self">self</span>)
 <a href=#280 id=280 data-nosnippet>280</a>            .input(wire, target, <span class="kw-2">&amp;</span>prebindgen_declarations::Condition::default())
 <a href=#281 id=281 data-nosnippet>281</a>            .map(Into::into)
@@ -312,7 +312,7 @@
 <a href=#312 id=312 data-nosnippet>312</a>        wire: syn::Ident,
 <a href=#313 id=313 data-nosnippet>313</a>        var: syn::Ident,
 <a href=#314 id=314 data-nosnippet>314</a>        active: <span class="kw-2">&amp;</span>prebindgen_declarations::Condition,
-<a href=#315 id=315 data-nosnippet>315</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;InputPlan&lt;JniWire&gt;&gt; {
+<a href=#315 id=315 data-nosnippet>315</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;JniInputPlan&lt;JniWire&gt;&gt; {
 <a href=#316 id=316 data-nosnippet>316</a>        prebindgen_conversions::validate_wire_names(<span class="self">self</span>.arguments.iter().flat_map(|arg| {
 <a href=#317 id=317 data-nosnippet>317</a>            prebindgen_flat::wire_definitions(std::iter::once(
 <a href=#318 id=318 data-nosnippet>318</a>                <span class="kw-2">&amp;</span>arg.output.output_outcomes().success,
@@ -431,7 +431,7 @@
 <a href=#431 id=431 data-nosnippet>431</a>        } <span class="kw">else </span>{
 <a href=#432 id=432 data-nosnippet>432</a>            <span class="macro">quote!</span>(#retained.with_env(#capacity, |#environment| { <span class="kw">let </span><span class="kw-2">mut </span>#environment = #environment; #source_bindings #invoke });)
 <a href=#433 id=433 data-nosnippet>433</a>        };
-<a href=#434 id=434 data-nosnippet>434</a>        <span class="kw">let </span><span class="kw-2">mut </span>plan = InputPlan::new(
+<a href=#434 id=434 data-nosnippet>434</a>        <span class="kw">let </span><span class="kw-2">mut </span>plan = JniInputPlan::new(
 <a href=#435 id=435 data-nosnippet>435</a>            WireNode::Leaf(<span class="macro">vec!</span>[Wire {
 <a href=#436 id=436 data-nosnippet>436</a>                name: wire.clone(),
 <a href=#437 id=437 data-nosnippet>437</a>                kind: JniWire::Callback {
@@ -1105,7 +1105,7 @@
 <a href=#1105 id=1105 data-nosnippet>1105</a>                <span class="kw-2">&amp;</span>prebindgen_declarations::Condition::default(),
 <a href=#1106 id=1106 data-nosnippet>1106</a>            ))
 <a href=#1107 id=1107 data-nosnippet>1107</a>            .unwrap();
-<a href=#1108 id=1108 data-nosnippet>1108</a>        <span class="kw">let </span>input = JniInput::from(plan);
+<a href=#1108 id=1108 data-nosnippet>1108</a>        <span class="kw">let </span>input = JniInputConverter::from(plan);
 <a href=#1109 id=1109 data-nosnippet>1109</a>        <span class="kw">let </span>callback = Rc::new(JniCallback {
 <a href=#1110 id=1110 data-nosnippet>1110</a>            package: <span class="string">"test"</span>.into(),
 <a href=#1111 id=1111 data-nosnippet>1111</a>            name: <span class="string">"ReturnHandle"</span>.into(),

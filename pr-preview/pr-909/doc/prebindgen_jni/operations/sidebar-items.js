@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["InputBranch","InputLeafOp","InputUnary","OutputBranch","OutputLeafOp","OutputUnary"],"struct":["InputOperations","OutputOperations"],"type":["Input","Output"]};
+window.SIDEBAR_ITEMS = {"enum":["JniInputBranch","JniInputLeafOp","JniInputUnary","JniOutputBranch","JniOutputLeafOp","JniOutputUnary"],"struct":["JniInputOps","JniOutputOps"],"type":["JniInput","JniOutput"]};
