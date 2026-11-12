@@ -82,7 +82,7 @@
 <a href=#82 id=82 data-nosnippet>82</a>    }
 <a href=#83 id=83 data-nosnippet>83</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>kotlin_integer(<span class="kw-2">&amp;</span><span class="self">self</span>, value: i64) -&gt; String {
 <a href=#84 id=84 data-nosnippet>84</a>        <span class="kw">if </span><span class="macro">matches!</span>(<span class="self">self</span>.jvm_type(), JvmType::Long) {
-<a href=#85 id=85 data-nosnippet>85</a>            <span class="macro">format!</span>(<span class="string">"{value}L"</span>)
+<a href=#85 id=85 data-nosnippet>85</a>            <span class="kw">super</span>::jvm::long_literal(value)
 <a href=#86 id=86 data-nosnippet>86</a>        } <span class="kw">else </span>{
 <a href=#87 id=87 data-nosnippet>87</a>            value.to_string()
 <a href=#88 id=88 data-nosnippet>88</a>        }

@@ -267,4 +267,12 @@
 <a href=#267 id=267 data-nosnippet>267</a>        .find(|ty| ty.kotlin_type() == kotlin_type)
 <a href=#268 id=268 data-nosnippet>268</a>        .map(JvmType::kotlin_default)
 <a href=#269 id=269 data-nosnippet>269</a>}
+<a href=#270 id=270 data-nosnippet>270</a><span class="doccomment">/// Spell a signed JVM long without an out-of-range positive Kotlin token.
+<a href=#271 id=271 data-nosnippet>271</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>long_literal(value: i64) -&gt; String {
+<a href=#272 id=272 data-nosnippet>272</a>    <span class="kw">if </span>value == i64::MIN {
+<a href=#273 id=273 data-nosnippet>273</a>        <span class="string">"kotlin.Long.MIN_VALUE"</span>.into()
+<a href=#274 id=274 data-nosnippet>274</a>    } <span class="kw">else </span>{
+<a href=#275 id=275 data-nosnippet>275</a>        <span class="macro">format!</span>(<span class="string">"{value}L"</span>)
+<a href=#276 id=276 data-nosnippet>276</a>    }
+<a href=#277 id=277 data-nosnippet>277</a>}
 </code></pre></div></section></main></body></html>
