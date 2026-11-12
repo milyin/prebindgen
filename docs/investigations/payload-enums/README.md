@@ -229,6 +229,12 @@ existing stable type hash, independent of variant order. Deduplicate per package
 and reject name collisions. These constants create no domain object or enum
 instance. Include every used enum's tag mapping in JNI initialization checks,
 including field-only and callback occurrences, not just sealed declarations.
+Constants are emitted per generated function/callback package, deduplicated
+within that package; there is no mandatory global tag package. Their names
+follow source variants even if `.variant_name(...)` renames a sealed class.
+JNI initialization checks the generated Kotlin/native pair, not a separately
+compiled SDK. Kotlin `const val` values are inlined into SDK bytecode, so rebuild
+the SDK with its binding when the tag ABI changes; no SDK runtime check is claimed.
 C retains its header/library compatibility contract with no runtime check.
 Bulk/row storage helpers retain the existing stable naming scheme. A complete
 canonical conversion to another representation can also avoid the declaration.
@@ -270,6 +276,12 @@ and `Output<OutputRequest>` with the fixed item shape
 `IntoIterator` of this concrete item shape is accepted; keys are not generic
 `Into<String>` arguments. `Input::enum_fields([])` and its Output equivalent
 must compile without type annotations.
+Output enum-field expansion follows the source occurrence's ownership: owned
+values move active fields, while `&Enum` observes them by reference. Propagate
+that access to child recipes. If a borrowed occurrence inherits an owned-only
+helper such as Sample's `fields_into`, fail preparation with the variant/field
+path; do not clone to make it fit. Input enum-field expansion constructs an owned
+enum; borrowing a reconstructed enum still requires explicit reconstruction.
 
 Type-wide boundary defaults apply in the same places as today's expansion
 defaults, including recursively expanded optional/sequence occurrences. Ordinary
@@ -290,6 +302,9 @@ source variant, payload member, then nested view/field names. A reply can expose
 `resultErrorEncodingId` alongside `replierId`. Apply existing explicit naming
 overrides and reject remaining collisions for both adapters; wire identifiers
 retain the existing stable internal naming rules.
+Omit the tuple position for a single-field tuple variant, so Sample(Sample)
+adds `Sample`, not `Sample0`, to that path. Multi-field tuple variants include
+their positions. Collision checking runs after this abbreviation and overrides.
 For example, an expanded ReplyResult can inherit Sample's configured consuming
 field expansion instead of producing a Sample handle. Expanding a surrounding
 ReplyStruct must preserve its sibling replier id and branch over only the
@@ -305,14 +320,19 @@ absence can use another reserved tag (normally `-2`), falling back to the existi
 explicit presence flag when a niche cannot be used. Inactive raw primitive slots
 have zero defaults and reference slots null defaults; only selected fields are
 decoded. Bulk changes physical storage, not this logical grouping.
+If a public field form exposes an optional absence through a reserved tag,
+generate its named constant too, using the control's structured occurrence path
+and optional nesting (for example, `_NONE_TAG` / `_SOME_NONE_TAG`). Clients need
+not hardcode reservations. An explicit presence-flag form exposes the flag
+instead. Emit a C `_EMPTY_TAG` lifecycle constant for a grouped owning carrier.
 
-These nodes support `.bulk()`, type-wide expansion registration, function
-overrides and callback argument/result overrides through the existing entry
-points, subject to existing delivery constraints. A callback result must expose
-one Kotlin value: the ordinary sealed value satisfies that rule, while an
-ungrouped tag/fields expansion may not. Physical bulk packing does not invent a
-public Kotlin tuple. Diagnose an override that still exposes multiple Kotlin
-values; generalized grouped representations remain the separate #830 task.
+Enum-field nodes support `.bulk()`, type-wide expansion registration, function
+overrides and callback arguments through the existing entry points. JNI callback
+results normally use the ordinary sealed value or another conversion exposing
+one Kotlin value; general ungrouped tag-plus-payload fields do not satisfy that
+existing rule. Diagnose such result overrides. Physical bulk packing does not
+invent a public Kotlin tuple; generalized grouping remains the separate #830
+task. C callback results can use their existing carrier/result-record protocol.
 These nodes do not add another bulk or callback configuration API. Existing
 constructor expansions remain useful as alternatives to enum-field input.
 
@@ -478,6 +498,8 @@ while leaving the source tag `-1`, and drop the active remainder afterward.
 A take destination must be uninitialized or resource-free; a typed move
 preserves payload ownership without interpreting inactive bytes/padding. Adding
 the outer scoped/takeable callback setting remains separate work.
+For ungrouped expanded arguments, that policy uses the existing take/empty
+operations of individual owning leaves; there is no whole-enum carrier to take.
 
 For JNI callbacks, argument handles remain scoped unless the existing explicit
 transfer/retention mechanism is used. Returned handles transfer into Rust as
@@ -569,6 +591,15 @@ incorrect even if later conversion ignored them. Writers initialize safe byte
 storage and write selected fields, without copying Rust padding. JNI checks
 selected descriptors/lengths with the existing bulk validation rules. C adds no
 runtime tag, alias or pointer checks.
+
+Tag validity is required for every JNI input form, not only bulk. A native
+integer-to-enum match rejects an unknown tag before constructing the source
+variant or touching its payload, using the existing binding-failure route
+(including the existing non-unit callback-result failure policy). Kotlin
+preflight must also select handles only from a valid active branch. This is
+scalar/wire validation, not a native alias-check pass. In C the unsafe caller
+contract supplies valid tags; an impossible catch-all may use
+`unsafe { core::hint::unreachable_unchecked() }`, without adding validation.
 
 Ordinary object delivery, bulk arrays, callback arguments and callback returns
 must consume this same branch-aware conversion and cleanup plan. A callback
