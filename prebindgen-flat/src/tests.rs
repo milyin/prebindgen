@@ -75,7 +75,7 @@ fn refuses_unsupported_syntax_without_dropping_it() {
         "pub fn f(x:Option<Unknown>){}",
         "pub struct X{field:String}",
         "fn f(){}",
-        "pub enum E{A(i32)}",
+        "pub enum E<T>{A(T)}",
     ] {
         assert!(parse(source).is_err(), "{source}");
     }
@@ -113,7 +113,7 @@ fn mapping_visits_only_boundary_slots_and_preserves_source_structure() {
 
 #[test]
 fn selected_sources_ignore_unbound_shapes_but_validate_reachable_ones() {
-    let source = "pub type Handle = hidden::Private; pub enum Unsupported { A(i32) } pub fn make() -> Handle {} pub fn bad(x: Unsupported) {}";
+    let source = "pub type Handle = hidden::Private; #[non_exhaustive] pub enum Unsupported { A(i32) } pub fn make() -> Handle {} pub fn bad(x: Unsupported) {}";
     let items = || {
         syn::parse_file(source)
             .unwrap()
@@ -128,7 +128,7 @@ fn selected_sources_ignore_unbound_shapes_but_validate_reachable_ones() {
     assert!(
         Flat::<TestSchema>::parse_selected(items(), &["bad".into()], &[])
             .unwrap_err()
-            .contains("fieldless enum")
+            .contains("non-exhaustive")
     );
 }
 
@@ -261,7 +261,6 @@ fn fieldless_enum_source_metadata_survives_selection_and_slot_mapping() {
         "enum E { A }",
         "pub enum E<T> { A }",
         "pub enum E {}",
-        "pub enum E { A {} }",
         "pub enum E { #[cfg(test)] A, B }",
         "#[non_exhaustive] pub enum E { A, B }",
         "#[cfg(test)] pub enum E { A, B }",

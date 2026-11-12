@@ -451,7 +451,7 @@ pub(crate) fn validate_buffered(
             ..
         }
         | prebindgen_flat::WireNode::Branch {
-            meta: JniBranch::Alternatives,
+            meta: JniBranch::Alternatives | JniBranch::Enum(_),
             children: elements,
             ..
         } => {

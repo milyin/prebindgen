@@ -126,16 +126,36 @@ val nativeResult = try { run { val __pb_handle0: io.prebindgen.covertest.NativeH
 public fun nullabilityValueBulk(valueVariant: Int, valueVariant0: io.prebindgen.covertest.nullability.NullabilityValue?, valueVariant1Text: String?, valueVariant1Bytes: ByteArray?, valueVariant1Wide: java.math.BigInteger?, valueVariant1Choice: io.prebindgen.covertest.nullability.NullabilityChoice?, valueVariant1Handle: io.prebindgen.covertest.nullability.NullabilityHandle?, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
     val p0_w1_writer_state = try { if (true) run { val p0_w1_writer = io.prebindgen.covertest.BulkInputs.Input_i32_Range_6217a02e84ef490c()
 p0_w1_writer.int((0) + io.prebindgen.covertest.BulkLayouts.r6217a02e84ef490c.offsets[0], io.prebindgen.covertest.InputValidation.value { valueVariant })
+if ((valueVariant) == 0) {
 p0_w1_writer.text((0) + io.prebindgen.covertest.BulkLayouts.r6217a02e84ef490c.offsets[1], io.prebindgen.covertest.InputValidation.value { if (valueVariant == 0) requireNotNull(valueVariant0).text else null })
+}
+if ((valueVariant) == 0) {
 p0_w1_writer.bytes((0) + io.prebindgen.covertest.BulkLayouts.r6217a02e84ef490c.offsets[2], io.prebindgen.covertest.InputValidation.value { if (valueVariant == 0) requireNotNull(valueVariant0).bytes else null })
+}
+if ((valueVariant) == 0) {
 p0_w1_writer.wide((0) + io.prebindgen.covertest.BulkLayouts.r6217a02e84ef490c.offsets[3], io.prebindgen.covertest.InputValidation.value { if (valueVariant == 0) requireNotNull(valueVariant0).wide.toByteArray() else null }, true)
+}
+if ((valueVariant) == 0) {
 p0_w1_writer.int((0) + io.prebindgen.covertest.BulkLayouts.r6217a02e84ef490c.offsets[4], io.prebindgen.covertest.InputValidation.value { if (valueVariant == 0) requireNotNull(valueVariant0).choice.wireValue else 0 })
+}
+if ((valueVariant) == 0) {
 p0_w1_writer.long((0) + io.prebindgen.covertest.BulkLayouts.r6217a02e84ef490c.offsets[5], io.prebindgen.covertest.InputValidation.value { if (valueVariant == 0) requireNotNull(valueVariant0).handle_value else 0L })
+}
+if ((valueVariant) == 1) {
 p0_w1_writer.text((0) + io.prebindgen.covertest.BulkLayouts.r6217a02e84ef490c.offsets[6], io.prebindgen.covertest.InputValidation.value { valueVariant1Text })
+}
+if ((valueVariant) == 1) {
 p0_w1_writer.bytes((0) + io.prebindgen.covertest.BulkLayouts.r6217a02e84ef490c.offsets[7], io.prebindgen.covertest.InputValidation.value { valueVariant1Bytes })
+}
+if ((valueVariant) == 1) {
 p0_w1_writer.wide((0) + io.prebindgen.covertest.BulkLayouts.r6217a02e84ef490c.offsets[8], io.prebindgen.covertest.InputValidation.value { if (valueVariant == 1) requireNotNull(valueVariant1Wide).toByteArray() else null }, true)
+}
+if ((valueVariant) == 1) {
 p0_w1_writer.int((0) + io.prebindgen.covertest.BulkLayouts.r6217a02e84ef490c.offsets[9], io.prebindgen.covertest.InputValidation.value { if (valueVariant == 1) requireNotNull(valueVariant1Choice).wireValue else 0 })
+}
+if ((valueVariant) == 1) {
 p0_w1_writer.handle((0) + io.prebindgen.covertest.BulkLayouts.r6217a02e84ef490c.offsets[10], io.prebindgen.covertest.InputValidation.value { if (valueVariant == 1) valueVariant1Handle else null }, false, 0)
+}
 
 p0_w1_writer } else null } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()

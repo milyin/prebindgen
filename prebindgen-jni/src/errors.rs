@@ -100,6 +100,9 @@ pub(crate) fn prepare(
         }
     }
     for function in functions {
+        if function.result_value {
+            continue;
+        }
         let ret = flat.function(&function.name)?.ret.ty.clone();
         let Some((_, error)) = prebindgen_flat::result_parts(&ret) else {
             continue;

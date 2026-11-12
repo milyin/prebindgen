@@ -130,7 +130,9 @@ fn strip_flat_class_prefix(class: &str, name: &str) -> String {
 use prebindgen_declarations::{
     convert, expand_param, expand_return, fields, from, fun, into, try_from, try_into,
 };
-use prebindgen_jni::{callback, data_class, enum_class, package, ptr_class, Input, JniGen};
+use prebindgen_jni::{
+    callback, data_class, enum_class, package, ptr_class, sealed_class, Input, JniGen,
+};
 
 fn bulk_replay_input_with(
     redundant_bulk: bool,
@@ -201,6 +203,65 @@ fn main() {
     let type_rows = || Input::Sequence(Box::new(Input::Record(vec![Input::Leaf; 2])));
     let type_nested = || Input::Sequence(Box::new(type_rows()));
     let binding = JniGen::builder()
+        .convert(convert!(WireMarker).input(fun!(wire_marker_new)).output(fun!(wire_marker_value)))
+        .expand(expand_return!(WireReply).fields_into(fields!(wire_reply_into_struct)))
+        .expand(expand_return!(WireReplyResult).view(prebindgen_declarations::Output::enum_fields([])))
+        .expand(expand_return!(WireReplySample).view(prebindgen_declarations::Output::OwnedFields(vec![prebindgen_declarations::Output::auto();2])))
+        .expand(expand_return!(WireReplyError).fields(fields!(wire_reply_error_view)))
+        .convert(convert!(WireDuration).input(fun!(wire_duration_new)).output(fun!(wire_duration_millis)))
+        .package(package!("payloadenums")
+            .class(sealed_class!(WireEvent))
+            .class(sealed_class!(WireSelfName))
+            .class(sealed_class!(WireErrorKind))
+            .class(sealed_class!(Result<Result<i64,String>,String>).name("WireNestedDecision"))
+            .class(callback!(impl Fn(&WireEvent)).expand_param(0,expand_return!(WireEvent).field_self_ref()))
+            .fun(fun!(wire_event_borrowed))
+            .fun(fun!(wire_self_name_echo))
+            .fun(fun!(wire_nested_echo).result_as_value())
+            .fun(fun!(wire_nested_outcome))
+            .fun(fun!(wire_error_outcome))
+            .class(sealed_class!(WireEmpty))
+            .fun(fun!(wire_empty_echo))
+            .class(sealed_class!(WireBench))
+            .fun(fun!(wire_owned_bench))
+            .fun(fun!(wire_manual_owned_bench))
+            .fun(fun!(wire_bench_total))
+            .fun(fun!(wire_bench_scalar_bulk).expand_param("value",Input::value().bulk()))
+            .fun(fun!(wire_manual_total))
+            .fun(fun!(wire_bench_bulk).expand_param("values",Input::Sequence(Box::new(Input::value())).bulk()))
+            .fun(fun!(wire_bench_objects))
+            .class(sealed_class!(WireCheckedEvent))
+            .fun(fun!(wire_checked_new))
+            .fun(fun!(wire_checked_callback))
+            .fun(fun!(wire_reply_emit))
+            .class(sealed_class!(WireOwnedEvent))
+            .class(sealed_class!(WireCompositeOwnedEvent))
+            .fun(fun!(wire_composite_owned_new))
+            .class(data_class!(WireOptionalOwner))
+            .class(sealed_class!(WireNicheEvent))
+            .fun(fun!(wire_niche_rows).expand_param("values",Input::Sequence(Box::new(Input::Enum { variants:vec![vec![],vec![Input::Optional(Box::new(Input::Record(vec![Input::value();2]))),Input::value()]],value:true })).bulk()))
+            .fun(fun!(wire_owned_new))
+            .fun(fun!(wire_owned_echo))
+            .fun(fun!(wire_owned_callback))
+            .fun(fun!(wire_owned_rows).expand_param("values",Input::Sequence(Box::new(Input::value())).bulk()))
+            .fun(fun!(wire_owned_rows_new))
+            .class(sealed_class!(WireRecoveryMode))
+            .class(data_class!(WireRecoveryConfig))
+            .class(data_class!(WireTimestamp))
+            .class(sealed_class!(WireInstrumentationTimestamp))
+            .class(enum_class!(WireInterceptionPoint))
+            .class(data_class!(WireTimestampStackRecord))
+            .fun(fun!(wire_recovery_echo))
+            .fun(fun!(wire_timestamps).expand_param("values",Input::Sequence(Box::new(Input::value())).bulk()))
+            .class(sealed_class!(Result<i64,String>).name("WireDecision"))
+            .class(sealed_class!(Result<(),String>).name("WireNotice"))
+            .fun(fun!(wire_event_rows).expand_param("values",Input::Sequence(Box::new(Input::value())).bulk()))
+            .fun(fun!(wire_event_rows_callback))
+            .fun(fun!(wire_bare_echo).expand_param("value",Input::enum_fields([])).expand_return(prebindgen_declarations::Output::enum_fields([])))
+            .fun(fun!(wire_event_echo))
+            .fun(fun!(wire_event_callback))
+            .fun(fun!(wire_result_echo).result_as_value())
+            .fun(fun!(wire_result_callback).result_as_value()))
         .convert(
             convert!(CanonMillis)
                 .input(fun!(canonical_millis_new))

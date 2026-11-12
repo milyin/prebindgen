@@ -37,6 +37,11 @@ internal open class BulkWriter(initial: Int) {
     fun int(at: Int, value: Int) { view.putInt(at, value) }
     fun long(at: Int, value: Long) { view.putLong(at, value) }
     protected fun long(at: Int): Long = view.getLong(at)
+    protected fun int(at: Int): Int = view.getInt(at)
+    protected fun byte(at: Int): Byte = view.get(at)
+    protected fun short(at: Int): Short = view.getShort(at)
+    protected fun float(at: Int): Float = view.getFloat(at)
+    protected fun double(at: Int): Double = view.getDouble(at)
     fun float(at: Int, value: Float) { view.putFloat(at, value) }
     fun double(at: Int, value: Double) { view.putDouble(at, value) }
     fun wide(at: Int, input: ByteArray?, signed: Boolean) {

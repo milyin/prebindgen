@@ -70,6 +70,7 @@ pub(crate) fn output(
     let cleanup = release_fields(
         element,
         &owned_fields,
+        &owned_fields,
         &|wire| prebindgen_conversions::template_parameter(&format!("row_{}", wire.name)),
         true,
     );
@@ -128,7 +129,7 @@ pub(crate) fn schemas<'a>(
             ..
         }
         | WireNode::Branch {
-            meta: CBranch::Alternatives,
+            meta: CBranch::Alternatives | CBranch::Enum(_),
             children: elements,
             ..
         } => {
@@ -137,7 +138,7 @@ pub(crate) fn schemas<'a>(
             }
         }
         WireNode::Chain {
-            meta: CChain::Optional(_),
+            meta: CChain::Optional(_) | CChain::Tagged(_),
             child: element,
             ..
         } => schemas(element, out),
@@ -232,6 +233,7 @@ pub(crate) fn release(
     release_fields(
         layout,
         fields,
+        fields,
         &|wire| {
             let row = &context.row_types[&wire.name.to_string()];
             quote!(#row)
@@ -242,9 +244,10 @@ pub(crate) fn release(
 
 // The same schema destruction is used before delivery (row-type placeholders)
 // and after delivery (resolved wrapper context), including nested collections.
-fn release_fields(
+pub(crate) fn release_fields(
     layout: &prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>,
     fields: &[(&Wire, TokenStream)],
+    conditions: &[(&Wire, TokenStream)],
     row_type: &impl Fn(&Wire) -> TokenStream,
     catch_panics: bool,
 ) -> TokenStream {
@@ -252,29 +255,45 @@ fn release_fields(
     self::schemas(layout, &mut schemas);
     let mut code = TokenStream::new();
     for (wire, value) in fields {
+        let mut release = TokenStream::new();
         match &wire.kind {
-            CWire::Buffer => code.extend(quote! {if !(#value).data.is_null(){drop(Box::from_raw(std::ptr::slice_from_raw_parts_mut((#value).data as *mut u8,(#value).len)));}}),
+            CWire::Buffer => release.extend(quote! {if !(#value).data.is_null(){drop(Box::from_raw(std::ptr::slice_from_raw_parts_mut((#value).data as *mut u8,(#value).len)));}}),
             CWire::Pointer { pointer, .. } if pointer.access == Access::Move => {
                 let ty = &pointer.ty;
                 let drop = quote!(drop(Box::from_raw((#value) as *mut #ty)););
                 let drop = if catch_panics {
                     quote!(let _ = ::prebindgen_runtime::boundary(|| { #drop Ok(()) });)
                 } else { drop };
-                code.extend(quote! { if !(#value).is_null() { #drop } });
+                release.extend(quote! { if !(#value).is_null() { #drop } });
             }
             CWire::Owned {access:Access::Move,by_value:true,..} => {
                 let drop=quote!(drop((#value).into_rust()););
                 let drop=if catch_panics {quote!(let _=::prebindgen_runtime::boundary(||{#drop Ok(())});)} else {drop};
-                code.extend(drop);
+                release.extend(drop);
+            }
+            CWire::Tagged{value:carrier,by_value:true} if carrier.owned=>{
+                let drop=&carrier.destructor;release.extend(quote!({let mut carrier=#value;#drop(::core::ptr::addr_of_mut!(carrier));}));
             }
             CWire::Rows => {
                 let row=row_type(wire);
                 let element=schemas.iter().find(|(carrier,_,_)|carrier.name==wire.name).unwrap().1;
                 let fields=crate::group::row_fields(element).enumerate().map(|(i,wire)|{let field=format_ident!("v{i}");(wire,quote!(row.#field))}).collect::<Vec<_>>();
-                let child=release_fields(element,&fields,row_type,catch_panics);
-                code.extend(quote! {if (#value).len != 0 {let rows=Box::from_raw(std::ptr::slice_from_raw_parts_mut((#value).data as *mut #row,(#value).len));for row in rows.iter(){#child}}});
+                let child=release_fields(element,&fields,&fields,row_type,catch_panics);
+                release.extend(quote! {if (#value).len != 0 {let rows=Box::from_raw(std::ptr::slice_from_raw_parts_mut((#value).data as *mut #row,(#value).len));for row in rows.iter(){#child}}});
             }
             _=>{}
+        }
+        if release.is_empty() {
+            continue;
+        }
+        let condition =
+            release_condition(layout, &wire.name, conditions).unwrap_or_else(|| quote!(true));
+        if condition.to_string() == "true" {
+            code.extend(release);
+        } else {
+            // The outer selector and the leaf's resource guard are composed
+            // independently; preserving that structure keeps inactive reads out.
+            code.extend(quote!(#[allow(clippy::collapsible_if)] if #condition {#release}));
         }
     }
     code
@@ -408,7 +427,7 @@ pub(crate) fn validate_buffered(
             validate_buffered(element)?;
         }
         prebindgen_flat::WireNode::Chain {
-            meta: CChain::Optional(_),
+            meta: CChain::Optional(_) | CChain::Tagged(_),
             child: element,
             ..
         } => validate_buffered(element)?,
@@ -418,7 +437,7 @@ pub(crate) fn validate_buffered(
             ..
         }
         | prebindgen_flat::WireNode::Branch {
-            meta: CBranch::Alternatives,
+            meta: CBranch::Alternatives | CBranch::Enum(_),
             children: elements,
             ..
         } => {
@@ -466,6 +485,69 @@ fn outer_sequences(
     let mut out = vec![];
     visit(node, &mut out);
     out
+}
+
+// A carrier is a scope boundary. Its own destructor interprets its children.
+fn release_condition(
+    node: &WireNode<CWire, CChain, CBranch>,
+    target: &syn::Ident,
+    fields: &[(&Wire, TokenStream)],
+) -> Option<TokenStream> {
+    fn enclose(predicate: TokenStream, child: TokenStream) -> TokenStream {
+        if child.to_string() == "true" {
+            predicate
+        } else {
+            quote!((#predicate) && (#child))
+        }
+    }
+    let value = |name: &syn::Ident| {
+        fields
+            .iter()
+            .find(|(w, _)| w.name == *name)
+            .map(|(_, v)| v.clone())
+    };
+    let controls = match node {
+        WireNode::Leaf(w) => w,
+        WireNode::Chain { controls, .. } | WireNode::Branch { controls, .. } => controls,
+    };
+    if controls.iter().any(|w| w.name == *target) {
+        return Some(quote!(true));
+    }
+    match node {
+        WireNode::Leaf(_) => None,
+        WireNode::Chain {
+            meta: CChain::Sequence(_) | CChain::Tagged(_),
+            ..
+        } => None,
+        WireNode::Chain {
+            meta: CChain::Optional(optional),
+            child,
+            ..
+        } => {
+            let child = release_condition(child, target, fields)?;
+            let discriminator = value(optional.discriminator())?;
+            let present = optional
+                .niche()
+                .map(|n| n.present(discriminator.clone()))
+                .unwrap_or_else(|| quote!(#discriminator==1));
+            Some(enclose(present, child))
+        }
+        WireNode::Branch {
+            meta: CBranch::Enum(_) | CBranch::Alternatives,
+            controls,
+            children,
+        } => {
+            let tag = value(&controls[0].name)?;
+            children.iter().enumerate().find_map(|(i, child)| {
+                let child = release_condition(child, target, fields)?;
+                let i = i as i32;
+                Some(enclose(quote!((#tag)==#i), child))
+            })
+        }
+        WireNode::Branch { children, .. } => children
+            .iter()
+            .find_map(|child| release_condition(child, target, fields)),
+    }
 }
 
 #[cfg(test)]

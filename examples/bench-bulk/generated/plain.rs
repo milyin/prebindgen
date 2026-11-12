@@ -205,7 +205,7 @@ unsafe fn __pb_cleanup_native_InputHandle_567ed8299898558e(
         let raw = reader
             .read::<
                 i64,
-            >(base + ::core::mem::offset_of!(__PbBulk_i64_i64_b3c08eb92fbbc74c, v0))?;
+            >(base + (::core::mem::offset_of!(__PbBulk_i64_i64_b3c08eb92fbbc74c, v0)))?;
         if raw != 0 {
             let _ = ::prebindgen_runtime::boundary(|| unsafe {
                 ::prebindgen_jni_runtime::drop_pointer::<bench_flat::InputHandle>(raw)
@@ -223,7 +223,9 @@ unsafe fn __pb_cleanup_native_InputHandle_Rows_64034ad291d2d0cd(
         let raw = reader
             .read::<
                 i64,
-            >(base + ::core::mem::offset_of!(__PbBulk_i64_Range_0643563939dde3e9, v0))?;
+            >(
+                base + (::core::mem::offset_of!(__PbBulk_i64_Range_0643563939dde3e9, v0)),
+            )?;
         if raw != 0 {
             let _ = ::prebindgen_runtime::boundary(|| unsafe {
                 ::prebindgen_jni_runtime::drop_pointer::<bench_flat::InputHandle>(raw)
@@ -234,7 +236,7 @@ unsafe fn __pb_cleanup_native_InputHandle_Rows_64034ad291d2d0cd(
     let _ = ::prebindgen_runtime::boundary(|| {
         if let Some(range) = reader
             .range(
-                base + ::core::mem::offset_of!(__PbBulk_i64_Range_0643563939dde3e9, v1),
+                base + (::core::mem::offset_of!(__PbBulk_i64_Range_0643563939dde3e9, v1)),
             )?
         {
             let (start, length) = reader

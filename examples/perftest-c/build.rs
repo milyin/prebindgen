@@ -10,6 +10,58 @@ fn main() {
     // into its C name (e.g. `Payload` -> `payload_t`, `String` -> `string_t`).
     let mut cbindgen = prebindgen_c::Cbindgen::builder()
         .convert(
+            convert!(WireMarker)
+                .input(fun!(wire_marker_new))
+                .output(fun!(wire_marker_value)),
+        )
+        .tagged_union("wire_checked_event", pq!(WireCheckedEvent))
+        .function(fun!(wire_checked_new))
+        .function(fun!(wire_checked_callback))
+        .function(
+            fun!(wire_bare_echo)
+                .expand_param("value", prebindgen_declarations::Input::enum_fields([]))
+                .expand_return(Output::enum_fields([])),
+        )
+        .panic()
+        .tagged_union("wire_optional_event", pq!(WireOptionalEvent))
+        .function(fun!(wire_optional_echo))
+        .panic()
+        .function(fun!(wire_optional_none))
+        .panic()
+        .tagged_union("wire_event", pq!(WireEvent))
+        .tagged_union("wire_empty", pq!(WireEmpty))
+        .function(fun!(wire_empty_echo))
+        .panic()
+        .tagged_union("wire_owned_event", pq!(WireOwnedEvent))
+        .function(fun!(wire_owned_new))
+        .panic()
+        .function(fun!(wire_owned_echo))
+        .panic()
+        .function(fun!(wire_owned_callback))
+        .panic()
+        .function(fun!(wire_owned_rows).expand_return(Output::Sequence {
+            element: Box::new(Output::value()),
+            mode: None,
+            delivery: SequenceDelivery::Value,
+        }))
+        .panic()
+        .function(fun!(wire_owned_rows_new).expand_return(Output::Sequence {
+            element: Box::new(Output::value()),
+            mode: None,
+            delivery: SequenceDelivery::Value,
+        }))
+        .panic()
+        .tagged_union("wire_decision", pq!(Result<i64,String>))
+        .tagged_union("wire_notice", pq!(Result<(),String>))
+        .function(fun!(wire_event_echo))
+        .panic()
+        .function(fun!(wire_event_callback))
+        .panic()
+        .function(fun!(wire_result_echo).result_as_value())
+        .panic()
+        .function(fun!(wire_result_callback).result_as_value())
+        .panic()
+        .convert(
             convert!(CanonMillis)
                 .input(fun!(canonical_millis_new))
                 .output(fun!(canonical_millis_value)),

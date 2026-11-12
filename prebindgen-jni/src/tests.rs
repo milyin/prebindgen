@@ -1961,7 +1961,7 @@ fn callback_rejections_are_preparation_errors() {
     for (source, message) in [
         (
             "pub fn f(cb:impl Fn(Result<i64,String>)) {}",
-            "Result-valued callback",
+            "requires sealed_class",
         ),
         ("pub fn f(cb:impl Fn(&mut i64)) {}", "mutable callback"),
     ] {
@@ -2193,7 +2193,7 @@ fn callback_returns_reject_borrows_and_unrepresented_results_in_preparation() {
         ("pub fn f(cb:impl Fn(&i64)->&i64) {}", "must be owned"),
         (
             "pub fn f(cb:impl Fn()->Result<i64,String>) {}",
-            "Result inputs",
+            "requires sealed_class",
         ),
     ] {
         let error = fail(

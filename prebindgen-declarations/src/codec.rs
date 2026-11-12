@@ -51,6 +51,35 @@ pub trait Codec {
     fn alternatives(&self, _request: Alternatives<'_, Self>) -> Result<Self::Branch> {
         Err("input alternatives are unsupported by this codec".into())
     }
+    /// Interpret a selected source variant and its recursively compiled payload.
+    fn enum_variants(&self, _request: EnumVariants<'_, Self>) -> Result<EnumEncoding<Self>> {
+        Err("payload enums are unsupported by this codec".into())
+    }
+    /// Wrap an ordinary enum input in the adapter's public value carrier.
+    #[allow(clippy::too_many_arguments)]
+    fn input_enum(
+        &self,
+        _flat: &Flat<Self::Schema>,
+        _ty: &Type,
+        _extra: &Self::Extra,
+        _wire: syn::Ident,
+        plan: CodecInput<Self>,
+        _active: &Condition,
+        _role: InputRole,
+    ) -> Result<CodecInput<Self>> {
+        Ok(plan)
+    }
+    /// Wrap an ordinary enum output in the adapter's public value carrier.
+    fn output_enum(
+        &self,
+        _flat: &Flat<Self::Schema>,
+        _ty: &Type,
+        _extra: &Self::Extra,
+        _wire: syn::Ident,
+        plan: CodecOutput<Self>,
+    ) -> Result<CodecOutput<Self>> {
+        Ok(plan)
+    }
     /// Choose ordinary or bulk input row transport; preserve row-local lifetimes.
     fn sequence_input(
         &self,
@@ -165,6 +194,7 @@ pub trait Codec {
         &self,
         _flat: &Flat<Self::Schema>,
         _ty: &Type,
+        _role: InputRole,
         _extra: &Self::Extra,
     ) -> bool {
         false

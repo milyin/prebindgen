@@ -8,6 +8,13 @@ use super::*;
 /// restore a consumed niche. Use [`Self::set_niche`] to check updates.
 #[derive(Clone, Debug)]
 pub enum CWire {
+    /// A tagged union stored inline or passed through its caller-owned slot.
+    Tagged {
+        /// Prepared converted carrier.
+        value: std::rc::Rc<crate::CTagged>,
+        /// Inline value, otherwise a mutable pointer to the carrier.
+        by_value: bool,
+    },
     /// A retained C function pointer, context and optional context destructor.
     Callback {
         /// Prepared argument and return conversions.
@@ -152,7 +159,8 @@ impl CWire {
                 null_niche_available,
                 ..
             } => *null_niche_available = false,
-            Self::Buffer
+            Self::Tagged { .. }
+            | Self::Buffer
             | Self::View
             | Self::MutableView
             | Self::Owned { .. }
@@ -215,6 +223,14 @@ impl CWire {
 impl WireKind for CWire {
     fn rust_type(&self) -> syn::Type {
         match self {
+            CWire::Tagged { value, by_value } => {
+                let n = &value.rust;
+                if *by_value {
+                    syn::parse_quote!(#n)
+                } else {
+                    syn::parse_quote!(*mut #n)
+                }
+            }
             CWire::SliceView { element } => {
                 let ident = crate::borrowed::ident(*element);
                 syn::parse_quote!(#ident)
@@ -267,6 +283,14 @@ pub(crate) fn absent_output_value(wire: &CWire, niche: Option<&CNiche>) -> Resul
     let buffer_type = prebindgen_conversions::template_parameter("buffer_type");
     let wide = prebindgen_conversions::template_parameter("wide_integer_type");
     Ok(match wire {
+        CWire::Tagged {
+            value,
+            by_value: true,
+        } => {
+            let n = &value.rust;
+            quote!(#n::empty())
+        }
+        CWire::Tagged { .. } => quote!(::core::ptr::null_mut()),
         CWire::Callback { callback } => callback.absent_value(),
         CWire::Pointer { pointer, .. } if pointer.access == Access::Shared => {
             quote!(std::ptr::null())

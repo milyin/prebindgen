@@ -4144,3 +4144,405 @@ pub fn scoped_input_failure(
     assert_ne!(first.id, 3, "failure after source entry");
     Ok(first.id + second.id)
 }
+
+// Payload-enum boundary coverage. Deliberately different source shapes share
+// converted primitives without exposing the source enum's Rust layout.
+#[prebindgen]
+pub enum WireEvent {
+    Idle,
+    Count(u64),
+    Packet { id: u64, bytes: Vec<u8> },
+    EmptyTuple(),
+    EmptyRecord {},
+}
+#[prebindgen]
+pub fn wire_event_echo(value: WireEvent) -> WireEvent {
+    value
+}
+#[prebindgen]
+pub fn wire_event_callback(callback: impl Fn(WireEvent) -> WireEvent) -> WireEvent {
+    callback(WireEvent::Packet {
+        id: u64::MAX,
+        bytes: vec![1, 2, 3],
+    })
+}
+#[prebindgen]
+pub fn wire_result_echo(value: Result<i64, String>) -> Result<i64, String> {
+    value
+}
+#[prebindgen]
+pub fn wire_result_callback(
+    callback: impl Fn(Result<(), String>) -> Result<i64, String>,
+) -> Result<i64, String> {
+    callback(Ok(()))
+}
+
+#[prebindgen]
+pub fn wire_event_rows(values: Vec<WireEvent>) -> Vec<WireEvent> {
+    values
+}
+#[prebindgen]
+pub fn wire_event_rows_callback(
+    callback: impl Fn(Vec<WireEvent>) -> Vec<WireEvent>,
+) -> Vec<WireEvent> {
+    callback(vec![
+        WireEvent::Idle,
+        WireEvent::Packet {
+            id: u64::MAX,
+            bytes: vec![8, 9],
+        },
+        WireEvent::Count(19),
+    ])
+}
+
+#[prebindgen]
+pub type WireDuration = std::time::Duration;
+#[prebindgen]
+pub fn wire_duration_new(millis: u64) -> WireDuration {
+    WireDuration::from_millis(millis)
+}
+#[prebindgen]
+pub fn wire_duration_millis(value: &WireDuration) -> u64 {
+    value.as_millis() as u64
+}
+#[prebindgen]
+pub enum WireRecoveryMode {
+    PeriodicQueries(WireDuration),
+    Heartbeat,
+}
+#[prebindgen]
+pub struct WireRecoveryConfig {
+    pub mode: Option<WireRecoveryMode>,
+    pub retention_period: Option<WireDuration>,
+}
+#[prebindgen]
+pub fn wire_recovery_echo(value: WireRecoveryConfig) -> WireRecoveryConfig {
+    value
+}
+#[prebindgen]
+pub struct WireTimestamp {
+    pub ntp64: u64,
+    pub id: Vec<u8>,
+}
+#[prebindgen]
+pub enum WireInstrumentationTimestamp {
+    Uhlc(WireTimestamp),
+    Custom(Vec<u8>),
+}
+#[prebindgen]
+pub enum WireInterceptionPoint {
+    Send,
+    Route,
+    Receive,
+}
+#[prebindgen]
+pub struct WireTimestampStackRecord {
+    pub point: WireInterceptionPoint,
+    pub timestamp: WireInstrumentationTimestamp,
+}
+#[prebindgen]
+pub fn wire_timestamps(values: Vec<WireTimestampStackRecord>) -> Vec<WireTimestampStackRecord> {
+    values
+}
+
+#[prebindgen]
+pub enum WireOwnedEvent {
+    Empty,
+    Pair {
+        first: CallbackReturnResource,
+        second: CallbackReturnResource,
+    },
+    Text(String),
+}
+#[prebindgen]
+pub fn wire_owned_new() -> WireOwnedEvent {
+    WireOwnedEvent::Pair {
+        first: crate::callback_return_resource_new(101),
+        second: crate::callback_return_resource_new(202),
+    }
+}
+#[prebindgen]
+pub fn wire_owned_echo(value: WireOwnedEvent) -> WireOwnedEvent {
+    value
+}
+#[prebindgen]
+pub fn wire_owned_callback(callback: impl Fn(WireOwnedEvent) -> WireOwnedEvent) -> WireOwnedEvent {
+    callback(wire_owned_new())
+}
+#[prebindgen]
+pub fn wire_owned_rows(values: Vec<WireOwnedEvent>) -> Vec<WireOwnedEvent> {
+    values
+}
+#[prebindgen]
+pub fn wire_owned_rows_new() -> Vec<WireOwnedEvent> {
+    vec![
+        WireOwnedEvent::Empty,
+        wire_owned_new(),
+        WireOwnedEvent::Text("text".into()),
+        wire_owned_new(),
+    ]
+}
+
+use crate::CallbackReturnResource;
+
+#[prebindgen]
+pub enum WireBare {
+    Count(i64),
+    Packet { x: u64, y: f64 },
+}
+#[prebindgen]
+pub fn wire_bare_echo(value: WireBare) -> WireBare {
+    value
+}
+
+#[prebindgen]
+pub struct WireMarker {
+    pub value: i64,
+}
+#[prebindgen]
+pub fn wire_marker_new(value: i64) -> WireMarker {
+    assert_ne!(value, -1, "enum input field failure");
+    WireMarker { value }
+}
+#[prebindgen]
+pub fn wire_marker_value(value: &WireMarker) -> i64 {
+    assert_ne!(value.value, -2, "enum output field failure");
+    value.value
+}
+#[prebindgen]
+pub enum WireCheckedEvent {
+    Empty,
+    Data {
+        first: CallbackReturnResource,
+        marker: WireMarker,
+        last: CallbackReturnResource,
+    },
+}
+#[prebindgen]
+pub fn wire_checked_callback(callback: impl Fn() -> WireCheckedEvent) -> Result<i64, String> {
+    Ok(match callback() {
+        WireCheckedEvent::Empty => 0,
+        WireCheckedEvent::Data { marker, .. } => marker.value,
+    })
+}
+#[prebindgen]
+pub fn wire_checked_new(marker: i64) -> Result<WireCheckedEvent, String> {
+    Ok(WireCheckedEvent::Data {
+        first: crate::callback_return_resource_new(1),
+        marker: WireMarker { value: marker },
+        last: crate::callback_return_resource_new(2),
+    })
+}
+
+// A Reply-like callback expands its owned record, then the selected enum payload.
+// These source types deliberately have no ordinary foreign classes.
+#[prebindgen]
+pub struct WireReplySample {
+    pub resource: CallbackReturnResource,
+    pub payload: Vec<u8>,
+}
+#[prebindgen]
+pub struct WireReplyError {
+    pub payload: Vec<u8>,
+    pub encoding: i32,
+}
+#[prebindgen]
+pub enum WireReplyResult {
+    Sample(WireReplySample),
+    Error(WireReplyError),
+}
+#[prebindgen]
+pub struct WireReplyStruct {
+    pub result: WireReplyResult,
+    pub replier_id: Option<i64>,
+}
+#[prebindgen]
+pub type WireReply = WireReplyStruct;
+#[prebindgen]
+pub fn wire_reply_into_struct(reply: WireReply) -> WireReplyStruct {
+    reply
+}
+#[prebindgen]
+pub fn wire_reply_error_view(error: &WireReplyError) -> WireReplyError {
+    WireReplyError {
+        payload: error.payload.clone(),
+        encoding: error.encoding,
+    }
+}
+#[prebindgen]
+pub fn wire_reply_emit(error: bool, callback: impl Fn(WireReply)) -> Result<(), String> {
+    if error {
+        callback(WireReplyStruct {
+            result: WireReplyResult::Error(WireReplyError {
+                payload: vec![0, 255, 3],
+                encoding: 7,
+            }),
+            replier_id: None,
+        });
+    } else {
+        callback(WireReplyStruct {
+            result: WireReplyResult::Sample(WireReplySample {
+                resource: crate::callback_return_resource_new(77),
+                payload: vec![8, 9],
+            }),
+            replier_id: Some(33),
+        });
+    }
+    Ok(())
+}
+
+#[prebindgen]
+pub enum WireBench {
+    Count(u64),
+    Pair { left: u64, right: u64 },
+}
+#[prebindgen]
+pub fn wire_bench_total(value: WireBench) -> u64 {
+    match value {
+        WireBench::Count(n) => n,
+        WireBench::Pair { left, right } => left.wrapping_add(right),
+    }
+}
+#[prebindgen]
+pub fn wire_manual_total(tag: i32, count: u64, left: u64, right: u64) -> u64 {
+    match tag {
+        0 => count,
+        1 => left.wrapping_add(right),
+        _ => panic!("invalid manual tag"),
+    }
+}
+#[prebindgen]
+pub fn wire_bench_bulk(values: Vec<WireBench>) -> u64 {
+    values
+        .into_iter()
+        .map(wire_bench_total)
+        .fold(0, u64::wrapping_add)
+}
+#[prebindgen]
+pub fn wire_bench_objects(values: Vec<WireBench>) -> u64 {
+    wire_bench_bulk(values)
+}
+#[prebindgen]
+pub fn wire_bench_scalar_bulk(value: WireBench) -> u64 {
+    wire_bench_total(value)
+}
+
+#[prebindgen]
+#[repr(i16)]
+pub enum WireEmpty {
+    Unit = -7,
+    Tuple() = 42,
+    Named {} = 93,
+}
+#[prebindgen]
+pub fn wire_empty_echo(value: WireEmpty) -> WireEmpty {
+    value
+}
+
+#[prebindgen]
+pub enum WireOptionalEvent {
+    Empty,
+    Bytes {
+        payload: Option<Vec<u8>>,
+        tail: Option<CallbackReturnResource>,
+    },
+}
+#[prebindgen]
+pub fn wire_optional_echo(value: WireOptionalEvent) -> WireOptionalEvent {
+    value
+}
+#[prebindgen]
+pub fn wire_optional_none() -> WireOptionalEvent {
+    WireOptionalEvent::Bytes {
+        payload: None,
+        tail: None,
+    }
+}
+
+#[prebindgen]
+pub enum WireSelfName {
+    WireSelfName(u64),
+    Other,
+}
+#[prebindgen]
+pub fn wire_self_name_echo(value: WireSelfName) -> WireSelfName {
+    value
+}
+#[prebindgen]
+pub fn wire_nested_echo(
+    value: Result<Result<i64, String>, String>,
+) -> Result<Result<i64, String>, String> {
+    value
+}
+#[prebindgen]
+pub fn wire_nested_outcome(kind: i32) -> Result<Result<i64, String>, String> {
+    match kind {
+        0 => Ok(Ok(7)),
+        1 => Ok(Err("inner".into())),
+        _ => Err("outer".into()),
+    }
+}
+#[prebindgen]
+pub enum WireErrorKind {
+    Code(i64),
+    Message(String),
+}
+#[prebindgen]
+pub fn wire_error_outcome() -> Result<(), WireErrorKind> {
+    Err(WireErrorKind::Code(73))
+}
+#[prebindgen]
+pub fn wire_event_borrowed(callback: impl Fn(&WireEvent)) {
+    let value = WireEvent::Packet {
+        id: 99,
+        bytes: vec![4, 5],
+    };
+    callback(&value);
+}
+#[prebindgen]
+pub fn wire_owned_bench(callback: impl Fn(WireOwnedEvent) -> i64) -> i64 {
+    callback(wire_owned_new())
+}
+#[prebindgen]
+pub fn wire_manual_owned_bench(
+    callback: impl Fn(CallbackReturnResource, CallbackReturnResource) -> i64,
+) -> i64 {
+    callback(
+        crate::callback_return_resource_new(101),
+        crate::callback_return_resource_new(202),
+    )
+}
+
+#[prebindgen]
+pub struct WireOptionalOwner {
+    pub enabled: bool,
+    pub resource: CallbackReturnResource,
+}
+#[prebindgen]
+pub enum WireNicheEvent {
+    Empty,
+    Data {
+        small: Option<WireOptionalOwner>,
+        wide: Option<CallbackReturnResource>,
+    },
+}
+#[prebindgen]
+pub fn wire_niche_rows(values: Vec<WireNicheEvent>) -> Vec<WireNicheEvent> {
+    values
+}
+
+#[prebindgen]
+pub enum WireCompositeOwnedEvent {
+    Empty,
+    Data {
+        resource: CallbackReturnResource,
+        detail: WireEvent,
+    },
+}
+#[prebindgen]
+pub fn wire_composite_owned_new() -> WireCompositeOwnedEvent {
+    WireCompositeOwnedEvent::Data {
+        resource: crate::callback_return_resource_new(7),
+        detail: WireEvent::Count(9),
+    }
+}

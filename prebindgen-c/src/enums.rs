@@ -116,7 +116,7 @@ mod tests {
             .build()
             .err()
             .unwrap()
-            .contains("both opaque_ptr and opaque_owned_struct"));
+            .contains("only one of opaque_ptr, opaque_owned_struct and tagged_union"));
     }
     #[test]
     fn enum_symbols_cannot_shadow_runtime_or_generated_result_types() {

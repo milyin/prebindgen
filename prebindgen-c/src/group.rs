@@ -8,6 +8,8 @@ use syn::ext::IdentExt;
 pub enum CChain {
     /// Zero or one payload occurrence.
     Optional(COptional),
+    /// Ordinary tagged value; child describes its physical payload members.
+    Tagged(std::rc::Rc<crate::CTagged>),
     /// Zero or more element occurrences.
     Sequence(CSequence),
 }
@@ -18,6 +20,8 @@ pub enum CBranch {
     Group(CGroup),
     /// Exactly one selected arm; at least one arm is required.
     Alternatives,
+    /// Source enum variants in wire-tag order.
+    Enum(std::rc::Rc<crate::CEnumGroup>),
 }
 /// Relationships between the child values of a group.
 #[derive(Clone, Debug)]
@@ -105,12 +109,12 @@ impl COptional {
 }
 
 // Definitions in one native scope; sequence element definitions belong to row scopes.
-fn values(node: &WireNode<CWire, CChain, CBranch>) -> std::vec::IntoIter<&Wire<CWire>> {
+pub(crate) fn values(node: &WireNode<CWire, CChain, CBranch>) -> std::vec::IntoIter<&Wire<CWire>> {
     fn visit<'a>(node: &'a WireNode<CWire, CChain, CBranch>, out: &mut Vec<&'a Wire<CWire>>) {
         match node {
             WireNode::Leaf(wires) => out.extend(wires),
             WireNode::Chain {
-                meta: CChain::Sequence(_),
+                meta: CChain::Sequence(_) | CChain::Tagged(_),
                 controls,
                 ..
             } => out.extend(controls),
@@ -134,7 +138,9 @@ fn values(node: &WireNode<CWire, CChain, CBranch>) -> std::vec::IntoIter<&Wire<C
     visit(node, &mut out);
     out.into_iter()
 }
-fn values_mut(node: &mut WireNode<CWire, CChain, CBranch>) -> std::vec::IntoIter<&mut Wire<CWire>> {
+pub(crate) fn values_mut(
+    node: &mut WireNode<CWire, CChain, CBranch>,
+) -> std::vec::IntoIter<&mut Wire<CWire>> {
     fn visit<'a>(
         node: &'a mut WireNode<CWire, CChain, CBranch>,
         out: &mut Vec<&'a mut Wire<CWire>>,
@@ -142,7 +148,7 @@ fn values_mut(node: &mut WireNode<CWire, CChain, CBranch>) -> std::vec::IntoIter
         match node {
             WireNode::Leaf(wires) => out.extend(wires),
             WireNode::Chain {
-                meta: CChain::Sequence(_),
+                meta: CChain::Sequence(_) | CChain::Tagged(_),
                 controls,
                 ..
             } => out.extend(controls),
@@ -188,7 +194,7 @@ pub(crate) fn validate_layout(node: &WireNode<CWire, crate::CChain, crate::CBran
                 }
             }
             WireNode::Branch {
-                meta: CBranch::Alternatives,
+                meta: CBranch::Alternatives | CBranch::Enum(_),
                 children: alternatives,
                 controls,
                 ..
@@ -204,6 +210,18 @@ pub(crate) fn validate_layout(node: &WireNode<CWire, crate::CChain, crate::CBran
                 for arm in alternatives {
                     visit(arm, bindings, false, reserved)?;
                 }
+            }
+            WireNode::Chain {
+                child,
+                controls,
+                meta: CChain::Tagged(value),
+            } => {
+                if controls.len() != 1
+                    || !matches!(&controls[0].kind,CWire::Tagged{value:v,..} if v.name==value.name)
+                {
+                    return Err("tagged carrier requires matching control".into());
+                }
+                visit(child, bindings, false, reserved)?;
             }
             WireNode::Chain {
                 child: element,

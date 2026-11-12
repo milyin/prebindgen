@@ -98,6 +98,7 @@ fn external(flat: Bindings) -> Flat<JniSchema<JniInput, ExternalOutput>> {
         metadata: flat.metadata,
         records: flat.records,
         enums: flat.enums,
+        payload_enums: flat.payload_enums,
         types: flat.types,
         guards: flat.guards,
         functions: flat

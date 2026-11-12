@@ -37,6 +37,8 @@ struct Row {
     parts: Vec<String>,
     label: String,
     constructor: Option<syn::Ident>,
+    selection: crate::selected::Selection,
+    wires: Vec<JniWire>,
 }
 
 fn carrier_child<'a>(
@@ -155,11 +157,17 @@ impl Row {
                     return Err("callback objects cannot own output row resources".into())
                 }
             };
+            let selection = crate::selected::Selection::new(node)?;
+            if !selection.tests[index].is_empty() {
+                parts.push(format!("selected:{:?}", selection.tests[index]));
+            }
             fields.push((index, field));
         }
         Ok(Self {
             carrier,
             layout,
+            selection: crate::selected::Selection::new(node)?,
+            wires: group::row_fields(node).map(|w| w.kind.clone()).collect(),
             fields,
             parts,
             label: labels.into_iter().take(2).collect::<Vec<_>>().join("_"),
@@ -219,10 +227,9 @@ impl Helpers {
                 } else {
                     quote!(env)
                 };
-            let member = format_ident!("v{index}");
             let at = row.layout.as_ref().map(|layout| {
-                let record = &layout.name;
-                quote!(base + ::core::mem::offset_of!(#record, #member))
+                let offset = &layout.offsets[*index];
+                quote!(base+(#offset))
             });
             let typed_object = row.constructor.as_ref().map(|cache| quote! {
                 env.get_field_unchecked(row,#cache.get()?.field(#index),::prebindgen_jni_runtime::jni::signature::ReturnType::Object).and_then(|v|v.l()).map_err(|e|e.to_string())?
@@ -286,6 +293,50 @@ impl Helpers {
                         }
                     }
                 }
+            };
+            let mut reads = BTreeMap::new();
+            for test in &row.selection.tests[*index] {
+                let i = test.index();
+                let kind = &row.wires[i];
+                let read = if let Some(layout) = &row.layout {
+                    let wire = prebindgen_flat::Wire {
+                        name: syn::parse_quote!(control),
+                        kind: kind.clone(),
+                    };
+                    bulk::native_read(&wire, layout, i, quote!(base), quote!(reader))?
+                } else {
+                    let read = if let Some(cache) = &row.constructor {
+                        let result = kind.callback_return_type();
+                        let member = kind.value_member();
+                        quote!(env.get_field_unchecked(row,#cache.get()?.field(#i),#result).and_then(|v|v.#member()).map_err(|e|e.to_string())?)
+                    } else {
+                        let read = kind.read_array_element(&quote!(row), i);
+                        let read = prebindgen_conversions::render_template(
+                            &read,
+                            &|name| {
+                                if name == "environment" {
+                                    Ok(quote!(*env))
+                                } else {
+                                    Err(format!("unexpected wire-reader parameter `{name}`"))
+                                }
+                            },
+                            &|_| Err("wire reads cannot transfer owners".into()),
+                        )?;
+                        quote!(#read?)
+                    };
+                    if kind.is_reference() {
+                        quote!({let discriminator=env.auto_local(#read);discriminator.as_raw()})
+                    } else {
+                        read
+                    }
+                };
+                reads.insert(i, read);
+            }
+            let predicate = row.selection.rust(*index, |i| reads[&i].clone());
+            let release = if row.selection.tests[*index].is_empty() {
+                release
+            } else {
+                quote!(if #predicate {#release})
             };
             body.extend(match row.carrier {
                 Carrier::Objects | Carrier::TypedObjects => quote!(::prebindgen_jni_runtime::reclaim_output(env, |env| {#release Ok(())});),

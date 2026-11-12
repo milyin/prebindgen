@@ -16,9 +16,13 @@ val __pb_p0_w7_field3 = p0_w7.kind
 val __pb_p0_w7_field4 = p0_w7.last
 p0_w1_writer.handle((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.size) + io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.offsets[0], io.prebindgen.covertest.InputValidation.value { __pb_p0_w7_field0 }, true, 0)
 p0_w1_writer.int((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.size) + io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.offsets[1], io.prebindgen.covertest.InputValidation.value { (if (__pb_p0_w7_field1 != null) 1 else 0) })
+if (((if (__pb_p0_w7_field1 != null) 1 else 0)) == 1) {
 p0_w1_writer.text((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.size) + io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.offsets[2], io.prebindgen.covertest.InputValidation.value { if (__pb_p0_w7_field1 != null) requireNotNull(__pb_p0_w7_field1) else null })
+}
 p0_w1_writer.int((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.size) + io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.offsets[3], io.prebindgen.covertest.InputValidation.value { (if (__pb_p0_w7_field2 != null) 1 else 0) })
+if (((if (__pb_p0_w7_field2 != null) 1 else 0)) == 1) {
 p0_w1_writer.bytes((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.size) + io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.offsets[4], io.prebindgen.covertest.InputValidation.value { if (__pb_p0_w7_field2 != null) requireNotNull(__pb_p0_w7_field2) else null })
+}
 p0_w1_writer.int((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.size) + io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.offsets[5], io.prebindgen.covertest.InputValidation.value { if (__pb_p0_w7_field3 != null) run { val value = requireNotNull(__pb_p0_w7_field3).wireValue; require(value != -1) { "invalid option payload" }; value } else -1 })
 p0_w1_writer.handle((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.size) + io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.offsets[6], io.prebindgen.covertest.InputValidation.value { __pb_p0_w7_field4 }, true, 0)
 }
@@ -51,9 +55,13 @@ val __pb_p0_w8_field3 = p0_w8.kind
 val __pb_p0_w8_field4 = p0_w8.last
 p0_w1_writer.handle((p0_w4_bulkStart + p0_w4_bulkIndex * io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.size) + io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.offsets[0], io.prebindgen.covertest.InputValidation.value { __pb_p0_w8_field0 }, true, 0)
 p0_w1_writer.int((p0_w4_bulkStart + p0_w4_bulkIndex * io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.size) + io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.offsets[1], io.prebindgen.covertest.InputValidation.value { (if (__pb_p0_w8_field1 != null) 1 else 0) })
+if (((if (__pb_p0_w8_field1 != null) 1 else 0)) == 1) {
 p0_w1_writer.text((p0_w4_bulkStart + p0_w4_bulkIndex * io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.size) + io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.offsets[2], io.prebindgen.covertest.InputValidation.value { if (__pb_p0_w8_field1 != null) requireNotNull(__pb_p0_w8_field1) else null })
+}
 p0_w1_writer.int((p0_w4_bulkStart + p0_w4_bulkIndex * io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.size) + io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.offsets[3], io.prebindgen.covertest.InputValidation.value { (if (__pb_p0_w8_field2 != null) 1 else 0) })
+if (((if (__pb_p0_w8_field2 != null) 1 else 0)) == 1) {
 p0_w1_writer.bytes((p0_w4_bulkStart + p0_w4_bulkIndex * io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.size) + io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.offsets[4], io.prebindgen.covertest.InputValidation.value { if (__pb_p0_w8_field2 != null) requireNotNull(__pb_p0_w8_field2) else null })
+}
 p0_w1_writer.int((p0_w4_bulkStart + p0_w4_bulkIndex * io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.size) + io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.offsets[5], io.prebindgen.covertest.InputValidation.value { if (__pb_p0_w8_field3 != null) run { val value = requireNotNull(__pb_p0_w8_field3).wireValue; require(value != -1) { "invalid option payload" }; value } else -1 })
 p0_w1_writer.handle((p0_w4_bulkStart + p0_w4_bulkIndex * io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.size) + io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.offsets[6], io.prebindgen.covertest.InputValidation.value { __pb_p0_w8_field4 }, true, 0)
 }
@@ -92,9 +100,13 @@ val __pb_p0_w14_field3 = p0_w14.kind
 val __pb_p0_w14_field4 = p0_w14.last
 p0_w1_writer.handle((p0_w10_bulkStart + p0_w10_bulkIndex * io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.size) + io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.offsets[0], io.prebindgen.covertest.InputValidation.value { __pb_p0_w14_field0 }, true, 0)
 p0_w1_writer.int((p0_w10_bulkStart + p0_w10_bulkIndex * io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.size) + io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.offsets[1], io.prebindgen.covertest.InputValidation.value { (if (__pb_p0_w14_field1 != null) 1 else 0) })
+if (((if (__pb_p0_w14_field1 != null) 1 else 0)) == 1) {
 p0_w1_writer.text((p0_w10_bulkStart + p0_w10_bulkIndex * io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.size) + io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.offsets[2], io.prebindgen.covertest.InputValidation.value { if (__pb_p0_w14_field1 != null) requireNotNull(__pb_p0_w14_field1) else null })
+}
 p0_w1_writer.int((p0_w10_bulkStart + p0_w10_bulkIndex * io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.size) + io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.offsets[3], io.prebindgen.covertest.InputValidation.value { (if (__pb_p0_w14_field2 != null) 1 else 0) })
+if (((if (__pb_p0_w14_field2 != null) 1 else 0)) == 1) {
 p0_w1_writer.bytes((p0_w10_bulkStart + p0_w10_bulkIndex * io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.size) + io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.offsets[4], io.prebindgen.covertest.InputValidation.value { if (__pb_p0_w14_field2 != null) requireNotNull(__pb_p0_w14_field2) else null })
+}
 p0_w1_writer.int((p0_w10_bulkStart + p0_w10_bulkIndex * io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.size) + io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.offsets[5], io.prebindgen.covertest.InputValidation.value { if (__pb_p0_w14_field3 != null) run { val value = requireNotNull(__pb_p0_w14_field3).wireValue; require(value != -1) { "invalid option payload" }; value } else -1 })
 p0_w1_writer.handle((p0_w10_bulkStart + p0_w10_bulkIndex * io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.size) + io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.offsets[6], io.prebindgen.covertest.InputValidation.value { __pb_p0_w14_field4 }, true, 0)
 }
@@ -149,9 +161,13 @@ val __pb_callback_return_w12_field3 = callback_return_w12.kind
 val __pb_callback_return_w12_field4 = callback_return_w12.last
 callback_return_w1_writer.handle((callback_return_w8_bulkStart + callback_return_w8_bulkIndex * io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.size) + io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.offsets[0], io.prebindgen.covertest.InputValidation.value { __pb_callback_return_w12_field0 }, true, 0)
 callback_return_w1_writer.int((callback_return_w8_bulkStart + callback_return_w8_bulkIndex * io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.size) + io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.offsets[1], io.prebindgen.covertest.InputValidation.value { (if (__pb_callback_return_w12_field1 != null) 1 else 0) })
+if (((if (__pb_callback_return_w12_field1 != null) 1 else 0)) == 1) {
 callback_return_w1_writer.text((callback_return_w8_bulkStart + callback_return_w8_bulkIndex * io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.size) + io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.offsets[2], io.prebindgen.covertest.InputValidation.value { if (__pb_callback_return_w12_field1 != null) requireNotNull(__pb_callback_return_w12_field1) else null })
+}
 callback_return_w1_writer.int((callback_return_w8_bulkStart + callback_return_w8_bulkIndex * io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.size) + io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.offsets[3], io.prebindgen.covertest.InputValidation.value { (if (__pb_callback_return_w12_field2 != null) 1 else 0) })
+if (((if (__pb_callback_return_w12_field2 != null) 1 else 0)) == 1) {
 callback_return_w1_writer.bytes((callback_return_w8_bulkStart + callback_return_w8_bulkIndex * io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.size) + io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.offsets[4], io.prebindgen.covertest.InputValidation.value { if (__pb_callback_return_w12_field2 != null) requireNotNull(__pb_callback_return_w12_field2) else null })
+}
 callback_return_w1_writer.int((callback_return_w8_bulkStart + callback_return_w8_bulkIndex * io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.size) + io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.offsets[5], io.prebindgen.covertest.InputValidation.value { if (__pb_callback_return_w12_field3 != null) run { val value = requireNotNull(__pb_callback_return_w12_field3).wireValue; require(value != -1) { "invalid option payload" }; value } else -1 })
 callback_return_w1_writer.handle((callback_return_w8_bulkStart + callback_return_w8_bulkIndex * io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.size) + io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.offsets[6], io.prebindgen.covertest.InputValidation.value { __pb_callback_return_w12_field4 }, true, 0)
 }
@@ -194,9 +210,13 @@ val __pb_p0_w7_field3 = p0_w7.kind
 val __pb_p0_w7_field4 = p0_w7.last
 p0_w1_writer.handle((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.size) + io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.offsets[0], io.prebindgen.covertest.InputValidation.value { __pb_p0_w7_field0 }, true, 0)
 p0_w1_writer.int((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.size) + io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.offsets[1], io.prebindgen.covertest.InputValidation.value { (if (__pb_p0_w7_field1 != null) 1 else 0) })
+if (((if (__pb_p0_w7_field1 != null) 1 else 0)) == 1) {
 p0_w1_writer.text((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.size) + io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.offsets[2], io.prebindgen.covertest.InputValidation.value { if (__pb_p0_w7_field1 != null) requireNotNull(__pb_p0_w7_field1) else null })
+}
 p0_w1_writer.int((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.size) + io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.offsets[3], io.prebindgen.covertest.InputValidation.value { (if (__pb_p0_w7_field2 != null) 1 else 0) })
+if (((if (__pb_p0_w7_field2 != null) 1 else 0)) == 1) {
 p0_w1_writer.bytes((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.size) + io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.offsets[4], io.prebindgen.covertest.InputValidation.value { if (__pb_p0_w7_field2 != null) requireNotNull(__pb_p0_w7_field2) else null })
+}
 p0_w1_writer.int((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.size) + io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.offsets[5], io.prebindgen.covertest.InputValidation.value { if (__pb_p0_w7_field3 != null) run { val value = requireNotNull(__pb_p0_w7_field3).wireValue; require(value != -1) { "invalid option payload" }; value } else -1 })
 p0_w1_writer.handle((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.size) + io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.offsets[6], io.prebindgen.covertest.InputValidation.value { __pb_p0_w7_field4 }, true, 0)
 }
@@ -243,9 +263,13 @@ val __pb_callback_return_w7_field3 = callback_return_w7.kind
 val __pb_callback_return_w7_field4 = callback_return_w7.last
 callback_return_w1_writer.handle((callback_return_w3_bulkStart + callback_return_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.size) + io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.offsets[0], io.prebindgen.covertest.InputValidation.value { __pb_callback_return_w7_field0 }, true, 0)
 callback_return_w1_writer.int((callback_return_w3_bulkStart + callback_return_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.size) + io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.offsets[1], io.prebindgen.covertest.InputValidation.value { (if (__pb_callback_return_w7_field1 != null) 1 else 0) })
+if (((if (__pb_callback_return_w7_field1 != null) 1 else 0)) == 1) {
 callback_return_w1_writer.text((callback_return_w3_bulkStart + callback_return_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.size) + io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.offsets[2], io.prebindgen.covertest.InputValidation.value { if (__pb_callback_return_w7_field1 != null) requireNotNull(__pb_callback_return_w7_field1) else null })
+}
 callback_return_w1_writer.int((callback_return_w3_bulkStart + callback_return_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.size) + io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.offsets[3], io.prebindgen.covertest.InputValidation.value { (if (__pb_callback_return_w7_field2 != null) 1 else 0) })
+if (((if (__pb_callback_return_w7_field2 != null) 1 else 0)) == 1) {
 callback_return_w1_writer.bytes((callback_return_w3_bulkStart + callback_return_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.size) + io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.offsets[4], io.prebindgen.covertest.InputValidation.value { if (__pb_callback_return_w7_field2 != null) requireNotNull(__pb_callback_return_w7_field2) else null })
+}
 callback_return_w1_writer.int((callback_return_w3_bulkStart + callback_return_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.size) + io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.offsets[5], io.prebindgen.covertest.InputValidation.value { if (__pb_callback_return_w7_field3 != null) run { val value = requireNotNull(__pb_callback_return_w7_field3).wireValue; require(value != -1) { "invalid option payload" }; value } else -1 })
 callback_return_w1_writer.handle((callback_return_w3_bulkStart + callback_return_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.size) + io.prebindgen.covertest.BulkLayouts.r01496d6ef6ccdfde.offsets[6], io.prebindgen.covertest.InputValidation.value { __pb_callback_return_w7_field4 }, true, 0)
 }
@@ -280,12 +304,14 @@ p0_w1_writer.range((0) + io.prebindgen.covertest.BulkLayouts.r5019fbfb9686d1a8.o
 p0_w4_bulkList.forEachIndexed { p0_w4_bulkIndex, p0_w11 ->
 val p0_w11_elements = if (p0_w11 != null) (if (true) requireNotNull(p0_w11).toList() else null) else (null)
 p0_w1_writer.int((p0_w4_bulkStart + p0_w4_bulkIndex * io.prebindgen.covertest.BulkLayouts.rf27ab2e6065597a6.size) + io.prebindgen.covertest.BulkLayouts.rf27ab2e6065597a6.offsets[0], io.prebindgen.covertest.InputValidation.value { (if (p0_w11 != null) 1 else 0) })
+if (((if (p0_w11 != null) 1 else 0)) == 1) {
 val p0_w11_bulkList = io.prebindgen.covertest.InputValidation.value { if (p0_w11 != null) p0_w11_elements else null }
 if (p0_w11_bulkList == null) { p0_w1_writer.absent((p0_w4_bulkStart + p0_w4_bulkIndex * io.prebindgen.covertest.BulkLayouts.rf27ab2e6065597a6.size) + io.prebindgen.covertest.BulkLayouts.rf27ab2e6065597a6.offsets[1]) } else {
 val p0_w11_bulkStart = p0_w1_writer.rows(p0_w11_bulkList.size, io.prebindgen.covertest.BulkLayouts.rcbe830243575e259)
 p0_w1_writer.range((p0_w4_bulkStart + p0_w4_bulkIndex * io.prebindgen.covertest.BulkLayouts.rf27ab2e6065597a6.size) + io.prebindgen.covertest.BulkLayouts.rf27ab2e6065597a6.offsets[1], p0_w11_bulkStart, p0_w11_bulkList.size)
 p0_w11_bulkList.forEachIndexed { p0_w11_bulkIndex, p0_w18 ->
 p0_w1_writer.handle((p0_w11_bulkStart + p0_w11_bulkIndex * io.prebindgen.covertest.BulkLayouts.rcbe830243575e259.size) + io.prebindgen.covertest.BulkLayouts.rcbe830243575e259.offsets[0], io.prebindgen.covertest.InputValidation.value { if (p0_w18 != null) requireNotNull(if (true) requireNotNull(p0_w18) else null) { "invalid option payload" } else null }, true, 0)
+}
 }
 }
 }
@@ -327,12 +353,14 @@ callback_return_w1_writer.range((0) + io.prebindgen.covertest.BulkLayouts.r5019f
 callback_return_w3_bulkList.forEachIndexed { callback_return_w3_bulkIndex, callback_return_w9 ->
 val callback_return_w9_elements = if (callback_return_w9 != null) (if (true) requireNotNull(callback_return_w9).toList() else null) else (null)
 callback_return_w1_writer.int((callback_return_w3_bulkStart + callback_return_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.rf27ab2e6065597a6.size) + io.prebindgen.covertest.BulkLayouts.rf27ab2e6065597a6.offsets[0], io.prebindgen.covertest.InputValidation.value { (if (callback_return_w9 != null) 1 else 0) })
+if (((if (callback_return_w9 != null) 1 else 0)) == 1) {
 val callback_return_w9_bulkList = io.prebindgen.covertest.InputValidation.value { if (callback_return_w9 != null) callback_return_w9_elements else null }
 if (callback_return_w9_bulkList == null) { callback_return_w1_writer.absent((callback_return_w3_bulkStart + callback_return_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.rf27ab2e6065597a6.size) + io.prebindgen.covertest.BulkLayouts.rf27ab2e6065597a6.offsets[1]) } else {
 val callback_return_w9_bulkStart = callback_return_w1_writer.rows(callback_return_w9_bulkList.size, io.prebindgen.covertest.BulkLayouts.rcbe830243575e259)
 callback_return_w1_writer.range((callback_return_w3_bulkStart + callback_return_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.rf27ab2e6065597a6.size) + io.prebindgen.covertest.BulkLayouts.rf27ab2e6065597a6.offsets[1], callback_return_w9_bulkStart, callback_return_w9_bulkList.size)
 callback_return_w9_bulkList.forEachIndexed { callback_return_w9_bulkIndex, callback_return_w16 ->
 callback_return_w1_writer.handle((callback_return_w9_bulkStart + callback_return_w9_bulkIndex * io.prebindgen.covertest.BulkLayouts.rcbe830243575e259.size) + io.prebindgen.covertest.BulkLayouts.rcbe830243575e259.offsets[0], io.prebindgen.covertest.InputValidation.value { if (callback_return_w16 != null) requireNotNull(if (true) requireNotNull(callback_return_w16) else null) { "invalid option payload" } else null }, true, 0)
+}
 }
 }
 }
@@ -437,6 +465,7 @@ public fun bulkPatchRows(rowFirst: io.prebindgen.covertest.bulk.BulkHandle?, row
 val p0_w1_writer_state = try { if (true) run { val p0_w1_writer = io.prebindgen.covertest.BulkInputs.Input_i64_i32_7fe138bb3730f8e7()
 p0_w1_writer.handle((0) + io.prebindgen.covertest.BulkLayouts.r7fe138bb3730f8e7.offsets[0], io.prebindgen.covertest.InputValidation.value { if (rowFirst != null) requireNotNull(if (true) requireNotNull(rowFirst) else null) { "invalid option payload" } else null }, true, 0)
 p0_w1_writer.int((0) + io.prebindgen.covertest.BulkLayouts.r7fe138bb3730f8e7.offsets[1], io.prebindgen.covertest.InputValidation.value { (if (rowChildren != null) 1 else 0) })
+if (((if (rowChildren != null) 1 else 0)) == 1) {
 val p0_w10_bulkList = io.prebindgen.covertest.InputValidation.value { if (rowChildren != null) p0_w10_elements else null }
 if (p0_w10_bulkList == null) { p0_w1_writer.absent((0) + io.prebindgen.covertest.BulkLayouts.r7fe138bb3730f8e7.offsets[2]) } else {
 val p0_w10_bulkStart = p0_w1_writer.rows(p0_w10_bulkList.size, io.prebindgen.covertest.BulkLayouts.rf27ab2e6065597a6)
@@ -444,12 +473,15 @@ p0_w1_writer.range((0) + io.prebindgen.covertest.BulkLayouts.r7fe138bb3730f8e7.o
 p0_w10_bulkList.forEachIndexed { p0_w10_bulkIndex, p0_w16 ->
 val p0_w16_elements = if (p0_w16 != null) (if (true) requireNotNull(p0_w16).toList() else null) else (null)
 p0_w1_writer.int((p0_w10_bulkStart + p0_w10_bulkIndex * io.prebindgen.covertest.BulkLayouts.rf27ab2e6065597a6.size) + io.prebindgen.covertest.BulkLayouts.rf27ab2e6065597a6.offsets[0], io.prebindgen.covertest.InputValidation.value { (if (p0_w16 != null) 1 else 0) })
+if (((if (p0_w16 != null) 1 else 0)) == 1) {
 val p0_w16_bulkList = io.prebindgen.covertest.InputValidation.value { if (p0_w16 != null) p0_w16_elements else null }
 if (p0_w16_bulkList == null) { p0_w1_writer.absent((p0_w10_bulkStart + p0_w10_bulkIndex * io.prebindgen.covertest.BulkLayouts.rf27ab2e6065597a6.size) + io.prebindgen.covertest.BulkLayouts.rf27ab2e6065597a6.offsets[1]) } else {
 val p0_w16_bulkStart = p0_w1_writer.rows(p0_w16_bulkList.size, io.prebindgen.covertest.BulkLayouts.rcbe830243575e259)
 p0_w1_writer.range((p0_w10_bulkStart + p0_w10_bulkIndex * io.prebindgen.covertest.BulkLayouts.rf27ab2e6065597a6.size) + io.prebindgen.covertest.BulkLayouts.rf27ab2e6065597a6.offsets[1], p0_w16_bulkStart, p0_w16_bulkList.size)
 p0_w16_bulkList.forEachIndexed { p0_w16_bulkIndex, p0_w22 ->
 p0_w1_writer.handle((p0_w16_bulkStart + p0_w16_bulkIndex * io.prebindgen.covertest.BulkLayouts.rcbe830243575e259.size) + io.prebindgen.covertest.BulkLayouts.rcbe830243575e259.offsets[0], io.prebindgen.covertest.InputValidation.value { if (p0_w22 != null) requireNotNull(if (true) requireNotNull(p0_w22) else null) { "invalid option payload" } else null }, true, 0)
+}
+}
 }
 }
 }
@@ -505,12 +537,14 @@ callback_return_w1_writer.range((0) + io.prebindgen.covertest.BulkLayouts.r5019f
 callback_return_w3_bulkList.forEachIndexed { callback_return_w3_bulkIndex, callback_return_w9 ->
 val callback_return_w9_elements = if (callback_return_w9 != null) (if (true) requireNotNull(callback_return_w9).toList() else null) else (null)
 callback_return_w1_writer.int((callback_return_w3_bulkStart + callback_return_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.rf27ab2e6065597a6.size) + io.prebindgen.covertest.BulkLayouts.rf27ab2e6065597a6.offsets[0], io.prebindgen.covertest.InputValidation.value { (if (callback_return_w9 != null) 1 else 0) })
+if (((if (callback_return_w9 != null) 1 else 0)) == 1) {
 val callback_return_w9_bulkList = io.prebindgen.covertest.InputValidation.value { if (callback_return_w9 != null) callback_return_w9_elements else null }
 if (callback_return_w9_bulkList == null) { callback_return_w1_writer.absent((callback_return_w3_bulkStart + callback_return_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.rf27ab2e6065597a6.size) + io.prebindgen.covertest.BulkLayouts.rf27ab2e6065597a6.offsets[1]) } else {
 val callback_return_w9_bulkStart = callback_return_w1_writer.rows(callback_return_w9_bulkList.size, io.prebindgen.covertest.BulkLayouts.rcbe830243575e259)
 callback_return_w1_writer.range((callback_return_w3_bulkStart + callback_return_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.rf27ab2e6065597a6.size) + io.prebindgen.covertest.BulkLayouts.rf27ab2e6065597a6.offsets[1], callback_return_w9_bulkStart, callback_return_w9_bulkList.size)
 callback_return_w9_bulkList.forEachIndexed { callback_return_w9_bulkIndex, callback_return_w16 ->
 callback_return_w1_writer.handle((callback_return_w9_bulkStart + callback_return_w9_bulkIndex * io.prebindgen.covertest.BulkLayouts.rcbe830243575e259.size) + io.prebindgen.covertest.BulkLayouts.rcbe830243575e259.offsets[0], io.prebindgen.covertest.InputValidation.value { if (callback_return_w16 != null) requireNotNull(if (true) requireNotNull(callback_return_w16) else null) { "invalid option payload" } else null }, true, 0)
+}
 }
 }
 }
@@ -924,7 +958,9 @@ val released = kotlin.collections.HashSet<Long>(); for (owner in returnedOwners)
 public fun bulkOptionalBorrowPair(valuePresent: Boolean, valueHandle: io.prebindgen.covertest.bulk.BulkHandle?, valueNumber: Long, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
     val p0_w1_writer_state = try { if (true) run { val p0_w1_writer = io.prebindgen.covertest.BulkInputs.Input_i64_i64_fd1551214c82cfe3()
 p0_w1_writer.handle((0) + io.prebindgen.covertest.BulkLayouts.rfd1551214c82cfe3.offsets[0], io.prebindgen.covertest.InputValidation.value { if (valuePresent) requireNotNull(if (true) valueHandle else null) { "invalid option payload" } else null }, false, 0)
+if ((if (valuePresent) requireNotNull(if (true) valueHandle else null) { "invalid option payload" } else null) != null) {
 p0_w1_writer.long((0) + io.prebindgen.covertest.BulkLayouts.rfd1551214c82cfe3.offsets[1], io.prebindgen.covertest.InputValidation.value { if (valuePresent) valueNumber else 0L })
+}
 
 p0_w1_writer } else null } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
@@ -940,8 +976,12 @@ val nativeResult = try { run { val __pb_handle0: kotlin.collections.List<io.preb
 public fun bulkSelect(valueVariant: Int, valueVariant0Value: Long, valueVariant1: Long, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
     val p0_w1_writer_state = try { if (true) run { val p0_w1_writer = io.prebindgen.covertest.BulkWriter(io.prebindgen.covertest.BulkLayouts.rdafeaae0e426fdd5.size)
 p0_w1_writer.int((0) + io.prebindgen.covertest.BulkLayouts.rdafeaae0e426fdd5.offsets[0], io.prebindgen.covertest.InputValidation.value { valueVariant })
+if ((valueVariant) == 0) {
 p0_w1_writer.long((0) + io.prebindgen.covertest.BulkLayouts.rdafeaae0e426fdd5.offsets[1], io.prebindgen.covertest.InputValidation.value { valueVariant0Value })
+}
+if ((valueVariant) == 1) {
 p0_w1_writer.long((0) + io.prebindgen.covertest.BulkLayouts.rdafeaae0e426fdd5.offsets[2], io.prebindgen.covertest.InputValidation.value { valueVariant1 })
+}
 
 p0_w1_writer } else null } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
@@ -1106,7 +1146,9 @@ io.prebindgen.covertest.bulk.BulkPrimitives(((requireNotNull(outputbulkReader).b
 public fun bulkOptionalWide(`value`: java.math.BigInteger?, onError: io.prebindgen.covertest.JniErrorHandler<java.math.BigInteger?> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): java.math.BigInteger? = run {
     val p0_w1_writer_state = try { if (true) run { val p0_w1_writer = io.prebindgen.covertest.BulkWriter(io.prebindgen.covertest.BulkLayouts.r807a81a0a53fa8e0.size)
 p0_w1_writer.int((0) + io.prebindgen.covertest.BulkLayouts.r807a81a0a53fa8e0.offsets[0], io.prebindgen.covertest.InputValidation.value { (if (`value` != null) 1 else 0) })
+if (((if (`value` != null) 1 else 0)) == 1) {
 p0_w1_writer.wide((0) + io.prebindgen.covertest.BulkLayouts.r807a81a0a53fa8e0.offsets[1], io.prebindgen.covertest.InputValidation.value { if (`value` != null) requireNotNull(`value`).toByteArray() else null }, true)
+}
 
 p0_w1_writer } else null } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
@@ -2000,12 +2042,14 @@ public fun bulkOptionalHandles(`value`: kotlin.collections.List<io.prebindgen.co
     val p0_w5_elements = try { if (`value` != null) (if (true) requireNotNull(`value`).toList() else null) else (null) } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
 val p0_w1_writer_state = try { if (true) run { val p0_w1_writer = io.prebindgen.covertest.BulkInputs.Input_i32_Range_f27ab2e6065597a6()
 p0_w1_writer.int((0) + io.prebindgen.covertest.BulkLayouts.rf27ab2e6065597a6.offsets[0], io.prebindgen.covertest.InputValidation.value { (if (`value` != null) 1 else 0) })
+if (((if (`value` != null) 1 else 0)) == 1) {
 val p0_w5_bulkList = io.prebindgen.covertest.InputValidation.value { if (`value` != null) p0_w5_elements else null }
 if (p0_w5_bulkList == null) { p0_w1_writer.absent((0) + io.prebindgen.covertest.BulkLayouts.rf27ab2e6065597a6.offsets[1]) } else {
 val p0_w5_bulkStart = p0_w1_writer.rows(p0_w5_bulkList.size, io.prebindgen.covertest.BulkLayouts.rcbe830243575e259)
 p0_w1_writer.range((0) + io.prebindgen.covertest.BulkLayouts.rf27ab2e6065597a6.offsets[1], p0_w5_bulkStart, p0_w5_bulkList.size)
 p0_w5_bulkList.forEachIndexed { p0_w5_bulkIndex, p0_w12 ->
 p0_w1_writer.handle((p0_w5_bulkStart + p0_w5_bulkIndex * io.prebindgen.covertest.BulkLayouts.rcbe830243575e259.size) + io.prebindgen.covertest.BulkLayouts.rcbe830243575e259.offsets[0], io.prebindgen.covertest.InputValidation.value { if (p0_w12 != null) requireNotNull(if (true) requireNotNull(p0_w12) else null) { "invalid option payload" } else null }, true, 0)
+}
 }
 }
 
@@ -2316,13 +2360,17 @@ public fun bulkOptional(`value`: kotlin.collections.List<String?>?, onError: io.
     val p0_w5_elements = try { if (`value` != null) (if (true) requireNotNull(`value`).toList() else null) else (null) } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
 val p0_w1_writer_state = try { if (true) run { val p0_w1_writer = io.prebindgen.covertest.BulkWriter(io.prebindgen.covertest.BulkLayouts.rc8d6433a01ad4efb.size)
 p0_w1_writer.int((0) + io.prebindgen.covertest.BulkLayouts.rc8d6433a01ad4efb.offsets[0], io.prebindgen.covertest.InputValidation.value { (if (`value` != null) 1 else 0) })
+if (((if (`value` != null) 1 else 0)) == 1) {
 val p0_w5_bulkList = io.prebindgen.covertest.InputValidation.value { if (`value` != null) p0_w5_elements else null }
 if (p0_w5_bulkList == null) { p0_w1_writer.absent((0) + io.prebindgen.covertest.BulkLayouts.rc8d6433a01ad4efb.offsets[1]) } else {
 val p0_w5_bulkStart = p0_w1_writer.rows(p0_w5_bulkList.size, io.prebindgen.covertest.BulkLayouts.re5f8866547bdf41a)
 p0_w1_writer.range((0) + io.prebindgen.covertest.BulkLayouts.rc8d6433a01ad4efb.offsets[1], p0_w5_bulkStart, p0_w5_bulkList.size)
 p0_w5_bulkList.forEachIndexed { p0_w5_bulkIndex, p0_w12 ->
 p0_w1_writer.int((p0_w5_bulkStart + p0_w5_bulkIndex * io.prebindgen.covertest.BulkLayouts.re5f8866547bdf41a.size) + io.prebindgen.covertest.BulkLayouts.re5f8866547bdf41a.offsets[0], io.prebindgen.covertest.InputValidation.value { (if (p0_w12 != null) 1 else 0) })
+if (((if (p0_w12 != null) 1 else 0)) == 1) {
 p0_w1_writer.text((p0_w5_bulkStart + p0_w5_bulkIndex * io.prebindgen.covertest.BulkLayouts.re5f8866547bdf41a.size) + io.prebindgen.covertest.BulkLayouts.re5f8866547bdf41a.offsets[1], io.prebindgen.covertest.InputValidation.value { if (p0_w12 != null) requireNotNull(p0_w12) else null })
+}
+}
 }
 }
 
