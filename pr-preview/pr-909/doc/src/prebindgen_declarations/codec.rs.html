@@ -556,7 +556,7 @@
 <a href=#556 id=556 data-nosnippet>556</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
 <a href=#557 id=557 data-nosnippet>557</a>        _cx: <span class="kw-2">&amp;mut </span>Resolve&lt;<span class="lifetime">'_</span>, <span class="self">Self</span>&gt;,
 <a href=#558 id=558 data-nosnippet>558</a>        _ty: <span class="kw-2">&amp;</span>Type,
-<a href=#559 id=559 data-nosnippet>559</a>        _tree: <span class="kw-2">&amp;</span>Input&lt;InputRequest, OutputRequest&gt;,
+<a href=#559 id=559 data-nosnippet>559</a>        _tree: <span class="kw-2">&amp;</span>DeclarationInput&lt;InputRequest, OutputRequest&gt;,
 <a href=#560 id=560 data-nosnippet>560</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;ResolvedInput&lt;<span class="self">Self</span>&gt;&gt;&gt;
 <a href=#561 id=561 data-nosnippet>561</a>    <span class="kw">where
 <a href=#562 id=562 data-nosnippet>562</a>        </span><span class="self">Self</span>: Sized,
@@ -568,7 +568,7 @@
 <a href=#568 id=568 data-nosnippet>568</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
 <a href=#569 id=569 data-nosnippet>569</a>        _cx: <span class="kw-2">&amp;mut </span>Resolve&lt;<span class="lifetime">'_</span>, <span class="self">Self</span>&gt;,
 <a href=#570 id=570 data-nosnippet>570</a>        _ty: <span class="kw-2">&amp;</span>Type,
-<a href=#571 id=571 data-nosnippet>571</a>        _tree: <span class="kw-2">&amp;</span>Output&lt;OutputRequest, InputRequest&gt;,
+<a href=#571 id=571 data-nosnippet>571</a>        _tree: <span class="kw-2">&amp;</span>DeclarationOutput&lt;OutputRequest, InputRequest&gt;,
 <a href=#572 id=572 data-nosnippet>572</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;ResolvedOutput&lt;<span class="self">Self</span>&gt;&gt;&gt;
 <a href=#573 id=573 data-nosnippet>573</a>    <span class="kw">where
 <a href=#574 id=574 data-nosnippet>574</a>        </span><span class="self">Self</span>: Sized,

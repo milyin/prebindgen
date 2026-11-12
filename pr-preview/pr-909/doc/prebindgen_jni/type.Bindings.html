@@ -8,9 +8,9 @@ JNI declaration metadata and wire representations remain adapter-specific.</p>
 wire type belongs to a different adapter:</p>
 
 <div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>prebindgen_jni::Bindings;
-<span class="kw">use </span>prebindgen_declarations::{bind_input, DeclarationInput <span class="kw">as </span>Input};
+<span class="kw">use </span>prebindgen_declarations::{bind_input, DeclarationInput};
 <span class="kw">fn </span>wrong(flat: <span class="kw-2">&amp;mut </span>Bindings) {
-    bind_input(flat, <span class="kw-2">&amp;</span>prebindgen_c::CCodec::raw(), <span class="string">"echo"</span>, <span class="string">"x"</span>, <span class="kw-2">&amp;</span>Input::Leaf(prebindgen_declarations::frontend::InputLeafOp::Value), <span class="kw-2">&amp;</span>()).unwrap();
+    bind_input(flat, <span class="kw-2">&amp;</span>prebindgen_c::CCodec::raw(), <span class="string">"echo"</span>, <span class="string">"x"</span>, <span class="kw-2">&amp;</span>DeclarationInput::Leaf(prebindgen_declarations::frontend::InputLeafOp::Value), <span class="kw-2">&amp;</span>()).unwrap();
 }</code></pre></div>
 <p>A completed JNI model also cannot be passed to the C generator:</p>
 

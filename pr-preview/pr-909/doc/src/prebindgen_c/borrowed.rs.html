@@ -639,7 +639,7 @@
 <a href=#639 id=639 data-nosnippet>639</a>    }
 <a href=#640 id=640 data-nosnippet>640</a>    <span class="attr">#[test]
 <a href=#641 id=641 data-nosnippet>641</a>    </span><span class="kw">fn </span>reconstruction_is_explicit_and_can_be_global_local_optional_or_nested() {
-<a href=#642 id=642 data-nosnippet>642</a>        <span class="kw">use </span>prebindgen_declarations::{expand_param, DeclarationInput <span class="kw">as </span>Input};
+<a href=#642 id=642 data-nosnippet>642</a>        <span class="kw">use </span>prebindgen_declarations::{expand_param, DeclarationInput};
 <a href=#643 id=643 data-nosnippet>643</a>        <span class="kw">for </span>ty <span class="kw">in </span>[
 <a href=#644 id=644 data-nosnippet>644</a>            <span class="string">"&amp;[i64]"</span>,
 <a href=#645 id=645 data-nosnippet>645</a>            <span class="string">"&amp;Vec&lt;i64&gt;"</span>,
@@ -668,7 +668,7 @@
 <a href=#668 id=668 data-nosnippet>668</a>        <span class="macro">assert!</span>(!g.rust.contains(<span class="string">"_prepared"</span>));
 <a href=#669 id=669 data-nosnippet>669</a>        <span class="macro">assert!</span>(
 <a href=#670 id=670 data-nosnippet>670</a>            Cbindgen::new(model(<span class="string">"pub fn inspect(values:&amp;String)-&gt;usize{}"</span>))
-<a href=#671 id=671 data-nosnippet>671</a>                .function(<span class="macro">fun!</span>(inspect).input(<span class="string">"values"</span>, Input::auto().reconstruct()))
+<a href=#671 id=671 data-nosnippet>671</a>                .function(<span class="macro">fun!</span>(inspect).input(<span class="string">"values"</span>, DeclarationInput::auto().reconstruct()))
 <a href=#672 id=672 data-nosnippet>672</a>                .panic()
 <a href=#673 id=673 data-nosnippet>673</a>                .build()
 <a href=#674 id=674 data-nosnippet>674</a>                .is_ok()

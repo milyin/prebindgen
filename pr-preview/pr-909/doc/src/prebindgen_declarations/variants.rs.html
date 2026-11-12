@@ -49,74 +49,81 @@
 <a href=#49 id=49 data-nosnippet>49</a>        codec: <span class="kw-2">&amp;</span>C,
 <a href=#50 id=50 data-nosnippet>50</a>        ty: <span class="kw-2">&amp;</span>Type,
 <a href=#51 id=51 data-nosnippet>51</a>        extra: <span class="kw-2">&amp;</span>C::Extra,
-<a href=#52 id=52 data-nosnippet>52</a>        entries: <span class="kw-2">&amp;</span>BTreeMap&lt;String, BTreeMap&lt;String, Input&lt;InputRequest, OutputRequest&gt;&gt;&gt;,
+<a href=#52 id=52 data-nosnippet>52</a>        entries: <span class="kw-2">&amp;</span>BTreeMap&lt;String, BTreeMap&lt;String, DeclarationInput&lt;InputRequest, OutputRequest&gt;&gt;&gt;,
 <a href=#53 id=53 data-nosnippet>53</a>        value: bool,
 <a href=#54 id=54 data-nosnippet>54</a>        stack: <span class="kw-2">&amp;mut </span>Vec&lt;String&gt;,
 <a href=#55 id=55 data-nosnippet>55</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">crate</span>::ResolvedInput&lt;C&gt;&gt; {
 <a href=#56 id=56 data-nosnippet>56</a>        <span class="kw">let </span>source = flat.payload_enum(ty)<span class="question-mark">?</span>;
 <a href=#57 id=57 data-nosnippet>57</a>        validate_overrides(source, entries)<span class="question-mark">?</span>;
-<a href=#58 id=58 data-nosnippet>58</a>        <span class="kw">let </span>default = <span class="kw">if </span>value { Input::value() } <span class="kw">else </span>{ Input::auto() };
-<a href=#59 id=59 data-nosnippet>59</a>        <span class="kw">let </span>variants = source
-<a href=#60 id=60 data-nosnippet>60</a>            .variants
-<a href=#61 id=61 data-nosnippet>61</a>            .iter()
-<a href=#62 id=62 data-nosnippet>62</a>            .map(|arm| {
-<a href=#63 id=63 data-nosnippet>63</a>                <span class="kw">let </span>fields = entries.get(arm.name.to_string().trim_start_matches(<span class="string">"r#"</span>));
-<a href=#64 id=64 data-nosnippet>64</a>                arm.fields
-<a href=#65 id=65 data-nosnippet>65</a>                    .iter()
-<a href=#66 id=66 data-nosnippet>66</a>                    .map(|field| {
-<a href=#67 id=67 data-nosnippet>67</a>                        <span class="kw">let </span>recipe = fields.and_then(|f| f.get(<span class="kw-2">&amp;</span>field.key())).unwrap_or(<span class="kw-2">&amp;</span>default);
-<a href=#68 id=68 data-nosnippet>68</a>                        <span class="kw">let </span>previous = <span class="self">self</span>.input_role.get();
-<a href=#69 id=69 data-nosnippet>69</a>                        <span class="kw">if </span>value {
-<a href=#70 id=70 data-nosnippet>70</a>                            <span class="self">self</span>.input_role.set(InputRole::EnumField);
-<a href=#71 id=71 data-nosnippet>71</a>                        }
-<a href=#72 id=72 data-nosnippet>72</a>                        <span class="kw">let </span>result = <span class="self">self</span>.input(flat, codec, <span class="kw-2">&amp;</span>field.ty, recipe, extra, stack);
-<a href=#73 id=73 data-nosnippet>73</a>                        <span class="self">self</span>.input_role.set(previous);
-<a href=#74 id=74 data-nosnippet>74</a>                        result.map_err(|e| {
-<a href=#75 id=75 data-nosnippet>75</a>                            <span class="macro">format!</span>(<span class="string">"{}::{}.{}: {e}"</span>, type_key(ty), arm.name, field.key())
-<a href=#76 id=76 data-nosnippet>76</a>                        })
-<a href=#77 id=77 data-nosnippet>77</a>                    })
-<a href=#78 id=78 data-nosnippet>78</a>                    .collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;&gt;()
-<a href=#79 id=79 data-nosnippet>79</a>            })
-<a href=#80 id=80 data-nosnippet>80</a>            .collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;&gt;()<span class="question-mark">?</span>;
-<a href=#81 id=81 data-nosnippet>81</a>        <span class="kw">crate</span>::resolution::resolve_input_enum(codec, variants, value)
-<a href=#82 id=82 data-nosnippet>82</a>    }
-<a href=#83 id=83 data-nosnippet>83</a>    <span class="attr">#[allow(clippy::too_many_arguments)]
-<a href=#84 id=84 data-nosnippet>84</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>enum_output_recipe&lt;C: DeclarationCodec&gt;(
-<a href=#85 id=85 data-nosnippet>85</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#86 id=86 data-nosnippet>86</a>        flat: <span class="kw-2">&amp;</span>Flat&lt;C::Schema&gt;,
-<a href=#87 id=87 data-nosnippet>87</a>        codec: <span class="kw-2">&amp;</span>C,
-<a href=#88 id=88 data-nosnippet>88</a>        ty: <span class="kw-2">&amp;</span>Type,
-<a href=#89 id=89 data-nosnippet>89</a>        extra: <span class="kw-2">&amp;</span>C::Extra,
-<a href=#90 id=90 data-nosnippet>90</a>        entries: <span class="kw-2">&amp;</span>BTreeMap&lt;String, BTreeMap&lt;String, Output&lt;OutputRequest, InputRequest&gt;&gt;&gt;,
-<a href=#91 id=91 data-nosnippet>91</a>        value: bool,
-<a href=#92 id=92 data-nosnippet>92</a>        stack: <span class="kw-2">&amp;mut </span>Vec&lt;String&gt;,
-<a href=#93 id=93 data-nosnippet>93</a>        getter: bool,
-<a href=#94 id=94 data-nosnippet>94</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">crate</span>::ResolvedOutput&lt;C&gt;&gt; {
-<a href=#95 id=95 data-nosnippet>95</a>        <span class="kw">let </span>source = flat.payload_enum(ty)<span class="question-mark">?</span>;
-<a href=#96 id=96 data-nosnippet>96</a>        validate_overrides(source, entries)<span class="question-mark">?</span>;
-<a href=#97 id=97 data-nosnippet>97</a>        <span class="kw">let </span>default = <span class="kw">if </span>value {
-<a href=#98 id=98 data-nosnippet>98</a>            Output::value()
-<a href=#99 id=99 data-nosnippet>99</a>        } <span class="kw">else </span>{
-<a href=#100 id=100 data-nosnippet>100</a>            Output::auto()
-<a href=#101 id=101 data-nosnippet>101</a>        };
-<a href=#102 id=102 data-nosnippet>102</a>        <span class="kw">let </span>variants = source
-<a href=#103 id=103 data-nosnippet>103</a>            .variants
-<a href=#104 id=104 data-nosnippet>104</a>            .iter()
-<a href=#105 id=105 data-nosnippet>105</a>            .map(|arm| {
-<a href=#106 id=106 data-nosnippet>106</a>                <span class="kw">let </span>fields = entries.get(arm.name.to_string().trim_start_matches(<span class="string">"r#"</span>));
-<a href=#107 id=107 data-nosnippet>107</a>                arm.fields
-<a href=#108 id=108 data-nosnippet>108</a>                    .iter()
-<a href=#109 id=109 data-nosnippet>109</a>                    .map(|field| {
-<a href=#110 id=110 data-nosnippet>110</a>                        <span class="kw">let </span>recipe = fields.and_then(|f| f.get(<span class="kw-2">&amp;</span>field.key())).unwrap_or(<span class="kw-2">&amp;</span>default);
-<a href=#111 id=111 data-nosnippet>111</a>                        <span class="self">self</span>.output(flat, codec, <span class="kw-2">&amp;</span>field.ty, recipe, extra, stack, getter)
-<a href=#112 id=112 data-nosnippet>112</a>                            .map_err(|e| {
-<a href=#113 id=113 data-nosnippet>113</a>                                <span class="macro">format!</span>(<span class="string">"{}::{}.{}: {e}"</span>, type_key(ty), arm.name, field.key())
-<a href=#114 id=114 data-nosnippet>114</a>                            })
-<a href=#115 id=115 data-nosnippet>115</a>                    })
-<a href=#116 id=116 data-nosnippet>116</a>                    .collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;&gt;()
-<a href=#117 id=117 data-nosnippet>117</a>            })
-<a href=#118 id=118 data-nosnippet>118</a>            .collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;&gt;()<span class="question-mark">?</span>;
-<a href=#119 id=119 data-nosnippet>119</a>        <span class="kw">crate</span>::resolution::resolve_output_enum(codec, variants, value, <span class="prelude-val">None</span>)
-<a href=#120 id=120 data-nosnippet>120</a>    }
-<a href=#121 id=121 data-nosnippet>121</a>}
+<a href=#58 id=58 data-nosnippet>58</a>        <span class="kw">let </span>default = <span class="kw">if </span>value {
+<a href=#59 id=59 data-nosnippet>59</a>            DeclarationInput::value()
+<a href=#60 id=60 data-nosnippet>60</a>        } <span class="kw">else </span>{
+<a href=#61 id=61 data-nosnippet>61</a>            DeclarationInput::auto()
+<a href=#62 id=62 data-nosnippet>62</a>        };
+<a href=#63 id=63 data-nosnippet>63</a>        <span class="kw">let </span>variants = source
+<a href=#64 id=64 data-nosnippet>64</a>            .variants
+<a href=#65 id=65 data-nosnippet>65</a>            .iter()
+<a href=#66 id=66 data-nosnippet>66</a>            .map(|arm| {
+<a href=#67 id=67 data-nosnippet>67</a>                <span class="kw">let </span>fields = entries.get(arm.name.to_string().trim_start_matches(<span class="string">"r#"</span>));
+<a href=#68 id=68 data-nosnippet>68</a>                arm.fields
+<a href=#69 id=69 data-nosnippet>69</a>                    .iter()
+<a href=#70 id=70 data-nosnippet>70</a>                    .map(|field| {
+<a href=#71 id=71 data-nosnippet>71</a>                        <span class="kw">let </span>recipe = fields.and_then(|f| f.get(<span class="kw-2">&amp;</span>field.key())).unwrap_or(<span class="kw-2">&amp;</span>default);
+<a href=#72 id=72 data-nosnippet>72</a>                        <span class="kw">let </span>previous = <span class="self">self</span>.input_role.get();
+<a href=#73 id=73 data-nosnippet>73</a>                        <span class="kw">if </span>value {
+<a href=#74 id=74 data-nosnippet>74</a>                            <span class="self">self</span>.input_role.set(InputRole::EnumField);
+<a href=#75 id=75 data-nosnippet>75</a>                        }
+<a href=#76 id=76 data-nosnippet>76</a>                        <span class="kw">let </span>result = <span class="self">self</span>.input(flat, codec, <span class="kw-2">&amp;</span>field.ty, recipe, extra, stack);
+<a href=#77 id=77 data-nosnippet>77</a>                        <span class="self">self</span>.input_role.set(previous);
+<a href=#78 id=78 data-nosnippet>78</a>                        result.map_err(|e| {
+<a href=#79 id=79 data-nosnippet>79</a>                            <span class="macro">format!</span>(<span class="string">"{}::{}.{}: {e}"</span>, type_key(ty), arm.name, field.key())
+<a href=#80 id=80 data-nosnippet>80</a>                        })
+<a href=#81 id=81 data-nosnippet>81</a>                    })
+<a href=#82 id=82 data-nosnippet>82</a>                    .collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;&gt;()
+<a href=#83 id=83 data-nosnippet>83</a>            })
+<a href=#84 id=84 data-nosnippet>84</a>            .collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;&gt;()<span class="question-mark">?</span>;
+<a href=#85 id=85 data-nosnippet>85</a>        <span class="kw">crate</span>::resolution::resolve_input_enum(codec, variants, value)
+<a href=#86 id=86 data-nosnippet>86</a>    }
+<a href=#87 id=87 data-nosnippet>87</a>    <span class="attr">#[allow(clippy::too_many_arguments)]
+<a href=#88 id=88 data-nosnippet>88</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>enum_output_recipe&lt;C: DeclarationCodec&gt;(
+<a href=#89 id=89 data-nosnippet>89</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#90 id=90 data-nosnippet>90</a>        flat: <span class="kw-2">&amp;</span>Flat&lt;C::Schema&gt;,
+<a href=#91 id=91 data-nosnippet>91</a>        codec: <span class="kw-2">&amp;</span>C,
+<a href=#92 id=92 data-nosnippet>92</a>        ty: <span class="kw-2">&amp;</span>Type,
+<a href=#93 id=93 data-nosnippet>93</a>        extra: <span class="kw-2">&amp;</span>C::Extra,
+<a href=#94 id=94 data-nosnippet>94</a>        entries: <span class="kw-2">&amp;</span>BTreeMap&lt;
+<a href=#95 id=95 data-nosnippet>95</a>            String,
+<a href=#96 id=96 data-nosnippet>96</a>            BTreeMap&lt;String, DeclarationOutput&lt;OutputRequest, InputRequest&gt;&gt;,
+<a href=#97 id=97 data-nosnippet>97</a>        &gt;,
+<a href=#98 id=98 data-nosnippet>98</a>        value: bool,
+<a href=#99 id=99 data-nosnippet>99</a>        stack: <span class="kw-2">&amp;mut </span>Vec&lt;String&gt;,
+<a href=#100 id=100 data-nosnippet>100</a>        getter: bool,
+<a href=#101 id=101 data-nosnippet>101</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">crate</span>::ResolvedOutput&lt;C&gt;&gt; {
+<a href=#102 id=102 data-nosnippet>102</a>        <span class="kw">let </span>source = flat.payload_enum(ty)<span class="question-mark">?</span>;
+<a href=#103 id=103 data-nosnippet>103</a>        validate_overrides(source, entries)<span class="question-mark">?</span>;
+<a href=#104 id=104 data-nosnippet>104</a>        <span class="kw">let </span>default = <span class="kw">if </span>value {
+<a href=#105 id=105 data-nosnippet>105</a>            DeclarationOutput::value()
+<a href=#106 id=106 data-nosnippet>106</a>        } <span class="kw">else </span>{
+<a href=#107 id=107 data-nosnippet>107</a>            DeclarationOutput::auto()
+<a href=#108 id=108 data-nosnippet>108</a>        };
+<a href=#109 id=109 data-nosnippet>109</a>        <span class="kw">let </span>variants = source
+<a href=#110 id=110 data-nosnippet>110</a>            .variants
+<a href=#111 id=111 data-nosnippet>111</a>            .iter()
+<a href=#112 id=112 data-nosnippet>112</a>            .map(|arm| {
+<a href=#113 id=113 data-nosnippet>113</a>                <span class="kw">let </span>fields = entries.get(arm.name.to_string().trim_start_matches(<span class="string">"r#"</span>));
+<a href=#114 id=114 data-nosnippet>114</a>                arm.fields
+<a href=#115 id=115 data-nosnippet>115</a>                    .iter()
+<a href=#116 id=116 data-nosnippet>116</a>                    .map(|field| {
+<a href=#117 id=117 data-nosnippet>117</a>                        <span class="kw">let </span>recipe = fields.and_then(|f| f.get(<span class="kw-2">&amp;</span>field.key())).unwrap_or(<span class="kw-2">&amp;</span>default);
+<a href=#118 id=118 data-nosnippet>118</a>                        <span class="self">self</span>.output(flat, codec, <span class="kw-2">&amp;</span>field.ty, recipe, extra, stack, getter)
+<a href=#119 id=119 data-nosnippet>119</a>                            .map_err(|e| {
+<a href=#120 id=120 data-nosnippet>120</a>                                <span class="macro">format!</span>(<span class="string">"{}::{}.{}: {e}"</span>, type_key(ty), arm.name, field.key())
+<a href=#121 id=121 data-nosnippet>121</a>                            })
+<a href=#122 id=122 data-nosnippet>122</a>                    })
+<a href=#123 id=123 data-nosnippet>123</a>                    .collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;&gt;()
+<a href=#124 id=124 data-nosnippet>124</a>            })
+<a href=#125 id=125 data-nosnippet>125</a>            .collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;&gt;()<span class="question-mark">?</span>;
+<a href=#126 id=126 data-nosnippet>126</a>        <span class="kw">crate</span>::resolution::resolve_output_enum(codec, variants, value, <span class="prelude-val">None</span>)
+<a href=#127 id=127 data-nosnippet>127</a>    }
+<a href=#128 id=128 data-nosnippet>128</a>}
 </code></pre></div></section></main></body></html>

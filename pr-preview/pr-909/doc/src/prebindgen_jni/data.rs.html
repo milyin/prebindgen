@@ -870,119 +870,121 @@
 <a href=#870 id=870 data-nosnippet>870</a>        <span class="kw">let </span>codec = JniCodec::declared();
 <a href=#871 id=871 data-nosnippet>871</a>        <span class="kw">let </span>defaults =
 <a href=#872 id=872 data-nosnippet>872</a>            prebindgen_declarations::Declarations::new(<span class="kw-2">&amp;</span>flat, <span class="macro">vec!</span>[], <span class="macro">vec!</span>[], <span class="macro">vec!</span>[]).unwrap();
-<a href=#873 id=873 data-nosnippet>873</a>        <span class="kw">let </span>request = Output::Unary {
+<a href=#873 id=873 data-nosnippet>873</a>        <span class="kw">let </span>request = DeclarationOutput::Unary {
 <a href=#874 id=874 data-nosnippet>874</a>            operation: OutputUnary::Sequence {
 <a href=#875 id=875 data-nosnippet>875</a>                delivery: prebindgen_declarations::SequenceDelivery::Callback,
 <a href=#876 id=876 data-nosnippet>876</a>                mode: <span class="prelude-val">Some</span>(ProjectionMode::Owned),
 <a href=#877 id=877 data-nosnippet>877</a>            },
-<a href=#878 id=878 data-nosnippet>878</a>            child: Box::new(Output::Leaf(OutputLeafOp::Projected(Projection::owned()))),
-<a href=#879 id=879 data-nosnippet>879</a>        };
-<a href=#880 id=880 data-nosnippet>880</a>        <span class="kw">let </span>resolved = defaults
-<a href=#881 id=881 data-nosnippet>881</a>            .resolve_output(
-<a href=#882 id=882 data-nosnippet>882</a>                <span class="kw-2">&amp;</span>flat,
-<a href=#883 id=883 data-nosnippet>883</a>                <span class="kw-2">&amp;</span>codec,
-<a href=#884 id=884 data-nosnippet>884</a>                <span class="kw-2">&amp;</span>flat.function(<span class="string">"items"</span>).unwrap().ret.ty,
-<a href=#885 id=885 data-nosnippet>885</a>                <span class="kw-2">&amp;</span>request,
-<a href=#886 id=886 data-nosnippet>886</a>                <span class="kw-2">&amp;</span>(),
-<a href=#887 id=887 data-nosnippet>887</a>            )
-<a href=#888 id=888 data-nosnippet>888</a>            .unwrap();
-<a href=#889 id=889 data-nosnippet>889</a>        <span class="macro">assert!</span>(
-<a href=#890 id=890 data-nosnippet>890</a>            <span class="macro">matches!</span>(<span class="kw-2">&amp;</span>resolved,<span class="kw">crate</span>::operations::Output::Unary { operation: <span class="kw">crate</span>::operations::OutputUnary::Sequence { .. }, child: element, .. } <span class="kw">if </span><span class="macro">matches!</span>(element.as_ref(),<span class="kw">crate</span>::operations::Output::Branch { operation: <span class="kw">crate</span>::operations::OutputBranch::Record { mode: <span class="prelude-val">Some</span>(ProjectionMode::Owned) }, children: fields,  } <span class="kw">if </span><span class="macro">matches!</span>(fields.as_slice(),[<span class="kw">crate</span>::operations::Output::Leaf(<span class="kw">crate</span>::operations::OutputLeafOp::Projected(<span class="kw">_</span>))])))
-<a href=#891 id=891 data-nosnippet>891</a>        );
-<a href=#892 id=892 data-nosnippet>892</a>        drop(defaults);
-<a href=#893 id=893 data-nosnippet>893</a>        <span class="kw">let </span>plan = prebindgen_declarations::compile_output(<span class="kw-2">&amp;</span>flat, <span class="kw-2">&amp;</span>codec, <span class="string">"items"</span>, <span class="kw-2">&amp;</span>resolved, <span class="kw-2">&amp;</span>())
-<a href=#894 id=894 data-nosnippet>894</a>            .unwrap();
-<a href=#895 id=895 data-nosnippet>895</a>        flat.function_mut(<span class="string">"items"</span>).unwrap().ret.slot = <span class="prelude-val">Some</span>(plan);
-<a href=#896 id=896 data-nosnippet>896</a>    }
-<a href=#897 id=897 data-nosnippet>897</a>
-<a href=#898 id=898 data-nosnippet>898</a>    <span class="kw">fn </span>record(root: <span class="kw-2">&amp;</span>str) -&gt; WireNode&lt;JniWire, <span class="kw">crate</span>::JniChain, <span class="kw">crate</span>::JniBranch&gt; {
-<a href=#899 id=899 data-nosnippet>899</a>        WireNode::Branch {
-<a href=#900 id=900 data-nosnippet>900</a>            controls: <span class="macro">vec!</span>[],
-<a href=#901 id=901 data-nosnippet>901</a>            meta: JniBranch::Group(JniGroup::Fields(<span class="prelude-val">Some</span>(DataGroup {
-<a href=#902 id=902 data-nosnippet>902</a>                root: root.into(),
-<a href=#903 id=903 data-nosnippet>903</a>                class_name: <span class="string">"example.Empty"</span>.into(),
-<a href=#904 id=904 data-nosnippet>904</a>                condition: <span class="string">"true"</span>.into(),
-<a href=#905 id=905 data-nosnippet>905</a>            }))),
-<a href=#906 id=906 data-nosnippet>906</a>            children: Vec::new(),
-<a href=#907 id=907 data-nosnippet>907</a>        }
-<a href=#908 id=908 data-nosnippet>908</a>    }
-<a href=#909 id=909 data-nosnippet>909</a>    <span class="attr">#[test]
-<a href=#910 id=910 data-nosnippet>910</a>    </span><span class="kw">fn </span>kotlin_record_and_presence_bindings_share_a_namespace() {
-<a href=#911 id=911 data-nosnippet>911</a>        <span class="kw">let </span>optional = WireNode::Chain {
-<a href=#912 id=912 data-nosnippet>912</a>            controls: <span class="macro">vec!</span>[Wire {
-<a href=#913 id=913 data-nosnippet>913</a>                name: <span class="macro">syn::parse_quote!</span>(flag),
-<a href=#914 id=914 data-nosnippet>914</a>                kind: JniWire::selector(),
-<a href=#915 id=915 data-nosnippet>915</a>            }],
-<a href=#916 id=916 data-nosnippet>916</a>            meta: JniChain::Optional(JniOptional::Flag(<span class="macro">syn::parse_quote!</span>(flag))),
-<a href=#917 id=917 data-nosnippet>917</a>            child: Box::default(),
-<a href=#918 id=918 data-nosnippet>918</a>        };
-<a href=#919 id=919 data-nosnippet>919</a>        <span class="kw">let </span><span class="kw-2">mut </span>combined = WireNode::Branch {
-<a href=#920 id=920 data-nosnippet>920</a>            controls: <span class="macro">vec!</span>[],
-<a href=#921 id=921 data-nosnippet>921</a>            meta: JniBranch::Group(JniGroup::Values),
-<a href=#922 id=922 data-nosnippet>922</a>            children: <span class="macro">vec!</span>[optional, record(<span class="string">"value"</span>)],
-<a href=#923 id=923 data-nosnippet>923</a>        };
-<a href=#924 id=924 data-nosnippet>924</a>        <span class="kw">crate</span>::group::validate_layout(<span class="kw-2">&amp;</span>combined).unwrap();
-<a href=#925 id=925 data-nosnippet>925</a>        <span class="kw">let </span>WireNode::Branch {
-<a href=#926 id=926 data-nosnippet>926</a>            meta: JniBranch::Group(<span class="kw">_</span>),
-<a href=#927 id=927 data-nosnippet>927</a>            children: elements,
-<a href=#928 id=928 data-nosnippet>928</a>            ..
-<a href=#929 id=929 data-nosnippet>929</a>        } = <span class="kw-2">&amp;mut </span>combined
-<a href=#930 id=930 data-nosnippet>930</a>        <span class="kw">else </span>{
-<a href=#931 id=931 data-nosnippet>931</a>            <span class="macro">panic!</span>()
-<a href=#932 id=932 data-nosnippet>932</a>        };
-<a href=#933 id=933 data-nosnippet>933</a>        elements.push(record(<span class="string">"flag"</span>));
-<a href=#934 id=934 data-nosnippet>934</a>        <span class="macro">assert!</span>(<span class="kw">crate</span>::group::validate_layout(<span class="kw-2">&amp;</span>combined)
-<a href=#935 id=935 data-nosnippet>935</a>            .unwrap_err()
-<a href=#936 id=936 data-nosnippet>936</a>            .contains(<span class="string">"duplicate Kotlin group binding `flag`"</span>));
-<a href=#937 id=937 data-nosnippet>937</a>        <span class="kw">let </span>duplicates = WireNode::Branch {
-<a href=#938 id=938 data-nosnippet>938</a>            controls: <span class="macro">vec!</span>[],
-<a href=#939 id=939 data-nosnippet>939</a>            meta: JniBranch::Group(JniGroup::Values),
-<a href=#940 id=940 data-nosnippet>940</a>            children: <span class="macro">vec!</span>[record(<span class="string">"value"</span>), record(<span class="string">"value"</span>)],
-<a href=#941 id=941 data-nosnippet>941</a>        };
-<a href=#942 id=942 data-nosnippet>942</a>        <span class="macro">assert!</span>(<span class="kw">crate</span>::group::validate_layout(<span class="kw-2">&amp;</span>duplicates)
-<a href=#943 id=943 data-nosnippet>943</a>            .unwrap_err()
-<a href=#944 id=944 data-nosnippet>944</a>            .contains(<span class="string">"duplicate Kotlin group binding `value`"</span>));
-<a href=#945 id=945 data-nosnippet>945</a>    }
-<a href=#946 id=946 data-nosnippet>946</a>    <span class="attr">#[test]
-<a href=#947 id=947 data-nosnippet>947</a>    </span><span class="kw">fn </span>kotlin_record_emission_reads_names_from_shared_fields() {
-<a href=#948 id=948 data-nosnippet>948</a>        <span class="kw">let </span><span class="kw-2">mut </span>field = prebindgen_flat::WireNode::Leaf(<span class="macro">vec!</span>[Wire {
-<a href=#949 id=949 data-nosnippet>949</a>            name: <span class="macro">syn::parse_quote!</span>(incoming),
-<a href=#950 id=950 data-nosnippet>950</a>            kind: JniWire::scalar(Primitive::I32),
-<a href=#951 id=951 data-nosnippet>951</a>        }]);
-<a href=#952 id=952 data-nosnippet>952</a>        field = prebindgen_flat::WireNode::Branch {
-<a href=#953 id=953 data-nosnippet>953</a>            controls: <span class="macro">vec!</span>[],
-<a href=#954 id=954 data-nosnippet>954</a>            meta: JniBranch::Group(JniGroup::Field(<span class="macro">syn::parse_quote!</span>(r#type))),
-<a href=#955 id=955 data-nosnippet>955</a>            children: <span class="macro">vec!</span>[std::mem::take(<span class="kw-2">&amp;mut </span>field)],
-<a href=#956 id=956 data-nosnippet>956</a>        };
-<a href=#957 id=957 data-nosnippet>957</a>        field = prebindgen_flat::WireNode::Branch {
-<a href=#958 id=958 data-nosnippet>958</a>            controls: <span class="macro">vec!</span>[],
-<a href=#959 id=959 data-nosnippet>959</a>            meta: JniBranch::Group(JniGroup::Fields(<span class="prelude-val">Some</span>(DataGroup {
-<a href=#960 id=960 data-nosnippet>960</a>                root: <span class="string">"point"</span>.into(),
-<a href=#961 id=961 data-nosnippet>961</a>                class_name: <span class="string">"example.Point"</span>.into(),
-<a href=#962 id=962 data-nosnippet>962</a>                condition: <span class="string">"true"</span>.into(),
-<a href=#963 id=963 data-nosnippet>963</a>            }))),
-<a href=#964 id=964 data-nosnippet>964</a>            children: <span class="macro">vec!</span>[std::mem::take(<span class="kw-2">&amp;mut </span>field)],
-<a href=#965 id=965 data-nosnippet>965</a>        };
-<a href=#966 id=966 data-nosnippet>966</a>        <span class="kw">crate</span>::group::validate_layout(<span class="kw-2">&amp;</span>field).unwrap();
-<a href=#967 id=967 data-nosnippet>967</a>        <span class="kw">let </span>classes = BTreeMap::new();
-<a href=#968 id=968 data-nosnippet>968</a>        <span class="kw">let </span>context = KotlinContext {
-<a href=#969 id=969 data-nosnippet>969</a>            package: <span class="string">"example"</span>,
-<a href=#970 id=970 data-nosnippet>970</a>            classes: <span class="kw-2">&amp;</span>classes,
-<a href=#971 id=971 data-nosnippet>971</a>            result: <span class="string">"result"</span>,
-<a href=#972 id=972 data-nosnippet>972</a>            failure: <span class="string">"failure"</span>,
-<a href=#973 id=973 data-nosnippet>973</a>            cleanup_failure: <span class="prelude-val">None</span>,
-<a href=#974 id=974 data-nosnippet>974</a>            output_prefix: <span class="string">"output"</span>,
-<a href=#975 id=975 data-nosnippet>975</a>        };
-<a href=#976 id=976 data-nosnippet>976</a>        <span class="kw">let </span>input = kotlin::input_kotlin(<span class="kw-2">&amp;</span>field, <span class="kw-2">&amp;</span>context).unwrap();
-<a href=#977 id=977 data-nosnippet>977</a>        <span class="macro">assert_eq!</span>(input.parameters, [<span class="string">"point: example.Point"</span>]);
-<a href=#978 id=978 data-nosnippet>978</a>        <span class="macro">assert!</span>(input.arguments[<span class="number">0</span>].contains(<span class="string">"point.type"</span>));
-<a href=#979 id=979 data-nosnippet>979</a>        <span class="kw">let </span>output = kotlin::output_kotlin(<span class="kw-2">&amp;</span>field, <span class="kw-2">&amp;</span>context).unwrap();
-<a href=#980 id=980 data-nosnippet>980</a>        <span class="macro">assert_eq!</span>(output.result_types, [<span class="string">"example.Point"</span>]);
-<a href=#981 id=981 data-nosnippet>981</a>        <span class="macro">assert!</span>(output.delivered[<span class="number">0</span>].contains(<span class="string">"example.Point(result[0]"</span>));
-<a href=#982 id=982 data-nosnippet>982</a>        <span class="comment">// An empty record still denotes one Kotlin object with no ABI wires.
-<a href=#983 id=983 data-nosnippet>983</a>        </span><span class="kw">let </span>empty = record(<span class="string">"empty"</span>);
-<a href=#984 id=984 data-nosnippet>984</a>        <span class="kw">let </span>output = kotlin::output_kotlin(<span class="kw-2">&amp;</span>empty, <span class="kw-2">&amp;</span>context).unwrap();
-<a href=#985 id=985 data-nosnippet>985</a>        <span class="macro">assert_eq!</span>(output.delivered, [<span class="string">"example.Empty()"</span>]);
-<a href=#986 id=986 data-nosnippet>986</a>    }
-<a href=#987 id=987 data-nosnippet>987</a>}
+<a href=#878 id=878 data-nosnippet>878</a>            child: Box::new(DeclarationOutput::Leaf(OutputLeafOp::Projected(
+<a href=#879 id=879 data-nosnippet>879</a>                Projection::owned(),
+<a href=#880 id=880 data-nosnippet>880</a>            ))),
+<a href=#881 id=881 data-nosnippet>881</a>        };
+<a href=#882 id=882 data-nosnippet>882</a>        <span class="kw">let </span>resolved = defaults
+<a href=#883 id=883 data-nosnippet>883</a>            .resolve_output(
+<a href=#884 id=884 data-nosnippet>884</a>                <span class="kw-2">&amp;</span>flat,
+<a href=#885 id=885 data-nosnippet>885</a>                <span class="kw-2">&amp;</span>codec,
+<a href=#886 id=886 data-nosnippet>886</a>                <span class="kw-2">&amp;</span>flat.function(<span class="string">"items"</span>).unwrap().ret.ty,
+<a href=#887 id=887 data-nosnippet>887</a>                <span class="kw-2">&amp;</span>request,
+<a href=#888 id=888 data-nosnippet>888</a>                <span class="kw-2">&amp;</span>(),
+<a href=#889 id=889 data-nosnippet>889</a>            )
+<a href=#890 id=890 data-nosnippet>890</a>            .unwrap();
+<a href=#891 id=891 data-nosnippet>891</a>        <span class="macro">assert!</span>(
+<a href=#892 id=892 data-nosnippet>892</a>            <span class="macro">matches!</span>(<span class="kw-2">&amp;</span>resolved,<span class="kw">crate</span>::operations::Output::Unary { operation: <span class="kw">crate</span>::operations::OutputUnary::Sequence { .. }, child: element, .. } <span class="kw">if </span><span class="macro">matches!</span>(element.as_ref(),<span class="kw">crate</span>::operations::Output::Branch { operation: <span class="kw">crate</span>::operations::OutputBranch::Record { mode: <span class="prelude-val">Some</span>(ProjectionMode::Owned) }, children: fields,  } <span class="kw">if </span><span class="macro">matches!</span>(fields.as_slice(),[<span class="kw">crate</span>::operations::Output::Leaf(<span class="kw">crate</span>::operations::OutputLeafOp::Projected(<span class="kw">_</span>))])))
+<a href=#893 id=893 data-nosnippet>893</a>        );
+<a href=#894 id=894 data-nosnippet>894</a>        drop(defaults);
+<a href=#895 id=895 data-nosnippet>895</a>        <span class="kw">let </span>plan = prebindgen_declarations::compile_output(<span class="kw-2">&amp;</span>flat, <span class="kw-2">&amp;</span>codec, <span class="string">"items"</span>, <span class="kw-2">&amp;</span>resolved, <span class="kw-2">&amp;</span>())
+<a href=#896 id=896 data-nosnippet>896</a>            .unwrap();
+<a href=#897 id=897 data-nosnippet>897</a>        flat.function_mut(<span class="string">"items"</span>).unwrap().ret.slot = <span class="prelude-val">Some</span>(plan);
+<a href=#898 id=898 data-nosnippet>898</a>    }
+<a href=#899 id=899 data-nosnippet>899</a>
+<a href=#900 id=900 data-nosnippet>900</a>    <span class="kw">fn </span>record(root: <span class="kw-2">&amp;</span>str) -&gt; WireNode&lt;JniWire, <span class="kw">crate</span>::JniChain, <span class="kw">crate</span>::JniBranch&gt; {
+<a href=#901 id=901 data-nosnippet>901</a>        WireNode::Branch {
+<a href=#902 id=902 data-nosnippet>902</a>            controls: <span class="macro">vec!</span>[],
+<a href=#903 id=903 data-nosnippet>903</a>            meta: JniBranch::Group(JniGroup::Fields(<span class="prelude-val">Some</span>(DataGroup {
+<a href=#904 id=904 data-nosnippet>904</a>                root: root.into(),
+<a href=#905 id=905 data-nosnippet>905</a>                class_name: <span class="string">"example.Empty"</span>.into(),
+<a href=#906 id=906 data-nosnippet>906</a>                condition: <span class="string">"true"</span>.into(),
+<a href=#907 id=907 data-nosnippet>907</a>            }))),
+<a href=#908 id=908 data-nosnippet>908</a>            children: Vec::new(),
+<a href=#909 id=909 data-nosnippet>909</a>        }
+<a href=#910 id=910 data-nosnippet>910</a>    }
+<a href=#911 id=911 data-nosnippet>911</a>    <span class="attr">#[test]
+<a href=#912 id=912 data-nosnippet>912</a>    </span><span class="kw">fn </span>kotlin_record_and_presence_bindings_share_a_namespace() {
+<a href=#913 id=913 data-nosnippet>913</a>        <span class="kw">let </span>optional = WireNode::Chain {
+<a href=#914 id=914 data-nosnippet>914</a>            controls: <span class="macro">vec!</span>[Wire {
+<a href=#915 id=915 data-nosnippet>915</a>                name: <span class="macro">syn::parse_quote!</span>(flag),
+<a href=#916 id=916 data-nosnippet>916</a>                kind: JniWire::selector(),
+<a href=#917 id=917 data-nosnippet>917</a>            }],
+<a href=#918 id=918 data-nosnippet>918</a>            meta: JniChain::Optional(JniOptional::Flag(<span class="macro">syn::parse_quote!</span>(flag))),
+<a href=#919 id=919 data-nosnippet>919</a>            child: Box::default(),
+<a href=#920 id=920 data-nosnippet>920</a>        };
+<a href=#921 id=921 data-nosnippet>921</a>        <span class="kw">let </span><span class="kw-2">mut </span>combined = WireNode::Branch {
+<a href=#922 id=922 data-nosnippet>922</a>            controls: <span class="macro">vec!</span>[],
+<a href=#923 id=923 data-nosnippet>923</a>            meta: JniBranch::Group(JniGroup::Values),
+<a href=#924 id=924 data-nosnippet>924</a>            children: <span class="macro">vec!</span>[optional, record(<span class="string">"value"</span>)],
+<a href=#925 id=925 data-nosnippet>925</a>        };
+<a href=#926 id=926 data-nosnippet>926</a>        <span class="kw">crate</span>::group::validate_layout(<span class="kw-2">&amp;</span>combined).unwrap();
+<a href=#927 id=927 data-nosnippet>927</a>        <span class="kw">let </span>WireNode::Branch {
+<a href=#928 id=928 data-nosnippet>928</a>            meta: JniBranch::Group(<span class="kw">_</span>),
+<a href=#929 id=929 data-nosnippet>929</a>            children: elements,
+<a href=#930 id=930 data-nosnippet>930</a>            ..
+<a href=#931 id=931 data-nosnippet>931</a>        } = <span class="kw-2">&amp;mut </span>combined
+<a href=#932 id=932 data-nosnippet>932</a>        <span class="kw">else </span>{
+<a href=#933 id=933 data-nosnippet>933</a>            <span class="macro">panic!</span>()
+<a href=#934 id=934 data-nosnippet>934</a>        };
+<a href=#935 id=935 data-nosnippet>935</a>        elements.push(record(<span class="string">"flag"</span>));
+<a href=#936 id=936 data-nosnippet>936</a>        <span class="macro">assert!</span>(<span class="kw">crate</span>::group::validate_layout(<span class="kw-2">&amp;</span>combined)
+<a href=#937 id=937 data-nosnippet>937</a>            .unwrap_err()
+<a href=#938 id=938 data-nosnippet>938</a>            .contains(<span class="string">"duplicate Kotlin group binding `flag`"</span>));
+<a href=#939 id=939 data-nosnippet>939</a>        <span class="kw">let </span>duplicates = WireNode::Branch {
+<a href=#940 id=940 data-nosnippet>940</a>            controls: <span class="macro">vec!</span>[],
+<a href=#941 id=941 data-nosnippet>941</a>            meta: JniBranch::Group(JniGroup::Values),
+<a href=#942 id=942 data-nosnippet>942</a>            children: <span class="macro">vec!</span>[record(<span class="string">"value"</span>), record(<span class="string">"value"</span>)],
+<a href=#943 id=943 data-nosnippet>943</a>        };
+<a href=#944 id=944 data-nosnippet>944</a>        <span class="macro">assert!</span>(<span class="kw">crate</span>::group::validate_layout(<span class="kw-2">&amp;</span>duplicates)
+<a href=#945 id=945 data-nosnippet>945</a>            .unwrap_err()
+<a href=#946 id=946 data-nosnippet>946</a>            .contains(<span class="string">"duplicate Kotlin group binding `value`"</span>));
+<a href=#947 id=947 data-nosnippet>947</a>    }
+<a href=#948 id=948 data-nosnippet>948</a>    <span class="attr">#[test]
+<a href=#949 id=949 data-nosnippet>949</a>    </span><span class="kw">fn </span>kotlin_record_emission_reads_names_from_shared_fields() {
+<a href=#950 id=950 data-nosnippet>950</a>        <span class="kw">let </span><span class="kw-2">mut </span>field = prebindgen_flat::WireNode::Leaf(<span class="macro">vec!</span>[Wire {
+<a href=#951 id=951 data-nosnippet>951</a>            name: <span class="macro">syn::parse_quote!</span>(incoming),
+<a href=#952 id=952 data-nosnippet>952</a>            kind: JniWire::scalar(Primitive::I32),
+<a href=#953 id=953 data-nosnippet>953</a>        }]);
+<a href=#954 id=954 data-nosnippet>954</a>        field = prebindgen_flat::WireNode::Branch {
+<a href=#955 id=955 data-nosnippet>955</a>            controls: <span class="macro">vec!</span>[],
+<a href=#956 id=956 data-nosnippet>956</a>            meta: JniBranch::Group(JniGroup::Field(<span class="macro">syn::parse_quote!</span>(r#type))),
+<a href=#957 id=957 data-nosnippet>957</a>            children: <span class="macro">vec!</span>[std::mem::take(<span class="kw-2">&amp;mut </span>field)],
+<a href=#958 id=958 data-nosnippet>958</a>        };
+<a href=#959 id=959 data-nosnippet>959</a>        field = prebindgen_flat::WireNode::Branch {
+<a href=#960 id=960 data-nosnippet>960</a>            controls: <span class="macro">vec!</span>[],
+<a href=#961 id=961 data-nosnippet>961</a>            meta: JniBranch::Group(JniGroup::Fields(<span class="prelude-val">Some</span>(DataGroup {
+<a href=#962 id=962 data-nosnippet>962</a>                root: <span class="string">"point"</span>.into(),
+<a href=#963 id=963 data-nosnippet>963</a>                class_name: <span class="string">"example.Point"</span>.into(),
+<a href=#964 id=964 data-nosnippet>964</a>                condition: <span class="string">"true"</span>.into(),
+<a href=#965 id=965 data-nosnippet>965</a>            }))),
+<a href=#966 id=966 data-nosnippet>966</a>            children: <span class="macro">vec!</span>[std::mem::take(<span class="kw-2">&amp;mut </span>field)],
+<a href=#967 id=967 data-nosnippet>967</a>        };
+<a href=#968 id=968 data-nosnippet>968</a>        <span class="kw">crate</span>::group::validate_layout(<span class="kw-2">&amp;</span>field).unwrap();
+<a href=#969 id=969 data-nosnippet>969</a>        <span class="kw">let </span>classes = BTreeMap::new();
+<a href=#970 id=970 data-nosnippet>970</a>        <span class="kw">let </span>context = KotlinContext {
+<a href=#971 id=971 data-nosnippet>971</a>            package: <span class="string">"example"</span>,
+<a href=#972 id=972 data-nosnippet>972</a>            classes: <span class="kw-2">&amp;</span>classes,
+<a href=#973 id=973 data-nosnippet>973</a>            result: <span class="string">"result"</span>,
+<a href=#974 id=974 data-nosnippet>974</a>            failure: <span class="string">"failure"</span>,
+<a href=#975 id=975 data-nosnippet>975</a>            cleanup_failure: <span class="prelude-val">None</span>,
+<a href=#976 id=976 data-nosnippet>976</a>            output_prefix: <span class="string">"output"</span>,
+<a href=#977 id=977 data-nosnippet>977</a>        };
+<a href=#978 id=978 data-nosnippet>978</a>        <span class="kw">let </span>input = kotlin::input_kotlin(<span class="kw-2">&amp;</span>field, <span class="kw-2">&amp;</span>context).unwrap();
+<a href=#979 id=979 data-nosnippet>979</a>        <span class="macro">assert_eq!</span>(input.parameters, [<span class="string">"point: example.Point"</span>]);
+<a href=#980 id=980 data-nosnippet>980</a>        <span class="macro">assert!</span>(input.arguments[<span class="number">0</span>].contains(<span class="string">"point.type"</span>));
+<a href=#981 id=981 data-nosnippet>981</a>        <span class="kw">let </span>output = kotlin::output_kotlin(<span class="kw-2">&amp;</span>field, <span class="kw-2">&amp;</span>context).unwrap();
+<a href=#982 id=982 data-nosnippet>982</a>        <span class="macro">assert_eq!</span>(output.result_types, [<span class="string">"example.Point"</span>]);
+<a href=#983 id=983 data-nosnippet>983</a>        <span class="macro">assert!</span>(output.delivered[<span class="number">0</span>].contains(<span class="string">"example.Point(result[0]"</span>));
+<a href=#984 id=984 data-nosnippet>984</a>        <span class="comment">// An empty record still denotes one Kotlin object with no ABI wires.
+<a href=#985 id=985 data-nosnippet>985</a>        </span><span class="kw">let </span>empty = record(<span class="string">"empty"</span>);
+<a href=#986 id=986 data-nosnippet>986</a>        <span class="kw">let </span>output = kotlin::output_kotlin(<span class="kw-2">&amp;</span>empty, <span class="kw-2">&amp;</span>context).unwrap();
+<a href=#987 id=987 data-nosnippet>987</a>        <span class="macro">assert_eq!</span>(output.delivered, [<span class="string">"example.Empty()"</span>]);
+<a href=#988 id=988 data-nosnippet>988</a>    }
+<a href=#989 id=989 data-nosnippet>989</a>}
 </code></pre></div></section></main></body></html>

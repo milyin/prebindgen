@@ -605,7 +605,7 @@
 <a href=#605 id=605 data-nosnippet>605</a>    <span class="attr">#[test]
 <a href=#606 id=606 data-nosnippet>606</a>    </span><span class="kw">fn </span>borrowed_records_and_sequences_cannot_lend_owned_getter_temporaries() {
 <a href=#607 id=607 data-nosnippet>607</a>        <span class="kw">use </span>prebindgen_declarations::{
-<a href=#608 id=608 data-nosnippet>608</a>            fields, DeclarationOutput <span class="kw">as </span>Output, ProjectionMode, SequenceDelivery,
+<a href=#608 id=608 data-nosnippet>608</a>            fields, DeclarationOutput, ProjectionMode, SequenceDelivery,
 <a href=#609 id=609 data-nosnippet>609</a>        };
 <a href=#610 id=610 data-nosnippet>610</a>        <span class="kw">let </span>source=<span class="string">"pub type Owner=String; pub struct Info{pub inner:Inner} pub type Inner=String; pub fn make()-&gt;Owner{} pub fn borrow(v:&amp;Owner)-&gt;&amp;Owner{} pub fn info(o:&amp;Owner)-&gt;Info{} pub fn name(v:&amp;Inner)-&gt;&amp;str{} pub fn list(o:&amp;Owner)-&gt;Vec&lt;Inner&gt;{}"</span>;
 <a href=#611 id=611 data-nosnippet>611</a>        <span class="kw">for </span>function <span class="kw">in </span>[<span class="string">"make"</span>, <span class="string">"borrow"</span>] {
@@ -631,14 +631,14 @@
 <a href=#631 id=631 data-nosnippet>631</a>        <span class="kw">let </span>error = Cbindgen::new(flat(source))
 <a href=#632 id=632 data-nosnippet>632</a>            .opaque_ptr(<span class="string">"owner"</span>, <span class="macro">syn::parse_quote!</span>(Owner))
 <a href=#633 id=633 data-nosnippet>633</a>            .opaque_ptr(<span class="string">"inner"</span>, <span class="macro">syn::parse_quote!</span>(Inner))
-<a href=#634 id=634 data-nosnippet>634</a>            .function(<span class="macro">fun!</span>(borrow).output(Output::getter(
+<a href=#634 id=634 data-nosnippet>634</a>            .function(<span class="macro">fun!</span>(borrow).output(DeclarationOutput::getter(
 <a href=#635 id=635 data-nosnippet>635</a>                <span class="string">"list"</span>,
-<a href=#636 id=636 data-nosnippet>636</a>                Output::Unary {
+<a href=#636 id=636 data-nosnippet>636</a>                DeclarationOutput::Unary {
 <a href=#637 id=637 data-nosnippet>637</a>                    operation: OutputUnary::Sequence {
 <a href=#638 id=638 data-nosnippet>638</a>                        delivery: SequenceDelivery::Value,
 <a href=#639 id=639 data-nosnippet>639</a>                        mode: <span class="prelude-val">Some</span>(ProjectionMode::Borrowed),
 <a href=#640 id=640 data-nosnippet>640</a>                    },
-<a href=#641 id=641 data-nosnippet>641</a>                    child: Box::new(Output::getter(<span class="string">"name"</span>, Output::auto())),
+<a href=#641 id=641 data-nosnippet>641</a>                    child: Box::new(DeclarationOutput::getter(<span class="string">"name"</span>, DeclarationOutput::auto())),
 <a href=#642 id=642 data-nosnippet>642</a>                },
 <a href=#643 id=643 data-nosnippet>643</a>            )))
 <a href=#644 id=644 data-nosnippet>644</a>            .panic()
