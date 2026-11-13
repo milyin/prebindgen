@@ -335,7 +335,7 @@
 <a href=#335 id=335 data-nosnippet>335</a>                    <span class="kw-2">&amp;</span>input_body((<span class="kw-2">**</span>input).clone()),
 <a href=#336 id=336 data-nosnippet>336</a>                    tree,
 <a href=#337 id=337 data-nosnippet>337</a>                    stack,
-<a href=#338 id=338 data-nosnippet>338</a>                    |ty, tree, stack| resolve(ty, tree, stack),
+<a href=#338 id=338 data-nosnippet>338</a>                    resolve,
 <a href=#339 id=339 data-nosnippet>339</a>                    |child| CInput::Unary {
 <a href=#340 id=340 data-nosnippet>340</a>                        operation: CInputUnary::Optional,
 <a href=#341 id=341 data-nosnippet>341</a>                        child: Box::new(child),
@@ -443,7 +443,7 @@
 <a href=#443 id=443 data-nosnippet>443</a>                    <span class="kw-2">&amp;</span>CInput::auto(),
 <a href=#444 id=444 data-nosnippet>444</a>                    <span class="kw-2">&amp;</span>COutput::auto(),
 <a href=#445 id=445 data-nosnippet>445</a>                    stack,
-<a href=#446 id=446 data-nosnippet>446</a>                    |ty, tree, stack| resolve(ty, tree, stack),
+<a href=#446 id=446 data-nosnippet>446</a>                    resolve,
 <a href=#447 id=447 data-nosnippet>447</a>                    |ty, tree, ownership| {
 <a href=#448 id=448 data-nosnippet>448</a>                        <span class="prelude-val">Ok</span>(<span class="self">self
 <a href=#449 id=449 data-nosnippet>449</a>                            </span>.output(flat, codec, ty, tree, extra, <span class="kw-2">&amp;mut </span><span class="macro">vec!</span>[], <span class="bool-val">true</span>)<span class="question-mark">?
@@ -728,7 +728,7 @@
 <a href=#728 id=728 data-nosnippet>728</a>                    <span class="kw-2">&amp;</span>output_body((<span class="kw-2">**</span>output).clone()),
 <a href=#729 id=729 data-nosnippet>729</a>                    tree,
 <a href=#730 id=730 data-nosnippet>730</a>                    stack,
-<a href=#731 id=731 data-nosnippet>731</a>                    |ty, tree, stack| resolve(ty, tree, stack),
+<a href=#731 id=731 data-nosnippet>731</a>                    resolve,
 <a href=#732 id=732 data-nosnippet>732</a>                    |child| {
 <a href=#733 id=733 data-nosnippet>733</a>                        <span class="kw">if </span><span class="macro">matches!</span>(<span class="kw-2">&amp;</span>child, COutput::Leaf(COutputLeafOp::Discard)) {
 <a href=#734 id=734 data-nosnippet>734</a>                            child
