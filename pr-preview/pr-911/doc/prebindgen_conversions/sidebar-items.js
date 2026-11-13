@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Access","DeliveryPolicy","InputTransfers"],"fn":["match_output_fields","record_input_transfer","render_output","render_template","source_result_expr","template_parameter","validate_value_bindings","validate_wire_names"],"mod":["boxed","staged","value"],"struct":["Delivery","InputPlan","OutputPlan","PlanSchema"],"trait":["TemplateContext"]};

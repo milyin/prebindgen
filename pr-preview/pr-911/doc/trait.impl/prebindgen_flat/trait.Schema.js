@@ -1,0 +1,9 @@
+(function() {
+    const implementors = Object.fromEntries([["prebindgen_c",[["impl <a class=\"trait\" href=\"prebindgen_flat/trait.Schema.html\" title=\"trait prebindgen_flat::Schema\">Schema</a> for <a class=\"struct\" href=\"prebindgen_c/struct.CSchema.html\" title=\"struct prebindgen_c::CSchema\">CSchema</a>",0]]],["prebindgen_conversions",[["impl&lt;WireType: <a class=\"trait\" href=\"prebindgen_flat/conversion/trait.WireKind.html\" title=\"trait prebindgen_flat::conversion::WireKind\">WireKind</a>, Context, Chain, Branch&gt; <a class=\"trait\" href=\"prebindgen_flat/trait.Schema.html\" title=\"trait prebindgen_flat::Schema\">Schema</a> for <a class=\"struct\" href=\"prebindgen_conversions/struct.PlanSchema.html\" title=\"struct prebindgen_conversions::PlanSchema\">PlanSchema</a>&lt;WireType, Context, Chain, Branch&gt;",0]]],["prebindgen_declarations",[["impl&lt;C: <a class=\"trait\" href=\"prebindgen_declarations/trait.Codec.html\" title=\"trait prebindgen_declarations::Codec\">Codec</a>&gt; <a class=\"trait\" href=\"prebindgen_flat/trait.Schema.html\" title=\"trait prebindgen_flat::Schema\">Schema</a> for <a class=\"struct\" href=\"prebindgen_declarations/struct.ResolvedSchema.html\" title=\"struct prebindgen_declarations::ResolvedSchema\">ResolvedSchema</a>&lt;C&gt;",0]]],["prebindgen_flat",[]],["prebindgen_jni",[["impl&lt;InConverter, OutConverter&gt; <a class=\"trait\" href=\"prebindgen_flat/trait.Schema.html\" title=\"trait prebindgen_flat::Schema\">Schema</a> for <a class=\"struct\" href=\"prebindgen_jni/struct.JniSchema.html\" title=\"struct prebindgen_jni::JniSchema\">JniSchema</a>&lt;InConverter, OutConverter&gt;",0]]]]);
+    if (window.register_implementors) {
+        window.register_implementors(implementors);
+    } else {
+        window.pending_implementors = implementors;
+    }
+})()
+//{"start":59,"fragment_lengths":[259,522,459,23,338]}
