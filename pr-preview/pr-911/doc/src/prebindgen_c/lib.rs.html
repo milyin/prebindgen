@@ -1505,7 +1505,7 @@
 <a href=#1505 id=1505 data-nosnippet>1505</a>                explicit: <span class="bool-val">true</span>,
 <a href=#1506 id=1506 data-nosnippet>1506</a>            }));
 <a href=#1507 id=1507 data-nosnippet>1507</a>        }
-<a href=#1508 id=1508 data-nosnippet>1508</a>        prebindgen_declarations::prepare_value_conversions(<span class="kw-2">&amp;mut </span>flat, <span class="self">self</span>.conversions)<span class="question-mark">?</span>;
+<a href=#1508 id=1508 data-nosnippet>1508</a>        prebindgen_declarations::prepare_value_conversions(<span class="kw-2">&amp;mut </span>flat, <span class="kw-2">&amp;</span><span class="self">self</span>.conversions)<span class="question-mark">?</span>;
 <a href=#1509 id=1509 data-nosnippet>1509</a>        <span class="kw">let </span><span class="kw-2">mut </span>automatic = std::collections::BTreeMap::new();
 <a href=#1510 id=1510 data-nosnippet>1510</a>        <span class="kw">for </span>f <span class="kw">in </span>flat.functions.values() {
 <a href=#1511 id=1511 data-nosnippet>1511</a>            owned::collect(<span class="kw-2">&amp;</span>f.ret.ty, <span class="kw-2">&amp;mut </span>automatic);
