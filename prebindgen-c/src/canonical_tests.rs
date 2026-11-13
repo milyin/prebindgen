@@ -1,6 +1,6 @@
 use super::*;
 use prebindgen_declarations::{convert, fun};
-fn model(source: &str) -> Bindings {
+fn model(source: &str) -> CBindings {
     Flat::parse(
         syn::parse_file(source)
             .unwrap()

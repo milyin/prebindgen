@@ -32,7 +32,7 @@ enum Field {
 }
 struct Row {
     carrier: Carrier,
-    layout: Option<Rc<BulkRecord>>,
+    layout: Option<Rc<JniBulkRecord>>,
     fields: Vec<(usize, Field)>,
     parts: Vec<String>,
     label: String,

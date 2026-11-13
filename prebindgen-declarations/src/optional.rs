@@ -166,8 +166,8 @@ pub fn optional_input<C: Codec>(
     tag: syn::Ident,
     var: syn::Ident,
     active: &Condition,
-    mut child: CodecInput<C>,
-) -> Result<CodecInput<C>> {
+    mut child: CodecInputPlan<C>,
+) -> Result<CodecInputPlan<C>> {
     let encoding = codec.optional(Optional {
         extra,
         payload: &mut child.node,
@@ -214,8 +214,8 @@ pub fn optional_output<C: Codec>(
     payload: syn::Ident,
     value: TokenStream,
     borrowed: bool,
-    mut child: CodecOutput<C>,
-) -> Result<CodecOutput<C>> {
+    mut child: CodecOutputPlan<C>,
+) -> Result<CodecOutputPlan<C>> {
     if !child.delivery.statements.is_empty()
         || child.delivery.result.to_string() != quote!(()).to_string()
     {

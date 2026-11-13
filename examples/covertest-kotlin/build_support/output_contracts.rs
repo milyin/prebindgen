@@ -2,14 +2,14 @@
 use prebindgen_conversions::{Delivery, DeliveryPolicy, InputFragment, OutputFragment};
 use prebindgen_flat::{Conversion, InputConversion, OutputConversion, Result, WireNode};
 use prebindgen_jni::{
-    expand_return, fun, package, ptr_class, Bindings, JniBranch, JniCallback, JniChain, JniContext,
-    JniGen, JniInput, JniOutput, JniWire, KotlinContext, KotlinInput, KotlinInputConversion,
-    KotlinOutput, KotlinOutputConversion,
+    expand_return, fun, package, ptr_class, JniBindings, JniBranch, JniCallback, JniChain,
+    JniContext, JniGen, JniInputConverter, JniOutputConverter, JniWire, KotlinContext, KotlinInput,
+    KotlinInputConversion, KotlinOutput, KotlinOutputConversion,
 };
 use proc_macro2::TokenStream;
 
 // Reuse the native wire conversion while independently defining the Kotlin API.
-struct DurationOutput(JniOutput);
+struct DurationOutput(JniOutputConverter);
 impl Conversion for DurationOutput {
     type Wire = JniWire;
     type Chain = JniChain;
@@ -79,7 +79,7 @@ impl KotlinOutputConversion for DurationOutput {
     }
 }
 
-struct DurationInput(JniInput);
+struct DurationInput(JniInputConverter);
 impl Conversion for DurationInput {
     type Wire = JniWire;
     type Chain = JniChain;
@@ -173,7 +173,7 @@ pub fn generate() -> Result<JniGen> {
         "duration_result",
     ] {
         let function = flat.function_mut(name)?;
-        let mut output = JniOutput::new(DurationOutput(
+        let mut output = JniOutputConverter::new(DurationOutput(
             function.ret.slot.take().ok_or("missing output")?,
         ));
         if name == "duration_packet" {
@@ -183,10 +183,12 @@ pub fn generate() -> Result<JniGen> {
     }
     // A local error override must not change plain_result's Long error handler.
     let error_output = prebindgen_declarations::compile_output_value(
-        &Bindings::parse([])?,
+        &JniBindings::parse([])?,
         &prebindgen_jni::JniCodec::raw(),
         &syn::parse_quote!(i64),
-        &prebindgen_declarations::Output::Leaf,
+        &prebindgen_jni::operations::JniOutput::Leaf(
+            prebindgen_jni::operations::JniOutputLeafOp::Value,
+        ),
         &(),
     )?;
     prebindgen_jni::bind_error_output(&mut flat, "duration_result", DurationOutput(error_output))?;
@@ -209,10 +211,12 @@ pub fn generate() -> Result<JniGen> {
     let mut callback: JniCallback = (*callback).clone();
     callback.set_interface_name("DurationCallback")?;
     let native_output = prebindgen_declarations::compile_output_value(
-        &Bindings::parse([])?,
+        &JniBindings::parse([])?,
         &prebindgen_jni::JniCodec::raw(),
         &syn::parse_quote!(i64),
-        &prebindgen_declarations::Output::Leaf,
+        &prebindgen_jni::operations::JniOutput::Leaf(
+            prebindgen_jni::operations::JniOutputLeafOp::Value,
+        ),
         &(),
     )?;
     callback.set_argument_converter(0, DurationOutput(native_output))?;
@@ -228,7 +232,7 @@ pub fn generate() -> Result<JniGen> {
             syn::parse_quote!(callback_duration_value),
             &prebindgen_declarations::Condition::default(),
         ))?;
-    callback.set_return_converter(DurationInput(JniInput::from(input)))?;
+    callback.set_return_converter(DurationInput(JniInputConverter::from(input)))?;
     flat.function_mut("duration_callback")?.params[0].ty.slot = Some(callback.into_input(
         syn::parse_quote!(custom_callback),
         syn::parse_quote!(callback_value),

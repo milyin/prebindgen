@@ -771,7 +771,7 @@ mod tests {
     fn malformed_metadata_is_rejected_before_final_slots_are_installed() {
         let mut input = CCodec::raw()
             .input_leaf(prebindgen_declarations::InputLeaf::new(
-                &Bindings::parse([]).unwrap(),
+                &CBindings::parse([]).unwrap(),
                 &syn::parse_quote!(i32),
                 &(),
                 syn::parse_quote!(wire),
@@ -790,7 +790,7 @@ mod tests {
             .contains("direct child"));
         let mut output = CCodec::raw()
             .output_leaf(prebindgen_declarations::OutputLeaf::new(
-                &Bindings::parse([]).unwrap(),
+                &CBindings::parse([]).unwrap(),
                 &syn::parse_quote!(i32),
                 &(),
                 syn::parse_quote!(wire),
@@ -822,7 +822,7 @@ mod tests {
         ] {
             let mut plan = CCodec::raw()
                 .input_leaf(prebindgen_declarations::InputLeaf::new(
-                    &Bindings::parse([]).unwrap(),
+                    &CBindings::parse([]).unwrap(),
                     &syn::parse_quote!(i64),
                     &(),
                     syn::parse_quote!(wire),
@@ -840,7 +840,7 @@ mod tests {
                 .contains("incompatible"));
             let mut output = CCodec::raw()
                 .output_leaf(prebindgen_declarations::OutputLeaf::new(
-                    &Bindings::parse([]).unwrap(),
+                    &CBindings::parse([]).unwrap(),
                     &syn::parse_quote!(i64),
                     &(),
                     syn::parse_quote!(wire),
@@ -929,11 +929,11 @@ mod abi_tests {
         assert_eq!(result_packet(&result.success, &packet).unwrap().len(), 1);
         assert!(result_packet(&result.success, &bindings).is_err());
         let source = syn::parse_file("pub fn f(value:i32){}").unwrap();
-        let mut flat: Bindings =
+        let mut flat: CBindings =
             Flat::parse(source.items.into_iter().map(|i| (i, Default::default()))).unwrap();
         let mut input = CCodec::raw()
             .input_leaf(prebindgen_declarations::InputLeaf::new(
-                &Bindings::parse([]).unwrap(),
+                &CBindings::parse([]).unwrap(),
                 &syn::parse_quote!(i32),
                 &(),
                 syn::parse_quote!(raw),

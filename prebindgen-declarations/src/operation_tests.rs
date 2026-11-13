@@ -1,9 +1,11 @@
-//! Contract tests for the operation API, including a four-method implementation.
+//! Contract tests for reusable operations and independent adapter vocabularies.
 use super::*;
 use prebindgen_conversions::{staged::emit_call, value};
 
 struct Scalars;
+test_frontend!(Scalars);
 impl Codec for Scalars {
+    test_operations!();
     type Schema = prebindgen_conversions::PlanSchema<Type>;
     type Wire = Type;
     type Context = ();
@@ -11,14 +13,14 @@ impl Codec for Scalars {
     type Chain = ();
     type Branch = ();
 
-    fn input_leaf(&self, r: InputLeaf<'_, Self>) -> Result<CodecInput<Self>> {
+    fn input_leaf(&self, r: InputLeaf<'_, Self>) -> Result<CodecInputPlan<Self>> {
         if !same_type(r.ty, &syn::parse_quote!(i64)) {
             return Err("this codec only supports i64".into());
         }
         let wire = &r.wire;
         value::input(r.ty, r.wire.clone(), r.target, quote!(#wire), r.ty.clone())
     }
-    fn output_leaf(&self, r: OutputLeaf<'_, Self>) -> Result<CodecOutput<Self>> {
+    fn output_leaf(&self, r: OutputLeaf<'_, Self>) -> Result<CodecOutputPlan<Self>> {
         if !same_type(r.ty, &syn::parse_quote!(i64)) {
             return Err("this codec only supports i64".into());
         }
@@ -52,9 +54,9 @@ fn model() -> Flat<<Scalars as Codec>::Schema> {
     .unwrap()
 }
 #[test]
-fn four_method_codec_compiles_and_executes_a_complete_call() {
+fn declaration_helpers_compile_and_execute_a_complete_call() {
     let mut flat = model();
-    Declarations::new(&flat, vec![], vec![], vec![])
+    DeclDefaults::new(&flat, vec![], vec![], vec![])
         .unwrap()
         .fill(&mut flat, &Scalars, &fun!(add), &())
         .unwrap();
@@ -112,36 +114,76 @@ fn minimal_codec_rejects_optional_features_and_bulk_before_decoding() {
     // Scalars deliberately ignores representation in its leaves. The compiler
     // must enforce opt-in before passing a bulk leaf or packing a sequence.
     for (source, input) in [
-        (ty.clone(), Input::Bulk(Box::new(Input::Leaf))),
+        (
+            ty.clone(),
+            DeclInput::Unary {
+                operation: DeclInputUnary::Bulk,
+                child: Box::new(DeclInput::Leaf(DeclInputLeafOp::Value)),
+            },
+        ),
         (
             syn::parse_quote!(()),
-            Input::Bulk(Box::new(Input::Fields(vec![]))),
+            DeclInput::Unary {
+                operation: DeclInputUnary::Bulk,
+                child: Box::new(DeclInput::Branch {
+                    operation: DeclInputBranch::Fields,
+                    children: vec![],
+                }),
+            },
         ),
         (
             syn::parse_quote!(Vec<i64>),
-            Input::Bulk(Box::new(Input::Sequence(Box::new(Input::Leaf)))),
+            DeclInput::Unary {
+                operation: DeclInputUnary::Bulk,
+                child: Box::new(DeclInput::Unary {
+                    operation: DeclInputUnary::Sequence,
+                    child: Box::new(DeclInput::Leaf(DeclInputLeafOp::Value)),
+                }),
+            },
         ),
     ] {
         let error = compile_callback_return(&flat, &Scalars, &source, &input, &()).unwrap_err();
         assert!(error.contains("bulk inputs are unsupported"), "{error}");
     }
     for (source, output) in [
-        (ty.clone(), Output::Bulk(Box::new(Output::Leaf))),
         (
             ty.clone(),
-            Output::Bulk(Box::new(Output::Projected(Projection::owned()))),
+            DeclOutput::Unary {
+                operation: DeclOutputUnary::Bulk,
+                child: Box::new(DeclOutput::Leaf(DeclOutputLeafOp::Value)),
+            },
+        ),
+        (
+            ty.clone(),
+            DeclOutput::Unary {
+                operation: DeclOutputUnary::Bulk,
+                child: Box::new(DeclOutput::Leaf(DeclOutputLeafOp::Projected(
+                    Projection::owned(),
+                ))),
+            },
         ),
         (
             syn::parse_quote!(()),
-            Output::Bulk(Box::new(Output::Fields(vec![]))),
+            DeclOutput::Unary {
+                operation: DeclOutputUnary::Bulk,
+                child: Box::new(DeclOutput::Branch {
+                    operation: DeclOutputBranch::Fields,
+                    children: vec![],
+                }),
+            },
         ),
         (
             syn::parse_quote!(Vec<i64>),
-            Output::Bulk(Box::new(Output::Sequence {
-                element: Box::new(Output::Leaf),
-                mode: None,
-                delivery: SequenceDelivery::Value,
-            })),
+            DeclOutput::Unary {
+                operation: DeclOutputUnary::Bulk,
+                child: Box::new(DeclOutput::Unary {
+                    operation: DeclOutputUnary::Sequence {
+                        delivery: SequenceDelivery::Value,
+                        mode: None,
+                    },
+                    child: Box::new(DeclOutput::Leaf(DeclOutputLeafOp::Value)),
+                }),
+            },
         ),
     ] {
         let error = compile_output_value(&flat, &Scalars, &source, &output, &()).unwrap_err();
@@ -151,7 +193,10 @@ fn minimal_codec_rejects_optional_features_and_bulk_before_decoding() {
         &flat,
         &Scalars,
         &syn::parse_quote!(Option<i64>),
-        &Input::Optional(Box::new(Input::Leaf)),
+        &DeclInput::Unary {
+            operation: DeclInputUnary::Optional,
+            child: Box::new(DeclInput::Leaf(DeclInputLeafOp::Value)),
+        },
         &(),
     )
     .unwrap_err();
@@ -216,14 +261,16 @@ struct Probe(
     std::cell::RefCell<Vec<(Representation, InputRole)>>,
     std::cell::Cell<bool>,
 );
+test_frontend!(Probe);
 impl Codec for Probe {
+    test_operations!();
     type Schema = <Scalars as Codec>::Schema;
     type Wire = Type;
     type Context = ();
     type Extra = ();
     type Chain = ();
     type Branch = ();
-    fn input_leaf(&self, r: InputLeaf<'_, Self>) -> Result<CodecInput<Self>> {
+    fn input_leaf(&self, r: InputLeaf<'_, Self>) -> Result<CodecInputPlan<Self>> {
         self.0.borrow_mut().push((r.representation, r.role));
         Scalars.input_leaf(InputLeaf {
             flat: r.flat,
@@ -236,7 +283,7 @@ impl Codec for Probe {
             role: r.role,
         })
     }
-    fn output_leaf(&self, r: OutputLeaf<'_, Self>) -> Result<CodecOutput<Self>> {
+    fn output_leaf(&self, r: OutputLeaf<'_, Self>) -> Result<CodecOutputPlan<Self>> {
         Scalars.output_leaf(OutputLeaf {
             flat: r.flat,
             ty: r.ty,
@@ -271,9 +318,14 @@ fn input_context_preserves_all_dispatch_cases_and_callback_roles() {
                 input_role: role.into(),
                 ..Compiler::new(&flat, &codec, "arg".into())
             };
-            compiler.bulk.set(bulk);
+            compiler.state.bulk.set(bulk);
             compiler
-                .input(&ty, &Input::Leaf, &(), &Condition::default())
+                .input(
+                    &ty,
+                    &DeclInput::Leaf(DeclInputLeafOp::Value),
+                    &(),
+                    &Condition::default(),
+                )
                 .unwrap();
             assert_eq!(codec.0.borrow().last(), Some(&(representation, role)));
         }
@@ -283,7 +335,10 @@ fn input_context_preserves_all_dispatch_cases_and_callback_roles() {
         &flat,
         &codec,
         &syn::parse_quote!(()),
-        &Input::Fields(vec![]),
+        &DeclInput::Branch {
+            operation: DeclInputBranch::Fields,
+            children: vec![],
+        },
         &(),
     )
     .unwrap();
@@ -291,7 +346,13 @@ fn input_context_preserves_all_dispatch_cases_and_callback_roles() {
         &flat,
         &codec,
         &ty,
-        &Input::constructor("add", [Input::Leaf, Input::Leaf]),
+        &DeclInput::constructor(
+            "add",
+            [
+                DeclInput::Leaf(DeclInputLeafOp::Value),
+                DeclInput::Leaf(DeclInputLeafOp::Value),
+            ],
+        ),
         &(),
     )
     .unwrap();
@@ -305,7 +366,10 @@ fn input_context_preserves_all_dispatch_cases_and_callback_roles() {
         &flat,
         &codec,
         &ty,
-        &Output::Bulk(Box::new(Output::Leaf)),
+        &DeclOutput::Unary {
+            operation: DeclOutputUnary::Bulk,
+            child: Box::new(DeclOutput::Leaf(DeclOutputLeafOp::Value)),
+        },
         &(),
     )
     .unwrap_err();
@@ -313,19 +377,21 @@ fn input_context_preserves_all_dispatch_cases_and_callback_roles() {
 }
 
 struct MalformedOptional(u8);
+test_frontend!(MalformedOptional);
 impl Codec for MalformedOptional {
+    test_operations!();
     type Schema = <Scalars as Codec>::Schema;
     type Wire = Type;
     type Context = ();
     type Extra = ();
     type Chain = ();
     type Branch = ();
-    fn input_leaf(&self, r: InputLeaf<'_, Self>) -> Result<CodecInput<Self>> {
+    fn input_leaf(&self, r: InputLeaf<'_, Self>) -> Result<CodecInputPlan<Self>> {
         Scalars.input_leaf(InputLeaf::new(
             r.flat, r.ty, r.extra, r.wire, r.target, r.active,
         ))
     }
-    fn output_leaf(&self, r: OutputLeaf<'_, Self>) -> Result<CodecOutput<Self>> {
+    fn output_leaf(&self, r: OutputLeaf<'_, Self>) -> Result<CodecOutputPlan<Self>> {
         Scalars.output_leaf(OutputLeaf::new(
             r.flat, r.ty, r.extra, r.wire, r.value, r.access,
         ))
@@ -394,7 +460,10 @@ fn malformed_optional_encodings_are_rejected_before_installing_a_slot() {
                 &MalformedOptional(mode),
                 "f",
                 "value",
-                &Input::Optional(Box::new(Input::Leaf)),
+                &DeclInput::Unary {
+                    operation: DeclInputUnary::Optional,
+                    child: Box::new(DeclInput::Leaf(DeclInputLeafOp::Value)),
+                },
                 &(),
             )
         } else {
@@ -402,7 +471,10 @@ fn malformed_optional_encodings_are_rejected_before_installing_a_slot() {
                 &mut flat,
                 &MalformedOptional(mode),
                 "f",
-                &Output::Optional(Box::new(Output::Leaf)),
+                &DeclOutput::Unary {
+                    operation: DeclOutputUnary::Optional,
+                    child: Box::new(DeclOutput::Leaf(DeclOutputLeafOp::Value)),
+                },
                 &(),
             )
         };
@@ -418,15 +490,255 @@ fn enabled_bulk_still_rejects_enclosing_callback_delivery_before_element_lowerin
     let flat = model();
     let codec = Probe::default();
     codec.1.set(true);
-    let recipe = Output::Bulk(Box::new(Output::Sequence {
-        element: Box::new(Output::Leaf),
-        mode: None,
-        delivery: SequenceDelivery::Callback,
-    }));
+    let recipe = DeclOutput::Unary {
+        operation: DeclOutputUnary::Bulk,
+        child: Box::new(DeclOutput::Unary {
+            operation: DeclOutputUnary::Sequence {
+                delivery: SequenceDelivery::Callback,
+                mode: None,
+            },
+            child: Box::new(DeclOutput::Leaf(DeclOutputLeafOp::Value)),
+        }),
+    };
     let error = compile_output_value(&flat, &codec, &syn::parse_quote!(Vec<i64>), &recipe, &())
         .unwrap_err();
     assert!(
         error.contains("bulk cannot enclose callback delivery"),
         "{error}"
     );
+}
+
+#[test]
+fn resolved_flat_compiles_after_its_configuration_is_dropped() {
+    let flat = model();
+    let declarations = DeclDefaults::new(&flat, vec![], vec![], vec![]).unwrap();
+    let configuration = vec![fun!(add)];
+    let resolved = declarations
+        .resolve(flat, Scalars, &configuration, ())
+        .unwrap();
+    drop(configuration);
+    drop(declarations);
+    assert!(matches!(
+        resolved.function("add").unwrap().params[0].ty.slot,
+        Some(ResolvedSlot::Tree(DeclInput::Leaf(_)))
+    ));
+    let compiled = compile_resolved(resolved).unwrap();
+    prebindgen_flat::validate_bindings(&compiled).unwrap();
+    assert_eq!(compiled.function("add").unwrap().params.len(), 2);
+}
+
+#[test]
+fn none_is_unit_and_cannot_silently_discard_non_unit_values() {
+    let source = model();
+    let defaults = DeclDefaults::new(&source, vec![], vec![], vec![]).unwrap();
+    assert!(defaults
+        .resolve_input(
+            &source,
+            &Scalars,
+            &syn::parse_quote!(i64),
+            &DeclInput::None,
+            &()
+        )
+        .is_err());
+    assert!(defaults
+        .resolve_output(
+            &source,
+            &Scalars,
+            &syn::parse_quote!(i64),
+            &DeclOutput::None,
+            &()
+        )
+        .is_err());
+    for tree in [DeclInput::auto(), DeclInput::fields([]), DeclInput::None] {
+        assert!(matches!(
+            defaults
+                .resolve_input(&source, &Scalars, &syn::parse_quote!(()), &tree, &())
+                .unwrap(),
+            DeclInput::None
+        ));
+    }
+    for tree in [DeclOutput::auto(), DeclOutput::fields([]), DeclOutput::None] {
+        assert!(matches!(
+            defaults
+                .resolve_output(&source, &Scalars, &syn::parse_quote!(()), &tree, &())
+                .unwrap(),
+            DeclOutput::None
+        ));
+    }
+}
+
+// This adapter deliberately does not implement DeclCodec. Its operations
+// cannot be represented by the optional declaration frontend's fixed vocabulary.
+#[derive(Clone, Debug)]
+struct ArithmeticInputs;
+#[derive(Clone, Debug)]
+struct ArithmeticOutputs;
+#[derive(Clone, Debug)]
+struct AddInput(i64);
+#[derive(Clone, Debug)]
+struct ScaleOutput(i64);
+impl InputOps for ArithmeticInputs {
+    type Leaf = ();
+    type Unary = AddInput;
+    type Branch = std::convert::Infallible;
+    type Arrow = std::convert::Infallible;
+}
+impl OutputOps for ArithmeticOutputs {
+    type Leaf = ScaleOutput;
+    type Unary = std::convert::Infallible;
+    type Branch = std::convert::Infallible;
+    type Arrow = std::convert::Infallible;
+}
+struct Arithmetic;
+impl Codec for Arithmetic {
+    fn finish_output(&self, plan: &mut CodecOutputPlan<Self>, _: &()) -> Result<()> {
+        plan.delivery.result = plan.values[0].1.clone();
+        Ok(())
+    }
+
+    type InOps = ArithmeticInputs;
+    type OutOps = ArithmeticOutputs;
+    type CompileState = ();
+    type Schema = prebindgen_conversions::PlanSchema<Type>;
+    type Wire = Type;
+    type Context = ();
+    type Extra = ();
+    type Chain = ();
+    type Branch = ();
+    fn input_leaf(&self, r: InputLeaf<'_, Self>) -> Result<CodecInputPlan<Self>> {
+        let wire = &r.wire;
+        value::input(r.ty, r.wire.clone(), r.target, quote!(#wire), r.ty.clone())
+    }
+    fn output_leaf(&self, r: OutputLeaf<'_, Self>) -> Result<CodecOutputPlan<Self>> {
+        value::output(
+            r.ty,
+            r.wire,
+            r.value,
+            r.access.is_shared(),
+            |v| v,
+            r.ty.clone(),
+        )
+    }
+    fn output_consumes(&self, _: &Flat<Self::Schema>, _: &Type, _: &()) -> bool {
+        false
+    }
+    fn group(&self, _: GroupKind<'_>) -> Result<()> {
+        Ok(())
+    }
+    fn compile_input_tree(
+        &self,
+        cx: &Compiler<'_, Self>,
+        ty: &Type,
+        tree: &ResolvedInput<Self>,
+        extra: &(),
+        active: &Condition,
+        names: Option<(&syn::Ident, &syn::Ident)>,
+    ) -> Result<CodecInputPlan<Self>> {
+        match tree {
+            InputNode::Leaf(()) => self.input_leaf(InputLeaf::new(
+                cx.flat,
+                ty,
+                extra,
+                names.map_or_else(|| cx.name(), |(w, _)| w.clone()),
+                names.map_or_else(|| cx.name(), |(_, v)| v.clone()),
+                active,
+            )),
+            InputNode::Unary {
+                operation: AddInput(amount),
+                child,
+            } => {
+                let plan = cx.input_named(ty, child, extra, active, names)?;
+                let v = cx.name();
+                let body = plan.bind(&v, quote!(#v + #amount))?;
+                Ok(InputPlan::new(plan.node, quote!(), quote!({#body})))
+            }
+            _ => Err("unsupported arithmetic input".into()),
+        }
+    }
+    fn compile_output_tree(
+        &self,
+        cx: &Compiler<'_, Self>,
+        ty: &Type,
+        tree: &ResolvedOutput<Self>,
+        extra: &(),
+        value: TokenStream,
+        borrowed: bool,
+        wire: Option<&syn::Ident>,
+    ) -> Result<CodecOutputPlan<Self>> {
+        let OutputNode::Leaf(ScaleOutput(scale)) = tree else {
+            return Err("unsupported arithmetic output".into());
+        };
+        self.output_leaf(OutputLeaf::new(
+            cx.flat,
+            ty,
+            extra,
+            wire.cloned().unwrap_or_else(|| cx.name()),
+            quote!((#value) * #scale),
+            if borrowed {
+                ValueAccess::Shared
+            } else {
+                ValueAccess::Owned
+            },
+        ))
+    }
+}
+#[test]
+fn independent_operation_vocabularies_compile_without_declaration_frontend() {
+    let mut model = Flat::<ResolvedSchema<Arithmetic>>::parse(
+        syn::parse_file("pub fn add(a:i64,b:i64)->i64{}")
+            .unwrap()
+            .items
+            .into_iter()
+            .map(|i| (i, Default::default())),
+    )
+    .unwrap();
+    model.metadata = ResolvedModule::new((), Arithmetic, ());
+    let f = model.function_mut("add").unwrap();
+    for (i, p) in f.params.iter_mut().enumerate() {
+        p.ty.slot = Some(ResolvedSlot::Tree(InputNode::Unary {
+            operation: AddInput(i as i64 + 1),
+            child: Box::new(InputNode::Leaf(())),
+        }));
+    }
+    f.ret.slot = Some(ResolvedSlot::Tree(OutputNode::Leaf(ScaleOutput(2))));
+    let model = compile_resolved(model).unwrap();
+    let f = model.function("add").unwrap();
+    let params = f
+        .params
+        .iter()
+        .flat_map(|p| {
+            prebindgen_flat::wire_definitions(std::iter::once(&p.ty.slot.as_ref().unwrap().node))
+        })
+        .map(|w| w.name.clone())
+        .collect::<Vec<_>>();
+    let types = params.iter().map(|p| quote!(#p:i64));
+    let body = emit_call(
+        f,
+        &(),
+        &syn::parse_quote!(result),
+        &syn::parse_quote!(i64),
+        &params,
+    )
+    .unwrap();
+    let code = quote! {fn add(a:i64,b:i64)->i64{a+b} fn bridge(#(#types),*)->Result<i64,String>{#body} fn main(){assert_eq!(bridge(10,8).unwrap(),42);}};
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("custom.rs");
+    let binary = dir.path().join("custom");
+    std::fs::write(&file, code.to_string()).unwrap();
+    let built = std::process::Command::new("rustc")
+        .arg("--edition=2021")
+        .arg(&file)
+        .arg("-o")
+        .arg(&binary)
+        .output()
+        .unwrap();
+    assert!(
+        built.status.success(),
+        "{}",
+        String::from_utf8_lossy(&built.stderr)
+    );
+    assert!(std::process::Command::new(binary)
+        .status()
+        .unwrap()
+        .success());
 }

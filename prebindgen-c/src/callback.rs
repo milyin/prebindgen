@@ -1,7 +1,7 @@
 //! Typed C callbacks retained by source closures.
 use super::*;
+use crate::operations::COutputParts;
 use prebindgen_conversions::{InputFragment, OutputFragment, TemplateContext};
-use prebindgen_declarations::{CallbackInput, Condition};
 use prebindgen_flat::{callback_signature, type_key, InputConversion, WireNode};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -14,12 +14,12 @@ pub struct CCallback {
     pub(crate) name: String,
     pub(crate) signature: String,
     pub(crate) arguments: Vec<Argument>,
-    pub(crate) returned: Option<(syn::Type, InputPlan<CWire>)>,
+    pub(crate) returned: Option<(syn::Type, CInputPlan<CWire>)>,
 }
 #[derive(Clone, Debug)]
 pub(crate) struct Argument {
     ty: syn::Type,
-    pub(crate) output: OutputPlan<CWire>,
+    pub(crate) output: COutputPlan<CWire>,
 }
 
 // Stable wire semantics, without spans, generated local names or recipe Debug.
@@ -116,12 +116,19 @@ fn schema(node: &WireNode<CWire, CChain, CBranch>, out: &mut String) {
 }
 
 pub(crate) fn input(
-    flat: &Bindings,
-    configuration: &CallbackInput,
-    wire: syn::Ident,
-    var: syn::Ident,
-    active: &Condition,
-) -> Result<InputPlan<CWire>> {
+    request: prebindgen_declarations::InputArrow<'_, CCodec>,
+) -> Result<CInputPlan<CWire>> {
+    let prebindgen_declarations::InputArrow {
+        flat,
+        operation: configuration,
+        domain,
+        codomain,
+        wire,
+        target: var,
+        active,
+        ..
+    } = request;
+    let argument_recipes = domain.argument_nodes()?;
     let signature = callback_signature(&configuration.ty)?.ok_or("expected source callback")?;
     let unit = matches!(&signature.return_type, syn::Type::Tuple(t) if t.elems.is_empty());
     let key = format!(
@@ -145,7 +152,7 @@ pub(crate) fn input(
             flat,
             &codec,
             &ty,
-            &configuration.arguments[index],
+            argument_recipes[index].callback_argument_parts()?.1,
             index,
             false,
             &(),
@@ -173,7 +180,7 @@ pub(crate) fn input(
                 flat,
                 &return_codec,
                 &signature.return_type,
-                &configuration.return_value,
+                codomain,
                 &(),
             )?,
         ))
@@ -230,7 +237,7 @@ pub(crate) fn input(
         }))
     };
     let transfer = prebindgen_conversions::record_input_transfer(quote!(1usize));
-    Ok(InputPlan::new(
+    Ok(CInputPlan::new(
         WireNode::Leaf(vec![Wire {
             name: wire.clone(),
             kind: CWire::Callback { callback },

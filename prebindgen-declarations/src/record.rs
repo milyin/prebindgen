@@ -16,8 +16,8 @@ pub fn record_input<C: Codec>(
     codec: &C,
     ty: &Type,
     var: syn::Ident,
-    fields: impl IntoIterator<Item = Result<(syn::Ident, CodecInput<C>)>>,
-) -> Result<CodecInput<C>> {
+    fields: impl IntoIterator<Item = Result<(syn::Ident, CodecInputPlan<C>)>>,
+) -> Result<CodecInputPlan<C>> {
     let mut plans = Vec::new();
     let mut values = Vec::new();
     let mut names = std::collections::BTreeSet::new();
@@ -71,8 +71,8 @@ pub fn record_output<C: Codec>(
     var: syn::Ident,
     value: TokenStream,
     fields: impl IntoIterator<Item = syn::Ident>,
-    mut convert: impl FnMut(usize, TokenStream) -> Result<CodecOutput<C>>,
-) -> Result<CodecOutput<C>> {
+    mut convert: impl FnMut(usize, TokenStream) -> Result<CodecOutputPlan<C>>,
+) -> Result<CodecOutputPlan<C>> {
     let mut fields = fields.into_iter().peekable();
     let binding = if fields.peek().is_some() {
         quote!(let #var = &(#value);)
@@ -129,8 +129,8 @@ pub fn record_output_owned<C: Codec>(
     var: syn::Ident,
     value: TokenStream,
     fields: impl IntoIterator<Item = syn::Ident>,
-    mut convert: impl FnMut(usize, TokenStream) -> Result<CodecOutput<C>>,
-) -> Result<CodecOutput<C>> {
+    mut convert: impl FnMut(usize, TokenStream) -> Result<CodecOutputPlan<C>>,
+) -> Result<CodecOutputPlan<C>> {
     let mut fields = fields.into_iter().peekable();
     let binding = if fields.peek().is_some() {
         quote!(let #var = #value;)

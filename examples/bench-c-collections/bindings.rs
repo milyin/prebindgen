@@ -1,11 +1,14 @@
 use prebindgen_declarations::{
-    expand_param, expand_return, fields, fun, Output, OutputRequest, SequenceDelivery,
+    expand_param, expand_return, fields, fun, DeclInputRequest, DeclOutput, DeclOutputRequest, frontend::DeclOutputUnary,
+    SequenceDelivery,
 };
-fn rows(element: Output<OutputRequest>) -> Output<OutputRequest> {
-    Output::Sequence {
-        element: Box::new(element),
-        mode: None,
-        delivery: SequenceDelivery::Value,
+fn rows(element: DeclOutput<DeclInputRequest, DeclOutputRequest>) -> DeclOutput<DeclInputRequest, DeclOutputRequest> {
+    DeclOutput::Unary {
+        operation: DeclOutputUnary::Sequence {
+            delivery: SequenceDelivery::Value,
+            mode: None,
+        },
+        child: Box::new(element),
     }
 }
 fn main() {
@@ -87,15 +90,15 @@ fn main() {
         .panic()
         .function(fun!(resource_value))
         .panic()
-        .function(fun!(make_handles).output(rows(Output::auto())))
+        .function(fun!(make_handles).output(rows(DeclOutput::auto())))
         .panic()
-        .function(fun!(make_records).output(rows(Output::auto())))
+        .function(fun!(make_records).output(rows(DeclOutput::auto())))
         .panic()
-        .function(fun!(make_nested).output(rows(rows(Output::auto()))))
+        .function(fun!(make_nested).output(rows(rows(DeclOutput::auto()))))
         .panic()
-        .function(fun!(make_many).output(rows(rows(Output::auto()))))
+        .function(fun!(make_many).output(rows(rows(DeclOutput::auto()))))
         .panic()
-        .function(fun!(make_numbers).output(rows(Output::auto())))
+        .function(fun!(make_numbers).output(rows(DeclOutput::auto())))
         .panic();
     let generation = builder.build().expect("C collection benchmark bindings");
     let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());

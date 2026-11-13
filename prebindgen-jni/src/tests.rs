@@ -1,6 +1,10 @@
 use super::*;
+use prebindgen_declarations::{
+    frontend::DeclInputBranch, frontend::DeclInputLeafOp, frontend::DeclInputUnary,
+    frontend::DeclOutputBranch, frontend::DeclOutputLeafOp, frontend::DeclOutputUnary,
+};
 use prebindgen_flat::InputConversion;
-fn flat(source: &str) -> Bindings {
+fn flat(source: &str) -> JniBindings {
     Flat::parse(
         syn::parse_file(source)
             .unwrap()
@@ -14,7 +18,13 @@ fn flat(source: &str) -> Bindings {
 #[test]
 fn kotlin_preflight_removes_native_row_staging_for_both_transports() {
     let source = "pub type Handle=String;pub enum Kind{A,B}pub struct Row{pub h:Handle,pub text:Option<String>,pub bytes:Option<Vec<u8>>,pub kind:Option<Kind>}pub fn rows(values:Vec<Row>)->usize{}";
-    let recipe = Input::Sequence(Box::new(Input::Record(vec![Input::Leaf; 4])));
+    let recipe = DeclInput::Unary {
+        operation: DeclInputUnary::Sequence,
+        child: Box::new(DeclInput::Branch {
+            operation: DeclInputBranch::Record,
+            children: vec![DeclInput::Leaf(DeclInputLeafOp::Value); 4],
+        }),
+    };
     for bulk in [false, true] {
         let input = if bulk {
             recipe.clone().bulk()
@@ -47,18 +57,29 @@ fn nested_bulk_modifiers_do_not_force_prepared_handle_rows() {
     let source = "pub type Handle=String;pub struct Row{pub h:Handle,pub tag:i64}pub fn make(h:Handle)->Handle{}pub fn nested(values:Vec<Vec<Row>>){}";
     for bulk in [false, true] {
         let handle = if bulk {
-            Input::Leaf.bulk()
+            DeclInput::Leaf(DeclInputLeafOp::Value).bulk()
         } else {
-            Input::Leaf
+            DeclInput::Leaf(DeclInputLeafOp::Value)
         };
-        let row = Input::Record(vec![
-            Input::Constructor {
-                function: "make".into(),
-                args: vec![handle],
-            },
-            Input::Leaf,
-        ]);
-        let input = Input::Sequence(Box::new(Input::Sequence(Box::new(row))));
+        let row = DeclInput::Branch {
+            operation: DeclInputBranch::Record,
+            children: vec![
+                DeclInput::Branch {
+                    operation: DeclInputBranch::Constructor {
+                        function: "make".into(),
+                    },
+                    children: vec![handle],
+                },
+                DeclInput::Leaf(DeclInputLeafOp::Value),
+            ],
+        };
+        let input = DeclInput::Unary {
+            operation: DeclInputUnary::Sequence,
+            child: Box::new(DeclInput::Unary {
+                operation: DeclInputUnary::Sequence,
+                child: Box::new(row),
+            }),
+        };
         let input = if bulk { input.bulk() } else { input };
         let generated = JniGen::builder()
             .flat(flat(source))
@@ -708,7 +729,7 @@ fn explicit_data_expansion_replaces_a_configured_handle_slot() {
                     &JniCodec::raw(),
                     "echo",
                     "value",
-                    &prebindgen_declarations::Input::Leaf,
+                    &prebindgen_declarations::DeclInput::Leaf(DeclInputLeafOp::Value),
                     &(),
                 )
             })
@@ -857,12 +878,12 @@ fn optional_niches_and_nested_presence_preserve_distinct_states() {
     assert!(kt.contains("if (returnCapture.s0 == 1)"));
     // Validate raw widths independently from the Kotlin nullable surface.
     let mut flat=flat("pub type Handle=String;pub fn h(x:Option<Handle>)->Option<Handle>{}pub fn n(x:Option<Option<Handle>>)->Option<Option<Handle>>{}pub fn ch2(x:Option<Option<char>>)->Option<Option<char>>{}pub fn u2(x:Option<Option<u32>>)->Option<Option<u32>>{}");
-    let d = prebindgen_declarations::Declarations::new(&flat, vec![], vec![], vec![]).unwrap();
+    let d = prebindgen_declarations::DeclDefaults::new(&flat, vec![], vec![], vec![]).unwrap();
     for (name, count) in [("h", 1), ("n", 2), ("ch2", 1), ("u2", 1)] {
         d.fill(
             &mut flat,
             &JniCodec::raw(),
-            &FunctionDecl::new(syn::parse_str(name).unwrap()),
+            &DeclFunction::new(syn::parse_str(name).unwrap()),
             &(),
         )
         .unwrap();
@@ -918,11 +939,18 @@ fn scalar_niches_exhaust_at_the_carrier_limit() {
 
 #[test]
 fn optional_unannotated_fields_keep_outer_presence_in_both_directions() {
-    use prebindgen_declarations::{bind_input, Input};
+    use prebindgen_declarations::{bind_input, DeclInput};
     let mut source = flat("pub struct Wrapped { pub value: Option<i64> } pub fn wrapped_fields(x: &Wrapped) -> Wrapped {} pub fn echo(value: Option<Wrapped>) -> Option<Wrapped> {}");
-    let input = Input::Optional(Box::new(Input::Fields(vec![Input::Optional(Box::new(
-        Input::Leaf,
-    ))])));
+    let input = DeclInput::Unary {
+        operation: DeclInputUnary::Optional,
+        child: Box::new(DeclInput::Branch {
+            operation: DeclInputBranch::Fields,
+            children: vec![DeclInput::Unary {
+                operation: DeclInputUnary::Optional,
+                child: Box::new(DeclInput::Leaf(DeclInputLeafOp::Value)),
+            }],
+        }),
+    };
     bind_input(&mut source, &JniCodec::raw(), "echo", "value", &input, &()).unwrap();
     let generated =
         JniGen::builder()
@@ -981,7 +1009,7 @@ fn reference_and_presence_flag_niches_keep_nested_wire_counts_bounded() {
             }
             let mut source = flat(&format!("pub fn echo(x:{ty})->{ty}{{}}"));
             let declarations =
-                prebindgen_declarations::Declarations::new(&source, vec![], vec![], vec![])
+                prebindgen_declarations::DeclDefaults::new(&source, vec![], vec![], vec![])
                     .unwrap();
             declarations
                 .fill(&mut source, &JniCodec::raw(), &fun!(echo), &())
@@ -1030,18 +1058,24 @@ fn reference_and_presence_flag_niches_keep_nested_wire_counts_bounded() {
 
 #[test]
 fn nested_optional_selectors_reserve_distinct_tags_and_disable_arm_niches() {
-    use prebindgen_declarations::{bind_input, Input};
+    use prebindgen_declarations::{bind_input, DeclInput};
     let mut source = flat("pub fn echo(x:Option<Option<char>>)->char {} pub fn first(x:char)->char{} pub fn second(x:char)->char{}");
-    let selector = Input::selector([
-        Input::constructor("first", [Input::Leaf]),
-        Input::constructor("second", [Input::Leaf]),
+    let selector = DeclInput::selector([
+        DeclInput::constructor("first", [DeclInput::Leaf(DeclInputLeafOp::Value)]),
+        DeclInput::constructor("second", [DeclInput::Leaf(DeclInputLeafOp::Value)]),
     ]);
     bind_input(
         &mut source,
         &JniCodec::raw(),
         "echo",
         "x",
-        &Input::Optional(Box::new(Input::Optional(Box::new(selector)))),
+        &DeclInput::Unary {
+            operation: DeclInputUnary::Optional,
+            child: Box::new(DeclInput::Unary {
+                operation: DeclInputUnary::Optional,
+                child: Box::new(selector),
+            }),
+        },
         &(),
     )
     .unwrap();
@@ -1238,10 +1272,14 @@ fn callback_returns_do_not_guess_prebound_or_extra_output_projections() {
         &mut model,
         &JniCodec::raw(),
         "values",
-        &prebindgen_declarations::Output::Sequence {
-            delivery: prebindgen_declarations::SequenceDelivery::Value,
-            element: Box::new(prebindgen_declarations::Output::Leaf),
-            mode: None,
+        &prebindgen_declarations::DeclOutput::Unary {
+            operation: DeclOutputUnary::Sequence {
+                delivery: prebindgen_declarations::SequenceDelivery::Value,
+                mode: None,
+            },
+            child: Box::new(prebindgen_declarations::DeclOutput::Leaf(
+                DeclOutputLeafOp::Value,
+            )),
         },
         &(),
     )
@@ -1335,17 +1373,17 @@ fn callback_collection_presence_is_a_direct_integer_without_a_jvm_marker() {
 
 #[test]
 fn logical_outcomes_keep_typed_errors_and_match_both_jni_sequence_deliveries() {
-    use prebindgen_declarations::{expand_return, fields, fun, Declarations};
+    use prebindgen_declarations::{expand_return, fields, fun, DeclDefaults};
 
     let mut flat=flat("pub struct Failure {pub code:i64,pub info:Option<String>} pub fn parts(e:Failure)->Failure{} pub fn f(v:Option<Vec<i64>>)->Result<Option<Vec<Option<i64>>>,Failure>{}");
-    let defaults = Declarations::new(
+    let defaults = DeclDefaults::new(
         &flat,
         vec![],
         vec![expand_return!(Failure).fields_into(fields!(parts)).into()],
         vec![],
     )
     .unwrap();
-    let codec = JniCodec::declared(None);
+    let codec = JniCodec::declared();
     let decl = fun!(f).callback_return();
     flat.metadata.package = "test".into();
     flat.function_mut("f").unwrap().metadata = Some(JniFunction {
@@ -1354,7 +1392,7 @@ fn logical_outcomes_keep_typed_errors_and_match_both_jni_sequence_deliveries() {
         order: 0,
         error: None,
     });
-    errors::prepare(&mut flat, &codec, &defaults, std::slice::from_ref(&decl)).unwrap();
+    errors::resolve(&mut flat, &codec, &defaults, std::slice::from_ref(&decl)).unwrap();
     assert!(flat
         .function("f")
         .unwrap()
@@ -1451,9 +1489,9 @@ fn logical_outcomes_keep_typed_errors_and_match_both_jni_sequence_deliveries() {
 
 #[test]
 fn manual_jni_plans_share_one_tree_through_flat_and_configure() {
-    fn install(model: &mut Bindings, binding_failure: bool) -> Result<()> {
+    fn install(model: &mut JniBindings, binding_failure: bool) -> Result<()> {
         let mut input = JniCodec::raw().input_leaf(prebindgen_declarations::InputLeaf::new(
-            &Bindings::parse([]).unwrap(),
+            &JniBindings::parse([]).unwrap(),
             &syn::parse_quote!(i64),
             &(),
             syn::parse_quote!(native_input),
@@ -1463,7 +1501,7 @@ fn manual_jni_plans_share_one_tree_through_flat_and_configure() {
         JniCodec::raw().finish_input(&mut input, &())?;
 
         let mut output = JniCodec::raw().output_leaf(prebindgen_declarations::OutputLeaf::new(
-            &Bindings::parse([]).unwrap(),
+            &JniBindings::parse([]).unwrap(),
             &syn::parse_quote!(i64),
             &(),
             syn::parse_quote!(native_output),
@@ -1609,8 +1647,8 @@ fn public_emission_rejects_invalid_settings_and_unplaced_bindings() {
 
 #[test]
 fn production_declarations_write_direct_trees_and_preserve_named_error_views() {
-    let input: ExpandParamDecl = expand_param!(Key).variant(fun!(new_key)).variant_self();
-    let output: ExpandReturnDecl = expand_return!(Key)
+    let input: DeclExpandParam = expand_param!(Key).variant(fun!(new_key)).variant_self();
+    let output: DeclExpandReturn = expand_return!(Key)
         .fields(fields!(key_parts).field("value", expand_return!(i64).field_self()));
     let prepared = JniGen::builder()
         .flat(flat("pub type Key=String;pub struct Parts{pub value:i64}pub fn new_key(v:i64)->Key{}pub fn key_parts(k:&Key)->Parts{}pub fn err_message(e:&Key)->String{}pub fn echo(k:Key)->Result<Key,Key>{}"))
@@ -1620,7 +1658,7 @@ fn production_declarations_write_direct_trees_and_preserve_named_error_views() {
         .package(package!().class(ptr_class!(Key)).fun(fun!(echo)
             .expand_param("k",expand_param!(Key).variant_self())
             .expand_return(expand_return!(Key).field_self())))
-        .expand(ErrorDecl::new(syn::parse_quote!(Key),fun!(err_message)))
+        .expand(DeclError::new(syn::parse_quote!(Key),fun!(err_message)))
         .prepare().unwrap();
     let input = prepared.function("echo").unwrap().params[0]
         .ty
@@ -2090,7 +2128,7 @@ fn callback_constructor_can_also_be_exported_and_selected_in_alternatives() {
 fn c_supports_callbacks_in_direct_and_constructor_parameters() {
     for constructor in [false, true] {
         let source = syn::parse_file("pub type Handler=String; pub fn make(cb:impl Fn(i64))->Handler{} pub fn use_handler(value:Handler){}").unwrap();
-        let model = prebindgen_c::Bindings::parse(
+        let model = prebindgen_c::CBindings::parse(
             source
                 .items
                 .into_iter()
@@ -2117,8 +2155,13 @@ fn c_supports_callbacks_in_direct_and_constructor_parameters() {
 
 #[test]
 fn callback_constructor_rejects_a_selector_for_the_callable_itself() {
-    let recipe: Input<InputRequest> =
-        Input::constructor("make", [Input::selector([Input::Leaf, Input::Leaf])]);
+    let recipe: DeclInput<DeclInputRequest, DeclOutputRequest> = DeclInput::constructor(
+        "make",
+        [DeclInput::selector([
+            DeclInput::Leaf(DeclInputLeafOp::Value),
+            DeclInput::Leaf(DeclInputLeafOp::Value),
+        ])],
+    );
     let error = fail(JniGen::builder()
         .flat(flat("pub type Handler=String; pub fn make(cb:impl Fn(i64))->Handler{} pub fn use_handler(value:Handler){}"))
         .set_package_prefix("test")
@@ -2209,7 +2252,7 @@ fn callback_returns_reject_borrows_and_unrepresented_results_in_preparation() {
 #[test]
 fn trusted_c_callback_inputs_need_no_validation_error_policy() {
     let source = syn::parse_file("pub fn f(cb:impl Fn(i64)->i64)->i64{}").unwrap();
-    let model = prebindgen_c::Bindings::parse(
+    let model = prebindgen_c::CBindings::parse(
         source
             .items
             .into_iter()
@@ -2329,17 +2372,20 @@ fn default_record_outputs_follow_source_ownership_and_allow_copy_overrides() {
     // Two views of optional references are observations, never two moves.
     let source =
         format!("{records}pub type Owner=String;pub fn maybe(owner:&Owner)->Option<&Bundle>{{}}");
-    let view = prebindgen_declarations::Output::Optional(Box::new(
-        prebindgen_declarations::Output::Record {
-            mode: Some(prebindgen_declarations::ProjectionMode::Borrowed),
-            fields: vec![prebindgen_declarations::Output::Leaf; 4],
-        },
-    ));
+    let view = prebindgen_declarations::DeclOutput::Unary {
+        operation: DeclOutputUnary::Optional,
+        child: Box::new(prebindgen_declarations::DeclOutput::Branch {
+            operation: DeclOutputBranch::Record {
+                mode: Some(prebindgen_declarations::ProjectionMode::Borrowed),
+            },
+            children: vec![prebindgen_declarations::DeclOutput::Leaf(DeclOutputLeafOp::Value); 4],
+        }),
+    };
     JniGen::builder()
         .flat(flat(&source))
         .set_package_prefix("test")
         .package(classes().class(ptr_class!(Owner)).fun(fun!(maybe).output(
-            prebindgen_declarations::Output::combine([view.clone(), view]),
+            prebindgen_declarations::DeclOutput::combine([view.clone(), view]),
         )))
         .build()
         .unwrap();
@@ -2611,7 +2657,7 @@ fn bulk_selector_and_empty_expansion_generate_valid_boundaries() {
             .flat(flat(source))
             .set_package_prefix("test");
         let call = if is_unit {
-            fun!(call).output(Output::auto().bulk())
+            fun!(call).output(DeclOutput::auto().bulk())
         } else {
             fun!(call)
                 .expand_param(
@@ -2635,7 +2681,7 @@ fn bulk_rejects_callback_objects_and_conflicting_collection_delivery() {
     let callback = JniGen::builder()
         .set_package_prefix("test")
         .flat(flat("pub fn call(callback:impl Fn(i64)){}"))
-        .package(package!().fun(fun!(call).expand_param("callback", Input::auto().bulk())))
+        .package(package!().fun(fun!(call).expand_param("callback", DeclInput::auto().bulk())))
         .build()
         .err()
         .unwrap();
@@ -2663,10 +2709,10 @@ fn bulk_rejects_callback_objects_and_conflicting_collection_delivery() {
 #[test]
 fn bulk_runtime_filename_is_reserved_for_all_class_kinds() {
     for class in [
-        ClassDecl::from(data_class!(Row).name("BulkRuntime")),
-        ClassDecl::from(ptr_class!(Row).name("BulkRuntime")),
-        ClassDecl::from(enum_class!(Kind).name("BulkRuntime")),
-        ClassDecl::from(callback!(impl Fn(i64)).name("BulkRuntime")),
+        DeclJniClass::from(data_class!(Row).name("BulkRuntime")),
+        DeclJniClass::from(ptr_class!(Row).name("BulkRuntime")),
+        DeclJniClass::from(enum_class!(Kind).name("BulkRuntime")),
+        DeclJniClass::from(callback!(impl Fn(i64)).name("BulkRuntime")),
     ] {
         let error = JniGen::builder()
             .flat(flat(
@@ -2731,15 +2777,15 @@ fn type_derived_bulk_runtime_names_are_also_reserved() {
     for (source, class) in [
         (
             "pub struct BulkRuntime{pub value:i64}",
-            ClassDecl::from(data_class!(BulkRuntime)),
+            DeclJniClass::from(data_class!(BulkRuntime)),
         ),
         (
             "pub struct BulkRuntime{pub value:i64}",
-            ClassDecl::from(ptr_class!(BulkRuntime)),
+            DeclJniClass::from(ptr_class!(BulkRuntime)),
         ),
         (
             "pub enum BulkRuntime{A,B}",
-            ClassDecl::from(enum_class!(BulkRuntime)),
+            DeclJniClass::from(enum_class!(BulkRuntime)),
         ),
     ] {
         let source = format!("{source} pub fn call(value:i64)->i64{{}}");
@@ -2760,7 +2806,7 @@ fn type_derived_bulk_runtime_names_are_also_reserved() {
     }
 }
 
-fn bulk_result(model: &Bindings, name: &str) -> bool {
+fn bulk_result(model: &JniBindings, name: &str) -> bool {
     let output = model.function(name).unwrap().output_conversion().unwrap();
     group::result_packet_fields(&output.output_outcomes().success)
         .any(|wire| matches!(wire.kind, JniWire::BulkBuffer { .. }))
@@ -2872,7 +2918,7 @@ fn automatic_bulk_collections_preserve_fold_and_callback_local_overrides() {
 #[test]
 fn automatic_bulk_uses_the_resolved_projection_instead_of_the_source_field_types() {
     let source="pub struct Row {pub x:i64} pub fn text(row:&Row)->String{} pub fn number(row:&Row)->i64{} pub fn rows()->Vec<Row>{}";
-    let build = |projection: ExpandReturnDecl| {
+    let build = |projection: DeclExpandReturn| {
         JniGen::builder()
             .flat(flat(source))
             .set_package_prefix("test")
@@ -3053,7 +3099,7 @@ fn explicit_nested_outputs_have_no_hidden_bulk_frames_in_rows_or_callbacks() {
             .set_package_prefix("test")
             .package(package!().fun(fun!(receive).expand_param(
                 "cb",
-                prebindgen_declarations::CallbackDecl::new(callback).expand_param(0, tree),
+                prebindgen_declarations::DeclCallback::new(callback).expand_param(0, tree),
             )))
             .build()
             .unwrap();
@@ -3316,7 +3362,7 @@ fn input_collections_and_callback_results_do_not_emit_output_cleanup_helpers() {
 
 // A callback element is one boundary argument even when it expands into many
 // Kotlin values or contains its own dynamic collection.
-fn callback_element_is_bulk(model: &Bindings, function: &str) -> bool {
+fn callback_element_is_bulk(model: &JniBindings, function: &str) -> bool {
     let output = model
         .function(function)
         .unwrap()
@@ -3482,7 +3528,9 @@ fn whole_collection_bulk_defaults_cannot_enclose_callback_delivery() {
 
 #[test]
 fn resolved_callback_elements_can_keep_optional_presence_outside_a_bulk_frame() {
-    use prebindgen_declarations::{Output, SequenceDelivery};
+    use crate::operations::{JniOutput, JniOutputLeafOp, JniOutputParts, JniOutputUnary};
+
+    use prebindgen_declarations::SequenceDelivery;
     let mut model = JniGen::builder()
         .flat(flat(
             "pub type Owner=String;pub fn rows()->Vec<Option<Vec<Owner>>>{}",
@@ -3497,17 +3545,24 @@ fn resolved_callback_elements_can_keep_optional_presence_outside_a_bulk_frame() 
         .unwrap();
     // Preserve support for direct request-free trees as well as the public
     // declaration spelling, which normalizes this to Bulk(Optional(...)).
-    let recipe = Output::Sequence {
-        delivery: SequenceDelivery::Callback,
-        mode: None,
-        element: Box::new(Output::Optional(Box::new(
-            Output::Sequence {
-                delivery: SequenceDelivery::Value,
-                mode: None,
-                element: Box::new(Output::Leaf),
-            }
-            .bulk(),
-        ))),
+    let recipe = JniOutput::Unary {
+        operation: JniOutputUnary::Sequence {
+            delivery: SequenceDelivery::Callback,
+            mode: None,
+        },
+        child: Box::new(JniOutput::Unary {
+            operation: JniOutputUnary::Optional,
+            child: Box::new(
+                JniOutput::Unary {
+                    operation: JniOutputUnary::Sequence {
+                        delivery: SequenceDelivery::Value,
+                        mode: None,
+                    },
+                    child: Box::new(JniOutput::Leaf(JniOutputLeafOp::Value)),
+                }
+                .bulk(),
+            ),
+        }),
     };
     let conversion = prebindgen_declarations::compile_output(
         &model,
@@ -4064,7 +4119,13 @@ fn raw_borrowed_leaf_composes_with_declared_inputs_using_wire_access() {
 #[test]
 fn callback_results_and_arguments_omit_all_native_alias_history() {
     for bulk in [false, true] {
-        let rows = Input::Sequence(Box::new(Input::Record(vec![Input::Leaf; 2])));
+        let rows = DeclInput::Unary {
+            operation: DeclInputUnary::Sequence,
+            child: Box::new(DeclInput::Branch {
+                operation: DeclInputBranch::Record,
+                children: vec![DeclInput::Leaf(DeclInputLeafOp::Value); 2],
+            }),
+        };
         let rows = if bulk { rows.bulk() } else { rows };
         let generated = JniGen::builder()
             .flat(flat("pub struct A{pub n:i64}pub struct B{pub n:i64}pub struct Row{pub a:A,pub b:B}pub fn call(values:Vec<Row>,cb:impl Fn()->Vec<Row>){}"))
@@ -4092,17 +4153,37 @@ fn callback_results_and_arguments_omit_all_native_alias_history() {
 fn callback_results_defer_ownership_tracking_through_ordinary_result_trees() {
     let source="pub type Handle=String; pub struct Reply{pub first:Handle,pub optional:Option<Handle>,pub marker:char,pub last:Handle} pub fn fixed(cb:impl Fn()->Reply){} pub fn rows(cb:impl Fn()->Vec<Reply>){}pub fn nested(cb:impl Fn()->Vec<Vec<Reply>>){}";
     for (function, returned, deferred) in [
-        ("fixed", Input::Record(vec![Input::Leaf; 4]), true),
+        (
+            "fixed",
+            DeclInput::Branch {
+                operation: DeclInputBranch::Record,
+                children: vec![DeclInput::Leaf(DeclInputLeafOp::Value); 4],
+            },
+            true,
+        ),
         (
             "rows",
-            Input::Sequence(Box::new(Input::Record(vec![Input::Leaf; 4]))),
+            DeclInput::Unary {
+                operation: DeclInputUnary::Sequence,
+                child: Box::new(DeclInput::Branch {
+                    operation: DeclInputBranch::Record,
+                    children: vec![DeclInput::Leaf(DeclInputLeafOp::Value); 4],
+                }),
+            },
             true,
         ),
         (
             "nested",
-            Input::Sequence(Box::new(Input::Sequence(Box::new(Input::Record(
-                vec![Input::Leaf; 4],
-            ))))),
+            DeclInput::Unary {
+                operation: DeclInputUnary::Sequence,
+                child: Box::new(DeclInput::Unary {
+                    operation: DeclInputUnary::Sequence,
+                    child: Box::new(DeclInput::Branch {
+                        operation: DeclInputBranch::Record,
+                        children: vec![DeclInput::Leaf(DeclInputLeafOp::Value); 4],
+                    }),
+                }),
+            },
             true,
         ),
     ] {
@@ -4113,7 +4194,7 @@ fn callback_results_defer_ownership_tracking_through_ordinary_result_trees() {
         } else {
             syn::parse_quote!(impl Fn() -> Vec<Vec<Reply>>)
         };
-        let callback = prebindgen_declarations::CallbackDecl::new(ty).expand_return(returned);
+        let callback = prebindgen_declarations::DeclCallback::new(ty).expand_return(returned);
         let generated = JniGen::builder()
             .flat(flat(source))
             .set_package_prefix("test")
@@ -4122,7 +4203,7 @@ fn callback_results_defer_ownership_tracking_through_ordinary_result_trees() {
                     .class(ptr_class!(Handle))
                     .class(data_class!(Reply))
                     .fun(
-                        prebindgen_declarations::FunctionDecl::new(
+                        prebindgen_declarations::DeclFunction::new(
                             syn::parse_str(function).unwrap(),
                         )
                         .expand_param("cb", callback),
@@ -4150,10 +4231,23 @@ fn callback_results_defer_ownership_tracking_through_ordinary_result_trees() {
 
 #[test]
 fn ordinary_callback_with_a_packed_child_uses_failure_only_cleanup() {
-    let returned = Input::Sequence(Box::new(Input::Record(vec![
-        Input::Leaf,
-        Input::Sequence(Box::new(Input::Record(vec![Input::Leaf; 4]))).bulk(),
-    ])));
+    let returned = DeclInput::Unary {
+        operation: DeclInputUnary::Sequence,
+        child: Box::new(DeclInput::Branch {
+            operation: DeclInputBranch::Record,
+            children: vec![
+                DeclInput::Leaf(DeclInputLeafOp::Value),
+                DeclInput::Unary {
+                    operation: DeclInputUnary::Sequence,
+                    child: Box::new(DeclInput::Branch {
+                        operation: DeclInputBranch::Record,
+                        children: vec![DeclInput::Leaf(DeclInputLeafOp::Value); 4],
+                    }),
+                }
+                .bulk(),
+            ],
+        }),
+    };
     let generated = JniGen::builder()
         .flat(flat("pub type Handle=String;pub struct Reply{pub first:Handle,pub optional:Option<Handle>,pub marker:char,pub last:Handle}pub struct Batch{pub first:Handle,pub packed:Vec<Reply>}pub fn mixed(cb:impl Fn()->Vec<Batch>){}"))
         .set_package_prefix("test")
@@ -4207,10 +4301,29 @@ fn data_class_collection_fields_reuse_logical_types_and_check_recursion() {
 
 #[test]
 fn mixed_callback_rows_reject_multi_argument_constructor_alternatives() {
-    let returned = Input::Sequence(Box::new(Input::Record(vec![
-        Input::Selector(vec![Input::Leaf, Input::Leaf]),
-        Input::Sequence(Box::new(Input::Record(vec![Input::Leaf; 2]))).bulk(),
-    ])));
+    let returned = DeclInput::Unary {
+        operation: DeclInputUnary::Sequence,
+        child: Box::new(DeclInput::Branch {
+            operation: DeclInputBranch::Record,
+            children: vec![
+                DeclInput::Branch {
+                    operation: DeclInputBranch::Selector,
+                    children: vec![
+                        DeclInput::Leaf(DeclInputLeafOp::Value),
+                        DeclInput::Leaf(DeclInputLeafOp::Value),
+                    ],
+                },
+                DeclInput::Unary {
+                    operation: DeclInputUnary::Sequence,
+                    child: Box::new(DeclInput::Branch {
+                        operation: DeclInputBranch::Record,
+                        children: vec![DeclInput::Leaf(DeclInputLeafOp::Value); 2],
+                    }),
+                }
+                .bulk(),
+            ],
+        }),
+    };
     let error = JniGen::builder()
         .flat(flat("pub type Handle=String;pub struct Row{pub h:Handle,pub tag:i64}pub struct Batch{pub first:Handle,pub packed:Vec<Row>}pub fn mixed(cb:impl Fn()->Vec<Batch>){}"))
         .set_package_prefix("test")
@@ -4225,12 +4338,14 @@ fn mixed_callback_rows_reject_multi_argument_constructor_alternatives() {
 
 #[test]
 fn named_output_groups_keep_name_validation_in_both_codec_policies() {
+    use crate::operations::{JniOutput, JniOutputLeafOp, JniOutputUnary};
+
     let model = flat("pub fn value()->i64{}");
-    for codec in [JniCodec::raw(), JniCodec::declared(None)] {
+    for codec in [JniCodec::raw(), JniCodec::declared()] {
         for name in ["", "1bad", "bad-name", "line\nbreak"] {
-            let recipe = prebindgen_declarations::Output::Named {
-                name: name.into(),
-                output: Box::new(prebindgen_declarations::Output::Leaf),
+            let recipe = JniOutput::Unary {
+                operation: JniOutputUnary::Named { name: name.into() },
+                child: Box::new(JniOutput::Leaf(JniOutputLeafOp::Value)),
             };
             assert!(
                 prebindgen_declarations::compile_output(&model, &codec, "value", &recipe, &())
@@ -4240,4 +4355,181 @@ fn named_output_groups_keep_name_validation_in_both_codec_policies() {
         }
         assert!(codec.group(GroupKind::NamedOutput("count")).is_ok());
     }
+}
+
+#[test]
+fn resolved_callback_owns_its_conversions_and_cleanup_policy() {
+    use crate::operations::{JniInput, JniOutputParts};
+
+    use prebindgen_declarations::{compile_resolved, DeclCallback, DeclDefaults, ResolvedSlot};
+    let mut source =
+        flat("pub fn scoped(cb:impl Fn(i64)->i64){} pub fn owned(cb:impl Fn(i64)->i64){}");
+    source.metadata.package = "example".into();
+    let defaults = DeclDefaults::new(&source, vec![], vec![], vec![]).unwrap();
+    let declarations = vec![
+        fun!(scoped),
+        fun!(owned).expand_param(
+            "cb",
+            DeclCallback::new(syn::parse_quote!(impl Fn(i64) -> i64))
+                .expand_param(0, prebindgen_declarations::DeclOutput::value()),
+        ),
+    ];
+    let resolved = defaults
+        .resolve(source, JniCodec::declared(), &declarations, ())
+        .unwrap();
+    drop(defaults);
+    drop(declarations);
+    for (name, scoped) in [("scoped", true), ("owned", false)] {
+        let Some(ResolvedSlot::Tree(JniInput::Arrow {
+            operation,
+            domain,
+            codomain,
+        })) = &resolved.function(name).unwrap().params[0].ty.slot
+        else {
+            panic!("expected arrow")
+        };
+        let _ = operation;
+        let (ownership, _) = domain.argument_nodes().unwrap()[0]
+            .callback_argument_parts()
+            .unwrap();
+        assert_eq!(
+            ownership == prebindgen_declarations::CallbackArgumentOwnership::Scoped,
+            scoped
+        );
+        assert_eq!(domain.argument_nodes().unwrap().len(), 1);
+        assert!(matches!(codomain.as_ref(), JniInput::Leaf(_)));
+    }
+    let compiled = compile_resolved(resolved).unwrap();
+    for name in ["scoped", "owned"] {
+        assert!(compiled.function(name).unwrap().params[0].ty.slot.is_some());
+    }
+}
+
+#[test]
+fn callback_variant_selects_delivery_before_wires_exist() {
+    use crate::operations::{JniOutput, JniOutputUnary};
+    use prebindgen_declarations::{DeclDefaults, SequenceDelivery};
+
+    let mut flat = flat("pub fn f()->Option<Vec<i64>>{}");
+    let defaults = DeclDefaults::new(&flat, vec![], vec![], vec![]).unwrap();
+    let variant = defaults
+        .callback_variant(&mut flat, &JniCodec::raw(), &fun!(f), "f_fold", &())
+        .unwrap();
+    assert!(flat.function("f_fold").unwrap().ret.slot.is_none());
+    let tree = defaults
+        .resolve_output(
+            &flat,
+            &JniCodec::raw(),
+            &flat.function("f_fold").unwrap().ret.ty,
+            variant.ret.as_ref().unwrap(),
+            &(),
+        )
+        .unwrap();
+    let JniOutput::Unary {
+        operation: JniOutputUnary::Optional,
+        child,
+    } = tree
+    else {
+        panic!("missing callback description")
+    };
+    assert!(matches!(
+        *child,
+        JniOutput::Unary {
+            operation: JniOutputUnary::Sequence {
+                delivery: SequenceDelivery::Callback,
+                ..
+            },
+            ..
+        }
+    ));
+}
+#[test]
+fn callback_delivery_is_selected_before_bulk_promotion() {
+    use crate::operations::{JniOutput, JniOutputUnary};
+    use prebindgen_declarations::{DeclDefaults, SequenceDelivery};
+
+    let mut flat = flat("pub fn values()->Option<Vec<i64>>{}");
+    let defaults = DeclDefaults::new(
+        &flat,
+        vec![],
+        vec![expand_return!(i64).field_self().bulk().into()],
+        vec![],
+    )
+    .unwrap();
+    let ty = flat.function("values").unwrap().ret.ty.clone();
+    let ordinary = defaults
+        .resolve_output(
+            &flat,
+            &JniCodec::raw(),
+            &ty,
+            &prebindgen_declarations::DeclOutput::auto(),
+            &(),
+        )
+        .unwrap();
+    assert!(matches!(
+        ordinary,
+        JniOutput::Unary {
+            operation: JniOutputUnary::Bulk,
+            child: _
+        }
+    ));
+    let variant = defaults
+        .callback_variant(
+            &mut flat,
+            &JniCodec::raw(),
+            &fun!(values),
+            "values_fold",
+            &(),
+        )
+        .unwrap();
+    let callback = defaults
+        .resolve_output(
+            &flat,
+            &JniCodec::raw(),
+            &ty,
+            variant.ret.as_ref().unwrap(),
+            &(),
+        )
+        .unwrap();
+    let JniOutput::Unary {
+        operation: JniOutputUnary::Optional,
+        child,
+    } = callback
+    else {
+        panic!("callback presence moved into a whole-collection bulk frame")
+    };
+    assert!(
+        matches!(*child,JniOutput::Unary { operation: JniOutputUnary::Sequence { delivery: SequenceDelivery::Callback, .. }, child: element, .. } if matches!(*element,JniOutput::Unary { operation: JniOutputUnary::Bulk, child: _ }))
+    );
+}
+#[test]
+fn callback_return_preserves_defaults_for_the_full_reference_type() {
+    use prebindgen_declarations::{frontend::DeclOutputLeafOp, DeclDefaults, DeclOutput};
+    let mut model = flat("pub fn values()->&Vec<i64>{}");
+    let defaults = DeclDefaults::new(
+        &model,
+        vec![],
+        vec![expand_return!(&Vec<i64>)
+            .view(DeclOutput::Leaf(DeclOutputLeafOp::Discard))
+            .into()],
+        vec![],
+    )
+    .unwrap();
+    let codec = JniCodec::raw();
+    let variant = defaults
+        .callback_variant(&mut model, &codec, &fun!(values), "values_fold", &())
+        .unwrap();
+    let error = defaults
+        .resolve_output(
+            &model,
+            &codec,
+            &model.function("values_fold").unwrap().ret.ty,
+            variant.ret.as_ref().unwrap(),
+            &(),
+        )
+        .unwrap_err();
+    assert!(
+        error.contains("requires exactly one outer sequence"),
+        "{error}"
+    );
 }

@@ -5,8 +5,8 @@ use std::rc::Rc;
 /// Metadata schema for a C binding model.
 pub struct CSchema;
 impl prebindgen_flat::Schema for CSchema {
-    type Input = InputPlan<CWire>;
-    type Output = OutputPlan<CWire>;
+    type Input = CInputConverter;
+    type Output = COutputConverter;
     type Module = CModule;
     type Function = Option<CFunction>;
     type Type = CType;

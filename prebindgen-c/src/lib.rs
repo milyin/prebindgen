@@ -1,10 +1,16 @@
 //! Generate Rust wrappers and C declarations from conversion slots.
 #![warn(missing_docs)]
+#[cfg(test)]
+use prebindgen_declarations::{
+    frontend::DeclInputBranch, frontend::DeclInputUnary, frontend::DeclOutputBranch,
+    frontend::DeclOutputUnary,
+};
+use prebindgen_declarations::{frontend::DeclInputLeafOp, frontend::DeclOutputLeafOp};
 
 use prebindgen_conversions::value::Value;
 pub use prebindgen_conversions::Access;
 pub use prebindgen_declarations::{
-    convert, from, into, try_from, try_into, ConvertDecl, ConvertSource,
+    convert, from, into, try_from, try_into, DeclConvert, DeclConvertSource,
 };
 use prebindgen_flat::{
     Conversion, Flat, InputConversion, OutputConversion, Primitive, Result, WireKind,
@@ -47,18 +53,24 @@ mod sequence;
 use group::validate_layout;
 pub use group::{CBranch, CChain, CGroup, COptional};
 use prebindgen_declarations::{
-    Alternatives, Codec, GroupKind, InputLeaf, InputRequest, InputRole, Optional, OptionalEncoding,
-    OutputLeaf, OutputRequest, Presence, Representation, SequenceInputRequest,
+    Alternatives, Codec, DeclInputRequest, DeclOutputRequest, GroupKind, InputLeaf, InputRole,
+    Optional, OptionalEncoding, OutputLeaf, Presence, Representation, SequenceInputRequest,
     SequenceOutputRequest, SourceError, SourceErrorPlan, ValueAccess,
 };
 use prebindgen_flat::Wire as GenericWire;
 pub use sequence::CSequence;
 mod emission;
 pub use emission::CContext;
-type InputPlan<W> = prebindgen_conversions::InputPlan<W, CContext, crate::CChain, crate::CBranch>;
-type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, CContext, crate::CChain, crate::CBranch>;
+type CInputPlan<WireType> =
+    prebindgen_conversions::InputPlan<WireType, CContext, crate::CChain, crate::CBranch>;
+type COutputPlan<WireType> =
+    prebindgen_conversions::OutputPlan<WireType, CContext, crate::CChain, crate::CBranch>;
+/// Prepared C parameter conversion.
+pub type CInputConverter = CInputPlan<CWire>;
+/// Prepared C result conversion.
+pub type COutputConverter = COutputPlan<CWire>;
 /// Flat source model with C conversion data for wrapper emission.
-pub type Bindings = Flat<CSchema>;
+pub type CBindings = Flat<CSchema>;
 type Wire = GenericWire<CWire>;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
@@ -67,17 +79,17 @@ use quote::{format_ident, quote};
 /// Prepared code uses explicit emission parameters for the output pointer and
 /// result type. The writer supplies these bindings and the error boundary.
 /// Use with [`prebindgen_declarations::bind_input`] and [`prebindgen_declarations::bind_output`]
-/// to fill [`Bindings`] manually.
+/// to fill [`CBindings`] manually.
 ///
 /// ```
-/// use prebindgen_c::{Bindings, Cbindgen, CCodec};
-/// use prebindgen_declarations::{bind_input, bind_output, Input, Output};
+/// use prebindgen_c::{CBindings, Cbindgen, CCodec};
+/// use prebindgen_declarations::{bind_input, bind_output, DeclInput, DeclOutput};
 /// let source = syn::parse_file("pub fn echo(x: i64) -> i64 { x }")?;
-/// let mut flat = Bindings::parse(
+/// let mut flat = CBindings::parse(
 ///     source.items.into_iter().map(|item| (item, Default::default())),
 /// )?;
-/// bind_input(&mut flat, &CCodec::raw(), "echo", "x", &Input::Leaf, &())?;
-/// bind_output(&mut flat, &CCodec::raw(), "echo", &Output::Leaf, &())?;
+/// bind_input(&mut flat, &CCodec::raw(), "echo", "x", &DeclInput::Leaf(prebindgen_declarations::frontend::DeclInputLeafOp::Value), &())?;
+/// bind_output(&mut flat, &CCodec::raw(), "echo", &DeclOutput::Leaf(prebindgen_declarations::frontend::DeclOutputLeafOp::Value), &())?;
 /// let generated = Cbindgen::new(flat).build()?;
 /// assert!(generated.header.contains("pb_echo("));
 /// syn::parse_file(&generated.rust)?;
@@ -101,22 +113,71 @@ fn explicit_copy_error(ty: &syn::Type) -> String {
     format!("borrowed opaque C output `{}` requires an explicit owning copy; select field_self_ref(), or expose a source reference for a non-owning view", prebindgen_flat::type_key(ty))
 }
 impl Codec for CCodec {
+    type InOps = operations::CInputOps;
+    type OutOps = operations::COutputOps;
+    type CompileState = compilation::CCompileState;
+
+    fn compile_input_tree(
+        &self,
+        cx: &prebindgen_declarations::Compiler<'_, Self>,
+        ty: &syn::Type,
+        tree: &operations::CInput,
+        extra: &Self::Extra,
+        active: &prebindgen_declarations::Condition,
+        names: Option<(&syn::Ident, &syn::Ident)>,
+    ) -> Result<prebindgen_declarations::CodecInputPlan<Self>> {
+        compilation::CCompiler { cx }.input_named(ty, tree, extra, active, names)
+    }
+    fn compile_output_tree(
+        &self,
+        cx: &prebindgen_declarations::Compiler<'_, Self>,
+        ty: &syn::Type,
+        tree: &operations::COutput,
+        extra: &Self::Extra,
+        value: TokenStream,
+        borrowed: bool,
+        wire: Option<&syn::Ident>,
+    ) -> Result<prebindgen_declarations::CodecOutputPlan<Self>> {
+        compilation::CCompiler { cx }.output_named(ty, tree, extra, value, borrowed, wire)
+    }
+    fn compile_output_root(
+        &self,
+        cx: &prebindgen_declarations::Compiler<'_, Self>,
+        ty: &syn::Type,
+        tree: &operations::COutput,
+        extra: &Self::Extra,
+        value: TokenStream,
+        borrowed: bool,
+        reference_return: bool,
+    ) -> Result<prebindgen_declarations::CodecOutputPlan<Self>> {
+        compilation::CCompiler { cx }.output_root(
+            ty,
+            tree,
+            extra,
+            value,
+            borrowed,
+            reference_return,
+        )
+    }
+    fn compile_output_return(
+        &self,
+        cx: &prebindgen_declarations::Compiler<'_, Self>,
+        ty: &syn::Type,
+        tree: &operations::COutput,
+        extra: &Self::Extra,
+        value: TokenStream,
+        borrowed: bool,
+    ) -> Result<prebindgen_declarations::CodecOutputPlan<Self>> {
+        compilation::CCompiler { cx }.output_return(ty, tree, extra, value, borrowed)
+    }
+
+    fn compile_declarations(&self, flat: &mut CBindings, _: &()) -> Result<()> {
+        errors::compile(flat, self)
+    }
+
     type Schema = CSchema;
     type Chain = CChain;
     type Branch = CBranch;
-    fn input_collection_is_leaf(
-        &self,
-        flat: &Bindings,
-        ty: &syn::Type,
-        role: InputRole,
-        _: &(),
-    ) -> bool {
-        owned::native_input(flat, ty)
-            || (role == InputRole::EnumField && owned::declaration(flat, ty).is_some())
-    }
-    fn output_collection_is_leaf(&self, flat: &Bindings, ty: &syn::Type, _: &()) -> bool {
-        owned::native_output(flat, ty)
-    }
 
     fn binding_failure_layout(
         &self,
@@ -136,10 +197,10 @@ impl Codec for CCodec {
     type Extra = ();
     type Wire = CWire;
     type Context = CContext;
-    fn finish_input(&self, plan: &mut InputPlan<CWire>, _: &()) -> Result<()> {
+    fn finish_input(&self, plan: &mut CInputPlan<CWire>, _: &()) -> Result<()> {
         validate_layout(&plan.node)
     }
-    fn finish_output(&self, plan: &mut OutputPlan<CWire>, _: &()) -> Result<()> {
+    fn finish_output(&self, plan: &mut COutputPlan<CWire>, _: &()) -> Result<()> {
         validate_layout(&plan.outcomes.success)?;
         plan.commit
             .extend(prebindgen_conversions::template_parameter(
@@ -237,119 +298,27 @@ impl Codec for CCodec {
     }
     fn input_enum(
         &self,
-        flat: &Bindings,
+        flat: &CBindings,
         ty: &syn::Type,
         _: &(),
         wire: syn::Ident,
-        plan: InputPlan<CWire>,
+        plan: CInputPlan<CWire>,
         active: &prebindgen_declarations::Condition,
         role: InputRole,
-    ) -> Result<InputPlan<CWire>> {
+    ) -> Result<CInputPlan<CWire>> {
         tagged::input(flat, ty, wire, plan, active, role)
     }
     fn output_enum(
         &self,
-        flat: &Bindings,
+        flat: &CBindings,
         ty: &syn::Type,
         _: &(),
         wire: syn::Ident,
-        plan: OutputPlan<CWire>,
-    ) -> Result<OutputPlan<CWire>> {
+        plan: COutputPlan<CWire>,
+    ) -> Result<COutputPlan<CWire>> {
         tagged::output(flat, ty, wire, plan)
     }
-    fn expand_input(
-        &self,
-        flat: &Bindings,
-        ty: &syn::Type,
-        tree: &prebindgen_declarations::Input<InputRequest>,
-        _: &(),
-    ) -> Result<Option<prebindgen_declarations::Input<InputRequest>>> {
-        if !self.declared || !matches!(tree, prebindgen_declarations::Input::Leaf) {
-            return Ok(None);
-        }
-        if flat
-            .payload_enums
-            .contains_key(&prebindgen_flat::type_key(ty))
-            && !flat.type_info(ty).ok().is_some_and(|t| {
-                t.metadata.tagged.is_some()
-                    || t.metadata.pointer.is_some()
-                    || t.metadata.owned.is_some()
-            })
-        {
-            return Err(format!(
-                "ordinary payload enum `{}` requires tagged_union or an explicit field expansion",
-                prebindgen_flat::type_key(ty)
-            ));
-        }
-        if flat
-            .type_info(ty)
-            .ok()
-            .is_some_and(|t| t.metadata.tagged.is_some())
-        {
-            let e = flat.payload_enum(ty)?;
-            return Ok(Some(prebindgen_declarations::Input::Enum {
-                variants: e
-                    .variants
-                    .iter()
-                    .map(|v| {
-                        v.fields
-                            .iter()
-                            .map(|_| prebindgen_declarations::Input::value())
-                            .collect()
-                    })
-                    .collect(),
-                value: true,
-            }));
-        }
-        Ok(None)
-    }
-    fn expand_output(
-        &self,
-        flat: &Bindings,
-        ty: &syn::Type,
-        tree: &prebindgen_declarations::Output<OutputRequest>,
-        _: &(),
-    ) -> Result<Option<prebindgen_declarations::Output<OutputRequest>>> {
-        if !self.declared || !matches!(tree, prebindgen_declarations::Output::Leaf) {
-            return Ok(None);
-        }
-        if flat
-            .payload_enums
-            .contains_key(&prebindgen_flat::type_key(ty))
-            && !flat.type_info(ty).ok().is_some_and(|t| {
-                t.metadata.tagged.is_some()
-                    || t.metadata.pointer.is_some()
-                    || t.metadata.owned.is_some()
-            })
-        {
-            return Err(format!(
-                "ordinary payload enum `{}` requires tagged_union or an explicit field expansion",
-                prebindgen_flat::type_key(ty)
-            ));
-        }
-        if flat
-            .type_info(ty)
-            .ok()
-            .is_some_and(|t| t.metadata.tagged.is_some())
-        {
-            let e = flat.payload_enum(ty)?;
-            return Ok(Some(prebindgen_declarations::Output::Enum {
-                variants: e
-                    .variants
-                    .iter()
-                    .map(|v| {
-                        v.fields
-                            .iter()
-                            .map(|_| prebindgen_declarations::Output::value())
-                            .collect()
-                    })
-                    .collect(),
-                value: true,
-                mode: None,
-            }));
-        }
-        Ok(None)
-    }
+
     fn selector(&self, _: &()) -> Result<CWire> {
         Ok(CWire::scalar(Primitive::I32))
     }
@@ -377,24 +346,24 @@ impl Codec for CCodec {
             && (owned::native_output(_flat, ty) || !matches!(Value::of(ty), Some(Value::Scalar(_))))
     }
 
-    fn input_leaf(&self, request: InputLeaf<'_, Self>) -> Result<InputPlan<CWire>> {
+    fn input_leaf(&self, request: InputLeaf<'_, Self>) -> Result<CInputPlan<CWire>> {
         self.input_value(request)
     }
 
     fn input_borrowed_sequence(
         &self,
-        flat: &Bindings,
+        flat: &CBindings,
         ty: &syn::Type,
         _: &(),
         wire: syn::Ident,
         var: syn::Ident,
-        element: &prebindgen_declarations::Input,
+        element: &operations::CInput,
         active: &prebindgen_declarations::Condition,
-    ) -> Result<Option<InputPlan<CWire>>> {
+    ) -> Result<Option<CInputPlan<CWire>>> {
         borrowed::input_sequence(flat, ty, wire, var, element, active).map(Some)
     }
 
-    fn output_leaf(&self, request: OutputLeaf<'_, Self>) -> Result<OutputPlan<CWire>> {
+    fn output_leaf(&self, request: OutputLeaf<'_, Self>) -> Result<COutputPlan<CWire>> {
         let OutputLeaf {
             flat: _flat,
             ty,
@@ -526,7 +495,7 @@ impl Codec for CCodec {
         &self,
         request: OutputLeaf<'_, Self>,
         projection: &prebindgen_declarations::Projection,
-    ) -> Result<OutputPlan<CWire>> {
+    ) -> Result<COutputPlan<CWire>> {
         let OutputLeaf {
             flat,
             ty,
@@ -628,12 +597,12 @@ impl Codec for CCodec {
 
     fn output_return_reference(
         &self,
-        flat: &Bindings,
+        flat: &CBindings,
         reference: &syn::TypeReference,
         _: &(),
         wire: syn::Ident,
         value: TokenStream,
-    ) -> Result<Option<OutputPlan<CWire>>> {
+    ) -> Result<Option<COutputPlan<CWire>>> {
         let ty = &*reference.elem;
         if let Some(owner) = owned::declaration(flat, ty) {
             return Ok(Some(owned::borrowed(
@@ -676,7 +645,7 @@ impl Codec for CCodec {
             access,
         });
         let pointer_type = kind.rust_type();
-        Ok(Some(OutputPlan {
+        Ok(Some(COutputPlan {
             fallible: false,
             context: Default::default(),
             delivery: Default::default(),
@@ -696,26 +665,26 @@ impl Codec for CCodec {
 
     fn output_borrowed_sequence(
         &self,
-        flat: &Bindings,
+        flat: &CBindings,
         ty: &syn::Type,
         _: &(),
         wire: syn::Ident,
         value: TokenStream,
-        element: &prebindgen_declarations::Output,
+        element: &operations::COutput,
         delivery: prebindgen_declarations::SequenceDelivery,
         temporary: bool,
-    ) -> Result<Option<OutputPlan<CWire>>> {
+    ) -> Result<Option<COutputPlan<CWire>>> {
         borrowed::sequence(flat, ty, wire, value, element, delivery, temporary)
     }
 
     fn output_owner(
         &self,
-        flat: &Bindings,
+        flat: &CBindings,
         ty: &syn::Type,
         _: &(),
         wire: syn::Ident,
         value: TokenStream,
-    ) -> Result<Option<(OutputPlan<CWire>, TokenStream)>> {
+    ) -> Result<Option<(COutputPlan<CWire>, TokenStream)>> {
         if let Some(owner) = owned::declaration(flat, ty).filter(|_| owned::std_owner(ty)) {
             let ident = owner.ident();
             let mut plan = owned::output(owner, wire.clone(), value.clone());
@@ -735,10 +704,10 @@ impl Codec for CCodec {
 
     fn validate_owner_getter(
         &self,
-        flat: &Bindings,
+        flat: &CBindings,
         ty: &syn::Type,
         getter: &str,
-        plan: &OutputPlan<CWire>,
+        plan: &COutputPlan<CWire>,
     ) -> Result<()> {
         if let Some(owner) = owned::declaration(flat, ty) {
             let has_loan = borrowed::has_loans(&plan.outcomes.success);
@@ -760,11 +729,11 @@ impl Codec for CCodec {
     }
     fn validate_getter_output(
         &self,
-        _flat: &Bindings,
+        _flat: &CBindings,
         _receiver: &syn::Type,
         borrowed: bool,
         ty: &syn::Type,
-        plan: &OutputPlan<CWire>,
+        plan: &COutputPlan<CWire>,
         _: &(),
     ) -> Result<()> {
         let mut reference_type = ty;
@@ -782,11 +751,11 @@ impl Codec for CCodec {
         Ok(())
     }
 
-    fn validate_input(&self, plan: &prebindgen_declarations::CodecInput<Self>) -> Result<()> {
+    fn validate_input(&self, plan: &prebindgen_declarations::CodecInputPlan<Self>) -> Result<()> {
         sequence::validate_buffered(&plan.node)?;
         crate::group::validate_layout(&plan.node)
     }
-    fn validate_output(&self, plan: &prebindgen_declarations::CodecOutput<Self>) -> Result<()> {
+    fn validate_output(&self, plan: &prebindgen_declarations::CodecOutputPlan<Self>) -> Result<()> {
         sequence::callback_delivery(&plan.outcomes.success)?;
         for error in plan
             .outcomes
@@ -849,30 +818,26 @@ impl Codec for CCodec {
         }
         prebindgen_declarations::prepare_mapped_source_error(self, request)
     }
-    fn callback_input(
+    fn input_arrow(
         &self,
-        flat: &Bindings,
-        configuration: &prebindgen_declarations::CallbackInput,
-        _: &(),
-        wire: syn::Ident,
-        var: syn::Ident,
-        active: &prebindgen_declarations::Condition,
-    ) -> Result<InputPlan<CWire>> {
+        request: prebindgen_declarations::InputArrow<'_, Self>,
+    ) -> Result<CInputPlan<CWire>> {
         if !self.declared {
             return Err("configured callbacks are unsupported by this codec".into());
         }
+        let configuration = request.operation;
         if configuration.foreign.is_some()
             || configuration.namespace.is_some()
             || configuration.explicit_return
         {
             return Err("configured callbacks are unsupported by the C adapter".into());
         }
-        callback::input(flat, configuration, wire, var, active)
+        callback::input(request)
     }
 }
 
 impl CCodec {
-    fn input_value(&self, request: InputLeaf<'_, Self>) -> Result<InputPlan<CWire>> {
+    fn input_value(&self, request: InputLeaf<'_, Self>) -> Result<CInputPlan<CWire>> {
         let InputLeaf {
             flat: _flat,
             ty,
@@ -913,7 +878,7 @@ impl CCodec {
                 } else {
                     (quote!(), quote!(let #v=#decode;), quote!(#v))
                 };
-                let mut plan = InputPlan::new(
+                let mut plan = CInputPlan::new(
                     prebindgen_flat::WireNode::Leaf(vec![Wire {
                         name: w,
                         kind: Self::enum_wire(name, mapping),
@@ -1004,10 +969,10 @@ fn owned_pointer_output(
     ty: &syn::Type,
     wire: syn::Ident,
     value: TokenStream,
-) -> (OutputPlan<CWire>, TokenStream) {
+) -> (COutputPlan<CWire>, TokenStream) {
     let guard = format_ident!("{wire}_owner");
     (
-        OutputPlan {
+        COutputPlan {
             fallible: false,
             context: Default::default(),
             delivery: Default::default(),
@@ -1056,15 +1021,15 @@ fn encode_scalar(p: Primitive, v: TokenStream) -> TokenStream {
 /// Start with captured source via [`Self::builder`] and [`Self::source`], or a
 /// flat model via [`Self::new`]. With captured source, declare each
 /// exported function. In either case, declare each opaque pointee type.
-/// Conversion declarations use [`prebindgen_declarations::Declarations`]. When reading
+/// Conversion declarations use [`prebindgen_declarations::DeclDefaults`]. When reading
 /// captured source, add the source crate as both a build dependency and a normal
 /// dependency: generation reads its captures, and generated code calls its functions.
 ///
 /// ```
-/// use prebindgen_c::{Bindings, Cbindgen};
+/// use prebindgen_c::{CBindings, Cbindgen};
 /// use prebindgen_declarations::fun;
 /// let source = syn::parse_file("pub fn add(a: i64, b: i64) -> i64 { a + b }")?;
-/// let flat = Bindings::parse(
+/// let flat = CBindings::parse(
 ///     source.items.into_iter().map(|item| (item, Default::default())),
 /// )?;
 /// let generated = Cbindgen::new(flat)
@@ -1098,13 +1063,13 @@ fn encode_scalar(p: Primitive, v: TokenStream) -> TokenStream {
 /// Mutable loans require exclusive access while in use. Getter expansions retain
 /// their existing ownership policy; mutable getter results remain unsupported.
 pub struct Cbindgen {
-    flat: Option<Bindings>,
+    flat: Option<CBindings>,
     source: Option<std::path::PathBuf>,
-    conversions: Vec<prebindgen_declarations::ConvertDecl>,
-    inputs: Vec<prebindgen_declarations::Input<InputRequest>>,
-    outputs: Vec<prebindgen_declarations::Output<OutputRequest>>,
+    conversions: Vec<prebindgen_declarations::DeclConvert>,
+    inputs: Vec<prebindgen_declarations::DeclInput<DeclInputRequest, DeclOutputRequest>>,
+    outputs: Vec<prebindgen_declarations::DeclOutput<DeclInputRequest, DeclOutputRequest>>,
     error_mappers: Vec<(syn::Type, String)>,
-    functions: Vec<prebindgen_declarations::FunctionDecl>,
+    functions: Vec<prebindgen_declarations::DeclFunction>,
     prefix: String,
     pointers: Vec<(String, syn::Type)>,
     owned: Vec<(String, syn::Type, OpaqueLayout, Option<String>)>,
@@ -1153,18 +1118,18 @@ impl Cbindgen {
         self
     }
     /// Select a type's canonical single-value input/output representations.
-    pub fn convert(mut self, declaration: prebindgen_declarations::ConvertDecl) -> Self {
+    pub fn convert(mut self, declaration: prebindgen_declarations::DeclConvert) -> Self {
         self.conversions.push(declaration);
         self
     }
     /// Register a boundary expansion using the declaration syntax.
     /// The builder is consumed directly into its Input/Output tree.
-    pub fn expand(self, decl: impl Into<prebindgen_declarations::ExpandDecl>) -> Self {
-        use prebindgen_declarations::ExpandDecl;
+    pub fn expand(self, decl: impl Into<prebindgen_declarations::DeclExpand>) -> Self {
+        use prebindgen_declarations::DeclExpand;
         match decl.into() {
-            ExpandDecl::Param(decl) => self.input(decl),
-            ExpandDecl::Return(decl) => self.output(decl),
-            ExpandDecl::Error(decl) => self.error_mapper(decl.ty, decl.mapper),
+            DeclExpand::Param(decl) => self.input(decl),
+            DeclExpand::Return(decl) => self.output(decl),
+            DeclExpand::Error(decl) => self.error_mapper(decl.ty, decl.mapper),
         }
     }
     /// Register a type-wide input or output expansion, built with `expand_param!`
@@ -1172,14 +1137,17 @@ impl Cbindgen {
     ///
     /// Per-function overrides replace this default; duplicate defaults are rejected
     /// by [`Self::build`]. Registration order does not affect type lookup.
-    pub fn input(mut self, tree: impl Into<prebindgen_declarations::Input<InputRequest>>) -> Self {
+    pub fn input(
+        mut self,
+        tree: impl Into<prebindgen_declarations::DeclInput<DeclInputRequest, DeclOutputRequest>>,
+    ) -> Self {
         self.inputs.push(tree.into());
         self
     }
     /// Register a type-wide direct output conversion tree.
     pub fn output(
         mut self,
-        tree: impl Into<prebindgen_declarations::Output<OutputRequest>>,
+        tree: impl Into<prebindgen_declarations::DeclOutput<DeclInputRequest, DeclOutputRequest>>,
     ) -> Self {
         self.outputs.push(tree.into());
         self
@@ -1191,7 +1159,7 @@ impl Cbindgen {
     pub fn error_mapper(
         mut self,
         ty: syn::Type,
-        mapper: impl Into<prebindgen_declarations::FunctionDecl>,
+        mapper: impl Into<prebindgen_declarations::DeclFunction>,
     ) -> Self {
         self.error_mappers.push((ty, mapper.into().source_name()));
         self
@@ -1209,7 +1177,7 @@ impl Cbindgen {
     pub fn opaque_error(
         self,
         ty: syn::Type,
-        mapper: impl Into<prebindgen_declarations::FunctionDecl>,
+        mapper: impl Into<prebindgen_declarations::DeclFunction>,
     ) -> Self {
         self.error_mapper(ty, mapper)
     }
@@ -1220,7 +1188,7 @@ impl Cbindgen {
     ///
     /// Function renaming is currently unsupported; exports use the symbol prefix
     /// and original source name.
-    pub fn function(mut self, decl: prebindgen_declarations::FunctionDecl) -> Self {
+    pub fn function(mut self, decl: prebindgen_declarations::DeclFunction) -> Self {
         self.functions.push(decl);
         self
     }
@@ -1251,7 +1219,7 @@ impl Cbindgen {
     /// [`prebindgen_declarations::bind_output`] with [`CCodec`], or fill defaults with
     /// [`Self::function`].
     /// Every fully bound function in the supplied model is exported.
-    pub fn new(flat: Bindings) -> Self {
+    pub fn new(flat: CBindings) -> Self {
         Self {
             flat: Some(flat),
             source: None,
@@ -1337,27 +1305,27 @@ impl Cbindgen {
         name: &str,
         ty: syn::Type,
         layout: OpaqueLayout,
-        empty: prebindgen_declarations::FunctionDecl,
+        empty: prebindgen_declarations::DeclFunction,
     ) -> Self {
         self.owned
             .push((name.into(), ty, layout, Some(empty.source_name())));
         self
     }
     /// Reference the generated length getter in an output expansion.
-    pub fn owned_len(name: &str) -> prebindgen_declarations::FunctionDecl {
-        prebindgen_declarations::FunctionDecl::new(owned::helper(name, "len"))
+    pub fn owned_len(name: &str) -> prebindgen_declarations::DeclFunction {
+        prebindgen_declarations::DeclFunction::new(owned::helper(name, "len"))
     }
     /// Reference the generated shared view getter for a `String`, `Vec<u8>`, or
     /// numeric `Vec` owner. Views preserve the original allocation without copying.
-    pub fn owned_view(name: &str) -> prebindgen_declarations::FunctionDecl {
-        prebindgen_declarations::FunctionDecl::new(owned::helper(name, "view"))
+    pub fn owned_view(name: &str) -> prebindgen_declarations::DeclFunction {
+        prebindgen_declarations::DeclFunction::new(owned::helper(name, "view"))
     }
     /// Reference the generated exclusive byte-view getter for a `Vec<u8>` owner.
     /// Use as the single getter alongside its owning identity in an output
     /// expansion. The C caller keeps the owner alive and preserves exclusive
     /// access until the view's last use. No copy or write-back is performed.
-    pub fn owned_view_mut(name: &str) -> prebindgen_declarations::FunctionDecl {
-        prebindgen_declarations::FunctionDecl::new(owned::helper(name, "view_mut"))
+    pub fn owned_view_mut(name: &str) -> prebindgen_declarations::DeclFunction {
+        prebindgen_declarations::DeclFunction::new(owned::helper(name, "view_mut"))
     }
     /// Declare an ordinary C tag/union carrier for a source payload enum or
     /// concrete Result. Tags follow source order, independently of Rust discriminants.
@@ -1377,7 +1345,7 @@ impl Cbindgen {
     /// Does not write files. Returns an error for conflicting sources, invalid or
     /// duplicate declarations, unsupported conversions, or missing opaque pointees.
     /// Rust layout/trait requirements are checked when the generated Rust compiles.
-    pub fn prepare(self) -> Result<Bindings> {
+    pub fn prepare(self) -> Result<CBindings> {
         prebindgen_declarations::ident(&self.prefix)?;
         let target = self.target.unwrap_or_else(|| {
             std::env::var("TARGET").unwrap_or_else(|_| env!("PREBINDGEN_C_GENERATOR_TARGET").into())
@@ -1596,7 +1564,7 @@ impl Cbindgen {
             }
         }
         owned::accessors(&mut flat)?;
-        let declarations = prebindgen_declarations::Declarations::new(
+        let declarations = prebindgen_declarations::DeclDefaults::new(
             &flat,
             self.inputs,
             self.outputs,
@@ -1616,29 +1584,44 @@ impl Cbindgen {
                 requires_abort: false,
             });
         }
-        errors::prepare(&mut flat, &codec, &declarations)
+        errors::resolve(&mut flat, &codec, &declarations)
             .map_err(|e| format!("C error preparation: {e}"))?;
+        let mut resolved_declarations = Vec::new();
+        let mut callback_variants = Vec::new();
         for decl in self.functions {
-            declarations.fill(&mut flat, &codec, &decl, &())?;
             if decl.callback_return.is_some() {
                 let name = format!("{}_each", decl.name);
                 let variant =
                     declarations.callback_variant(&mut flat, &codec, &decl, &name, &())?;
-                declarations.fill(&mut flat, &codec, &variant, &())?;
-                sequence::callback_target(
-                    &(flat.function(&name)?.output_conversion()?)
-                        .output_outcomes()
-                        .success,
-                )?;
-                if decl.callback_return == Some(prebindgen_declarations::CallbackReturn::Only) {
-                    let original = flat.functions.get_mut(&decl.name).unwrap();
-                    original.ret.slot = None;
-                    for param in &mut original.params {
-                        param.ty.slot = None;
-                    }
+                callback_variants.push((
+                    decl.name.clone(),
+                    name,
+                    decl.callback_return == Some(prebindgen_declarations::CallbackReturn::Only),
+                ));
+                resolved_declarations.push(variant);
+            }
+            resolved_declarations.push(decl);
+        }
+        let resolved = declarations.resolve(flat, codec, &resolved_declarations, ())?;
+        drop(declarations);
+        let mut flat = prebindgen_declarations::compile_resolved(resolved)?;
+        for (original, variant, only) in callback_variants {
+            sequence::callback_target(
+                &flat
+                    .function(&variant)?
+                    .output_conversion()?
+                    .output_outcomes()
+                    .success,
+            )?;
+            if only {
+                let source = flat.function_mut(&original)?;
+                source.ret.slot = None;
+                for param in &mut source.params {
+                    param.ty.slot = None;
                 }
             }
         }
+
         prebindgen_flat::validate_bindings(&flat)?;
         for f in flat.functions.values().filter(|f| f.ret.slot.is_some()) {
             let is_result = f
@@ -1676,19 +1659,19 @@ impl Cbindgen {
         Ok(flat)
     }
     /// Prepare a complete Flat model, then emit its C and Rust bindings.
-    pub fn build(self) -> Result<Generation> {
+    pub fn build(self) -> Result<CGeneration> {
         generate(&self.prepare()?)
     }
 }
 /// Generated Rust bindings and their corresponding C header.
-pub struct Generation {
+pub struct CGeneration {
     /// Formatted Rust source to include in a binding crate with `prebindgen-runtime`
     /// and `konst` (used by captured source feature guards).
     pub rust: String,
     /// C declarations matching the generated Rust ABI, with C++ linkage guards.
     pub header: String,
 }
-impl Generation {
+impl CGeneration {
     /// Write Rust source to exactly `path`, replacing any existing file.
     ///
     /// Relative paths use the current directory, not `OUT_DIR`. Parent directories
@@ -1703,7 +1686,7 @@ impl Generation {
         std::fs::write(path, &self.header).map_err(|e| e.to_string())
     }
 }
-fn byte_view(wire: syn::Ident, value: TokenStream, mutable: bool) -> OutputPlan<CWire> {
+fn byte_view(wire: syn::Ident, value: TokenStream, mutable: bool) -> COutputPlan<CWire> {
     let (kind, buffer, pointer) = if mutable {
         (
             CWire::MutableView,
@@ -1717,7 +1700,7 @@ fn byte_view(wire: syn::Ident, value: TokenStream, mutable: bool) -> OutputPlan<
             quote!(#wire.as_ptr()),
         )
     };
-    OutputPlan {
+    COutputPlan {
         fallible: false,
         context: Default::default(),
         delivery: Default::default(),
@@ -1854,7 +1837,7 @@ fn validate_wire_declaration(
 
 /// Emit C/Rust bindings using only the prepared Flat model.
 /// No builder, codec cache or separate declaration table is needed.
-pub fn generate<S>(flat: &Flat<S>) -> Result<Generation>
+pub fn generate<S>(flat: &Flat<S>) -> Result<CGeneration>
 where
     S: prebindgen_flat::Schema<
         Module = CModule,
@@ -2578,7 +2561,7 @@ The pointer must be null or a live allocation of the declared type returned by t
     let guards = &flat.guards;
     tokens.extend(quote!(#(#guards)*));
     header.push_str("#ifdef __cplusplus\n}\n#endif\n#endif\n");
-    Ok(Generation {
+    Ok(CGeneration {
         rust: prebindgen_flat::rust_source(tokens)?,
         header,
     })
@@ -2825,9 +2808,9 @@ fn describe_groups(
 mod generation_tests {
     use super::*;
 
-    fn error_model(source: &str) -> Bindings {
+    fn error_model(source: &str) -> CBindings {
         let source = syn::parse_file(source).unwrap();
-        Bindings::parse(
+        CBindings::parse(
             source
                 .items
                 .into_iter()
@@ -2959,7 +2942,7 @@ mod generation_tests {
         ] {
             let source = format!("pub fn emit(cb:impl Fn({argument})){{}}");
             let parsed = syn::parse_file(&source).unwrap();
-            let result = Bindings::parse(
+            let result = CBindings::parse(
                 parsed
                     .items
                     .into_iter()
@@ -3128,7 +3111,7 @@ mod generation_tests {
         use prebindgen_declarations::{expand_return, fun};
         let error = Cbindgen::new(error_model("pub type Owner=String;pub type Child=String;pub fn make()->Owner{}pub fn child(owner:&Owner)->&mut Child{}"))
             .opaque_ptr("child_t",syn::parse_quote!(Child))
-            .function(fun!(make).expand_return(expand_return!(Owner).view(prebindgen_declarations::Output::getter("child",prebindgen_declarations::Output::Projected(prebindgen_declarations::Projection::borrowed())))))
+            .function(fun!(make).expand_return(expand_return!(Owner).view(prebindgen_declarations::DeclOutput::getter("child",prebindgen_declarations::DeclOutput::Leaf(DeclOutputLeafOp::Projected(prebindgen_declarations::Projection::borrowed()))))))
             .build().err().unwrap();
         assert!(
             error.contains("mutable-reference getter results are unsupported"),
@@ -3138,12 +3121,12 @@ mod generation_tests {
 
     #[test]
     fn owner_backed_getters_borrow_final_storage_and_keep_wire_order() {
-        use prebindgen_declarations::{expand_return, fun, Output};
+        use prebindgen_declarations::{expand_return, fun, DeclOutput};
         for mutable in [false, true] {
             let qualifier = if mutable { "mut " } else { "" };
             let source=format!("pub type Owner=String;pub type Child=String;pub fn make()->Owner{{}}pub fn child(o:&{qualifier}Owner)->&{qualifier}Child{{}}");
             for reversed in [false, true] {
-                let getter = Output::getter("child", Output::Leaf);
+                let getter = DeclOutput::getter("child", DeclOutput::Leaf(DeclOutputLeafOp::Value));
                 let expansion = if reversed {
                     expand_return!(Owner).view(getter).field_self_into()
                 } else {
@@ -3187,7 +3170,7 @@ mod generation_tests {
 
     #[test]
     fn owner_view_near_misses_are_diagnostics_not_implicit_clones() {
-        use prebindgen_declarations::{expand_return, fun, Output};
+        use prebindgen_declarations::{expand_return, fun, DeclOutput};
         let source="pub type Owner=String;pub type Child=String;pub fn make()->Owner{}pub fn child(o:&Owner)->&Child{}pub fn mutate(o:&mut Owner)->&mut Child{}";
         let model = || {
             Cbindgen::new(error_model(source))
@@ -3203,13 +3186,16 @@ mod generation_tests {
                 expand_return!(Owner)
                     .field_self_into()
                     .field(fun!(child))
-                    .view(Output::Discard),
+                    .view(DeclOutput::Leaf(DeclOutputLeafOp::Discard)),
                 "supports only",
             ),
             (
                 expand_return!(Owner)
                     .field_self_into()
-                    .view(Output::getter("mutate", Output::Leaf))
+                    .view(DeclOutput::getter(
+                        "mutate",
+                        DeclOutput::Leaf(DeclOutputLeafOp::Value),
+                    ))
                     .field(fun!(child)),
                 "only getter view",
             ),
@@ -3230,7 +3216,7 @@ mod generation_tests {
         let flat = Cbindgen::new(error_model("pub type Owner=String;pub type Child=String;pub fn make()->Owner{}pub fn child(owner:&Owner)->&Child{}"))
             .opaque_ptr("owner", syn::parse_quote!(Owner))
             .opaque_ptr("child", syn::parse_quote!(Child))
-            .function(fun!(make).expand_return(expand_return!(Owner).view(prebindgen_declarations::Output::getter("child",prebindgen_declarations::Output::Projected(prebindgen_declarations::Projection::borrowed())))))
+            .function(fun!(make).expand_return(expand_return!(Owner).view(prebindgen_declarations::DeclOutput::getter("child",prebindgen_declarations::DeclOutput::Leaf(DeclOutputLeafOp::Projected(prebindgen_declarations::Projection::borrowed()))))))
             .function(fun!(child).expand_return(expand_return!(Child).field_self_ref()))
             .panic()
             .prepare().unwrap();
@@ -3264,9 +3250,10 @@ mod generation_tests {
             .function(
                 fun!(first).input(
                     "values",
-                    prebindgen_declarations::Input::Sequence(Box::new(
-                        prebindgen_declarations::Input::call("copy_child"),
-                    ))
+                    prebindgen_declarations::DeclInput::Unary {
+                        operation: DeclInputUnary::Sequence,
+                        child: Box::new(prebindgen_declarations::DeclInput::call("copy_child")),
+                    }
                     .reconstruct(),
                 ),
             )
@@ -3307,7 +3294,7 @@ mod generation_tests {
     #[test]
     fn callback_borrows_copies_and_expansions_have_distinct_stable_abis() {
         use prebindgen_declarations::{callback, expand_return, fun};
-        fn prepared(reverse: bool, global_copy: bool) -> Bindings {
+        fn prepared(reverse: bool, global_copy: bool) -> CBindings {
             let mut declarations = vec![
                 fun!(borrowed),
                 fun!(copied).expand_param(
@@ -3334,7 +3321,7 @@ mod generation_tests {
             }
             builder.prepare().unwrap()
         }
-        fn callbacks(flat: &Bindings) -> std::collections::BTreeMap<String, String> {
+        fn callbacks(flat: &CBindings) -> std::collections::BTreeMap<String, String> {
             ["borrowed","copied","expanded"].into_iter().map(|name| {
                 let wire=group::function_parameters(flat.function(name).unwrap()).unwrap().next().unwrap();
                 let CWire::Callback {callback}= &wire.kind else {panic!()};
@@ -3372,12 +3359,16 @@ mod generation_tests {
 
     #[test]
     fn optional_callback_references_preserve_their_borrow() {
-        use prebindgen_declarations::{compile_callback_argument, Output};
+        use crate::operations::{COutput, COutputLeafOp, COutputUnary};
+        use prebindgen_declarations::compile_callback_argument;
         let output = compile_callback_argument(
             &error_model("pub type Child=String;"),
             &CCodec::raw(),
             &syn::parse_quote!(Option<&Child>),
-            &Output::Optional(Box::new(Output::Leaf)),
+            &COutput::Unary {
+                operation: COutputUnary::Optional,
+                child: Box::new(COutput::Leaf(COutputLeafOp::Value)),
+            },
             0,
             false,
             &(),
@@ -3477,8 +3468,9 @@ mod generation_tests {
             errors::ErrorBinding::declared("initial".into(), ty.clone()),
         ));
         let declarations =
-            prebindgen_declarations::Declarations::new(&flat, vec![], vec![], vec![]).unwrap();
-        errors::prepare(&mut flat, &codec, &declarations).unwrap();
+            prebindgen_declarations::DeclDefaults::new(&flat, vec![], vec![], vec![]).unwrap();
+        errors::resolve(&mut flat, &codec, &declarations).unwrap();
+        codec.compile_declarations(&mut flat, &()).unwrap();
         let error = flat.type_metadata_mut(&ty).unwrap().error.as_mut().unwrap();
         std::rc::Rc::make_mut(error).name = "updated".into();
         let code = codec
@@ -3497,7 +3489,7 @@ mod generation_tests {
     }
     #[test]
     fn prebound_function_policy_is_read_from_flat() {
-        use prebindgen_declarations::{bind_input, bind_output, Input, Output};
+        use prebindgen_declarations::{bind_input, bind_output, DeclInput, DeclOutput};
         let mut flat = error_model("pub type Item=String;pub fn inspect(value:&Item)->i64{}");
         flat.type_metadata_mut(&syn::parse_quote!(Item))
             .unwrap()
@@ -3511,11 +3503,18 @@ mod generation_tests {
             &CCodec::raw(),
             "inspect",
             "value",
-            &Input::Leaf,
+            &DeclInput::Leaf(DeclInputLeafOp::Value),
             &(),
         )
         .unwrap();
-        bind_output(&mut flat, &CCodec::raw(), "inspect", &Output::Leaf, &()).unwrap();
+        bind_output(
+            &mut flat,
+            &CCodec::raw(),
+            "inspect",
+            &DeclOutput::Leaf(DeclOutputLeafOp::Value),
+            &(),
+        )
+        .unwrap();
         let prepared = Cbindgen::new(flat).prepare().unwrap();
         assert!(
             prepared
@@ -3530,7 +3529,7 @@ mod generation_tests {
     }
     #[test]
     fn logical_outcomes_and_sequence_fields_are_independent_of_c_transport() {
-        use prebindgen_declarations::{fun, Declarations};
+        use prebindgen_declarations::{fun, DeclDefaults};
 
         let mut flat=error_model("pub struct Failure {pub code:i64,pub info:Option<String>} pub fn f(v:Option<Vec<i64>>)->Result<Option<Vec<Option<i64>>>,Failure>{}");
         let ty = flat.resolve_type(&syn::parse_quote!(Failure)).unwrap();
@@ -3538,8 +3537,8 @@ mod generation_tests {
         flat.type_metadata_mut(&ty).unwrap().error = Some(std::rc::Rc::new(
             errors::ErrorBinding::declared("failure".into(), ty.clone()),
         ));
-        let declarations = Declarations::new(&flat, vec![], vec![], vec![]).unwrap();
-        errors::prepare(&mut flat, &codec, &declarations).unwrap();
+        let declarations = DeclDefaults::new(&flat, vec![], vec![], vec![]).unwrap();
+        errors::resolve(&mut flat, &codec, &declarations).unwrap();
         let decl = fun!(f).callback_return();
         declarations.fill(&mut flat, &codec, &decl, &()).unwrap();
         let normal = flat.function("f").unwrap();
@@ -3653,7 +3652,7 @@ mod generation_tests {
     fn callback_return_rejects_unrelated_output_values() {
         use prebindgen_declarations::{expand_return, fun};
         let source=syn::parse_file("pub fn values()->Option<Vec<i64>>{} pub fn number(v:&Option<Vec<i64>>)->i64{} pub fn view(v:&Option<Vec<i64>>)->Vec<i64>{}").unwrap();
-        let flat = Bindings::parse(
+        let flat = CBindings::parse(
             source
                 .items
                 .into_iter()
@@ -3681,7 +3680,7 @@ mod generation_tests {
         let source =
             syn::parse_file("pub struct Undeclared {pub n:i32} pub fn values()->Vec<Undeclared>{}")
                 .unwrap();
-        let flat = Bindings::parse(
+        let flat = CBindings::parse(
             source
                 .items
                 .into_iter()
@@ -3701,7 +3700,7 @@ mod generation_tests {
     fn callback_returns_preserve_buffers_and_require_explicit_abort_policy() {
         let flat = || {
             let source = syn::parse_file("pub fn values()->Vec<i64>{}").unwrap();
-            Bindings::parse(
+            CBindings::parse(
                 source
                     .items
                     .into_iter()
@@ -3809,25 +3808,28 @@ mod generation_tests {
 
     #[test]
     fn multiple_collection_observations_follow_the_actual_borrow() {
-        use prebindgen_declarations::{bind_output, Output};
-        let seq = |copy: bool| Output::Sequence {
-            delivery: prebindgen_declarations::SequenceDelivery::Value,
-            element: Box::new(Output::Leaf),
-            mode: copy.then_some(prebindgen_declarations::ProjectionMode::Borrowed),
+        use prebindgen_declarations::{bind_output, DeclOutput};
+        let seq = |copy: bool| DeclOutput::Unary {
+            operation: DeclOutputUnary::Sequence {
+                delivery: prebindgen_declarations::SequenceDelivery::Value,
+                mode: copy.then_some(prebindgen_declarations::ProjectionMode::Borrowed),
+            },
+            child: Box::new(DeclOutput::Leaf(DeclOutputLeafOp::Value)),
         };
         for (source, recipe) in [
             (
                 "pub fn f()->&Vec<i64> {}",
-                Output::combine([seq(false), seq(false)]),
+                DeclOutput::combine([seq(false), seq(false)]),
             ),
             (
                 "pub struct Record { pub values: Vec<i64> } pub fn f()->Record {}",
-                Output::fields([Output::combine([seq(true), seq(true)])]),
+                DeclOutput::fields([DeclOutput::combine([seq(true), seq(true)])]),
             ),
         ] {
             let source = syn::parse_file(source).unwrap();
             let mut flat =
-                Bindings::parse(source.items.into_iter().map(|i| (i, Default::default()))).unwrap();
+                CBindings::parse(source.items.into_iter().map(|i| (i, Default::default())))
+                    .unwrap();
             bind_output(&mut flat, &CCodec::raw(), "f", &recipe, &()).unwrap();
             assert_eq!(
                 crate::group::result_packet_fields(
@@ -3850,15 +3852,27 @@ mod generation_tests {
 
     #[test]
     fn option_comment_labels_are_unique_across_parameters_and_result() {
-        use prebindgen_declarations::{bind_input, bind_output, Input, Output};
+        use prebindgen_declarations::{bind_input, bind_output, DeclInput, DeclOutput};
         let source = syn::parse_file("pub fn echo(a: Option<Option<char>>, b: Option<Option<char>>) -> Option<Option<char>> { a }").unwrap();
         let mut flat =
-            Bindings::parse(source.items.into_iter().map(|i| (i, Default::default()))).unwrap();
-        let input = Input::Optional(Box::new(Input::Optional(Box::new(Input::Leaf))));
+            CBindings::parse(source.items.into_iter().map(|i| (i, Default::default()))).unwrap();
+        let input = DeclInput::Unary {
+            operation: DeclInputUnary::Optional,
+            child: Box::new(DeclInput::Unary {
+                operation: DeclInputUnary::Optional,
+                child: Box::new(DeclInput::Leaf(DeclInputLeafOp::Value)),
+            }),
+        };
         for param in ["a", "b"] {
             bind_input(&mut flat, &CCodec::raw(), "echo", param, &input, &()).unwrap();
         }
-        let output = Output::Optional(Box::new(Output::Optional(Box::new(Output::Leaf))));
+        let output = DeclOutput::Unary {
+            operation: DeclOutputUnary::Optional,
+            child: Box::new(DeclOutput::Unary {
+                operation: DeclOutputUnary::Optional,
+                child: Box::new(DeclOutput::Leaf(DeclOutputLeafOp::Value)),
+            }),
+        };
         bind_output(&mut flat, &CCodec::raw(), "echo", &output, &()).unwrap();
         let header = Cbindgen::new(flat)
             .function(prebindgen_declarations::fun!(echo))
@@ -3876,15 +3890,30 @@ mod generation_tests {
 
     #[test]
     fn header_describes_shared_nested_empty_and_multiwire_fields() {
-        use prebindgen_declarations::{bind_output, Output};
+        use prebindgen_declarations::{bind_output, DeclOutput};
         let source = syn::parse_file("pub struct Empty {} pub struct Pair { pub x: i32, pub y: i32 } pub struct Record { pub empty: Empty, pub pair: Pair, pub maybe: Option<i32> } pub fn make() -> Record { unreachable!() }").unwrap();
         let mut flat =
-            Bindings::parse(source.items.into_iter().map(|i| (i, Default::default()))).unwrap();
-        let recipe = Output::Fields(vec![
-            Output::Fields(vec![]),
-            Output::Fields(vec![Output::Leaf, Output::Leaf]),
-            Output::Optional(Box::new(Output::Leaf)),
-        ]);
+            CBindings::parse(source.items.into_iter().map(|i| (i, Default::default()))).unwrap();
+        let recipe = DeclOutput::Branch {
+            operation: DeclOutputBranch::Fields,
+            children: vec![
+                DeclOutput::Branch {
+                    operation: DeclOutputBranch::Fields,
+                    children: vec![],
+                },
+                DeclOutput::Branch {
+                    operation: DeclOutputBranch::Fields,
+                    children: vec![
+                        DeclOutput::Leaf(DeclOutputLeafOp::Value),
+                        DeclOutput::Leaf(DeclOutputLeafOp::Value),
+                    ],
+                },
+                DeclOutput::Unary {
+                    operation: DeclOutputUnary::Optional,
+                    child: Box::new(DeclOutput::Leaf(DeclOutputLeafOp::Value)),
+                },
+            ],
+        };
         bind_output(&mut flat, &CCodec::raw(), "make", &recipe, &()).unwrap();
         let header = Cbindgen::new(flat).build().unwrap().header;
         assert!(header.contains("Field return.empty: no boundary values."));
@@ -3908,15 +3937,25 @@ mod generation_tests {
 
     #[test]
     fn shared_compiler_suppresses_niches_in_selector_arms() {
-        use prebindgen_declarations::{bind_input, Input};
+        use prebindgen_declarations::{bind_input, DeclInput};
         for (payload, arm) in [
-            ("char", Input::Leaf),
-            ("Option<char>", Input::Optional(Box::new(Input::Leaf))),
+            ("char", DeclInput::Leaf(DeclInputLeafOp::Value)),
+            (
+                "Option<char>",
+                DeclInput::Unary {
+                    operation: DeclInputUnary::Optional,
+                    child: Box::new(DeclInput::Leaf(DeclInputLeafOp::Value)),
+                },
+            ),
         ] {
             let source = syn::parse_file(&format!("pub fn echo(value: {payload}) {{}}")).unwrap();
             let mut flat =
-                Bindings::parse(source.items.into_iter().map(|i| (i, Default::default()))).unwrap();
-            let selector = Input::Selector(vec![arm.clone(), arm.clone()]);
+                CBindings::parse(source.items.into_iter().map(|i| (i, Default::default())))
+                    .unwrap();
+            let selector = DeclInput::Branch {
+                operation: DeclInputBranch::Selector,
+                children: vec![arm.clone(), arm.clone()],
+            };
             bind_input(&mut flat, &CCodec::raw(), "echo", "value", &selector, &()).unwrap();
             assert_eq!(
                 crate::group::function_parameters(flat.function("echo").unwrap())
@@ -3941,8 +3980,15 @@ mod generation_tests {
             let source =
                 syn::parse_file(&format!("pub fn echo(value: Option<{payload}>) {{}}")).unwrap();
             let mut flat =
-                Bindings::parse(source.items.into_iter().map(|i| (i, Default::default()))).unwrap();
-            let recipe = Input::Optional(Box::new(Input::Selector(vec![arm.clone(), arm])));
+                CBindings::parse(source.items.into_iter().map(|i| (i, Default::default())))
+                    .unwrap();
+            let recipe = DeclInput::Unary {
+                operation: DeclInputUnary::Optional,
+                child: Box::new(DeclInput::Branch {
+                    operation: DeclInputBranch::Selector,
+                    children: vec![arm.clone(), arm],
+                }),
+            };
             bind_input(&mut flat, &CCodec::raw(), "echo", "value", &recipe, &()).unwrap();
             let plan = flat.function("echo").unwrap().params[0]
                 .ty
@@ -4047,7 +4093,7 @@ mod generation_tests {
     fn emission_reads_only_the_prepared_flat() {
         let source = syn::parse_file("pub enum E { A, B } pub fn echo(e:E)->E{}").unwrap();
         let flat =
-            Bindings::parse(source.items.into_iter().map(|i| (i, Default::default()))).unwrap();
+            CBindings::parse(source.items.into_iter().map(|i| (i, Default::default()))).unwrap();
         let prepared = Cbindgen::new(flat)
             .prefix("custom")
             .enum_type("choice", syn::parse_quote!(E))
@@ -4072,7 +4118,7 @@ mod generation_tests {
     #[test]
     fn rejects_invalid_pointer_names_during_preparation() {
         let source = syn::parse_file("pub type Handle = String;").unwrap();
-        let flat = Bindings::parse(
+        let flat = CBindings::parse(
             source
                 .items
                 .into_iter()
@@ -4087,10 +4133,10 @@ mod generation_tests {
 
     #[test]
     fn recoverable_c_results_require_a_declared_binding_failure_channel() {
-        use prebindgen_declarations::{fun, Declarations};
+        use prebindgen_declarations::{fun, DeclDefaults};
 
         let mut flat = error_model("pub fn message(e:i64)->String{} pub fn f()->Result<i64,i64>{}");
-        let declarations = Declarations::new(&flat, vec![], vec![], vec![]).unwrap();
+        let declarations = DeclDefaults::new(&flat, vec![], vec![], vec![]).unwrap();
         declarations
             .fill(
                 &mut flat,
@@ -4148,7 +4194,7 @@ mod generation_tests {
         }
         struct CountedSchema;
         impl prebindgen_flat::Schema for CountedSchema {
-            type Input = InputPlan<CWire>;
+            type Input = CInputPlan<CWire>;
             type Output = CountedOutput;
             type Module = CModule;
             type Function = Option<CFunction>;
@@ -4207,8 +4253,8 @@ impl CNiche {
 mod abort_policy_tests {
     use super::*;
     use prebindgen_declarations::{expand_param, fun};
-    fn model(source: &str) -> Bindings {
-        Bindings::parse(
+    fn model(source: &str) -> CBindings {
+        CBindings::parse(
             syn::parse_file(source)
                 .unwrap()
                 .items
@@ -4294,7 +4340,7 @@ mod abort_policy_tests {
             &mut flat,
             &CCodec::raw(),
             "f",
-            &prebindgen_declarations::Output::Leaf,
+            &prebindgen_declarations::DeclOutput::Leaf(DeclOutputLeafOp::Value),
             &(),
         )
         .unwrap();
@@ -4320,7 +4366,7 @@ mod abort_policy_tests {
     fn bulk_callback_elements_are_explicitly_unsupported_by_the_c_codec() {
         use prebindgen_declarations::{expand_return, fun};
         let source = syn::parse_file("pub fn rows()->Vec<i64>{}").unwrap();
-        let flat = Bindings::parse(
+        let flat = CBindings::parse(
             source
                 .items
                 .into_iter()
@@ -4359,3 +4405,326 @@ mod input_contract_tests;
 
 #[cfg(test)]
 mod canonical_tests;
+
+#[cfg(test)]
+mod resolved_arrow_tests {
+    use super::*;
+    use prebindgen_declarations::{compile_input, DeclDefaults, DeclInput};
+
+    #[test]
+    fn a_manually_edited_arrow_reports_wrong_arity_without_panicking() {
+        let items = syn::parse_file("pub fn take(cb:impl Fn(i64)->i64){}")
+            .unwrap()
+            .items;
+        let flat = CBindings::parse(items.into_iter().map(|i| (i, Default::default()))).unwrap();
+        let defaults = DeclDefaults::new(&flat, vec![], vec![], vec![]).unwrap();
+        let ty = &flat.function("take").unwrap().params[0].ty.ty;
+        let mut recipe = defaults
+            .resolve_input(&flat, &CCodec::declared(), ty, &DeclInput::auto(), &())
+            .unwrap();
+        let operations::CInput::Arrow { domain, .. } = &mut recipe else {
+            panic!("expected arrow")
+        };
+        **domain = operations::COutput::None;
+        let error =
+            compile_input(&flat, &CCodec::declared(), "take", "cb", &recipe, &()).unwrap_err();
+        assert!(error.contains("domain arity"), "{error}");
+    }
+}
+
+mod compilation;
+/// Resolved conversion operations interpreted by this adapter.
+pub mod operations;
+
+impl prebindgen_declarations::DeclCodec for CCodec {
+    fn sequence_callback(
+        &self,
+        cx: &mut prebindgen_declarations::DeclResolve<'_, Self>,
+        ty: &syn::Type,
+        tree: operations::COutput,
+        structural: bool,
+    ) -> Result<operations::COutput> {
+        operations::sequence_callback(cx, ty, tree, structural)
+    }
+
+    fn is_discarded_output(&self, tree: &operations::COutput) -> bool {
+        matches!(
+            tree,
+            operations::COutput::Leaf(operations::COutputLeafOp::Discard)
+        )
+    }
+
+    fn resolve_input_leaf(
+        &self,
+        operation: prebindgen_declarations::frontend::DeclInputLeafOp,
+    ) -> Result<<Self::InOps as prebindgen_declarations::InputOps>::Leaf> {
+        Ok(match operation {
+            prebindgen_declarations::frontend::DeclInputLeafOp::Value => {
+                operations::CInputLeafOp::Value
+            }
+        })
+    }
+    fn resolve_input_unary(
+        &self,
+        operation: prebindgen_declarations::frontend::DeclInputUnary,
+    ) -> Result<<Self::InOps as prebindgen_declarations::InputOps>::Unary> {
+        Ok(match operation {
+            prebindgen_declarations::frontend::DeclInputUnary::Convert { conversion } => {
+                operations::CInputUnary::Convert { conversion }
+            }
+            prebindgen_declarations::frontend::DeclInputUnary::Sequence => {
+                operations::CInputUnary::Sequence
+            }
+            prebindgen_declarations::frontend::DeclInputUnary::Temporary => {
+                operations::CInputUnary::Temporary
+            }
+            prebindgen_declarations::frontend::DeclInputUnary::Bulk => {
+                return Err("bulk inputs are unsupported by this codec".into())
+            }
+            prebindgen_declarations::frontend::DeclInputUnary::Optional => {
+                operations::CInputUnary::Optional
+            }
+        })
+    }
+    fn resolve_input_branch(
+        &self,
+        operation: prebindgen_declarations::frontend::DeclInputBranch,
+    ) -> Result<<Self::InOps as prebindgen_declarations::InputOps>::Branch> {
+        Ok(match operation {
+            prebindgen_declarations::frontend::DeclInputBranch::Fields => {
+                operations::CInputBranch::Fields
+            }
+            prebindgen_declarations::frontend::DeclInputBranch::Record => {
+                return Err("foreign record inputs are unsupported by this codec".into())
+            }
+            prebindgen_declarations::frontend::DeclInputBranch::Selector => {
+                operations::CInputBranch::Selector
+            }
+            prebindgen_declarations::frontend::DeclInputBranch::Constructor { function } => {
+                operations::CInputBranch::Constructor { function }
+            }
+            prebindgen_declarations::frontend::DeclInputBranch::Enum { value } => {
+                operations::CInputBranch::Enum { value }
+            }
+            prebindgen_declarations::frontend::DeclInputBranch::Variant => {
+                operations::CInputBranch::Variant
+            }
+        })
+    }
+    fn resolve_input_arrow(
+        &self,
+        operation: Box<prebindgen_declarations::CallbackOperation>,
+    ) -> Result<<Self::InOps as prebindgen_declarations::InputOps>::Arrow> {
+        Ok(operation)
+    }
+    fn resolve_output_leaf(
+        &self,
+        operation: prebindgen_declarations::frontend::DeclOutputLeafOp,
+    ) -> Result<<Self::OutOps as prebindgen_declarations::OutputOps>::Leaf> {
+        Ok(match operation {
+            prebindgen_declarations::frontend::DeclOutputLeafOp::Value => {
+                operations::COutputLeafOp::Value
+            }
+            prebindgen_declarations::frontend::DeclOutputLeafOp::Discard => {
+                operations::COutputLeafOp::Discard
+            }
+            prebindgen_declarations::frontend::DeclOutputLeafOp::Projected(projection) => {
+                operations::COutputLeafOp::Projected(projection)
+            }
+        })
+    }
+    fn resolve_output_unary(
+        &self,
+        operation: prebindgen_declarations::frontend::DeclOutputUnary,
+    ) -> Result<<Self::OutOps as prebindgen_declarations::OutputOps>::Unary> {
+        Ok(match operation {
+            prebindgen_declarations::frontend::DeclOutputUnary::CallbackArgument { ownership } => {
+                operations::COutputUnary::CallbackArgument { ownership }
+            }
+            prebindgen_declarations::frontend::DeclOutputUnary::Bulk => {
+                return Err("bulk outputs are unsupported by this codec".into())
+            }
+            prebindgen_declarations::frontend::DeclOutputUnary::Named { name } => {
+                operations::COutputUnary::Named { name }
+            }
+            prebindgen_declarations::frontend::DeclOutputUnary::Convert { conversion } => {
+                operations::COutputUnary::Convert { conversion }
+            }
+            prebindgen_declarations::frontend::DeclOutputUnary::Sequence { delivery, mode } => {
+                operations::COutputUnary::Sequence { delivery, mode }
+            }
+            prebindgen_declarations::frontend::DeclOutputUnary::Result { error } => {
+                operations::COutputUnary::Result { error }
+            }
+            prebindgen_declarations::frontend::DeclOutputUnary::Optional => {
+                operations::COutputUnary::Optional
+            }
+            prebindgen_declarations::frontend::DeclOutputUnary::Into { function } => {
+                operations::COutputUnary::Into { function }
+            }
+            prebindgen_declarations::frontend::DeclOutputUnary::Getter { function } => {
+                operations::COutputUnary::Getter { function }
+            }
+        })
+    }
+    fn resolve_output_branch(
+        &self,
+        operation: prebindgen_declarations::frontend::DeclOutputBranch,
+    ) -> Result<<Self::OutOps as prebindgen_declarations::OutputOps>::Branch> {
+        Ok(match operation {
+            prebindgen_declarations::frontend::DeclOutputBranch::Fields => {
+                operations::COutputBranch::Fields
+            }
+            prebindgen_declarations::frontend::DeclOutputBranch::OwnedFields => {
+                operations::COutputBranch::OwnedFields
+            }
+            prebindgen_declarations::frontend::DeclOutputBranch::Record { .. } => {
+                return Err("foreign record outputs are unsupported by this codec".into())
+            }
+            prebindgen_declarations::frontend::DeclOutputBranch::Combine => {
+                operations::COutputBranch::Combine
+            }
+            prebindgen_declarations::frontend::DeclOutputBranch::Enum { value, mode } => {
+                operations::COutputBranch::Enum { value, mode }
+            }
+            prebindgen_declarations::frontend::DeclOutputBranch::Variant => {
+                operations::COutputBranch::Variant
+            }
+            prebindgen_declarations::frontend::DeclOutputBranch::Arguments => {
+                operations::COutputBranch::Arguments
+            }
+        })
+    }
+    fn resolve_output_arrow(
+        &self,
+        operation: std::convert::Infallible,
+    ) -> Result<<Self::OutOps as prebindgen_declarations::OutputOps>::Arrow> {
+        match operation {}
+    }
+
+    fn expand_input(
+        &self,
+        cx: &mut prebindgen_declarations::DeclResolve<'_, Self>,
+        ty: &syn::Type,
+        tree: &prebindgen_declarations::DeclInput<DeclInputRequest, DeclOutputRequest>,
+    ) -> Result<Option<operations::CInput>> {
+        let flat = cx.flat;
+        let replacement = (|| {
+            if !self.declared
+                || !matches!(
+                    tree,
+                    prebindgen_declarations::DeclInput::Leaf(DeclInputLeafOp::Value)
+                )
+            {
+                return Ok(None);
+            }
+            if flat
+                .payload_enums
+                .contains_key(&prebindgen_flat::type_key(ty))
+                && !flat.type_info(ty).ok().is_some_and(|t| {
+                    t.metadata.tagged.is_some()
+                        || t.metadata.pointer.is_some()
+                        || t.metadata.owned.is_some()
+                })
+            {
+                return Err(format!(
+                "ordinary payload enum `{}` requires tagged_union or an explicit field expansion",
+                prebindgen_flat::type_key(ty)
+            ));
+            }
+            if flat
+                .type_info(ty)
+                .ok()
+                .is_some_and(|t| t.metadata.tagged.is_some())
+            {
+                let e = flat.payload_enum(ty)?;
+                return Ok(Some(prebindgen_declarations::DeclInput::enum_variants(
+                    e.variants
+                        .iter()
+                        .map(|v| {
+                            v.fields
+                                .iter()
+                                .map(|_| prebindgen_declarations::DeclInput::value())
+                                .collect()
+                        })
+                        .collect(),
+                    true,
+                )));
+            }
+            Ok(None)
+        })();
+        replacement?.map(|tree| cx.input(ty, &tree)).transpose()
+    }
+    fn expand_output(
+        &self,
+        cx: &mut prebindgen_declarations::DeclResolve<'_, Self>,
+        ty: &syn::Type,
+        tree: &prebindgen_declarations::DeclOutput<DeclInputRequest, DeclOutputRequest>,
+    ) -> Result<Option<operations::COutput>> {
+        let flat = cx.flat;
+        let replacement = (|| {
+            if !self.declared
+                || !matches!(
+                    tree,
+                    prebindgen_declarations::DeclOutput::Leaf(DeclOutputLeafOp::Value)
+                )
+            {
+                return Ok(None);
+            }
+            if flat
+                .payload_enums
+                .contains_key(&prebindgen_flat::type_key(ty))
+                && !flat.type_info(ty).ok().is_some_and(|t| {
+                    t.metadata.tagged.is_some()
+                        || t.metadata.pointer.is_some()
+                        || t.metadata.owned.is_some()
+                })
+            {
+                return Err(format!(
+                "ordinary payload enum `{}` requires tagged_union or an explicit field expansion",
+                prebindgen_flat::type_key(ty)
+            ));
+            }
+            if flat
+                .type_info(ty)
+                .ok()
+                .is_some_and(|t| t.metadata.tagged.is_some())
+            {
+                let e = flat.payload_enum(ty)?;
+                return Ok(Some(prebindgen_declarations::DeclOutput::enum_variants(
+                    e.variants
+                        .iter()
+                        .map(|v| {
+                            v.fields
+                                .iter()
+                                .map(|_| prebindgen_declarations::DeclOutput::value())
+                                .collect()
+                        })
+                        .collect(),
+                    true,
+                    None,
+                )));
+            }
+            Ok(None)
+        })();
+        replacement?.map(|tree| cx.output(ty, &tree)).transpose()
+    }
+    fn input_collection_is_leaf(
+        &self,
+        flat: &CBindings,
+        ty: &syn::Type,
+        role: InputRole,
+        _: &(),
+    ) -> bool {
+        owned::native_input(flat, ty)
+            || (role == InputRole::EnumField && owned::declaration(flat, ty).is_some())
+    }
+    fn output_collection_is_leaf(&self, flat: &CBindings, ty: &syn::Type, _: &()) -> bool {
+        owned::native_output(flat, ty)
+    }
+}
+
+pub use operations::{
+    CInput, CInputBranch, CInputLeafOp, CInputOps, CInputUnary, COutput, COutputBranch,
+    COutputLeafOp, COutputOps, COutputUnary,
+};

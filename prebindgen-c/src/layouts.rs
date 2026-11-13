@@ -46,7 +46,7 @@ pub(crate) fn builtin(ty: &syn::Type) -> OpaqueLayout {
     }
 }
 fn nodes(
-    plan: &OutputPlan<CWire>,
+    plan: &COutputPlan<CWire>,
 ) -> impl Iterator<Item = &prebindgen_flat::WireNode<CWire, CChain, CBranch>> {
     std::iter::once(&plan.outcomes.success)
         .chain(plan.outcomes.source_error.iter())
@@ -66,16 +66,16 @@ fn used_node(
         }
     }
 }
-pub(crate) fn output_names(plan: &OutputPlan<CWire>, names: &mut BTreeSet<String>) {
+pub(crate) fn output_names(plan: &COutputPlan<CWire>, names: &mut BTreeSet<String>) {
     for node in nodes(plan) {
         used_node(node, names);
     }
 }
-pub(crate) fn input_names(plan: &InputPlan<CWire>, names: &mut BTreeSet<String>) {
+pub(crate) fn input_names(plan: &CInputPlan<CWire>, names: &mut BTreeSet<String>) {
     used_node(&plan.node, names);
 }
 pub(crate) fn prepare(
-    flat: &mut Bindings,
+    flat: &mut CBindings,
     target: &str,
     artifact: Option<&OpaqueLayouts>,
     sources: &[prebindgen::Source],
@@ -202,8 +202,8 @@ pub(crate) fn prepare(
 mod tests {
     use super::*;
     use prebindgen_declarations::fun;
-    fn model(source: &str) -> Bindings {
-        Bindings::parse(
+    fn model(source: &str) -> CBindings {
+        CBindings::parse(
             syn::parse_file(source)
                 .unwrap()
                 .items

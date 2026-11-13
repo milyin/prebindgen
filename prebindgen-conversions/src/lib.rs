@@ -26,10 +26,14 @@ pub use staged::{InputFragment, OutputFragment};
 /// Schema for consumers storing the standard input/output plans and unit declaration metadata.
 /// Language generators with declaration metadata define their own fixed schema.
 #[allow(clippy::type_complexity)] // Keep wire, context and node metadata roles explicit.
-pub struct PlanSchema<W, C = (), N = (), B = ()>(std::marker::PhantomData<fn() -> (W, C, N, B)>);
-impl<W: prebindgen_flat::WireKind, C, N, B> prebindgen_flat::Schema for PlanSchema<W, C, N, B> {
-    type Input = InputPlan<W, C, N, B>;
-    type Output = OutputPlan<W, C, N, B>;
+pub struct PlanSchema<WireType, Context = (), Chain = (), Branch = ()>(
+    std::marker::PhantomData<fn() -> (WireType, Context, Chain, Branch)>,
+);
+impl<WireType: prebindgen_flat::WireKind, Context, Chain, Branch> prebindgen_flat::Schema
+    for PlanSchema<WireType, Context, Chain, Branch>
+{
+    type Input = InputPlan<WireType, Context, Chain, Branch>;
+    type Output = OutputPlan<WireType, Context, Chain, Branch>;
     type Module = ();
     type Function = ();
     type Type = ();

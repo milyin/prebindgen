@@ -117,7 +117,8 @@ fn replace(code: &TokenStream, values: &[(syn::Ident, TokenStream)]) -> Result<T
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn input<C: Codec>(
+/// Assemble one sequence input from a prepared row conversion.
+pub fn input<C: Codec>(
     codec: &C,
     ty: &Type,
     extra: &C::Extra,
@@ -126,9 +127,9 @@ pub(crate) fn input<C: Codec>(
     length: syn::Ident,
     index: syn::Ident,
     active: &Condition,
-    child: CodecInput<C>,
+    child: CodecInputPlan<C>,
     bulk: bool,
-) -> Result<CodecInput<C>> {
+) -> Result<CodecInputPlan<C>> {
     let (element, view) = prebindgen_flat::sequence_parts(ty)
         .ok_or("sequence recipe requires Vec<T>, &[T] or &Vec<T>")?;
     if view == SequenceView::Mutable {
@@ -265,7 +266,8 @@ pub(crate) fn input<C: Codec>(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn output<C: Codec>(
+/// Assemble one sequence output with the selected transport and delivery.
+pub fn output<C: Codec>(
     codec: &C,
     ty: &Type,
     extra: &C::Extra,
@@ -276,10 +278,10 @@ pub(crate) fn output<C: Codec>(
     value: TokenStream,
     borrowed: bool,
     mode: ProjectionMode,
-    child: CodecOutput<C>,
+    child: CodecOutputPlan<C>,
     delivery: crate::SequenceDelivery,
     bulk: bool,
-) -> Result<CodecOutput<C>> {
+) -> Result<CodecOutputPlan<C>> {
     let (element_type, view) =
         prebindgen_flat::sequence_parts(ty).ok_or("sequence recipe requires a collection")?;
     if matches!(element_type, Type::Reference(_)) {
@@ -401,7 +403,7 @@ pub(crate) fn output<C: Codec>(
     } else {
         quote!(for commit in #commits {commit();})
     };
-    let out: CodecOutput<C> = OutputPlan {
+    let out: CodecOutputPlan<C> = OutputPlan {
         fallible: child.fallible || fallible,
         context: Default::default(),
         delivery: Default::default(),

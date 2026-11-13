@@ -7,7 +7,8 @@ use prebindgen_flat::Conversion;
 pub(crate) struct ErrorBinding {
     pub name: String,
     pub ty: syn::Type,
-    pub plan: Option<OutputPlan<CWire>>,
+    pub plan: Option<COutputPlan<CWire>>,
+    recipe: Option<crate::operations::COutput>,
     pub fields: Vec<String>,
 }
 pub(crate) fn helper(name: &str) -> syn::Ident {
@@ -19,20 +20,21 @@ impl ErrorBinding {
             name,
             ty,
             plan: None,
+            recipe: None,
             fields: Vec::new(),
         }
     }
-    pub(crate) fn plan(&self) -> Result<&OutputPlan<CWire>> {
+    pub(crate) fn plan(&self) -> Result<&COutputPlan<CWire>> {
         self.plan
             .as_ref()
             .ok_or_else(|| format!("C error `{}` has no prepared conversion", self.name))
     }
 }
 /// Fill the conversions of error declarations already attached to their source types.
-pub(crate) fn prepare(
-    flat: &mut Bindings,
+pub(crate) fn resolve(
+    flat: &mut CBindings,
     codec: &CCodec,
-    declarations: &prebindgen_declarations::Declarations,
+    declarations: &prebindgen_declarations::DeclDefaults,
 ) -> Result<()> {
     let mut types = flat
         .types
@@ -48,10 +50,33 @@ pub(crate) fn prepare(
     types.sort_by_key(|(order, _)| *order);
     for (_, ty) in types {
         let recipe = declarations.owned_record_output(flat, codec, &ty, &())?;
+        let error = flat.type_metadata_mut(&ty)?.error.as_mut().unwrap();
+        std::rc::Rc::make_mut(error).recipe = Some(recipe);
+    }
+    Ok(())
+}
+
+pub(crate) fn compile(flat: &mut CBindings, codec: &CCodec) -> Result<()> {
+    let mut types = flat
+        .types
+        .values()
+        .filter_map(|t| {
+            t.metadata
+                .error
+                .as_ref()
+                .filter(|e| e.recipe.is_some())
+                .map(|e| (t.metadata.error_order, e.ty.clone()))
+        })
+        .collect::<Vec<_>>();
+    types.sort_by_key(|(order, _)| *order);
+    for (_, ty) in types {
+        let recipe = std::rc::Rc::make_mut(flat.type_metadata_mut(&ty)?.error.as_mut().unwrap())
+            .recipe
+            .take()
+            .unwrap();
         let plan = prebindgen_declarations::compile_output_value(flat, codec, &ty, &recipe, &())?;
         let fields = field_names(&plan.outcomes.success);
-        let error = flat.type_metadata_mut(&ty)?.error.as_mut().unwrap();
-        let binding = std::rc::Rc::make_mut(error);
+        let binding = std::rc::Rc::make_mut(flat.type_metadata_mut(&ty)?.error.as_mut().unwrap());
         binding.plan = Some(plan);
         binding.fields = fields;
     }

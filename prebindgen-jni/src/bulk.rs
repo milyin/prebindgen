@@ -7,7 +7,7 @@ use std::{fmt::Write, rc::Rc};
 
 /// Physical record shared by the Rust encoder and the initialized Kotlin layout table.
 #[derive(Clone, Debug)]
-pub struct BulkRecord {
+pub struct JniBulkRecord {
     pub(crate) name: syn::Ident,
     pub(crate) definitions: TokenStream,
     pub(crate) offsets: Vec<TokenStream>,
@@ -23,7 +23,7 @@ pub(crate) fn field_type(w: &JniWire) -> Result<syn::Type> {
         _=>w.rust_type(),
     })
 }
-pub(crate) fn record(node: &JniNode) -> Result<Rc<BulkRecord>> {
+pub(crate) fn record(node: &JniNode) -> Result<Rc<JniBulkRecord>> {
     let fields = crate::group::row_fields(node)
         .enumerate()
         .map(|(i, w)| Ok((format_ident!("v{i}"), field_type(&w.kind)?)))
@@ -59,7 +59,7 @@ pub(crate) fn record(node: &JniNode) -> Result<Rc<BulkRecord>> {
         prebindgen_reprc::schema_id(&key)
     );
     let (definitions, offsets) = physical_record(node, &name, fields)?;
-    Ok(Rc::new(BulkRecord {
+    Ok(Rc::new(JniBulkRecord {
         name,
         definitions,
         offsets,
@@ -86,7 +86,7 @@ fn resolve(code: &TokenStream, key: &str, value: &TokenStream) -> Result<TokenSt
 }
 pub(crate) fn native_read(
     w: &Wire<JniWire>,
-    record: &BulkRecord,
+    record: &JniBulkRecord,
     i: usize,
     base: TokenStream,
     reader: TokenStream,
@@ -108,7 +108,7 @@ pub(crate) fn native_read(
 }
 fn native_store(
     w: &Wire<JniWire>,
-    record: &BulkRecord,
+    record: &JniBulkRecord,
     i: usize,
     base: TokenStream,
     value: TokenStream,
@@ -132,9 +132,9 @@ fn native_store(
 }
 pub(crate) fn input(
     wire: syn::Ident,
-    mut child: InputPlan<JniWire>,
+    mut child: JniInputPlan<JniWire>,
     active: &Condition,
-) -> Result<InputPlan<JniWire>> {
+) -> Result<JniInputPlan<JniWire>> {
     let mut layout = (*record(&child.node)?).clone();
     layout.active = active.clone();
     let layout = Rc::new(layout);
@@ -206,8 +206,8 @@ pub(crate) fn input(
 }
 pub(crate) fn output(
     wire: syn::Ident,
-    mut child: OutputPlan<JniWire>,
-) -> Result<OutputPlan<JniWire>> {
+    mut child: JniOutputPlan<JniWire>,
+) -> Result<JniOutputPlan<JniWire>> {
     let layout = record(&child.outcomes.success)?;
     let ty = &layout.name;
     let writer = format_ident!("{wire}_writer");
@@ -367,12 +367,12 @@ fn decode_buffer(text: bool, wire: &syn::Ident) -> TokenStream {
 }
 
 pub(crate) fn input_leaf(
-    flat: &Bindings,
+    flat: &JniBindings,
     ty: &syn::Type,
     w: syn::Ident,
     v: syn::Ident,
     active: &Condition,
-) -> Result<InputPlan<JniWire>> {
+) -> Result<JniInputPlan<JniWire>> {
     match Value::of(ty) {
         Some(Value::Text) | Some(Value::Bytes) => {
             let text = Value::of(ty) == Some(Value::Text);
@@ -404,12 +404,12 @@ pub(crate) fn input_leaf(
     }
 }
 pub(crate) fn output_leaf(
-    flat: &Bindings,
+    flat: &JniBindings,
     ty: &syn::Type,
     w: syn::Ident,
     value: TokenStream,
     borrowed: bool,
-) -> Result<OutputPlan<JniWire>> {
+) -> Result<JniOutputPlan<JniWire>> {
     if let Some(kind @ (Value::Text | Value::Bytes)) = Value::of(ty) {
         let owner = format_ident!("{w}_source");
         let text = kind == Value::Text;
@@ -419,7 +419,7 @@ pub(crate) fn output_leaf(
             quote!(#owner.as_ref())
         };
         let writer = parameter("bulk_writer");
-        return Ok(OutputPlan {
+        return Ok(JniOutputPlan {
             fallible: true,
             context: Default::default(),
             delivery: Default::default(),
@@ -466,7 +466,7 @@ pub(crate) fn output_leaf(
         },
     ))
 }
-fn kt_layout(record: &BulkRecord, context: &KotlinContext<'_>) -> String {
+fn kt_layout(record: &JniBulkRecord, context: &KotlinContext<'_>) -> String {
     format!(
         "{}.BulkLayouts.r{:016x}",
         context.package,
@@ -486,7 +486,7 @@ fn sequence_child<'a>(node: &'a JniNode, name: &syn::Ident) -> Option<&'a JniNod
     }
 }
 
-fn input_writer(layout: &BulkRecord) -> String {
+fn input_writer(layout: &JniBulkRecord) -> String {
     format!(
         "Input{}",
         layout.name.to_string().trim_start_matches("__PbBulk")
@@ -792,7 +792,7 @@ pub(crate) fn input_list(
 }
 
 pub(crate) fn input_kotlin(
-    layout: &BulkRecord,
+    layout: &JniBulkRecord,
     controls: &[Wire<JniWire>],
     child: &JniNode,
     context: &KotlinContext<'_>,
@@ -894,7 +894,7 @@ fn remap(
     Ok(())
 }
 pub(crate) fn output_kotlin(
-    _layout: &BulkRecord,
+    _layout: &JniBulkRecord,
     child: &JniNode,
     context: &KotlinContext<'_>,
     owners: Option<&str>,
@@ -989,7 +989,10 @@ pub(crate) fn output_list(
     })
 }
 
-fn register(record: Rc<BulkRecord>, out: &mut BTreeMap<String, Rc<BulkRecord>>) -> Result<()> {
+fn register(
+    record: Rc<JniBulkRecord>,
+    out: &mut BTreeMap<String, Rc<JniBulkRecord>>,
+) -> Result<()> {
     let id = format!("{:016x}", prebindgen_reprc::schema_id(&record.key));
     if let Some(previous) = out.get(&id) {
         if previous.key != record.key {
@@ -1000,7 +1003,7 @@ fn register(record: Rc<BulkRecord>, out: &mut BTreeMap<String, Rc<BulkRecord>>) 
     }
     Ok(())
 }
-fn records(node: &JniNode, out: &mut BTreeMap<String, Rc<BulkRecord>>) -> Result<()> {
+fn records(node: &JniNode, out: &mut BTreeMap<String, Rc<JniBulkRecord>>) -> Result<()> {
     match node {
         WireNode::Chain {
             meta: JniChain::Bulk(r),
@@ -1309,7 +1312,7 @@ fn cleanup_attempt(code: TokenStream) -> TokenStream {
 }
 
 pub(crate) fn cleanup_cached(
-    layout: &BulkRecord,
+    layout: &JniBulkRecord,
     controls: &[Wire<JniWire>],
     child: &JniNode,
 ) -> Result<TokenStream> {
@@ -1333,7 +1336,7 @@ pub(crate) fn cleanup_cached(
 // decoding failed. Reuse the native scanner rather than introducing another
 // ownership traversal for packed children.
 pub(crate) fn cleanup_buffer(
-    layout: &BulkRecord,
+    layout: &JniBulkRecord,
     child: &JniNode,
     bytes: &syn::Ident,
 ) -> Result<TokenStream> {
@@ -1352,7 +1355,7 @@ pub(crate) fn cleanup_buffer(
 fn cleanup_native(
     node: &JniNode,
     row: &JniNode,
-    layout: &BulkRecord,
+    layout: &JniBulkRecord,
     base: TokenStream,
 ) -> Result<TokenStream> {
     if !crate::kotlin::input_handles(node, true) {

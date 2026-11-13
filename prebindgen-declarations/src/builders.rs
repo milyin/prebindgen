@@ -1,22 +1,26 @@
 //! Production declaration syntax writing directly into conversion descriptions.
-use crate::{FunctionDecl, Input, InputRequest, Output, OutputRequest, Projection};
+use crate::{DeclFunction, DeclInput, DeclInputRequest, DeclOutput, DeclOutputRequest, Projection};
+use crate::{DeclInputBranch, DeclInputUnary, DeclOutputBranch, DeclOutputLeafOp, DeclOutputUnary};
 use std::collections::BTreeMap;
 
-/// Input alternatives for a source type, built directly as an [`Input`] tree.
+/// Input alternatives for a source type, built directly as a [`DeclInput`] tree.
 #[derive(Clone, Debug)]
-pub struct ExpandParamDecl {
+pub struct DeclExpandParam {
     /// Source type targeted by this default or occurrence override.
     pub ty: syn::Type,
-    input: Input<InputRequest>,
+    input: DeclInput<DeclInputRequest, DeclOutputRequest>,
     bulk: bool,
     reconstruct: bool,
 }
-impl ExpandParamDecl {
+impl DeclExpandParam {
     /// Start an input declaration; add at least one alternative before use.
     pub fn new(ty: syn::Type) -> Self {
         Self {
             ty,
-            input: Input::Selector(vec![]),
+            input: DeclInput::Branch {
+                operation: DeclInputBranch::Selector,
+                children: vec![],
+            },
             bulk: false,
             reconstruct: false,
         }
@@ -35,7 +39,7 @@ impl ExpandParamDecl {
         self
     }
     /// Append a constructor reference; its arguments use their type defaults.
-    pub fn variant(mut self, function: impl Into<FunctionDecl>) -> Self {
+    pub fn variant(mut self, function: impl Into<DeclFunction>) -> Self {
         self.input = self.input.variant(function.into().reference_name(false));
         self
     }
@@ -45,36 +49,46 @@ impl ExpandParamDecl {
         self
     }
 }
-impl From<ExpandParamDecl> for Input<InputRequest> {
-    fn from(decl: ExpandParamDecl) -> Self {
+impl From<DeclExpandParam> for DeclInput<DeclInputRequest, DeclOutputRequest> {
+    fn from(decl: DeclExpandParam) -> Self {
         let mut input = decl.input;
         if decl.reconstruct {
-            if matches!(&input, Input::Selector(arms) if arms.is_empty()) {
-                input = Input::auto();
+            if matches!(&input, DeclInput::Branch { operation: DeclInputBranch::Selector, children: arms } if arms.is_empty())
+            {
+                input = DeclInput::auto();
             }
-            input = Input::Temporary(Box::new(input));
+            input = DeclInput::Unary {
+                operation: DeclInputUnary::Temporary,
+                child: Box::new(input),
+            };
         }
         if decl.bulk {
-            input = Input::Bulk(Box::new(input));
+            input = DeclInput::Unary {
+                operation: DeclInputUnary::Bulk,
+                child: Box::new(input),
+            };
         }
-        Input::for_type(decl.ty, input)
+        DeclInput::for_type(decl.ty, input)
     }
 }
 
-/// Simultaneous views of a source return value, built directly as an [`Output`] tree.
+/// Simultaneous views of a source return value, built directly as a [`DeclOutput`] tree.
 #[derive(Clone, Debug)]
-pub struct ExpandReturnDecl {
+pub struct DeclExpandReturn {
     /// Source type targeted by this default or occurrence override.
     pub ty: syn::Type,
-    output: Output<OutputRequest>,
+    output: DeclOutput<DeclInputRequest, DeclOutputRequest>,
     bulk: bool,
 }
-impl ExpandReturnDecl {
+impl DeclExpandReturn {
     /// Start an output declaration; add views before registering a type default.
     pub fn new(ty: syn::Type) -> Self {
         Self {
             ty,
-            output: Output::Combine(vec![]),
+            output: DeclOutput::Branch {
+                operation: DeclOutputBranch::Combine,
+                children: vec![],
+            },
             bulk: false,
         }
     }
@@ -91,36 +105,39 @@ impl ExpandReturnDecl {
     /// Append a getter view. An explicit `.name()` labels the delivered view.
     /// Shared results are observed before another view moves the owner. An
     /// owning opaque copy requires an explicit projection or cloning accessor.
-    pub fn field(mut self, function: impl Into<FunctionDecl>) -> Self {
+    pub fn field(mut self, function: impl Into<DeclFunction>) -> Self {
         let function = function.into();
         let name = function.foreign.clone();
-        let getter = Output::getter(function.reference_name(true), Output::auto());
+        let getter = DeclOutput::getter(function.reference_name(true), DeclOutput::auto());
         self.output = self.output.view(match name {
-            Some(name) => Output::Named {
-                name,
-                output: Box::new(getter),
+            Some(name) => DeclOutput::Unary {
+                operation: DeclOutputUnary::Named { name },
+                child: Box::new(getter),
             },
             None => getter,
         });
         self
     }
     /// Append a getter's named record fields as separate output values.
-    pub fn fields(self, fields: FieldsDecl) -> Self {
+    pub fn fields(self, fields: DeclFields) -> Self {
         self.view(fields)
     }
     /// Append another explicit output view.
-    pub fn view(mut self, output: impl Into<Output<OutputRequest>>) -> Self {
+    pub fn view(
+        mut self,
+        output: impl Into<DeclOutput<DeclInputRequest, DeclOutputRequest>>,
+    ) -> Self {
         self.output = self.output.view(output.into());
         self
     }
     /// Append a consuming accessor followed by owned field decomposition.
-    pub fn fields_into(mut self, fields: FieldsDecl) -> Self {
+    pub fn fields_into(mut self, fields: DeclFields) -> Self {
         self.output = self.output.fields_into(fields.into());
         self
     }
     /// Deprecated spelling of [`Self::fields_into`].
     #[deprecated(note = "use fields_into instead")]
-    pub fn fields_self_into(self, fields: FieldsDecl) -> Self {
+    pub fn fields_self_into(self, fields: DeclFields) -> Self {
         self.fields_into(fields)
     }
     /// Append the language's direct representation, bypassing this type's default.
@@ -143,12 +160,15 @@ impl ExpandReturnDecl {
         self
     }
 }
-impl From<ExpandReturnDecl> for Output<OutputRequest> {
-    fn from(decl: ExpandReturnDecl) -> Self {
-        Output::for_type(
+impl From<DeclExpandReturn> for DeclOutput<DeclInputRequest, DeclOutputRequest> {
+    fn from(decl: DeclExpandReturn) -> Self {
+        DeclOutput::for_type(
             decl.ty,
             if decl.bulk {
-                Output::Bulk(Box::new(decl.output))
+                DeclOutput::Unary {
+                    operation: DeclOutputUnary::Bulk,
+                    child: Box::new(decl.output),
+                }
             } else {
                 decl.output
             },
@@ -159,11 +179,11 @@ impl From<ExpandReturnDecl> for Output<OutputRequest> {
 /// A source accessor followed by named field decomposition.
 /// Field adjustments edit the accessor's output tree directly.
 #[derive(Clone, Debug)]
-pub struct FieldsDecl {
+pub struct DeclFields {
     function: String,
-    overrides: BTreeMap<String, Output<OutputRequest>>,
+    overrides: BTreeMap<String, DeclOutput<DeclInputRequest, DeclOutputRequest>>,
 }
-impl FieldsDecl {
+impl DeclFields {
     /// Select a getter whose returned record supplies the fields.
     pub fn new(function: syn::Ident) -> Self {
         Self {
@@ -173,7 +193,7 @@ impl FieldsDecl {
     }
     /// Replace one field's conversion. An empty declaration omits the whole field,
     /// including any enclosing Option or sequence representation.
-    pub fn field(self, name: impl AsRef<str>, output: ExpandReturnDecl) -> Self {
+    pub fn field(self, name: impl AsRef<str>, output: DeclExpandReturn) -> Self {
         self.field_override(name.as_ref().to_owned(), output)
     }
     /// Set an explicit conversion tree for one field, with the same omission
@@ -181,11 +201,11 @@ impl FieldsDecl {
     pub fn field_override(
         mut self,
         name: impl Into<String>,
-        output: impl Into<Output<OutputRequest>>,
+        output: impl Into<DeclOutput<DeclInputRequest, DeclOutputRequest>>,
     ) -> Self {
         let output = match output.into() {
-            Output::Request(OutputRequest::ForType { ty, output }) if matches!(output.as_ref(),Output::Combine(parts) if parts.is_empty()) => {
-                Output::for_type(*ty, Output::Discard)
+            DeclOutput::Request(DeclOutputRequest::ForType { ty, output }) if matches!(output.as_ref(),DeclOutput::Branch { operation: DeclOutputBranch::Combine, children: parts } if parts.is_empty()) => {
+                DeclOutput::for_type(*ty, DeclOutput::Leaf(DeclOutputLeafOp::Discard))
             }
             output => output,
         };
@@ -196,11 +216,11 @@ impl FieldsDecl {
         self
     }
 }
-impl From<FieldsDecl> for Output<OutputRequest> {
-    fn from(fields: FieldsDecl) -> Self {
-        Output::getter(
+impl From<DeclFields> for DeclOutput<DeclInputRequest, DeclOutputRequest> {
+    fn from(fields: DeclFields) -> Self {
+        DeclOutput::getter(
             fields.function,
-            Output::Request(OutputRequest::NamedFields {
+            DeclOutput::Request(DeclOutputRequest::NamedFields {
                 overrides: fields.overrides,
                 mode: crate::ProjectionMode::Borrowed,
             }),
@@ -210,41 +230,41 @@ impl From<FieldsDecl> for Output<OutputRequest> {
 
 /// A type-wide source-error message mapping.
 #[derive(Clone, Debug)]
-pub struct ErrorDecl {
+pub struct DeclError {
     /// Source error type.
     pub ty: syn::Type,
     /// Source helper taking E or &E and returning String.
-    pub mapper: FunctionDecl,
+    pub mapper: DeclFunction,
 }
-impl ErrorDecl {
+impl DeclError {
     /// Select the source helper for this error type.
-    pub fn new(ty: syn::Type, mapper: FunctionDecl) -> Self {
+    pub fn new(ty: syn::Type, mapper: DeclFunction) -> Self {
         Self { ty, mapper }
     }
 }
 /// A type-wide input, output, or error-mapping declaration.
 /// Generators immediately consume these builders into their conversion trees.
 #[derive(Clone, Debug)]
-pub enum ExpandDecl {
+pub enum DeclExpand {
     /// Input alternatives.
-    Param(ExpandParamDecl),
+    Param(DeclExpandParam),
     /// Simultaneous output views.
-    Return(ExpandReturnDecl),
+    Return(DeclExpandReturn),
     /// A source-error message mapping.
-    Error(Box<ErrorDecl>),
+    Error(Box<DeclError>),
 }
-impl From<ExpandParamDecl> for ExpandDecl {
-    fn from(value: ExpandParamDecl) -> Self {
+impl From<DeclExpandParam> for DeclExpand {
+    fn from(value: DeclExpandParam) -> Self {
         Self::Param(value)
     }
 }
-impl From<ExpandReturnDecl> for ExpandDecl {
-    fn from(value: ExpandReturnDecl) -> Self {
+impl From<DeclExpandReturn> for DeclExpand {
+    fn from(value: DeclExpandReturn) -> Self {
         Self::Return(value)
     }
 }
-impl From<ErrorDecl> for ExpandDecl {
-    fn from(value: ErrorDecl) -> Self {
+impl From<DeclError> for DeclExpand {
+    fn from(value: DeclError) -> Self {
         Self::Error(Box::new(value))
     }
 }

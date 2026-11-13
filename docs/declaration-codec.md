@@ -1,49 +1,136 @@
-# Implementing a declaration codec
+# Implementing a language conversion compiler
 
-A `Codec` translates resolved `Input` and `Output` recipes into conversion
-plans. The shared declaration compiler traverses constructors, fields, optional
-values, sequences, getters and source results; a codec supplies the language's
-physical values and conversion code. All codec operations run during generation.
-The completed plans and language declarations remain in `Flat`; generation reads
-that model without consulting the original recipes or another binding registry.
+`InputNode<InOps, OutOps>` and `OutputNode<InOps, OutOps>` describe composition: a leaf, a unary
+operation, a branch, or an arrow. `None` represents unit. An arrow's domain uses
+the opposite conversion direction and its codomain uses the enclosing direction.
+The adapter supplies the meanings of all operations through the separate
+`InputOps` and `OutputOps` traits. The first operation parameter requires
+`InputOps`; the second requires `OutputOps`. Each built-in operation set implements its corresponding trait.
 
-The wrapper generator drives Rust emission. An adapter author implements
-conversion operations and invokes preparation; an application author normally
-uses `Cbindgen` or `JniGen` declarations instead of implementing a codec.
+C and JNI define their own operation enums in their `operations` modules. For
+example, JNI has bulk packing and JVM object-record operations; C has neither.
+An adapter can introduce a different operation without extending a common enum
+or teaching a shared interpreter its meaning.
 
-## Four required operations
+## Names and direction parameters
 
-A codec selects six associated types: `Schema`, `Wire`, `Context`, `Extra`,
-`Chain` and `Branch`. `Schema` fixes the converters and declaration metadata;
-its input/output converters accept the codec's compiled plans. `Wire` describes
-one boundary value, `Context` supplies Rust emission bindings, and `Extra` is
-borrowed configuration for one conversion occurrence. `Chain` and `Branch`
-describe parent nodes without owning duplicate children or wires.
+Each representation has an explicit prefix:
 
-Only these operations are required:
+| Role | C | JNI | Declaration syntax |
+| --- | --- | --- | --- |
+| Input tree | `CInput` | `JniInput` | `DeclInput` |
+| Output tree | `COutput` | `JniOutput` | `DeclOutput` |
+| Input operations | `CInputOps` | `JniInputOps` | `DeclInputOps` |
+| Output operations | `COutputOps` | `JniOutputOps` | `DeclOutputOps` |
+| Prepared converter | `CInputConverter` / `COutputConverter` | `JniInputConverter` / `JniOutputConverter` | — |
+| Binding model | `CBindings` | `JniBindings` | — |
+
+C converters are concrete plan aliases. JNI converters are containers that can
+retain independent converter implementations. Both serve the corresponding
+schema’s input/output slots.
+
+`CBindings` uses `CSchema`; `JniBindings<InConverter, OutConverter>` uses
+`JniSchema<InConverter, OutConverter>`. Generic plans use `PlanBindings` and
+`PlanSchema`. The intermediate model uses `Flat<ResolvedSchema<C>>`.
+
+Both tree directions keep the same parameter order:
+
+```rust,ignore
+InputNode<InOps, OutOps, InRequest, OutRequest>
+OutputNode<InOps, OutOps, InRequest, OutRequest>
+DeclInput<DeclInputRequest, DeclOutputRequest>
+DeclOutput<DeclInputRequest, DeclOutputRequest>
+```
+
+Callbacks reverse the node direction while retaining that parameter order.
+
+Shared declaration builders use names such as `DeclFunction`, `DeclCallback`,
+`DeclExpandParam` and `DeclExpandReturn`. JNI-specific declaration builders use
+`DeclJniPackage`, `DeclJniPtrClass`, `DeclJniDataClass`, `DeclJniEnumClass` and
+`DeclJniSealedClass`.
+
+Migration: former prepared converter names `JniInput::new(...)` and
+`JniOutput::new(...)` become `JniInputConverter::new(...)` and
+`JniOutputConverter::new(...)`. `JniInput` and `JniOutput` now name resolved trees;
+they are not converter containers.
+
+## Resolving and compiling
+
+A `Flat<ResolvedSchema<C>>` stores the adapter's request-free conversion trees, source
+metadata, codec and occurrence settings. `compile_resolved(flat)` consumes that
+model and produces `Flat<C::Schema>` containing conversion plans for wrapper
+emission. It needs no configuration registry outside the model. Standalone
+callback and typed error recipes also live in Flat; `compile_declarations`
+compiles them before the function conversions.
+
+The adapter implements `Codec::compile_input_tree` and `compile_output_tree` to
+interpret its own nodes. `compile_output_root` and `compile_output_return` allow
+the adapter to preserve source-error routing and references returned by Rust.
+The `Compiler` context provides source metadata, deterministic names, nested
+compilation and reusable operations for constructors, fields, optional values,
+sequences, enum payloads, conversions and getters. These helpers accept adapter
+trees or compiled children; they do not match a shared operation enum.
+`CompileState` belongs to the adapter. JNI uses it for nested bulk and ordinary
+collection scopes; C has no such state.
+
+An adapter can construct the resolved model directly using
+`ResolvedModule::new`. The executable test
+[`independent_operation_vocabularies_compile_without_declaration_frontend`](../prebindgen-declarations/src/operation_tests.rs)
+builds and runs a wrapper with custom arithmetic input/output operations and
+never implements `DeclCodec`.
+
+## The optional declaration frontend
+
+`DeclDefaults` implements the existing expansion, conversion and callback
+configuration language. Its `DeclInput` / `DeclOutput` trees
+are configuration syntax, distinct from the adapter trees stored in resolved
+Flat. The syntax enums are in `prebindgen_declarations::frontend`.
+
+Adapters using that syntax also implement `DeclCodec`. Resolution applies
+defaults and local overrides recursively, interpreting each syntax operation
+into the adapter's vocabulary. `expand_input` and `expand_output` can return
+adapter-specific trees directly. Their `DeclResolve` context resolves nested values
+with the same defaults, recursion stack and occurrence policy. For example, a
+JNI record expansion resolves each field before constructing its JVM-record
+node. A callback's arguments and result use this same process in opposite
+directions.
+
+`finish_input_tree` / `finish_output_tree` normalize the resolved adapter tree.
+JNI owns bulk promotion here. Per-element callback delivery is selected before
+this promotion, preserving the callback element boundary.
+
+Application authors normally use `Cbindgen` or `JniGen` declarations.
+`DeclDefaults::fill` remains available for individual functions and uses the
+same resolution and compilation pipeline. Direct compiler callers supply
+`prebindgen_c::{CInput, COutput}` or `prebindgen_jni::{JniInput, JniOutput}`;
+declaration syntax cannot accidentally be passed as a resolved adapter tree.
+
+## Leaf and wire helpers
+
+Besides its operation vocabularies and compilation state, a codec selects
+`Schema`, `Wire`, `Context`, `Extra`, `Chain` and `Branch`. `Schema` fixes the
+converters and declaration metadata; `Wire` describes one boundary value.
+`Context` supplies Rust emission bindings, and `Extra` supplies occurrence
+settings. `Chain` and `Branch` describe wire parents without duplicating children.
+
+The existing physical-conversion hooks remain available to the reusable helpers:
 
 | Operation | Purpose |
 | --- | --- |
 | `input_leaf(InputLeaf)` | Construct one Rust input from boundary values. |
 | `output_leaf(OutputLeaf)` | Prepare boundary values from a Rust source expression. |
-| `output_consumes(flat, ty, extra)` | Tell the compiler whether the leaf moves its source, before it orders observations and moves. |
-| `group(GroupKind)` | Describe values, fields, a named field, or a named output view; reject unsupported kinds. |
+| `output_consumes(flat, ty, extra)` | Report whether the leaf moves its source. |
+| `group(GroupKind)` | Describe values, fields or named output views. |
 
-A scalar codec need not provide placeholder implementations for options,
-selectors, collections, callbacks or source errors. Those operations reject
-unsupported work by default. Validation and finalization defaults retain their
-existing purposes. The executable
-[four-method codec example](../prebindgen-declarations/src/operation_tests.rs)
-compiles and runs a complete generated function call.
+Optional features reject unsupported work by default. All interpretation and
+composition happens during generation, not during an FFI call.
 
 ## Requests describe the actual conversion
 
-`InputLeaf` carries `flat`, `ty`, `extra`, `wire`, `target`, `active`, and three
-independent decisions made by the compiler:
+`InputLeaf` carries `flat`, `ty`, `extra`, `wire`, `target`, `active`, and two
+independent decisions made by the adapter:
 
 - `representation`: `Ordinary` or native fields inside a `Bulk` frame.
-- `construction`: `EnclosingConversion` or `GroupedRow`, whose decoded values
-  must be combined while row storage remains alive.
 - `role`: a function `Parameter` or a retained source callback's `CallbackResult`.
   The role propagates through nested fields and constructors.
 
@@ -63,9 +150,8 @@ including references inside options. C and JNI keep their existing specialized
 projection checks. Source-return references, owner-backed getters and borrowed
 sequences retain their separate operations and ownership rules.
 
-`supports_bulk(Direction)` defaults to false. The shared compiler checks it
-before every bulk leaf, carrier or sequence operation, including implicitly
-selected bulk output. An implementation may support only one direction and
+`supports_bulk(Direction)` defaults to false. JNI checks it before bulk leaves and carriers; the sequence helpers check it
+before using bulk transport. An implementation may support only one direction and
 must still reject unsupported types. Whole-expansion packing (`bulk_input` /
 `bulk_output`) remains distinct from element transport.
 
@@ -136,9 +222,11 @@ separate binding-error callback, with user handlers invoked after native return.
 | Unit values `CCodec` / `JniCodec` | `CCodec::raw()` / `JniCodec::raw()` (also `Default`). |
 
 Each language now implements `Codec` once. `CCodec::declared()` and
-`JniCodec::declared(callback_outputs)` apply enum, record, error and callback
-metadata from Flat; builders choose this policy. JNI's optional callback output
-set supplies preparation context for retained callback parameters. Raw policy
+`JniCodec::declared()` apply enum, record, error and callback
+metadata from Flat; builders choose this policy. Callback argument ownership
+is stored on each argument's output subtree. `input_arrow(InputArrow)` receives
+the callback metadata, opposite-direction domain and same-direction codomain;
+no external callback output set is needed. Raw policy
 preserves the former low-level conversion behavior; it still respects existing
 C opaque-pointer and inline-owner declarations. There is no legacy forwarding
 codec or second declaration implementation.

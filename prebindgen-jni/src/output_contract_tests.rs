@@ -4,7 +4,7 @@ use prebindgen_flat::{Function, InputConversion, TypeUse};
 use std::{cell::Cell, rc::Rc};
 
 struct ExternalOutput {
-    native: JniOutput,
+    native: JniOutputConverter,
     preparations: Rc<Cell<usize>>,
     projections: Rc<Cell<usize>>,
     omit_delivery: bool,
@@ -62,7 +62,7 @@ impl KotlinOutputConversion for ExternalOutput {
     }
 }
 
-fn prepared() -> Bindings {
+fn prepared() -> JniBindings {
     let source = syn::parse_file("pub type Handle=String;pub struct Pair{pub a:i64,pub b:i64}pub fn scalar()->i64{} pub fn unit(){} pub fn text()->String{} pub fn handle()->Handle{} pub fn pair()->Pair{} pub fn rows()->Vec<Pair>{} pub fn failed()->Result<i64,i64>{} pub fn also_failed()->Result<i64,i64>{} pub fn invoke(callback:impl Fn(i64)->i64)->i64{} pub fn also_invoke(callback:impl Fn(i64)->i64)->i64{} pub fn overloaded_i64(n:i64)->Result<i64,i64>{} pub fn overloaded_string(n:String)->Result<i64,i64>{}").unwrap();
     JniGen::builder()
         .items(
@@ -93,7 +93,7 @@ fn prepared() -> Bindings {
         .unwrap()
 }
 
-fn external(flat: Bindings) -> Flat<JniSchema<JniInput, ExternalOutput>> {
+fn external(flat: JniBindings) -> JniBindings<JniInputConverter, ExternalOutput> {
     Flat {
         metadata: flat.metadata,
         records: flat.records,
@@ -193,12 +193,14 @@ fn packet_policy_is_explicit_and_does_not_require_token_recognition() {
 
 #[test]
 fn local_error_override_rejects_an_incompatible_wire_description() {
+    use crate::operations::{JniOutput, JniOutputLeafOp};
+
     let mut flat = prepared();
     let output = prebindgen_declarations::compile_output_value(
-        &Bindings::parse([]).unwrap(),
+        &JniBindings::parse([]).unwrap(),
         &JniCodec::raw(),
         &syn::parse_quote!(String),
-        &Output::Leaf,
+        &JniOutput::Leaf(JniOutputLeafOp::Value),
         &(),
     )
     .unwrap();
@@ -246,7 +248,7 @@ fn one_prepared_output_supports_packet_direct_and_capture_without_mutation() {
     assert_eq!(output.delivery_policy(), DeliveryPolicy::AdapterSelected);
 }
 
-struct TextOutput(JniOutput);
+struct TextOutput(JniOutputConverter);
 impl Conversion for TextOutput {
     type Wire = JniWire;
     type Chain = JniChain;
@@ -282,7 +284,7 @@ impl KotlinOutputConversion for TextOutput {
         self.0.callback_arguments(context, source)
     }
 }
-fn callback(flat: &Bindings, name: &str) -> JniCallback {
+fn callback(flat: &JniBindings, name: &str) -> JniCallback {
     let input = flat.function(name).unwrap().params[0]
         .ty
         .slot
@@ -352,7 +354,8 @@ fn local_error_handlers_are_independent_for_overloads() {
             .error
             .as_ref()
             .unwrap()
-            .output
+            .output()
+            .unwrap()
             .clone();
         bind_error_output(&mut flat, name, native).unwrap();
     }
@@ -386,6 +389,8 @@ fn local_error_handlers_are_independent_for_overloads() {
 }
 #[test]
 fn nested_error_layouts_must_match_even_with_the_same_outer_byte_array() {
+    use crate::operations::{JniOutput, JniOutputLeafOp, JniOutputParts, JniOutputUnary};
+
     let source = syn::parse_file("pub fn failed()->Result<i64,Vec<i64>>{}").unwrap();
     let mut flat = JniGen::builder()
         .items(
@@ -398,16 +403,18 @@ fn nested_error_layouts_must_match_even_with_the_same_outer_byte_array() {
         .package(package!().fun(fun!(failed)))
         .prepare()
         .unwrap();
-    let mut catalogue = Bindings::parse([]).unwrap();
+    let mut catalogue = JniBindings::parse([]).unwrap();
     catalogue.metadata.bulk_collection_outputs = true;
     let output = prebindgen_declarations::compile_output_value(
         &catalogue,
         &JniCodec::raw(),
         &syn::parse_quote!(Vec<i32>),
-        &Output::Sequence {
-            delivery: prebindgen_declarations::SequenceDelivery::Value,
-            mode: None,
-            element: Box::new(Output::Leaf),
+        &JniOutput::Unary {
+            operation: JniOutputUnary::Sequence {
+                delivery: prebindgen_declarations::SequenceDelivery::Value,
+                mode: None,
+            },
+            child: Box::new(JniOutput::Leaf(JniOutputLeafOp::Value)),
         }
         .bulk(),
         &(),

@@ -447,7 +447,7 @@ mod tests {
     fn builder(source: &str) -> JniGenBuilder {
         JniGen::builder()
             .flat(
-                Bindings::parse(
+                JniBindings::parse(
                     syn::parse_file(source)
                         .unwrap()
                         .items
@@ -629,7 +629,7 @@ mod tests {
     #[test]
     fn nested_optional_and_source_presence_field_have_distinct_paths() {
         let output=builder("pub struct Row{pub present:bool,pub number:i64}pub fn call(row:Option<Row>,nested:Option<Option<i64>>)->i64{}")
-            .package(package!().fun(fun!(call).input("row", Input::Optional(Box::new(Input::Fields(vec![Input::Leaf,Input::Leaf]))))))
+            .package(package!().fun(fun!(call).input("row", DeclInput::Unary { operation: DeclInputUnary::Optional, child: Box::new(DeclInput::Branch { operation: DeclInputBranch::Fields, children: vec![DeclInput::Leaf(DeclInputLeafOp::Value),DeclInput::Leaf(DeclInputLeafOp::Value)] }) })))
             .build().unwrap();
         let functions = &output.kotlin["test/Functions.kt"];
         let signature = functions

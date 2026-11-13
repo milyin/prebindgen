@@ -17,7 +17,7 @@ fn every_mixed_raw_and_declared_input_combination_generates() {
         let source = format!("pub struct Item{{pub value:i64}} pub struct Packet{{pub id:u32}} pub fn mixed(first:{first},second:{second}){{}}");
         let items = syn::parse_file(&source).unwrap().items;
         let flat =
-            Bindings::parse(items.into_iter().map(|item| (item, Default::default()))).unwrap();
+            CBindings::parse(items.into_iter().map(|item| (item, Default::default()))).unwrap();
         let mut model = Cbindgen::new(flat)
             .opaque_ptr("item", syn::parse_quote!(Item))
             .opaque_ptr("packet", syn::parse_quote!(Packet))

@@ -6,7 +6,7 @@ use std::rc::Rc;
 
 /// Declare a Kotlin sealed interface for a Rust payload enum or concrete Result.
 #[derive(Clone)]
-pub struct SealedClassDecl {
+pub struct DeclJniSealedClass {
     /// Source enum type.
     pub ty: syn::Type,
     /// Literal Kotlin short name; required for concrete generic types.
@@ -14,7 +14,7 @@ pub struct SealedClassDecl {
     /// Source variant name and foreign class-name overrides.
     pub variant_names: Vec<(String, String)>,
 }
-impl SealedClassDecl {
+impl DeclJniSealedClass {
     /// Declare the ordinary value representation of a source enum.
     pub fn new(ty: syn::Type) -> Self {
         Self {
@@ -36,7 +36,7 @@ impl SealedClassDecl {
 }
 /// Declare an ordinary sealed Kotlin representation without importing the Rust type.
 #[macro_export]
-macro_rules! sealed_class {($($ty:tt)+)=>{$crate::SealedClassDecl::new($crate::__type(stringify!($($ty)+)))};}
+macro_rules! sealed_class {($($ty:tt)+)=>{$crate::DeclJniSealedClass::new($crate::__type(stringify!($($ty)+)))};}
 
 /// Prepared enum grouping in an occurrence's wire tree.
 #[derive(Clone, Debug)]
@@ -79,9 +79,7 @@ fn variant_names(class: &Class, names: &[String]) -> Result<Vec<String>> {
         .collect()
 }
 
-pub(crate) fn encoding<'c>(
-    request: EnumVariants<'_, JniCodec<'c>>,
-) -> Result<EnumEncoding<JniCodec<'c>>> {
+pub(crate) fn encoding(request: EnumVariants<'_, JniCodec>) -> Result<EnumEncoding<JniCodec>> {
     let source = request.flat.payload_enum(request.ty)?;
     let names = source
         .variants
@@ -716,13 +714,13 @@ pub(crate) fn emit_tags<I: KotlinInputConversion, O: KotlinOutputConversion>(
             }
             if let Some(error) = &metadata.error {
                 visit(
-                    &error.output.output_outcomes().success,
+                    &error.output()?.output_outcomes().success,
                     &metadata.package,
                     &mut packages,
                 )?;
                 if let Some((package, _)) = error.handler.rsplit_once('.') {
                     visit(
-                        &error.output.output_outcomes().success,
+                        &error.output()?.output_outcomes().success,
                         package,
                         &mut packages,
                     )?;

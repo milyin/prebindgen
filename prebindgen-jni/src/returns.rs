@@ -284,7 +284,7 @@ pub(crate) fn binding_failure(
 mod tests {
     use super::*;
     use crate::{fun, package, ptr_class};
-    fn prepared() -> Bindings {
+    fn prepared() -> JniBindings {
         let source = syn::parse_file("pub type Handle=String; pub type Failure=String; pub fn value(x:i64)->i64{} pub fn unit(){} pub fn owned()->Handle{} pub fn failed()->Result<i64,Failure>{} pub fn message(x:Failure)->String{}").unwrap();
         JniGen::builder()
             .items(
@@ -365,7 +365,7 @@ mod tests {
             .as_mut()
             .unwrap();
         let binding = std::rc::Rc::make_mut(error);
-        binding.output = binding.output.clone().packet_only();
+        binding.output = Some(binding.output().unwrap().clone().packet_only());
         let generation = generate(&flat).unwrap();
         let functions = externs(&generation);
         let function = functions
@@ -404,7 +404,7 @@ mod tests {
             .as_mut()
             .unwrap();
         let binding = std::rc::Rc::make_mut(error);
-        binding.output = binding.output.clone().packet_only();
+        binding.output = Some(binding.output().unwrap().clone().packet_only());
         let generation = generate(&flat).unwrap();
         let functions = externs(&generation);
         let function = functions

@@ -4,7 +4,7 @@ use prebindgen_declarations::EnumMapping;
 impl CCodec {
     pub(super) fn enum_mapping<'a>(
         &self,
-        flat: &'a Bindings,
+        flat: &'a CBindings,
         ty: &syn::Type,
     ) -> Option<(&'a str, &'a std::rc::Rc<EnumMapping>)> {
         if !self.declared {
@@ -30,7 +30,7 @@ impl CCodec {
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn flat(source: &str) -> Bindings {
+    fn flat(source: &str) -> CBindings {
         Flat::parse(
             syn::parse_file(source)
                 .unwrap()
@@ -172,7 +172,7 @@ mod tests {
                 &codec,
                 "echo",
                 "value",
-                &prebindgen_declarations::Input::auto(),
+                &prebindgen_declarations::DeclInput::auto(),
                 &(),
             )
             .unwrap();
@@ -180,7 +180,7 @@ mod tests {
                 &mut model,
                 &codec,
                 "echo",
-                &prebindgen_declarations::Output::auto(),
+                &prebindgen_declarations::DeclOutput::auto(),
                 &(),
             )
             .unwrap();

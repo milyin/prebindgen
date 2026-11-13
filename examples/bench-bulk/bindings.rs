@@ -1,4 +1,5 @@
-use prebindgen_declarations::{callback, convert, expand_param, expand_return, fun, Input};
+use prebindgen_declarations::{frontend::DeclInputBranch, frontend::DeclInputLeafOp, frontend::DeclInputUnary};
+use prebindgen_declarations::{callback, convert, expand_param, expand_return, fun, DeclInput};
 use prebindgen_jni::{data_class, package, ptr_class, JniGen};
 fn main() {
     let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
@@ -79,13 +80,10 @@ fn main() {
                 expand_param!(i64).variant(fun!(input_handle_value))
             },
         );
-        let record_input = Input::Sequence(Box::new(Input::Record(vec![
-            Input::Constructor {
-                function: "input_handle_copy".into(),
-                args: vec![Input::Leaf],
-            },
-            Input::Leaf,
-        ])));
+        let record_input = DeclInput::Unary { operation: DeclInputUnary::Sequence, child: Box::new(DeclInput::Branch { operation: DeclInputBranch::Record, children: vec![
+            DeclInput::Branch { operation: DeclInputBranch::Constructor { function: "input_handle_copy".into() }, children: vec![DeclInput::Leaf(DeclInputLeafOp::Value)],  },
+            DeclInput::Leaf(DeclInputLeafOp::Value),
+        ] }) };
         let handle_records = fun!(handle_records_sum).expand_param(
             "values",
             if bulk {
@@ -101,7 +99,7 @@ fn main() {
         } else {
             fun!(owned_handles_echo)
         };
-        let owned_records_input = Input::Sequence(Box::new(Input::Record(vec![Input::Leaf; 2])));
+        let owned_records_input = DeclInput::Unary { operation: DeclInputUnary::Sequence, child: Box::new(DeclInput::Branch { operation: DeclInputBranch::Record, children: vec![DeclInput::Leaf(DeclInputLeafOp::Value); 2] }) };
         let owned_records = fun!(owned_handle_records_echo).expand_param(
             "values",
             if bulk {
@@ -130,11 +128,11 @@ fn main() {
                 nested_owners.callback_return(),
             )
         };
-        let nested_callback_input = Input::Sequence(Box::new(Input::Sequence(Box::new(if bulk {
-            Input::Leaf.bulk()
+        let nested_callback_input = DeclInput::Unary { operation: DeclInputUnary::Sequence, child: Box::new(DeclInput::Unary { operation: DeclInputUnary::Sequence, child: Box::new(if bulk {
+            DeclInput::Leaf(DeclInputLeafOp::Value).bulk()
         } else {
-            Input::Leaf
-        }))));
+            DeclInput::Leaf(DeclInputLeafOp::Value)
+        }) }) };
         let nested_callback_input = if bulk {
             nested_callback_input.bulk()
         } else {
@@ -151,14 +149,14 @@ fn main() {
         } else {
             nested_callback.callback_return()
         };
-        let batch_input = Input::Sequence(Box::new(Input::Record(vec![
-            Input::Leaf,
-            Input::Sequence(Box::new(Input::Record(vec![Input::Leaf; 2]))),
-        ])));
-        let mixed_batch_input = Input::Sequence(Box::new(Input::Record(vec![
-            Input::Leaf,
-            Input::Sequence(Box::new(Input::Record(vec![Input::Leaf; 2]))).bulk(),
-        ])));
+        let batch_input = DeclInput::Unary { operation: DeclInputUnary::Sequence, child: Box::new(DeclInput::Branch { operation: DeclInputBranch::Record, children: vec![
+            DeclInput::Leaf(DeclInputLeafOp::Value),
+            DeclInput::Unary { operation: DeclInputUnary::Sequence, child: Box::new(DeclInput::Branch { operation: DeclInputBranch::Record, children: vec![DeclInput::Leaf(DeclInputLeafOp::Value); 2] }) },
+        ] }) };
+        let mixed_batch_input = DeclInput::Unary { operation: DeclInputUnary::Sequence, child: Box::new(DeclInput::Branch { operation: DeclInputBranch::Record, children: vec![
+            DeclInput::Leaf(DeclInputLeafOp::Value),
+            DeclInput::Unary { operation: DeclInputUnary::Sequence, child: Box::new(DeclInput::Branch { operation: DeclInputBranch::Record, children: vec![DeclInput::Leaf(DeclInputLeafOp::Value); 2] }) }.bulk(),
+        ] }) };
         let batches = fun!(callback_batches_owned_handles)
             .expand_param(
                 "callback",
@@ -179,7 +177,7 @@ fn main() {
                     .expand_return(mixed_batch_input),
             )
             .expand_return(expand_return!(Vec<HandleBatch>).field_self_into().bulk());
-        let callback_input = Input::Sequence(Box::new(Input::Record(vec![Input::Leaf; 2])));
+        let callback_input = DeclInput::Unary { operation: DeclInputUnary::Sequence, child: Box::new(DeclInput::Branch { operation: DeclInputBranch::Record, children: vec![DeclInput::Leaf(DeclInputLeafOp::Value); 2] }) };
         let callback_input = if bulk {
             callback_input.bulk()
         } else {
@@ -196,7 +194,7 @@ fn main() {
         } else {
             callback_records
         };
-        let record_input = Input::Record(vec![Input::Leaf; 2]);
+        let record_input = DeclInput::Branch { operation: DeclInputBranch::Record, children: vec![DeclInput::Leaf(DeclInputLeafOp::Value); 2] };
         let record_input = if bulk {
             record_input.bulk()
         } else {
@@ -213,7 +211,7 @@ fn main() {
         } else {
             callback_record
         };
-        let buffer_input = Input::Sequence(Box::new(Input::Record(vec![Input::Leaf; 3])));
+        let buffer_input = DeclInput::Unary { operation: DeclInputUnary::Sequence, child: Box::new(DeclInput::Branch { operation: DeclInputBranch::Record, children: vec![DeclInput::Leaf(DeclInputLeafOp::Value); 3] }) };
         let buffers = fun!(owned_buffer_records_echo).expand_param(
             "values",
             if bulk {

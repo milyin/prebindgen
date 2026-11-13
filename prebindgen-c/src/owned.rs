@@ -34,18 +34,18 @@ pub(crate) fn referent(ty: &syn::Type) -> &syn::Type {
         ty
     }
 }
-pub(crate) fn declaration(flat: &Bindings, ty: &syn::Type) -> Option<Rc<COwned>> {
+pub(crate) fn declaration(flat: &CBindings, ty: &syn::Type) -> Option<Rc<COwned>> {
     flat.type_info(referent(ty)).ok()?.metadata.owned.clone()
 }
-pub(crate) fn pointer_declared(flat: &Bindings, ty: &syn::Type) -> bool {
+pub(crate) fn pointer_declared(flat: &CBindings, ty: &syn::Type) -> bool {
     flat.type_info(referent(ty))
         .ok()
         .is_some_and(|t| t.metadata.pointer.is_some())
 }
-pub(crate) fn native_input(flat: &Bindings, ty: &syn::Type) -> bool {
+pub(crate) fn native_input(flat: &CBindings, ty: &syn::Type) -> bool {
     pointer_declared(flat, ty) || declaration(flat, ty).is_some_and(|o| o.explicit)
 }
-pub(crate) fn native_output(flat: &Bindings, ty: &syn::Type) -> bool {
+pub(crate) fn native_output(flat: &CBindings, ty: &syn::Type) -> bool {
     pointer_declared(flat, ty) || declaration(flat, ty).is_some()
 }
 fn has_borrow(ty: &syn::Type) -> bool {
@@ -75,9 +75,13 @@ pub(crate) fn std_owner(ty: &syn::Type) -> bool {
             Some((_, prebindgen_flat::SequenceView::Owned))
         ))
 }
-pub(crate) fn output(owner: Rc<COwned>, wire: syn::Ident, value: TokenStream) -> OutputPlan<CWire> {
+pub(crate) fn output(
+    owner: Rc<COwned>,
+    wire: syn::Ident,
+    value: TokenStream,
+) -> COutputPlan<CWire> {
     let ident = owner.ident();
-    OutputPlan {
+    COutputPlan {
         fallible: false,
         context: Default::default(),
         delivery: Default::default(),
@@ -103,7 +107,7 @@ pub(crate) fn borrowed(
     wire: syn::Ident,
     value: TokenStream,
     access: Access,
-) -> OutputPlan<CWire> {
+) -> COutputPlan<CWire> {
     let ident = owner.ident();
     let native = &owner.ty;
     let pointer = if access == Access::Shared {
@@ -111,7 +115,7 @@ pub(crate) fn borrowed(
     } else {
         quote!(*mut #native as *mut #ident)
     };
-    OutputPlan {
+    COutputPlan {
         fallible: false,
         context: Default::default(),
         delivery: Default::default(),
@@ -139,7 +143,7 @@ pub(crate) fn input(
     var: syn::Ident,
     active: &Condition,
     by_value: bool,
-) -> Result<InputPlan<CWire>> {
+) -> Result<CInputPlan<CWire>> {
     let access = match ty {
         syn::Type::Reference(r) if r.mutability.is_none() => Access::Shared,
         syn::Type::Reference(_) => Access::Exclusive,
@@ -196,7 +200,7 @@ pub(crate) fn input(
     } else {
         quote!(#storage let #pointer=#ptr;#prepare_empty)
     };
-    let plan = InputPlan::new(
+    let plan = CInputPlan::new(
         prebindgen_flat::WireNode::Leaf(vec![Wire {
             name: wire,
             kind: CWire::Owned {
@@ -296,7 +300,7 @@ pub(crate) fn emit(
 }
 
 /// Register ordinary Rust helper functions so expansions can reference them.
-pub(crate) fn accessors(flat: &mut Bindings) -> Result<()> {
+pub(crate) fn accessors(flat: &mut CBindings) -> Result<()> {
     let owners: Vec<_> = flat
         .types
         .values()
@@ -470,8 +474,8 @@ pub(crate) fn validate_type(ty: &syn::Type) -> Result<()> {
 mod tests {
     use super::*;
     use prebindgen_declarations::{expand_return, fun};
-    fn flat(source: &str) -> Bindings {
-        Bindings::parse(
+    fn flat(source: &str) -> CBindings {
+        CBindings::parse(
             syn::parse_file(source)
                 .unwrap()
                 .items
@@ -604,7 +608,7 @@ mod tests {
     }
     #[test]
     fn borrowed_records_and_sequences_cannot_lend_owned_getter_temporaries() {
-        use prebindgen_declarations::{fields, Output, ProjectionMode, SequenceDelivery};
+        use prebindgen_declarations::{fields, DeclOutput, ProjectionMode, SequenceDelivery};
         let source="pub type Owner=String; pub struct Info{pub inner:Inner} pub type Inner=String; pub fn make()->Owner{} pub fn borrow(v:&Owner)->&Owner{} pub fn info(o:&Owner)->Info{} pub fn name(v:&Inner)->&str{} pub fn list(o:&Owner)->Vec<Inner>{}";
         for function in ["make", "borrow"] {
             let fields = fields!(info).field("inner", expand_return!(Inner).field(fun!(name)));
@@ -629,12 +633,14 @@ mod tests {
         let error = Cbindgen::new(flat(source))
             .opaque_ptr("owner", syn::parse_quote!(Owner))
             .opaque_ptr("inner", syn::parse_quote!(Inner))
-            .function(fun!(borrow).output(Output::getter(
+            .function(fun!(borrow).output(DeclOutput::getter(
                 "list",
-                Output::Sequence {
-                    element: Box::new(Output::getter("name", Output::auto())),
-                    mode: Some(ProjectionMode::Borrowed),
-                    delivery: SequenceDelivery::Value,
+                DeclOutput::Unary {
+                    operation: DeclOutputUnary::Sequence {
+                        delivery: SequenceDelivery::Value,
+                        mode: Some(ProjectionMode::Borrowed),
+                    },
+                    child: Box::new(DeclOutput::getter("name", DeclOutput::auto())),
                 },
             )))
             .panic()
