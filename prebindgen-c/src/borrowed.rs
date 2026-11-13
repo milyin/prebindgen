@@ -201,7 +201,8 @@ pub(crate) fn emit(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use prebindgen_declarations::{expand_return, fun, ProjectionMode};
+    use crate::{expand_return, fun};
+    use prebindgen_declarations::ProjectionMode;
     fn model(source: &str) -> CBindings {
         CBindings::parse(
             syn::parse_file(source)
@@ -214,10 +215,10 @@ mod tests {
     }
     fn sequence(
         copy: bool,
-        element: prebindgen_declarations::DeclOutput<DeclInputRequest, DeclOutputRequest>,
-    ) -> prebindgen_declarations::DeclOutput<DeclInputRequest, DeclOutputRequest> {
-        prebindgen_declarations::DeclOutput::Unary {
-            operation: DeclOutputUnary::Sequence {
+        element: crate::COutput<CInputRequest, COutputRequest>,
+    ) -> crate::COutput<CInputRequest, COutputRequest> {
+        crate::COutput::Unary {
+            operation: COutputUnary::Sequence {
                 delivery: SequenceDelivery::Value,
                 mode: copy.then_some(ProjectionMode::Borrowed),
             },
@@ -269,9 +270,7 @@ mod tests {
             );
         }
         let g = Cbindgen::new(model("pub fn values()->&'static [bool]{}"))
-            .function(
-                fun!(values).output(sequence(true, prebindgen_declarations::DeclOutput::auto())),
-            )
+            .function(fun!(values).output(sequence(true, crate::COutput::auto())))
             .build()
             .unwrap();
         assert!(g.rust.contains("OutputRows"));
@@ -306,12 +305,10 @@ mod tests {
             .unwrap();
         assert!(g.header.contains("pb_i64_slice_view *out1"));
         let error = Cbindgen::new(model(source))
-            .function(
-                fun!(make).output(prebindgen_declarations::DeclOutput::Branch {
-                    operation: DeclOutputBranch::Fields,
-                    children: vec![sequence(false, prebindgen_declarations::DeclOutput::auto())],
-                }),
-            )
+            .function(fun!(make).output(crate::COutput::Branch {
+                operation: COutputBranch::Fields,
+                children: vec![sequence(false, crate::COutput::auto())],
+            }))
             .build()
             .err()
             .unwrap();
@@ -320,19 +317,14 @@ mod tests {
     #[test]
     fn explicitly_reconstructed_reference_inputs_cannot_lend_views() {
         let error = Cbindgen::new(model("pub fn echo(v:&[i64])->&[i64]{}"))
-            .function(fun!(echo).expand_param(
-                "v",
-                prebindgen_declarations::expand_param!(&[i64]).reconstruct(),
-            ))
+            .function(fun!(echo).expand_param("v", crate::expand_param!(&[i64]).reconstruct()))
             .panic()
             .build()
             .err()
             .unwrap();
         assert!(error.contains("reconstructed reference input"), "{error}");
         let g = Cbindgen::new(model("pub fn echo(v:&[i64])->&[i64]{}"))
-            .function(
-                fun!(echo).output(sequence(true, prebindgen_declarations::DeclOutput::auto())),
-            )
+            .function(fun!(echo).output(sequence(true, crate::COutput::auto())))
             .panic()
             .build()
             .unwrap();
@@ -341,10 +333,7 @@ mod tests {
     #[test]
     fn explicit_outer_copy_copies_nested_sequences_and_never_emits_views() {
         let g = Cbindgen::new(model("pub fn values()->&'static [Vec<i64>]{}"))
-            .function(fun!(values).output(sequence(
-                true,
-                sequence(false, prebindgen_declarations::DeclOutput::auto()),
-            )))
+            .function(fun!(values).output(sequence(true, sequence(false, crate::COutput::auto()))))
             .build()
             .unwrap();
         assert!(g.rust.matches("OutputRows").count() >= 2);
@@ -491,15 +480,6 @@ mod tests {
         assert!(error.contains("temporary owner"), "{error}");
     }
     #[test]
-    fn unsupported_c_bulk_does_not_bypass_borrow_rules() {
-        let error = Cbindgen::new(model("pub fn values()->&'static [i64]{}"))
-            .function(fun!(values).output(prebindgen_declarations::DeclOutput::auto().bulk()))
-            .build()
-            .err()
-            .unwrap();
-        assert!(error.contains("bulk outputs are unsupported"), "{error}");
-    }
-    #[test]
     fn loans_inside_rows_are_not_hidden_by_the_owning_container() {
         let node = prebindgen_flat::WireNode::Chain {
             controls: vec![Wire {
@@ -620,10 +600,9 @@ mod tests {
         let error = Cbindgen::new(model(
             "pub fn make(v:i64)->i64{}pub fn inspect(values:&[i64])->usize{}",
         ))
-        .function(fun!(inspect).expand_param(
-            "values",
-            prebindgen_declarations::expand_param!(i64).variant(fun!(make)),
-        ))
+        .function(
+            fun!(inspect).expand_param("values", crate::expand_param!(i64).variant(fun!(make))),
+        )
         .panic()
         .build()
         .err()
@@ -632,7 +611,7 @@ mod tests {
     }
     #[test]
     fn reconstruction_is_explicit_and_can_be_global_local_optional_or_nested() {
-        use prebindgen_declarations::{expand_param, DeclInput};
+        use crate::{expand_param, CInput};
         for ty in [
             "&[i64]",
             "&Vec<i64>",
@@ -644,8 +623,7 @@ mod tests {
         ] {
             let source = format!("pub fn inspect(values:{ty})->usize{{}}");
             let declaration =
-                prebindgen_declarations::DeclExpandParam::new(syn::parse_str(ty).unwrap())
-                    .reconstruct();
+                crate::DeclCExpandParam::new(syn::parse_str(ty).unwrap()).reconstruct();
             let g = Cbindgen::new(model(&source))
                 .function(fun!(inspect).expand_param("values", declaration))
                 .panic()
@@ -661,7 +639,7 @@ mod tests {
         assert!(!g.rust.contains("_prepared"));
         assert!(
             Cbindgen::new(model("pub fn inspect(values:&String)->usize{}"))
-                .function(fun!(inspect).input("values", DeclInput::auto().reconstruct()))
+                .function(fun!(inspect).input("values", CInput::auto().reconstruct()))
                 .panic()
                 .build()
                 .is_ok()
@@ -669,7 +647,7 @@ mod tests {
     }
     #[test]
     fn reconstruction_builder_order_and_local_identity_overrides_are_checked() {
-        use prebindgen_declarations::expand_param;
+        use crate::expand_param;
         for declaration in [
             expand_param!(&String).reconstruct().variant(fun!(make)),
             expand_param!(&String).variant(fun!(make)).reconstruct(),
@@ -707,13 +685,10 @@ mod tests {
         for ty in ["&[i64]", "&str", "&[u8]"] {
             let source = format!("pub fn echo(values:{ty})->{ty}{{}}");
             let error = Cbindgen::new(model(&source))
-                .function(
-                    fun!(echo).expand_param(
-                        "values",
-                        prebindgen_declarations::DeclExpandParam::new(syn::parse_str(ty).unwrap())
-                            .reconstruct(),
-                    ),
-                )
+                .function(fun!(echo).expand_param(
+                    "values",
+                    crate::DeclCExpandParam::new(syn::parse_str(ty).unwrap()).reconstruct(),
+                ))
                 .panic()
                 .build()
                 .err()
@@ -726,13 +701,10 @@ mod tests {
         for ty in ["&mut Vec<i64>", "Option<&[i64]>", "Vec<i64>"] {
             let source = format!("pub fn inspect(values:{ty})->usize{{}}");
             let error = Cbindgen::new(model(&source))
-                .function(
-                    fun!(inspect).expand_param(
-                        "values",
-                        prebindgen_declarations::DeclExpandParam::new(syn::parse_str(ty).unwrap())
-                            .reconstruct(),
-                    ),
-                )
+                .function(fun!(inspect).expand_param(
+                    "values",
+                    crate::DeclCExpandParam::new(syn::parse_str(ty).unwrap()).reconstruct(),
+                ))
                 .panic()
                 .build()
                 .err()
@@ -770,7 +742,7 @@ mod tests {
         }
     }
     #[test]
-    fn low_level_static_input_views_and_c_bulk_inputs_are_rejected() {
+    fn low_level_static_input_views_are_rejected() {
         let flat = model("");
         let error = input_sequence(
             &flat,
@@ -795,15 +767,6 @@ mod tests {
             .err()
             .unwrap()
             .contains("'static reference lifetime"));
-        let error = Cbindgen::new(model("pub fn inspect(values:&[i64])->usize{}"))
-            .function(
-                fun!(inspect).input("values", prebindgen_declarations::DeclInput::auto().bulk()),
-            )
-            .panic()
-            .build()
-            .err()
-            .unwrap();
-        assert!(error.contains("bulk inputs are unsupported"), "{error}");
     }
     #[test]
     fn malformed_views_are_rejected() {

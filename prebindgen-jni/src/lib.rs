@@ -4,17 +4,12 @@
 //! package prefix and native initialization.
 //! Declaration processing fills occurrence slots before wrappers are generated.
 #![warn(missing_docs)]
-use prebindgen_declarations::{
-    frontend::DeclInputBranch, frontend::DeclInputLeafOp, frontend::DeclOutputBranch,
-    frontend::DeclOutputLeafOp,
-};
-#[cfg(test)]
-use prebindgen_declarations::{frontend::DeclInputUnary, frontend::DeclOutputUnary};
+
 use prebindgen_flat::{type_key, Conversion, Flat, OutputConversion, Result, WireKind};
 
 pub use prebindgen_declarations::{
-    callback, convert, from, into, try_from, try_into, DeclCallback, DeclConvert,
-    DeclConvertSource, Projection, ProjectionMode,
+    convert, from, into, try_from, try_into, DeclConvert, DeclConvertSource, Projection,
+    ProjectionMode,
 };
 mod bulk;
 mod metadata;
@@ -85,10 +80,10 @@ pub use kotlin::{
 /// Use [`JniCodec`] when binding conversions. Rust rejects a C codec because its
 /// wire type belongs to a different adapter:
 /// ```compile_fail
-/// use prebindgen_jni::JniBindings;
-/// use prebindgen_declarations::{bind_input, DeclInput};
+/// use prebindgen_jni::{JniBindings,JniInput};
+/// use prebindgen_declarations::{bind_input};
 /// fn wrong(flat: &mut JniBindings) {
-///     bind_input(flat, &prebindgen_c::CCodec::raw(), "echo", "x", &DeclInput::Leaf(prebindgen_declarations::frontend::DeclInputLeafOp::Value), &()).unwrap();
+///     bind_input(flat, &prebindgen_c::CCodec::raw(), "echo", "x", &JniInput::Leaf(prebindgen_jni::JniInputLeafOp::Value), &()).unwrap();
 /// }
 /// ```
 /// A completed JNI model also cannot be passed to the C generator:
@@ -103,11 +98,6 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use std::collections::{BTreeMap, BTreeSet};
 
-pub use prebindgen_declarations::{
-    expand_param, expand_return, fields, fun, DeclError, DeclExpand, DeclExpandParam,
-    DeclExpandReturn, DeclFields, DeclFunction, DeclInput, DeclInputRequest, DeclOutput,
-    DeclOutputRequest,
-};
 /// A Kotlin owning handle class for one nonzero-sized source type.
 ///
 /// Generated code requires `Send` because the handle can be closed on any JVM
@@ -167,7 +157,7 @@ pub struct DeclJniPackage {
     /// Handle and data classes to emit in this package.
     pub classes: Vec<DeclJniClass>,
     /// Source functions to export as top-level Kotlin functions.
-    pub functions: Vec<DeclFunction>,
+    pub functions: Vec<DeclJniFunction>,
 }
 impl DeclJniPackage {
     /// Create an empty package relative to the configured root prefix.
@@ -187,8 +177,8 @@ impl DeclJniPackage {
     }
     /// Add a top-level Kotlin function with optional occurrence overrides.
     ///
-    /// Names default to camel case; [`DeclFunction::name`] overrides that spelling.
-    pub fn fun(mut self, f: DeclFunction) -> Self {
+    /// Names default to camel case; [`DeclJniFunction::name`] overrides that spelling.
+    pub fn fun(mut self, f: DeclJniFunction) -> Self {
         self.functions.push(f);
         self
     }
@@ -224,7 +214,7 @@ pub fn __type(s: &str) -> syn::Type {
 /// in one native signature; multiple outputs use a Kotlin builder callback.
 ///
 /// ```
-/// use prebindgen_jni::{JniGen, package, ptr_class, fun};
+/// use prebindgen_jni::{JniInput, JniOutput, JniGen, package, ptr_class, fun};
 /// let source = syn::parse_file(r#"
 ///     pub struct Counter { pub value: i64 }
 ///     pub fn new_counter(value: i64) -> Counter { Counter { value } }
@@ -274,8 +264,8 @@ pub struct JniGenBuilder {
     source: Option<std::path::PathBuf>,
     items: Option<Vec<(syn::Item, prebindgen::SourceLocation)>>,
     conversions: Vec<prebindgen_declarations::DeclConvert>,
-    inputs: Vec<prebindgen_declarations::DeclInput<DeclInputRequest, DeclOutputRequest>>,
-    outputs: Vec<prebindgen_declarations::DeclOutput<DeclInputRequest, DeclOutputRequest>>,
+    inputs: Vec<crate::JniInput<JniInputRequest, JniOutputRequest>>,
+    outputs: Vec<crate::JniOutput<JniInputRequest, JniOutputRequest>>,
     error_mappers: Vec<(syn::Type, String)>,
     prefix: String,
     init: String,
@@ -317,8 +307,8 @@ impl JniGenBuilder {
     /// handler package; it does not relocate already declared classes or functions.
     ///
     /// ```
-    /// use prebindgen_jni::{JniBindings, JniGen, JniCodec, fun, package};
-    /// use prebindgen_declarations::{bind_input, bind_output, DeclInput, DeclOutput};
+    /// use prebindgen_jni::{JniInput, JniOutput, JniBindings, JniGen, JniCodec, fun, package};
+    /// use prebindgen_declarations::{bind_input,bind_output};
     /// let source = syn::parse_file("pub fn echo(x: i64) -> i64 { x }")?;
     /// let flat = JniBindings::parse(
     ///     source.items.into_iter().map(|item| (item, Default::default())),
@@ -326,8 +316,8 @@ impl JniGenBuilder {
     /// let generated = JniGen::builder().flat(flat)
     ///     .set_package_prefix("example")
     ///     .configure(|flat| {
-    ///         bind_input(flat, &JniCodec::raw(), "echo", "x", &DeclInput::Leaf(prebindgen_declarations::frontend::DeclInputLeafOp::Value), &())?;
-    ///         bind_output(flat, &JniCodec::raw(), "echo", &DeclOutput::Leaf(prebindgen_declarations::frontend::DeclOutputLeafOp::Value), &())
+    ///         bind_input(flat, &JniCodec::raw(), "echo", "x", &JniInput::Leaf(prebindgen_jni::JniInputLeafOp::Value), &())?;
+    ///         bind_output(flat, &JniCodec::raw(), "echo", &JniOutput::Leaf(prebindgen_jni::JniOutputLeafOp::Value), &())
     ///     })
     ///     .package(package!().fun(fun!(echo)))
     ///     .build()?;
@@ -370,12 +360,12 @@ impl JniGenBuilder {
     }
     /// Register a boundary expansion using the declaration syntax.
     /// The builder is consumed directly into its Input/Output tree.
-    pub fn expand(self, decl: impl Into<prebindgen_declarations::DeclExpand>) -> Self {
-        use prebindgen_declarations::DeclExpand;
+    pub fn expand(self, decl: impl Into<crate::DeclJniExpand>) -> Self {
+        use crate::DeclJniExpand;
         match decl.into() {
-            DeclExpand::Param(decl) => self.input(decl),
-            DeclExpand::Return(decl) => self.output(decl),
-            DeclExpand::Error(decl) => self.error_mapper(decl.ty, decl.mapper),
+            DeclJniExpand::Param(decl) => self.input(decl),
+            DeclJniExpand::Return(decl) => self.output(decl),
+            DeclJniExpand::Error(decl) => self.error_mapper(decl.ty, decl.mapper),
         }
     }
     /// Register a type-wide explicit input tree, or a convertible input builder.
@@ -384,7 +374,7 @@ impl JniGenBuilder {
     /// type and direction are rejected during build.
     pub fn input(
         mut self,
-        tree: impl Into<prebindgen_declarations::DeclInput<DeclInputRequest, DeclOutputRequest>>,
+        tree: impl Into<crate::JniInput<JniInputRequest, JniOutputRequest>>,
     ) -> Self {
         self.inputs.push(tree.into());
         self
@@ -392,7 +382,7 @@ impl JniGenBuilder {
     /// Register a type-wide direct output conversion tree.
     pub fn output(
         mut self,
-        tree: impl Into<prebindgen_declarations::DeclOutput<DeclInputRequest, DeclOutputRequest>>,
+        tree: impl Into<crate::JniOutput<JniInputRequest, JniOutputRequest>>,
     ) -> Self {
         self.outputs.push(tree.into());
         self
@@ -403,7 +393,7 @@ impl JniGenBuilder {
     pub fn error_mapper(
         mut self,
         ty: syn::Type,
-        mapper: impl Into<prebindgen_declarations::DeclFunction>,
+        mapper: impl Into<crate::DeclJniFunction>,
     ) -> Self {
         self.error_mappers.push((ty, mapper.into().source_name()));
         self
@@ -438,7 +428,7 @@ impl JniGenBuilder {
     /// nested classes (for example `example.Errors$Rejected`). The class must exist at
     /// Kotlin compile time, extend Throwable, and provide a public String constructor.
     /// Result-returning functions also require `error_mapper` or
-    /// `DeclFunction::on_error` to select their message mapper. Kotlin invokes this
+    /// `DeclJniFunction::on_error` to select their message mapper. Kotlin invokes this
     /// default after JNI and handle locks finish; callers can replace `onError`
     /// with a recovering callback. Without this setting `onError` is required.
     /// Binding failures use the separate `onBindingError` callback.
@@ -475,7 +465,7 @@ impl JniGenBuilder {
                 }
             }
         }
-        let mut references = prebindgen_declarations::declarations::source_items(
+        let mut references = crate::declarations::source_items(
             &self.inputs,
             &self.outputs,
             &self.error_mappers,
@@ -626,15 +616,11 @@ impl JniGenBuilder {
         validate_declaration_names(&flat)?;
         prebindgen_declarations::prepare_value_conversions(&mut flat, self.conversions)?;
         data::prepare(&mut flat)?;
-        let defaults = prebindgen_declarations::DeclDefaults::new(
-            &flat,
-            self.inputs,
-            self.outputs,
-            self.error_mappers,
-        )?;
+        let defaults =
+            crate::DeclJniDefaults::new(&flat, self.inputs, self.outputs, self.error_mappers)?;
         errors::resolve(&mut flat, &codec, &defaults, &declarations)?;
         for ty in callback_types {
-            let recipe = defaults.resolve_input(&flat, &codec, &ty, &DeclInput::auto(), &())?;
+            let recipe = defaults.resolve_input(&flat, &codec, &ty, &JniInput::auto(), &())?;
             let operations::JniInput::Arrow {
                 operation: configuration,
                 ..
@@ -2525,318 +2511,25 @@ mod compilation;
 /// Resolved conversion operations interpreted by this adapter.
 pub mod operations;
 
-impl prebindgen_declarations::DeclCodec for JniCodec {
-    fn sequence_callback(
-        &self,
-        cx: &mut prebindgen_declarations::DeclResolve<'_, Self>,
-        ty: &syn::Type,
-        tree: operations::JniOutput,
-        structural: bool,
-    ) -> Result<operations::JniOutput> {
-        operations::sequence_callback(cx, ty, tree, structural)
-    }
-
-    fn is_discarded_output(&self, tree: &operations::JniOutput) -> bool {
-        matches!(
-            tree,
-            operations::JniOutput::Leaf(operations::JniOutputLeafOp::Discard)
-        )
-    }
-
-    fn resolve_input_leaf(
-        &self,
-        operation: prebindgen_declarations::frontend::DeclInputLeafOp,
-    ) -> Result<<Self::InOps as prebindgen_declarations::InputOps>::Leaf> {
-        Ok(match operation {
-            prebindgen_declarations::frontend::DeclInputLeafOp::Value => {
-                operations::JniInputLeafOp::Value
-            }
-        })
-    }
-    fn resolve_input_unary(
-        &self,
-        operation: prebindgen_declarations::frontend::DeclInputUnary,
-    ) -> Result<<Self::InOps as prebindgen_declarations::InputOps>::Unary> {
-        Ok(match operation {
-            prebindgen_declarations::frontend::DeclInputUnary::Convert { conversion } => {
-                operations::JniInputUnary::Convert { conversion }
-            }
-            prebindgen_declarations::frontend::DeclInputUnary::Sequence => {
-                operations::JniInputUnary::Sequence
-            }
-            prebindgen_declarations::frontend::DeclInputUnary::Temporary => {
-                operations::JniInputUnary::Temporary
-            }
-            prebindgen_declarations::frontend::DeclInputUnary::Bulk => {
-                operations::JniInputUnary::Bulk
-            }
-            prebindgen_declarations::frontend::DeclInputUnary::Optional => {
-                operations::JniInputUnary::Optional
-            }
-        })
-    }
-    fn resolve_input_branch(
-        &self,
-        operation: prebindgen_declarations::frontend::DeclInputBranch,
-    ) -> Result<<Self::InOps as prebindgen_declarations::InputOps>::Branch> {
-        Ok(match operation {
-            prebindgen_declarations::frontend::DeclInputBranch::Fields => {
-                operations::JniInputBranch::Fields
-            }
-            prebindgen_declarations::frontend::DeclInputBranch::Record => {
-                operations::JniInputBranch::Record
-            }
-            prebindgen_declarations::frontend::DeclInputBranch::Selector => {
-                operations::JniInputBranch::Selector
-            }
-            prebindgen_declarations::frontend::DeclInputBranch::Constructor { function } => {
-                operations::JniInputBranch::Constructor { function }
-            }
-            prebindgen_declarations::frontend::DeclInputBranch::Enum { value } => {
-                operations::JniInputBranch::Enum { value }
-            }
-            prebindgen_declarations::frontend::DeclInputBranch::Variant => {
-                operations::JniInputBranch::Variant
-            }
-        })
-    }
-    fn resolve_input_arrow(
-        &self,
-        operation: Box<prebindgen_declarations::CallbackOperation>,
-    ) -> Result<<Self::InOps as prebindgen_declarations::InputOps>::Arrow> {
-        Ok(operation)
-    }
-    fn finish_input_tree(&self, tree: operations::JniInput) -> Result<operations::JniInput> {
-        Ok(operations::lift_input_bulk(tree))
-    }
-    fn resolve_output_leaf(
-        &self,
-        operation: prebindgen_declarations::frontend::DeclOutputLeafOp,
-    ) -> Result<<Self::OutOps as prebindgen_declarations::OutputOps>::Leaf> {
-        Ok(match operation {
-            prebindgen_declarations::frontend::DeclOutputLeafOp::Value => {
-                operations::JniOutputLeafOp::Value
-            }
-            prebindgen_declarations::frontend::DeclOutputLeafOp::Discard => {
-                operations::JniOutputLeafOp::Discard
-            }
-            prebindgen_declarations::frontend::DeclOutputLeafOp::Projected(projection) => {
-                operations::JniOutputLeafOp::Projected(projection)
-            }
-        })
-    }
-    fn resolve_output_unary(
-        &self,
-        operation: prebindgen_declarations::frontend::DeclOutputUnary,
-    ) -> Result<<Self::OutOps as prebindgen_declarations::OutputOps>::Unary> {
-        Ok(match operation {
-            prebindgen_declarations::frontend::DeclOutputUnary::CallbackArgument { ownership } => {
-                operations::JniOutputUnary::CallbackArgument { ownership }
-            }
-            prebindgen_declarations::frontend::DeclOutputUnary::Bulk => {
-                operations::JniOutputUnary::Bulk
-            }
-            prebindgen_declarations::frontend::DeclOutputUnary::Named { name } => {
-                operations::JniOutputUnary::Named { name }
-            }
-            prebindgen_declarations::frontend::DeclOutputUnary::Convert { conversion } => {
-                operations::JniOutputUnary::Convert { conversion }
-            }
-            prebindgen_declarations::frontend::DeclOutputUnary::Sequence { delivery, mode } => {
-                operations::JniOutputUnary::Sequence { delivery, mode }
-            }
-            prebindgen_declarations::frontend::DeclOutputUnary::Result { error } => {
-                operations::JniOutputUnary::Result { error }
-            }
-            prebindgen_declarations::frontend::DeclOutputUnary::Optional => {
-                operations::JniOutputUnary::Optional
-            }
-            prebindgen_declarations::frontend::DeclOutputUnary::Into { function } => {
-                operations::JniOutputUnary::Into { function }
-            }
-            prebindgen_declarations::frontend::DeclOutputUnary::Getter { function } => {
-                operations::JniOutputUnary::Getter { function }
-            }
-        })
-    }
-    fn resolve_output_branch(
-        &self,
-        operation: prebindgen_declarations::frontend::DeclOutputBranch,
-    ) -> Result<<Self::OutOps as prebindgen_declarations::OutputOps>::Branch> {
-        Ok(match operation {
-            prebindgen_declarations::frontend::DeclOutputBranch::Fields => {
-                operations::JniOutputBranch::Fields
-            }
-            prebindgen_declarations::frontend::DeclOutputBranch::OwnedFields => {
-                operations::JniOutputBranch::OwnedFields
-            }
-            prebindgen_declarations::frontend::DeclOutputBranch::Record { mode } => {
-                operations::JniOutputBranch::Record { mode }
-            }
-            prebindgen_declarations::frontend::DeclOutputBranch::Combine => {
-                operations::JniOutputBranch::Combine
-            }
-            prebindgen_declarations::frontend::DeclOutputBranch::Enum { value, mode } => {
-                operations::JniOutputBranch::Enum { value, mode }
-            }
-            prebindgen_declarations::frontend::DeclOutputBranch::Variant => {
-                operations::JniOutputBranch::Variant
-            }
-            prebindgen_declarations::frontend::DeclOutputBranch::Arguments => {
-                operations::JniOutputBranch::Arguments
-            }
-        })
-    }
-    fn resolve_output_arrow(
-        &self,
-        operation: std::convert::Infallible,
-    ) -> Result<<Self::OutOps as prebindgen_declarations::OutputOps>::Arrow> {
-        match operation {}
-    }
-    fn finish_output_tree(&self, tree: operations::JniOutput) -> Result<operations::JniOutput> {
-        Ok(operations::lift_output_bulk(tree))
-    }
-
-    fn expand_input(
-        &self,
-        cx: &mut prebindgen_declarations::DeclResolve<'_, Self>,
-        ty: &syn::Type,
-        tree: &DeclInput<DeclInputRequest, DeclOutputRequest>,
-    ) -> Result<Option<operations::JniInput>> {
-        let flat = cx.flat;
-        let replacement = (|| {
-            if !self.declared {
-                return Ok(None);
-            }
-
-            if !matches!(tree, DeclInput::Leaf(DeclInputLeafOp::Value)) {
-                return Ok(None);
-            }
-            if flat.payload_enums.contains_key(&type_key(ty))
-                && flat
-                    .type_info(ty)
-                    .ok()
-                    .and_then(|t| t.metadata.class.as_ref())
-                    .is_none()
-            {
-                return Err(format!(
-                "ordinary payload enum `{}` requires sealed_class! or an explicit field expansion",
-                type_key(ty)
-            ));
-            }
-            if flat
-                .type_info(ty)
-                .ok()
-                .and_then(|t| t.metadata.class.as_ref())
-                .is_some_and(|c| c.kind == ClassKind::Sealed)
-            {
-                return Ok(Some(DeclInput::enum_variants(
-                    flat.payload_enum(ty)?
-                        .variants
-                        .iter()
-                        .map(|v| vec![DeclInput::value(); v.fields.len()])
-                        .collect(),
-                    true,
-                )));
-            }
-            let Some(record) = Self::source_record(flat, ty)? else {
-                return Ok(None);
-            };
-            if record.has_handles {
-                return Err(format!(
-                    "data class `{}` contains handles and cannot be passed into Rust as a record",
-                    record.fqn()
-                ));
-            }
-            Ok(Some(DeclInput::Branch {
-                operation: DeclInputBranch::Record,
-                children: vec![DeclInput::value(); flat.record(ty)?.fields.len()],
-            }))
-        })();
-        replacement?.map(|tree| cx.input(ty, &tree)).transpose()
-    }
-    fn expand_output(
-        &self,
-        cx: &mut prebindgen_declarations::DeclResolve<'_, Self>,
-        ty: &syn::Type,
-        tree: &DeclOutput<DeclInputRequest, DeclOutputRequest>,
-    ) -> Result<Option<operations::JniOutput>> {
-        let flat = cx.flat;
-        let replacement = (|| {
-            if !self.declared {
-                return Ok(None);
-            }
-
-            let policy = match tree {
-                DeclOutput::Leaf(DeclOutputLeafOp::Value) => None,
-                DeclOutput::Leaf(DeclOutputLeafOp::Projected(p)) => Some(p.clone()),
-                _ => return Ok(None),
-            };
-            if flat.payload_enums.contains_key(&type_key(ty))
-                && flat
-                    .type_info(ty)
-                    .ok()
-                    .and_then(|t| t.metadata.class.as_ref())
-                    .is_none()
-            {
-                return Err(format!(
-                "ordinary payload enum `{}` requires sealed_class! or an explicit field expansion",
-                type_key(ty)
-            ));
-            }
-            if flat
-                .type_info(ty)
-                .ok()
-                .and_then(|t| t.metadata.class.as_ref())
-                .is_some_and(|c| c.kind == ClassKind::Sealed)
-            {
-                return Ok(Some(DeclOutput::enum_variants(
-                    flat.payload_enum(ty)?
-                        .variants
-                        .iter()
-                        .map(|v| vec![DeclOutput::value(); v.fields.len()])
-                        .collect(),
-                    true,
-                    policy.as_ref().map(|p| p.mode),
-                )));
-            }
-            let Some(record) = Self::source_record(flat, ty)? else {
-                return Ok(None);
-            };
-            let fields = &flat.record(ty)?.fields;
-            for name in policy.iter().flat_map(|p| p.fields.keys()) {
-                if !fields
-                    .iter()
-                    .any(|f| f.name.to_string().trim_start_matches("r#") == name)
-                {
-                    return Err(format!(
-                        "data class `{}`: unknown projection field `{name}`",
-                        record.fqn()
-                    ));
-                }
-            }
-            let inherited = policy.as_ref().map(Projection::inherited);
-            let children = fields.iter().map(|field| {
-            let name = field.name.to_string();
-            let Some(policy) = &policy else { return Ok(DeclOutput::value()); };
-            let child = policy.fields.get(name.trim_start_matches("r#")).unwrap_or(inherited.as_ref().unwrap());
-            if policy.mode == ProjectionMode::Borrowed && child.mode == ProjectionMode::Owned {
-                return Err(format!("data class `{}` field `{name}`: owned projection cannot consume a shared-reference occurrence", record.fqn()));
-            }
-            Ok(DeclOutput::Request(DeclOutputRequest::Value {projection:Some(child.clone())}))
-        }).collect::<Result<Vec<_>>>()?;
-            Ok(Some(DeclOutput::Branch {
-                operation: DeclOutputBranch::Record {
-                    mode: policy.map(|p| p.mode),
-                },
-                children,
-            }))
-        })();
-        replacement?.map(|tree| cx.output(ty, &tree)).transpose()
-    }
-}
-
 pub use operations::{
     JniInput, JniInputBranch, JniInputLeafOp, JniInputOps, JniInputUnary, JniOutput,
     JniOutputBranch, JniOutputLeafOp, JniOutputOps, JniOutputUnary,
 };
+
+mod declarations;
+pub use declarations::*;
+
+#[macro_export]
+/// Select a source function and configure its binding in this adapter.
+macro_rules! fun {
+    ($name:ident) => {
+        $crate::DeclJniFunction::new(
+            $crate::__declaration_ident(stringify!($name)).expect("source identifier"),
+        )
+    };
+}
+
+/// Traits for constructing and inspecting this adapter's conversion trees.
+pub mod prelude {
+    pub use crate::{JniInputExt, JniInputRequests, JniOutputExt, JniOutputRequests};
+}

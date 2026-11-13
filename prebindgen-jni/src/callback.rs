@@ -1,6 +1,5 @@
 //! Preparation and emission of retained source callbacks.
 use super::*;
-use crate::operations::JniOutputParts;
 use crate::operations::{JniInput, JniInputBranch};
 use prebindgen_conversions::{InputFragment, OutputFragment, TemplateContext};
 use prebindgen_flat::{callback_signature, InputConversion, Wire, WireNode};

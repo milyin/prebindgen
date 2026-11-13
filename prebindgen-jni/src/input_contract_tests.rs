@@ -1,6 +1,7 @@
 use super::*;
 use prebindgen_conversions::InputFragment;
-use prebindgen_declarations::{frontend::DeclInputLeafOp, frontend::DeclInputUnary};
+
+use crate::{JniInputLeafOp, JniInputUnary};
 use prebindgen_flat::{Function, InputConversion, Param, TypeUse};
 use std::{cell::Cell, rc::Rc};
 
@@ -96,7 +97,7 @@ fn handles() -> JniBindings {
     JniGen::builder()
         .items(syn::parse_file("pub type Handle=String;pub fn mixed(shared:&Handle,maybe:Option<&Handle>,owned:Handle,rows:Vec<Handle>)->i64{}").unwrap().items.into_iter().map(|item|(item,Default::default())))
         .set_package_prefix("test")
-        .package(package!().class(ptr_class!(Handle)).fun(fun!(mixed).expand_param("rows", DeclInput::Unary { operation: DeclInputUnary::Sequence, child: Box::new(DeclInput::Leaf(DeclInputLeafOp::Value)) }.bulk())))
+        .package(package!().class(ptr_class!(Handle)).fun(fun!(mixed).expand_param("rows", JniInput::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInput::Leaf(JniInputLeafOp::Value)) }.bulk())))
         .prepare().unwrap()
 }
 

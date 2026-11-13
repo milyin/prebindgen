@@ -1,5 +1,6 @@
 use super::*;
-use prebindgen_declarations::{convert, fun};
+use crate::fun;
+use prebindgen_declarations::convert;
 fn model(source: &str) -> CBindings {
     Flat::parse(
         syn::parse_file(source)

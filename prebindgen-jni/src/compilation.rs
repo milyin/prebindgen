@@ -1,8 +1,10 @@
 //! Interpretation of this adapter's resolved conversion operations.
 #![allow(missing_docs)]
+use crate::{JniInputExt, JniOutputExt};
+
 use super::operations::{
-    JniInput, JniInputBranch, JniInputLeafOp, JniInputOps, JniInputParts, JniInputUnary, JniOutput,
-    JniOutputBranch, JniOutputLeafOp, JniOutputOps, JniOutputParts, JniOutputUnary,
+    JniInput, JniInputBranch, JniInputLeafOp, JniInputOps, JniInputUnary, JniOutput,
+    JniOutputBranch, JniOutputLeafOp, JniOutputOps, JniOutputUnary,
 };
 use prebindgen_declarations::*;
 use prebindgen_flat::{Flat, Result};

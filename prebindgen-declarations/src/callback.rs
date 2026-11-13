@@ -1,85 +1,6 @@
 //! Signature defaults and occurrence overrides for source callbacks.
-use crate::{DeclInput, DeclInputRequest, DeclOutput, DeclOutputRequest};
 use prebindgen_flat::{callback_signature, Flat, Result, Schema};
-use std::collections::BTreeMap;
 use syn::Type;
-
-/// A retained callback's foreign declaration and independently selected conversions.
-///
-/// Arguments leave Rust and accept output declarations; the returned value enters
-/// Rust and accepts an input declaration. Unspecified settings inherit the
-/// callback signature's defaults, followed by ordinary value-type defaults.
-/// Each overridden argument/result replaces its entire conversion tree.
-///
-/// ```
-/// use prebindgen_declarations::{callback, expand_param, expand_return, fun};
-/// let handler = callback!(impl Fn(Packet) -> Decision)
-///     .name("PacketHandler")
-///     .expand_param(0, expand_return!(Packet).field(fun!(packet_payload)))
-///     .expand_return(expand_param!(Decision).variant(fun!(decision_new)));
-/// let registration = fun!(register).expand_param("callback", handler);
-/// ```
-#[derive(Clone, Debug)]
-pub struct DeclCallback {
-    /// Source `impl Fn(...) -> R` signature; marker bounds do not identify defaults.
-    pub ty: Type,
-    /// Literal destination interface name.
-    pub foreign: Option<String>,
-    /// Destination namespace, supplied by the language adapter's placement declaration.
-    pub namespace: Option<String>,
-    /// Argument output overrides, indexed in source invocation order.
-    pub params: BTreeMap<usize, DeclOutput<DeclInputRequest, DeclOutputRequest>>,
-    /// Returned-value input override.
-    pub ret: Option<DeclInput<DeclInputRequest, DeclOutputRequest>>,
-}
-impl DeclCallback {
-    /// Declare defaults or an occurrence override for a source callback signature.
-    pub fn new(ty: Type) -> Self {
-        Self {
-            ty,
-            foreign: None,
-            namespace: None,
-            params: BTreeMap::new(),
-            ret: None,
-        }
-    }
-    /// Set a literal destination interface name.
-    pub fn name(mut self, name: impl Into<String>) -> Self {
-        self.foreign = Some(name.into());
-        self
-    }
-    /// Override one argument's Rust-to-foreign conversion.
-    ///
-    /// Like a function parameter override, duplicate indices panic. Build checks
-    /// that the index exists and the conversion matches the source argument type.
-    pub fn expand_param(
-        mut self,
-        index: usize,
-        output: impl Into<DeclOutput<DeclInputRequest, DeclOutputRequest>>,
-    ) -> Self {
-        assert!(
-            self.params.insert(index, output.into()).is_none(),
-            "duplicate callback parameter override"
-        );
-        self
-    }
-    /// Override the callback result's foreign-to-Rust conversion.
-    pub fn expand_return(
-        mut self,
-        input: impl Into<DeclInput<DeclInputRequest, DeclOutputRequest>>,
-    ) -> Self {
-        self.ret = Some(input.into());
-        self
-    }
-}
-impl From<DeclCallback> for DeclInput<DeclInputRequest, DeclOutputRequest> {
-    fn from(decl: DeclCallback) -> Self {
-        Self::for_type(
-            decl.ty.clone(),
-            Self::Request(DeclInputRequest::Callback(Box::new(decl))),
-        )
-    }
-}
 
 /// Source identity and foreign declaration policy for one callback occurrence.
 ///
@@ -108,14 +29,8 @@ impl CallbackOperation {
     }
 }
 
-/// Declare a callback interface, defaults, or a callback occurrence override.
-#[macro_export]
-macro_rules! callback {
-    ($($ty:tt)+) => { $crate::DeclCallback::new($crate::declarations::parse_type(stringify!($($ty)+))) };
-}
-
 /// Resolve a callback signature for configuration identity, excluding marker bounds.
-pub(crate) fn input_type<M: Schema>(flat: &Flat<M>, ty: &Type) -> Result<Type> {
+pub fn input_type<M: Schema>(flat: &Flat<M>, ty: &Type) -> Result<Type> {
     let Some(signature) = callback_signature(ty)? else {
         return flat.resolve_type(ty);
     };
@@ -130,7 +45,8 @@ pub(crate) fn input_type<M: Schema>(flat: &Flat<M>, ty: &Type) -> Result<Type> {
 
 // Source occurrences have already been resolved by Flat. Only callback marker
 // bounds need normalization when looking up defaults.
-pub(crate) fn input_key<M: Schema>(flat: &Flat<M>, ty: &Type) -> Result<String> {
+/// Canonical callback identity without lifetimes or marker bounds.
+pub fn input_key<M: Schema>(flat: &Flat<M>, ty: &Type) -> Result<String> {
     if callback_signature(ty)?.is_some() {
         Ok(prebindgen_flat::type_key(&input_type(flat, ty)?))
     } else {
@@ -145,4 +61,72 @@ pub enum CallbackArgumentOwnership {
     Scoped,
     /// The callback author receives the produced owners and releases them.
     Transferred,
+}
+
+use std::collections::BTreeMap;
+/// A retained callback's foreign declaration and independently selected conversions.
+///
+/// Arguments leave Rust and accept output declarations; the returned value enters
+/// Rust and accepts an input declaration. Unspecified settings inherit the
+/// callback signature's defaults, followed by ordinary value-type defaults.
+/// Each overridden argument/result replaces its entire conversion tree.
+///
+#[derive(Clone, Debug)]
+pub struct DeclCallback<InTree, OutTree> {
+    /// Source `impl Fn(...) -> R` signature; marker bounds do not identify defaults.
+    pub ty: Type,
+    /// Literal destination interface name.
+    pub foreign: Option<String>,
+    /// Destination namespace, supplied by the language adapter's placement declaration.
+    pub namespace: Option<String>,
+    /// Argument output overrides, indexed in source invocation order.
+    pub params: BTreeMap<usize, OutTree>,
+    /// Returned-value input override.
+    pub ret: Option<InTree>,
+}
+impl<InTree, OutTree> DeclCallback<InTree, OutTree> {
+    /// Declare defaults or an occurrence override for a source callback signature.
+    pub fn new(ty: Type) -> Self {
+        Self {
+            ty,
+            foreign: None,
+            namespace: None,
+            params: BTreeMap::new(),
+            ret: None,
+        }
+    }
+    /// Set a literal destination interface name.
+    pub fn name(mut self, name: impl Into<String>) -> Self {
+        self.foreign = Some(name.into());
+        self
+    }
+    /// Override one argument's Rust-to-foreign conversion.
+    ///
+    /// Like a function parameter override, duplicate indices panic. Build checks
+    /// that the index exists and the conversion matches the source argument type.
+    pub fn expand_param(mut self, index: usize, output: impl Into<OutTree>) -> Self {
+        assert!(
+            self.params.insert(index, output.into()).is_none(),
+            "duplicate callback parameter override"
+        );
+        self
+    }
+    /// Override the callback result's foreign-to-Rust conversion.
+    pub fn expand_return(mut self, input: impl Into<InTree>) -> Self {
+        self.ret = Some(input.into());
+        self
+    }
+}
+
+impl<I: crate::InputOps, O: crate::OutputOps, IR, OR>
+    From<DeclCallback<crate::InputNode<I, O, IR, OR>, crate::OutputNode<I, O, IR, OR>>>
+    for crate::InputNode<I, O, IR, OR>
+where
+    IR: From<DeclCallback<crate::InputNode<I, O, IR, OR>, crate::OutputNode<I, O, IR, OR>>>,
+{
+    fn from(
+        declaration: DeclCallback<crate::InputNode<I, O, IR, OR>, crate::OutputNode<I, O, IR, OR>>,
+    ) -> Self {
+        Self::Request(declaration.into())
+    }
 }

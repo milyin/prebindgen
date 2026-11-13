@@ -13,11 +13,13 @@
 
 /* Unsupported: imports and helpers for the disabled declarations.
 use prebindgen_jni::{data_class, package, ptr_class, JniGen};
-use prebindgen_declarations::{expand_param, expand_return, fields, fun};
+
+use prebindgen_jni::{expand_param,expand_return,fields,fun};
 
 
 */
-use prebindgen_declarations::{expand_param, expand_return, fields, fun};
+
+use prebindgen_jni::{expand_param, expand_return, fields, fun};
 use prebindgen_jni::{package, ptr_class, JniGen};
 
 fn main() {
@@ -198,3 +200,10 @@ fn main() {
     }
     jni.write_kotlin(&kotlin).unwrap();
 }
+
+// Check declaration macros with only the language adapter as a generator dependency.
+const _: fn() = || {
+    let _ = prebindgen_jni::expand_param!(i64).variant_self();
+    let _ = prebindgen_jni::expand_return!(i64).field_self();
+    let _ = prebindgen_jni::callback!(impl Fn(i64));
+};

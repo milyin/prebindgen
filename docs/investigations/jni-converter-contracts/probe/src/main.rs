@@ -1,6 +1,6 @@
 //! Independent input/output entry-point controls for the completed contracts.
 use prebindgen_conversions::{InputFragment, OutputFragment};
-use prebindgen_declarations::{Codec, Condition};
+use prebindgen_declarations::{Codec,Condition};
 use prebindgen_flat::{Conversion, InputConversion, OutputConversion, Result, Schema};
 use prebindgen_jni::{
     fun, package, JniBranch, JniChain, JniContext, JniGen, JniInputConverter, JniOutputConverter, JniSchema, JniWire,

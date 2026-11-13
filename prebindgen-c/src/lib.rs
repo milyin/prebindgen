@@ -1,12 +1,5 @@
 //! Generate Rust wrappers and C declarations from conversion slots.
 #![warn(missing_docs)]
-#[cfg(test)]
-use prebindgen_declarations::{
-    frontend::DeclInputBranch, frontend::DeclInputUnary, frontend::DeclOutputBranch,
-    frontend::DeclOutputUnary,
-};
-use prebindgen_declarations::{frontend::DeclInputLeafOp, frontend::DeclOutputLeafOp};
-
 use prebindgen_conversions::value::Value;
 pub use prebindgen_conversions::Access;
 pub use prebindgen_declarations::{
@@ -53,9 +46,9 @@ mod sequence;
 use group::validate_layout;
 pub use group::{CBranch, CChain, CGroup, COptional};
 use prebindgen_declarations::{
-    Alternatives, Codec, DeclInputRequest, DeclOutputRequest, GroupKind, InputLeaf, InputRole,
-    Optional, OptionalEncoding, OutputLeaf, Presence, Representation, SequenceInputRequest,
-    SequenceOutputRequest, SourceError, SourceErrorPlan, ValueAccess,
+    Alternatives, Codec, GroupKind, InputLeaf, InputRole, Optional, OptionalEncoding, OutputLeaf,
+    Presence, Representation, SequenceInputRequest, SequenceOutputRequest, SourceError,
+    SourceErrorPlan, ValueAccess,
 };
 use prebindgen_flat::Wire as GenericWire;
 pub use sequence::CSequence;
@@ -82,14 +75,14 @@ use quote::{format_ident, quote};
 /// to fill [`CBindings`] manually.
 ///
 /// ```
-/// use prebindgen_c::{CBindings, Cbindgen, CCodec};
-/// use prebindgen_declarations::{bind_input, bind_output, DeclInput, DeclOutput};
+/// use prebindgen_c::{CInput, COutput, CBindings, Cbindgen, CCodec};
+/// use prebindgen_declarations::{bind_input,bind_output};
 /// let source = syn::parse_file("pub fn echo(x: i64) -> i64 { x }")?;
 /// let mut flat = CBindings::parse(
 ///     source.items.into_iter().map(|item| (item, Default::default())),
 /// )?;
-/// bind_input(&mut flat, &CCodec::raw(), "echo", "x", &DeclInput::Leaf(prebindgen_declarations::frontend::DeclInputLeafOp::Value), &())?;
-/// bind_output(&mut flat, &CCodec::raw(), "echo", &DeclOutput::Leaf(prebindgen_declarations::frontend::DeclOutputLeafOp::Value), &())?;
+/// bind_input(&mut flat, &CCodec::raw(), "echo", "x", &CInput::Leaf(prebindgen_c::CInputLeafOp::Value), &())?;
+/// bind_output(&mut flat, &CCodec::raw(), "echo", &COutput::Leaf(prebindgen_c::COutputLeafOp::Value), &())?;
 /// let generated = Cbindgen::new(flat).build()?;
 /// assert!(generated.header.contains("pb_echo("));
 /// syn::parse_file(&generated.rust)?;
@@ -1021,13 +1014,13 @@ fn encode_scalar(p: Primitive, v: TokenStream) -> TokenStream {
 /// Start with captured source via [`Self::builder`] and [`Self::source`], or a
 /// flat model via [`Self::new`]. With captured source, declare each
 /// exported function. In either case, declare each opaque pointee type.
-/// Conversion declarations use [`prebindgen_declarations::DeclDefaults`]. When reading
+/// Conversion declarations use [`crate::DeclCDefaults`]. When reading
 /// captured source, add the source crate as both a build dependency and a normal
 /// dependency: generation reads its captures, and generated code calls its functions.
 ///
 /// ```
-/// use prebindgen_c::{CBindings, Cbindgen};
-/// use prebindgen_declarations::fun;
+/// use prebindgen_c::{CInput, COutput, CBindings, Cbindgen};
+/// use prebindgen_c::fun;
 /// let source = syn::parse_file("pub fn add(a: i64, b: i64) -> i64 { a + b }")?;
 /// let flat = CBindings::parse(
 ///     source.items.into_iter().map(|item| (item, Default::default())),
@@ -1066,10 +1059,10 @@ pub struct Cbindgen {
     flat: Option<CBindings>,
     source: Option<std::path::PathBuf>,
     conversions: Vec<prebindgen_declarations::DeclConvert>,
-    inputs: Vec<prebindgen_declarations::DeclInput<DeclInputRequest, DeclOutputRequest>>,
-    outputs: Vec<prebindgen_declarations::DeclOutput<DeclInputRequest, DeclOutputRequest>>,
+    inputs: Vec<crate::CInput<CInputRequest, COutputRequest>>,
+    outputs: Vec<crate::COutput<CInputRequest, COutputRequest>>,
     error_mappers: Vec<(syn::Type, String)>,
-    functions: Vec<prebindgen_declarations::DeclFunction>,
+    functions: Vec<crate::DeclCFunction>,
     prefix: String,
     pointers: Vec<(String, syn::Type)>,
     owned: Vec<(String, syn::Type, OpaqueLayout, Option<String>)>,
@@ -1124,12 +1117,12 @@ impl Cbindgen {
     }
     /// Register a boundary expansion using the declaration syntax.
     /// The builder is consumed directly into its Input/Output tree.
-    pub fn expand(self, decl: impl Into<prebindgen_declarations::DeclExpand>) -> Self {
-        use prebindgen_declarations::DeclExpand;
+    pub fn expand(self, decl: impl Into<crate::DeclCExpand>) -> Self {
+        use crate::DeclCExpand;
         match decl.into() {
-            DeclExpand::Param(decl) => self.input(decl),
-            DeclExpand::Return(decl) => self.output(decl),
-            DeclExpand::Error(decl) => self.error_mapper(decl.ty, decl.mapper),
+            DeclCExpand::Param(decl) => self.input(decl),
+            DeclCExpand::Return(decl) => self.output(decl),
+            DeclCExpand::Error(decl) => self.error_mapper(decl.ty, decl.mapper),
         }
     }
     /// Register a type-wide input or output expansion, built with `expand_param!`
@@ -1137,17 +1130,14 @@ impl Cbindgen {
     ///
     /// Per-function overrides replace this default; duplicate defaults are rejected
     /// by [`Self::build`]. Registration order does not affect type lookup.
-    pub fn input(
-        mut self,
-        tree: impl Into<prebindgen_declarations::DeclInput<DeclInputRequest, DeclOutputRequest>>,
-    ) -> Self {
+    pub fn input(mut self, tree: impl Into<crate::CInput<CInputRequest, COutputRequest>>) -> Self {
         self.inputs.push(tree.into());
         self
     }
     /// Register a type-wide direct output conversion tree.
     pub fn output(
         mut self,
-        tree: impl Into<prebindgen_declarations::DeclOutput<DeclInputRequest, DeclOutputRequest>>,
+        tree: impl Into<crate::COutput<CInputRequest, COutputRequest>>,
     ) -> Self {
         self.outputs.push(tree.into());
         self
@@ -1156,11 +1146,7 @@ impl Cbindgen {
     /// using `ty`, with a default source error-message mapper.
     /// The helper takes exactly E or &E and returns String. A function's
     /// `on_error(...)` overrides this default. Duplicate resolved types are rejected.
-    pub fn error_mapper(
-        mut self,
-        ty: syn::Type,
-        mapper: impl Into<prebindgen_declarations::DeclFunction>,
-    ) -> Self {
+    pub fn error_mapper(mut self, ty: syn::Type, mapper: impl Into<crate::DeclCFunction>) -> Self {
         self.error_mappers.push((ty, mapper.into().source_name()));
         self
     }
@@ -1174,11 +1160,7 @@ impl Cbindgen {
     }
     /// Deliver an opaque source error as a caller-owned C string through
     /// `char **error`. The mapper takes E or &E and returns String.
-    pub fn opaque_error(
-        self,
-        ty: syn::Type,
-        mapper: impl Into<prebindgen_declarations::DeclFunction>,
-    ) -> Self {
+    pub fn opaque_error(self, ty: syn::Type, mapper: impl Into<crate::DeclCFunction>) -> Self {
         self.error_mapper(ty, mapper)
     }
 
@@ -1188,7 +1170,7 @@ impl Cbindgen {
     ///
     /// Function renaming is currently unsupported; exports use the symbol prefix
     /// and original source name.
-    pub fn function(mut self, decl: prebindgen_declarations::DeclFunction) -> Self {
+    pub fn function(mut self, decl: crate::DeclCFunction) -> Self {
         self.functions.push(decl);
         self
     }
@@ -1305,27 +1287,27 @@ impl Cbindgen {
         name: &str,
         ty: syn::Type,
         layout: OpaqueLayout,
-        empty: prebindgen_declarations::DeclFunction,
+        empty: crate::DeclCFunction,
     ) -> Self {
         self.owned
             .push((name.into(), ty, layout, Some(empty.source_name())));
         self
     }
     /// Reference the generated length getter in an output expansion.
-    pub fn owned_len(name: &str) -> prebindgen_declarations::DeclFunction {
-        prebindgen_declarations::DeclFunction::new(owned::helper(name, "len"))
+    pub fn owned_len(name: &str) -> crate::DeclCFunction {
+        crate::DeclCFunction::new(owned::helper(name, "len"))
     }
     /// Reference the generated shared view getter for a `String`, `Vec<u8>`, or
     /// numeric `Vec` owner. Views preserve the original allocation without copying.
-    pub fn owned_view(name: &str) -> prebindgen_declarations::DeclFunction {
-        prebindgen_declarations::DeclFunction::new(owned::helper(name, "view"))
+    pub fn owned_view(name: &str) -> crate::DeclCFunction {
+        crate::DeclCFunction::new(owned::helper(name, "view"))
     }
     /// Reference the generated exclusive byte-view getter for a `Vec<u8>` owner.
     /// Use as the single getter alongside its owning identity in an output
     /// expansion. The C caller keeps the owner alive and preserves exclusive
     /// access until the view's last use. No copy or write-back is performed.
-    pub fn owned_view_mut(name: &str) -> prebindgen_declarations::DeclFunction {
-        prebindgen_declarations::DeclFunction::new(owned::helper(name, "view_mut"))
+    pub fn owned_view_mut(name: &str) -> crate::DeclCFunction {
+        crate::DeclCFunction::new(owned::helper(name, "view_mut"))
     }
     /// Declare an ordinary C tag/union carrier for a source payload enum or
     /// concrete Result. Tags follow source order, independently of Rust discriminants.
@@ -1374,7 +1356,7 @@ impl Cbindgen {
                     .build();
                 let flat = Flat::parse_selected(
                     source.items_all(),
-                    &prebindgen_declarations::declarations::source_items(
+                    &crate::declarations::source_items(
                         &self.inputs,
                         &self.outputs,
                         &self.error_mappers,
@@ -1564,12 +1546,8 @@ impl Cbindgen {
             }
         }
         owned::accessors(&mut flat)?;
-        let declarations = prebindgen_declarations::DeclDefaults::new(
-            &flat,
-            self.inputs,
-            self.outputs,
-            self.error_mappers,
-        )?;
+        let declarations =
+            crate::DeclCDefaults::new(&flat, self.inputs, self.outputs, self.error_mappers)?;
         let codec = CCodec::declared();
         let mut names = std::collections::BTreeSet::new();
         for decl in &self.functions {
@@ -2821,7 +2799,7 @@ mod generation_tests {
 
     #[test]
     fn mutable_byte_views_preserve_ownership_and_optional_layers() {
-        use prebindgen_declarations::fun;
+        use crate::fun;
         let flat = Cbindgen::new(error_model("pub type Owner=String; pub fn bytes(o:&mut Owner)->&mut [u8]{} pub fn maybe(o:&mut Owner)->Option<&mut [u8]>{} pub fn nested(o:&mut Owner)->Option<Option<&mut [u8]>>{} pub fn fallible(o:&mut Owner)->Result<&mut [u8],String>{} pub fn optional(o:&mut Owner)->Result<Option<&mut [u8]>,String>{} pub fn message(e:&String)->String{}"))
             .opaque_ptr("owner", syn::parse_quote!(Owner))
             .opaque_error(syn::parse_quote!(String),fun!(message))
@@ -2850,7 +2828,7 @@ mod generation_tests {
 
     #[test]
     fn mutable_byte_views_reject_temporary_owners_and_duplicate_views() {
-        use prebindgen_declarations::{expand_return, fun};
+        use crate::fun;
         let model = || {
             Cbindgen::new(error_model(
                 "pub type Owner=String; pub fn bytes(o:&mut Owner)->&mut [u8]{}",
@@ -2858,10 +2836,7 @@ mod generation_tests {
             .opaque_ptr("owner", syn::parse_quote!(Owner))
         };
         let error = Cbindgen::new(error_model("pub fn temp(o:&String)->&mut [u8]{}"))
-            .function(fun!(temp).expand_param(
-                "o",
-                prebindgen_declarations::expand_param!(&String).reconstruct(),
-            ))
+            .function(fun!(temp).expand_param("o", crate::expand_param!(&String).reconstruct()))
             .panic()
             .build()
             .err()
@@ -2883,7 +2858,7 @@ mod generation_tests {
 
     #[test]
     fn mutable_byte_views_reject_shared_getter_receivers_and_callback_arguments() {
-        use prebindgen_declarations::{expand_return, fun};
+        use crate::fun;
         let model = || {
             Cbindgen::new(error_model("pub fn borrowed(v:&Vec<u8>)->&Vec<u8>{} pub fn rows(v:&Vec<Vec<u8>>)->&Vec<Vec<u8>>{}"))
             .opaque_owned_struct("bytes",syn::parse_quote!(Vec<u8>),OpaqueLayout::auto::<Vec<u8>>())
@@ -2931,7 +2906,7 @@ mod generation_tests {
 
     #[test]
     fn unsupported_composite_callback_borrows_remain_generation_errors() {
-        use prebindgen_declarations::fun;
+        use crate::fun;
         // Arrays use the same recursive collection guard. Other shapes have no
         // declared C representation and must not silently accept borrowed data.
         for argument in [
@@ -2955,7 +2930,7 @@ mod generation_tests {
 
     #[test]
     fn mutable_owned_byte_view_requires_a_single_getter_and_vec_storage() {
-        use prebindgen_declarations::{expand_return, fun};
+        use crate::fun;
         let model = || {
             Cbindgen::new(error_model("pub fn make()->Vec<u8>{}")).opaque_owned_struct(
                 "bytes",
@@ -3007,7 +2982,7 @@ mod generation_tests {
 
     #[test]
     fn direct_shared_returns_are_non_owning_nullable_const_pointers() {
-        use prebindgen_declarations::fun;
+        use crate::fun;
         let flat = Cbindgen::new(error_model("pub type Owner=String;pub type Child=String;pub fn child(owner:&Owner)->&Child{}pub fn maybe(owner:&Owner)->Option<&Child>{}pub fn nested(owner:&Owner)->Option<Option<&Child>>{}pub fn fallible(owner:&Owner)->Result<&Child,String>{}pub fn optional(owner:&Owner)->Result<Option<&Child>,String>{}pub fn message(error:&String)->String{}"))
             .opaque_ptr("owner", syn::parse_quote!(Owner))
             .opaque_ptr("child_t", syn::parse_quote!(Child))
@@ -3058,7 +3033,7 @@ mod generation_tests {
 
     #[test]
     fn mutable_returns_preserve_exclusive_access_without_ownership_or_copying() {
-        use prebindgen_declarations::fun;
+        use crate::fun;
         let flat = Cbindgen::new(error_model("pub type Owner=String;pub type Child=String;pub fn child(owner:&mut Owner)->&mut Child{}pub fn maybe(owner:&mut Owner)->Option<&mut Child>{}pub fn fallible(owner:&mut Owner)->Result<&mut Child,String>{}pub fn optional(owner:&mut Owner)->Result<Option<&mut Child>,String>{}pub fn message(error:&String)->String{}"))
             .opaque_ptr("owner",syn::parse_quote!(Owner)).opaque_ptr("child_t",syn::parse_quote!(Child))
             .opaque_error(syn::parse_quote!(String),fun!(message))
@@ -3091,7 +3066,7 @@ mod generation_tests {
 
     #[test]
     fn mutable_value_and_collection_outputs_have_no_copying_fallback() {
-        use prebindgen_declarations::fun;
+        use crate::fun;
         for returned in ["&mut i64", "&mut str", "&mut [i64]"] {
             let source =
                 format!("pub type Owner=String;pub fn value(owner:&mut Owner)->{returned}{{}}");
@@ -3108,10 +3083,10 @@ mod generation_tests {
 
     #[test]
     fn mutable_getter_expansions_are_rejected_instead_of_copied() {
-        use prebindgen_declarations::{expand_return, fun};
+        use crate::fun;
         let error = Cbindgen::new(error_model("pub type Owner=String;pub type Child=String;pub fn make()->Owner{}pub fn child(owner:&Owner)->&mut Child{}"))
             .opaque_ptr("child_t",syn::parse_quote!(Child))
-            .function(fun!(make).expand_return(expand_return!(Owner).view(prebindgen_declarations::DeclOutput::getter("child",prebindgen_declarations::DeclOutput::Leaf(DeclOutputLeafOp::Projected(prebindgen_declarations::Projection::borrowed()))))))
+            .function(fun!(make).expand_return(expand_return!(Owner).view(crate::COutput::getter("child",crate::COutput::Leaf(COutputLeafOp::Projected(prebindgen_declarations::Projection::borrowed()))))))
             .build().err().unwrap();
         assert!(
             error.contains("mutable-reference getter results are unsupported"),
@@ -3121,12 +3096,12 @@ mod generation_tests {
 
     #[test]
     fn owner_backed_getters_borrow_final_storage_and_keep_wire_order() {
-        use prebindgen_declarations::{expand_return, fun, DeclOutput};
+        use crate::fun;
         for mutable in [false, true] {
             let qualifier = if mutable { "mut " } else { "" };
             let source=format!("pub type Owner=String;pub type Child=String;pub fn make()->Owner{{}}pub fn child(o:&{qualifier}Owner)->&{qualifier}Child{{}}");
             for reversed in [false, true] {
-                let getter = DeclOutput::getter("child", DeclOutput::Leaf(DeclOutputLeafOp::Value));
+                let getter = COutput::getter("child", COutput::Leaf(COutputLeafOp::Value));
                 let expansion = if reversed {
                     expand_return!(Owner).view(getter).field_self_into()
                 } else {
@@ -3170,7 +3145,7 @@ mod generation_tests {
 
     #[test]
     fn owner_view_near_misses_are_diagnostics_not_implicit_clones() {
-        use prebindgen_declarations::{expand_return, fun, DeclOutput};
+        use crate::fun;
         let source="pub type Owner=String;pub type Child=String;pub fn make()->Owner{}pub fn child(o:&Owner)->&Child{}pub fn mutate(o:&mut Owner)->&mut Child{}";
         let model = || {
             Cbindgen::new(error_model(source))
@@ -3186,15 +3161,15 @@ mod generation_tests {
                 expand_return!(Owner)
                     .field_self_into()
                     .field(fun!(child))
-                    .view(DeclOutput::Leaf(DeclOutputLeafOp::Discard)),
+                    .view(COutput::Leaf(COutputLeafOp::Discard)),
                 "supports only",
             ),
             (
                 expand_return!(Owner)
                     .field_self_into()
-                    .view(DeclOutput::getter(
+                    .view(COutput::getter(
                         "mutate",
-                        DeclOutput::Leaf(DeclOutputLeafOp::Value),
+                        COutput::Leaf(COutputLeafOp::Value),
                     ))
                     .field(fun!(child)),
                 "only getter view",
@@ -3212,11 +3187,11 @@ mod generation_tests {
 
     #[test]
     fn getter_expansions_and_explicit_projections_keep_owned_clones() {
-        use prebindgen_declarations::{expand_return, fun};
+        use crate::fun;
         let flat = Cbindgen::new(error_model("pub type Owner=String;pub type Child=String;pub fn make()->Owner{}pub fn child(owner:&Owner)->&Child{}"))
             .opaque_ptr("owner", syn::parse_quote!(Owner))
             .opaque_ptr("child", syn::parse_quote!(Child))
-            .function(fun!(make).expand_return(expand_return!(Owner).view(prebindgen_declarations::DeclOutput::getter("child",prebindgen_declarations::DeclOutput::Leaf(DeclOutputLeafOp::Projected(prebindgen_declarations::Projection::borrowed()))))))
+            .function(fun!(make).expand_return(expand_return!(Owner).view(crate::COutput::getter("child",crate::COutput::Leaf(COutputLeafOp::Projected(prebindgen_declarations::Projection::borrowed()))))))
             .function(fun!(child).expand_return(expand_return!(Child).field_self_ref()))
             .panic()
             .prepare().unwrap();
@@ -3234,7 +3209,7 @@ mod generation_tests {
 
     #[test]
     fn loans_reject_reconstructed_inputs_but_allow_static_returns_and_owned_copies() {
-        use prebindgen_declarations::{expand_param, expand_return, fun};
+        use crate::fun;
         let source = "pub type Child=String;pub fn peek(value:&String)->&Child{}pub fn fixed(value:&String)->&'static Child{}pub fn first(values:&[Child])->&Child{}pub fn copy_child(child:&Child)->Child{}";
         let model = || {
             Cbindgen::new(error_model(source))
@@ -3250,9 +3225,9 @@ mod generation_tests {
             .function(
                 fun!(first).input(
                     "values",
-                    prebindgen_declarations::DeclInput::Unary {
-                        operation: DeclInputUnary::Sequence,
-                        child: Box::new(prebindgen_declarations::DeclInput::call("copy_child")),
+                    crate::CInput::Unary {
+                        operation: CInputUnary::Sequence,
+                        child: Box::new(crate::CInput::call("copy_child")),
                     }
                     .reconstruct(),
                 ),
@@ -3275,7 +3250,7 @@ mod generation_tests {
 
     #[test]
     fn expanded_reference_to_option_keeps_ordinary_value_conversion() {
-        use prebindgen_declarations::{expand_return, fun};
+        use crate::fun;
         let source = "pub type Child=String;pub type Owner=String;pub fn maybe(owner:&Owner)->&Option<Child>{}pub fn length(child:&Child)->i64{}pub fn fallible(owner:&Owner)->Result<&Option<Child>,String>{}pub fn message(error:&String)->String{}";
         let generated = Cbindgen::new(error_model(source))
             .opaque_ptr("owner", syn::parse_quote!(Owner))
@@ -3293,7 +3268,7 @@ mod generation_tests {
 
     #[test]
     fn callback_borrows_copies_and_expansions_have_distinct_stable_abis() {
-        use prebindgen_declarations::{callback, expand_return, fun};
+        use crate::fun;
         fn prepared(reverse: bool, global_copy: bool) -> CBindings {
             let mut declarations = vec![
                 fun!(borrowed),
@@ -3433,7 +3408,7 @@ mod generation_tests {
     }
     #[test]
     fn opaque_declarations_override_builtin_and_collection_types() {
-        use prebindgen_declarations::fun;
+        use crate::fun;
         for ty in [syn::parse_quote!(String), syn::parse_quote!(Vec<Item>)] {
             let generated = Cbindgen::new(error_model("pub type Item=String;"))
                 .opaque_ptr("native", ty)
@@ -3467,8 +3442,7 @@ mod generation_tests {
         flat.type_metadata_mut(&ty).unwrap().error = Some(std::rc::Rc::new(
             errors::ErrorBinding::declared("initial".into(), ty.clone()),
         ));
-        let declarations =
-            prebindgen_declarations::DeclDefaults::new(&flat, vec![], vec![], vec![]).unwrap();
+        let declarations = crate::DeclCDefaults::new(&flat, vec![], vec![], vec![]).unwrap();
         errors::resolve(&mut flat, &codec, &declarations).unwrap();
         codec.compile_declarations(&mut flat, &()).unwrap();
         let error = flat.type_metadata_mut(&ty).unwrap().error.as_mut().unwrap();
@@ -3489,7 +3463,7 @@ mod generation_tests {
     }
     #[test]
     fn prebound_function_policy_is_read_from_flat() {
-        use prebindgen_declarations::{bind_input, bind_output, DeclInput, DeclOutput};
+        use prebindgen_declarations::{bind_input, bind_output};
         let mut flat = error_model("pub type Item=String;pub fn inspect(value:&Item)->i64{}");
         flat.type_metadata_mut(&syn::parse_quote!(Item))
             .unwrap()
@@ -3503,7 +3477,7 @@ mod generation_tests {
             &CCodec::raw(),
             "inspect",
             "value",
-            &DeclInput::Leaf(DeclInputLeafOp::Value),
+            &CInput::Leaf(CInputLeafOp::Value),
             &(),
         )
         .unwrap();
@@ -3511,7 +3485,7 @@ mod generation_tests {
             &mut flat,
             &CCodec::raw(),
             "inspect",
-            &DeclOutput::Leaf(DeclOutputLeafOp::Value),
+            &COutput::Leaf(COutputLeafOp::Value),
             &(),
         )
         .unwrap();
@@ -3529,7 +3503,7 @@ mod generation_tests {
     }
     #[test]
     fn logical_outcomes_and_sequence_fields_are_independent_of_c_transport() {
-        use prebindgen_declarations::{fun, DeclDefaults};
+        use crate::fun;
 
         let mut flat=error_model("pub struct Failure {pub code:i64,pub info:Option<String>} pub fn f(v:Option<Vec<i64>>)->Result<Option<Vec<Option<i64>>>,Failure>{}");
         let ty = flat.resolve_type(&syn::parse_quote!(Failure)).unwrap();
@@ -3537,7 +3511,7 @@ mod generation_tests {
         flat.type_metadata_mut(&ty).unwrap().error = Some(std::rc::Rc::new(
             errors::ErrorBinding::declared("failure".into(), ty.clone()),
         ));
-        let declarations = DeclDefaults::new(&flat, vec![], vec![], vec![]).unwrap();
+        let declarations = DeclCDefaults::new(&flat, vec![], vec![], vec![]).unwrap();
         errors::resolve(&mut flat, &codec, &declarations).unwrap();
         let decl = fun!(f).callback_return();
         declarations.fill(&mut flat, &codec, &decl, &()).unwrap();
@@ -3650,7 +3624,7 @@ mod generation_tests {
     }
     #[test]
     fn callback_return_rejects_unrelated_output_values() {
-        use prebindgen_declarations::{expand_return, fun};
+        use crate::fun;
         let source=syn::parse_file("pub fn values()->Option<Vec<i64>>{} pub fn number(v:&Option<Vec<i64>>)->i64{} pub fn view(v:&Option<Vec<i64>>)->Vec<i64>{}").unwrap();
         let flat = CBindings::parse(
             source
@@ -3688,7 +3662,7 @@ mod generation_tests {
         )
         .unwrap();
         let error = Cbindgen::new(flat)
-            .function(prebindgen_declarations::fun!(values).callback_return_only())
+            .function(crate::fun!(values).callback_return_only())
             .panic()
             .build()
             .err()
@@ -3708,9 +3682,7 @@ mod generation_tests {
             )
             .unwrap()
         };
-        let builder = || {
-            Cbindgen::new(flat()).function(prebindgen_declarations::fun!(values).callback_return())
-        };
+        let builder = || Cbindgen::new(flat()).function(crate::fun!(values).callback_return());
         assert!(builder().build().err().unwrap().contains(".panic()"));
         let output = builder().panic().build().unwrap();
         assert!(output.header.contains("test_values") || output.header.contains("pb_values("));
@@ -3723,7 +3695,7 @@ mod generation_tests {
 
     #[test]
     fn structured_error_registration_is_explicit_and_conflicts_are_rejected() {
-        use prebindgen_declarations::fun;
+        use crate::fun;
         let source="pub struct Error {pub code:i64} pub fn message(error:&Error)->String{} pub fn f()->Result<i64,Error>{}";
         assert!(Cbindgen::new(error_model(source))
             .function(fun!(f))
@@ -3758,7 +3730,7 @@ mod generation_tests {
     }
     #[test]
     fn error_field_names_follow_wire_subtrees_and_avoid_c_keywords() {
-        use prebindgen_declarations::fun;
+        use crate::fun;
         let generated = Cbindgen::new(error_model(
             "pub struct Error {pub empty:(),pub value:Option<i64>} pub fn f()->Result<(),Error>{}",
         ))
@@ -3786,7 +3758,7 @@ mod generation_tests {
 
     #[test]
     fn unit_and_optional_handle_results_use_the_expected_explicit_outputs() {
-        use prebindgen_declarations::fun;
+        use crate::fun;
         let source="pub type Handle=String; pub struct Error {pub code:i64} pub fn unit()->Result<(),Error>{} pub fn make()->Result<Handle,Error>{} pub fn maybe()->Result<Option<Handle>,Error>{}";
         let generated = Cbindgen::new(error_model(source))
             .opaque_ptr("handle", syn::parse_quote!(Handle))
@@ -3808,22 +3780,22 @@ mod generation_tests {
 
     #[test]
     fn multiple_collection_observations_follow_the_actual_borrow() {
-        use prebindgen_declarations::{bind_output, DeclOutput};
-        let seq = |copy: bool| DeclOutput::Unary {
-            operation: DeclOutputUnary::Sequence {
+        use prebindgen_declarations::bind_output;
+        let seq = |copy: bool| COutput::Unary {
+            operation: COutputUnary::Sequence {
                 delivery: prebindgen_declarations::SequenceDelivery::Value,
                 mode: copy.then_some(prebindgen_declarations::ProjectionMode::Borrowed),
             },
-            child: Box::new(DeclOutput::Leaf(DeclOutputLeafOp::Value)),
+            child: Box::new(COutput::Leaf(COutputLeafOp::Value)),
         };
         for (source, recipe) in [
             (
                 "pub fn f()->&Vec<i64> {}",
-                DeclOutput::combine([seq(false), seq(false)]),
+                COutput::combine([seq(false), seq(false)]),
             ),
             (
                 "pub struct Record { pub values: Vec<i64> } pub fn f()->Record {}",
-                DeclOutput::fields([DeclOutput::combine([seq(true), seq(true)])]),
+                COutput::fields([COutput::combine([seq(true), seq(true)])]),
             ),
         ] {
             let source = syn::parse_file(source).unwrap();
@@ -3852,30 +3824,30 @@ mod generation_tests {
 
     #[test]
     fn option_comment_labels_are_unique_across_parameters_and_result() {
-        use prebindgen_declarations::{bind_input, bind_output, DeclInput, DeclOutput};
+        use prebindgen_declarations::{bind_input, bind_output};
         let source = syn::parse_file("pub fn echo(a: Option<Option<char>>, b: Option<Option<char>>) -> Option<Option<char>> { a }").unwrap();
         let mut flat =
             CBindings::parse(source.items.into_iter().map(|i| (i, Default::default()))).unwrap();
-        let input = DeclInput::Unary {
-            operation: DeclInputUnary::Optional,
-            child: Box::new(DeclInput::Unary {
-                operation: DeclInputUnary::Optional,
-                child: Box::new(DeclInput::Leaf(DeclInputLeafOp::Value)),
+        let input = CInput::Unary {
+            operation: CInputUnary::Optional,
+            child: Box::new(CInput::Unary {
+                operation: CInputUnary::Optional,
+                child: Box::new(CInput::Leaf(CInputLeafOp::Value)),
             }),
         };
         for param in ["a", "b"] {
             bind_input(&mut flat, &CCodec::raw(), "echo", param, &input, &()).unwrap();
         }
-        let output = DeclOutput::Unary {
-            operation: DeclOutputUnary::Optional,
-            child: Box::new(DeclOutput::Unary {
-                operation: DeclOutputUnary::Optional,
-                child: Box::new(DeclOutput::Leaf(DeclOutputLeafOp::Value)),
+        let output = COutput::Unary {
+            operation: COutputUnary::Optional,
+            child: Box::new(COutput::Unary {
+                operation: COutputUnary::Optional,
+                child: Box::new(COutput::Leaf(COutputLeafOp::Value)),
             }),
         };
         bind_output(&mut flat, &CCodec::raw(), "echo", &output, &()).unwrap();
         let header = Cbindgen::new(flat)
-            .function(prebindgen_declarations::fun!(echo))
+            .function(crate::fun!(echo))
             .panic()
             .build()
             .unwrap()
@@ -3890,27 +3862,27 @@ mod generation_tests {
 
     #[test]
     fn header_describes_shared_nested_empty_and_multiwire_fields() {
-        use prebindgen_declarations::{bind_output, DeclOutput};
+        use prebindgen_declarations::bind_output;
         let source = syn::parse_file("pub struct Empty {} pub struct Pair { pub x: i32, pub y: i32 } pub struct Record { pub empty: Empty, pub pair: Pair, pub maybe: Option<i32> } pub fn make() -> Record { unreachable!() }").unwrap();
         let mut flat =
             CBindings::parse(source.items.into_iter().map(|i| (i, Default::default()))).unwrap();
-        let recipe = DeclOutput::Branch {
-            operation: DeclOutputBranch::Fields,
+        let recipe = COutput::Branch {
+            operation: COutputBranch::Fields,
             children: vec![
-                DeclOutput::Branch {
-                    operation: DeclOutputBranch::Fields,
+                COutput::Branch {
+                    operation: COutputBranch::Fields,
                     children: vec![],
                 },
-                DeclOutput::Branch {
-                    operation: DeclOutputBranch::Fields,
+                COutput::Branch {
+                    operation: COutputBranch::Fields,
                     children: vec![
-                        DeclOutput::Leaf(DeclOutputLeafOp::Value),
-                        DeclOutput::Leaf(DeclOutputLeafOp::Value),
+                        COutput::Leaf(COutputLeafOp::Value),
+                        COutput::Leaf(COutputLeafOp::Value),
                     ],
                 },
-                DeclOutput::Unary {
-                    operation: DeclOutputUnary::Optional,
-                    child: Box::new(DeclOutput::Leaf(DeclOutputLeafOp::Value)),
+                COutput::Unary {
+                    operation: COutputUnary::Optional,
+                    child: Box::new(COutput::Leaf(COutputLeafOp::Value)),
                 },
             ],
         };
@@ -3937,14 +3909,14 @@ mod generation_tests {
 
     #[test]
     fn shared_compiler_suppresses_niches_in_selector_arms() {
-        use prebindgen_declarations::{bind_input, DeclInput};
+        use prebindgen_declarations::bind_input;
         for (payload, arm) in [
-            ("char", DeclInput::Leaf(DeclInputLeafOp::Value)),
+            ("char", CInput::Leaf(CInputLeafOp::Value)),
             (
                 "Option<char>",
-                DeclInput::Unary {
-                    operation: DeclInputUnary::Optional,
-                    child: Box::new(DeclInput::Leaf(DeclInputLeafOp::Value)),
+                CInput::Unary {
+                    operation: CInputUnary::Optional,
+                    child: Box::new(CInput::Leaf(CInputLeafOp::Value)),
                 },
             ),
         ] {
@@ -3952,8 +3924,8 @@ mod generation_tests {
             let mut flat =
                 CBindings::parse(source.items.into_iter().map(|i| (i, Default::default())))
                     .unwrap();
-            let selector = DeclInput::Branch {
-                operation: DeclInputBranch::Selector,
+            let selector = CInput::Branch {
+                operation: CInputBranch::Selector,
                 children: vec![arm.clone(), arm.clone()],
             };
             bind_input(&mut flat, &CCodec::raw(), "echo", "value", &selector, &()).unwrap();
@@ -3982,10 +3954,10 @@ mod generation_tests {
             let mut flat =
                 CBindings::parse(source.items.into_iter().map(|i| (i, Default::default())))
                     .unwrap();
-            let recipe = DeclInput::Unary {
-                operation: DeclInputUnary::Optional,
-                child: Box::new(DeclInput::Branch {
-                    operation: DeclInputBranch::Selector,
+            let recipe = CInput::Unary {
+                operation: CInputUnary::Optional,
+                child: Box::new(CInput::Branch {
+                    operation: CInputBranch::Selector,
                     children: vec![arm.clone(), arm],
                 }),
             };
@@ -4056,7 +4028,7 @@ mod generation_tests {
     fn public_emission_validates_abort_policy_and_module_settings() {
         let flat = error_model("pub fn f(c:char)->char{}");
         let mut prepared = Cbindgen::new(flat)
-            .function(prebindgen_declarations::fun!(f))
+            .function(crate::fun!(f))
             .panic()
             .prepare()
             .unwrap();
@@ -4097,7 +4069,7 @@ mod generation_tests {
         let prepared = Cbindgen::new(flat)
             .prefix("custom")
             .enum_type("choice", syn::parse_quote!(E))
-            .function(prebindgen_declarations::fun!(echo))
+            .function(crate::fun!(echo))
             .panic()
             .prepare()
             .unwrap();
@@ -4133,10 +4105,10 @@ mod generation_tests {
 
     #[test]
     fn recoverable_c_results_require_a_declared_binding_failure_channel() {
-        use prebindgen_declarations::{fun, DeclDefaults};
+        use crate::fun;
 
         let mut flat = error_model("pub fn message(e:i64)->String{} pub fn f()->Result<i64,i64>{}");
-        let declarations = DeclDefaults::new(&flat, vec![], vec![], vec![]).unwrap();
+        let declarations = DeclCDefaults::new(&flat, vec![], vec![], vec![]).unwrap();
         declarations
             .fill(
                 &mut flat,
@@ -4252,7 +4224,7 @@ impl CNiche {
 #[cfg(test)]
 mod abort_policy_tests {
     use super::*;
-    use prebindgen_declarations::{expand_param, fun};
+    use crate::fun;
     fn model(source: &str) -> CBindings {
         CBindings::parse(
             syn::parse_file(source)
@@ -4336,11 +4308,11 @@ mod abort_policy_tests {
     #[test]
     fn manually_bound_fallible_output_requires_the_same_policy() {
         let mut flat = model("pub fn f()->i64{}");
-        prebindgen_declarations::bind_output(
+        crate::bind_output(
             &mut flat,
             &CCodec::raw(),
             "f",
-            &prebindgen_declarations::DeclOutput::Leaf(DeclOutputLeafOp::Value),
+            &crate::COutput::Leaf(COutputLeafOp::Value),
             &(),
         )
         .unwrap();
@@ -4361,32 +4333,6 @@ mod abort_policy_tests {
             .panic()
             .build()
             .unwrap();
-    }
-    #[test]
-    fn bulk_callback_elements_are_explicitly_unsupported_by_the_c_codec() {
-        use prebindgen_declarations::{expand_return, fun};
-        let source = syn::parse_file("pub fn rows()->Vec<i64>{}").unwrap();
-        let flat = CBindings::parse(
-            source
-                .items
-                .into_iter()
-                .map(|item| (item, Default::default())),
-        )
-        .unwrap();
-        let error = Cbindgen::new(flat)
-            .function(
-                fun!(rows)
-                    .callback_return_only()
-                    .expand_return(expand_return!(i64).field_self().bulk()),
-            )
-            .panic()
-            .build()
-            .err()
-            .unwrap();
-        assert!(
-            error.contains("bulk outputs are unsupported by this codec"),
-            "{error}"
-        );
     }
 }
 
@@ -4409,7 +4355,7 @@ mod canonical_tests;
 #[cfg(test)]
 mod resolved_arrow_tests {
     use super::*;
-    use prebindgen_declarations::{compile_input, DeclDefaults, DeclInput};
+    use prebindgen_declarations::compile_input;
 
     #[test]
     fn a_manually_edited_arrow_reports_wrong_arity_without_panicking() {
@@ -4417,10 +4363,10 @@ mod resolved_arrow_tests {
             .unwrap()
             .items;
         let flat = CBindings::parse(items.into_iter().map(|i| (i, Default::default()))).unwrap();
-        let defaults = DeclDefaults::new(&flat, vec![], vec![], vec![]).unwrap();
+        let defaults = DeclCDefaults::new(&flat, vec![], vec![], vec![]).unwrap();
         let ty = &flat.function("take").unwrap().params[0].ty.ty;
         let mut recipe = defaults
-            .resolve_input(&flat, &CCodec::declared(), ty, &DeclInput::auto(), &())
+            .resolve_input(&flat, &CCodec::declared(), ty, &CInput::auto(), &())
             .unwrap();
         let operations::CInput::Arrow { domain, .. } = &mut recipe else {
             panic!("expected arrow")
@@ -4436,295 +4382,40 @@ mod compilation;
 /// Resolved conversion operations interpreted by this adapter.
 pub mod operations;
 
-impl prebindgen_declarations::DeclCodec for CCodec {
-    fn sequence_callback(
-        &self,
-        cx: &mut prebindgen_declarations::DeclResolve<'_, Self>,
-        ty: &syn::Type,
-        tree: operations::COutput,
-        structural: bool,
-    ) -> Result<operations::COutput> {
-        operations::sequence_callback(cx, ty, tree, structural)
-    }
-
-    fn is_discarded_output(&self, tree: &operations::COutput) -> bool {
-        matches!(
-            tree,
-            operations::COutput::Leaf(operations::COutputLeafOp::Discard)
-        )
-    }
-
-    fn resolve_input_leaf(
-        &self,
-        operation: prebindgen_declarations::frontend::DeclInputLeafOp,
-    ) -> Result<<Self::InOps as prebindgen_declarations::InputOps>::Leaf> {
-        Ok(match operation {
-            prebindgen_declarations::frontend::DeclInputLeafOp::Value => {
-                operations::CInputLeafOp::Value
-            }
-        })
-    }
-    fn resolve_input_unary(
-        &self,
-        operation: prebindgen_declarations::frontend::DeclInputUnary,
-    ) -> Result<<Self::InOps as prebindgen_declarations::InputOps>::Unary> {
-        Ok(match operation {
-            prebindgen_declarations::frontend::DeclInputUnary::Convert { conversion } => {
-                operations::CInputUnary::Convert { conversion }
-            }
-            prebindgen_declarations::frontend::DeclInputUnary::Sequence => {
-                operations::CInputUnary::Sequence
-            }
-            prebindgen_declarations::frontend::DeclInputUnary::Temporary => {
-                operations::CInputUnary::Temporary
-            }
-            prebindgen_declarations::frontend::DeclInputUnary::Bulk => {
-                return Err("bulk inputs are unsupported by this codec".into())
-            }
-            prebindgen_declarations::frontend::DeclInputUnary::Optional => {
-                operations::CInputUnary::Optional
-            }
-        })
-    }
-    fn resolve_input_branch(
-        &self,
-        operation: prebindgen_declarations::frontend::DeclInputBranch,
-    ) -> Result<<Self::InOps as prebindgen_declarations::InputOps>::Branch> {
-        Ok(match operation {
-            prebindgen_declarations::frontend::DeclInputBranch::Fields => {
-                operations::CInputBranch::Fields
-            }
-            prebindgen_declarations::frontend::DeclInputBranch::Record => {
-                return Err("foreign record inputs are unsupported by this codec".into())
-            }
-            prebindgen_declarations::frontend::DeclInputBranch::Selector => {
-                operations::CInputBranch::Selector
-            }
-            prebindgen_declarations::frontend::DeclInputBranch::Constructor { function } => {
-                operations::CInputBranch::Constructor { function }
-            }
-            prebindgen_declarations::frontend::DeclInputBranch::Enum { value } => {
-                operations::CInputBranch::Enum { value }
-            }
-            prebindgen_declarations::frontend::DeclInputBranch::Variant => {
-                operations::CInputBranch::Variant
-            }
-        })
-    }
-    fn resolve_input_arrow(
-        &self,
-        operation: Box<prebindgen_declarations::CallbackOperation>,
-    ) -> Result<<Self::InOps as prebindgen_declarations::InputOps>::Arrow> {
-        Ok(operation)
-    }
-    fn resolve_output_leaf(
-        &self,
-        operation: prebindgen_declarations::frontend::DeclOutputLeafOp,
-    ) -> Result<<Self::OutOps as prebindgen_declarations::OutputOps>::Leaf> {
-        Ok(match operation {
-            prebindgen_declarations::frontend::DeclOutputLeafOp::Value => {
-                operations::COutputLeafOp::Value
-            }
-            prebindgen_declarations::frontend::DeclOutputLeafOp::Discard => {
-                operations::COutputLeafOp::Discard
-            }
-            prebindgen_declarations::frontend::DeclOutputLeafOp::Projected(projection) => {
-                operations::COutputLeafOp::Projected(projection)
-            }
-        })
-    }
-    fn resolve_output_unary(
-        &self,
-        operation: prebindgen_declarations::frontend::DeclOutputUnary,
-    ) -> Result<<Self::OutOps as prebindgen_declarations::OutputOps>::Unary> {
-        Ok(match operation {
-            prebindgen_declarations::frontend::DeclOutputUnary::CallbackArgument { ownership } => {
-                operations::COutputUnary::CallbackArgument { ownership }
-            }
-            prebindgen_declarations::frontend::DeclOutputUnary::Bulk => {
-                return Err("bulk outputs are unsupported by this codec".into())
-            }
-            prebindgen_declarations::frontend::DeclOutputUnary::Named { name } => {
-                operations::COutputUnary::Named { name }
-            }
-            prebindgen_declarations::frontend::DeclOutputUnary::Convert { conversion } => {
-                operations::COutputUnary::Convert { conversion }
-            }
-            prebindgen_declarations::frontend::DeclOutputUnary::Sequence { delivery, mode } => {
-                operations::COutputUnary::Sequence { delivery, mode }
-            }
-            prebindgen_declarations::frontend::DeclOutputUnary::Result { error } => {
-                operations::COutputUnary::Result { error }
-            }
-            prebindgen_declarations::frontend::DeclOutputUnary::Optional => {
-                operations::COutputUnary::Optional
-            }
-            prebindgen_declarations::frontend::DeclOutputUnary::Into { function } => {
-                operations::COutputUnary::Into { function }
-            }
-            prebindgen_declarations::frontend::DeclOutputUnary::Getter { function } => {
-                operations::COutputUnary::Getter { function }
-            }
-        })
-    }
-    fn resolve_output_branch(
-        &self,
-        operation: prebindgen_declarations::frontend::DeclOutputBranch,
-    ) -> Result<<Self::OutOps as prebindgen_declarations::OutputOps>::Branch> {
-        Ok(match operation {
-            prebindgen_declarations::frontend::DeclOutputBranch::Fields => {
-                operations::COutputBranch::Fields
-            }
-            prebindgen_declarations::frontend::DeclOutputBranch::OwnedFields => {
-                operations::COutputBranch::OwnedFields
-            }
-            prebindgen_declarations::frontend::DeclOutputBranch::Record { .. } => {
-                return Err("foreign record outputs are unsupported by this codec".into())
-            }
-            prebindgen_declarations::frontend::DeclOutputBranch::Combine => {
-                operations::COutputBranch::Combine
-            }
-            prebindgen_declarations::frontend::DeclOutputBranch::Enum { value, mode } => {
-                operations::COutputBranch::Enum { value, mode }
-            }
-            prebindgen_declarations::frontend::DeclOutputBranch::Variant => {
-                operations::COutputBranch::Variant
-            }
-            prebindgen_declarations::frontend::DeclOutputBranch::Arguments => {
-                operations::COutputBranch::Arguments
-            }
-        })
-    }
-    fn resolve_output_arrow(
-        &self,
-        operation: std::convert::Infallible,
-    ) -> Result<<Self::OutOps as prebindgen_declarations::OutputOps>::Arrow> {
-        match operation {}
-    }
-
-    fn expand_input(
-        &self,
-        cx: &mut prebindgen_declarations::DeclResolve<'_, Self>,
-        ty: &syn::Type,
-        tree: &prebindgen_declarations::DeclInput<DeclInputRequest, DeclOutputRequest>,
-    ) -> Result<Option<operations::CInput>> {
-        let flat = cx.flat;
-        let replacement = (|| {
-            if !self.declared
-                || !matches!(
-                    tree,
-                    prebindgen_declarations::DeclInput::Leaf(DeclInputLeafOp::Value)
-                )
-            {
-                return Ok(None);
-            }
-            if flat
-                .payload_enums
-                .contains_key(&prebindgen_flat::type_key(ty))
-                && !flat.type_info(ty).ok().is_some_and(|t| {
-                    t.metadata.tagged.is_some()
-                        || t.metadata.pointer.is_some()
-                        || t.metadata.owned.is_some()
-                })
-            {
-                return Err(format!(
-                "ordinary payload enum `{}` requires tagged_union or an explicit field expansion",
-                prebindgen_flat::type_key(ty)
-            ));
-            }
-            if flat
-                .type_info(ty)
-                .ok()
-                .is_some_and(|t| t.metadata.tagged.is_some())
-            {
-                let e = flat.payload_enum(ty)?;
-                return Ok(Some(prebindgen_declarations::DeclInput::enum_variants(
-                    e.variants
-                        .iter()
-                        .map(|v| {
-                            v.fields
-                                .iter()
-                                .map(|_| prebindgen_declarations::DeclInput::value())
-                                .collect()
-                        })
-                        .collect(),
-                    true,
-                )));
-            }
-            Ok(None)
-        })();
-        replacement?.map(|tree| cx.input(ty, &tree)).transpose()
-    }
-    fn expand_output(
-        &self,
-        cx: &mut prebindgen_declarations::DeclResolve<'_, Self>,
-        ty: &syn::Type,
-        tree: &prebindgen_declarations::DeclOutput<DeclInputRequest, DeclOutputRequest>,
-    ) -> Result<Option<operations::COutput>> {
-        let flat = cx.flat;
-        let replacement = (|| {
-            if !self.declared
-                || !matches!(
-                    tree,
-                    prebindgen_declarations::DeclOutput::Leaf(DeclOutputLeafOp::Value)
-                )
-            {
-                return Ok(None);
-            }
-            if flat
-                .payload_enums
-                .contains_key(&prebindgen_flat::type_key(ty))
-                && !flat.type_info(ty).ok().is_some_and(|t| {
-                    t.metadata.tagged.is_some()
-                        || t.metadata.pointer.is_some()
-                        || t.metadata.owned.is_some()
-                })
-            {
-                return Err(format!(
-                "ordinary payload enum `{}` requires tagged_union or an explicit field expansion",
-                prebindgen_flat::type_key(ty)
-            ));
-            }
-            if flat
-                .type_info(ty)
-                .ok()
-                .is_some_and(|t| t.metadata.tagged.is_some())
-            {
-                let e = flat.payload_enum(ty)?;
-                return Ok(Some(prebindgen_declarations::DeclOutput::enum_variants(
-                    e.variants
-                        .iter()
-                        .map(|v| {
-                            v.fields
-                                .iter()
-                                .map(|_| prebindgen_declarations::DeclOutput::value())
-                                .collect()
-                        })
-                        .collect(),
-                    true,
-                    None,
-                )));
-            }
-            Ok(None)
-        })();
-        replacement?.map(|tree| cx.output(ty, &tree)).transpose()
-    }
-    fn input_collection_is_leaf(
-        &self,
-        flat: &CBindings,
-        ty: &syn::Type,
-        role: InputRole,
-        _: &(),
-    ) -> bool {
-        owned::native_input(flat, ty)
-            || (role == InputRole::EnumField && owned::declaration(flat, ty).is_some())
-    }
-    fn output_collection_is_leaf(&self, flat: &CBindings, ty: &syn::Type, _: &()) -> bool {
-        owned::native_output(flat, ty)
-    }
-}
-
 pub use operations::{
     CInput, CInputBranch, CInputLeafOp, CInputOps, CInputUnary, COutput, COutputBranch,
     COutputLeafOp, COutputOps, COutputUnary,
 };
+
+mod declarations;
+pub use declarations::*;
+
+#[macro_export]
+/// Select a source function and configure its binding in this adapter.
+macro_rules! fun {
+    ($name:ident) => {
+        $crate::DeclCFunction::new(
+            $crate::__declaration_ident(stringify!($name)).expect("source identifier"),
+        )
+    };
+}
+
+/// Traits for constructing and inspecting this adapter's conversion trees.
+pub mod prelude {
+    pub use crate::{CInputExt, CInputRequests, COutputExt, COutputRequests};
+}
+
+/// The C adapter has no bulk transport, including in callback-delivery variants.
+/// ```compile_fail
+/// use prebindgen_c::{CInput, COutput, expand_return, fun};
+/// let _ = fun!(rows).callback_return_only().expand_return(expand_return!(i64).field_self().bulk());
+/// ```
+/// ```compile_fail
+/// use prebindgen_c::{CInput, prelude::*};
+/// let _ = CInput::auto().bulk();
+/// ```
+/// ```compile_fail
+/// use prebindgen_c::{COutput, prelude::*};
+/// let _ = COutput::auto().bulk();
+/// ```
+const _: () = ();

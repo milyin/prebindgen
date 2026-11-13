@@ -1,6 +1,5 @@
 //! Typed C callbacks retained by source closures.
 use super::*;
-use crate::operations::COutputParts;
 use prebindgen_conversions::{InputFragment, OutputFragment, TemplateContext};
 use prebindgen_flat::{callback_signature, type_key, InputConversion, WireNode};
 use std::{

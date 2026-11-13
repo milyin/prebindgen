@@ -201,7 +201,7 @@ pub(crate) fn prepare(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use prebindgen_declarations::fun;
+    use crate::fun;
     fn model(source: &str) -> CBindings {
         CBindings::parse(
             syn::parse_file(source)

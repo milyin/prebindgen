@@ -91,8 +91,8 @@ fn helper_name(names: &mut names::Names, ty: &syn::Type, mapped: bool) -> Result
 pub(crate) fn resolve(
     flat: &mut JniBindings,
     codec: &JniCodec,
-    declarations: &prebindgen_declarations::DeclDefaults,
-    functions: &[DeclFunction],
+    declarations: &crate::DeclJniDefaults,
+    functions: &[DeclJniFunction],
 ) -> Result<()> {
     let mut names = names::Names::default();
     for ty in flat.types.values() {

@@ -3,7 +3,6 @@ use super::*;
 use prebindgen_conversions::{staged::emit_call, value};
 
 struct Scalars;
-test_frontend!(Scalars);
 impl Codec for Scalars {
     test_operations!();
     type Schema = prebindgen_conversions::PlanSchema<Type>;
@@ -54,11 +53,32 @@ fn model() -> Flat<<Scalars as Codec>::Schema> {
     .unwrap()
 }
 #[test]
+fn custom_resolution_cannot_drop_source_function_parameters() {
+    let invalid = || FunctionRecipe::<ResolvedInput<Scalars>, ResolvedOutput<Scalars>> {
+        inputs: vec![],
+        output: None,
+    };
+    let error = resolve_bindings(
+        model(),
+        Scalars,
+        &[test_fun!(add)],
+        |_, _, _, _| Ok(invalid()),
+        (),
+    )
+    .err()
+    .unwrap();
+    assert!(error.contains("input recipe count"), "{error}");
+    let mut flat = model();
+    let error = compile_function(&mut flat, &Scalars, "add", invalid(), &()).unwrap_err();
+    assert!(error.contains("input recipe count"), "{error}");
+    assert_eq!(flat.function("add").unwrap().params.len(), 2);
+}
+#[test]
 fn declaration_helpers_compile_and_execute_a_complete_call() {
     let mut flat = model();
-    DeclDefaults::new(&flat, vec![], vec![], vec![])
+    TestDefaults::new(&flat, vec![], vec![], vec![])
         .unwrap()
-        .fill(&mut flat, &Scalars, &fun!(add), &())
+        .fill(&mut flat, &Scalars, &test_fun!(add), &())
         .unwrap();
     // The wrapper selects its final result independently of codec preparation.
     let output = flat.function_mut("add").unwrap().ret.slot.as_mut().unwrap();
@@ -116,28 +136,28 @@ fn minimal_codec_rejects_optional_features_and_bulk_before_decoding() {
     for (source, input) in [
         (
             ty.clone(),
-            DeclInput::Unary {
-                operation: DeclInputUnary::Bulk,
-                child: Box::new(DeclInput::Leaf(DeclInputLeafOp::Value)),
+            TestInput::Unary {
+                operation: TestInputUnary::Bulk,
+                child: Box::new(TestInput::Leaf(TestInputLeafOp::Value)),
             },
         ),
         (
             syn::parse_quote!(()),
-            DeclInput::Unary {
-                operation: DeclInputUnary::Bulk,
-                child: Box::new(DeclInput::Branch {
-                    operation: DeclInputBranch::Fields,
+            TestInput::Unary {
+                operation: TestInputUnary::Bulk,
+                child: Box::new(TestInput::Branch {
+                    operation: TestInputBranch::Fields,
                     children: vec![],
                 }),
             },
         ),
         (
             syn::parse_quote!(Vec<i64>),
-            DeclInput::Unary {
-                operation: DeclInputUnary::Bulk,
-                child: Box::new(DeclInput::Unary {
-                    operation: DeclInputUnary::Sequence,
-                    child: Box::new(DeclInput::Leaf(DeclInputLeafOp::Value)),
+            TestInput::Unary {
+                operation: TestInputUnary::Bulk,
+                child: Box::new(TestInput::Unary {
+                    operation: TestInputUnary::Sequence,
+                    child: Box::new(TestInput::Leaf(TestInputLeafOp::Value)),
                 }),
             },
         ),
@@ -148,40 +168,40 @@ fn minimal_codec_rejects_optional_features_and_bulk_before_decoding() {
     for (source, output) in [
         (
             ty.clone(),
-            DeclOutput::Unary {
-                operation: DeclOutputUnary::Bulk,
-                child: Box::new(DeclOutput::Leaf(DeclOutputLeafOp::Value)),
+            TestOutput::Unary {
+                operation: TestOutputUnary::Bulk,
+                child: Box::new(TestOutput::Leaf(TestOutputLeafOp::Value)),
             },
         ),
         (
             ty.clone(),
-            DeclOutput::Unary {
-                operation: DeclOutputUnary::Bulk,
-                child: Box::new(DeclOutput::Leaf(DeclOutputLeafOp::Projected(
+            TestOutput::Unary {
+                operation: TestOutputUnary::Bulk,
+                child: Box::new(TestOutput::Leaf(TestOutputLeafOp::Projected(
                     Projection::owned(),
                 ))),
             },
         ),
         (
             syn::parse_quote!(()),
-            DeclOutput::Unary {
-                operation: DeclOutputUnary::Bulk,
-                child: Box::new(DeclOutput::Branch {
-                    operation: DeclOutputBranch::Fields,
+            TestOutput::Unary {
+                operation: TestOutputUnary::Bulk,
+                child: Box::new(TestOutput::Branch {
+                    operation: TestOutputBranch::Fields,
                     children: vec![],
                 }),
             },
         ),
         (
             syn::parse_quote!(Vec<i64>),
-            DeclOutput::Unary {
-                operation: DeclOutputUnary::Bulk,
-                child: Box::new(DeclOutput::Unary {
-                    operation: DeclOutputUnary::Sequence {
+            TestOutput::Unary {
+                operation: TestOutputUnary::Bulk,
+                child: Box::new(TestOutput::Unary {
+                    operation: TestOutputUnary::Sequence {
                         delivery: SequenceDelivery::Value,
                         mode: None,
                     },
-                    child: Box::new(DeclOutput::Leaf(DeclOutputLeafOp::Value)),
+                    child: Box::new(TestOutput::Leaf(TestOutputLeafOp::Value)),
                 }),
             },
         ),
@@ -193,9 +213,9 @@ fn minimal_codec_rejects_optional_features_and_bulk_before_decoding() {
         &flat,
         &Scalars,
         &syn::parse_quote!(Option<i64>),
-        &DeclInput::Unary {
-            operation: DeclInputUnary::Optional,
-            child: Box::new(DeclInput::Leaf(DeclInputLeafOp::Value)),
+        &TestInput::Unary {
+            operation: TestInputUnary::Optional,
+            child: Box::new(TestInput::Leaf(TestInputLeafOp::Value)),
         },
         &(),
     )
@@ -261,7 +281,6 @@ struct Probe(
     std::cell::RefCell<Vec<(Representation, InputRole)>>,
     std::cell::Cell<bool>,
 );
-test_frontend!(Probe);
 impl Codec for Probe {
     test_operations!();
     type Schema = <Scalars as Codec>::Schema;
@@ -322,7 +341,7 @@ fn input_context_preserves_all_dispatch_cases_and_callback_roles() {
             compiler
                 .input(
                     &ty,
-                    &DeclInput::Leaf(DeclInputLeafOp::Value),
+                    &TestInput::Leaf(TestInputLeafOp::Value),
                     &(),
                     &Condition::default(),
                 )
@@ -335,8 +354,8 @@ fn input_context_preserves_all_dispatch_cases_and_callback_roles() {
         &flat,
         &codec,
         &syn::parse_quote!(()),
-        &DeclInput::Branch {
-            operation: DeclInputBranch::Fields,
+        &TestInput::Branch {
+            operation: TestInputBranch::Fields,
             children: vec![],
         },
         &(),
@@ -346,11 +365,11 @@ fn input_context_preserves_all_dispatch_cases_and_callback_roles() {
         &flat,
         &codec,
         &ty,
-        &DeclInput::constructor(
+        &TestInput::constructor(
             "add",
             [
-                DeclInput::Leaf(DeclInputLeafOp::Value),
-                DeclInput::Leaf(DeclInputLeafOp::Value),
+                TestInput::Leaf(TestInputLeafOp::Value),
+                TestInput::Leaf(TestInputLeafOp::Value),
             ],
         ),
         &(),
@@ -366,9 +385,9 @@ fn input_context_preserves_all_dispatch_cases_and_callback_roles() {
         &flat,
         &codec,
         &ty,
-        &DeclOutput::Unary {
-            operation: DeclOutputUnary::Bulk,
-            child: Box::new(DeclOutput::Leaf(DeclOutputLeafOp::Value)),
+        &TestOutput::Unary {
+            operation: TestOutputUnary::Bulk,
+            child: Box::new(TestOutput::Leaf(TestOutputLeafOp::Value)),
         },
         &(),
     )
@@ -377,7 +396,6 @@ fn input_context_preserves_all_dispatch_cases_and_callback_roles() {
 }
 
 struct MalformedOptional(u8);
-test_frontend!(MalformedOptional);
 impl Codec for MalformedOptional {
     test_operations!();
     type Schema = <Scalars as Codec>::Schema;
@@ -455,25 +473,25 @@ fn malformed_optional_encodings_are_rejected_before_installing_a_slot() {
         (4, false, "missing absent output binding"),
     ] {
         let result = if input {
-            bind_input(
+            test_bind_input(
                 &mut flat,
                 &MalformedOptional(mode),
                 "f",
                 "value",
-                &DeclInput::Unary {
-                    operation: DeclInputUnary::Optional,
-                    child: Box::new(DeclInput::Leaf(DeclInputLeafOp::Value)),
+                &TestInput::Unary {
+                    operation: TestInputUnary::Optional,
+                    child: Box::new(TestInput::Leaf(TestInputLeafOp::Value)),
                 },
                 &(),
             )
         } else {
-            bind_output(
+            test_bind_output(
                 &mut flat,
                 &MalformedOptional(mode),
                 "f",
-                &DeclOutput::Unary {
-                    operation: DeclOutputUnary::Optional,
-                    child: Box::new(DeclOutput::Leaf(DeclOutputLeafOp::Value)),
+                &TestOutput::Unary {
+                    operation: TestOutputUnary::Optional,
+                    child: Box::new(TestOutput::Leaf(TestOutputLeafOp::Value)),
                 },
                 &(),
             )
@@ -490,14 +508,14 @@ fn enabled_bulk_still_rejects_enclosing_callback_delivery_before_element_lowerin
     let flat = model();
     let codec = Probe::default();
     codec.1.set(true);
-    let recipe = DeclOutput::Unary {
-        operation: DeclOutputUnary::Bulk,
-        child: Box::new(DeclOutput::Unary {
-            operation: DeclOutputUnary::Sequence {
+    let recipe = TestOutput::Unary {
+        operation: TestOutputUnary::Bulk,
+        child: Box::new(TestOutput::Unary {
+            operation: TestOutputUnary::Sequence {
                 delivery: SequenceDelivery::Callback,
                 mode: None,
             },
-            child: Box::new(DeclOutput::Leaf(DeclOutputLeafOp::Value)),
+            child: Box::new(TestOutput::Leaf(TestOutputLeafOp::Value)),
         }),
     };
     let error = compile_output_value(&flat, &codec, &syn::parse_quote!(Vec<i64>), &recipe, &())
@@ -511,8 +529,8 @@ fn enabled_bulk_still_rejects_enclosing_callback_delivery_before_element_lowerin
 #[test]
 fn resolved_flat_compiles_after_its_configuration_is_dropped() {
     let flat = model();
-    let declarations = DeclDefaults::new(&flat, vec![], vec![], vec![]).unwrap();
-    let configuration = vec![fun!(add)];
+    let declarations = TestDefaults::new(&flat, vec![], vec![], vec![]).unwrap();
+    let configuration = vec![test_fun!(add)];
     let resolved = declarations
         .resolve(flat, Scalars, &configuration, ())
         .unwrap();
@@ -520,7 +538,7 @@ fn resolved_flat_compiles_after_its_configuration_is_dropped() {
     drop(declarations);
     assert!(matches!(
         resolved.function("add").unwrap().params[0].ty.slot,
-        Some(ResolvedSlot::Tree(DeclInput::Leaf(_)))
+        Some(ResolvedSlot::Tree(TestInput::Leaf(_)))
     ));
     let compiled = compile_resolved(resolved).unwrap();
     prebindgen_flat::validate_bindings(&compiled).unwrap();
@@ -530,13 +548,13 @@ fn resolved_flat_compiles_after_its_configuration_is_dropped() {
 #[test]
 fn none_is_unit_and_cannot_silently_discard_non_unit_values() {
     let source = model();
-    let defaults = DeclDefaults::new(&source, vec![], vec![], vec![]).unwrap();
+    let defaults = TestDefaults::new(&source, vec![], vec![], vec![]).unwrap();
     assert!(defaults
         .resolve_input(
             &source,
             &Scalars,
             &syn::parse_quote!(i64),
-            &DeclInput::None,
+            &TestInput::None,
             &()
         )
         .is_err());
@@ -545,29 +563,29 @@ fn none_is_unit_and_cannot_silently_discard_non_unit_values() {
             &source,
             &Scalars,
             &syn::parse_quote!(i64),
-            &DeclOutput::None,
+            &TestOutput::None,
             &()
         )
         .is_err());
-    for tree in [DeclInput::auto(), DeclInput::fields([]), DeclInput::None] {
+    for tree in [TestInput::auto(), TestInput::fields([]), TestInput::None] {
         assert!(matches!(
             defaults
                 .resolve_input(&source, &Scalars, &syn::parse_quote!(()), &tree, &())
                 .unwrap(),
-            DeclInput::None
+            TestInput::None
         ));
     }
-    for tree in [DeclOutput::auto(), DeclOutput::fields([]), DeclOutput::None] {
+    for tree in [TestOutput::auto(), TestOutput::fields([]), TestOutput::None] {
         assert!(matches!(
             defaults
                 .resolve_output(&source, &Scalars, &syn::parse_quote!(()), &tree, &())
                 .unwrap(),
-            DeclOutput::None
+            TestOutput::None
         ));
     }
 }
 
-// This adapter deliberately does not implement DeclCodec. Its operations
+// This adapter deliberately does not implement TestResolvePolicy. Its operations
 // cannot be represented by the optional declaration frontend's fixed vocabulary.
 #[derive(Clone, Debug)]
 struct ArithmeticInputs;

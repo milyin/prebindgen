@@ -239,7 +239,7 @@ fn source_selection_includes_local_trait_representations() {
     .map(|i| (i, Default::default()))
     .collect::<Vec<_>>();
     let function = fun!(echo).expand_param("v", convert!(Value).input(from!(crate::Repr)));
-    let names = prebindgen_declarations::declarations::source_items(&[], &[], &[], [&function]);
+    let names = crate::declarations::source_items(&[], &[], &[], [&function]);
     let selected: JniBindings = JniBindings::parse_selected(items, &names, &[]).unwrap();
     assert!(selected.type_info(&syn::parse_quote!(crate::Repr)).is_ok());
 }

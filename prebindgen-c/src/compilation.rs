@@ -1,8 +1,10 @@
 //! Interpretation of this adapter's resolved conversion operations.
 #![allow(missing_docs)]
+use crate::{CInputExt, COutputExt};
+
 use super::operations::{
-    CInput, CInputBranch, CInputLeafOp, CInputOps, CInputParts, CInputUnary, COutput,
-    COutputBranch, COutputLeafOp, COutputOps, COutputParts, COutputUnary,
+    CInput, CInputBranch, CInputLeafOp, CInputOps, CInputUnary, COutput, COutputBranch,
+    COutputLeafOp, COutputOps, COutputUnary,
 };
 use prebindgen_declarations::*;
 use prebindgen_flat::{Flat, Result};

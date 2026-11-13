@@ -21,7 +21,7 @@ fn every_mixed_raw_and_declared_input_combination_generates() {
         let mut model = Cbindgen::new(flat)
             .opaque_ptr("item", syn::parse_quote!(Item))
             .opaque_ptr("packet", syn::parse_quote!(Packet))
-            .function(prebindgen_declarations::fun!(mixed))
+            .function(crate::fun!(mixed))
             .panic()
             .prepare()
             .unwrap();
