@@ -488,70 +488,69 @@
 <a href=#488 id=488 data-nosnippet>488</a>    }
 <a href=#489 id=489 data-nosnippet>489</a>    <span class="doccomment">/// Append a consuming accessor followed by owned field decomposition.
 <a href=#490 id=490 data-nosnippet>490</a>    </span><span class="kw">fn </span>fields_into(<span class="self">self</span>, view: <span class="self">Self</span>) -&gt; <span class="self">Self </span>{
-<a href=#491 id=491 data-nosnippet>491</a>        <span class="kw">let </span>COutput::Unary {
-<a href=#492 id=492 data-nosnippet>492</a>            operation: COutputUnary::Getter { function },
-<a href=#493 id=493 data-nosnippet>493</a>            child: output,
-<a href=#494 id=494 data-nosnippet>494</a>        } = view
-<a href=#495 id=495 data-nosnippet>495</a>        <span class="kw">else </span>{
-<a href=#496 id=496 data-nosnippet>496</a>            <span class="macro">panic!</span>(<span class="string">"fields_into requires a fields! accessor"</span>)
-<a href=#497 id=497 data-nosnippet>497</a>        };
-<a href=#498 id=498 data-nosnippet>498</a>        <span class="kw">let </span>COutput::Request(COutputRequest::NamedFields { overrides, .. }) = <span class="kw-2">*</span>output <span class="kw">else </span>{
-<a href=#499 id=499 data-nosnippet>499</a>            <span class="macro">panic!</span>(<span class="string">"fields_into requires named fields"</span>)
-<a href=#500 id=500 data-nosnippet>500</a>        };
-<a href=#501 id=501 data-nosnippet>501</a>        <span class="self">self</span>.view(COutput::Unary {
-<a href=#502 id=502 data-nosnippet>502</a>            operation: COutputUnary::Into { function },
-<a href=#503 id=503 data-nosnippet>503</a>            child: Box::new(COutput::Request(COutputRequest::NamedFields {
-<a href=#504 id=504 data-nosnippet>504</a>                overrides,
-<a href=#505 id=505 data-nosnippet>505</a>                mode: ProjectionMode::Owned,
-<a href=#506 id=506 data-nosnippet>506</a>            })),
-<a href=#507 id=507 data-nosnippet>507</a>        })
-<a href=#508 id=508 data-nosnippet>508</a>    }
-<a href=#509 id=509 data-nosnippet>509</a>    <span class="doccomment">/// Deprecated spelling of [`COutput::fields_into`].
-<a href=#510 id=510 data-nosnippet>510</a>    </span><span class="kw">fn </span>fields_self_into(<span class="self">self</span>, view: <span class="self">Self</span>) -&gt; <span class="self">Self </span>{
-<a href=#511 id=511 data-nosnippet>511</a>        <span class="self">self</span>.fields_into(view)
-<a href=#512 id=512 data-nosnippet>512</a>    }
-<a href=#513 id=513 data-nosnippet>513</a>    <span class="doccomment">/// Override one named source field, preserving defaults for its siblings.
-<a href=#514 id=514 data-nosnippet>514</a>    </span><span class="kw">fn </span>field_override(<span class="kw-2">mut </span><span class="self">self</span>, name: <span class="kw">impl </span>Into&lt;String&gt;, output: <span class="self">Self</span>) -&gt; <span class="self">Self </span>{
-<a href=#515 id=515 data-nosnippet>515</a>        <span class="kw">match </span><span class="kw-2">&amp;mut </span><span class="self">self </span>{
-<a href=#516 id=516 data-nosnippet>516</a>            COutput::Request(COutputRequest::NamedFields { overrides, .. }) =&gt; {
-<a href=#517 id=517 data-nosnippet>517</a>                <span class="macro">assert!</span>(
-<a href=#518 id=518 data-nosnippet>518</a>                    overrides.insert(name.into(), output).is_none(),
-<a href=#519 id=519 data-nosnippet>519</a>                    <span class="string">"duplicate field override"
-<a href=#520 id=520 data-nosnippet>520</a>                </span>);
-<a href=#521 id=521 data-nosnippet>521</a>            }
-<a href=#522 id=522 data-nosnippet>522</a>            COutput::Unary {
-<a href=#523 id=523 data-nosnippet>523</a>                operation: COutputUnary::Getter { .. },
-<a href=#524 id=524 data-nosnippet>524</a>                child: inner,
-<a href=#525 id=525 data-nosnippet>525</a>                ..
-<a href=#526 id=526 data-nosnippet>526</a>            }
-<a href=#527 id=527 data-nosnippet>527</a>            | COutput::Unary {
-<a href=#528 id=528 data-nosnippet>528</a>                operation: COutputUnary::Into { .. },
-<a href=#529 id=529 data-nosnippet>529</a>                child: inner,
-<a href=#530 id=530 data-nosnippet>530</a>                ..
-<a href=#531 id=531 data-nosnippet>531</a>            }
-<a href=#532 id=532 data-nosnippet>532</a>            | COutput::Request(COutputRequest::ForType { output: inner, .. }) =&gt; {
-<a href=#533 id=533 data-nosnippet>533</a>                <span class="kw">let </span>old = std::mem::replace(inner, Box::new(COutput::auto()));
-<a href=#534 id=534 data-nosnippet>534</a>                <span class="kw-2">**</span>inner = old.field_override(name, output);
-<a href=#535 id=535 data-nosnippet>535</a>            }
-<a href=#536 id=536 data-nosnippet>536</a>            <span class="kw">_ </span>=&gt; <span class="macro">panic!</span>(<span class="string">"field override requires named field decomposition"</span>),
-<a href=#537 id=537 data-nosnippet>537</a>        }
-<a href=#538 id=538 data-nosnippet>538</a>        <span class="self">self
-<a href=#539 id=539 data-nosnippet>539</a>    </span>}
-<a href=#540 id=540 data-nosnippet>540</a>}
-<a href=#541 id=541 data-nosnippet>541</a><span class="kw">impl </span>From&lt;DeclConvert&gt; <span class="kw">for </span>CInputRequest {
-<a href=#542 id=542 data-nosnippet>542</a>    <span class="kw">fn </span>from(decl: DeclConvert) -&gt; <span class="self">Self </span>{
-<a href=#543 id=543 data-nosnippet>543</a>        <span class="self">Self</span>::ForType {
-<a href=#544 id=544 data-nosnippet>544</a>            ty: Box::new(decl.ty.clone()),
-<a href=#545 id=545 data-nosnippet>545</a>            input: Box::new(CInput::Request(<span class="self">Self</span>::Conversion(Box::new(decl)))),
-<a href=#546 id=546 data-nosnippet>546</a>        }
-<a href=#547 id=547 data-nosnippet>547</a>    }
-<a href=#548 id=548 data-nosnippet>548</a>}
-<a href=#549 id=549 data-nosnippet>549</a><span class="kw">impl </span>From&lt;DeclConvert&gt; <span class="kw">for </span>COutputRequest {
-<a href=#550 id=550 data-nosnippet>550</a>    <span class="kw">fn </span>from(decl: DeclConvert) -&gt; <span class="self">Self </span>{
-<a href=#551 id=551 data-nosnippet>551</a>        <span class="self">Self</span>::ForType {
-<a href=#552 id=552 data-nosnippet>552</a>            ty: Box::new(decl.ty.clone()),
-<a href=#553 id=553 data-nosnippet>553</a>            output: Box::new(COutput::Request(<span class="self">Self</span>::Conversion(Box::new(decl)))),
-<a href=#554 id=554 data-nosnippet>554</a>        }
-<a href=#555 id=555 data-nosnippet>555</a>    }
-<a href=#556 id=556 data-nosnippet>556</a>}
+<a href=#491 id=491 data-nosnippet>491</a>        <span class="self">self</span>.view(owned_field_view(view))
+<a href=#492 id=492 data-nosnippet>492</a>    }
+<a href=#493 id=493 data-nosnippet>493</a>    <span class="doccomment">/// Deprecated spelling of [`COutput::fields_into`].
+<a href=#494 id=494 data-nosnippet>494</a>    </span><span class="kw">fn </span>fields_self_into(<span class="self">self</span>, view: <span class="self">Self</span>) -&gt; <span class="self">Self </span>{
+<a href=#495 id=495 data-nosnippet>495</a>        <span class="self">self</span>.fields_into(view)
+<a href=#496 id=496 data-nosnippet>496</a>    }
+<a href=#497 id=497 data-nosnippet>497</a>    <span class="doccomment">/// Override one named source field, preserving defaults for its siblings.
+<a href=#498 id=498 data-nosnippet>498</a>    </span><span class="kw">fn </span>field_override(<span class="self">self</span>, name: <span class="kw">impl </span>Into&lt;String&gt;, output: <span class="self">Self</span>) -&gt; <span class="self">Self </span>{
+<a href=#499 id=499 data-nosnippet>499</a>        prebindgen_declarations::override_output_field(
+<a href=#500 id=500 data-nosnippet>500</a>            <span class="self">self</span>,
+<a href=#501 id=501 data-nosnippet>501</a>            name.into(),
+<a href=#502 id=502 data-nosnippet>502</a>            output,
+<a href=#503 id=503 data-nosnippet>503</a>            |tree| <span class="kw">match </span>tree {
+<a href=#504 id=504 data-nosnippet>504</a>                COutput::Request(COutputRequest::NamedFields { overrides, .. }) =&gt; <span class="prelude-val">Some</span>(overrides),
+<a href=#505 id=505 data-nosnippet>505</a>                <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
+<a href=#506 id=506 data-nosnippet>506</a>            },
+<a href=#507 id=507 data-nosnippet>507</a>            |tree| <span class="kw">match </span>tree {
+<a href=#508 id=508 data-nosnippet>508</a>                COutput::Unary {
+<a href=#509 id=509 data-nosnippet>509</a>                    operation: COutputUnary::Getter { .. } | COutputUnary::Into { .. },
+<a href=#510 id=510 data-nosnippet>510</a>                    child,
+<a href=#511 id=511 data-nosnippet>511</a>                }
+<a href=#512 id=512 data-nosnippet>512</a>                | COutput::Request(COutputRequest::ForType { output: child, .. }) =&gt; <span class="prelude-val">Some</span>(child),
+<a href=#513 id=513 data-nosnippet>513</a>                <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
+<a href=#514 id=514 data-nosnippet>514</a>            },
+<a href=#515 id=515 data-nosnippet>515</a>        )
+<a href=#516 id=516 data-nosnippet>516</a>    }
+<a href=#517 id=517 data-nosnippet>517</a>}
+<a href=#518 id=518 data-nosnippet>518</a><span class="kw">impl </span>From&lt;DeclConvert&gt; <span class="kw">for </span>CInputRequest {
+<a href=#519 id=519 data-nosnippet>519</a>    <span class="kw">fn </span>from(decl: DeclConvert) -&gt; <span class="self">Self </span>{
+<a href=#520 id=520 data-nosnippet>520</a>        <span class="self">Self</span>::ForType {
+<a href=#521 id=521 data-nosnippet>521</a>            ty: Box::new(decl.ty.clone()),
+<a href=#522 id=522 data-nosnippet>522</a>            input: Box::new(CInput::Request(<span class="self">Self</span>::Conversion(Box::new(decl)))),
+<a href=#523 id=523 data-nosnippet>523</a>        }
+<a href=#524 id=524 data-nosnippet>524</a>    }
+<a href=#525 id=525 data-nosnippet>525</a>}
+<a href=#526 id=526 data-nosnippet>526</a><span class="kw">impl </span>From&lt;DeclConvert&gt; <span class="kw">for </span>COutputRequest {
+<a href=#527 id=527 data-nosnippet>527</a>    <span class="kw">fn </span>from(decl: DeclConvert) -&gt; <span class="self">Self </span>{
+<a href=#528 id=528 data-nosnippet>528</a>        <span class="self">Self</span>::ForType {
+<a href=#529 id=529 data-nosnippet>529</a>            ty: Box::new(decl.ty.clone()),
+<a href=#530 id=530 data-nosnippet>530</a>            output: Box::new(COutput::Request(<span class="self">Self</span>::Conversion(Box::new(decl)))),
+<a href=#531 id=531 data-nosnippet>531</a>        }
+<a href=#532 id=532 data-nosnippet>532</a>    }
+<a href=#533 id=533 data-nosnippet>533</a>}
+<a href=#534 id=534 data-nosnippet>534</a>
+<a href=#535 id=535 data-nosnippet>535</a><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>owned_field_view(
+<a href=#536 id=536 data-nosnippet>536</a>    view: COutput&lt;CInputRequest, COutputRequest&gt;,
+<a href=#537 id=537 data-nosnippet>537</a>) -&gt; COutput&lt;CInputRequest, COutputRequest&gt; {
+<a href=#538 id=538 data-nosnippet>538</a>    <span class="kw">let </span>COutput::Unary {
+<a href=#539 id=539 data-nosnippet>539</a>        operation: COutputUnary::Getter { function },
+<a href=#540 id=540 data-nosnippet>540</a>        child: output,
+<a href=#541 id=541 data-nosnippet>541</a>    } = view
+<a href=#542 id=542 data-nosnippet>542</a>    <span class="kw">else </span>{
+<a href=#543 id=543 data-nosnippet>543</a>        <span class="macro">panic!</span>(<span class="string">"fields_into requires a fields! accessor"</span>)
+<a href=#544 id=544 data-nosnippet>544</a>    };
+<a href=#545 id=545 data-nosnippet>545</a>    <span class="kw">let </span>COutput::Request(COutputRequest::NamedFields { overrides, .. }) = <span class="kw-2">*</span>output <span class="kw">else </span>{
+<a href=#546 id=546 data-nosnippet>546</a>        <span class="macro">panic!</span>(<span class="string">"fields_into requires named fields"</span>)
+<a href=#547 id=547 data-nosnippet>547</a>    };
+<a href=#548 id=548 data-nosnippet>548</a>    COutput::Unary {
+<a href=#549 id=549 data-nosnippet>549</a>        operation: COutputUnary::Into { function },
+<a href=#550 id=550 data-nosnippet>550</a>        child: Box::new(COutput::Request(COutputRequest::NamedFields {
+<a href=#551 id=551 data-nosnippet>551</a>            overrides,
+<a href=#552 id=552 data-nosnippet>552</a>            mode: ProjectionMode::Owned,
+<a href=#553 id=553 data-nosnippet>553</a>        })),
+<a href=#554 id=554 data-nosnippet>554</a>    }
+<a href=#555 id=555 data-nosnippet>555</a>}
 </code></pre></div></section></main></body></html>
