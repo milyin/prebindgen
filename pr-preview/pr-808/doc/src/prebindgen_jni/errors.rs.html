@@ -91,8 +91,8 @@
 <a href=#91 id=91 data-nosnippet>91</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>resolve(
 <a href=#92 id=92 data-nosnippet>92</a>    flat: <span class="kw-2">&amp;mut </span>JniBindings,
 <a href=#93 id=93 data-nosnippet>93</a>    codec: <span class="kw-2">&amp;</span>JniCodec,
-<a href=#94 id=94 data-nosnippet>94</a>    declarations: <span class="kw-2">&amp;</span>prebindgen_declarations::DeclDefaults,
-<a href=#95 id=95 data-nosnippet>95</a>    functions: <span class="kw-2">&amp;</span>[DeclFunction],
+<a href=#94 id=94 data-nosnippet>94</a>    declarations: <span class="kw-2">&amp;</span><span class="kw">crate</span>::DeclJniDefaults,
+<a href=#95 id=95 data-nosnippet>95</a>    functions: <span class="kw-2">&amp;</span>[DeclJniFunction],
 <a href=#96 id=96 data-nosnippet>96</a>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#97 id=97 data-nosnippet>97</a>    <span class="kw">let </span><span class="kw-2">mut </span>names = names::Names::default();
 <a href=#98 id=98 data-nosnippet>98</a>    <span class="kw">for </span>ty <span class="kw">in </span>flat.types.values() {
