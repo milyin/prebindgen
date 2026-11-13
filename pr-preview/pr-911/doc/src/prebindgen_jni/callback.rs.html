@@ -109,7 +109,7 @@
 <a href=#109 id=109 data-nosnippet>109</a>    <span class="kw">let </span>returns_unit = <span class="macro">matches!</span>(<span class="kw-2">&amp;</span>signature.return_type, syn::Type::Tuple(t) <span class="kw">if </span>t.elems.is_empty());
 <a href=#110 id=110 data-nosnippet>110</a>    <span class="kw">if </span>returns_unit
 <a href=#111 id=111 data-nosnippet>111</a>        &amp;&amp; !<span class="macro">matches!</span>(codomain, JniInput::None)
-<a href=#112 id=112 data-nosnippet>112</a>        &amp;&amp; !<span class="macro">matches!</span>(codomain, JniInput::Branch { operation: JniInputBranch::Fields, children } <span class="kw">if </span>children.is_empty())
+<a href=#112 id=112 data-nosnippet>112</a>        &amp;&amp; !<span class="macro">matches!</span>(codomain, JniInput::Branch { operation: prebindgen_declarations::Operation::Resolved(JniInputBranch::Fields), children } <span class="kw">if </span>children.is_empty())
 <a href=#113 id=113 data-nosnippet>113</a>    {
 <a href=#114 id=114 data-nosnippet>114</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"unit callback returns require an empty unit input representation"</span>.into());
 <a href=#115 id=115 data-nosnippet>115</a>    }

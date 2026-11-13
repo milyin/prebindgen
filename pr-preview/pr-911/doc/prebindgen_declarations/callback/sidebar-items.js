@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["CallbackArgumentOwnership"],"fn":["input_key","input_type"],"struct":["CallbackOperation","DeclCallback"]};
+window.SIDEBAR_ITEMS = {"enum":["CallbackArgumentOwnership"],"fn":["callback_input","input_key","input_type"],"struct":["CallbackOperation","CallbackRequest","DeclCallback"],"trait":["CallbackInput"]};

@@ -3226,7 +3226,7 @@
 <a href=#3226 id=3226 data-nosnippet>3226</a>                <span class="macro">fun!</span>(first).input(
 <a href=#3227 id=3227 data-nosnippet>3227</a>                    <span class="string">"values"</span>,
 <a href=#3228 id=3228 data-nosnippet>3228</a>                    <span class="kw">crate</span>::CInput::Unary {
-<a href=#3229 id=3229 data-nosnippet>3229</a>                        operation: CInputUnary::Sequence,
+<a href=#3229 id=3229 data-nosnippet>3229</a>                        operation: (CInputUnary::Sequence).into(),
 <a href=#3230 id=3230 data-nosnippet>3230</a>                        child: Box::new(<span class="kw">crate</span>::CInput::call(<span class="string">"copy_child"</span>)),
 <a href=#3231 id=3231 data-nosnippet>3231</a>                    }
 <a href=#3232 id=3232 data-nosnippet>3232</a>                    .reconstruct(),
@@ -3341,7 +3341,7 @@
 <a href=#3341 id=3341 data-nosnippet>3341</a>            <span class="kw-2">&amp;</span>CCodec::raw(),
 <a href=#3342 id=3342 data-nosnippet>3342</a>            <span class="kw-2">&amp;</span><span class="macro">syn::parse_quote!</span>(<span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Child&gt;),
 <a href=#3343 id=3343 data-nosnippet>3343</a>            <span class="kw-2">&amp;</span>COutput::Unary {
-<a href=#3344 id=3344 data-nosnippet>3344</a>                operation: COutputUnary::Optional,
+<a href=#3344 id=3344 data-nosnippet>3344</a>                operation: (COutputUnary::Optional).into(),
 <a href=#3345 id=3345 data-nosnippet>3345</a>                child: Box::new(COutput::Leaf(COutputLeafOp::Value)),
 <a href=#3346 id=3346 data-nosnippet>3346</a>            },
 <a href=#3347 id=3347 data-nosnippet>3347</a>            <span class="number">0</span>,
@@ -3782,641 +3782,645 @@
 <a href=#3782 id=3782 data-nosnippet>3782</a>    </span><span class="kw">fn </span>multiple_collection_observations_follow_the_actual_borrow() {
 <a href=#3783 id=3783 data-nosnippet>3783</a>        <span class="kw">use </span>prebindgen_declarations::bind_output;
 <a href=#3784 id=3784 data-nosnippet>3784</a>        <span class="kw">let </span>seq = |copy: bool| COutput::Unary {
-<a href=#3785 id=3785 data-nosnippet>3785</a>            operation: COutputUnary::Sequence {
+<a href=#3785 id=3785 data-nosnippet>3785</a>            operation: (COutputUnary::Sequence {
 <a href=#3786 id=3786 data-nosnippet>3786</a>                delivery: prebindgen_declarations::SequenceDelivery::Value,
 <a href=#3787 id=3787 data-nosnippet>3787</a>                mode: copy.then_some(prebindgen_declarations::ProjectionMode::Borrowed),
-<a href=#3788 id=3788 data-nosnippet>3788</a>            },
-<a href=#3789 id=3789 data-nosnippet>3789</a>            child: Box::new(COutput::Leaf(COutputLeafOp::Value)),
-<a href=#3790 id=3790 data-nosnippet>3790</a>        };
-<a href=#3791 id=3791 data-nosnippet>3791</a>        <span class="kw">for </span>(source, recipe) <span class="kw">in </span>[
-<a href=#3792 id=3792 data-nosnippet>3792</a>            (
-<a href=#3793 id=3793 data-nosnippet>3793</a>                <span class="string">"pub fn f()-&gt;&amp;Vec&lt;i64&gt; {}"</span>,
-<a href=#3794 id=3794 data-nosnippet>3794</a>                COutput::combine([seq(<span class="bool-val">false</span>), seq(<span class="bool-val">false</span>)]),
-<a href=#3795 id=3795 data-nosnippet>3795</a>            ),
-<a href=#3796 id=3796 data-nosnippet>3796</a>            (
-<a href=#3797 id=3797 data-nosnippet>3797</a>                <span class="string">"pub struct Record { pub values: Vec&lt;i64&gt; } pub fn f()-&gt;Record {}"</span>,
-<a href=#3798 id=3798 data-nosnippet>3798</a>                COutput::fields([COutput::combine([seq(<span class="bool-val">true</span>), seq(<span class="bool-val">true</span>)])]),
-<a href=#3799 id=3799 data-nosnippet>3799</a>            ),
-<a href=#3800 id=3800 data-nosnippet>3800</a>        ] {
-<a href=#3801 id=3801 data-nosnippet>3801</a>            <span class="kw">let </span>source = syn::parse_file(source).unwrap();
-<a href=#3802 id=3802 data-nosnippet>3802</a>            <span class="kw">let </span><span class="kw-2">mut </span>flat =
-<a href=#3803 id=3803 data-nosnippet>3803</a>                CBindings::parse(source.items.into_iter().map(|i| (i, Default::default())))
-<a href=#3804 id=3804 data-nosnippet>3804</a>                    .unwrap();
-<a href=#3805 id=3805 data-nosnippet>3805</a>            bind_output(<span class="kw-2">&amp;mut </span>flat, <span class="kw-2">&amp;</span>CCodec::raw(), <span class="string">"f"</span>, <span class="kw-2">&amp;</span>recipe, <span class="kw-2">&amp;</span>()).unwrap();
-<a href=#3806 id=3806 data-nosnippet>3806</a>            <span class="macro">assert_eq!</span>(
-<a href=#3807 id=3807 data-nosnippet>3807</a>                <span class="kw">crate</span>::group::result_packet_fields(
-<a href=#3808 id=3808 data-nosnippet>3808</a>                    <span class="kw-2">&amp;</span>flat
-<a href=#3809 id=3809 data-nosnippet>3809</a>                        .function(<span class="string">"f"</span>)
-<a href=#3810 id=3810 data-nosnippet>3810</a>                        .unwrap()
-<a href=#3811 id=3811 data-nosnippet>3811</a>                        .ret
-<a href=#3812 id=3812 data-nosnippet>3812</a>                        .slot
-<a href=#3813 id=3813 data-nosnippet>3813</a>                        .as_ref()
-<a href=#3814 id=3814 data-nosnippet>3814</a>                        .unwrap()
-<a href=#3815 id=3815 data-nosnippet>3815</a>                        .outcomes
-<a href=#3816 id=3816 data-nosnippet>3816</a>                        .success
-<a href=#3817 id=3817 data-nosnippet>3817</a>                )
-<a href=#3818 id=3818 data-nosnippet>3818</a>                .len(),
-<a href=#3819 id=3819 data-nosnippet>3819</a>                <span class="number">2
-<a href=#3820 id=3820 data-nosnippet>3820</a>            </span>);
-<a href=#3821 id=3821 data-nosnippet>3821</a>            Cbindgen::new(flat).build().unwrap();
-<a href=#3822 id=3822 data-nosnippet>3822</a>        }
-<a href=#3823 id=3823 data-nosnippet>3823</a>    }
-<a href=#3824 id=3824 data-nosnippet>3824</a>
-<a href=#3825 id=3825 data-nosnippet>3825</a>    <span class="attr">#[test]
-<a href=#3826 id=3826 data-nosnippet>3826</a>    </span><span class="kw">fn </span>option_comment_labels_are_unique_across_parameters_and_result() {
-<a href=#3827 id=3827 data-nosnippet>3827</a>        <span class="kw">use </span>prebindgen_declarations::{bind_input, bind_output};
-<a href=#3828 id=3828 data-nosnippet>3828</a>        <span class="kw">let </span>source = syn::parse_file(<span class="string">"pub fn echo(a: Option&lt;Option&lt;char&gt;&gt;, b: Option&lt;Option&lt;char&gt;&gt;) -&gt; Option&lt;Option&lt;char&gt;&gt; { a }"</span>).unwrap();
-<a href=#3829 id=3829 data-nosnippet>3829</a>        <span class="kw">let </span><span class="kw-2">mut </span>flat =
-<a href=#3830 id=3830 data-nosnippet>3830</a>            CBindings::parse(source.items.into_iter().map(|i| (i, Default::default()))).unwrap();
-<a href=#3831 id=3831 data-nosnippet>3831</a>        <span class="kw">let </span>input = CInput::Unary {
-<a href=#3832 id=3832 data-nosnippet>3832</a>            operation: CInputUnary::Optional,
-<a href=#3833 id=3833 data-nosnippet>3833</a>            child: Box::new(CInput::Unary {
-<a href=#3834 id=3834 data-nosnippet>3834</a>                operation: CInputUnary::Optional,
-<a href=#3835 id=3835 data-nosnippet>3835</a>                child: Box::new(CInput::Leaf(CInputLeafOp::Value)),
-<a href=#3836 id=3836 data-nosnippet>3836</a>            }),
-<a href=#3837 id=3837 data-nosnippet>3837</a>        };
-<a href=#3838 id=3838 data-nosnippet>3838</a>        <span class="kw">for </span>param <span class="kw">in </span>[<span class="string">"a"</span>, <span class="string">"b"</span>] {
-<a href=#3839 id=3839 data-nosnippet>3839</a>            bind_input(<span class="kw-2">&amp;mut </span>flat, <span class="kw-2">&amp;</span>CCodec::raw(), <span class="string">"echo"</span>, param, <span class="kw-2">&amp;</span>input, <span class="kw-2">&amp;</span>()).unwrap();
-<a href=#3840 id=3840 data-nosnippet>3840</a>        }
-<a href=#3841 id=3841 data-nosnippet>3841</a>        <span class="kw">let </span>output = COutput::Unary {
-<a href=#3842 id=3842 data-nosnippet>3842</a>            operation: COutputUnary::Optional,
-<a href=#3843 id=3843 data-nosnippet>3843</a>            child: Box::new(COutput::Unary {
-<a href=#3844 id=3844 data-nosnippet>3844</a>                operation: COutputUnary::Optional,
-<a href=#3845 id=3845 data-nosnippet>3845</a>                child: Box::new(COutput::Leaf(COutputLeafOp::Value)),
-<a href=#3846 id=3846 data-nosnippet>3846</a>            }),
-<a href=#3847 id=3847 data-nosnippet>3847</a>        };
-<a href=#3848 id=3848 data-nosnippet>3848</a>        bind_output(<span class="kw-2">&amp;mut </span>flat, <span class="kw-2">&amp;</span>CCodec::raw(), <span class="string">"echo"</span>, <span class="kw-2">&amp;</span>output, <span class="kw-2">&amp;</span>()).unwrap();
-<a href=#3849 id=3849 data-nosnippet>3849</a>        <span class="kw">let </span>header = Cbindgen::new(flat)
-<a href=#3850 id=3850 data-nosnippet>3850</a>            .function(<span class="macro">crate::fun!</span>(echo))
-<a href=#3851 id=3851 data-nosnippet>3851</a>            .panic()
-<a href=#3852 id=3852 data-nosnippet>3852</a>            .build()
-<a href=#3853 id=3853 data-nosnippet>3853</a>            .unwrap()
-<a href=#3854 id=3854 data-nosnippet>3854</a>            .header;
-<a href=#3855 id=3855 data-nosnippet>3855</a>        <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..<span class="number">6 </span>{
-<a href=#3856 id=3856 data-nosnippet>3856</a>            <span class="macro">assert_eq!</span>(header.matches(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"Option option{i}:"</span>)).count(), <span class="number">1</span>);
-<a href=#3857 id=3857 data-nosnippet>3857</a>        }
-<a href=#3858 id=3858 data-nosnippet>3858</a>        <span class="kw">for </span>parent <span class="kw">in </span>[<span class="number">0</span>, <span class="number">2</span>, <span class="number">4</span>] {
-<a href=#3859 id=3859 data-nosnippet>3859</a>            <span class="macro">assert!</span>(header.contains(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"only when option{parent} is present"</span>)));
-<a href=#3860 id=3860 data-nosnippet>3860</a>        }
-<a href=#3861 id=3861 data-nosnippet>3861</a>    }
-<a href=#3862 id=3862 data-nosnippet>3862</a>
-<a href=#3863 id=3863 data-nosnippet>3863</a>    <span class="attr">#[test]
-<a href=#3864 id=3864 data-nosnippet>3864</a>    </span><span class="kw">fn </span>header_describes_shared_nested_empty_and_multiwire_fields() {
-<a href=#3865 id=3865 data-nosnippet>3865</a>        <span class="kw">use </span>prebindgen_declarations::bind_output;
-<a href=#3866 id=3866 data-nosnippet>3866</a>        <span class="kw">let </span>source = syn::parse_file(<span class="string">"pub struct Empty {} pub struct Pair { pub x: i32, pub y: i32 } pub struct Record { pub empty: Empty, pub pair: Pair, pub maybe: Option&lt;i32&gt; } pub fn make() -&gt; Record { unreachable!() }"</span>).unwrap();
-<a href=#3867 id=3867 data-nosnippet>3867</a>        <span class="kw">let </span><span class="kw-2">mut </span>flat =
-<a href=#3868 id=3868 data-nosnippet>3868</a>            CBindings::parse(source.items.into_iter().map(|i| (i, Default::default()))).unwrap();
-<a href=#3869 id=3869 data-nosnippet>3869</a>        <span class="kw">let </span>recipe = COutput::Branch {
-<a href=#3870 id=3870 data-nosnippet>3870</a>            operation: COutputBranch::Fields,
-<a href=#3871 id=3871 data-nosnippet>3871</a>            children: <span class="macro">vec!</span>[
-<a href=#3872 id=3872 data-nosnippet>3872</a>                COutput::Branch {
-<a href=#3873 id=3873 data-nosnippet>3873</a>                    operation: COutputBranch::Fields,
-<a href=#3874 id=3874 data-nosnippet>3874</a>                    children: <span class="macro">vec!</span>[],
-<a href=#3875 id=3875 data-nosnippet>3875</a>                },
-<a href=#3876 id=3876 data-nosnippet>3876</a>                COutput::Branch {
-<a href=#3877 id=3877 data-nosnippet>3877</a>                    operation: COutputBranch::Fields,
-<a href=#3878 id=3878 data-nosnippet>3878</a>                    children: <span class="macro">vec!</span>[
-<a href=#3879 id=3879 data-nosnippet>3879</a>                        COutput::Leaf(COutputLeafOp::Value),
+<a href=#3788 id=3788 data-nosnippet>3788</a>            })
+<a href=#3789 id=3789 data-nosnippet>3789</a>            .into(),
+<a href=#3790 id=3790 data-nosnippet>3790</a>            child: Box::new(COutput::Leaf(COutputLeafOp::Value)),
+<a href=#3791 id=3791 data-nosnippet>3791</a>        };
+<a href=#3792 id=3792 data-nosnippet>3792</a>        <span class="kw">for </span>(source, recipe) <span class="kw">in </span>[
+<a href=#3793 id=3793 data-nosnippet>3793</a>            (
+<a href=#3794 id=3794 data-nosnippet>3794</a>                <span class="string">"pub fn f()-&gt;&amp;Vec&lt;i64&gt; {}"</span>,
+<a href=#3795 id=3795 data-nosnippet>3795</a>                COutput::combine([seq(<span class="bool-val">false</span>), seq(<span class="bool-val">false</span>)]),
+<a href=#3796 id=3796 data-nosnippet>3796</a>            ),
+<a href=#3797 id=3797 data-nosnippet>3797</a>            (
+<a href=#3798 id=3798 data-nosnippet>3798</a>                <span class="string">"pub struct Record { pub values: Vec&lt;i64&gt; } pub fn f()-&gt;Record {}"</span>,
+<a href=#3799 id=3799 data-nosnippet>3799</a>                COutput::fields([COutput::combine([seq(<span class="bool-val">true</span>), seq(<span class="bool-val">true</span>)])]),
+<a href=#3800 id=3800 data-nosnippet>3800</a>            ),
+<a href=#3801 id=3801 data-nosnippet>3801</a>        ] {
+<a href=#3802 id=3802 data-nosnippet>3802</a>            <span class="kw">let </span>source = syn::parse_file(source).unwrap();
+<a href=#3803 id=3803 data-nosnippet>3803</a>            <span class="kw">let </span><span class="kw-2">mut </span>flat =
+<a href=#3804 id=3804 data-nosnippet>3804</a>                CBindings::parse(source.items.into_iter().map(|i| (i, Default::default())))
+<a href=#3805 id=3805 data-nosnippet>3805</a>                    .unwrap();
+<a href=#3806 id=3806 data-nosnippet>3806</a>            bind_output(<span class="kw-2">&amp;mut </span>flat, <span class="kw-2">&amp;</span>CCodec::raw(), <span class="string">"f"</span>, <span class="kw-2">&amp;</span>recipe, <span class="kw-2">&amp;</span>()).unwrap();
+<a href=#3807 id=3807 data-nosnippet>3807</a>            <span class="macro">assert_eq!</span>(
+<a href=#3808 id=3808 data-nosnippet>3808</a>                <span class="kw">crate</span>::group::result_packet_fields(
+<a href=#3809 id=3809 data-nosnippet>3809</a>                    <span class="kw-2">&amp;</span>flat
+<a href=#3810 id=3810 data-nosnippet>3810</a>                        .function(<span class="string">"f"</span>)
+<a href=#3811 id=3811 data-nosnippet>3811</a>                        .unwrap()
+<a href=#3812 id=3812 data-nosnippet>3812</a>                        .ret
+<a href=#3813 id=3813 data-nosnippet>3813</a>                        .slot
+<a href=#3814 id=3814 data-nosnippet>3814</a>                        .as_ref()
+<a href=#3815 id=3815 data-nosnippet>3815</a>                        .unwrap()
+<a href=#3816 id=3816 data-nosnippet>3816</a>                        .outcomes
+<a href=#3817 id=3817 data-nosnippet>3817</a>                        .success
+<a href=#3818 id=3818 data-nosnippet>3818</a>                )
+<a href=#3819 id=3819 data-nosnippet>3819</a>                .len(),
+<a href=#3820 id=3820 data-nosnippet>3820</a>                <span class="number">2
+<a href=#3821 id=3821 data-nosnippet>3821</a>            </span>);
+<a href=#3822 id=3822 data-nosnippet>3822</a>            Cbindgen::new(flat).build().unwrap();
+<a href=#3823 id=3823 data-nosnippet>3823</a>        }
+<a href=#3824 id=3824 data-nosnippet>3824</a>    }
+<a href=#3825 id=3825 data-nosnippet>3825</a>
+<a href=#3826 id=3826 data-nosnippet>3826</a>    <span class="attr">#[test]
+<a href=#3827 id=3827 data-nosnippet>3827</a>    </span><span class="kw">fn </span>option_comment_labels_are_unique_across_parameters_and_result() {
+<a href=#3828 id=3828 data-nosnippet>3828</a>        <span class="kw">use </span>prebindgen_declarations::{bind_input, bind_output};
+<a href=#3829 id=3829 data-nosnippet>3829</a>        <span class="kw">let </span>source = syn::parse_file(<span class="string">"pub fn echo(a: Option&lt;Option&lt;char&gt;&gt;, b: Option&lt;Option&lt;char&gt;&gt;) -&gt; Option&lt;Option&lt;char&gt;&gt; { a }"</span>).unwrap();
+<a href=#3830 id=3830 data-nosnippet>3830</a>        <span class="kw">let </span><span class="kw-2">mut </span>flat =
+<a href=#3831 id=3831 data-nosnippet>3831</a>            CBindings::parse(source.items.into_iter().map(|i| (i, Default::default()))).unwrap();
+<a href=#3832 id=3832 data-nosnippet>3832</a>        <span class="kw">let </span>input = CInput::Unary {
+<a href=#3833 id=3833 data-nosnippet>3833</a>            operation: (CInputUnary::Optional).into(),
+<a href=#3834 id=3834 data-nosnippet>3834</a>            child: Box::new(CInput::Unary {
+<a href=#3835 id=3835 data-nosnippet>3835</a>                operation: (CInputUnary::Optional).into(),
+<a href=#3836 id=3836 data-nosnippet>3836</a>                child: Box::new(CInput::Leaf(CInputLeafOp::Value)),
+<a href=#3837 id=3837 data-nosnippet>3837</a>            }),
+<a href=#3838 id=3838 data-nosnippet>3838</a>        };
+<a href=#3839 id=3839 data-nosnippet>3839</a>        <span class="kw">for </span>param <span class="kw">in </span>[<span class="string">"a"</span>, <span class="string">"b"</span>] {
+<a href=#3840 id=3840 data-nosnippet>3840</a>            bind_input(<span class="kw-2">&amp;mut </span>flat, <span class="kw-2">&amp;</span>CCodec::raw(), <span class="string">"echo"</span>, param, <span class="kw-2">&amp;</span>input, <span class="kw-2">&amp;</span>()).unwrap();
+<a href=#3841 id=3841 data-nosnippet>3841</a>        }
+<a href=#3842 id=3842 data-nosnippet>3842</a>        <span class="kw">let </span>output = COutput::Unary {
+<a href=#3843 id=3843 data-nosnippet>3843</a>            operation: (COutputUnary::Optional).into(),
+<a href=#3844 id=3844 data-nosnippet>3844</a>            child: Box::new(COutput::Unary {
+<a href=#3845 id=3845 data-nosnippet>3845</a>                operation: (COutputUnary::Optional).into(),
+<a href=#3846 id=3846 data-nosnippet>3846</a>                child: Box::new(COutput::Leaf(COutputLeafOp::Value)),
+<a href=#3847 id=3847 data-nosnippet>3847</a>            }),
+<a href=#3848 id=3848 data-nosnippet>3848</a>        };
+<a href=#3849 id=3849 data-nosnippet>3849</a>        bind_output(<span class="kw-2">&amp;mut </span>flat, <span class="kw-2">&amp;</span>CCodec::raw(), <span class="string">"echo"</span>, <span class="kw-2">&amp;</span>output, <span class="kw-2">&amp;</span>()).unwrap();
+<a href=#3850 id=3850 data-nosnippet>3850</a>        <span class="kw">let </span>header = Cbindgen::new(flat)
+<a href=#3851 id=3851 data-nosnippet>3851</a>            .function(<span class="macro">crate::fun!</span>(echo))
+<a href=#3852 id=3852 data-nosnippet>3852</a>            .panic()
+<a href=#3853 id=3853 data-nosnippet>3853</a>            .build()
+<a href=#3854 id=3854 data-nosnippet>3854</a>            .unwrap()
+<a href=#3855 id=3855 data-nosnippet>3855</a>            .header;
+<a href=#3856 id=3856 data-nosnippet>3856</a>        <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..<span class="number">6 </span>{
+<a href=#3857 id=3857 data-nosnippet>3857</a>            <span class="macro">assert_eq!</span>(header.matches(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"Option option{i}:"</span>)).count(), <span class="number">1</span>);
+<a href=#3858 id=3858 data-nosnippet>3858</a>        }
+<a href=#3859 id=3859 data-nosnippet>3859</a>        <span class="kw">for </span>parent <span class="kw">in </span>[<span class="number">0</span>, <span class="number">2</span>, <span class="number">4</span>] {
+<a href=#3860 id=3860 data-nosnippet>3860</a>            <span class="macro">assert!</span>(header.contains(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"only when option{parent} is present"</span>)));
+<a href=#3861 id=3861 data-nosnippet>3861</a>        }
+<a href=#3862 id=3862 data-nosnippet>3862</a>    }
+<a href=#3863 id=3863 data-nosnippet>3863</a>
+<a href=#3864 id=3864 data-nosnippet>3864</a>    <span class="attr">#[test]
+<a href=#3865 id=3865 data-nosnippet>3865</a>    </span><span class="kw">fn </span>header_describes_shared_nested_empty_and_multiwire_fields() {
+<a href=#3866 id=3866 data-nosnippet>3866</a>        <span class="kw">use </span>prebindgen_declarations::bind_output;
+<a href=#3867 id=3867 data-nosnippet>3867</a>        <span class="kw">let </span>source = syn::parse_file(<span class="string">"pub struct Empty {} pub struct Pair { pub x: i32, pub y: i32 } pub struct Record { pub empty: Empty, pub pair: Pair, pub maybe: Option&lt;i32&gt; } pub fn make() -&gt; Record { unreachable!() }"</span>).unwrap();
+<a href=#3868 id=3868 data-nosnippet>3868</a>        <span class="kw">let </span><span class="kw-2">mut </span>flat =
+<a href=#3869 id=3869 data-nosnippet>3869</a>            CBindings::parse(source.items.into_iter().map(|i| (i, Default::default()))).unwrap();
+<a href=#3870 id=3870 data-nosnippet>3870</a>        <span class="kw">let </span>recipe = COutput::Branch {
+<a href=#3871 id=3871 data-nosnippet>3871</a>            operation: (COutputBranch::Fields).into(),
+<a href=#3872 id=3872 data-nosnippet>3872</a>            children: <span class="macro">vec!</span>[
+<a href=#3873 id=3873 data-nosnippet>3873</a>                COutput::Branch {
+<a href=#3874 id=3874 data-nosnippet>3874</a>                    operation: (COutputBranch::Fields).into(),
+<a href=#3875 id=3875 data-nosnippet>3875</a>                    children: <span class="macro">vec!</span>[],
+<a href=#3876 id=3876 data-nosnippet>3876</a>                },
+<a href=#3877 id=3877 data-nosnippet>3877</a>                COutput::Branch {
+<a href=#3878 id=3878 data-nosnippet>3878</a>                    operation: (COutputBranch::Fields).into(),
+<a href=#3879 id=3879 data-nosnippet>3879</a>                    children: <span class="macro">vec!</span>[
 <a href=#3880 id=3880 data-nosnippet>3880</a>                        COutput::Leaf(COutputLeafOp::Value),
-<a href=#3881 id=3881 data-nosnippet>3881</a>                    ],
-<a href=#3882 id=3882 data-nosnippet>3882</a>                },
-<a href=#3883 id=3883 data-nosnippet>3883</a>                COutput::Unary {
-<a href=#3884 id=3884 data-nosnippet>3884</a>                    operation: COutputUnary::Optional,
-<a href=#3885 id=3885 data-nosnippet>3885</a>                    child: Box::new(COutput::Leaf(COutputLeafOp::Value)),
-<a href=#3886 id=3886 data-nosnippet>3886</a>                },
-<a href=#3887 id=3887 data-nosnippet>3887</a>            ],
-<a href=#3888 id=3888 data-nosnippet>3888</a>        };
-<a href=#3889 id=3889 data-nosnippet>3889</a>        bind_output(<span class="kw-2">&amp;mut </span>flat, <span class="kw-2">&amp;</span>CCodec::raw(), <span class="string">"make"</span>, <span class="kw-2">&amp;</span>recipe, <span class="kw-2">&amp;</span>()).unwrap();
-<a href=#3890 id=3890 data-nosnippet>3890</a>        <span class="kw">let </span>header = Cbindgen::new(flat).build().unwrap().header;
-<a href=#3891 id=3891 data-nosnippet>3891</a>        <span class="macro">assert!</span>(header.contains(<span class="string">"Field return.empty: no boundary values."</span>));
-<a href=#3892 id=3892 data-nosnippet>3892</a>        <span class="macro">assert!</span>(header.contains(<span class="string">"Field return.pair: return value, *out1."</span>));
-<a href=#3893 id=3893 data-nosnippet>3893</a>        <span class="macro">assert!</span>(header.contains(<span class="string">"Field return.pair.x: return value."</span>));
-<a href=#3894 id=3894 data-nosnippet>3894</a>        <span class="macro">assert!</span>(header.contains(<span class="string">"Field return.pair.y: *out1."</span>));
-<a href=#3895 id=3895 data-nosnippet>3895</a>        <span class="macro">assert!</span>(header.contains(<span class="string">"Field return.maybe: *out2, *out3."</span>));
-<a href=#3896 id=3896 data-nosnippet>3896</a>    }
-<a href=#3897 id=3897 data-nosnippet>3897</a>
-<a href=#3898 id=3898 data-nosnippet>3898</a>    <span class="attr">#[test]
-<a href=#3899 id=3899 data-nosnippet>3899</a>    </span><span class="kw">fn </span>character_niches_exhaust_at_the_carrier_limit() {
-<a href=#3900 id=3900 data-nosnippet>3900</a>        <span class="kw">let </span>wire: CWire = CWire::scalar(Primitive::Char);
-<a href=#3901 id=3901 data-nosnippet>3901</a>        <span class="macro">assert!</span>(wire
-<a href=#3902 id=3902 data-nosnippet>3902</a>            .remaining_niche(<span class="kw-2">&amp;</span>CNiche::Integer(u32::MAX <span class="kw">as </span>i64))
-<a href=#3903 id=3903 data-nosnippet>3903</a>            .is_none());
-<a href=#3904 id=3904 data-nosnippet>3904</a>        <span class="macro">assert!</span>(<span class="macro">matches!</span>(
-<a href=#3905 id=3905 data-nosnippet>3905</a>            wire.remaining_niche(<span class="kw-2">&amp;</span>CNiche::Integer(<span class="number">0x110000</span>)),
-<a href=#3906 id=3906 data-nosnippet>3906</a>            <span class="prelude-val">Some</span>(CNiche::Integer(<span class="number">0x110001</span>))
-<a href=#3907 id=3907 data-nosnippet>3907</a>        ));
-<a href=#3908 id=3908 data-nosnippet>3908</a>    }
-<a href=#3909 id=3909 data-nosnippet>3909</a>
-<a href=#3910 id=3910 data-nosnippet>3910</a>    <span class="attr">#[test]
-<a href=#3911 id=3911 data-nosnippet>3911</a>    </span><span class="kw">fn </span>shared_compiler_suppresses_niches_in_selector_arms() {
-<a href=#3912 id=3912 data-nosnippet>3912</a>        <span class="kw">use </span>prebindgen_declarations::bind_input;
-<a href=#3913 id=3913 data-nosnippet>3913</a>        <span class="kw">for </span>(payload, arm) <span class="kw">in </span>[
-<a href=#3914 id=3914 data-nosnippet>3914</a>            (<span class="string">"char"</span>, CInput::Leaf(CInputLeafOp::Value)),
-<a href=#3915 id=3915 data-nosnippet>3915</a>            (
-<a href=#3916 id=3916 data-nosnippet>3916</a>                <span class="string">"Option&lt;char&gt;"</span>,
-<a href=#3917 id=3917 data-nosnippet>3917</a>                CInput::Unary {
-<a href=#3918 id=3918 data-nosnippet>3918</a>                    operation: CInputUnary::Optional,
-<a href=#3919 id=3919 data-nosnippet>3919</a>                    child: Box::new(CInput::Leaf(CInputLeafOp::Value)),
-<a href=#3920 id=3920 data-nosnippet>3920</a>                },
-<a href=#3921 id=3921 data-nosnippet>3921</a>            ),
-<a href=#3922 id=3922 data-nosnippet>3922</a>        ] {
-<a href=#3923 id=3923 data-nosnippet>3923</a>            <span class="kw">let </span>source = syn::parse_file(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"pub fn echo(value: {payload}) {{}}"</span>)).unwrap();
-<a href=#3924 id=3924 data-nosnippet>3924</a>            <span class="kw">let </span><span class="kw-2">mut </span>flat =
-<a href=#3925 id=3925 data-nosnippet>3925</a>                CBindings::parse(source.items.into_iter().map(|i| (i, Default::default())))
-<a href=#3926 id=3926 data-nosnippet>3926</a>                    .unwrap();
-<a href=#3927 id=3927 data-nosnippet>3927</a>            <span class="kw">let </span>selector = CInput::Branch {
-<a href=#3928 id=3928 data-nosnippet>3928</a>                operation: CInputBranch::Selector,
-<a href=#3929 id=3929 data-nosnippet>3929</a>                children: <span class="macro">vec!</span>[arm.clone(), arm.clone()],
-<a href=#3930 id=3930 data-nosnippet>3930</a>            };
-<a href=#3931 id=3931 data-nosnippet>3931</a>            bind_input(<span class="kw-2">&amp;mut </span>flat, <span class="kw-2">&amp;</span>CCodec::raw(), <span class="string">"echo"</span>, <span class="string">"value"</span>, <span class="kw-2">&amp;</span>selector, <span class="kw-2">&amp;</span>()).unwrap();
-<a href=#3932 id=3932 data-nosnippet>3932</a>            <span class="macro">assert_eq!</span>(
-<a href=#3933 id=3933 data-nosnippet>3933</a>                <span class="kw">crate</span>::group::function_parameters(flat.function(<span class="string">"echo"</span>).unwrap())
-<a href=#3934 id=3934 data-nosnippet>3934</a>                    .unwrap()
-<a href=#3935 id=3935 data-nosnippet>3935</a>                    .len(),
-<a href=#3936 id=3936 data-nosnippet>3936</a>                <span class="number">3
-<a href=#3937 id=3937 data-nosnippet>3937</a>            </span>);
-<a href=#3938 id=3938 data-nosnippet>3938</a>            <span class="comment">// Check suppression before an outer option can clear the arm niches.
-<a href=#3939 id=3939 data-nosnippet>3939</a>            </span><span class="kw">for </span>wire <span class="kw">in </span><span class="kw">crate</span>::group::function_parameters(flat.function(<span class="string">"echo"</span>).unwrap())
-<a href=#3940 id=3940 data-nosnippet>3940</a>                .unwrap()
-<a href=#3941 id=3941 data-nosnippet>3941</a>                .skip(<span class="number">1</span>)
-<a href=#3942 id=3942 data-nosnippet>3942</a>            {
-<a href=#3943 id=3943 data-nosnippet>3943</a>                <span class="macro">assert!</span>(<span class="macro">matches!</span>(
-<a href=#3944 id=3944 data-nosnippet>3944</a>                    wire.kind,
-<a href=#3945 id=3945 data-nosnippet>3945</a>                    CWire::Scalar {
-<a href=#3946 id=3946 data-nosnippet>3946</a>                        primitive: Primitive::Char,
-<a href=#3947 id=3947 data-nosnippet>3947</a>                        ..
-<a href=#3948 id=3948 data-nosnippet>3948</a>                    }
-<a href=#3949 id=3949 data-nosnippet>3949</a>                ));
-<a href=#3950 id=3950 data-nosnippet>3950</a>                <span class="macro">assert!</span>(wire.kind.available_niche().is_none());
-<a href=#3951 id=3951 data-nosnippet>3951</a>            }
-<a href=#3952 id=3952 data-nosnippet>3952</a>            <span class="kw">let </span>source =
-<a href=#3953 id=3953 data-nosnippet>3953</a>                syn::parse_file(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"pub fn echo(value: Option&lt;{payload}&gt;) {{}}"</span>)).unwrap();
-<a href=#3954 id=3954 data-nosnippet>3954</a>            <span class="kw">let </span><span class="kw-2">mut </span>flat =
-<a href=#3955 id=3955 data-nosnippet>3955</a>                CBindings::parse(source.items.into_iter().map(|i| (i, Default::default())))
-<a href=#3956 id=3956 data-nosnippet>3956</a>                    .unwrap();
-<a href=#3957 id=3957 data-nosnippet>3957</a>            <span class="kw">let </span>recipe = CInput::Unary {
-<a href=#3958 id=3958 data-nosnippet>3958</a>                operation: CInputUnary::Optional,
-<a href=#3959 id=3959 data-nosnippet>3959</a>                child: Box::new(CInput::Branch {
-<a href=#3960 id=3960 data-nosnippet>3960</a>                    operation: CInputBranch::Selector,
-<a href=#3961 id=3961 data-nosnippet>3961</a>                    children: <span class="macro">vec!</span>[arm.clone(), arm],
-<a href=#3962 id=3962 data-nosnippet>3962</a>                }),
-<a href=#3963 id=3963 data-nosnippet>3963</a>            };
-<a href=#3964 id=3964 data-nosnippet>3964</a>            bind_input(<span class="kw-2">&amp;mut </span>flat, <span class="kw-2">&amp;</span>CCodec::raw(), <span class="string">"echo"</span>, <span class="string">"value"</span>, <span class="kw-2">&amp;</span>recipe, <span class="kw-2">&amp;</span>()).unwrap();
-<a href=#3965 id=3965 data-nosnippet>3965</a>            <span class="kw">let </span>plan = flat.function(<span class="string">"echo"</span>).unwrap().params[<span class="number">0</span>]
-<a href=#3966 id=3966 data-nosnippet>3966</a>                .ty
-<a href=#3967 id=3967 data-nosnippet>3967</a>                .slot
-<a href=#3968 id=3968 data-nosnippet>3968</a>                .as_ref()
-<a href=#3969 id=3969 data-nosnippet>3969</a>                .unwrap();
-<a href=#3970 id=3970 data-nosnippet>3970</a>            <span class="comment">// Presence flag + selector + two char carriers. Even a remaining
-<a href=#3971 id=3971 data-nosnippet>3971</a>            // niche of an optional arm cannot describe the outer option.
-<a href=#3972 id=3972 data-nosnippet>3972</a>            </span><span class="macro">assert_eq!</span>(
-<a href=#3973 id=3973 data-nosnippet>3973</a>                <span class="kw">crate</span>::group::function_parameters(flat.function(<span class="string">"echo"</span>).unwrap())
-<a href=#3974 id=3974 data-nosnippet>3974</a>                    .unwrap()
-<a href=#3975 id=3975 data-nosnippet>3975</a>                    .len(),
-<a href=#3976 id=3976 data-nosnippet>3976</a>                <span class="number">4
-<a href=#3977 id=3977 data-nosnippet>3977</a>            </span>);
-<a href=#3978 id=3978 data-nosnippet>3978</a>            <span class="kw">let </span>prebindgen_flat::WireNode::Chain {
-<a href=#3979 id=3979 data-nosnippet>3979</a>                meta: CChain::Optional(outer_metadata),
-<a href=#3980 id=3980 data-nosnippet>3980</a>                ..
-<a href=#3981 id=3981 data-nosnippet>3981</a>            } = <span class="kw-2">&amp;</span>plan.node
-<a href=#3982 id=3982 data-nosnippet>3982</a>            <span class="kw">else </span>{
-<a href=#3983 id=3983 data-nosnippet>3983</a>                <span class="macro">panic!</span>()
-<a href=#3984 id=3984 data-nosnippet>3984</a>            };
-<a href=#3985 id=3985 data-nosnippet>3985</a>            <span class="kw">let </span>optional = outer_metadata;
-<a href=#3986 id=3986 data-nosnippet>3986</a>            <span class="macro">assert!</span>(optional.niche().is_none());
-<a href=#3987 id=3987 data-nosnippet>3987</a>            <span class="macro">assert_eq!</span>(
-<a href=#3988 id=3988 data-nosnippet>3988</a>                <span class="kw-2">*</span>optional.discriminator(),
-<a href=#3989 id=3989 data-nosnippet>3989</a>                <span class="kw">crate</span>::group::function_parameters(flat.function(<span class="string">"echo"</span>).unwrap())
-<a href=#3990 id=3990 data-nosnippet>3990</a>                    .unwrap()
-<a href=#3991 id=3991 data-nosnippet>3991</a>                    .next()
-<a href=#3992 id=3992 data-nosnippet>3992</a>                    .unwrap()
-<a href=#3993 id=3993 data-nosnippet>3993</a>                    .name
-<a href=#3994 id=3994 data-nosnippet>3994</a>            );
-<a href=#3995 id=3995 data-nosnippet>3995</a>        }
-<a href=#3996 id=3996 data-nosnippet>3996</a>    }
-<a href=#3997 id=3997 data-nosnippet>3997</a>
-<a href=#3998 id=3998 data-nosnippet>3998</a>    <span class="attr">#[test]
-<a href=#3999 id=3999 data-nosnippet>3999</a>    </span><span class="kw">fn </span>public_emission_rejects_invalid_c_type_names_without_panicking() {
-<a href=#4000 id=4000 data-nosnippet>4000</a>        <span class="kw">let </span><span class="kw-2">mut </span>prepared = Cbindgen::new(error_model(<span class="string">"pub type Handle=String;pub enum E{A,B}"</span>))
-<a href=#4001 id=4001 data-nosnippet>4001</a>            .opaque_ptr(<span class="string">"handle"</span>, <span class="macro">syn::parse_quote!</span>(Handle))
-<a href=#4002 id=4002 data-nosnippet>4002</a>            .enum_type(<span class="string">"choice"</span>, <span class="macro">syn::parse_quote!</span>(E))
-<a href=#4003 id=4003 data-nosnippet>4003</a>            .prepare()
-<a href=#4004 id=4004 data-nosnippet>4004</a>            .unwrap();
-<a href=#4005 id=4005 data-nosnippet>4005</a>        prepared
-<a href=#4006 id=4006 data-nosnippet>4006</a>            .type_info_mut(<span class="kw-2">&amp;</span><span class="macro">syn::parse_quote!</span>(<span class="kw">crate</span>::Handle))
-<a href=#4007 id=4007 data-nosnippet>4007</a>            .unwrap()
-<a href=#4008 id=4008 data-nosnippet>4008</a>            .metadata
-<a href=#4009 id=4009 data-nosnippet>4009</a>            .pointer = <span class="prelude-val">Some</span>(<span class="string">"bad-name"</span>.into());
-<a href=#4010 id=4010 data-nosnippet>4010</a>        <span class="macro">assert!</span>(generate(<span class="kw-2">&amp;</span>prepared).is_err());
-<a href=#4011 id=4011 data-nosnippet>4011</a>        prepared
-<a href=#4012 id=4012 data-nosnippet>4012</a>            .type_info_mut(<span class="kw-2">&amp;</span><span class="macro">syn::parse_quote!</span>(<span class="kw">crate</span>::Handle))
-<a href=#4013 id=4013 data-nosnippet>4013</a>            .unwrap()
-<a href=#4014 id=4014 data-nosnippet>4014</a>            .metadata
-<a href=#4015 id=4015 data-nosnippet>4015</a>            .pointer = <span class="prelude-val">Some</span>(<span class="string">"handle"</span>.into());
-<a href=#4016 id=4016 data-nosnippet>4016</a>        <span class="kw">let </span>enumeration = prepared
-<a href=#4017 id=4017 data-nosnippet>4017</a>            .type_info_mut(<span class="kw-2">&amp;</span><span class="macro">syn::parse_quote!</span>(<span class="kw">crate</span>::E))
-<a href=#4018 id=4018 data-nosnippet>4018</a>            .unwrap()
-<a href=#4019 id=4019 data-nosnippet>4019</a>            .metadata
-<a href=#4020 id=4020 data-nosnippet>4020</a>            .enumeration
-<a href=#4021 id=4021 data-nosnippet>4021</a>            .as_mut()
-<a href=#4022 id=4022 data-nosnippet>4022</a>            .unwrap();
-<a href=#4023 id=4023 data-nosnippet>4023</a>        std::rc::Rc::make_mut(enumeration).name = <span class="string">"bad-name"</span>.into();
-<a href=#4024 id=4024 data-nosnippet>4024</a>        <span class="macro">assert!</span>(generate(<span class="kw-2">&amp;</span>prepared).is_err());
-<a href=#4025 id=4025 data-nosnippet>4025</a>    }
-<a href=#4026 id=4026 data-nosnippet>4026</a>
-<a href=#4027 id=4027 data-nosnippet>4027</a>    <span class="attr">#[test]
-<a href=#4028 id=4028 data-nosnippet>4028</a>    </span><span class="kw">fn </span>public_emission_validates_abort_policy_and_module_settings() {
-<a href=#4029 id=4029 data-nosnippet>4029</a>        <span class="kw">let </span>flat = error_model(<span class="string">"pub fn f(c:char)-&gt;char{}"</span>);
-<a href=#4030 id=4030 data-nosnippet>4030</a>        <span class="kw">let </span><span class="kw-2">mut </span>prepared = Cbindgen::new(flat)
-<a href=#4031 id=4031 data-nosnippet>4031</a>            .function(<span class="macro">crate::fun!</span>(f))
-<a href=#4032 id=4032 data-nosnippet>4032</a>            .panic()
-<a href=#4033 id=4033 data-nosnippet>4033</a>            .prepare()
-<a href=#4034 id=4034 data-nosnippet>4034</a>            .unwrap();
-<a href=#4035 id=4035 data-nosnippet>4035</a>        prepared
-<a href=#4036 id=4036 data-nosnippet>4036</a>            .function_mut(<span class="string">"f"</span>)
-<a href=#4037 id=4037 data-nosnippet>4037</a>            .unwrap()
-<a href=#4038 id=4038 data-nosnippet>4038</a>            .metadata
-<a href=#4039 id=4039 data-nosnippet>4039</a>            .as_mut()
-<a href=#4040 id=4040 data-nosnippet>4040</a>            .unwrap()
-<a href=#4041 id=4041 data-nosnippet>4041</a>            .abort_on_failure = <span class="bool-val">false</span>;
-<a href=#4042 id=4042 data-nosnippet>4042</a>        prepared
-<a href=#4043 id=4043 data-nosnippet>4043</a>            .function_mut(<span class="string">"f"</span>)
-<a href=#4044 id=4044 data-nosnippet>4044</a>            .unwrap()
-<a href=#4045 id=4045 data-nosnippet>4045</a>            .metadata
-<a href=#4046 id=4046 data-nosnippet>4046</a>            .as_mut()
-<a href=#4047 id=4047 data-nosnippet>4047</a>            .unwrap()
-<a href=#4048 id=4048 data-nosnippet>4048</a>            .requires_abort = <span class="bool-val">true</span>;
-<a href=#4049 id=4049 data-nosnippet>4049</a>        <span class="macro">assert!</span>(generate(<span class="kw-2">&amp;</span>prepared).err().unwrap().contains(<span class="string">"abort policy"</span>));
-<a href=#4050 id=4050 data-nosnippet>4050</a>        prepared
-<a href=#4051 id=4051 data-nosnippet>4051</a>            .function_mut(<span class="string">"f"</span>)
-<a href=#4052 id=4052 data-nosnippet>4052</a>            .unwrap()
-<a href=#4053 id=4053 data-nosnippet>4053</a>            .metadata
-<a href=#4054 id=4054 data-nosnippet>4054</a>            .as_mut()
-<a href=#4055 id=4055 data-nosnippet>4055</a>            .unwrap()
-<a href=#4056 id=4056 data-nosnippet>4056</a>            .abort_on_failure = <span class="bool-val">true</span>;
-<a href=#4057 id=4057 data-nosnippet>4057</a>        prepared.metadata.prefix = <span class="string">"invalid-prefix"</span>.into();
-<a href=#4058 id=4058 data-nosnippet>4058</a>        <span class="macro">assert!</span>(generate(<span class="kw-2">&amp;</span>prepared).is_err());
-<a href=#4059 id=4059 data-nosnippet>4059</a>        prepared.metadata.prefix = <span class="string">"test"</span>.into();
-<a href=#4060 id=4060 data-nosnippet>4060</a>        prepared.function_mut(<span class="string">"f"</span>).unwrap().metadata = <span class="prelude-val">None</span>;
-<a href=#4061 id=4061 data-nosnippet>4061</a>        <span class="macro">assert!</span>(generate(<span class="kw-2">&amp;</span>prepared).is_err());
-<a href=#4062 id=4062 data-nosnippet>4062</a>    }
-<a href=#4063 id=4063 data-nosnippet>4063</a>
-<a href=#4064 id=4064 data-nosnippet>4064</a>    <span class="attr">#[test]
-<a href=#4065 id=4065 data-nosnippet>4065</a>    </span><span class="kw">fn </span>emission_reads_only_the_prepared_flat() {
-<a href=#4066 id=4066 data-nosnippet>4066</a>        <span class="kw">let </span>source = syn::parse_file(<span class="string">"pub enum E { A, B } pub fn echo(e:E)-&gt;E{}"</span>).unwrap();
-<a href=#4067 id=4067 data-nosnippet>4067</a>        <span class="kw">let </span>flat =
-<a href=#4068 id=4068 data-nosnippet>4068</a>            CBindings::parse(source.items.into_iter().map(|i| (i, Default::default()))).unwrap();
-<a href=#4069 id=4069 data-nosnippet>4069</a>        <span class="kw">let </span>prepared = Cbindgen::new(flat)
-<a href=#4070 id=4070 data-nosnippet>4070</a>            .prefix(<span class="string">"custom"</span>)
-<a href=#4071 id=4071 data-nosnippet>4071</a>            .enum_type(<span class="string">"choice"</span>, <span class="macro">syn::parse_quote!</span>(E))
-<a href=#4072 id=4072 data-nosnippet>4072</a>            .function(<span class="macro">crate::fun!</span>(echo))
-<a href=#4073 id=4073 data-nosnippet>4073</a>            .panic()
-<a href=#4074 id=4074 data-nosnippet>4074</a>            .prepare()
-<a href=#4075 id=4075 data-nosnippet>4075</a>            .unwrap();
-<a href=#4076 id=4076 data-nosnippet>4076</a>        <span class="macro">assert!</span>(prepared
-<a href=#4077 id=4077 data-nosnippet>4077</a>            .type_info(<span class="kw-2">&amp;</span><span class="macro">syn::parse_quote!</span>(<span class="kw">crate</span>::E))
-<a href=#4078 id=4078 data-nosnippet>4078</a>            .unwrap()
-<a href=#4079 id=4079 data-nosnippet>4079</a>            .metadata
-<a href=#4080 id=4080 data-nosnippet>4080</a>            .enumeration
-<a href=#4081 id=4081 data-nosnippet>4081</a>            .is_some());
-<a href=#4082 id=4082 data-nosnippet>4082</a>        <span class="kw">let </span>first = generate(<span class="kw-2">&amp;</span>prepared).unwrap();
-<a href=#4083 id=4083 data-nosnippet>4083</a>        <span class="kw">let </span>second = generate(<span class="kw-2">&amp;</span>prepared.clone()).unwrap();
-<a href=#4084 id=4084 data-nosnippet>4084</a>        <span class="macro">assert_eq!</span>(first.rust, second.rust);
-<a href=#4085 id=4085 data-nosnippet>4085</a>        <span class="macro">assert_eq!</span>(first.header, second.header);
-<a href=#4086 id=4086 data-nosnippet>4086</a>        <span class="macro">assert!</span>(first.header.contains(<span class="string">"custom_choice"</span>));
-<a href=#4087 id=4087 data-nosnippet>4087</a>        <span class="macro">assert!</span>(first.header.contains(<span class="string">"custom_echo"</span>));
-<a href=#4088 id=4088 data-nosnippet>4088</a>    }
-<a href=#4089 id=4089 data-nosnippet>4089</a>
-<a href=#4090 id=4090 data-nosnippet>4090</a>    <span class="attr">#[test]
-<a href=#4091 id=4091 data-nosnippet>4091</a>    </span><span class="kw">fn </span>rejects_invalid_pointer_names_during_preparation() {
-<a href=#4092 id=4092 data-nosnippet>4092</a>        <span class="kw">let </span>source = syn::parse_file(<span class="string">"pub type Handle = String;"</span>).unwrap();
-<a href=#4093 id=4093 data-nosnippet>4093</a>        <span class="kw">let </span>flat = CBindings::parse(
-<a href=#4094 id=4094 data-nosnippet>4094</a>            source
-<a href=#4095 id=4095 data-nosnippet>4095</a>                .items
-<a href=#4096 id=4096 data-nosnippet>4096</a>                .into_iter()
-<a href=#4097 id=4097 data-nosnippet>4097</a>                .map(|item| (item, Default::default())),
-<a href=#4098 id=4098 data-nosnippet>4098</a>        )
-<a href=#4099 id=4099 data-nosnippet>4099</a>        .unwrap();
-<a href=#4100 id=4100 data-nosnippet>4100</a>        <span class="kw">let </span>result = Cbindgen::new(flat)
-<a href=#4101 id=4101 data-nosnippet>4101</a>            .opaque_ptr(<span class="string">"invalid-name"</span>, <span class="macro">syn::parse_quote!</span>(Handle))
-<a href=#4102 id=4102 data-nosnippet>4102</a>            .build();
-<a href=#4103 id=4103 data-nosnippet>4103</a>        <span class="macro">assert_eq!</span>(result.err().unwrap(), <span class="string">"invalid identifier `invalid-name`"</span>);
-<a href=#4104 id=4104 data-nosnippet>4104</a>    }
-<a href=#4105 id=4105 data-nosnippet>4105</a>
-<a href=#4106 id=4106 data-nosnippet>4106</a>    <span class="attr">#[test]
-<a href=#4107 id=4107 data-nosnippet>4107</a>    </span><span class="kw">fn </span>recoverable_c_results_require_a_declared_binding_failure_channel() {
-<a href=#4108 id=4108 data-nosnippet>4108</a>        <span class="kw">use </span><span class="kw">crate</span>::fun;
-<a href=#4109 id=4109 data-nosnippet>4109</a>
-<a href=#4110 id=4110 data-nosnippet>4110</a>        <span class="kw">let </span><span class="kw-2">mut </span>flat = error_model(<span class="string">"pub fn message(e:i64)-&gt;String{} pub fn f()-&gt;Result&lt;i64,i64&gt;{}"</span>);
-<a href=#4111 id=4111 data-nosnippet>4111</a>        <span class="kw">let </span>declarations = DeclCDefaults::new(<span class="kw-2">&amp;</span>flat, <span class="macro">vec!</span>[], <span class="macro">vec!</span>[], <span class="macro">vec!</span>[]).unwrap();
-<a href=#4112 id=4112 data-nosnippet>4112</a>        declarations
-<a href=#4113 id=4113 data-nosnippet>4113</a>            .fill(
-<a href=#4114 id=4114 data-nosnippet>4114</a>                <span class="kw-2">&amp;mut </span>flat,
-<a href=#4115 id=4115 data-nosnippet>4115</a>                <span class="kw-2">&amp;</span>CCodec::raw(),
-<a href=#4116 id=4116 data-nosnippet>4116</a>                <span class="kw-2">&amp;</span><span class="macro">fun!</span>(f).on_error(<span class="macro">fun!</span>(message)),
-<a href=#4117 id=4117 data-nosnippet>4117</a>                <span class="kw-2">&amp;</span>(),
-<a href=#4118 id=4118 data-nosnippet>4118</a>            )
-<a href=#4119 id=4119 data-nosnippet>4119</a>            .unwrap();
-<a href=#4120 id=4120 data-nosnippet>4120</a>        <span class="kw">let </span>output = flat.function_mut(<span class="string">"f"</span>).unwrap().ret.slot.as_mut().unwrap();
-<a href=#4121 id=4121 data-nosnippet>4121</a>        output.outcomes.binding_failure = <span class="prelude-val">None</span>;
-<a href=#4122 id=4122 data-nosnippet>4122</a>        flat.function_mut(<span class="string">"f"</span>).unwrap().metadata = <span class="prelude-val">Some</span>(CFunction::default());
-<a href=#4123 id=4123 data-nosnippet>4123</a>        <span class="kw">let </span>error = generate(<span class="kw-2">&amp;</span>flat).err().unwrap();
-<a href=#4124 id=4124 data-nosnippet>4124</a>        <span class="macro">assert!</span>(error.contains(<span class="string">"binding-failure schema"</span>));
-<a href=#4125 id=4125 data-nosnippet>4125</a>    }
-<a href=#4126 id=4126 data-nosnippet>4126</a>
-<a href=#4127 id=4127 data-nosnippet>4127</a>    <span class="attr">#[test]
-<a href=#4128 id=4128 data-nosnippet>4128</a>    </span><span class="kw">fn </span>emits_custom_slot_code_without_building_a_plan() {
-<a href=#4129 id=4129 data-nosnippet>4129</a>        <span class="attr">#[allow(clippy::type_complexity)] </span><span class="comment">// Custom slot storage keeps every metadata type explicit.
-<a href=#4130 id=4130 data-nosnippet>4130</a>        </span><span class="kw">struct </span>CountedOutput(
-<a href=#4131 id=4131 data-nosnippet>4131</a>            std::rc::Rc&lt;std::cell::Cell&lt;usize&gt;&gt;,
-<a href=#4132 id=4132 data-nosnippet>4132</a>            prebindgen_flat::Outcomes&lt;
-<a href=#4133 id=4133 data-nosnippet>4133</a>                prebindgen_flat::WireNode&lt;CWire, <span class="kw">crate</span>::CChain, <span class="kw">crate</span>::CBranch&gt;,
-<a href=#4134 id=4134 data-nosnippet>4134</a>            &gt;,
-<a href=#4135 id=4135 data-nosnippet>4135</a>        );
-<a href=#4136 id=4136 data-nosnippet>4136</a>        <span class="kw">impl </span>prebindgen_flat::Conversion <span class="kw">for </span>CountedOutput {
-<a href=#4137 id=4137 data-nosnippet>4137</a>            <span class="kw">type </span>Wire = CWire;
-<a href=#4138 id=4138 data-nosnippet>4138</a>            <span class="kw">type </span>Chain = CChain;
-<a href=#4139 id=4139 data-nosnippet>4139</a>            <span class="kw">type </span>Branch = CBranch;
-<a href=#4140 id=4140 data-nosnippet>4140</a>            <span class="kw">type </span>SlotFragment&lt;<span class="lifetime">'a</span>&gt; = prebindgen_conversions::OutputFragment&lt;<span class="lifetime">'a</span>, CContext&gt;;
-<a href=#4141 id=4141 data-nosnippet>4141</a>
-<a href=#4142 id=4142 data-nosnippet>4142</a>            <span class="kw">fn </span>code_fragment_slot(
-<a href=#4143 id=4143 data-nosnippet>4143</a>                <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#4144 id=4144 data-nosnippet>4144</a>                mode: <span class="self">Self</span>::SlotFragment&lt;<span class="lifetime">'_</span>&gt;,
-<a href=#4145 id=4145 data-nosnippet>4145</a>                <span class="kw">_</span>: <span class="kw-2">&amp;</span>syn::Type,
-<a href=#4146 id=4146 data-nosnippet>4146</a>            ) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
-<a href=#4147 id=4147 data-nosnippet>4147</a>                <span class="kw">use </span>prebindgen_conversions::OutputFragment;
-<a href=#4148 id=4148 data-nosnippet>4148</a>                <span class="prelude-val">Ok</span>(<span class="kw">match </span>mode {
-<a href=#4149 id=4149 data-nosnippet>4149</a>                    OutputFragment::Prepare { next, .. } =&gt; {
-<a href=#4150 id=4150 data-nosnippet>4150</a>                        <span class="self">self</span>.<span class="number">0</span>.set(<span class="self">self</span>.<span class="number">0</span>.get() + <span class="number">1</span>);
-<a href=#4151 id=4151 data-nosnippet>4151</a>                        <span class="macro">quote!</span>({ #next })
-<a href=#4152 id=4152 data-nosnippet>4152</a>                    }
-<a href=#4153 id=4153 data-nosnippet>4153</a>                    OutputFragment::Deliver { next, .. } =&gt; <span class="macro">quote!</span>({ #next }),
-<a href=#4154 id=4154 data-nosnippet>4154</a>                    OutputFragment::Commit { .. } | OutputFragment::Result { .. } =&gt; <span class="macro">quote!</span>(()),
-<a href=#4155 id=4155 data-nosnippet>4155</a>                })
-<a href=#4156 id=4156 data-nosnippet>4156</a>            }
-<a href=#4157 id=4157 data-nosnippet>4157</a>        }
-<a href=#4158 id=4158 data-nosnippet>4158</a>        <span class="kw">impl </span>prebindgen_flat::OutputConversion <span class="kw">for </span>CountedOutput {
-<a href=#4159 id=4159 data-nosnippet>4159</a>            <span class="kw">fn </span>output_outcomes(
-<a href=#4160 id=4160 data-nosnippet>4160</a>                <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#4161 id=4161 data-nosnippet>4161</a>            ) -&gt; <span class="kw-2">&amp;</span>prebindgen_flat::Outcomes&lt;
-<a href=#4162 id=4162 data-nosnippet>4162</a>                prebindgen_flat::WireNode&lt;CWire, <span class="kw">crate</span>::CChain, <span class="kw">crate</span>::CBranch&gt;,
-<a href=#4163 id=4163 data-nosnippet>4163</a>            &gt; {
-<a href=#4164 id=4164 data-nosnippet>4164</a>                <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">1
-<a href=#4165 id=4165 data-nosnippet>4165</a>            </span>}
-<a href=#4166 id=4166 data-nosnippet>4166</a>        }
-<a href=#4167 id=4167 data-nosnippet>4167</a>        <span class="kw">struct </span>CountedSchema;
-<a href=#4168 id=4168 data-nosnippet>4168</a>        <span class="kw">impl </span>prebindgen_flat::Schema <span class="kw">for </span>CountedSchema {
-<a href=#4169 id=4169 data-nosnippet>4169</a>            <span class="kw">type </span>Input = CInputPlan&lt;CWire&gt;;
-<a href=#4170 id=4170 data-nosnippet>4170</a>            <span class="kw">type </span>Output = CountedOutput;
-<a href=#4171 id=4171 data-nosnippet>4171</a>            <span class="kw">type </span>Module = CModule;
-<a href=#4172 id=4172 data-nosnippet>4172</a>            <span class="kw">type </span>Function = <span class="prelude-ty">Option</span>&lt;CFunction&gt;;
-<a href=#4173 id=4173 data-nosnippet>4173</a>            <span class="kw">type </span>Type = CType;
-<a href=#4174 id=4174 data-nosnippet>4174</a>            <span class="kw">type </span>Field = ();
-<a href=#4175 id=4175 data-nosnippet>4175</a>            <span class="kw">type </span>Variant = ();
-<a href=#4176 id=4176 data-nosnippet>4176</a>        }
-<a href=#4177 id=4177 data-nosnippet>4177</a>        <span class="kw">let </span>count = std::rc::Rc::new(std::cell::Cell::new(<span class="number">0</span>));
-<a href=#4178 id=4178 data-nosnippet>4178</a>        <span class="kw">let </span>source = syn::parse_file(<span class="string">"pub fn noop() {}"</span>).unwrap();
-<a href=#4179 id=4179 data-nosnippet>4179</a>        <span class="kw">let </span><span class="kw-2">mut </span>flat = Flat::&lt;CountedSchema&gt;::parse(
-<a href=#4180 id=4180 data-nosnippet>4180</a>            source
-<a href=#4181 id=4181 data-nosnippet>4181</a>                .items
-<a href=#4182 id=4182 data-nosnippet>4182</a>                .into_iter()
-<a href=#4183 id=4183 data-nosnippet>4183</a>                .map(|item| (item, Default::default())),
-<a href=#4184 id=4184 data-nosnippet>4184</a>        )
-<a href=#4185 id=4185 data-nosnippet>4185</a>        .unwrap();
-<a href=#4186 id=4186 data-nosnippet>4186</a>        flat.function_mut(<span class="string">"noop"</span>).unwrap().ret.slot =
-<a href=#4187 id=4187 data-nosnippet>4187</a>            <span class="prelude-val">Some</span>(CountedOutput(count.clone(), Default::default()));
-<a href=#4188 id=4188 data-nosnippet>4188</a>        flat.metadata.prefix = <span class="string">"test"</span>.into();
-<a href=#4189 id=4189 data-nosnippet>4189</a>        flat.function_mut(<span class="string">"noop"</span>).unwrap().metadata = <span class="prelude-val">Some</span>(CFunction::default());
-<a href=#4190 id=4190 data-nosnippet>4190</a>        <span class="kw">let </span>output = generate(<span class="kw-2">&amp;</span>flat).unwrap();
-<a href=#4191 id=4191 data-nosnippet>4191</a>        <span class="macro">assert!</span>(output.header.contains(<span class="string">"test_noop("</span>));
-<a href=#4192 id=4192 data-nosnippet>4192</a>        <span class="macro">assert_eq!</span>(count.get(), <span class="number">1</span>);
-<a href=#4193 id=4193 data-nosnippet>4193</a>    }
-<a href=#4194 id=4194 data-nosnippet>4194</a>}
-<a href=#4195 id=4195 data-nosnippet>4195</a>
-<a href=#4196 id=4196 data-nosnippet>4196</a><span class="doccomment">/// A wire value excluded from the representation of a present value.
-<a href=#4197 id=4197 data-nosnippet>4197</a></span><span class="attr">#[derive(Clone, Debug, PartialEq, Eq)]
-<a href=#4198 id=4198 data-nosnippet>4198</a></span><span class="kw">pub enum </span>CNiche {
-<a href=#4199 id=4199 data-nosnippet>4199</a>    <span class="doccomment">/// Null address (pointer or integer-encoded handle).
-<a href=#4200 id=4200 data-nosnippet>4200</a>    </span>Null,
-<a href=#4201 id=4201 data-nosnippet>4201</a>    <span class="doccomment">/// An invalid integer representation, within the wire's integer range.
-<a href=#4202 id=4202 data-nosnippet>4202</a>    </span>Integer(i64),
-<a href=#4203 id=4203 data-nosnippet>4203</a>}
-<a href=#4204 id=4204 data-nosnippet>4204</a><span class="kw">impl </span>CNiche {
-<a href=#4205 id=4205 data-nosnippet>4205</a>    <span class="doccomment">/// Expression recognizing the present case without decoding the payload.
-<a href=#4206 id=4206 data-nosnippet>4206</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>present(<span class="kw-2">&amp;</span><span class="self">self</span>, value: TokenStream) -&gt; TokenStream {
-<a href=#4207 id=4207 data-nosnippet>4207</a>        <span class="kw">match </span><span class="self">self </span>{
-<a href=#4208 id=4208 data-nosnippet>4208</a>            <span class="self">Self</span>::Null =&gt; <span class="macro">quote!</span>((#value <span class="kw">as </span>usize) != <span class="number">0</span>),
-<a href=#4209 id=4209 data-nosnippet>4209</a>            <span class="self">Self</span>::Integer(n) =&gt; {
-<a href=#4210 id=4210 data-nosnippet>4210</a>                <span class="kw">let </span>n = syn::parse_str::&lt;syn::Expr&gt;(<span class="kw-2">&amp;</span>n.to_string()).unwrap();
-<a href=#4211 id=4211 data-nosnippet>4211</a>                <span class="macro">quote!</span>(#value != #n)
-<a href=#4212 id=4212 data-nosnippet>4212</a>            }
-<a href=#4213 id=4213 data-nosnippet>4213</a>        }
-<a href=#4214 id=4214 data-nosnippet>4214</a>    }
-<a href=#4215 id=4215 data-nosnippet>4215</a>    <span class="doccomment">/// Absence expression for a numeric wire. Pointer codecs supply a null pointer.
-<a href=#4216 id=4216 data-nosnippet>4216</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>integer_value(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TokenStream {
-<a href=#4217 id=4217 data-nosnippet>4217</a>        <span class="kw">match </span><span class="self">self </span>{
-<a href=#4218 id=4218 data-nosnippet>4218</a>            <span class="self">Self</span>::Null =&gt; <span class="macro">quote!</span>(<span class="number">0</span>),
-<a href=#4219 id=4219 data-nosnippet>4219</a>            <span class="self">Self</span>::Integer(n) =&gt; syn::parse_str::&lt;TokenStream&gt;(<span class="kw-2">&amp;</span>n.to_string()).unwrap(),
-<a href=#4220 id=4220 data-nosnippet>4220</a>        }
-<a href=#4221 id=4221 data-nosnippet>4221</a>    }
-<a href=#4222 id=4222 data-nosnippet>4222</a>}
-<a href=#4223 id=4223 data-nosnippet>4223</a>
-<a href=#4224 id=4224 data-nosnippet>4224</a><span class="attr">#[cfg(test)]
-<a href=#4225 id=4225 data-nosnippet>4225</a></span><span class="kw">mod </span>abort_policy_tests {
-<a href=#4226 id=4226 data-nosnippet>4226</a>    <span class="kw">use super</span>::<span class="kw-2">*</span>;
-<a href=#4227 id=4227 data-nosnippet>4227</a>    <span class="kw">use </span><span class="kw">crate</span>::fun;
-<a href=#4228 id=4228 data-nosnippet>4228</a>    <span class="kw">fn </span>model(source: <span class="kw-2">&amp;</span>str) -&gt; CBindings {
-<a href=#4229 id=4229 data-nosnippet>4229</a>        CBindings::parse(
-<a href=#4230 id=4230 data-nosnippet>4230</a>            syn::parse_file(source)
-<a href=#4231 id=4231 data-nosnippet>4231</a>                .unwrap()
-<a href=#4232 id=4232 data-nosnippet>4232</a>                .items
-<a href=#4233 id=4233 data-nosnippet>4233</a>                .into_iter()
-<a href=#4234 id=4234 data-nosnippet>4234</a>                .map(|i| (i, Default::default())),
-<a href=#4235 id=4235 data-nosnippet>4235</a>        )
-<a href=#4236 id=4236 data-nosnippet>4236</a>        .unwrap()
-<a href=#4237 id=4237 data-nosnippet>4237</a>    }
-<a href=#4238 id=4238 data-nosnippet>4238</a>    <span class="attr">#[test]
-<a href=#4239 id=4239 data-nosnippet>4239</a>    </span><span class="kw">fn </span>direct_values_and_void_do_not_need_an_error_policy() {
-<a href=#4240 id=4240 data-nosnippet>4240</a>        <span class="kw">let </span>generated = Cbindgen::new(model(<span class="string">"pub fn identity(x:i64)-&gt;i64{} pub fn unit(){}"</span>))
-<a href=#4241 id=4241 data-nosnippet>4241</a>            .function(<span class="macro">fun!</span>(identity))
-<a href=#4242 id=4242 data-nosnippet>4242</a>            .function(<span class="macro">fun!</span>(unit))
-<a href=#4243 id=4243 data-nosnippet>4243</a>            .build()
-<a href=#4244 id=4244 data-nosnippet>4244</a>            .unwrap();
-<a href=#4245 id=4245 data-nosnippet>4245</a>        <span class="macro">assert!</span>(generated.header.contains(<span class="string">"int64_t pb_identity(int64_t"</span>));
-<a href=#4246 id=4246 data-nosnippet>4246</a>        <span class="macro">assert!</span>(generated.header.contains(<span class="string">"void pb_unit(void)"</span>));
-<a href=#4247 id=4247 data-nosnippet>4247</a>        <span class="macro">assert!</span>(!generated.header.contains(<span class="string">"_result"</span>));
-<a href=#4248 id=4248 data-nosnippet>4248</a>        <span class="macro">assert!</span>(!generated.header.contains(<span class="string">"last_error"</span>));
-<a href=#4249 id=4249 data-nosnippet>4249</a>        <span class="macro">assert!</span>(!generated.rust.contains(<span class="string">"thread_local"</span>));
-<a href=#4250 id=4250 data-nosnippet>4250</a>        syn::parse_file(<span class="kw-2">&amp;</span>generated.rust).unwrap();
-<a href=#4251 id=4251 data-nosnippet>4251</a>    }
-<a href=#4252 id=4252 data-nosnippet>4252</a>    <span class="attr">#[test]
-<a href=#4253 id=4253 data-nosnippet>4253</a>    </span><span class="kw">fn </span>trusted_input_representations_need_no_abort_policy_or_runtime_validation() {
-<a href=#4254 id=4254 data-nosnippet>4254</a>        <span class="kw">for </span>ty <span class="kw">in </span>[<span class="string">"char"</span>, <span class="string">"&amp;str"</span>, <span class="string">"&amp;[u8]"</span>, <span class="string">"Option&lt;i64&gt;"</span>, <span class="string">"[i64;4]"</span>] {
-<a href=#4255 id=4255 data-nosnippet>4255</a>            <span class="kw">let </span>source = <span class="macro">format!</span>(<span class="string">"pub fn f(value:{ty}){{}}"</span>);
-<a href=#4256 id=4256 data-nosnippet>4256</a>            <span class="kw">let </span>generated = Cbindgen::new(model(<span class="kw-2">&amp;</span>source))
-<a href=#4257 id=4257 data-nosnippet>4257</a>                .function(<span class="macro">fun!</span>(f))
-<a href=#4258 id=4258 data-nosnippet>4258</a>                .build()
-<a href=#4259 id=4259 data-nosnippet>4259</a>                .unwrap();
-<a href=#4260 id=4260 data-nosnippet>4260</a>            <span class="kw">for </span>forbidden <span class="kw">in </span>[
-<a href=#4261 id=4261 data-nosnippet>4261</a>                <span class="string">"validate_pointer"</span>,
-<a href=#4262 id=4262 data-nosnippet>4262</a>                <span class="string">"validate_slice"</span>,
-<a href=#4263 id=4263 data-nosnippet>4263</a>                <span class="string">"invalid UTF-8"</span>,
-<a href=#4264 id=4264 data-nosnippet>4264</a>                <span class="string">"invalid option"</span>,
-<a href=#4265 id=4265 data-nosnippet>4265</a>                <span class="string">"wrong fixed array length"</span>,
-<a href=#4266 id=4266 data-nosnippet>4266</a>                <span class="string">"invalid Unicode"</span>,
-<a href=#4267 id=4267 data-nosnippet>4267</a>                <span class="string">"input_aliases"</span>,
-<a href=#4268 id=4268 data-nosnippet>4268</a>            ] {
-<a href=#4269 id=4269 data-nosnippet>4269</a>                <span class="macro">assert!</span>(!generated.rust.contains(forbidden), <span class="string">"{ty}: {forbidden}"</span>);
-<a href=#4270 id=4270 data-nosnippet>4270</a>            }
-<a href=#4271 id=4271 data-nosnippet>4271</a>        }
-<a href=#4272 id=4272 data-nosnippet>4272</a>    }
-<a href=#4273 id=4273 data-nosnippet>4273</a>    <span class="attr">#[test]
-<a href=#4274 id=4274 data-nosnippet>4274</a>    </span><span class="kw">fn </span>trusted_handles_rows_and_callback_results_emit_no_validation_support() {
-<a href=#4275 id=4275 data-nosnippet>4275</a>        <span class="kw">let </span>generated = Cbindgen::new(model(<span class="string">"pub struct H{pub n:i64} pub enum Tag{A,B} pub fn round(first:H,second:&amp;H,third:&amp;mut H,rows:Vec&lt;H&gt;,tag:Tag,callback:impl Fn()-&gt;Vec&lt;H&gt;)-&gt;H{}"</span>))
-<a href=#4276 id=4276 data-nosnippet>4276</a>            .opaque_ptr(<span class="string">"handle"</span>,<span class="macro">syn::parse_quote!</span>(H))
-<a href=#4277 id=4277 data-nosnippet>4277</a>            .enum_type(<span class="string">"tag"</span>,<span class="macro">syn::parse_quote!</span>(Tag))
-<a href=#4278 id=4278 data-nosnippet>4278</a>            .function(<span class="macro">fun!</span>(round)).build().unwrap();
-<a href=#4279 id=4279 data-nosnippet>4279</a>        <span class="kw">for </span>forbidden <span class="kw">in </span>[
-<a href=#4280 id=4280 data-nosnippet>4280</a>            <span class="string">"validate_pointer"</span>,
-<a href=#4281 id=4281 data-nosnippet>4281</a>            <span class="string">"validate_slice"</span>,
-<a href=#4282 id=4282 data-nosnippet>4282</a>            <span class="string">"input_aliases"</span>,
-<a href=#4283 id=4283 data-nosnippet>4283</a>            <span class="string">"CallbackReturnAllocations"</span>,
-<a href=#4284 id=4284 data-nosnippet>4284</a>            <span class="string">"null callback"</span>,
-<a href=#4285 id=4285 data-nosnippet>4285</a>            <span class="string">"invalid enum discriminant"</span>,
-<a href=#4286 id=4286 data-nosnippet>4286</a>        ] {
-<a href=#4287 id=4287 data-nosnippet>4287</a>            <span class="macro">assert!</span>(!generated.rust.contains(forbidden), <span class="string">"{forbidden}"</span>);
-<a href=#4288 id=4288 data-nosnippet>4288</a>        }
-<a href=#4289 id=4289 data-nosnippet>4289</a>        <span class="macro">assert!</span>(generated.header.contains(<span class="string">"Trusted C ABI"</span>));
-<a href=#4290 id=4290 data-nosnippet>4290</a>        <span class="macro">assert!</span>(generated.rust.contains(<span class="string">"CallbackReturnCleanup"</span>));
-<a href=#4291 id=4291 data-nosnippet>4291</a>    }
-<a href=#4292 id=4292 data-nosnippet>4292</a>    <span class="attr">#[test]
-<a href=#4293 id=4293 data-nosnippet>4293</a>    </span><span class="kw">fn </span>constructor_alternatives_retain_their_own_validation_policy() {
-<a href=#4294 id=4294 data-nosnippet>4294</a>        <span class="kw">let </span>source=<span class="string">"pub struct Number {pub value:i64} pub fn new(value:i64)-&gt;Number{} pub fn other(value:i64)-&gt;Number{} pub fn consume(value:Number){}"</span>;
-<a href=#4295 id=4295 data-nosnippet>4295</a>        <span class="kw">let </span>bind = || {
-<a href=#4296 id=4296 data-nosnippet>4296</a>            Cbindgen::new(model(source)).function(
-<a href=#4297 id=4297 data-nosnippet>4297</a>                <span class="macro">fun!</span>(consume).expand_param(
-<a href=#4298 id=4298 data-nosnippet>4298</a>                    <span class="string">"value"</span>,
-<a href=#4299 id=4299 data-nosnippet>4299</a>                    <span class="macro">expand_param!</span>(Number)
-<a href=#4300 id=4300 data-nosnippet>4300</a>                        .variant(<span class="macro">fun!</span>(new))
-<a href=#4301 id=4301 data-nosnippet>4301</a>                        .variant(<span class="macro">fun!</span>(other)),
-<a href=#4302 id=4302 data-nosnippet>4302</a>                ),
-<a href=#4303 id=4303 data-nosnippet>4303</a>            )
-<a href=#4304 id=4304 data-nosnippet>4304</a>        };
-<a href=#4305 id=4305 data-nosnippet>4305</a>        bind().build().unwrap();
-<a href=#4306 id=4306 data-nosnippet>4306</a>        bind().panic().build().unwrap();
-<a href=#4307 id=4307 data-nosnippet>4307</a>    }
-<a href=#4308 id=4308 data-nosnippet>4308</a>    <span class="attr">#[test]
-<a href=#4309 id=4309 data-nosnippet>4309</a>    </span><span class="kw">fn </span>manually_bound_fallible_output_requires_the_same_policy() {
-<a href=#4310 id=4310 data-nosnippet>4310</a>        <span class="kw">let </span><span class="kw-2">mut </span>flat = model(<span class="string">"pub fn f()-&gt;i64{}"</span>);
-<a href=#4311 id=4311 data-nosnippet>4311</a>        <span class="kw">crate</span>::bind_output(
-<a href=#4312 id=4312 data-nosnippet>4312</a>            <span class="kw-2">&amp;mut </span>flat,
-<a href=#4313 id=4313 data-nosnippet>4313</a>            <span class="kw-2">&amp;</span>CCodec::raw(),
-<a href=#4314 id=4314 data-nosnippet>4314</a>            <span class="string">"f"</span>,
-<a href=#4315 id=4315 data-nosnippet>4315</a>            <span class="kw-2">&amp;</span><span class="kw">crate</span>::COutput::Leaf(COutputLeafOp::Value),
-<a href=#4316 id=4316 data-nosnippet>4316</a>            <span class="kw-2">&amp;</span>(),
-<a href=#4317 id=4317 data-nosnippet>4317</a>        )
-<a href=#4318 id=4318 data-nosnippet>4318</a>        .unwrap();
-<a href=#4319 id=4319 data-nosnippet>4319</a>        flat.function_mut(<span class="string">"f"</span>)
-<a href=#4320 id=4320 data-nosnippet>4320</a>            .unwrap()
-<a href=#4321 id=4321 data-nosnippet>4321</a>            .ret
-<a href=#4322 id=4322 data-nosnippet>4322</a>            .slot
-<a href=#4323 id=4323 data-nosnippet>4323</a>            .as_mut()
-<a href=#4324 id=4324 data-nosnippet>4324</a>            .unwrap()
-<a href=#4325 id=4325 data-nosnippet>4325</a>            .fallible = <span class="bool-val">true</span>;
-<a href=#4326 id=4326 data-nosnippet>4326</a>        <span class="macro">assert!</span>(Cbindgen::new(flat.clone())
-<a href=#4327 id=4327 data-nosnippet>4327</a>            .build()
-<a href=#4328 id=4328 data-nosnippet>4328</a>            .err()
-<a href=#4329 id=4329 data-nosnippet>4329</a>            .unwrap()
-<a href=#4330 id=4330 data-nosnippet>4330</a>            .contains(<span class="string">".panic()"</span>));
-<a href=#4331 id=4331 data-nosnippet>4331</a>        Cbindgen::new(flat)
-<a href=#4332 id=4332 data-nosnippet>4332</a>            .function(<span class="macro">fun!</span>(f))
-<a href=#4333 id=4333 data-nosnippet>4333</a>            .panic()
-<a href=#4334 id=4334 data-nosnippet>4334</a>            .build()
-<a href=#4335 id=4335 data-nosnippet>4335</a>            .unwrap();
-<a href=#4336 id=4336 data-nosnippet>4336</a>    }
-<a href=#4337 id=4337 data-nosnippet>4337</a>}
-<a href=#4338 id=4338 data-nosnippet>4338</a>
-<a href=#4339 id=4339 data-nosnippet>4339</a><span class="kw">fn </span>takes_input_owners(node: <span class="kw-2">&amp;</span>prebindgen_flat::WireNode&lt;CWire, CChain, CBranch&gt;) -&gt; bool {
-<a href=#4340 id=4340 data-nosnippet>4340</a>    prebindgen_flat::wire_definitions(std::iter::once(node)).any(|w| <span class="kw">match </span><span class="kw-2">&amp;</span>w.kind {
-<a href=#4341 id=4341 data-nosnippet>4341</a>        CWire::Pointer { pointer, .. } =&gt; pointer.access == Access::Move,
-<a href=#4342 id=4342 data-nosnippet>4342</a>        CWire::Owned { access, .. } =&gt; <span class="kw-2">*</span>access == Access::Move,
-<a href=#4343 id=4343 data-nosnippet>4343</a>        CWire::Callback { .. } =&gt; <span class="bool-val">true</span>,
-<a href=#4344 id=4344 data-nosnippet>4344</a>        CWire::Tagged { value, .. } =&gt; value.owned,
-<a href=#4345 id=4345 data-nosnippet>4345</a>        <span class="kw">_ </span>=&gt; <span class="bool-val">false</span>,
-<a href=#4346 id=4346 data-nosnippet>4346</a>    })
-<a href=#4347 id=4347 data-nosnippet>4347</a>}
-<a href=#4348 id=4348 data-nosnippet>4348</a>
-<a href=#4349 id=4349 data-nosnippet>4349</a><span class="attr">#[cfg(test)]
-<a href=#4350 id=4350 data-nosnippet>4350</a></span><span class="kw">mod </span>input_contract_tests;
-<a href=#4351 id=4351 data-nosnippet>4351</a>
-<a href=#4352 id=4352 data-nosnippet>4352</a><span class="attr">#[cfg(test)]
-<a href=#4353 id=4353 data-nosnippet>4353</a></span><span class="kw">mod </span>canonical_tests;
-<a href=#4354 id=4354 data-nosnippet>4354</a>
-<a href=#4355 id=4355 data-nosnippet>4355</a><span class="attr">#[cfg(test)]
-<a href=#4356 id=4356 data-nosnippet>4356</a></span><span class="kw">mod </span>resolved_arrow_tests {
-<a href=#4357 id=4357 data-nosnippet>4357</a>    <span class="kw">use super</span>::<span class="kw-2">*</span>;
-<a href=#4358 id=4358 data-nosnippet>4358</a>    <span class="kw">use </span>prebindgen_declarations::compile_input;
-<a href=#4359 id=4359 data-nosnippet>4359</a>
-<a href=#4360 id=4360 data-nosnippet>4360</a>    <span class="attr">#[test]
-<a href=#4361 id=4361 data-nosnippet>4361</a>    </span><span class="kw">fn </span>a_manually_edited_arrow_reports_wrong_arity_without_panicking() {
-<a href=#4362 id=4362 data-nosnippet>4362</a>        <span class="kw">let </span>items = syn::parse_file(<span class="string">"pub fn take(cb:impl Fn(i64)-&gt;i64){}"</span>)
-<a href=#4363 id=4363 data-nosnippet>4363</a>            .unwrap()
-<a href=#4364 id=4364 data-nosnippet>4364</a>            .items;
-<a href=#4365 id=4365 data-nosnippet>4365</a>        <span class="kw">let </span>flat = CBindings::parse(items.into_iter().map(|i| (i, Default::default()))).unwrap();
-<a href=#4366 id=4366 data-nosnippet>4366</a>        <span class="kw">let </span>defaults = DeclCDefaults::new(<span class="kw-2">&amp;</span>flat, <span class="macro">vec!</span>[], <span class="macro">vec!</span>[], <span class="macro">vec!</span>[]).unwrap();
-<a href=#4367 id=4367 data-nosnippet>4367</a>        <span class="kw">let </span>ty = <span class="kw-2">&amp;</span>flat.function(<span class="string">"take"</span>).unwrap().params[<span class="number">0</span>].ty.ty;
-<a href=#4368 id=4368 data-nosnippet>4368</a>        <span class="kw">let </span><span class="kw-2">mut </span>recipe = defaults
-<a href=#4369 id=4369 data-nosnippet>4369</a>            .resolve_input(<span class="kw-2">&amp;</span>flat, <span class="kw-2">&amp;</span>CCodec::declared(), ty, <span class="kw-2">&amp;</span>CInput::auto(), <span class="kw-2">&amp;</span>())
-<a href=#4370 id=4370 data-nosnippet>4370</a>            .unwrap();
-<a href=#4371 id=4371 data-nosnippet>4371</a>        <span class="kw">let </span>operations::CInput::Arrow { domain, .. } = <span class="kw-2">&amp;mut </span>recipe <span class="kw">else </span>{
-<a href=#4372 id=4372 data-nosnippet>4372</a>            <span class="macro">panic!</span>(<span class="string">"expected arrow"</span>)
-<a href=#4373 id=4373 data-nosnippet>4373</a>        };
-<a href=#4374 id=4374 data-nosnippet>4374</a>        <span class="kw-2">**</span>domain = operations::COutput::None;
-<a href=#4375 id=4375 data-nosnippet>4375</a>        <span class="kw">let </span>error =
-<a href=#4376 id=4376 data-nosnippet>4376</a>            compile_input(<span class="kw-2">&amp;</span>flat, <span class="kw-2">&amp;</span>CCodec::declared(), <span class="string">"take"</span>, <span class="string">"cb"</span>, <span class="kw-2">&amp;</span>recipe, <span class="kw-2">&amp;</span>()).unwrap_err();
-<a href=#4377 id=4377 data-nosnippet>4377</a>        <span class="macro">assert!</span>(error.contains(<span class="string">"domain arity"</span>), <span class="string">"{error}"</span>);
-<a href=#4378 id=4378 data-nosnippet>4378</a>    }
-<a href=#4379 id=4379 data-nosnippet>4379</a>}
-<a href=#4380 id=4380 data-nosnippet>4380</a>
-<a href=#4381 id=4381 data-nosnippet>4381</a><span class="kw">mod </span>compilation;
-<a href=#4382 id=4382 data-nosnippet>4382</a><span class="doccomment">/// Resolved conversion operations interpreted by this adapter.
-<a href=#4383 id=4383 data-nosnippet>4383</a></span><span class="kw">pub mod </span>operations;
-<a href=#4384 id=4384 data-nosnippet>4384</a>
-<a href=#4385 id=4385 data-nosnippet>4385</a><span class="kw">pub use </span>operations::{
-<a href=#4386 id=4386 data-nosnippet>4386</a>    CInput, CInputBranch, CInputLeafOp, CInputOps, CInputUnary, COutput, COutputBranch,
-<a href=#4387 id=4387 data-nosnippet>4387</a>    COutputLeafOp, COutputOps, COutputUnary,
-<a href=#4388 id=4388 data-nosnippet>4388</a>};
-<a href=#4389 id=4389 data-nosnippet>4389</a>
-<a href=#4390 id=4390 data-nosnippet>4390</a><span class="kw">mod </span>declarations;
-<a href=#4391 id=4391 data-nosnippet>4391</a><span class="kw">pub use </span>declarations::<span class="kw-2">*</span>;
-<a href=#4392 id=4392 data-nosnippet>4392</a>
-<a href=#4393 id=4393 data-nosnippet>4393</a><span class="attr">#[macro_export]
-<a href=#4394 id=4394 data-nosnippet>4394</a></span><span class="doccomment">/// Select a source function and configure its binding in this adapter.
-<a href=#4395 id=4395 data-nosnippet>4395</a></span><span class="macro">macro_rules!</span> fun {
-<a href=#4396 id=4396 data-nosnippet>4396</a>    (<span class="macro-nonterminal">$name</span>:ident) =&gt; {
-<a href=#4397 id=4397 data-nosnippet>4397</a>        <span class="macro-nonterminal">$crate::DeclCFunction::new</span>(
-<a href=#4398 id=4398 data-nosnippet>4398</a>            <span class="macro-nonterminal">$crate::__declaration_ident</span>(<span class="macro">stringify!</span>(<span class="macro-nonterminal">$name</span>)).expect(<span class="string">"source identifier"</span>),
-<a href=#4399 id=4399 data-nosnippet>4399</a>        )
-<a href=#4400 id=4400 data-nosnippet>4400</a>    };
-<a href=#4401 id=4401 data-nosnippet>4401</a>}
-<a href=#4402 id=4402 data-nosnippet>4402</a>
-<a href=#4403 id=4403 data-nosnippet>4403</a><span class="doccomment">/// Traits for constructing and inspecting this adapter's conversion trees.
-<a href=#4404 id=4404 data-nosnippet>4404</a></span><span class="kw">pub mod </span>prelude {
-<a href=#4405 id=4405 data-nosnippet>4405</a>    <span class="kw">pub use crate</span>::{CInputExt, CInputRequests, COutputExt, COutputRequests};
-<a href=#4406 id=4406 data-nosnippet>4406</a>}
-<a href=#4407 id=4407 data-nosnippet>4407</a>
-<a href=#4408 id=4408 data-nosnippet>4408</a><span class="doccomment">/// The C adapter has no bulk transport, including in callback-delivery variants.
-<a href=#4409 id=4409 data-nosnippet>4409</a>/// ```compile_fail
-<a href=#4410 id=4410 data-nosnippet>4410</a>/// use prebindgen_c::{CInput, COutput, expand_return, fun};
-<a href=#4411 id=4411 data-nosnippet>4411</a>/// let _ = fun!(rows).callback_return_only().expand_return(expand_return!(i64).field_self().bulk());
-<a href=#4412 id=4412 data-nosnippet>4412</a>/// ```
-<a href=#4413 id=4413 data-nosnippet>4413</a>/// ```compile_fail
-<a href=#4414 id=4414 data-nosnippet>4414</a>/// use prebindgen_c::{CInput, prelude::*};
-<a href=#4415 id=4415 data-nosnippet>4415</a>/// let _ = CInput::auto().bulk();
-<a href=#4416 id=4416 data-nosnippet>4416</a>/// ```
-<a href=#4417 id=4417 data-nosnippet>4417</a>/// ```compile_fail
-<a href=#4418 id=4418 data-nosnippet>4418</a>/// use prebindgen_c::{COutput, prelude::*};
-<a href=#4419 id=4419 data-nosnippet>4419</a>/// let _ = COutput::auto().bulk();
-<a href=#4420 id=4420 data-nosnippet>4420</a>/// ```
-<a href=#4421 id=4421 data-nosnippet>4421</a></span><span class="kw">const _</span>: () = ();
+<a href=#3881 id=3881 data-nosnippet>3881</a>                        COutput::Leaf(COutputLeafOp::Value),
+<a href=#3882 id=3882 data-nosnippet>3882</a>                    ],
+<a href=#3883 id=3883 data-nosnippet>3883</a>                },
+<a href=#3884 id=3884 data-nosnippet>3884</a>                COutput::Unary {
+<a href=#3885 id=3885 data-nosnippet>3885</a>                    operation: (COutputUnary::Optional).into(),
+<a href=#3886 id=3886 data-nosnippet>3886</a>                    child: Box::new(COutput::Leaf(COutputLeafOp::Value)),
+<a href=#3887 id=3887 data-nosnippet>3887</a>                },
+<a href=#3888 id=3888 data-nosnippet>3888</a>            ],
+<a href=#3889 id=3889 data-nosnippet>3889</a>        };
+<a href=#3890 id=3890 data-nosnippet>3890</a>        bind_output(<span class="kw-2">&amp;mut </span>flat, <span class="kw-2">&amp;</span>CCodec::raw(), <span class="string">"make"</span>, <span class="kw-2">&amp;</span>recipe, <span class="kw-2">&amp;</span>()).unwrap();
+<a href=#3891 id=3891 data-nosnippet>3891</a>        <span class="kw">let </span>header = Cbindgen::new(flat).build().unwrap().header;
+<a href=#3892 id=3892 data-nosnippet>3892</a>        <span class="macro">assert!</span>(header.contains(<span class="string">"Field return.empty: no boundary values."</span>));
+<a href=#3893 id=3893 data-nosnippet>3893</a>        <span class="macro">assert!</span>(header.contains(<span class="string">"Field return.pair: return value, *out1."</span>));
+<a href=#3894 id=3894 data-nosnippet>3894</a>        <span class="macro">assert!</span>(header.contains(<span class="string">"Field return.pair.x: return value."</span>));
+<a href=#3895 id=3895 data-nosnippet>3895</a>        <span class="macro">assert!</span>(header.contains(<span class="string">"Field return.pair.y: *out1."</span>));
+<a href=#3896 id=3896 data-nosnippet>3896</a>        <span class="macro">assert!</span>(header.contains(<span class="string">"Field return.maybe: *out2, *out3."</span>));
+<a href=#3897 id=3897 data-nosnippet>3897</a>    }
+<a href=#3898 id=3898 data-nosnippet>3898</a>
+<a href=#3899 id=3899 data-nosnippet>3899</a>    <span class="attr">#[test]
+<a href=#3900 id=3900 data-nosnippet>3900</a>    </span><span class="kw">fn </span>character_niches_exhaust_at_the_carrier_limit() {
+<a href=#3901 id=3901 data-nosnippet>3901</a>        <span class="kw">let </span>wire: CWire = CWire::scalar(Primitive::Char);
+<a href=#3902 id=3902 data-nosnippet>3902</a>        <span class="macro">assert!</span>(wire
+<a href=#3903 id=3903 data-nosnippet>3903</a>            .remaining_niche(<span class="kw-2">&amp;</span>CNiche::Integer(u32::MAX <span class="kw">as </span>i64))
+<a href=#3904 id=3904 data-nosnippet>3904</a>            .is_none());
+<a href=#3905 id=3905 data-nosnippet>3905</a>        <span class="macro">assert!</span>(<span class="macro">matches!</span>(
+<a href=#3906 id=3906 data-nosnippet>3906</a>            wire.remaining_niche(<span class="kw-2">&amp;</span>CNiche::Integer(<span class="number">0x110000</span>)),
+<a href=#3907 id=3907 data-nosnippet>3907</a>            <span class="prelude-val">Some</span>(CNiche::Integer(<span class="number">0x110001</span>))
+<a href=#3908 id=3908 data-nosnippet>3908</a>        ));
+<a href=#3909 id=3909 data-nosnippet>3909</a>    }
+<a href=#3910 id=3910 data-nosnippet>3910</a>
+<a href=#3911 id=3911 data-nosnippet>3911</a>    <span class="attr">#[test]
+<a href=#3912 id=3912 data-nosnippet>3912</a>    </span><span class="kw">fn </span>shared_compiler_suppresses_niches_in_selector_arms() {
+<a href=#3913 id=3913 data-nosnippet>3913</a>        <span class="kw">use </span>prebindgen_declarations::bind_input;
+<a href=#3914 id=3914 data-nosnippet>3914</a>        <span class="kw">for </span>(payload, arm) <span class="kw">in </span>[
+<a href=#3915 id=3915 data-nosnippet>3915</a>            (<span class="string">"char"</span>, CInput::Leaf(CInputLeafOp::Value)),
+<a href=#3916 id=3916 data-nosnippet>3916</a>            (
+<a href=#3917 id=3917 data-nosnippet>3917</a>                <span class="string">"Option&lt;char&gt;"</span>,
+<a href=#3918 id=3918 data-nosnippet>3918</a>                CInput::Unary {
+<a href=#3919 id=3919 data-nosnippet>3919</a>                    operation: (CInputUnary::Optional).into(),
+<a href=#3920 id=3920 data-nosnippet>3920</a>                    child: Box::new(CInput::Leaf(CInputLeafOp::Value)),
+<a href=#3921 id=3921 data-nosnippet>3921</a>                },
+<a href=#3922 id=3922 data-nosnippet>3922</a>            ),
+<a href=#3923 id=3923 data-nosnippet>3923</a>        ] {
+<a href=#3924 id=3924 data-nosnippet>3924</a>            <span class="kw">let </span>source = syn::parse_file(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"pub fn echo(value: {payload}) {{}}"</span>)).unwrap();
+<a href=#3925 id=3925 data-nosnippet>3925</a>            <span class="kw">let </span><span class="kw-2">mut </span>flat =
+<a href=#3926 id=3926 data-nosnippet>3926</a>                CBindings::parse(source.items.into_iter().map(|i| (i, Default::default())))
+<a href=#3927 id=3927 data-nosnippet>3927</a>                    .unwrap();
+<a href=#3928 id=3928 data-nosnippet>3928</a>            <span class="kw">let </span>selector = CInput::Branch {
+<a href=#3929 id=3929 data-nosnippet>3929</a>                operation: (CInputBranch::Selector).into(),
+<a href=#3930 id=3930 data-nosnippet>3930</a>                children: <span class="macro">vec!</span>[arm.clone(), arm.clone()],
+<a href=#3931 id=3931 data-nosnippet>3931</a>            };
+<a href=#3932 id=3932 data-nosnippet>3932</a>            bind_input(<span class="kw-2">&amp;mut </span>flat, <span class="kw-2">&amp;</span>CCodec::raw(), <span class="string">"echo"</span>, <span class="string">"value"</span>, <span class="kw-2">&amp;</span>selector, <span class="kw-2">&amp;</span>()).unwrap();
+<a href=#3933 id=3933 data-nosnippet>3933</a>            <span class="macro">assert_eq!</span>(
+<a href=#3934 id=3934 data-nosnippet>3934</a>                <span class="kw">crate</span>::group::function_parameters(flat.function(<span class="string">"echo"</span>).unwrap())
+<a href=#3935 id=3935 data-nosnippet>3935</a>                    .unwrap()
+<a href=#3936 id=3936 data-nosnippet>3936</a>                    .len(),
+<a href=#3937 id=3937 data-nosnippet>3937</a>                <span class="number">3
+<a href=#3938 id=3938 data-nosnippet>3938</a>            </span>);
+<a href=#3939 id=3939 data-nosnippet>3939</a>            <span class="comment">// Check suppression before an outer option can clear the arm niches.
+<a href=#3940 id=3940 data-nosnippet>3940</a>            </span><span class="kw">for </span>wire <span class="kw">in </span><span class="kw">crate</span>::group::function_parameters(flat.function(<span class="string">"echo"</span>).unwrap())
+<a href=#3941 id=3941 data-nosnippet>3941</a>                .unwrap()
+<a href=#3942 id=3942 data-nosnippet>3942</a>                .skip(<span class="number">1</span>)
+<a href=#3943 id=3943 data-nosnippet>3943</a>            {
+<a href=#3944 id=3944 data-nosnippet>3944</a>                <span class="macro">assert!</span>(<span class="macro">matches!</span>(
+<a href=#3945 id=3945 data-nosnippet>3945</a>                    wire.kind,
+<a href=#3946 id=3946 data-nosnippet>3946</a>                    CWire::Scalar {
+<a href=#3947 id=3947 data-nosnippet>3947</a>                        primitive: Primitive::Char,
+<a href=#3948 id=3948 data-nosnippet>3948</a>                        ..
+<a href=#3949 id=3949 data-nosnippet>3949</a>                    }
+<a href=#3950 id=3950 data-nosnippet>3950</a>                ));
+<a href=#3951 id=3951 data-nosnippet>3951</a>                <span class="macro">assert!</span>(wire.kind.available_niche().is_none());
+<a href=#3952 id=3952 data-nosnippet>3952</a>            }
+<a href=#3953 id=3953 data-nosnippet>3953</a>            <span class="kw">let </span>source =
+<a href=#3954 id=3954 data-nosnippet>3954</a>                syn::parse_file(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"pub fn echo(value: Option&lt;{payload}&gt;) {{}}"</span>)).unwrap();
+<a href=#3955 id=3955 data-nosnippet>3955</a>            <span class="kw">let </span><span class="kw-2">mut </span>flat =
+<a href=#3956 id=3956 data-nosnippet>3956</a>                CBindings::parse(source.items.into_iter().map(|i| (i, Default::default())))
+<a href=#3957 id=3957 data-nosnippet>3957</a>                    .unwrap();
+<a href=#3958 id=3958 data-nosnippet>3958</a>            <span class="kw">let </span>recipe = CInput::Unary {
+<a href=#3959 id=3959 data-nosnippet>3959</a>                operation: (CInputUnary::Optional).into(),
+<a href=#3960 id=3960 data-nosnippet>3960</a>                child: Box::new(CInput::Branch {
+<a href=#3961 id=3961 data-nosnippet>3961</a>                    operation: (CInputBranch::Selector).into(),
+<a href=#3962 id=3962 data-nosnippet>3962</a>                    children: <span class="macro">vec!</span>[arm.clone(), arm],
+<a href=#3963 id=3963 data-nosnippet>3963</a>                }),
+<a href=#3964 id=3964 data-nosnippet>3964</a>            };
+<a href=#3965 id=3965 data-nosnippet>3965</a>            bind_input(<span class="kw-2">&amp;mut </span>flat, <span class="kw-2">&amp;</span>CCodec::raw(), <span class="string">"echo"</span>, <span class="string">"value"</span>, <span class="kw-2">&amp;</span>recipe, <span class="kw-2">&amp;</span>()).unwrap();
+<a href=#3966 id=3966 data-nosnippet>3966</a>            <span class="kw">let </span>plan = flat.function(<span class="string">"echo"</span>).unwrap().params[<span class="number">0</span>]
+<a href=#3967 id=3967 data-nosnippet>3967</a>                .ty
+<a href=#3968 id=3968 data-nosnippet>3968</a>                .slot
+<a href=#3969 id=3969 data-nosnippet>3969</a>                .as_ref()
+<a href=#3970 id=3970 data-nosnippet>3970</a>                .unwrap();
+<a href=#3971 id=3971 data-nosnippet>3971</a>            <span class="comment">// Presence flag + selector + two char carriers. Even a remaining
+<a href=#3972 id=3972 data-nosnippet>3972</a>            // niche of an optional arm cannot describe the outer option.
+<a href=#3973 id=3973 data-nosnippet>3973</a>            </span><span class="macro">assert_eq!</span>(
+<a href=#3974 id=3974 data-nosnippet>3974</a>                <span class="kw">crate</span>::group::function_parameters(flat.function(<span class="string">"echo"</span>).unwrap())
+<a href=#3975 id=3975 data-nosnippet>3975</a>                    .unwrap()
+<a href=#3976 id=3976 data-nosnippet>3976</a>                    .len(),
+<a href=#3977 id=3977 data-nosnippet>3977</a>                <span class="number">4
+<a href=#3978 id=3978 data-nosnippet>3978</a>            </span>);
+<a href=#3979 id=3979 data-nosnippet>3979</a>            <span class="kw">let </span>prebindgen_flat::WireNode::Chain {
+<a href=#3980 id=3980 data-nosnippet>3980</a>                meta: CChain::Optional(outer_metadata),
+<a href=#3981 id=3981 data-nosnippet>3981</a>                ..
+<a href=#3982 id=3982 data-nosnippet>3982</a>            } = <span class="kw-2">&amp;</span>plan.node
+<a href=#3983 id=3983 data-nosnippet>3983</a>            <span class="kw">else </span>{
+<a href=#3984 id=3984 data-nosnippet>3984</a>                <span class="macro">panic!</span>()
+<a href=#3985 id=3985 data-nosnippet>3985</a>            };
+<a href=#3986 id=3986 data-nosnippet>3986</a>            <span class="kw">let </span>optional = outer_metadata;
+<a href=#3987 id=3987 data-nosnippet>3987</a>            <span class="macro">assert!</span>(optional.niche().is_none());
+<a href=#3988 id=3988 data-nosnippet>3988</a>            <span class="macro">assert_eq!</span>(
+<a href=#3989 id=3989 data-nosnippet>3989</a>                <span class="kw-2">*</span>optional.discriminator(),
+<a href=#3990 id=3990 data-nosnippet>3990</a>                <span class="kw">crate</span>::group::function_parameters(flat.function(<span class="string">"echo"</span>).unwrap())
+<a href=#3991 id=3991 data-nosnippet>3991</a>                    .unwrap()
+<a href=#3992 id=3992 data-nosnippet>3992</a>                    .next()
+<a href=#3993 id=3993 data-nosnippet>3993</a>                    .unwrap()
+<a href=#3994 id=3994 data-nosnippet>3994</a>                    .name
+<a href=#3995 id=3995 data-nosnippet>3995</a>            );
+<a href=#3996 id=3996 data-nosnippet>3996</a>        }
+<a href=#3997 id=3997 data-nosnippet>3997</a>    }
+<a href=#3998 id=3998 data-nosnippet>3998</a>
+<a href=#3999 id=3999 data-nosnippet>3999</a>    <span class="attr">#[test]
+<a href=#4000 id=4000 data-nosnippet>4000</a>    </span><span class="kw">fn </span>public_emission_rejects_invalid_c_type_names_without_panicking() {
+<a href=#4001 id=4001 data-nosnippet>4001</a>        <span class="kw">let </span><span class="kw-2">mut </span>prepared = Cbindgen::new(error_model(<span class="string">"pub type Handle=String;pub enum E{A,B}"</span>))
+<a href=#4002 id=4002 data-nosnippet>4002</a>            .opaque_ptr(<span class="string">"handle"</span>, <span class="macro">syn::parse_quote!</span>(Handle))
+<a href=#4003 id=4003 data-nosnippet>4003</a>            .enum_type(<span class="string">"choice"</span>, <span class="macro">syn::parse_quote!</span>(E))
+<a href=#4004 id=4004 data-nosnippet>4004</a>            .prepare()
+<a href=#4005 id=4005 data-nosnippet>4005</a>            .unwrap();
+<a href=#4006 id=4006 data-nosnippet>4006</a>        prepared
+<a href=#4007 id=4007 data-nosnippet>4007</a>            .type_info_mut(<span class="kw-2">&amp;</span><span class="macro">syn::parse_quote!</span>(<span class="kw">crate</span>::Handle))
+<a href=#4008 id=4008 data-nosnippet>4008</a>            .unwrap()
+<a href=#4009 id=4009 data-nosnippet>4009</a>            .metadata
+<a href=#4010 id=4010 data-nosnippet>4010</a>            .pointer = <span class="prelude-val">Some</span>(<span class="string">"bad-name"</span>.into());
+<a href=#4011 id=4011 data-nosnippet>4011</a>        <span class="macro">assert!</span>(generate(<span class="kw-2">&amp;</span>prepared).is_err());
+<a href=#4012 id=4012 data-nosnippet>4012</a>        prepared
+<a href=#4013 id=4013 data-nosnippet>4013</a>            .type_info_mut(<span class="kw-2">&amp;</span><span class="macro">syn::parse_quote!</span>(<span class="kw">crate</span>::Handle))
+<a href=#4014 id=4014 data-nosnippet>4014</a>            .unwrap()
+<a href=#4015 id=4015 data-nosnippet>4015</a>            .metadata
+<a href=#4016 id=4016 data-nosnippet>4016</a>            .pointer = <span class="prelude-val">Some</span>(<span class="string">"handle"</span>.into());
+<a href=#4017 id=4017 data-nosnippet>4017</a>        <span class="kw">let </span>enumeration = prepared
+<a href=#4018 id=4018 data-nosnippet>4018</a>            .type_info_mut(<span class="kw-2">&amp;</span><span class="macro">syn::parse_quote!</span>(<span class="kw">crate</span>::E))
+<a href=#4019 id=4019 data-nosnippet>4019</a>            .unwrap()
+<a href=#4020 id=4020 data-nosnippet>4020</a>            .metadata
+<a href=#4021 id=4021 data-nosnippet>4021</a>            .enumeration
+<a href=#4022 id=4022 data-nosnippet>4022</a>            .as_mut()
+<a href=#4023 id=4023 data-nosnippet>4023</a>            .unwrap();
+<a href=#4024 id=4024 data-nosnippet>4024</a>        std::rc::Rc::make_mut(enumeration).name = <span class="string">"bad-name"</span>.into();
+<a href=#4025 id=4025 data-nosnippet>4025</a>        <span class="macro">assert!</span>(generate(<span class="kw-2">&amp;</span>prepared).is_err());
+<a href=#4026 id=4026 data-nosnippet>4026</a>    }
+<a href=#4027 id=4027 data-nosnippet>4027</a>
+<a href=#4028 id=4028 data-nosnippet>4028</a>    <span class="attr">#[test]
+<a href=#4029 id=4029 data-nosnippet>4029</a>    </span><span class="kw">fn </span>public_emission_validates_abort_policy_and_module_settings() {
+<a href=#4030 id=4030 data-nosnippet>4030</a>        <span class="kw">let </span>flat = error_model(<span class="string">"pub fn f(c:char)-&gt;char{}"</span>);
+<a href=#4031 id=4031 data-nosnippet>4031</a>        <span class="kw">let </span><span class="kw-2">mut </span>prepared = Cbindgen::new(flat)
+<a href=#4032 id=4032 data-nosnippet>4032</a>            .function(<span class="macro">crate::fun!</span>(f))
+<a href=#4033 id=4033 data-nosnippet>4033</a>            .panic()
+<a href=#4034 id=4034 data-nosnippet>4034</a>            .prepare()
+<a href=#4035 id=4035 data-nosnippet>4035</a>            .unwrap();
+<a href=#4036 id=4036 data-nosnippet>4036</a>        prepared
+<a href=#4037 id=4037 data-nosnippet>4037</a>            .function_mut(<span class="string">"f"</span>)
+<a href=#4038 id=4038 data-nosnippet>4038</a>            .unwrap()
+<a href=#4039 id=4039 data-nosnippet>4039</a>            .metadata
+<a href=#4040 id=4040 data-nosnippet>4040</a>            .as_mut()
+<a href=#4041 id=4041 data-nosnippet>4041</a>            .unwrap()
+<a href=#4042 id=4042 data-nosnippet>4042</a>            .abort_on_failure = <span class="bool-val">false</span>;
+<a href=#4043 id=4043 data-nosnippet>4043</a>        prepared
+<a href=#4044 id=4044 data-nosnippet>4044</a>            .function_mut(<span class="string">"f"</span>)
+<a href=#4045 id=4045 data-nosnippet>4045</a>            .unwrap()
+<a href=#4046 id=4046 data-nosnippet>4046</a>            .metadata
+<a href=#4047 id=4047 data-nosnippet>4047</a>            .as_mut()
+<a href=#4048 id=4048 data-nosnippet>4048</a>            .unwrap()
+<a href=#4049 id=4049 data-nosnippet>4049</a>            .requires_abort = <span class="bool-val">true</span>;
+<a href=#4050 id=4050 data-nosnippet>4050</a>        <span class="macro">assert!</span>(generate(<span class="kw-2">&amp;</span>prepared).err().unwrap().contains(<span class="string">"abort policy"</span>));
+<a href=#4051 id=4051 data-nosnippet>4051</a>        prepared
+<a href=#4052 id=4052 data-nosnippet>4052</a>            .function_mut(<span class="string">"f"</span>)
+<a href=#4053 id=4053 data-nosnippet>4053</a>            .unwrap()
+<a href=#4054 id=4054 data-nosnippet>4054</a>            .metadata
+<a href=#4055 id=4055 data-nosnippet>4055</a>            .as_mut()
+<a href=#4056 id=4056 data-nosnippet>4056</a>            .unwrap()
+<a href=#4057 id=4057 data-nosnippet>4057</a>            .abort_on_failure = <span class="bool-val">true</span>;
+<a href=#4058 id=4058 data-nosnippet>4058</a>        prepared.metadata.prefix = <span class="string">"invalid-prefix"</span>.into();
+<a href=#4059 id=4059 data-nosnippet>4059</a>        <span class="macro">assert!</span>(generate(<span class="kw-2">&amp;</span>prepared).is_err());
+<a href=#4060 id=4060 data-nosnippet>4060</a>        prepared.metadata.prefix = <span class="string">"test"</span>.into();
+<a href=#4061 id=4061 data-nosnippet>4061</a>        prepared.function_mut(<span class="string">"f"</span>).unwrap().metadata = <span class="prelude-val">None</span>;
+<a href=#4062 id=4062 data-nosnippet>4062</a>        <span class="macro">assert!</span>(generate(<span class="kw-2">&amp;</span>prepared).is_err());
+<a href=#4063 id=4063 data-nosnippet>4063</a>    }
+<a href=#4064 id=4064 data-nosnippet>4064</a>
+<a href=#4065 id=4065 data-nosnippet>4065</a>    <span class="attr">#[test]
+<a href=#4066 id=4066 data-nosnippet>4066</a>    </span><span class="kw">fn </span>emission_reads_only_the_prepared_flat() {
+<a href=#4067 id=4067 data-nosnippet>4067</a>        <span class="kw">let </span>source = syn::parse_file(<span class="string">"pub enum E { A, B } pub fn echo(e:E)-&gt;E{}"</span>).unwrap();
+<a href=#4068 id=4068 data-nosnippet>4068</a>        <span class="kw">let </span>flat =
+<a href=#4069 id=4069 data-nosnippet>4069</a>            CBindings::parse(source.items.into_iter().map(|i| (i, Default::default()))).unwrap();
+<a href=#4070 id=4070 data-nosnippet>4070</a>        <span class="kw">let </span>prepared = Cbindgen::new(flat)
+<a href=#4071 id=4071 data-nosnippet>4071</a>            .prefix(<span class="string">"custom"</span>)
+<a href=#4072 id=4072 data-nosnippet>4072</a>            .enum_type(<span class="string">"choice"</span>, <span class="macro">syn::parse_quote!</span>(E))
+<a href=#4073 id=4073 data-nosnippet>4073</a>            .function(<span class="macro">crate::fun!</span>(echo))
+<a href=#4074 id=4074 data-nosnippet>4074</a>            .panic()
+<a href=#4075 id=4075 data-nosnippet>4075</a>            .prepare()
+<a href=#4076 id=4076 data-nosnippet>4076</a>            .unwrap();
+<a href=#4077 id=4077 data-nosnippet>4077</a>        <span class="macro">assert!</span>(prepared
+<a href=#4078 id=4078 data-nosnippet>4078</a>            .type_info(<span class="kw-2">&amp;</span><span class="macro">syn::parse_quote!</span>(<span class="kw">crate</span>::E))
+<a href=#4079 id=4079 data-nosnippet>4079</a>            .unwrap()
+<a href=#4080 id=4080 data-nosnippet>4080</a>            .metadata
+<a href=#4081 id=4081 data-nosnippet>4081</a>            .enumeration
+<a href=#4082 id=4082 data-nosnippet>4082</a>            .is_some());
+<a href=#4083 id=4083 data-nosnippet>4083</a>        <span class="kw">let </span>first = generate(<span class="kw-2">&amp;</span>prepared).unwrap();
+<a href=#4084 id=4084 data-nosnippet>4084</a>        <span class="kw">let </span>second = generate(<span class="kw-2">&amp;</span>prepared.clone()).unwrap();
+<a href=#4085 id=4085 data-nosnippet>4085</a>        <span class="macro">assert_eq!</span>(first.rust, second.rust);
+<a href=#4086 id=4086 data-nosnippet>4086</a>        <span class="macro">assert_eq!</span>(first.header, second.header);
+<a href=#4087 id=4087 data-nosnippet>4087</a>        <span class="macro">assert!</span>(first.header.contains(<span class="string">"custom_choice"</span>));
+<a href=#4088 id=4088 data-nosnippet>4088</a>        <span class="macro">assert!</span>(first.header.contains(<span class="string">"custom_echo"</span>));
+<a href=#4089 id=4089 data-nosnippet>4089</a>    }
+<a href=#4090 id=4090 data-nosnippet>4090</a>
+<a href=#4091 id=4091 data-nosnippet>4091</a>    <span class="attr">#[test]
+<a href=#4092 id=4092 data-nosnippet>4092</a>    </span><span class="kw">fn </span>rejects_invalid_pointer_names_during_preparation() {
+<a href=#4093 id=4093 data-nosnippet>4093</a>        <span class="kw">let </span>source = syn::parse_file(<span class="string">"pub type Handle = String;"</span>).unwrap();
+<a href=#4094 id=4094 data-nosnippet>4094</a>        <span class="kw">let </span>flat = CBindings::parse(
+<a href=#4095 id=4095 data-nosnippet>4095</a>            source
+<a href=#4096 id=4096 data-nosnippet>4096</a>                .items
+<a href=#4097 id=4097 data-nosnippet>4097</a>                .into_iter()
+<a href=#4098 id=4098 data-nosnippet>4098</a>                .map(|item| (item, Default::default())),
+<a href=#4099 id=4099 data-nosnippet>4099</a>        )
+<a href=#4100 id=4100 data-nosnippet>4100</a>        .unwrap();
+<a href=#4101 id=4101 data-nosnippet>4101</a>        <span class="kw">let </span>result = Cbindgen::new(flat)
+<a href=#4102 id=4102 data-nosnippet>4102</a>            .opaque_ptr(<span class="string">"invalid-name"</span>, <span class="macro">syn::parse_quote!</span>(Handle))
+<a href=#4103 id=4103 data-nosnippet>4103</a>            .build();
+<a href=#4104 id=4104 data-nosnippet>4104</a>        <span class="macro">assert_eq!</span>(result.err().unwrap(), <span class="string">"invalid identifier `invalid-name`"</span>);
+<a href=#4105 id=4105 data-nosnippet>4105</a>    }
+<a href=#4106 id=4106 data-nosnippet>4106</a>
+<a href=#4107 id=4107 data-nosnippet>4107</a>    <span class="attr">#[test]
+<a href=#4108 id=4108 data-nosnippet>4108</a>    </span><span class="kw">fn </span>recoverable_c_results_require_a_declared_binding_failure_channel() {
+<a href=#4109 id=4109 data-nosnippet>4109</a>        <span class="kw">use </span><span class="kw">crate</span>::fun;
+<a href=#4110 id=4110 data-nosnippet>4110</a>
+<a href=#4111 id=4111 data-nosnippet>4111</a>        <span class="kw">let </span><span class="kw-2">mut </span>flat = error_model(<span class="string">"pub fn message(e:i64)-&gt;String{} pub fn f()-&gt;Result&lt;i64,i64&gt;{}"</span>);
+<a href=#4112 id=4112 data-nosnippet>4112</a>        <span class="kw">let </span>declarations = DeclCDefaults::new(<span class="kw-2">&amp;</span>flat, <span class="macro">vec!</span>[], <span class="macro">vec!</span>[], <span class="macro">vec!</span>[]).unwrap();
+<a href=#4113 id=4113 data-nosnippet>4113</a>        declarations
+<a href=#4114 id=4114 data-nosnippet>4114</a>            .fill(
+<a href=#4115 id=4115 data-nosnippet>4115</a>                <span class="kw-2">&amp;mut </span>flat,
+<a href=#4116 id=4116 data-nosnippet>4116</a>                <span class="kw-2">&amp;</span>CCodec::raw(),
+<a href=#4117 id=4117 data-nosnippet>4117</a>                <span class="kw-2">&amp;</span><span class="macro">fun!</span>(f).on_error(<span class="macro">fun!</span>(message)),
+<a href=#4118 id=4118 data-nosnippet>4118</a>                <span class="kw-2">&amp;</span>(),
+<a href=#4119 id=4119 data-nosnippet>4119</a>            )
+<a href=#4120 id=4120 data-nosnippet>4120</a>            .unwrap();
+<a href=#4121 id=4121 data-nosnippet>4121</a>        <span class="kw">let </span>output = flat.function_mut(<span class="string">"f"</span>).unwrap().ret.slot.as_mut().unwrap();
+<a href=#4122 id=4122 data-nosnippet>4122</a>        output.outcomes.binding_failure = <span class="prelude-val">None</span>;
+<a href=#4123 id=4123 data-nosnippet>4123</a>        flat.function_mut(<span class="string">"f"</span>).unwrap().metadata = <span class="prelude-val">Some</span>(CFunction::default());
+<a href=#4124 id=4124 data-nosnippet>4124</a>        <span class="kw">let </span>error = generate(<span class="kw-2">&amp;</span>flat).err().unwrap();
+<a href=#4125 id=4125 data-nosnippet>4125</a>        <span class="macro">assert!</span>(error.contains(<span class="string">"binding-failure schema"</span>));
+<a href=#4126 id=4126 data-nosnippet>4126</a>    }
+<a href=#4127 id=4127 data-nosnippet>4127</a>
+<a href=#4128 id=4128 data-nosnippet>4128</a>    <span class="attr">#[test]
+<a href=#4129 id=4129 data-nosnippet>4129</a>    </span><span class="kw">fn </span>emits_custom_slot_code_without_building_a_plan() {
+<a href=#4130 id=4130 data-nosnippet>4130</a>        <span class="attr">#[allow(clippy::type_complexity)] </span><span class="comment">// Custom slot storage keeps every metadata type explicit.
+<a href=#4131 id=4131 data-nosnippet>4131</a>        </span><span class="kw">struct </span>CountedOutput(
+<a href=#4132 id=4132 data-nosnippet>4132</a>            std::rc::Rc&lt;std::cell::Cell&lt;usize&gt;&gt;,
+<a href=#4133 id=4133 data-nosnippet>4133</a>            prebindgen_flat::Outcomes&lt;
+<a href=#4134 id=4134 data-nosnippet>4134</a>                prebindgen_flat::WireNode&lt;CWire, <span class="kw">crate</span>::CChain, <span class="kw">crate</span>::CBranch&gt;,
+<a href=#4135 id=4135 data-nosnippet>4135</a>            &gt;,
+<a href=#4136 id=4136 data-nosnippet>4136</a>        );
+<a href=#4137 id=4137 data-nosnippet>4137</a>        <span class="kw">impl </span>prebindgen_flat::Conversion <span class="kw">for </span>CountedOutput {
+<a href=#4138 id=4138 data-nosnippet>4138</a>            <span class="kw">type </span>Wire = CWire;
+<a href=#4139 id=4139 data-nosnippet>4139</a>            <span class="kw">type </span>Chain = CChain;
+<a href=#4140 id=4140 data-nosnippet>4140</a>            <span class="kw">type </span>Branch = CBranch;
+<a href=#4141 id=4141 data-nosnippet>4141</a>            <span class="kw">type </span>SlotFragment&lt;<span class="lifetime">'a</span>&gt; = prebindgen_conversions::OutputFragment&lt;<span class="lifetime">'a</span>, CContext&gt;;
+<a href=#4142 id=4142 data-nosnippet>4142</a>
+<a href=#4143 id=4143 data-nosnippet>4143</a>            <span class="kw">fn </span>code_fragment_slot(
+<a href=#4144 id=4144 data-nosnippet>4144</a>                <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#4145 id=4145 data-nosnippet>4145</a>                mode: <span class="self">Self</span>::SlotFragment&lt;<span class="lifetime">'_</span>&gt;,
+<a href=#4146 id=4146 data-nosnippet>4146</a>                <span class="kw">_</span>: <span class="kw-2">&amp;</span>syn::Type,
+<a href=#4147 id=4147 data-nosnippet>4147</a>            ) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
+<a href=#4148 id=4148 data-nosnippet>4148</a>                <span class="kw">use </span>prebindgen_conversions::OutputFragment;
+<a href=#4149 id=4149 data-nosnippet>4149</a>                <span class="prelude-val">Ok</span>(<span class="kw">match </span>mode {
+<a href=#4150 id=4150 data-nosnippet>4150</a>                    OutputFragment::Prepare { next, .. } =&gt; {
+<a href=#4151 id=4151 data-nosnippet>4151</a>                        <span class="self">self</span>.<span class="number">0</span>.set(<span class="self">self</span>.<span class="number">0</span>.get() + <span class="number">1</span>);
+<a href=#4152 id=4152 data-nosnippet>4152</a>                        <span class="macro">quote!</span>({ #next })
+<a href=#4153 id=4153 data-nosnippet>4153</a>                    }
+<a href=#4154 id=4154 data-nosnippet>4154</a>                    OutputFragment::Deliver { next, .. } =&gt; <span class="macro">quote!</span>({ #next }),
+<a href=#4155 id=4155 data-nosnippet>4155</a>                    OutputFragment::Commit { .. } | OutputFragment::Result { .. } =&gt; <span class="macro">quote!</span>(()),
+<a href=#4156 id=4156 data-nosnippet>4156</a>                })
+<a href=#4157 id=4157 data-nosnippet>4157</a>            }
+<a href=#4158 id=4158 data-nosnippet>4158</a>        }
+<a href=#4159 id=4159 data-nosnippet>4159</a>        <span class="kw">impl </span>prebindgen_flat::OutputConversion <span class="kw">for </span>CountedOutput {
+<a href=#4160 id=4160 data-nosnippet>4160</a>            <span class="kw">fn </span>output_outcomes(
+<a href=#4161 id=4161 data-nosnippet>4161</a>                <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#4162 id=4162 data-nosnippet>4162</a>            ) -&gt; <span class="kw-2">&amp;</span>prebindgen_flat::Outcomes&lt;
+<a href=#4163 id=4163 data-nosnippet>4163</a>                prebindgen_flat::WireNode&lt;CWire, <span class="kw">crate</span>::CChain, <span class="kw">crate</span>::CBranch&gt;,
+<a href=#4164 id=4164 data-nosnippet>4164</a>            &gt; {
+<a href=#4165 id=4165 data-nosnippet>4165</a>                <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">1
+<a href=#4166 id=4166 data-nosnippet>4166</a>            </span>}
+<a href=#4167 id=4167 data-nosnippet>4167</a>        }
+<a href=#4168 id=4168 data-nosnippet>4168</a>        <span class="kw">struct </span>CountedSchema;
+<a href=#4169 id=4169 data-nosnippet>4169</a>        <span class="kw">impl </span>prebindgen_flat::Schema <span class="kw">for </span>CountedSchema {
+<a href=#4170 id=4170 data-nosnippet>4170</a>            <span class="kw">type </span>Input = CInputPlan&lt;CWire&gt;;
+<a href=#4171 id=4171 data-nosnippet>4171</a>            <span class="kw">type </span>Output = CountedOutput;
+<a href=#4172 id=4172 data-nosnippet>4172</a>            <span class="kw">type </span>Module = CModule;
+<a href=#4173 id=4173 data-nosnippet>4173</a>            <span class="kw">type </span>Function = <span class="prelude-ty">Option</span>&lt;CFunction&gt;;
+<a href=#4174 id=4174 data-nosnippet>4174</a>            <span class="kw">type </span>Type = CType;
+<a href=#4175 id=4175 data-nosnippet>4175</a>            <span class="kw">type </span>Field = ();
+<a href=#4176 id=4176 data-nosnippet>4176</a>            <span class="kw">type </span>Variant = ();
+<a href=#4177 id=4177 data-nosnippet>4177</a>        }
+<a href=#4178 id=4178 data-nosnippet>4178</a>        <span class="kw">let </span>count = std::rc::Rc::new(std::cell::Cell::new(<span class="number">0</span>));
+<a href=#4179 id=4179 data-nosnippet>4179</a>        <span class="kw">let </span>source = syn::parse_file(<span class="string">"pub fn noop() {}"</span>).unwrap();
+<a href=#4180 id=4180 data-nosnippet>4180</a>        <span class="kw">let </span><span class="kw-2">mut </span>flat = Flat::&lt;CountedSchema&gt;::parse(
+<a href=#4181 id=4181 data-nosnippet>4181</a>            source
+<a href=#4182 id=4182 data-nosnippet>4182</a>                .items
+<a href=#4183 id=4183 data-nosnippet>4183</a>                .into_iter()
+<a href=#4184 id=4184 data-nosnippet>4184</a>                .map(|item| (item, Default::default())),
+<a href=#4185 id=4185 data-nosnippet>4185</a>        )
+<a href=#4186 id=4186 data-nosnippet>4186</a>        .unwrap();
+<a href=#4187 id=4187 data-nosnippet>4187</a>        flat.function_mut(<span class="string">"noop"</span>).unwrap().ret.slot =
+<a href=#4188 id=4188 data-nosnippet>4188</a>            <span class="prelude-val">Some</span>(CountedOutput(count.clone(), Default::default()));
+<a href=#4189 id=4189 data-nosnippet>4189</a>        flat.metadata.prefix = <span class="string">"test"</span>.into();
+<a href=#4190 id=4190 data-nosnippet>4190</a>        flat.function_mut(<span class="string">"noop"</span>).unwrap().metadata = <span class="prelude-val">Some</span>(CFunction::default());
+<a href=#4191 id=4191 data-nosnippet>4191</a>        <span class="kw">let </span>output = generate(<span class="kw-2">&amp;</span>flat).unwrap();
+<a href=#4192 id=4192 data-nosnippet>4192</a>        <span class="macro">assert!</span>(output.header.contains(<span class="string">"test_noop("</span>));
+<a href=#4193 id=4193 data-nosnippet>4193</a>        <span class="macro">assert_eq!</span>(count.get(), <span class="number">1</span>);
+<a href=#4194 id=4194 data-nosnippet>4194</a>    }
+<a href=#4195 id=4195 data-nosnippet>4195</a>}
+<a href=#4196 id=4196 data-nosnippet>4196</a>
+<a href=#4197 id=4197 data-nosnippet>4197</a><span class="doccomment">/// A wire value excluded from the representation of a present value.
+<a href=#4198 id=4198 data-nosnippet>4198</a></span><span class="attr">#[derive(Clone, Debug, PartialEq, Eq)]
+<a href=#4199 id=4199 data-nosnippet>4199</a></span><span class="kw">pub enum </span>CNiche {
+<a href=#4200 id=4200 data-nosnippet>4200</a>    <span class="doccomment">/// Null address (pointer or integer-encoded handle).
+<a href=#4201 id=4201 data-nosnippet>4201</a>    </span>Null,
+<a href=#4202 id=4202 data-nosnippet>4202</a>    <span class="doccomment">/// An invalid integer representation, within the wire's integer range.
+<a href=#4203 id=4203 data-nosnippet>4203</a>    </span>Integer(i64),
+<a href=#4204 id=4204 data-nosnippet>4204</a>}
+<a href=#4205 id=4205 data-nosnippet>4205</a><span class="kw">impl </span>CNiche {
+<a href=#4206 id=4206 data-nosnippet>4206</a>    <span class="doccomment">/// Expression recognizing the present case without decoding the payload.
+<a href=#4207 id=4207 data-nosnippet>4207</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>present(<span class="kw-2">&amp;</span><span class="self">self</span>, value: TokenStream) -&gt; TokenStream {
+<a href=#4208 id=4208 data-nosnippet>4208</a>        <span class="kw">match </span><span class="self">self </span>{
+<a href=#4209 id=4209 data-nosnippet>4209</a>            <span class="self">Self</span>::Null =&gt; <span class="macro">quote!</span>((#value <span class="kw">as </span>usize) != <span class="number">0</span>),
+<a href=#4210 id=4210 data-nosnippet>4210</a>            <span class="self">Self</span>::Integer(n) =&gt; {
+<a href=#4211 id=4211 data-nosnippet>4211</a>                <span class="kw">let </span>n = syn::parse_str::&lt;syn::Expr&gt;(<span class="kw-2">&amp;</span>n.to_string()).unwrap();
+<a href=#4212 id=4212 data-nosnippet>4212</a>                <span class="macro">quote!</span>(#value != #n)
+<a href=#4213 id=4213 data-nosnippet>4213</a>            }
+<a href=#4214 id=4214 data-nosnippet>4214</a>        }
+<a href=#4215 id=4215 data-nosnippet>4215</a>    }
+<a href=#4216 id=4216 data-nosnippet>4216</a>    <span class="doccomment">/// Absence expression for a numeric wire. Pointer codecs supply a null pointer.
+<a href=#4217 id=4217 data-nosnippet>4217</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>integer_value(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TokenStream {
+<a href=#4218 id=4218 data-nosnippet>4218</a>        <span class="kw">match </span><span class="self">self </span>{
+<a href=#4219 id=4219 data-nosnippet>4219</a>            <span class="self">Self</span>::Null =&gt; <span class="macro">quote!</span>(<span class="number">0</span>),
+<a href=#4220 id=4220 data-nosnippet>4220</a>            <span class="self">Self</span>::Integer(n) =&gt; syn::parse_str::&lt;TokenStream&gt;(<span class="kw-2">&amp;</span>n.to_string()).unwrap(),
+<a href=#4221 id=4221 data-nosnippet>4221</a>        }
+<a href=#4222 id=4222 data-nosnippet>4222</a>    }
+<a href=#4223 id=4223 data-nosnippet>4223</a>}
+<a href=#4224 id=4224 data-nosnippet>4224</a>
+<a href=#4225 id=4225 data-nosnippet>4225</a><span class="attr">#[cfg(test)]
+<a href=#4226 id=4226 data-nosnippet>4226</a></span><span class="kw">mod </span>abort_policy_tests {
+<a href=#4227 id=4227 data-nosnippet>4227</a>    <span class="kw">use super</span>::<span class="kw-2">*</span>;
+<a href=#4228 id=4228 data-nosnippet>4228</a>    <span class="kw">use </span><span class="kw">crate</span>::fun;
+<a href=#4229 id=4229 data-nosnippet>4229</a>    <span class="kw">fn </span>model(source: <span class="kw-2">&amp;</span>str) -&gt; CBindings {
+<a href=#4230 id=4230 data-nosnippet>4230</a>        CBindings::parse(
+<a href=#4231 id=4231 data-nosnippet>4231</a>            syn::parse_file(source)
+<a href=#4232 id=4232 data-nosnippet>4232</a>                .unwrap()
+<a href=#4233 id=4233 data-nosnippet>4233</a>                .items
+<a href=#4234 id=4234 data-nosnippet>4234</a>                .into_iter()
+<a href=#4235 id=4235 data-nosnippet>4235</a>                .map(|i| (i, Default::default())),
+<a href=#4236 id=4236 data-nosnippet>4236</a>        )
+<a href=#4237 id=4237 data-nosnippet>4237</a>        .unwrap()
+<a href=#4238 id=4238 data-nosnippet>4238</a>    }
+<a href=#4239 id=4239 data-nosnippet>4239</a>    <span class="attr">#[test]
+<a href=#4240 id=4240 data-nosnippet>4240</a>    </span><span class="kw">fn </span>direct_values_and_void_do_not_need_an_error_policy() {
+<a href=#4241 id=4241 data-nosnippet>4241</a>        <span class="kw">let </span>generated = Cbindgen::new(model(<span class="string">"pub fn identity(x:i64)-&gt;i64{} pub fn unit(){}"</span>))
+<a href=#4242 id=4242 data-nosnippet>4242</a>            .function(<span class="macro">fun!</span>(identity))
+<a href=#4243 id=4243 data-nosnippet>4243</a>            .function(<span class="macro">fun!</span>(unit))
+<a href=#4244 id=4244 data-nosnippet>4244</a>            .build()
+<a href=#4245 id=4245 data-nosnippet>4245</a>            .unwrap();
+<a href=#4246 id=4246 data-nosnippet>4246</a>        <span class="macro">assert!</span>(generated.header.contains(<span class="string">"int64_t pb_identity(int64_t"</span>));
+<a href=#4247 id=4247 data-nosnippet>4247</a>        <span class="macro">assert!</span>(generated.header.contains(<span class="string">"void pb_unit(void)"</span>));
+<a href=#4248 id=4248 data-nosnippet>4248</a>        <span class="macro">assert!</span>(!generated.header.contains(<span class="string">"_result"</span>));
+<a href=#4249 id=4249 data-nosnippet>4249</a>        <span class="macro">assert!</span>(!generated.header.contains(<span class="string">"last_error"</span>));
+<a href=#4250 id=4250 data-nosnippet>4250</a>        <span class="macro">assert!</span>(!generated.rust.contains(<span class="string">"thread_local"</span>));
+<a href=#4251 id=4251 data-nosnippet>4251</a>        syn::parse_file(<span class="kw-2">&amp;</span>generated.rust).unwrap();
+<a href=#4252 id=4252 data-nosnippet>4252</a>    }
+<a href=#4253 id=4253 data-nosnippet>4253</a>    <span class="attr">#[test]
+<a href=#4254 id=4254 data-nosnippet>4254</a>    </span><span class="kw">fn </span>trusted_input_representations_need_no_abort_policy_or_runtime_validation() {
+<a href=#4255 id=4255 data-nosnippet>4255</a>        <span class="kw">for </span>ty <span class="kw">in </span>[<span class="string">"char"</span>, <span class="string">"&amp;str"</span>, <span class="string">"&amp;[u8]"</span>, <span class="string">"Option&lt;i64&gt;"</span>, <span class="string">"[i64;4]"</span>] {
+<a href=#4256 id=4256 data-nosnippet>4256</a>            <span class="kw">let </span>source = <span class="macro">format!</span>(<span class="string">"pub fn f(value:{ty}){{}}"</span>);
+<a href=#4257 id=4257 data-nosnippet>4257</a>            <span class="kw">let </span>generated = Cbindgen::new(model(<span class="kw-2">&amp;</span>source))
+<a href=#4258 id=4258 data-nosnippet>4258</a>                .function(<span class="macro">fun!</span>(f))
+<a href=#4259 id=4259 data-nosnippet>4259</a>                .build()
+<a href=#4260 id=4260 data-nosnippet>4260</a>                .unwrap();
+<a href=#4261 id=4261 data-nosnippet>4261</a>            <span class="kw">for </span>forbidden <span class="kw">in </span>[
+<a href=#4262 id=4262 data-nosnippet>4262</a>                <span class="string">"validate_pointer"</span>,
+<a href=#4263 id=4263 data-nosnippet>4263</a>                <span class="string">"validate_slice"</span>,
+<a href=#4264 id=4264 data-nosnippet>4264</a>                <span class="string">"invalid UTF-8"</span>,
+<a href=#4265 id=4265 data-nosnippet>4265</a>                <span class="string">"invalid option"</span>,
+<a href=#4266 id=4266 data-nosnippet>4266</a>                <span class="string">"wrong fixed array length"</span>,
+<a href=#4267 id=4267 data-nosnippet>4267</a>                <span class="string">"invalid Unicode"</span>,
+<a href=#4268 id=4268 data-nosnippet>4268</a>                <span class="string">"input_aliases"</span>,
+<a href=#4269 id=4269 data-nosnippet>4269</a>            ] {
+<a href=#4270 id=4270 data-nosnippet>4270</a>                <span class="macro">assert!</span>(!generated.rust.contains(forbidden), <span class="string">"{ty}: {forbidden}"</span>);
+<a href=#4271 id=4271 data-nosnippet>4271</a>            }
+<a href=#4272 id=4272 data-nosnippet>4272</a>        }
+<a href=#4273 id=4273 data-nosnippet>4273</a>    }
+<a href=#4274 id=4274 data-nosnippet>4274</a>    <span class="attr">#[test]
+<a href=#4275 id=4275 data-nosnippet>4275</a>    </span><span class="kw">fn </span>trusted_handles_rows_and_callback_results_emit_no_validation_support() {
+<a href=#4276 id=4276 data-nosnippet>4276</a>        <span class="kw">let </span>generated = Cbindgen::new(model(<span class="string">"pub struct H{pub n:i64} pub enum Tag{A,B} pub fn round(first:H,second:&amp;H,third:&amp;mut H,rows:Vec&lt;H&gt;,tag:Tag,callback:impl Fn()-&gt;Vec&lt;H&gt;)-&gt;H{}"</span>))
+<a href=#4277 id=4277 data-nosnippet>4277</a>            .opaque_ptr(<span class="string">"handle"</span>,<span class="macro">syn::parse_quote!</span>(H))
+<a href=#4278 id=4278 data-nosnippet>4278</a>            .enum_type(<span class="string">"tag"</span>,<span class="macro">syn::parse_quote!</span>(Tag))
+<a href=#4279 id=4279 data-nosnippet>4279</a>            .function(<span class="macro">fun!</span>(round)).build().unwrap();
+<a href=#4280 id=4280 data-nosnippet>4280</a>        <span class="kw">for </span>forbidden <span class="kw">in </span>[
+<a href=#4281 id=4281 data-nosnippet>4281</a>            <span class="string">"validate_pointer"</span>,
+<a href=#4282 id=4282 data-nosnippet>4282</a>            <span class="string">"validate_slice"</span>,
+<a href=#4283 id=4283 data-nosnippet>4283</a>            <span class="string">"input_aliases"</span>,
+<a href=#4284 id=4284 data-nosnippet>4284</a>            <span class="string">"CallbackReturnAllocations"</span>,
+<a href=#4285 id=4285 data-nosnippet>4285</a>            <span class="string">"null callback"</span>,
+<a href=#4286 id=4286 data-nosnippet>4286</a>            <span class="string">"invalid enum discriminant"</span>,
+<a href=#4287 id=4287 data-nosnippet>4287</a>        ] {
+<a href=#4288 id=4288 data-nosnippet>4288</a>            <span class="macro">assert!</span>(!generated.rust.contains(forbidden), <span class="string">"{forbidden}"</span>);
+<a href=#4289 id=4289 data-nosnippet>4289</a>        }
+<a href=#4290 id=4290 data-nosnippet>4290</a>        <span class="macro">assert!</span>(generated.header.contains(<span class="string">"Trusted C ABI"</span>));
+<a href=#4291 id=4291 data-nosnippet>4291</a>        <span class="macro">assert!</span>(generated.rust.contains(<span class="string">"CallbackReturnCleanup"</span>));
+<a href=#4292 id=4292 data-nosnippet>4292</a>    }
+<a href=#4293 id=4293 data-nosnippet>4293</a>    <span class="attr">#[test]
+<a href=#4294 id=4294 data-nosnippet>4294</a>    </span><span class="kw">fn </span>constructor_alternatives_retain_their_own_validation_policy() {
+<a href=#4295 id=4295 data-nosnippet>4295</a>        <span class="kw">let </span>source=<span class="string">"pub struct Number {pub value:i64} pub fn new(value:i64)-&gt;Number{} pub fn other(value:i64)-&gt;Number{} pub fn consume(value:Number){}"</span>;
+<a href=#4296 id=4296 data-nosnippet>4296</a>        <span class="kw">let </span>bind = || {
+<a href=#4297 id=4297 data-nosnippet>4297</a>            Cbindgen::new(model(source)).function(
+<a href=#4298 id=4298 data-nosnippet>4298</a>                <span class="macro">fun!</span>(consume).expand_param(
+<a href=#4299 id=4299 data-nosnippet>4299</a>                    <span class="string">"value"</span>,
+<a href=#4300 id=4300 data-nosnippet>4300</a>                    <span class="macro">expand_param!</span>(Number)
+<a href=#4301 id=4301 data-nosnippet>4301</a>                        .variant(<span class="macro">fun!</span>(new))
+<a href=#4302 id=4302 data-nosnippet>4302</a>                        .variant(<span class="macro">fun!</span>(other)),
+<a href=#4303 id=4303 data-nosnippet>4303</a>                ),
+<a href=#4304 id=4304 data-nosnippet>4304</a>            )
+<a href=#4305 id=4305 data-nosnippet>4305</a>        };
+<a href=#4306 id=4306 data-nosnippet>4306</a>        bind().build().unwrap();
+<a href=#4307 id=4307 data-nosnippet>4307</a>        bind().panic().build().unwrap();
+<a href=#4308 id=4308 data-nosnippet>4308</a>    }
+<a href=#4309 id=4309 data-nosnippet>4309</a>    <span class="attr">#[test]
+<a href=#4310 id=4310 data-nosnippet>4310</a>    </span><span class="kw">fn </span>manually_bound_fallible_output_requires_the_same_policy() {
+<a href=#4311 id=4311 data-nosnippet>4311</a>        <span class="kw">let </span><span class="kw-2">mut </span>flat = model(<span class="string">"pub fn f()-&gt;i64{}"</span>);
+<a href=#4312 id=4312 data-nosnippet>4312</a>        <span class="kw">crate</span>::bind_output(
+<a href=#4313 id=4313 data-nosnippet>4313</a>            <span class="kw-2">&amp;mut </span>flat,
+<a href=#4314 id=4314 data-nosnippet>4314</a>            <span class="kw-2">&amp;</span>CCodec::raw(),
+<a href=#4315 id=4315 data-nosnippet>4315</a>            <span class="string">"f"</span>,
+<a href=#4316 id=4316 data-nosnippet>4316</a>            <span class="kw-2">&amp;</span><span class="kw">crate</span>::COutput::Leaf(COutputLeafOp::Value),
+<a href=#4317 id=4317 data-nosnippet>4317</a>            <span class="kw-2">&amp;</span>(),
+<a href=#4318 id=4318 data-nosnippet>4318</a>        )
+<a href=#4319 id=4319 data-nosnippet>4319</a>        .unwrap();
+<a href=#4320 id=4320 data-nosnippet>4320</a>        flat.function_mut(<span class="string">"f"</span>)
+<a href=#4321 id=4321 data-nosnippet>4321</a>            .unwrap()
+<a href=#4322 id=4322 data-nosnippet>4322</a>            .ret
+<a href=#4323 id=4323 data-nosnippet>4323</a>            .slot
+<a href=#4324 id=4324 data-nosnippet>4324</a>            .as_mut()
+<a href=#4325 id=4325 data-nosnippet>4325</a>            .unwrap()
+<a href=#4326 id=4326 data-nosnippet>4326</a>            .fallible = <span class="bool-val">true</span>;
+<a href=#4327 id=4327 data-nosnippet>4327</a>        <span class="macro">assert!</span>(Cbindgen::new(flat.clone())
+<a href=#4328 id=4328 data-nosnippet>4328</a>            .build()
+<a href=#4329 id=4329 data-nosnippet>4329</a>            .err()
+<a href=#4330 id=4330 data-nosnippet>4330</a>            .unwrap()
+<a href=#4331 id=4331 data-nosnippet>4331</a>            .contains(<span class="string">".panic()"</span>));
+<a href=#4332 id=4332 data-nosnippet>4332</a>        Cbindgen::new(flat)
+<a href=#4333 id=4333 data-nosnippet>4333</a>            .function(<span class="macro">fun!</span>(f))
+<a href=#4334 id=4334 data-nosnippet>4334</a>            .panic()
+<a href=#4335 id=4335 data-nosnippet>4335</a>            .build()
+<a href=#4336 id=4336 data-nosnippet>4336</a>            .unwrap();
+<a href=#4337 id=4337 data-nosnippet>4337</a>    }
+<a href=#4338 id=4338 data-nosnippet>4338</a>}
+<a href=#4339 id=4339 data-nosnippet>4339</a>
+<a href=#4340 id=4340 data-nosnippet>4340</a><span class="kw">fn </span>takes_input_owners(node: <span class="kw-2">&amp;</span>prebindgen_flat::WireNode&lt;CWire, CChain, CBranch&gt;) -&gt; bool {
+<a href=#4341 id=4341 data-nosnippet>4341</a>    prebindgen_flat::wire_definitions(std::iter::once(node)).any(|w| <span class="kw">match </span><span class="kw-2">&amp;</span>w.kind {
+<a href=#4342 id=4342 data-nosnippet>4342</a>        CWire::Pointer { pointer, .. } =&gt; pointer.access == Access::Move,
+<a href=#4343 id=4343 data-nosnippet>4343</a>        CWire::Owned { access, .. } =&gt; <span class="kw-2">*</span>access == Access::Move,
+<a href=#4344 id=4344 data-nosnippet>4344</a>        CWire::Callback { .. } =&gt; <span class="bool-val">true</span>,
+<a href=#4345 id=4345 data-nosnippet>4345</a>        CWire::Tagged { value, .. } =&gt; value.owned,
+<a href=#4346 id=4346 data-nosnippet>4346</a>        <span class="kw">_ </span>=&gt; <span class="bool-val">false</span>,
+<a href=#4347 id=4347 data-nosnippet>4347</a>    })
+<a href=#4348 id=4348 data-nosnippet>4348</a>}
+<a href=#4349 id=4349 data-nosnippet>4349</a>
+<a href=#4350 id=4350 data-nosnippet>4350</a><span class="attr">#[cfg(test)]
+<a href=#4351 id=4351 data-nosnippet>4351</a></span><span class="kw">mod </span>input_contract_tests;
+<a href=#4352 id=4352 data-nosnippet>4352</a>
+<a href=#4353 id=4353 data-nosnippet>4353</a><span class="attr">#[cfg(test)]
+<a href=#4354 id=4354 data-nosnippet>4354</a></span><span class="kw">mod </span>canonical_tests;
+<a href=#4355 id=4355 data-nosnippet>4355</a>
+<a href=#4356 id=4356 data-nosnippet>4356</a><span class="attr">#[cfg(test)]
+<a href=#4357 id=4357 data-nosnippet>4357</a></span><span class="kw">mod </span>resolved_arrow_tests {
+<a href=#4358 id=4358 data-nosnippet>4358</a>    <span class="kw">use super</span>::<span class="kw-2">*</span>;
+<a href=#4359 id=4359 data-nosnippet>4359</a>    <span class="kw">use </span>prebindgen_declarations::compile_input;
+<a href=#4360 id=4360 data-nosnippet>4360</a>
+<a href=#4361 id=4361 data-nosnippet>4361</a>    <span class="attr">#[test]
+<a href=#4362 id=4362 data-nosnippet>4362</a>    </span><span class="kw">fn </span>a_manually_edited_arrow_reports_wrong_arity_without_panicking() {
+<a href=#4363 id=4363 data-nosnippet>4363</a>        <span class="kw">let </span>items = syn::parse_file(<span class="string">"pub fn take(cb:impl Fn(i64)-&gt;i64){}"</span>)
+<a href=#4364 id=4364 data-nosnippet>4364</a>            .unwrap()
+<a href=#4365 id=4365 data-nosnippet>4365</a>            .items;
+<a href=#4366 id=4366 data-nosnippet>4366</a>        <span class="kw">let </span>flat = CBindings::parse(items.into_iter().map(|i| (i, Default::default()))).unwrap();
+<a href=#4367 id=4367 data-nosnippet>4367</a>        <span class="kw">let </span>defaults = DeclCDefaults::new(<span class="kw-2">&amp;</span>flat, <span class="macro">vec!</span>[], <span class="macro">vec!</span>[], <span class="macro">vec!</span>[]).unwrap();
+<a href=#4368 id=4368 data-nosnippet>4368</a>        <span class="kw">let </span>ty = <span class="kw-2">&amp;</span>flat.function(<span class="string">"take"</span>).unwrap().params[<span class="number">0</span>].ty.ty;
+<a href=#4369 id=4369 data-nosnippet>4369</a>        <span class="kw">let </span><span class="kw-2">mut </span>recipe = defaults
+<a href=#4370 id=4370 data-nosnippet>4370</a>            .resolve_input(<span class="kw-2">&amp;</span>flat, <span class="kw-2">&amp;</span>CCodec::declared(), ty, <span class="kw-2">&amp;</span>CInput::auto(), <span class="kw-2">&amp;</span>())
+<a href=#4371 id=4371 data-nosnippet>4371</a>            .unwrap();
+<a href=#4372 id=4372 data-nosnippet>4372</a>        <span class="kw">let </span>operations::CInput::Arrow { domain, .. } = <span class="kw-2">&amp;mut </span>recipe <span class="kw">else </span>{
+<a href=#4373 id=4373 data-nosnippet>4373</a>            <span class="macro">panic!</span>(<span class="string">"expected arrow"</span>)
+<a href=#4374 id=4374 data-nosnippet>4374</a>        };
+<a href=#4375 id=4375 data-nosnippet>4375</a>        <span class="kw-2">**</span>domain = operations::COutput::None;
+<a href=#4376 id=4376 data-nosnippet>4376</a>        <span class="kw">let </span>error =
+<a href=#4377 id=4377 data-nosnippet>4377</a>            compile_input(<span class="kw-2">&amp;</span>flat, <span class="kw-2">&amp;</span>CCodec::declared(), <span class="string">"take"</span>, <span class="string">"cb"</span>, <span class="kw-2">&amp;</span>recipe, <span class="kw-2">&amp;</span>()).unwrap_err();
+<a href=#4378 id=4378 data-nosnippet>4378</a>        <span class="macro">assert!</span>(error.contains(<span class="string">"domain arity"</span>), <span class="string">"{error}"</span>);
+<a href=#4379 id=4379 data-nosnippet>4379</a>    }
+<a href=#4380 id=4380 data-nosnippet>4380</a>}
+<a href=#4381 id=4381 data-nosnippet>4381</a>
+<a href=#4382 id=4382 data-nosnippet>4382</a><span class="kw">mod </span>compilation;
+<a href=#4383 id=4383 data-nosnippet>4383</a><span class="doccomment">/// Resolved conversion operations interpreted by this adapter.
+<a href=#4384 id=4384 data-nosnippet>4384</a></span><span class="kw">pub mod </span>operations;
+<a href=#4385 id=4385 data-nosnippet>4385</a>
+<a href=#4386 id=4386 data-nosnippet>4386</a><span class="kw">pub use </span>operations::{
+<a href=#4387 id=4387 data-nosnippet>4387</a>    CInput, CInputBranch, CInputLeafOp, CInputOps, CInputUnary, COutput, COutputBranch,
+<a href=#4388 id=4388 data-nosnippet>4388</a>    COutputLeafOp, COutputOps, COutputUnary,
+<a href=#4389 id=4389 data-nosnippet>4389</a>};
+<a href=#4390 id=4390 data-nosnippet>4390</a>
+<a href=#4391 id=4391 data-nosnippet>4391</a><span class="kw">mod </span>declarations;
+<a href=#4392 id=4392 data-nosnippet>4392</a><span class="kw">pub use </span>declarations::<span class="kw-2">*</span>;
+<a href=#4393 id=4393 data-nosnippet>4393</a>
+<a href=#4394 id=4394 data-nosnippet>4394</a><span class="attr">#[macro_export]
+<a href=#4395 id=4395 data-nosnippet>4395</a></span><span class="doccomment">/// Select a source function and configure its binding in this adapter.
+<a href=#4396 id=4396 data-nosnippet>4396</a></span><span class="macro">macro_rules!</span> fun {
+<a href=#4397 id=4397 data-nosnippet>4397</a>    (<span class="macro-nonterminal">$name</span>:ident) =&gt; {
+<a href=#4398 id=4398 data-nosnippet>4398</a>        <span class="macro-nonterminal">$crate::DeclCFunction::new</span>(
+<a href=#4399 id=4399 data-nosnippet>4399</a>            <span class="macro-nonterminal">$crate::__declaration_ident</span>(<span class="macro">stringify!</span>(<span class="macro-nonterminal">$name</span>)).expect(<span class="string">"source identifier"</span>),
+<a href=#4400 id=4400 data-nosnippet>4400</a>        )
+<a href=#4401 id=4401 data-nosnippet>4401</a>    };
+<a href=#4402 id=4402 data-nosnippet>4402</a>}
+<a href=#4403 id=4403 data-nosnippet>4403</a>
+<a href=#4404 id=4404 data-nosnippet>4404</a><span class="doccomment">/// Traits for constructing and inspecting this adapter's conversion trees.
+<a href=#4405 id=4405 data-nosnippet>4405</a></span><span class="kw">pub mod </span>prelude {
+<a href=#4406 id=4406 data-nosnippet>4406</a>    <span class="kw">pub use crate</span>::{CInputExt, CInputRequests, COutputExt, COutputRequests};
+<a href=#4407 id=4407 data-nosnippet>4407</a>}
+<a href=#4408 id=4408 data-nosnippet>4408</a>
+<a href=#4409 id=4409 data-nosnippet>4409</a><span class="doccomment">/// The C adapter has no bulk transport, including in callback-delivery variants.
+<a href=#4410 id=4410 data-nosnippet>4410</a>/// ```compile_fail
+<a href=#4411 id=4411 data-nosnippet>4411</a>/// use prebindgen_c::{CInput, COutput, expand_return, fun};
+<a href=#4412 id=4412 data-nosnippet>4412</a>/// let _ = fun!(rows).callback_return_only().expand_return(expand_return!(i64).field_self().bulk());
+<a href=#4413 id=4413 data-nosnippet>4413</a>/// ```
+<a href=#4414 id=4414 data-nosnippet>4414</a>/// ```compile_fail
+<a href=#4415 id=4415 data-nosnippet>4415</a>/// use prebindgen_c::{CInput, prelude::*};
+<a href=#4416 id=4416 data-nosnippet>4416</a>/// let _ = CInput::auto().bulk();
+<a href=#4417 id=4417 data-nosnippet>4417</a>/// ```
+<a href=#4418 id=4418 data-nosnippet>4418</a>/// ```compile_fail
+<a href=#4419 id=4419 data-nosnippet>4419</a>/// use prebindgen_c::{COutput, prelude::*};
+<a href=#4420 id=4420 data-nosnippet>4420</a>/// let _ = COutput::auto().bulk();
+<a href=#4421 id=4421 data-nosnippet>4421</a>/// ```
+<a href=#4422 id=4422 data-nosnippet>4422</a></span><span class="kw">const _</span>: () = ();
+<a href=#4423 id=4423 data-nosnippet>4423</a>
+<a href=#4424 id=4424 data-nosnippet>4424</a><span class="attr">#[cfg(test)]
+<a href=#4425 id=4425 data-nosnippet>4425</a></span><span class="kw">mod </span>structural_tests;
 </code></pre></div></section></main></body></html>

@@ -10,7 +10,7 @@
 <a href=#10 id=10 data-nosnippet>10</a></span><span class="kw">pub struct </span>CallbackOperation&lt;Extension = std::convert::Infallible&gt; {
 <a href=#11 id=11 data-nosnippet>11</a>    <span class="doccomment">/// Adapter-specific callback settings retained in the resolved tree.
 <a href=#12 id=12 data-nosnippet>12</a>    </span><span class="kw">pub </span>extension: <span class="prelude-ty">Option</span>&lt;Extension&gt;,
-<a href=#13 id=13 data-nosnippet>13</a>    <span class="doccomment">/// Canonical source callback signature, excluding marker bounds.
+<a href=#13 id=13 data-nosnippet>13</a>    <span class="doccomment">/// Source callback signature; canonicalized when the request resolves.
 <a href=#14 id=14 data-nosnippet>14</a>    </span><span class="kw">pub </span>ty: Type,
 <a href=#15 id=15 data-nosnippet>15</a>    <span class="doccomment">/// Literal foreign interface name, if explicitly selected.
 <a href=#16 id=16 data-nosnippet>16</a>    </span><span class="kw">pub </span>foreign: <span class="prelude-ty">Option</span>&lt;String&gt;,
@@ -134,22 +134,54 @@
 <a href=#134 id=134 data-nosnippet>134</a>    </span>}
 <a href=#135 id=135 data-nosnippet>135</a>}
 <a href=#136 id=136 data-nosnippet>136</a>
-<a href=#137 id=137 data-nosnippet>137</a><span class="kw">impl</span>&lt;I: <span class="kw">crate</span>::InputOps, O: <span class="kw">crate</span>::OutputOps, IR, OR, Extension&gt;
-<a href=#138 id=138 data-nosnippet>138</a>    From&lt;DeclCallback&lt;<span class="kw">crate</span>::InputNode&lt;I, O, IR, OR&gt;, <span class="kw">crate</span>::OutputNode&lt;I, O, IR, OR&gt;, Extension&gt;&gt;
-<a href=#139 id=139 data-nosnippet>139</a>    <span class="kw">for </span><span class="kw">crate</span>::InputNode&lt;I, O, IR, OR&gt;
-<a href=#140 id=140 data-nosnippet>140</a><span class="kw">where
-<a href=#141 id=141 data-nosnippet>141</a>    </span>IR: From&lt;
-<a href=#142 id=142 data-nosnippet>142</a>        DeclCallback&lt;<span class="kw">crate</span>::InputNode&lt;I, O, IR, OR&gt;, <span class="kw">crate</span>::OutputNode&lt;I, O, IR, OR&gt;, Extension&gt;,
-<a href=#143 id=143 data-nosnippet>143</a>    &gt;,
-<a href=#144 id=144 data-nosnippet>144</a>{
-<a href=#145 id=145 data-nosnippet>145</a>    <span class="kw">fn </span>from(
-<a href=#146 id=146 data-nosnippet>146</a>        declaration: DeclCallback&lt;
-<a href=#147 id=147 data-nosnippet>147</a>            <span class="kw">crate</span>::InputNode&lt;I, O, IR, OR&gt;,
-<a href=#148 id=148 data-nosnippet>148</a>            <span class="kw">crate</span>::OutputNode&lt;I, O, IR, OR&gt;,
-<a href=#149 id=149 data-nosnippet>149</a>            Extension,
-<a href=#150 id=150 data-nosnippet>150</a>        &gt;,
-<a href=#151 id=151 data-nosnippet>151</a>    ) -&gt; <span class="self">Self </span>{
-<a href=#152 id=152 data-nosnippet>152</a>        <span class="self">Self</span>::Request(declaration.into())
-<a href=#153 id=153 data-nosnippet>153</a>    }
-<a href=#154 id=154 data-nosnippet>154</a>}
+<a href=#137 id=137 data-nosnippet>137</a><span class="doccomment">/// Metadata for a callback whose explicit conversions live on structural tree edges.
+<a href=#138 id=138 data-nosnippet>138</a></span><span class="attr">#[derive(Clone, Debug)]
+<a href=#139 id=139 data-nosnippet>139</a></span><span class="kw">pub struct </span>CallbackRequest&lt;Extension = std::convert::Infallible&gt; {
+<a href=#140 id=140 data-nosnippet>140</a>    <span class="doccomment">/// Source identity, foreign placement and adapter settings.
+<a href=#141 id=141 data-nosnippet>141</a>    </span><span class="kw">pub </span>operation: CallbackOperation&lt;Extension&gt;,
+<a href=#142 id=142 data-nosnippet>142</a>    <span class="doccomment">/// Source argument indices corresponding to the domain's explicit children.
+<a href=#143 id=143 data-nosnippet>143</a>    </span><span class="kw">pub </span>arguments: Vec&lt;usize&gt;,
+<a href=#144 id=144 data-nosnippet>144</a>}
+<a href=#145 id=145 data-nosnippet>145</a><span class="doccomment">/// Adapter construction of a retained callback's complete input tree.
+<a href=#146 id=146 data-nosnippet>146</a>/// This bridge permits the shared declaration's `Into&lt;InputNode&gt;` implementation
+<a href=#147 id=147 data-nosnippet>147</a>/// while the adapter selects its own operation and grouping metadata.
+<a href=#148 id=148 data-nosnippet>148</a></span><span class="kw">pub trait </span>CallbackInput&lt;InTree, OutTree, Extension = std::convert::Infallible&gt; {
+<a href=#149 id=149 data-nosnippet>149</a>    <span class="doccomment">/// Put explicit argument/result recipes on structural edges, preserving type scope.
+<a href=#150 id=150 data-nosnippet>150</a>    </span><span class="kw">fn </span>callback_input(declaration: DeclCallback&lt;InTree, OutTree, Extension&gt;) -&gt; InTree;
+<a href=#151 id=151 data-nosnippet>151</a>}
+<a href=#152 id=152 data-nosnippet>152</a><span class="doccomment">/// Assemble a callback declaration using the adapter's structural node constructors.
+<a href=#153 id=153 data-nosnippet>153</a></span><span class="kw">pub fn </span>callback_input&lt;I, O, E&gt;(
+<a href=#154 id=154 data-nosnippet>154</a>    declaration: DeclCallback&lt;I, O, E&gt;,
+<a href=#155 id=155 data-nosnippet>155</a>    auto: <span class="kw">impl </span>FnOnce() -&gt; I,
+<a href=#156 id=156 data-nosnippet>156</a>    arguments: <span class="kw">impl </span>FnOnce(Vec&lt;O&gt;) -&gt; O,
+<a href=#157 id=157 data-nosnippet>157</a>    arrow: <span class="kw">impl </span>FnOnce(CallbackRequest&lt;E&gt;, O, I) -&gt; I,
+<a href=#158 id=158 data-nosnippet>158</a>    typed: <span class="kw">impl </span>FnOnce(Type, I) -&gt; I,
+<a href=#159 id=159 data-nosnippet>159</a>) -&gt; I {
+<a href=#160 id=160 data-nosnippet>160</a>    <span class="kw">let </span>ty = declaration.ty;
+<a href=#161 id=161 data-nosnippet>161</a>    <span class="kw">let </span>explicit_return = declaration.ret.is_some();
+<a href=#162 id=162 data-nosnippet>162</a>    <span class="kw">let </span>(indices, children) = declaration.params.into_iter().unzip();
+<a href=#163 id=163 data-nosnippet>163</a>    <span class="kw">let </span>metadata = CallbackRequest {
+<a href=#164 id=164 data-nosnippet>164</a>        operation: CallbackOperation {
+<a href=#165 id=165 data-nosnippet>165</a>            ty: ty.clone(),
+<a href=#166 id=166 data-nosnippet>166</a>            foreign: declaration.foreign,
+<a href=#167 id=167 data-nosnippet>167</a>            namespace: declaration.namespace,
+<a href=#168 id=168 data-nosnippet>168</a>            extension: declaration.extension,
+<a href=#169 id=169 data-nosnippet>169</a>            explicit_return,
+<a href=#170 id=170 data-nosnippet>170</a>        },
+<a href=#171 id=171 data-nosnippet>171</a>        arguments: indices,
+<a href=#172 id=172 data-nosnippet>172</a>    };
+<a href=#173 id=173 data-nosnippet>173</a>    <span class="kw">let </span>domain = arguments(children);
+<a href=#174 id=174 data-nosnippet>174</a>    <span class="kw">let </span>codomain = declaration.ret.unwrap_or_else(auto);
+<a href=#175 id=175 data-nosnippet>175</a>    typed(ty, arrow(metadata, domain, codomain))
+<a href=#176 id=176 data-nosnippet>176</a>}
+<a href=#177 id=177 data-nosnippet>177</a><span class="kw">impl</span>&lt;I: <span class="kw">crate</span>::InputOps, O: <span class="kw">crate</span>::OutputOps, IR, OR, E&gt;
+<a href=#178 id=178 data-nosnippet>178</a>    From&lt;DeclCallback&lt;<span class="kw">crate</span>::InputNode&lt;I, O, IR, OR&gt;, <span class="kw">crate</span>::OutputNode&lt;I, O, IR, OR&gt;, E&gt;&gt;
+<a href=#179 id=179 data-nosnippet>179</a>    <span class="kw">for </span><span class="kw">crate</span>::InputNode&lt;I, O, IR, OR&gt;
+<a href=#180 id=180 data-nosnippet>180</a><span class="kw">where
+<a href=#181 id=181 data-nosnippet>181</a>    </span>IR: CallbackInput&lt;<span class="kw">crate</span>::InputNode&lt;I, O, IR, OR&gt;, <span class="kw">crate</span>::OutputNode&lt;I, O, IR, OR&gt;, E&gt;,
+<a href=#182 id=182 data-nosnippet>182</a>{
+<a href=#183 id=183 data-nosnippet>183</a>    <span class="kw">fn </span>from(declaration: DeclCallback&lt;<span class="self">Self</span>, <span class="kw">crate</span>::OutputNode&lt;I, O, IR, OR&gt;, E&gt;) -&gt; <span class="self">Self </span>{
+<a href=#184 id=184 data-nosnippet>184</a>        IR::callback_input(declaration)
+<a href=#185 id=185 data-nosnippet>185</a>    }
+<a href=#186 id=186 data-nosnippet>186</a>}
 </code></pre></div></section></main></body></html>
