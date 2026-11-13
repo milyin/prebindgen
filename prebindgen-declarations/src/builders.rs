@@ -48,13 +48,13 @@ impl<T> DeclInputAlternatives<T> {
 
 /// A source type's input alternatives, with optional adapter-defined settings.
 /// The adapter supplies node constructors; the fluent declaration logic is shared.
-pub struct DeclExpandParam<In, Function, Extension = Infallible> {
+pub struct DeclExpandParam<In, FunctionDecl, Extension = Infallible> {
     /// Source type targeted by this default or occurrence override.
     pub ty: Type,
     /// Adapter-defined settings; absent until explicitly configured.
     pub extension: Option<Extension>,
     input: DeclInputAlternatives<In>,
-    constructor: fn(Function) -> In,
+    constructor: fn(FunctionDecl) -> In,
     direct: fn() -> In,
     finish: fn(Type, DeclInputAlternatives<In>, Option<Extension>) -> In,
 }
@@ -132,13 +132,13 @@ impl<I: InputOps, O: OutputOps, IR, OR, F, E> From<DeclExpandParam<InputNode<I, 
 }
 
 /// Simultaneous observations of a source return value, with adapter-defined settings.
-pub struct DeclExpandReturn<Out, Function, Extension = Infallible> {
+pub struct DeclExpandReturn<Out, FunctionDecl, Extension = Infallible> {
     /// Source type targeted by this default or occurrence override.
     pub ty: Type,
     /// Adapter-defined settings; absent until explicitly configured.
     pub extension: Option<Extension>,
     views: Vec<Out>,
-    getter: fn(Function) -> Out,
+    getter: fn(FunctionDecl) -> Out,
     direct: fn() -> Out,
     projected: fn(Projection) -> Out,
     owned_fields: fn(Out) -> Out,
@@ -324,11 +324,11 @@ pub fn getter_view<I, O, E>(
 
 /// A source-error mapping with an adapter's function reference and optional settings.
 #[derive(Clone, Debug)]
-pub struct DeclError<Function, Extension = Infallible> {
+pub struct DeclError<FunctionDecl, Extension = Infallible> {
     /// Source error type.
     pub ty: Type,
     /// Source helper taking E or &E and returning String.
-    pub mapper: Function,
+    pub mapper: FunctionDecl,
     /// Adapter-defined error delivery settings.
     pub extension: Option<Extension>,
 }
@@ -353,13 +353,13 @@ impl<F, E> DeclError<F, E> {
 
 /// Register an input expansion, output expansion or source-error mapping.
 #[derive(Clone, Debug)]
-pub enum DeclExpand<Param, Return, Error> {
+pub enum DeclExpand<ParamDecl, ReturnDecl, ErrorDecl> {
     /// Input alternatives.
-    Param(Param),
+    Param(ParamDecl),
     /// Simultaneous output views.
-    Return(Return),
+    Return(ReturnDecl),
     /// Source-error mapping.
-    Error(Box<Error>),
+    Error(Box<ErrorDecl>),
 }
 impl<I, F, E, R, X> From<DeclExpandParam<I, F, E>> for DeclExpand<DeclExpandParam<I, F, E>, R, X> {
     fn from(value: DeclExpandParam<I, F, E>) -> Self {

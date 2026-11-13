@@ -79,16 +79,15 @@ callbacks instead of a trait describing every supported operation.
 | `input_children` / `output_children` | Traverse structural children across arrow directions | Adapter-specific source-reference handling |
 
 The declaration family is generic over the adapter's tree types and extension
-settings. `DeclExpandParam<In, Function, Extension>`,
-`DeclExpandReturn<Out, Function, Extension>` and `DeclFields<Out, Extension>` own
-the complete fluent API. `DeclExpand<Param, Return, Error>` is their common
+settings. `DeclExpandParam<In, FunctionDecl, Extension>`,
+`DeclExpandReturn<Out, FunctionDecl, Extension>` and `DeclFields<Out, Extension>` own
+the complete fluent API. `DeclExpand<ParamDecl, ReturnDecl, ErrorDecl>` is their common
 registration enum. C and JNI provide aliases and small factory functions that
 supply node constructors. An adapter should also expose its own `fun!` macro
 using its concrete function alias, including that alias's extension type, as C
 and JNI already do. The shared `fun!` starts with no extension type;
 `with_extension(options)` can attach settings explicitly. Expansion factories
-are also available as `expand_param`,
-`expand_return` and `fields`, alongside the familiar macros of the same names.
+are also available as `expand_param`, `expand_return` and `fields`, alongside the familiar macros of the same names.
 An adapter's aliases cannot add inherent methods to shared Rust types; JNI adds
 `bulk()` with `JniBulkExpansion`, exported by its `prelude`.
 
@@ -96,7 +95,7 @@ Each declaration carries an optional adapter-defined `extension`. The default
 extension type is `Infallible`, so adapters without additional settings have no
 extension values to configure. The same extension mechanism exists on
 `DeclFunction<In, Out, Extension>`, `DeclCallback<In, Out, Extension>`,
-`DeclError<Function, Extension>` and `DeclConvert<Extension>`. Common fluent
+`DeclError<FunctionDecl, Extension>` and `DeclConvert<Extension>`. Common fluent
 methods retain these options. An adapter adds its own fluent methods through a
 local extension trait and interprets the settings when resolving or constructing
 its tree. It can put the resulting policy in its own operations or Flat metadata;
