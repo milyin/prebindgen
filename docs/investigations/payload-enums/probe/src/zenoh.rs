@@ -157,7 +157,7 @@ pub fn run() -> Result<()> {
             .set_package_prefix("example")
             .expand(expand_return!(NativePayload).field(fun!(payload_size)))
             .expand(expand_return!(Envelope).view(JniOutput::Branch {
-                operation: (prebindgen_jni::JniOutputBranch::OwnedFields).into(),
+                operation: prebindgen_jni::JniOutputBranch::OwnedFields,
                 children: vec![JniOutput::auto()],
             }))
     };

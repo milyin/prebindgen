@@ -630,7 +630,7 @@ impl JniGenBuilder {
             };
             callback::validate_source_occurrence(
                 &flat,
-                configuration.resolved(),
+                configuration.bound_callback()?,
                 &callback_sources,
             )?;
             flat.metadata.callback_recipes.push(recipe);
@@ -854,7 +854,7 @@ impl Codec for JniCodec {
             let plan = prebindgen_declarations::compile_input_value(
                 flat,
                 self,
-                &operation.resolved().ty,
+                &operation.bound_callback()?.ty,
                 &recipe,
                 &(),
             )?;
@@ -2516,7 +2516,7 @@ mod compilation;
 pub mod operations;
 
 pub use operations::{
-    JniInput, JniInputBranch, JniInputLeafOp, JniInputOps, JniInputUnary, JniOutput,
+    JniInput, JniInputArrow, JniInputBranch, JniInputLeafOp, JniInputOps, JniInputUnary, JniOutput,
     JniOutputBranch, JniOutputLeafOp, JniOutputOps, JniOutputUnary,
 };
 

@@ -6,10 +6,10 @@ use prebindgen_c::{
 use prebindgen_declarations::SequenceDelivery;
 fn rows(element: COutput<CInputRequest, COutputRequest>) -> COutput<CInputRequest, COutputRequest> {
     COutput::Unary {
-        operation: (COutputUnary::Sequence {
+        operation: COutputUnary::Sequence {
             delivery: SequenceDelivery::Value,
             mode: None,
-        }).into(),
+        },
         child: Box::new(element),
     }
 }

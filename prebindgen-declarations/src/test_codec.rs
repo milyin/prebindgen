@@ -44,7 +44,7 @@ impl Consumes for TestOutput {
     ) -> bool {
         match self {
             TestOutput::Unary {
-                operation: crate::Operation::Resolved(TestOutputUnary::Convert { conversion, .. }),
+                operation: TestOutputUnary::Convert { conversion, .. },
                 ..
             } => match &conversion.source {
                 prebindgen_flat::ValueSource::Function(name) => {
@@ -57,23 +57,23 @@ impl Consumes for TestOutput {
                 prebindgen_flat::ValueSource::Into { .. } => true,
             },
             TestOutput::Unary {
-                operation: crate::Operation::Resolved(TestOutputUnary::Sequence { mode, .. }),
+                operation: TestOutputUnary::Sequence { mode, .. },
                 ..
             } => match mode {
                 Some(mode) => *mode == ProjectionMode::Owned,
                 None => !borrowed && sequence_parts(ty).is_some_and(|(_, view)| view.is_owned()),
             },
             TestOutput::Unary {
-                operation: crate::Operation::Resolved(TestOutputUnary::Bulk),
+                operation: TestOutputUnary::Bulk,
                 child,
             } => child.consumes(flat, ty, extra, codec, borrowed),
             TestOutput::Unary {
-                operation: crate::Operation::Resolved(TestOutputUnary::Named { .. }),
+                operation: TestOutputUnary::Named { .. },
                 child,
                 ..
             } => child.consumes(flat, ty, extra, codec, borrowed),
             TestOutput::Unary {
-                operation: crate::Operation::Resolved(TestOutputUnary::Optional),
+                operation: TestOutputUnary::Optional,
                 child,
             } => child.consumes(flat, option_inner(ty).unwrap_or(ty), extra, codec, borrowed),
             TestOutput::Leaf(TestOutputLeafOp::Value) => {
@@ -81,32 +81,32 @@ impl Consumes for TestOutput {
             }
             TestOutput::Leaf(TestOutputLeafOp::Projected(p)) => p.mode == ProjectionMode::Owned,
             TestOutput::Branch {
-                operation: crate::Operation::Resolved(TestOutputBranch::OwnedFields),
+                operation: TestOutputBranch::OwnedFields,
                 children: _,
             }
             | TestOutput::Unary {
-                operation: crate::Operation::Resolved(TestOutputUnary::Into { .. }),
+                operation: TestOutputUnary::Into { .. },
                 ..
             }
             | TestOutput::Unary {
-                operation: crate::Operation::Resolved(TestOutputUnary::Result { .. }),
+                operation: TestOutputUnary::Result { .. },
                 ..
             } => true,
             TestOutput::Branch {
-                operation: crate::Operation::Resolved(TestOutputBranch::Record { mode, .. }),
+                operation: TestOutputBranch::Record { mode, .. },
                 ..
             } => mode.map_or(!borrowed && output_referent(ty).is_none(), |m| {
                 m == ProjectionMode::Owned
             }),
             TestOutput::Branch {
-                operation: crate::Operation::Resolved(TestOutputBranch::Enum { mode, .. }),
+                operation: TestOutputBranch::Enum { mode, .. },
                 ..
             } => mode.map_or(!borrowed && output_referent(ty).is_none(), |m| {
                 m == ProjectionMode::Owned
             }),
             TestOutput::Request(never) => match *never {},
             TestOutput::Branch {
-                operation: crate::Operation::Resolved(TestOutputBranch::Combine),
+                operation: TestOutputBranch::Combine,
                 children: p,
             } => p
                 .iter()
@@ -151,11 +151,11 @@ impl<C: Codec<InOps = TestInputOps, OutOps = TestOutputOps, CompileState = TestC
         match recipe {
             TestInput::None => self.cx.input_unit(ty),
             TestInput::Branch {
-                operation: crate::Operation::Resolved(TestInputBranch::Variant),
+                operation: TestInputBranch::Variant,
                 ..
             } => Err("variant branch requires an enum parent".into()),
             TestInput::Branch {
-                operation: crate::Operation::Resolved(TestInputBranch::Enum { value }),
+                operation: TestInputBranch::Enum { value },
                 children: variants,
             } => self.cx.enum_input(
                 ty,
@@ -169,15 +169,15 @@ impl<C: Codec<InOps = TestInputOps, OutOps = TestOutputOps, CompileState = TestC
                 names,
             ),
             TestInput::Unary {
-                operation: crate::Operation::Resolved(TestInputUnary::Convert { conversion }),
+                operation: TestInputUnary::Convert { conversion },
                 child: input,
             } => self.input_conversion(ty, conversion, input, extra, active, names),
             TestInput::Unary {
-                operation: crate::Operation::Resolved(TestInputUnary::Temporary),
+                operation: TestInputUnary::Temporary,
                 child: inner,
             } => self.cx.input_temporary(ty, extra, active, names, inner),
             TestInput::Unary {
-                operation: crate::Operation::Resolved(TestInputUnary::Bulk),
+                operation: TestInputUnary::Bulk,
                 child: inner,
             } => {
                 require_bulk(self.codec, Direction::Input)?;
@@ -192,7 +192,7 @@ impl<C: Codec<InOps = TestInputOps, OutOps = TestOutputOps, CompileState = TestC
                     .bulk_input(self.flat, ty, extra, wire, child?, active)
             }
             TestInput::Arrow {
-                operation: crate::Operation::Resolved(callback),
+                operation: operation @ TestInputArrow::BoundCallback(callback),
                 domain,
                 codomain,
             } => {
@@ -204,7 +204,7 @@ impl<C: Codec<InOps = TestInputOps, OutOps = TestOutputOps, CompileState = TestC
                 }
                 self.codec.input_arrow(InputArrow {
                     flat: self.flat,
-                    operation: callback,
+                    operation,
                     domain,
                     codomain,
                     extra,
@@ -216,21 +216,21 @@ impl<C: Codec<InOps = TestInputOps, OutOps = TestOutputOps, CompileState = TestC
                 })
             }
             TestInput::Unary {
-                operation: crate::Operation::Resolved(TestInputUnary::Sequence),
+                operation: TestInputUnary::Sequence,
                 child: element_recipe,
             } => {
                 if !self.state.bulk.get() {
                     if let TestInput::Unary {
-                        operation: crate::Operation::Resolved(TestInputUnary::Bulk),
+                        operation: TestInputUnary::Bulk,
                         child: inner,
                     } = element_recipe.as_ref()
                     {
                         return self.input_named(
                             ty,
                             &TestInput::Unary {
-                                operation: (TestInputUnary::Bulk).into(),
+                                operation: TestInputUnary::Bulk,
                                 child: Box::new(TestInput::Unary {
-                                    operation: (TestInputUnary::Sequence).into(),
+                                    operation: TestInputUnary::Sequence,
                                     child: inner.clone(),
                                 }),
                             },
@@ -251,7 +251,7 @@ impl<C: Codec<InOps = TestInputOps, OutOps = TestOutputOps, CompileState = TestC
                 )
             }
             TestInput::Unary {
-                operation: crate::Operation::Resolved(TestInputUnary::Optional),
+                operation: TestInputUnary::Optional,
                 child: inner,
             } => self.cx.input_optional(ty, extra, active, names, var, inner),
             TestInput::Leaf(TestInputLeafOp::Value) => {
@@ -278,12 +278,24 @@ impl<C: Codec<InOps = TestInputOps, OutOps = TestOutputOps, CompileState = TestC
                 })
             }
             TestInput::Request(never) => match *never {},
+            TestInput::Unary {
+                operation: TestInputUnary::ForType { .. },
+                ..
+            }
+            | TestInput::Branch {
+                operation: TestInputBranch::EnumFields | TestInputBranch::VariantFields { .. },
+                ..
+            }
+            | TestInput::Arrow {
+                operation: TestInputArrow::Callback(_),
+                ..
+            } => Err("resolve source-dependent input operations before compilation".into()),
             TestInput::Branch {
-                operation: crate::Operation::Resolved(TestInputBranch::Fields),
+                operation: TestInputBranch::Fields,
                 children,
             }
             | TestInput::Branch {
-                operation: crate::Operation::Resolved(TestInputBranch::Record),
+                operation: TestInputBranch::Record,
                 children,
             } => self.cx.input_fields(
                 ty,
@@ -295,33 +307,21 @@ impl<C: Codec<InOps = TestInputOps, OutOps = TestOutputOps, CompileState = TestC
                 matches!(
                     recipe,
                     TestInput::Branch {
-                        operation: crate::Operation::Resolved(TestInputBranch::Record),
+                        operation: TestInputBranch::Record,
                         ..
                     }
                 ),
             ),
             TestInput::Branch {
-                operation: crate::Operation::Resolved(TestInputBranch::Constructor { function }),
+                operation: TestInputBranch::Constructor { function },
                 children: args,
             } => self
                 .cx
                 .input_constructor(ty, extra, active, var, function, args),
             TestInput::Branch {
-                operation: crate::Operation::Resolved(TestInputBranch::Selector),
+                operation: TestInputBranch::Selector,
                 children: arms,
             } => self.cx.input_selector(ty, extra, active, var, arms),
-            TestInput::Unary {
-                operation: crate::Operation::Request(never),
-                ..
-            }
-            | TestInput::Branch {
-                operation: crate::Operation::Request(never),
-                ..
-            }
-            | TestInput::Arrow {
-                operation: crate::Operation::Request(never),
-                ..
-            } => match *never {},
         }
     }
 
@@ -335,7 +335,7 @@ impl<C: Codec<InOps = TestInputOps, OutOps = TestOutputOps, CompileState = TestC
         reference_return: bool,
     ) -> Result<CodecOutputPlan<C>> {
         if let TestOutput::Unary {
-            operation: crate::Operation::Resolved(TestOutputUnary::Result { error }),
+            operation: TestOutputUnary::Result { error },
             child: ok,
         } = recipe
         {
@@ -362,7 +362,7 @@ impl<C: Codec<InOps = TestInputOps, OutOps = TestOutputOps, CompileState = TestC
         if !borrowed {
             if matches!(ty, Type::Reference(_)) {
                 if let TestOutput::Branch {
-                    operation: crate::Operation::Resolved(TestOutputBranch::Combine),
+                    operation: TestOutputBranch::Combine,
                     children: parts,
                 } = recipe
                 {
@@ -387,7 +387,7 @@ impl<C: Codec<InOps = TestInputOps, OutOps = TestOutputOps, CompileState = TestC
             if let (
                 Some(payload_ty),
                 TestOutput::Unary {
-                    operation: crate::Operation::Resolved(TestOutputUnary::Optional),
+                    operation: TestOutputUnary::Optional,
                     child: inner,
                 },
             ) = (option_inner(ty), recipe)
@@ -435,27 +435,25 @@ impl<C: Codec<InOps = TestInputOps, OutOps = TestOutputOps, CompileState = TestC
         let mut out = self.cx.empty_output()?;
         match recipe {
             TestOutput::Unary {
-                operation: crate::Operation::Resolved(TestOutputUnary::CallbackArgument { .. }),
+                operation: TestOutputUnary::CallbackArgument { .. },
                 ..
             } => return Err("callback argument ownership requires an arrow domain".into()),
             TestOutput::None => {
                 return self.cx.output_unit(ty, out);
             }
             TestOutput::Arrow {
-                operation: crate::Operation::Resolved(never),
-                ..
+                operation: never, ..
             } => match *never {},
             TestOutput::Branch {
-                operation:
-                    crate::Operation::Resolved(TestOutputBranch::Variant | TestOutputBranch::Arguments),
+                operation: TestOutputBranch::Variant | TestOutputBranch::Arguments,
                 ..
             } => return Err("variant/argument branch requires its parent operation".into()),
             TestOutput::Branch {
                 operation:
-                    crate::Operation::Resolved(TestOutputBranch::Enum {
+                    TestOutputBranch::Enum {
                         value: grouped,
                         mode,
-                    }),
+                    },
                 children: variants,
             } => {
                 return self.cx.enum_output(
@@ -473,11 +471,11 @@ impl<C: Codec<InOps = TestInputOps, OutOps = TestOutputOps, CompileState = TestC
                 );
             }
             TestOutput::Unary {
-                operation: crate::Operation::Resolved(TestOutputUnary::Convert { conversion }),
+                operation: TestOutputUnary::Convert { conversion },
                 child: output,
             } => return self.output_conversion(ty, conversion, output, extra, value, borrowed),
             TestOutput::Unary {
-                operation: crate::Operation::Resolved(TestOutputUnary::Bulk),
+                operation: TestOutputUnary::Bulk,
                 child: inner,
             } => {
                 require_bulk(self.codec, Direction::Output)?;
@@ -492,7 +490,7 @@ impl<C: Codec<InOps = TestInputOps, OutOps = TestOutputOps, CompileState = TestC
             }
             TestOutput::Leaf(TestOutputLeafOp::Discard) => return Ok(out),
             TestOutput::Unary {
-                operation: crate::Operation::Resolved(TestOutputUnary::Named { name }),
+                operation: TestOutputUnary::Named { name },
                 child: output,
             } => {
                 return self
@@ -500,7 +498,7 @@ impl<C: Codec<InOps = TestInputOps, OutOps = TestOutputOps, CompileState = TestC
                     .output_named_view(ty, extra, value, borrowed, wire_name, name, output);
             }
             TestOutput::Unary {
-                operation: crate::Operation::Resolved(TestOutputUnary::Sequence { delivery, mode }),
+                operation: TestOutputUnary::Sequence { delivery, mode },
                 child: element,
             } => {
                 if self.state.bulk.get() && *delivery == SequenceDelivery::Callback {
@@ -514,7 +512,7 @@ impl<C: Codec<InOps = TestInputOps, OutOps = TestOutputOps, CompileState = TestC
                     return self.output_named(
                         ty,
                         &TestOutput::Unary {
-                            operation: (TestOutputUnary::Bulk).into(),
+                            operation: TestOutputUnary::Bulk,
                             child: Box::new(recipe.clone()),
                         },
                         extra,
@@ -525,20 +523,19 @@ impl<C: Codec<InOps = TestInputOps, OutOps = TestOutputOps, CompileState = TestC
                 }
                 if !self.state.bulk.get() && *delivery != SequenceDelivery::Callback {
                     if let TestOutput::Unary {
-                        operation: crate::Operation::Resolved(TestOutputUnary::Bulk),
+                        operation: TestOutputUnary::Bulk,
                         child: inner,
                     } = element.as_ref()
                     {
                         return self.output_named(
                             ty,
                             &TestOutput::Unary {
-                                operation: (TestOutputUnary::Bulk).into(),
+                                operation: TestOutputUnary::Bulk,
                                 child: Box::new(TestOutput::Unary {
-                                    operation: (TestOutputUnary::Sequence {
+                                    operation: TestOutputUnary::Sequence {
                                         delivery: *delivery,
                                         mode: *mode,
-                                    })
-                                    .into(),
+                                    },
                                     child: inner.clone(),
                                 }),
                             },
@@ -566,13 +563,13 @@ impl<C: Codec<InOps = TestInputOps, OutOps = TestOutputOps, CompileState = TestC
                 return result;
             }
             TestOutput::Unary {
-                operation: crate::Operation::Resolved(TestOutputUnary::Result { .. }),
+                operation: TestOutputUnary::Result { .. },
                 ..
             } => {
                 return Err("Result error routing is supported only at the outermost return".into())
             }
             TestOutput::Unary {
-                operation: crate::Operation::Resolved(TestOutputUnary::Optional),
+                operation: TestOutputUnary::Optional,
                 child: inner,
             } => {
                 return self
@@ -580,6 +577,20 @@ impl<C: Codec<InOps = TestInputOps, OutOps = TestOutputOps, CompileState = TestC
                     .output_optional(ty, extra, value, borrowed, wire_name, inner);
             }
             TestOutput::Request(never) => match *never {},
+            TestOutput::Unary {
+                operation:
+                    TestOutputUnary::ForType { .. } | TestOutputUnary::SequenceCallback { .. },
+                ..
+            }
+            | TestOutput::Branch {
+                operation:
+                    TestOutputBranch::EnumFields
+                    | TestOutputBranch::VariantFields { .. }
+                    | TestOutputBranch::NamedFields { .. },
+                ..
+            } => {
+                return Err("resolve source-dependent output operations before compilation".into())
+            }
             TestOutput::Leaf(TestOutputLeafOp::Value) => {
                 let representation = if self.state.bulk.get() {
                     Representation::Bulk
@@ -607,32 +618,32 @@ impl<C: Codec<InOps = TestInputOps, OutOps = TestOutputOps, CompileState = TestC
                 );
             }
             TestOutput::Branch {
-                operation: crate::Operation::Resolved(TestOutputBranch::Fields),
+                operation: TestOutputBranch::Fields,
                 children,
             }
             | TestOutput::Branch {
-                operation: crate::Operation::Resolved(TestOutputBranch::OwnedFields),
+                operation: TestOutputBranch::OwnedFields,
                 children,
             }
             | TestOutput::Branch {
-                operation: crate::Operation::Resolved(TestOutputBranch::Record { .. }),
+                operation: TestOutputBranch::Record { .. },
                 children,
                 ..
             } => {
                 let grouped = matches!(
                     recipe,
                     TestOutput::Branch {
-                        operation: crate::Operation::Resolved(TestOutputBranch::Record { .. }),
+                        operation: TestOutputBranch::Record { .. },
                         ..
                     }
                 );
                 let owned = match recipe {
                     TestOutput::Branch {
-                        operation: crate::Operation::Resolved(TestOutputBranch::OwnedFields),
+                        operation: TestOutputBranch::OwnedFields,
                         ..
                     } => true,
                     TestOutput::Branch {
-                        operation: crate::Operation::Resolved(TestOutputBranch::Record { mode }),
+                        operation: TestOutputBranch::Record { mode },
                         ..
                     } => mode.map_or(!borrowed, |m| m == ProjectionMode::Owned),
                     _ => false,
@@ -640,9 +651,9 @@ impl<C: Codec<InOps = TestInputOps, OutOps = TestOutputOps, CompileState = TestC
                 let explicit_copy = matches!(
                     recipe,
                     TestOutput::Branch {
-                        operation: crate::Operation::Resolved(TestOutputBranch::Record {
+                        operation: TestOutputBranch::Record {
                             mode: Some(ProjectionMode::Borrowed)
-                        }),
+                        },
                         ..
                     }
                 );
@@ -660,17 +671,17 @@ impl<C: Codec<InOps = TestInputOps, OutOps = TestOutputOps, CompileState = TestC
                 );
             }
             TestOutput::Unary {
-                operation: crate::Operation::Resolved(TestOutputUnary::Getter { function }),
+                operation: TestOutputUnary::Getter { function },
                 child: output,
             }
             | TestOutput::Unary {
-                operation: crate::Operation::Resolved(TestOutputUnary::Into { function }),
+                operation: TestOutputUnary::Into { function },
                 child: output,
             } => {
                 let consuming = matches!(
                     recipe,
                     TestOutput::Unary {
-                        operation: crate::Operation::Resolved(TestOutputUnary::Into { .. }),
+                        operation: TestOutputUnary::Into { .. },
                         ..
                     }
                 );
@@ -679,7 +690,7 @@ impl<C: Codec<InOps = TestInputOps, OutOps = TestOutputOps, CompileState = TestC
                     .output_getter(ty, extra, value, borrowed, function, output, consuming, out);
             }
             TestOutput::Branch {
-                operation: crate::Operation::Resolved(TestOutputBranch::Combine),
+                operation: TestOutputBranch::Combine,
                 children: parts,
             } => {
                 if parts.is_empty() {
@@ -718,18 +729,6 @@ impl<C: Codec<InOps = TestInputOps, OutOps = TestOutputOps, CompileState = TestC
                     out.statements.extend(body);
                 }
             }
-            TestOutput::Unary {
-                operation: crate::Operation::Request(never),
-                ..
-            }
-            | TestOutput::Branch {
-                operation: crate::Operation::Request(never),
-                ..
-            }
-            | TestOutput::Arrow {
-                operation: crate::Operation::Request(never),
-                ..
-            } => match *never {},
         }
         Ok(out)
     }
@@ -764,7 +763,7 @@ impl<C: Codec<InOps = TestInputOps, OutOps = TestOutputOps, CompileState = TestC
             .iter()
             .map(|part| match part {
                 TestOutput::Unary {
-                    operation: crate::Operation::Resolved(TestOutputUnary::Getter { function }),
+                    operation: TestOutputUnary::Getter { function },
                     child,
                 } => Some((function.as_str(), child.as_ref())),
                 _ => None,

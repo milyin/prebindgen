@@ -3,8 +3,8 @@
 use crate::{CInputExt, COutputExt};
 
 use super::operations::{
-    CInput, CInputBranch, CInputLeafOp, CInputOps, CInputUnary, COutput, COutputBranch,
-    COutputLeafOp, COutputOps, COutputUnary,
+    CInput, CInputArrow, CInputBranch, CInputLeafOp, CInputOps, CInputUnary, COutput,
+    COutputBranch, COutputLeafOp, COutputOps, COutputUnary,
 };
 use prebindgen_declarations::*;
 use prebindgen_flat::{Flat, Result};
@@ -43,11 +43,7 @@ impl Consumes for COutput {
     ) -> bool {
         match self {
             COutput::Unary {
-                operation:
-                    prebindgen_declarations::Operation::Resolved(COutputUnary::Convert {
-                        conversion,
-                        ..
-                    }),
+                operation: COutputUnary::Convert { conversion, .. },
                 ..
             } => match &conversion.source {
                 prebindgen_flat::ValueSource::Function(name) => {
@@ -60,22 +56,19 @@ impl Consumes for COutput {
                 prebindgen_flat::ValueSource::Into { .. } => true,
             },
             COutput::Unary {
-                operation:
-                    prebindgen_declarations::Operation::Resolved(COutputUnary::Sequence {
-                        mode, ..
-                    }),
+                operation: COutputUnary::Sequence { mode, .. },
                 ..
             } => match mode {
                 Some(mode) => *mode == ProjectionMode::Owned,
                 None => !borrowed && sequence_parts(ty).is_some_and(|(_, view)| view.is_owned()),
             },
             COutput::Unary {
-                operation: prebindgen_declarations::Operation::Resolved(COutputUnary::Named { .. }),
+                operation: COutputUnary::Named { .. },
                 child,
                 ..
             } => child.consumes(flat, ty, extra, codec, borrowed),
             COutput::Unary {
-                operation: prebindgen_declarations::Operation::Resolved(COutputUnary::Optional),
+                operation: COutputUnary::Optional,
                 child,
             } => child.consumes(flat, option_inner(ty).unwrap_or(ty), extra, codec, borrowed),
             COutput::Leaf(COutputLeafOp::Value) => {
@@ -83,27 +76,26 @@ impl Consumes for COutput {
             }
             COutput::Leaf(COutputLeafOp::Projected(p)) => p.mode == ProjectionMode::Owned,
             COutput::Branch {
-                operation: prebindgen_declarations::Operation::Resolved(COutputBranch::OwnedFields),
+                operation: COutputBranch::OwnedFields,
                 children: _,
             }
             | COutput::Unary {
-                operation: prebindgen_declarations::Operation::Resolved(COutputUnary::Into { .. }),
+                operation: COutputUnary::Into { .. },
                 ..
             }
             | COutput::Unary {
-                operation: prebindgen_declarations::Operation::Resolved(COutputUnary::Result { .. }),
+                operation: COutputUnary::Result { .. },
                 ..
             } => true,
             COutput::Branch {
-                operation:
-                    prebindgen_declarations::Operation::Resolved(COutputBranch::Enum { mode, .. }),
+                operation: COutputBranch::Enum { mode, .. },
                 ..
             } => mode.map_or(!borrowed && output_referent(ty).is_none(), |m| {
                 m == ProjectionMode::Owned
             }),
             COutput::Request(never) => match *never {},
             COutput::Branch {
-                operation: prebindgen_declarations::Operation::Resolved(COutputBranch::Combine),
+                operation: COutputBranch::Combine,
                 children: p,
             } => p
                 .iter()
@@ -148,12 +140,11 @@ impl<C: Codec<InOps = CInputOps, OutOps = COutputOps, CompileState = CCompileSta
         match recipe {
             CInput::None => self.cx.input_unit(ty),
             CInput::Branch {
-                operation: prebindgen_declarations::Operation::Resolved(CInputBranch::Variant),
+                operation: CInputBranch::Variant,
                 ..
             } => Err("variant branch requires an enum parent".into()),
             CInput::Branch {
-                operation:
-                    prebindgen_declarations::Operation::Resolved(CInputBranch::Enum { value }),
+                operation: CInputBranch::Enum { value },
                 children: variants,
             } => self.cx.enum_input(
                 ty,
@@ -167,16 +158,15 @@ impl<C: Codec<InOps = CInputOps, OutOps = COutputOps, CompileState = CCompileSta
                 names,
             ),
             CInput::Unary {
-                operation:
-                    prebindgen_declarations::Operation::Resolved(CInputUnary::Convert { conversion }),
+                operation: CInputUnary::Convert { conversion },
                 child: input,
             } => self.input_conversion(ty, conversion, input, extra, active, names),
             CInput::Unary {
-                operation: prebindgen_declarations::Operation::Resolved(CInputUnary::Temporary),
+                operation: CInputUnary::Temporary,
                 child: inner,
             } => self.cx.input_temporary(ty, extra, active, names, inner),
             CInput::Arrow {
-                operation: prebindgen_declarations::Operation::Resolved(callback),
+                operation: operation @ CInputArrow::BoundCallback(callback),
                 domain,
                 codomain,
             } => {
@@ -188,7 +178,7 @@ impl<C: Codec<InOps = CInputOps, OutOps = COutputOps, CompileState = CCompileSta
                 }
                 self.codec.input_arrow(InputArrow {
                     flat: self.flat,
-                    operation: callback,
+                    operation,
                     domain,
                     codomain,
                     extra,
@@ -200,13 +190,13 @@ impl<C: Codec<InOps = CInputOps, OutOps = COutputOps, CompileState = CCompileSta
                 })
             }
             CInput::Unary {
-                operation: prebindgen_declarations::Operation::Resolved(CInputUnary::Sequence),
+                operation: CInputUnary::Sequence,
                 child: element_recipe,
             } => self
                 .cx
                 .input_sequence(ty, element_recipe, extra, active, names, var, false),
             CInput::Unary {
-                operation: prebindgen_declarations::Operation::Resolved(CInputUnary::Optional),
+                operation: CInputUnary::Optional,
                 child: inner,
             } => self.cx.input_optional(ty, extra, active, names, var, inner),
             CInput::Leaf(CInputLeafOp::Value) => {
@@ -226,35 +216,34 @@ impl<C: Codec<InOps = CInputOps, OutOps = COutputOps, CompileState = CCompileSta
                 })
             }
             CInput::Request(never) => match *never {},
+            CInput::Unary {
+                operation: CInputUnary::ForType { .. },
+                ..
+            }
+            | CInput::Branch {
+                operation: CInputBranch::EnumFields | CInputBranch::VariantFields { .. },
+                ..
+            }
+            | CInput::Arrow {
+                operation: CInputArrow::Callback(_),
+                ..
+            } => Err("resolve source-dependent input operations before compilation".into()),
             CInput::Branch {
-                operation: prebindgen_declarations::Operation::Resolved(CInputBranch::Fields),
+                operation: CInputBranch::Fields,
                 children,
             } => self
                 .cx
                 .input_fields(ty, extra, active, names, var, children, false),
             CInput::Branch {
-                operation:
-                    prebindgen_declarations::Operation::Resolved(CInputBranch::Constructor { function }),
+                operation: CInputBranch::Constructor { function },
                 children: args,
             } => self
                 .cx
                 .input_constructor(ty, extra, active, var, function, args),
             CInput::Branch {
-                operation: prebindgen_declarations::Operation::Resolved(CInputBranch::Selector),
+                operation: CInputBranch::Selector,
                 children: arms,
             } => self.cx.input_selector(ty, extra, active, var, arms),
-            CInput::Unary {
-                operation: prebindgen_declarations::Operation::Request(never),
-                ..
-            }
-            | CInput::Branch {
-                operation: prebindgen_declarations::Operation::Request(never),
-                ..
-            }
-            | CInput::Arrow {
-                operation: prebindgen_declarations::Operation::Request(never),
-                ..
-            } => match *never {},
         }
     }
 
@@ -268,7 +257,7 @@ impl<C: Codec<InOps = CInputOps, OutOps = COutputOps, CompileState = CCompileSta
         reference_return: bool,
     ) -> Result<CodecOutputPlan<C>> {
         if let COutput::Unary {
-            operation: prebindgen_declarations::Operation::Resolved(COutputUnary::Result { error }),
+            operation: COutputUnary::Result { error },
             child: ok,
         } = recipe
         {
@@ -295,7 +284,7 @@ impl<C: Codec<InOps = CInputOps, OutOps = COutputOps, CompileState = CCompileSta
         if !borrowed {
             if matches!(ty, Type::Reference(_)) {
                 if let COutput::Branch {
-                    operation: prebindgen_declarations::Operation::Resolved(COutputBranch::Combine),
+                    operation: COutputBranch::Combine,
                     children: parts,
                 } = recipe
                 {
@@ -319,7 +308,7 @@ impl<C: Codec<InOps = CInputOps, OutOps = COutputOps, CompileState = CCompileSta
             if let (
                 Some(payload_ty),
                 COutput::Unary {
-                    operation: prebindgen_declarations::Operation::Resolved(COutputUnary::Optional),
+                    operation: COutputUnary::Optional,
                     child: inner,
                 },
             ) = (option_inner(ty), recipe)
@@ -367,32 +356,25 @@ impl<C: Codec<InOps = CInputOps, OutOps = COutputOps, CompileState = CCompileSta
         let mut out = self.cx.empty_output()?;
         match recipe {
             COutput::Unary {
-                operation:
-                    prebindgen_declarations::Operation::Resolved(COutputUnary::CallbackArgument {
-                        ..
-                    }),
+                operation: COutputUnary::CallbackArgument { .. },
                 ..
             } => return Err("callback argument ownership requires an arrow domain".into()),
             COutput::None => {
                 return self.cx.output_unit(ty, out);
             }
             COutput::Arrow {
-                operation: prebindgen_declarations::Operation::Resolved(never),
-                ..
+                operation: never, ..
             } => match *never {},
             COutput::Branch {
-                operation:
-                    prebindgen_declarations::Operation::Resolved(
-                        COutputBranch::Variant | COutputBranch::Arguments,
-                    ),
+                operation: COutputBranch::Variant | COutputBranch::Arguments,
                 ..
             } => return Err("variant/argument branch requires its parent operation".into()),
             COutput::Branch {
                 operation:
-                    prebindgen_declarations::Operation::Resolved(COutputBranch::Enum {
+                    COutputBranch::Enum {
                         value: grouped,
                         mode,
-                    }),
+                    },
                 children: variants,
             } => {
                 return self.cx.enum_output(
@@ -410,14 +392,12 @@ impl<C: Codec<InOps = CInputOps, OutOps = COutputOps, CompileState = CCompileSta
                 );
             }
             COutput::Unary {
-                operation:
-                    prebindgen_declarations::Operation::Resolved(COutputUnary::Convert { conversion }),
+                operation: COutputUnary::Convert { conversion },
                 child: output,
             } => return self.output_conversion(ty, conversion, output, extra, value, borrowed),
             COutput::Leaf(COutputLeafOp::Discard) => return Ok(out),
             COutput::Unary {
-                operation:
-                    prebindgen_declarations::Operation::Resolved(COutputUnary::Named { name }),
+                operation: COutputUnary::Named { name },
                 child: output,
             } => {
                 return self
@@ -425,11 +405,7 @@ impl<C: Codec<InOps = CInputOps, OutOps = COutputOps, CompileState = CCompileSta
                     .output_named_view(ty, extra, value, borrowed, wire_name, name, output);
             }
             COutput::Unary {
-                operation:
-                    prebindgen_declarations::Operation::Resolved(COutputUnary::Sequence {
-                        delivery,
-                        mode,
-                    }),
+                operation: COutputUnary::Sequence { delivery, mode },
                 child: element,
             } => {
                 return self
@@ -437,13 +413,13 @@ impl<C: Codec<InOps = CInputOps, OutOps = COutputOps, CompileState = CCompileSta
                     .output_sequence(ty, element, extra, value, borrowed, delivery, mode, false);
             }
             COutput::Unary {
-                operation: prebindgen_declarations::Operation::Resolved(COutputUnary::Result { .. }),
+                operation: COutputUnary::Result { .. },
                 ..
             } => {
                 return Err("Result error routing is supported only at the outermost return".into())
             }
             COutput::Unary {
-                operation: prebindgen_declarations::Operation::Resolved(COutputUnary::Optional),
+                operation: COutputUnary::Optional,
                 child: inner,
             } => {
                 return self
@@ -451,6 +427,19 @@ impl<C: Codec<InOps = CInputOps, OutOps = COutputOps, CompileState = CCompileSta
                     .output_optional(ty, extra, value, borrowed, wire_name, inner);
             }
             COutput::Request(never) => match *never {},
+            COutput::Unary {
+                operation: COutputUnary::ForType { .. } | COutputUnary::SequenceCallback { .. },
+                ..
+            }
+            | COutput::Branch {
+                operation:
+                    COutputBranch::EnumFields
+                    | COutputBranch::VariantFields { .. }
+                    | COutputBranch::NamedFields { .. },
+                ..
+            } => {
+                return Err("resolve source-dependent output operations before compilation".into())
+            }
             COutput::Leaf(COutputLeafOp::Value) => {
                 let representation = Representation::Ordinary;
                 return self
@@ -470,11 +459,11 @@ impl<C: Codec<InOps = CInputOps, OutOps = COutputOps, CompileState = CCompileSta
                 );
             }
             COutput::Branch {
-                operation: prebindgen_declarations::Operation::Resolved(COutputBranch::Fields),
+                operation: COutputBranch::Fields,
                 children,
             }
             | COutput::Branch {
-                operation: prebindgen_declarations::Operation::Resolved(COutputBranch::OwnedFields),
+                operation: COutputBranch::OwnedFields,
                 children,
             } => {
                 return self.cx.output_fields(
@@ -488,9 +477,7 @@ impl<C: Codec<InOps = CInputOps, OutOps = COutputOps, CompileState = CCompileSta
                     matches!(
                         recipe,
                         COutput::Branch {
-                            operation: prebindgen_declarations::Operation::Resolved(
-                                COutputBranch::OwnedFields
-                            ),
+                            operation: COutputBranch::OwnedFields,
                             ..
                         }
                     ),
@@ -499,21 +486,17 @@ impl<C: Codec<InOps = CInputOps, OutOps = COutputOps, CompileState = CCompileSta
                 );
             }
             COutput::Unary {
-                operation:
-                    prebindgen_declarations::Operation::Resolved(COutputUnary::Getter { function }),
+                operation: COutputUnary::Getter { function },
                 child: output,
             }
             | COutput::Unary {
-                operation:
-                    prebindgen_declarations::Operation::Resolved(COutputUnary::Into { function }),
+                operation: COutputUnary::Into { function },
                 child: output,
             } => {
                 let consuming = matches!(
                     recipe,
                     COutput::Unary {
-                        operation: prebindgen_declarations::Operation::Resolved(
-                            COutputUnary::Into { .. }
-                        ),
+                        operation: COutputUnary::Into { .. },
                         ..
                     }
                 );
@@ -522,7 +505,7 @@ impl<C: Codec<InOps = CInputOps, OutOps = COutputOps, CompileState = CCompileSta
                     .output_getter(ty, extra, value, borrowed, function, output, consuming, out);
             }
             COutput::Branch {
-                operation: prebindgen_declarations::Operation::Resolved(COutputBranch::Combine),
+                operation: COutputBranch::Combine,
                 children: parts,
             } => {
                 if parts.is_empty() {
@@ -561,18 +544,6 @@ impl<C: Codec<InOps = CInputOps, OutOps = COutputOps, CompileState = CCompileSta
                     out.statements.extend(body);
                 }
             }
-            COutput::Unary {
-                operation: prebindgen_declarations::Operation::Request(never),
-                ..
-            }
-            | COutput::Branch {
-                operation: prebindgen_declarations::Operation::Request(never),
-                ..
-            }
-            | COutput::Arrow {
-                operation: prebindgen_declarations::Operation::Request(never),
-                ..
-            } => match *never {},
         }
         Ok(out)
     }
@@ -603,20 +574,16 @@ impl<C: Codec<InOps = CInputOps, OutOps = COutputOps, CompileState = CCompileSta
         {
             return Ok(None);
         }
-        let views =
-            parts
-                .iter()
-                .map(|part| match part {
-                    COutput::Unary {
-                        operation:
-                            prebindgen_declarations::Operation::Resolved(COutputUnary::Getter {
-                                function,
-                            }),
-                        child,
-                    } => Some((function.as_str(), child.as_ref())),
-                    _ => None,
-                })
-                .collect::<Vec<_>>();
+        let views = parts
+            .iter()
+            .map(|part| match part {
+                COutput::Unary {
+                    operation: COutputUnary::Getter { function },
+                    child,
+                } => Some((function.as_str(), child.as_ref())),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
         self.cx
             .output_owner_getters(ty, &views, owner, extra, value)
     }

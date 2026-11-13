@@ -39,27 +39,21 @@ fn main() {
         .panic()
         .function(fun!(wire_owned_callback))
         .panic()
-        .function(
-            fun!(wire_owned_rows).expand_return(COutput::Unary {
-                operation: (COutputUnary::Sequence {
-                    delivery: SequenceDelivery::Value,
-                    mode: None,
-                })
-                .into(),
-                child: Box::new(COutput::value()),
-            }),
-        )
+        .function(fun!(wire_owned_rows).expand_return(COutput::Unary {
+            operation: COutputUnary::Sequence {
+                delivery: SequenceDelivery::Value,
+                mode: None,
+            },
+            child: Box::new(COutput::value()),
+        }))
         .panic()
-        .function(
-            fun!(wire_owned_rows_new).expand_return(COutput::Unary {
-                operation: (COutputUnary::Sequence {
-                    delivery: SequenceDelivery::Value,
-                    mode: None,
-                })
-                .into(),
-                child: Box::new(COutput::value()),
-            }),
-        )
+        .function(fun!(wire_owned_rows_new).expand_return(COutput::Unary {
+            operation: COutputUnary::Sequence {
+                delivery: SequenceDelivery::Value,
+                mode: None,
+            },
+            child: Box::new(COutput::value()),
+        }))
         .panic()
         .tagged_union("wire_decision", pq!(Result<i64,String>))
         .tagged_union("wire_notice", pq!(Result<(),String>))
@@ -103,16 +97,13 @@ fn main() {
         .panic()
         .function(fun!(canonical_millis_optional))
         .panic()
-        .function(
-            fun!(canonical_millis_rows).expand_return(COutput::Unary {
-                operation: (COutputUnary::Sequence {
-                    delivery: SequenceDelivery::Value,
-                    mode: None,
-                })
-                .into(),
-                child: Box::new(COutput::value()),
-            }),
-        )
+        .function(fun!(canonical_millis_rows).expand_return(COutput::Unary {
+            operation: COutputUnary::Sequence {
+                delivery: SequenceDelivery::Value,
+                mode: None,
+            },
+            child: Box::new(COutput::value()),
+        }))
         .panic()
         .function(fun!(canonical_millis_callback))
         .panic()
@@ -283,7 +274,7 @@ fn main() {
         .function(fun!(c_output_rows).output(c_output_rows()))
         .function(fun!(c_output_nested).output(c_output_nested_rows()))
         .function(fun!(c_output_pair).output(prebindgen_c::COutput::Branch {
-            operation: (COutputBranch::OwnedFields).into(),
+            operation: COutputBranch::OwnedFields,
             children: vec![c_output_rows(), c_output_rows()],
         }))
         .output(prebindgen_c::COutput::for_type(
@@ -723,28 +714,25 @@ fn main() {
         .function(fun!(collection_nested_handles).callback_return())
         .panic()
         .function(
-            fun!(collection_numbers).expand_return(
-                expand_return!(CollectionNumbers).fields(
-                    fields!(collection_numbers_view).field_override(
-                        "values",
-                        prebindgen_c::COutput::Unary {
-                            operation: (COutputUnary::Sequence {
-                                delivery: prebindgen_declarations::SequenceDelivery::Value,
-                                mode: Some(prebindgen_declarations::ProjectionMode::Borrowed),
-                            })
-                            .into(),
-                            child: Box::new(prebindgen_c::COutput::auto()),
+            fun!(collection_numbers).expand_return(expand_return!(CollectionNumbers).fields(
+                fields!(collection_numbers_view).field_override(
+                    "values",
+                    prebindgen_c::COutput::Unary {
+                        operation: COutputUnary::Sequence {
+                            delivery: prebindgen_declarations::SequenceDelivery::Value,
+                            mode: Some(prebindgen_declarations::ProjectionMode::Borrowed),
                         },
-                    ),
+                        child: Box::new(prebindgen_c::COutput::auto()),
+                    },
                 ),
-            ),
+            )),
         )
         .panic()
         .function(
             fun!(collection_resource_ids).input(
                 "values",
                 prebindgen_c::CInput::Unary {
-                    operation: (CInputUnary::Sequence).into(),
+                    operation: CInputUnary::Sequence,
                     child: Box::new(prebindgen_c::CInput::call("collection_resource_clone")),
                 }
                 .reconstruct(),
@@ -1029,7 +1017,7 @@ fn main() {
                 .view(prebindgen_c::COutput::getter(
                     "report_to_struct",
                     prebindgen_c::COutput::Branch {
-                        operation: (COutputBranch::OwnedFields).into(),
+                        operation: COutputBranch::OwnedFields,
                         children: vec![prebindgen_c::COutput::auto(); 3],
                     },
                 ))
@@ -1223,11 +1211,10 @@ fn main() {
         cbindgen = cbindgen.output(prebindgen_c::COutput::for_type(
             ty,
             prebindgen_c::COutput::Unary {
-                operation: (COutputUnary::Sequence {
+                operation: COutputUnary::Sequence {
                     delivery: prebindgen_declarations::SequenceDelivery::Value,
                     mode: None,
-                })
-                .into(),
+                },
                 child: Box::new(prebindgen_c::COutput::auto()),
             },
         ));
@@ -1389,11 +1376,10 @@ fn main() {
             prebindgen_c::COutput::getter(
                 "inline_packets_getter",
                 prebindgen_c::COutput::Unary {
-                    operation: (COutputUnary::Sequence {
+                    operation: COutputUnary::Sequence {
                         delivery: prebindgen_declarations::SequenceDelivery::Value,
                         mode: None,
-                    })
-                    .into(),
+                    },
                     child: Box::new(prebindgen_c::COutput::auto()),
                 },
             ),
@@ -1496,22 +1482,20 @@ fn enum_inputs(generator: prebindgen_c::Cbindgen) -> prebindgen_c::Cbindgen {
 fn c_output_rows(
 ) -> prebindgen_c::COutput<prebindgen_c::CInputRequest, prebindgen_c::COutputRequest> {
     prebindgen_c::COutput::Unary {
-        operation: (COutputUnary::Sequence {
+        operation: COutputUnary::Sequence {
             delivery: prebindgen_declarations::SequenceDelivery::Value,
             mode: None,
-        })
-        .into(),
+        },
         child: Box::new(prebindgen_c::COutput::auto()),
     }
 }
 fn c_output_nested_rows(
 ) -> prebindgen_c::COutput<prebindgen_c::CInputRequest, prebindgen_c::COutputRequest> {
     prebindgen_c::COutput::Unary {
-        operation: (COutputUnary::Sequence {
+        operation: COutputUnary::Sequence {
             delivery: prebindgen_declarations::SequenceDelivery::Value,
             mode: None,
-        })
-        .into(),
+        },
         child: Box::new(c_output_rows()),
     }
 }

@@ -395,10 +395,13 @@ Both directions always put input requests before output requests.
 Preparation uses `JniInput<JniInputRequest, JniOutputRequest>` and the corresponding
 `JniOutput` type, or C's equivalent types. These are aliases for generic
 `InputNode<InOps, OutOps, InRequest, OutRequest>` and `OutputNode` trees.
-Each adapter defines `Leaf`, `Unary`, `Branch` and `Arrow` operation types.
+Each adapter defines `Leaf`, `Unary`, `Branch` and `Arrow` metadata types,
+and the node fields hold those types directly.
 `None` represents unit. An arrow's domain uses the opposite node direction and
 its codomain uses the enclosing direction. `Request` carries deferred choices
-such as default lookup, constructor discovery and named field overrides.
+without explicit children, such as default lookup and constructor discovery.
+Type scoping belongs to unary metadata; named field overrides belong to branch
+metadata; callback configuration belongs to arrow metadata.
 Resolved trees keep the same operations and use `Infallible` for both request types.
 There is no shared declaration dictionary to translate.
 
@@ -428,9 +431,10 @@ constructor/getter references, and expands optional, sequence and record operati
 Resolution returns `ResolvedInput<C>` or `ResolvedOutput<C>` for each occurrence,
 using the codec's operation types. The C and JNI adapters name their resolved
 trees `CInput`/`COutput` or `JniInput`/`JniOutput`. Both request types are
-`Infallible`, so pending choices cannot appear in these trees or nested children.
-`compile_input` and `compile_output` accept
-only this resolved form and return the final converter. the adapter's defaults `fill` method resolves,
+`Infallible`, so leaf requests cannot appear in these trees or nested children.
+The adapter resolves source-dependent metadata before compilation; its compiler
+rejects unresolved metadata if callers bypass resolution. `compile_input` and
+`compile_output` return the final converter. The adapter's defaults `fill` method resolves,
 compiles and installs the converters atomically for one function; the Flat schema
 and its source declarations stay in place throughout. An explicit subtree can be
 embedded in a preparation tree with `.into_preparation()`; source-dependent

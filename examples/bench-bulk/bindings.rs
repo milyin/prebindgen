@@ -82,8 +82,8 @@ fn main() {
                 expand_param!(i64).variant(fun!(input_handle_value))
             },
         );
-        let record_input = JniInput::Unary { operation: (JniInputUnary::Sequence).into(), child: Box::new(JniInput::Branch { operation: (JniInputBranch::Record).into(), children: vec![
-            JniInput::Branch { operation: (JniInputBranch::Constructor { function: "input_handle_copy".into() }).into(), children: vec![JniInput::Leaf(JniInputLeafOp::Value)],  },
+        let record_input = JniInput::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInput::Branch { operation: JniInputBranch::Record, children: vec![
+            JniInput::Branch { operation: JniInputBranch::Constructor { function: "input_handle_copy".into() }, children: vec![JniInput::Leaf(JniInputLeafOp::Value)],  },
             JniInput::Leaf(JniInputLeafOp::Value),
         ] }) };
         let handle_records = fun!(handle_records_sum).expand_param(
@@ -101,7 +101,7 @@ fn main() {
         } else {
             fun!(owned_handles_echo)
         };
-        let owned_records_input = JniInput::Unary { operation: (JniInputUnary::Sequence).into(), child: Box::new(JniInput::Branch { operation: (JniInputBranch::Record).into(), children: vec![JniInput::Leaf(JniInputLeafOp::Value); 2] }) };
+        let owned_records_input = JniInput::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInput::Branch { operation: JniInputBranch::Record, children: vec![JniInput::Leaf(JniInputLeafOp::Value); 2] }) };
         let owned_records = fun!(owned_handle_records_echo).expand_param(
             "values",
             if bulk {
@@ -130,7 +130,7 @@ fn main() {
                 nested_owners.callback_return(),
             )
         };
-        let nested_callback_input = JniInput::Unary { operation: (JniInputUnary::Sequence).into(), child: Box::new(JniInput::Unary { operation: (JniInputUnary::Sequence).into(), child: Box::new(if bulk {
+        let nested_callback_input = JniInput::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInput::Unary { operation: JniInputUnary::Sequence, child: Box::new(if bulk {
             JniInput::Leaf(JniInputLeafOp::Value).bulk()
         } else {
             JniInput::Leaf(JniInputLeafOp::Value)
@@ -151,13 +151,13 @@ fn main() {
         } else {
             nested_callback.callback_return()
         };
-        let batch_input = JniInput::Unary { operation: (JniInputUnary::Sequence).into(), child: Box::new(JniInput::Branch { operation: (JniInputBranch::Record).into(), children: vec![
+        let batch_input = JniInput::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInput::Branch { operation: JniInputBranch::Record, children: vec![
             JniInput::Leaf(JniInputLeafOp::Value),
-            JniInput::Unary { operation: (JniInputUnary::Sequence).into(), child: Box::new(JniInput::Branch { operation: (JniInputBranch::Record).into(), children: vec![JniInput::Leaf(JniInputLeafOp::Value); 2] }) },
+            JniInput::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInput::Branch { operation: JniInputBranch::Record, children: vec![JniInput::Leaf(JniInputLeafOp::Value); 2] }) },
         ] }) };
-        let mixed_batch_input = JniInput::Unary { operation: (JniInputUnary::Sequence).into(), child: Box::new(JniInput::Branch { operation: (JniInputBranch::Record).into(), children: vec![
+        let mixed_batch_input = JniInput::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInput::Branch { operation: JniInputBranch::Record, children: vec![
             JniInput::Leaf(JniInputLeafOp::Value),
-            JniInput::Unary { operation: (JniInputUnary::Sequence).into(), child: Box::new(JniInput::Branch { operation: (JniInputBranch::Record).into(), children: vec![JniInput::Leaf(JniInputLeafOp::Value); 2] }) }.bulk(),
+            JniInput::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInput::Branch { operation: JniInputBranch::Record, children: vec![JniInput::Leaf(JniInputLeafOp::Value); 2] }) }.bulk(),
         ] }) };
         let batches = fun!(callback_batches_owned_handles)
             .expand_param(
@@ -179,7 +179,7 @@ fn main() {
                     .expand_return(mixed_batch_input),
             )
             .expand_return(expand_return!(Vec<HandleBatch>).field_self_into().bulk());
-        let callback_input = JniInput::Unary { operation: (JniInputUnary::Sequence).into(), child: Box::new(JniInput::Branch { operation: (JniInputBranch::Record).into(), children: vec![JniInput::Leaf(JniInputLeafOp::Value); 2] }) };
+        let callback_input = JniInput::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInput::Branch { operation: JniInputBranch::Record, children: vec![JniInput::Leaf(JniInputLeafOp::Value); 2] }) };
         let callback_input = if bulk {
             callback_input.bulk()
         } else {
@@ -196,7 +196,7 @@ fn main() {
         } else {
             callback_records
         };
-        let record_input = JniInput::Branch { operation: (JniInputBranch::Record).into(), children: vec![JniInput::Leaf(JniInputLeafOp::Value); 2] };
+        let record_input = JniInput::Branch { operation: JniInputBranch::Record, children: vec![JniInput::Leaf(JniInputLeafOp::Value); 2] };
         let record_input = if bulk {
             record_input.bulk()
         } else {
@@ -213,7 +213,7 @@ fn main() {
         } else {
             callback_record
         };
-        let buffer_input = JniInput::Unary { operation: (JniInputUnary::Sequence).into(), child: Box::new(JniInput::Branch { operation: (JniInputBranch::Record).into(), children: vec![JniInput::Leaf(JniInputLeafOp::Value); 3] }) };
+        let buffer_input = JniInput::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInput::Branch { operation: JniInputBranch::Record, children: vec![JniInput::Leaf(JniInputLeafOp::Value); 3] }) };
         let buffers = fun!(owned_buffer_records_echo).expand_param(
             "values",
             if bulk {

@@ -477,17 +477,15 @@ fn malformed_nested_sequence_bindings_are_rejected_before_installation() {
         ..Default::default()
     };
     let recipe = TestOutput::Unary {
-        operation: (TestOutputUnary::Sequence {
+        operation: TestOutputUnary::Sequence {
             delivery: SequenceDelivery::Value,
             mode: None,
-        })
-        .into(),
+        },
         child: Box::new(TestOutput::Unary {
-            operation: (TestOutputUnary::Sequence {
+            operation: TestOutputUnary::Sequence {
                 delivery: SequenceDelivery::Value,
                 mode: None,
-            })
-            .into(),
+            },
             child: Box::new(TestOutput::Leaf(TestOutputLeafOp::Value)),
         }),
     };
@@ -504,7 +502,7 @@ fn malformed_nested_sequence_bindings_are_rejected_before_installation() {
         "input",
         "values",
         &TestInput::Unary {
-            operation: (TestInputUnary::Sequence).into(),
+            operation: TestInputUnary::Sequence,
             child: Box::new(TestInput::Leaf(TestInputLeafOp::Value)),
         },
         &(),
@@ -526,11 +524,11 @@ fn rows_lend_temporary_values_and_construct_once() {
     .unwrap();
     let codec = CodecImpl::default();
     let recipe = TestInput::Unary {
-        operation: (TestInputUnary::Sequence).into(),
+        operation: TestInputUnary::Sequence,
         child: Box::new(TestInput::constructor(
             "row",
             [TestInput::Unary {
-                operation: (TestInputUnary::Temporary).into(),
+                operation: TestInputUnary::Temporary,
                 child: Box::new(TestInput::Leaf(TestInputLeafOp::Value)),
             }],
         )),

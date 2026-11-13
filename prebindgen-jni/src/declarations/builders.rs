@@ -52,13 +52,13 @@ pub fn expand_param(ty: Type) -> DeclJniExpandParam {
         |ty, alternatives, extension| {
             let mut input = alternatives.build(JniInput::selector, JniInput::auto, |child| {
                 JniInput::Unary {
-                    operation: (JniInputUnary::Temporary).into(),
+                    operation: JniInputUnary::Temporary,
                     child: Box::new(child),
                 }
             });
             if extension.is_some_and(|options| options.bulk) {
                 input = JniInput::Unary {
-                    operation: (JniInputUnary::Bulk).into(),
+                    operation: JniInputUnary::Bulk,
                     child: Box::new(input),
                 };
             }
@@ -75,7 +75,7 @@ pub fn expand_return(ty: Type) -> DeclJniExpandReturn {
                 function,
                 |name| JniOutput::getter(name, JniOutput::auto()),
                 |name, child| JniOutput::Unary {
-                    operation: (JniOutputUnary::Named { name }).into(),
+                    operation: JniOutputUnary::Named { name },
                     child: Box::new(child),
                 },
             )
@@ -87,7 +87,7 @@ pub fn expand_return(ty: Type) -> DeclJniExpandReturn {
             let mut output = JniOutput::combine(views);
             if extension.is_some_and(|options| options.bulk) {
                 output = JniOutput::Unary {
-                    operation: (JniOutputUnary::Bulk).into(),
+                    operation: JniOutputUnary::Bulk,
                     child: Box::new(output),
                 };
             }
@@ -101,10 +101,9 @@ pub fn fields(function: syn::Ident) -> DeclJniFields {
         function,
         |output| match output {
             JniOutput::Unary {
-                operation:
-                    prebindgen_declarations::Operation::Request(JniOutputRequest::ForType { ty }),
+                operation: JniOutputUnary::ForType { ty },
                 child: output,
-            } if matches!(output.as_ref(),JniOutput::Branch {operation:prebindgen_declarations::Operation::Resolved(JniOutputBranch::Combine),children} if children.is_empty()) => {
+            } if matches!(output.as_ref(),JniOutput::Branch {operation:JniOutputBranch::Combine,children} if children.is_empty()) => {
                 JniOutput::for_type(*ty, JniOutput::Leaf(JniOutputLeafOp::Discard))
             }
             output => output,
@@ -114,12 +113,10 @@ pub fn fields(function: syn::Ident) -> DeclJniFields {
             JniOutput::getter(
                 function,
                 JniOutput::Branch {
-                    operation: prebindgen_declarations::Operation::Request(
-                        JniOutputRequest::NamedFields {
-                            fields,
-                            mode: prebindgen_declarations::ProjectionMode::Borrowed,
-                        },
-                    ),
+                    operation: JniOutputBranch::NamedFields {
+                        fields,
+                        mode: prebindgen_declarations::ProjectionMode::Borrowed,
+                    },
                     children,
                 },
             )
@@ -155,13 +152,11 @@ impl
             declaration,
             JniInput::auto,
             |children| JniOutput::Branch {
-                operation: JniOutputBranch::Arguments.into(),
+                operation: JniOutputBranch::Arguments,
                 children,
             },
             |metadata, domain, codomain| JniInput::Arrow {
-                operation: prebindgen_declarations::Operation::Request(Self::Callback(Box::new(
-                    metadata,
-                ))),
+                operation: JniInputArrow::Callback(Box::new(metadata)),
                 domain: Box::new(domain),
                 codomain: Box::new(codomain),
             },

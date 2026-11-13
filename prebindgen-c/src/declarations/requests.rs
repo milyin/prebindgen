@@ -1,49 +1,19 @@
 use super::*;
 #[derive(Clone, Debug)]
-/// Metadata-only input choices. Explicit conversions use structural node children.
+/// Deferred input choices without explicitly supplied children.
 pub enum CInputRequest {
-    /// Partial named enum fields; children are variant branches.
-    EnumFields,
-    /// One partial variant; the children correspond to these source field names.
-    VariantFields {
-        /// Source variant name.
-        variant: String,
-        /// Source field names corresponding to the structural children.
-        fields: Vec<String>,
-    },
     /// Resolve the canonical value representation.
     Value,
     /// Select a local Rust value conversion.
     Conversion(Box<DeclConvert>),
     /// Resolve this occurrence's configured default.
     Auto,
-    /// Partial callback metadata; domain/codomain own all conversion children.
-    Callback(Box<prebindgen_declarations::CallbackRequest>),
-    /// Apply the unary child at this source type, including nested occurrences.
-    ForType {
-        /// Source type at which the unary child applies.
-        ty: Box<Type>,
-    },
     /// Infer constructor arguments from their defaults.
     Call(String),
 }
 #[derive(Clone, Debug)]
-/// Metadata-only output choices. Explicit conversions use structural node children.
+/// Deferred output choices without explicitly supplied children.
 pub enum COutputRequest {
-    /// Select per-element delivery of the unary child's resolved sequence.
-    SequenceCallback {
-        /// Permit decomposition of an ordinary collection identity.
-        structural: bool,
-    },
-    /// Partial named enum fields; children are variant branches.
-    EnumFields,
-    /// One partial variant; children correspond to these source field names.
-    VariantFields {
-        /// Source variant name.
-        variant: String,
-        /// Source field names corresponding to the structural children.
-        fields: Vec<String>,
-    },
     /// Resolve the canonical value representation with optional projection policy.
     Value {
         /// Explicit ownership and field projection policy.
@@ -53,18 +23,6 @@ pub enum COutputRequest {
     Conversion(Box<DeclConvert>),
     /// Resolve this occurrence's configured default.
     Auto,
-    /// Apply the unary child at this source type, including nested occurrences.
-    ForType {
-        /// Source type at which the unary child applies.
-        ty: Box<Type>,
-    },
-    /// Partial record fields, corresponding to the branch children.
-    NamedFields {
-        /// Source field names corresponding to the structural children.
-        fields: Vec<String>,
-        /// Observe or move the selected fields.
-        mode: ProjectionMode,
-    },
 }
 /// Fluent conversion construction for this language.
 pub trait CInputExt<InRequest, OutRequest>: Sized {
@@ -91,7 +49,7 @@ impl<InRequest, OutRequest> CInputExt<InRequest, OutRequest> for CInput<InReques
     /// order. Binding verifies the count against the record.
     fn fields(fields: impl IntoIterator<Item = CInput<InRequest, OutRequest>>) -> Self {
         CInput::Branch {
-            operation: (CInputBranch::Fields).into(),
+            operation: CInputBranch::Fields,
             children: fields.into_iter().collect(),
         }
     }
@@ -110,10 +68,9 @@ impl<InRequest, OutRequest> CInputExt<InRequest, OutRequest> for CInput<InReques
         args: impl IntoIterator<Item = CInput<InRequest, OutRequest>>,
     ) -> Self {
         CInput::Branch {
-            operation: (CInputBranch::Constructor {
+            operation: CInputBranch::Constructor {
                 function: name.into(),
-            })
-            .into(),
+            },
             children: args.into_iter().collect(),
         }
     }
@@ -127,18 +84,18 @@ impl<InRequest, OutRequest> CInputExt<InRequest, OutRequest> for CInput<InReques
     /// merge equivalent wire parameters or generate destination-language overloads.
     fn selector(arms: impl IntoIterator<Item = CInput<InRequest, OutRequest>>) -> Self {
         CInput::Branch {
-            operation: (CInputBranch::Selector).into(),
+            operation: CInputBranch::Selector,
             children: arms.into_iter().collect(),
         }
     }
     /// Describe source variants, each with an ordinary branch of field conversions.
     fn enum_variants(variants: Vec<Vec<Self>>, value: bool) -> Self {
         Self::Branch {
-            operation: (CInputBranch::Enum { value }).into(),
+            operation: CInputBranch::Enum { value },
             children: variants
                 .into_iter()
                 .map(|children| Self::Branch {
-                    operation: (CInputBranch::Variant).into(),
+                    operation: CInputBranch::Variant,
                     children,
                 })
                 .collect(),
@@ -148,7 +105,7 @@ impl<InRequest, OutRequest> CInputExt<InRequest, OutRequest> for CInput<InReques
     fn variant_fields(&self) -> crate::Result<&[Self]> {
         match self {
             Self::Branch {
-                operation: prebindgen_declarations::Operation::Resolved(CInputBranch::Variant),
+                operation: CInputBranch::Variant,
                 children,
             } => Ok(children),
             _ => Err("enum children must be variant branches".into()),
@@ -157,7 +114,7 @@ impl<InRequest, OutRequest> CInputExt<InRequest, OutRequest> for CInput<InReques
     /// Convert each incoming collection element using the supplied subtree.
     fn sequence(element: Self) -> Self {
         Self::Unary {
-            operation: (CInputUnary::Sequence).into(),
+            operation: CInputUnary::Sequence,
             child: Box::new(element),
         }
     }
@@ -193,15 +150,13 @@ impl CInputRequests for CInput<CInputRequest, COutputRequest> {
     ) -> Self {
         let overrides = prebindgen_declarations::enum_overrides(overrides);
         CInput::Branch {
-            operation: prebindgen_declarations::Operation::Request(CInputRequest::EnumFields),
+            operation: CInputBranch::EnumFields,
             children: overrides
                 .into_iter()
                 .map(|(variant, fields)| {
                     let (fields, children) = fields.into_iter().unzip();
                     CInput::Branch {
-                        operation: prebindgen_declarations::Operation::Request(
-                            CInputRequest::VariantFields { variant, fields },
-                        ),
+                        operation: CInputBranch::VariantFields { variant, fields },
                         children,
                     }
                 })
@@ -219,9 +174,7 @@ impl CInputRequests for CInput<CInputRequest, COutputRequest> {
     /// Associate a conversion with a source type for a default or nested override.
     fn for_type(ty: Type, input: Self) -> Self {
         CInput::Unary {
-            operation: prebindgen_declarations::Operation::Request(CInputRequest::ForType {
-                ty: Box::new(ty),
-            }),
+            operation: CInputUnary::ForType { ty: Box::new(ty) },
             child: Box::new(input),
         }
     }
@@ -236,18 +189,17 @@ impl CInputRequests for CInput<CInputRequest, COutputRequest> {
     fn reconstruct(self) -> Self {
         match self {
             CInput::Unary {
-                operation:
-                    prebindgen_declarations::Operation::Request(CInputRequest::ForType { ty }),
+                operation: CInputUnary::ForType { ty },
                 child: input,
             } => CInput::for_type(
                 *ty,
                 CInput::Unary {
-                    operation: (CInputUnary::Temporary).into(),
+                    operation: CInputUnary::Temporary,
                     child: input,
                 },
             ),
             other => CInput::Unary {
-                operation: (CInputUnary::Temporary).into(),
+                operation: CInputUnary::Temporary,
                 child: Box::new(other),
             },
         }
@@ -263,22 +215,21 @@ impl CInputRequests for CInput<CInputRequest, COutputRequest> {
     fn add_alternative(self, arm: Self) -> Self {
         match self {
             CInput::Unary {
-                operation:
-                    prebindgen_declarations::Operation::Request(CInputRequest::ForType { ty }),
+                operation: CInputUnary::ForType { ty },
                 child: input,
             } => CInput::for_type(*ty, input.add_alternative(arm)),
             CInput::Branch {
-                operation: prebindgen_declarations::Operation::Resolved(CInputBranch::Selector),
+                operation: CInputBranch::Selector,
                 children: mut arms,
             } => {
                 arms.push(arm);
                 CInput::Branch {
-                    operation: (CInputBranch::Selector).into(),
+                    operation: CInputBranch::Selector,
                     children: arms,
                 }
             }
             other => CInput::Branch {
-                operation: (CInputBranch::Selector).into(),
+                operation: CInputBranch::Selector,
                 children: vec![other, arm],
             },
         }
@@ -311,7 +262,7 @@ impl<InRequest, OutRequest> COutputExt<InRequest, OutRequest> for COutput<InRequ
     /// `fields` holds one recipe per field of the source record, in declaration order.
     fn fields(fields: impl IntoIterator<Item = COutput<InRequest, OutRequest>>) -> Self {
         COutput::Branch {
-            operation: (COutputBranch::Fields).into(),
+            operation: COutputBranch::Fields,
             children: fields.into_iter().collect(),
         }
     }
@@ -327,10 +278,9 @@ impl<InRequest, OutRequest> COutputExt<InRequest, OutRequest> for COutput<InRequ
     /// * `output` — recipe for the getter's result.
     fn getter(name: impl Into<String>, output: COutput<InRequest, OutRequest>) -> Self {
         COutput::Unary {
-            operation: (COutputUnary::Getter {
+            operation: COutputUnary::Getter {
                 function: name.into(),
-            })
-            .into(),
+            },
             child: Box::new(output),
         }
     }
@@ -342,7 +292,7 @@ impl<InRequest, OutRequest> COutputExt<InRequest, OutRequest> for COutput<InRequ
     /// unless [`Codec::output_owner`] first retains the final output allocation.
     fn combine(parts: impl IntoIterator<Item = COutput<InRequest, OutRequest>>) -> Self {
         COutput::Branch {
-            operation: (COutputBranch::Combine).into(),
+            operation: COutputBranch::Combine,
             children: parts.into_iter().collect(),
         }
     }
@@ -352,7 +302,7 @@ impl<InRequest, OutRequest> COutputExt<InRequest, OutRequest> for COutput<InRequ
             Self::None
         } else {
             Self::Branch {
-                operation: (COutputBranch::Arguments).into(),
+                operation: COutputBranch::Arguments,
                 children,
             }
         }
@@ -362,7 +312,7 @@ impl<InRequest, OutRequest> COutputExt<InRequest, OutRequest> for COutput<InRequ
         match self {
             Self::None => Ok(&[]),
             Self::Branch {
-                operation: prebindgen_declarations::Operation::Resolved(COutputBranch::Arguments),
+                operation: COutputBranch::Arguments,
                 children,
             } => Ok(children),
             _ => Err("callback domain requires an argument branch or None".into()),
@@ -371,11 +321,11 @@ impl<InRequest, OutRequest> COutputExt<InRequest, OutRequest> for COutput<InRequ
     /// Describe source variants, each with an ordinary branch of field conversions.
     fn enum_variants(variants: Vec<Vec<Self>>, value: bool, mode: Option<ProjectionMode>) -> Self {
         Self::Branch {
-            operation: (COutputBranch::Enum { value, mode }).into(),
+            operation: COutputBranch::Enum { value, mode },
             children: variants
                 .into_iter()
                 .map(|children| Self::Branch {
-                    operation: (COutputBranch::Variant).into(),
+                    operation: COutputBranch::Variant,
                     children,
                 })
                 .collect(),
@@ -385,7 +335,7 @@ impl<InRequest, OutRequest> COutputExt<InRequest, OutRequest> for COutput<InRequ
     fn variant_fields(&self) -> crate::Result<&[Self]> {
         match self {
             Self::Branch {
-                operation: prebindgen_declarations::Operation::Resolved(COutputBranch::Variant),
+                operation: COutputBranch::Variant,
                 children,
             } => Ok(children),
             _ => Err("enum children must be variant branches".into()),
@@ -394,7 +344,7 @@ impl<InRequest, OutRequest> COutputExt<InRequest, OutRequest> for COutput<InRequ
     /// Attach the lifetime of produced foreign owners to this callable argument.
     fn callback_argument(self, ownership: CallbackArgumentOwnership) -> Self {
         Self::Unary {
-            operation: (COutputUnary::CallbackArgument { ownership }).into(),
+            operation: COutputUnary::CallbackArgument { ownership },
             child: Box::new(self),
         }
     }
@@ -402,10 +352,7 @@ impl<InRequest, OutRequest> COutputExt<InRequest, OutRequest> for COutput<InRequ
     fn callback_argument_parts(&self) -> crate::Result<(CallbackArgumentOwnership, &Self)> {
         match self {
             Self::Unary {
-                operation:
-                    prebindgen_declarations::Operation::Resolved(COutputUnary::CallbackArgument {
-                        ownership,
-                    }),
+                operation: COutputUnary::CallbackArgument { ownership },
                 child,
             } => Ok((*ownership, child)),
             _ => Err("callback argument requires an explicit ownership contract".into()),
@@ -450,15 +397,13 @@ impl COutputRequests for COutput<CInputRequest, COutputRequest> {
     ) -> Self {
         let overrides = prebindgen_declarations::enum_overrides(overrides);
         COutput::Branch {
-            operation: prebindgen_declarations::Operation::Request(COutputRequest::EnumFields),
+            operation: COutputBranch::EnumFields,
             children: overrides
                 .into_iter()
                 .map(|(variant, fields)| {
                     let (fields, children) = fields.into_iter().unzip();
                     COutput::Branch {
-                        operation: prebindgen_declarations::Operation::Request(
-                            COutputRequest::VariantFields { variant, fields },
-                        ),
+                        operation: COutputBranch::VariantFields { variant, fields },
                         children,
                     }
                 })
@@ -476,9 +421,7 @@ impl COutputRequests for COutput<CInputRequest, COutputRequest> {
     /// Associate a conversion with a source type for a default or nested override.
     fn for_type(ty: Type, output: Self) -> Self {
         COutput::Unary {
-            operation: prebindgen_declarations::Operation::Request(COutputRequest::ForType {
-                ty: Box::new(ty),
-            }),
+            operation: COutputUnary::ForType { ty: Box::new(ty) },
             child: Box::new(output),
         }
     }
@@ -487,22 +430,21 @@ impl COutputRequests for COutput<CInputRequest, COutputRequest> {
         let view = view.into();
         match self {
             COutput::Unary {
-                operation:
-                    prebindgen_declarations::Operation::Request(COutputRequest::ForType { ty }),
+                operation: COutputUnary::ForType { ty },
                 child: output,
             } => COutput::for_type(*ty, output.view(view)),
             COutput::Branch {
-                operation: prebindgen_declarations::Operation::Resolved(COutputBranch::Combine),
+                operation: COutputBranch::Combine,
                 children: mut parts,
             } => {
                 parts.push(view);
                 COutput::Branch {
-                    operation: (COutputBranch::Combine).into(),
+                    operation: COutputBranch::Combine,
                     children: parts,
                 }
             }
             other => COutput::Branch {
-                operation: (COutputBranch::Combine).into(),
+                operation: COutputBranch::Combine,
                 children: vec![other, view],
             },
         }
@@ -543,11 +485,7 @@ impl COutputRequests for COutput<CInputRequest, COutputRequest> {
             output,
             |tree| match tree {
                 COutput::Branch {
-                    operation:
-                        prebindgen_declarations::Operation::Request(COutputRequest::NamedFields {
-                            fields,
-                            ..
-                        }),
+                    operation: COutputBranch::NamedFields { fields, .. },
                     children,
                 } => Some((fields, children)),
                 _ => None,
@@ -555,10 +493,9 @@ impl COutputRequests for COutput<CInputRequest, COutputRequest> {
             |tree| match tree {
                 COutput::Unary {
                     operation:
-                        prebindgen_declarations::Operation::Resolved(
-                            COutputUnary::Getter { .. } | COutputUnary::Into { .. },
-                        )
-                        | prebindgen_declarations::Operation::Request(COutputRequest::ForType { .. }),
+                        COutputUnary::Getter { .. }
+                        | COutputUnary::Into { .. }
+                        | COutputUnary::ForType { .. },
                     child,
                 } => Some(child),
                 _ => None,
@@ -591,27 +528,26 @@ pub(super) fn owned_field_view(
     view: COutput<CInputRequest, COutputRequest>,
 ) -> COutput<CInputRequest, COutputRequest> {
     let COutput::Unary {
-        operation: prebindgen_declarations::Operation::Resolved(COutputUnary::Getter { function }),
+        operation: COutputUnary::Getter { function },
         child,
     } = view
     else {
         panic!("fields_into requires a fields! accessor")
     };
     let COutput::Branch {
-        operation:
-            prebindgen_declarations::Operation::Request(COutputRequest::NamedFields { fields, .. }),
+        operation: COutputBranch::NamedFields { fields, .. },
         children,
     } = *child
     else {
         panic!("fields_into requires named fields")
     };
     COutput::Unary {
-        operation: COutputUnary::Into { function }.into(),
+        operation: COutputUnary::Into { function },
         child: Box::new(COutput::Branch {
-            operation: prebindgen_declarations::Operation::Request(COutputRequest::NamedFields {
+            operation: COutputBranch::NamedFields {
                 fields,
                 mode: ProjectionMode::Owned,
-            }),
+            },
             children,
         }),
     }

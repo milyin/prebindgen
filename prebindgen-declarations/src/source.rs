@@ -94,7 +94,7 @@ pub fn resolve_constructor<I: InputOps, O: OutputOps, IR, OR>(
         return Err(format!("constructor `{function}`: wrong argument count"));
     }
     Ok(InputNode::Branch {
-        operation: (operation(function.to_owned())).into(),
+        operation: operation(function.to_owned()),
         children: f
             .params
             .iter()
@@ -1033,7 +1033,7 @@ mod tests {
         )
         .unwrap();
         assert!(
-            matches!(resolved, ConstructorInput::Branch {operation, children} if operation.resolved() == "make" && matches!(children.as_slice(),[ConstructorInput::Leaf(42)]))
+            matches!(resolved, ConstructorInput::Branch {operation, children} if operation == "make" && matches!(children.as_slice(),[ConstructorInput::Leaf(42)]))
         );
         assert!(resolve_constructor(
             &flat,

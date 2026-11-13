@@ -818,7 +818,7 @@ impl Codec for CCodec {
         if !self.declared {
             return Err("configured callbacks are unsupported by this codec".into());
         }
-        let configuration = request.operation;
+        let configuration = request.operation.bound_callback()?;
         if configuration.foreign.is_some()
             || configuration.namespace.is_some()
             || configuration.explicit_return
@@ -3226,7 +3226,7 @@ mod generation_tests {
                 fun!(first).input(
                     "values",
                     crate::CInput::Unary {
-                        operation: (CInputUnary::Sequence).into(),
+                        operation: CInputUnary::Sequence,
                         child: Box::new(crate::CInput::call("copy_child")),
                     }
                     .reconstruct(),
@@ -3341,7 +3341,7 @@ mod generation_tests {
             &CCodec::raw(),
             &syn::parse_quote!(Option<&Child>),
             &COutput::Unary {
-                operation: (COutputUnary::Optional).into(),
+                operation: COutputUnary::Optional,
                 child: Box::new(COutput::Leaf(COutputLeafOp::Value)),
             },
             0,
@@ -3782,11 +3782,10 @@ mod generation_tests {
     fn multiple_collection_observations_follow_the_actual_borrow() {
         use prebindgen_declarations::bind_output;
         let seq = |copy: bool| COutput::Unary {
-            operation: (COutputUnary::Sequence {
+            operation: COutputUnary::Sequence {
                 delivery: prebindgen_declarations::SequenceDelivery::Value,
                 mode: copy.then_some(prebindgen_declarations::ProjectionMode::Borrowed),
-            })
-            .into(),
+            },
             child: Box::new(COutput::Leaf(COutputLeafOp::Value)),
         };
         for (source, recipe) in [
@@ -3830,9 +3829,9 @@ mod generation_tests {
         let mut flat =
             CBindings::parse(source.items.into_iter().map(|i| (i, Default::default()))).unwrap();
         let input = CInput::Unary {
-            operation: (CInputUnary::Optional).into(),
+            operation: CInputUnary::Optional,
             child: Box::new(CInput::Unary {
-                operation: (CInputUnary::Optional).into(),
+                operation: CInputUnary::Optional,
                 child: Box::new(CInput::Leaf(CInputLeafOp::Value)),
             }),
         };
@@ -3840,9 +3839,9 @@ mod generation_tests {
             bind_input(&mut flat, &CCodec::raw(), "echo", param, &input, &()).unwrap();
         }
         let output = COutput::Unary {
-            operation: (COutputUnary::Optional).into(),
+            operation: COutputUnary::Optional,
             child: Box::new(COutput::Unary {
-                operation: (COutputUnary::Optional).into(),
+                operation: COutputUnary::Optional,
                 child: Box::new(COutput::Leaf(COutputLeafOp::Value)),
             }),
         };
@@ -3868,21 +3867,21 @@ mod generation_tests {
         let mut flat =
             CBindings::parse(source.items.into_iter().map(|i| (i, Default::default()))).unwrap();
         let recipe = COutput::Branch {
-            operation: (COutputBranch::Fields).into(),
+            operation: COutputBranch::Fields,
             children: vec![
                 COutput::Branch {
-                    operation: (COutputBranch::Fields).into(),
+                    operation: COutputBranch::Fields,
                     children: vec![],
                 },
                 COutput::Branch {
-                    operation: (COutputBranch::Fields).into(),
+                    operation: COutputBranch::Fields,
                     children: vec![
                         COutput::Leaf(COutputLeafOp::Value),
                         COutput::Leaf(COutputLeafOp::Value),
                     ],
                 },
                 COutput::Unary {
-                    operation: (COutputUnary::Optional).into(),
+                    operation: COutputUnary::Optional,
                     child: Box::new(COutput::Leaf(COutputLeafOp::Value)),
                 },
             ],
@@ -3916,7 +3915,7 @@ mod generation_tests {
             (
                 "Option<char>",
                 CInput::Unary {
-                    operation: (CInputUnary::Optional).into(),
+                    operation: CInputUnary::Optional,
                     child: Box::new(CInput::Leaf(CInputLeafOp::Value)),
                 },
             ),
@@ -3926,7 +3925,7 @@ mod generation_tests {
                 CBindings::parse(source.items.into_iter().map(|i| (i, Default::default())))
                     .unwrap();
             let selector = CInput::Branch {
-                operation: (CInputBranch::Selector).into(),
+                operation: CInputBranch::Selector,
                 children: vec![arm.clone(), arm.clone()],
             };
             bind_input(&mut flat, &CCodec::raw(), "echo", "value", &selector, &()).unwrap();
@@ -3956,9 +3955,9 @@ mod generation_tests {
                 CBindings::parse(source.items.into_iter().map(|i| (i, Default::default())))
                     .unwrap();
             let recipe = CInput::Unary {
-                operation: (CInputUnary::Optional).into(),
+                operation: CInputUnary::Optional,
                 child: Box::new(CInput::Branch {
-                    operation: (CInputBranch::Selector).into(),
+                    operation: CInputBranch::Selector,
                     children: vec![arm.clone(), arm],
                 }),
             };
@@ -4384,8 +4383,8 @@ mod compilation;
 pub mod operations;
 
 pub use operations::{
-    CInput, CInputBranch, CInputLeafOp, CInputOps, CInputUnary, COutput, COutputBranch,
-    COutputLeafOp, COutputOps, COutputUnary,
+    CInput, CInputArrow, CInputBranch, CInputLeafOp, CInputOps, CInputUnary, COutput,
+    COutputBranch, COutputLeafOp, COutputOps, COutputUnary,
 };
 
 mod declarations;

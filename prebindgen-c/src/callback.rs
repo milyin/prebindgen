@@ -127,6 +127,7 @@ pub(crate) fn input(
         active,
         ..
     } = request;
+    let configuration = configuration.bound_callback()?;
     let argument_recipes = domain.argument_nodes()?;
     let signature = callback_signature(&configuration.ty)?.ok_or("expected source callback")?;
     let unit = matches!(&signature.return_type, syn::Type::Tuple(t) if t.elems.is_empty());

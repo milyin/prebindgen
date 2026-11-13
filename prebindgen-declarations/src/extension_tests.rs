@@ -44,17 +44,17 @@ fn parameter() -> Parameter {
         |ty, alternatives, extension| {
             let child = alternatives.build(
                 |children| Input::Branch {
-                    operation: crate::Operation::Resolved("choose".into()),
+                    operation: "choose".into(),
                     children,
                 },
                 || Input::Leaf("default".into()),
                 |child| Input::Unary {
-                    operation: crate::Operation::Resolved("temporary".into()),
+                    operation: "temporary".into(),
                     child: Box::new(child),
                 },
             );
             Input::Unary {
-                operation: (format!("{}:{}", type_key(&ty), extension.unwrap().0)).into(),
+                operation: format!("{}:{}", type_key(&ty), extension.unwrap().0),
                 child: Box::new(child),
             }
         },
@@ -65,18 +65,18 @@ fn returned() -> Return {
         syn::parse_quote!(Value),
         |function| {
             getter_view(function, Output::Leaf, |name, child| Output::Unary {
-                operation: (name).into(),
+                operation: name,
                 child: Box::new(child),
             })
         },
         || Output::Leaf("direct".into()),
         |policy| Output::Leaf(format!("{:?}", policy.mode)),
         |child| Output::Unary {
-            operation: crate::Operation::Resolved("owned fields".into()),
+            operation: "owned fields".into(),
             child: Box::new(child),
         },
         |ty, children, extension| Output::Branch {
-            operation: (format!("{}:{}", type_key(&ty), extension.unwrap().0)).into(),
+            operation: format!("{}:{}", type_key(&ty), extension.unwrap().0),
             children,
         },
     )
@@ -91,7 +91,7 @@ fn fields() -> Fields {
             other => other,
         },
         |function, overrides, extension| Output::Branch {
-            operation: (format!("{function}:{}", extension.unwrap().0)).into(),
+            operation: format!("{function}:{}", extension.unwrap().0),
             children: overrides.into_values().collect(),
         },
     )
@@ -119,11 +119,11 @@ fn adapter_methods_compose_with_common_input_and_return_builders() {
     let Input::Unary { operation, child } = input else {
         panic!("lost typed scope")
     };
-    assert_eq!(operation.resolved(), "Value:packet");
+    assert_eq!(operation, "Value:packet");
     let Input::Unary { operation, child } = *child else {
         panic!("lost reconstruction")
     };
-    assert_eq!(operation.resolved(), "temporary");
+    assert_eq!(operation, "temporary");
     let Input::Branch { children, .. } = *child else {
         panic!("lost alternatives")
     };
@@ -150,15 +150,15 @@ fn adapter_methods_compose_with_common_input_and_return_builders() {
     else {
         panic!("lost views")
     };
-    assert_eq!(operation.resolved(), "Value:result");
+    assert_eq!(operation, "Value:result");
     assert!(
-        matches!(&children[..],[Output::Unary {operation,..},Output::Leaf(borrowed),Output::Leaf(owned)] if operation.resolved()=="renamed" && borrowed=="Borrowed" && owned=="Owned")
+        matches!(&children[..],[Output::Unary {operation,..},Output::Leaf(borrowed),Output::Leaf(owned)] if operation=="renamed" && borrowed=="Borrowed" && owned=="Owned")
     );
 }
 #[test]
 fn field_options_and_omission_survive_common_builders_and_registration() {
     let empty = Output::Branch {
-        operation: crate::Operation::Resolved("empty".into()),
+        operation: "empty".into(),
         children: vec![],
     };
     let output: Output = returned()
@@ -175,9 +175,9 @@ fn field_options_and_omission_survive_common_builders_and_registration() {
     let Output::Unary { operation, child } = &children[0] else {
         panic!("lost consuming accessor")
     };
-    assert_eq!(operation.resolved(), "owned fields");
+    assert_eq!(operation, "owned fields");
     assert!(
-        matches!(child.as_ref(),Output::Branch {operation,children} if operation.resolved()=="accessor:fields" && matches!(&children[..],[Output::Leaf(value)] if value=="discard"))
+        matches!(child.as_ref(),Output::Branch {operation,children} if operation=="accessor:fields" && matches!(&children[..],[Output::Leaf(value)] if value=="discard"))
     );
     let declarations: Vec<Expansion> = vec![
         parameter().packet_format().variant_self().into(),
@@ -265,16 +265,14 @@ fn callback_settings_inherit_override_and_reach_the_resolved_arrow() {
         )
         .unwrap();
         let arrow = Input::Arrow {
-            operation: (Box::new(operation)).into(),
+            operation: Box::new(operation),
             domain: Box::new(Output::Branch {
-                operation: crate::Operation::Resolved("arguments".into()),
+                operation: "arguments".into(),
                 children: arguments,
             }),
             codomain: Box::new(result),
         };
-        assert!(
-            matches!(arrow,Input::Arrow {operation,..} if operation.resolved().extension.is_some())
-        );
+        assert!(matches!(arrow,Input::Arrow {operation,..} if operation.extension.is_some()));
     }
     let operation = CallbackOperation {
         ty: default.ty.clone(),
@@ -328,10 +326,10 @@ fn independent_transport_extension_uses_the_shared_fluent_api() {
     let output: TestOutput<TestInputRequest, TestOutputRequest> =
         test_expand_return!(i64).field_self().bulk().into();
     assert!(
-        matches!(input,TestInput::Unary {operation:crate::Operation::Request(TestInputRequest::ForType {..}),child:input} if matches!(*input,TestInput::Unary {operation:crate::Operation::Resolved(TestInputUnary::Bulk),..}))
+        matches!(input,TestInput::Unary {operation:TestInputUnary::ForType {..},child:input} if matches!(*input,TestInput::Unary {operation:TestInputUnary::Bulk,..}))
     );
     assert!(
-        matches!(output,TestOutput::Unary {operation:crate::Operation::Request(TestOutputRequest::ForType {..}),child:output} if matches!(*output,TestOutput::Unary {operation:crate::Operation::Resolved(TestOutputUnary::Bulk),..}))
+        matches!(output,TestOutput::Unary {operation:TestOutputUnary::ForType {..},child:output} if matches!(*output,TestOutput::Unary {operation:TestOutputUnary::Bulk,..}))
     );
 }
 #[test]
@@ -416,7 +414,7 @@ impl Codec for ArrowCodec {
         };
         self.input_arrow(InputArrow {
             flat: cx.flat,
-            operation: operation.resolved(),
+            operation,
             domain,
             codomain,
             extra,
@@ -531,9 +529,9 @@ fn callback_extensions_reach_the_compiler_and_change_generated_behavior() {
     )
     .unwrap();
     let arrow = Input::Arrow {
-        operation: (Box::new(operation)).into(),
+        operation: Box::new(operation),
         domain: Box::new(Output::Branch {
-            operation: crate::Operation::Resolved("arguments".into()),
+            operation: "arguments".into(),
             children: arguments,
         }),
         codomain: Box::new(result),

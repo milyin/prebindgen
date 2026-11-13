@@ -218,11 +218,10 @@ mod tests {
         element: crate::COutput<CInputRequest, COutputRequest>,
     ) -> crate::COutput<CInputRequest, COutputRequest> {
         crate::COutput::Unary {
-            operation: (COutputUnary::Sequence {
+            operation: COutputUnary::Sequence {
                 delivery: SequenceDelivery::Value,
                 mode: copy.then_some(ProjectionMode::Borrowed),
-            })
-            .into(),
+            },
             child: Box::new(element),
         }
     }
@@ -307,7 +306,7 @@ mod tests {
         assert!(g.header.contains("pb_i64_slice_view *out1"));
         let error = Cbindgen::new(model(source))
             .function(fun!(make).output(crate::COutput::Branch {
-                operation: (COutputBranch::Fields).into(),
+                operation: COutputBranch::Fields,
                 children: vec![sequence(false, crate::COutput::auto())],
             }))
             .build()

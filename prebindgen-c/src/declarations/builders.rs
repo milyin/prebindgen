@@ -30,7 +30,7 @@ pub fn expand_param(ty: Type) -> DeclCExpandParam {
         || CInput::Leaf(CInputLeafOp::Value),
         |ty, alternatives, extension| {
             let input = alternatives.build(CInput::selector, CInput::auto, |child| CInput::Unary {
-                operation: (CInputUnary::Temporary).into(),
+                operation: CInputUnary::Temporary,
                 child: Box::new(child),
             });
             let _ = extension;
@@ -47,7 +47,7 @@ pub fn expand_return(ty: Type) -> DeclCExpandReturn {
                 function,
                 |name| COutput::getter(name, COutput::auto()),
                 |name, child| COutput::Unary {
-                    operation: (COutputUnary::Named { name }).into(),
+                    operation: COutputUnary::Named { name },
                     child: Box::new(child),
                 },
             )
@@ -68,10 +68,9 @@ pub fn fields(function: syn::Ident) -> DeclCFields {
         function,
         |output| match output {
             COutput::Unary {
-                operation:
-                    prebindgen_declarations::Operation::Request(COutputRequest::ForType { ty }),
+                operation: COutputUnary::ForType { ty },
                 child: output,
-            } if matches!(output.as_ref(),COutput::Branch {operation:prebindgen_declarations::Operation::Resolved(COutputBranch::Combine),children} if children.is_empty()) => {
+            } if matches!(output.as_ref(),COutput::Branch {operation:COutputBranch::Combine,children} if children.is_empty()) => {
                 COutput::for_type(*ty, COutput::Leaf(COutputLeafOp::Discard))
             }
             output => output,
@@ -81,12 +80,10 @@ pub fn fields(function: syn::Ident) -> DeclCFields {
             COutput::getter(
                 function,
                 COutput::Branch {
-                    operation: prebindgen_declarations::Operation::Request(
-                        COutputRequest::NamedFields {
-                            fields,
-                            mode: prebindgen_declarations::ProjectionMode::Borrowed,
-                        },
-                    ),
+                    operation: COutputBranch::NamedFields {
+                        fields,
+                        mode: prebindgen_declarations::ProjectionMode::Borrowed,
+                    },
                     children,
                 },
             )
@@ -114,13 +111,11 @@ impl
             declaration,
             CInput::auto,
             |children| COutput::Branch {
-                operation: COutputBranch::Arguments.into(),
+                operation: COutputBranch::Arguments,
                 children,
             },
             |metadata, domain, codomain| CInput::Arrow {
-                operation: prebindgen_declarations::Operation::Request(Self::Callback(Box::new(
-                    metadata,
-                ))),
+                operation: CInputArrow::Callback(Box::new(metadata)),
                 domain: Box::new(domain),
                 codomain: Box::new(codomain),
             },

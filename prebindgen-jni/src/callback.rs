@@ -103,13 +103,14 @@ pub(crate) fn input(
         active,
         ..
     } = request;
+    let configuration = configuration.bound_callback()?;
     let ty = &configuration.ty;
     let argument_recipes = domain.argument_nodes()?;
     let signature = callback_signature(ty)?.ok_or("expected source callback")?;
     let returns_unit = matches!(&signature.return_type, syn::Type::Tuple(t) if t.elems.is_empty());
     if returns_unit
         && !matches!(codomain, JniInput::None)
-        && !matches!(codomain, JniInput::Branch { operation: prebindgen_declarations::Operation::Resolved(JniInputBranch::Fields), children } if children.is_empty())
+        && !matches!(codomain, JniInput::Branch { operation: JniInputBranch::Fields, children } if children.is_empty())
     {
         return Err("unit callback returns require an empty unit input representation".into());
     }

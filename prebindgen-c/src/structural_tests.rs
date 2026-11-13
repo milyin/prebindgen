@@ -1,6 +1,6 @@
 //! Structural preparation trees expose every explicit recipe to the common walkers.
 use crate::*;
-use prebindgen_declarations::{input_children, output_children, Operation};
+use prebindgen_declarations::{input_children, output_children};
 
 #[test]
 fn nested_callback_fields_and_result_are_visible_without_request_specific_recursion() {
@@ -39,17 +39,21 @@ fn nested_callback_fields_and_result_are_visible_without_request_specific_recurs
 fn partial_enum_branches_expose_their_field_recipes_to_generic_traversal() {
     let tree = CInput::enum_fields([("First", vec![("value", CInput::call("make"))])]);
     fn input(tree: &CInput<CInputRequest, COutputRequest>, requests: &mut Vec<String>) {
-        if let Some(request) = tree.pending_request() {
-            requests.push(
-                match request {
-                    CInputRequest::EnumFields => "enum",
-                    CInputRequest::VariantFields { .. } => "variant",
-                    CInputRequest::Call(_) => "constructor",
-                    _ => "other",
-                }
-                .into(),
-            );
-        }
+        requests.push(
+            match tree {
+                CInput::Branch {
+                    operation: CInputBranch::EnumFields,
+                    ..
+                } => "enum",
+                CInput::Branch {
+                    operation: CInputBranch::VariantFields { .. },
+                    ..
+                } => "variant",
+                CInput::Request(CInputRequest::Call(_)) => "constructor",
+                _ => "other",
+            }
+            .into(),
+        );
         input_children(tree, requests, &mut input, &mut output);
     }
     fn output(tree: &COutput<CInputRequest, COutputRequest>, requests: &mut Vec<String>) {
@@ -74,10 +78,10 @@ fn mismatched_names_and_children_are_rejected_before_conversion() {
     let flat = flat("pub struct Row {pub value:i64}pub fn rows()->Row{}");
     let defaults = DeclCDefaults::new(&flat, vec![], vec![], vec![]).unwrap();
     let tree = COutput::Branch {
-        operation: Operation::Request(COutputRequest::NamedFields {
+        operation: COutputBranch::NamedFields {
             fields: vec!["value".into()],
             mode: prebindgen_declarations::ProjectionMode::Owned,
-        }),
+        },
         children: vec![],
     };
     let error = defaults
@@ -90,20 +94,6 @@ fn mismatched_names_and_children_are_rejected_before_conversion() {
         )
         .unwrap_err();
     assert!(error.contains("field name and child counts"), "{error}");
-    let malformed = CInput::Unary {
-        operation: Operation::Request(CInputRequest::EnumFields),
-        child: Box::new(CInput::auto()),
-    };
-    let error = defaults
-        .resolve_input(
-            &flat,
-            &CCodec::declared(),
-            &syn::parse_quote!(i64),
-            &malformed,
-            &(),
-        )
-        .unwrap_err();
-    assert!(error.contains("structural node shape"), "{error}");
 }
 #[test]
 fn callback_argument_indices_must_correspond_to_domain_children() {
@@ -116,7 +106,7 @@ fn callback_argument_indices_must_correspond_to_domain_children() {
         panic!("expected typed callback")
     };
     let CInput::Arrow {
-        operation: Operation::Request(CInputRequest::Callback(request)),
+        operation: CInputArrow::Callback(request),
         ..
     } = child.as_mut()
     else {
@@ -168,7 +158,7 @@ fn local_conversion_combinators_preserve_type_scope_and_container_defaults() {
     assert!(matches!(
         input,
         CInput::Unary {
-            operation: Operation::Resolved(CInputUnary::Optional),
+            operation: CInputUnary::Optional,
             ..
         }
     ));
@@ -187,7 +177,7 @@ fn local_conversion_combinators_preserve_type_scope_and_container_defaults() {
     assert!(matches!(
         output,
         COutput::Unary {
-            operation: Operation::Resolved(COutputUnary::Sequence { .. }),
+            operation: COutputUnary::Sequence { .. },
             ..
         }
     ));
@@ -206,7 +196,7 @@ fn local_conversion_combinators_preserve_type_scope_and_container_defaults() {
     assert!(matches!(
         reconstructed,
         CInput::Unary {
-            operation: Operation::Resolved(CInputUnary::Temporary),
+            operation: CInputUnary::Temporary,
             ..
         }
     ));
@@ -231,7 +221,7 @@ fn reference_type_local_conversions_keep_their_declared_scope() {
     assert!(matches!(
         output,
         COutput::Unary {
-            operation: Operation::Resolved(COutputUnary::Convert { .. }),
+            operation: COutputUnary::Convert { .. },
             ..
         }
     ));
@@ -259,4 +249,41 @@ fn implicit_callback_result_cannot_hide_an_explicit_child() {
         )
         .unwrap_err();
     assert!(error.contains("Auto codomain"), "{error}");
+}
+
+#[test]
+fn direct_compilation_rejects_source_dependent_metadata() {
+    let flat = flat("pub fn echo(value:i64)->i64{}");
+    let input = CInput::Unary {
+        operation: CInputUnary::ForType {
+            ty: Box::new(syn::parse_quote!(i64)),
+        },
+        child: Box::new(CInput::Leaf(CInputLeafOp::Value)),
+    };
+    let error = prebindgen_declarations::compile_input(
+        &flat,
+        &CCodec::declared(),
+        "echo",
+        "value",
+        &input,
+        &(),
+    )
+    .unwrap_err();
+    assert!(
+        error.contains("resolve source-dependent input operations"),
+        "{error}"
+    );
+    let output = COutput::Unary {
+        operation: COutputUnary::ForType {
+            ty: Box::new(syn::parse_quote!(i64)),
+        },
+        child: Box::new(COutput::Leaf(COutputLeafOp::Value)),
+    };
+    let error =
+        prebindgen_declarations::compile_output(&flat, &CCodec::declared(), "echo", &output, &())
+            .unwrap_err();
+    assert!(
+        error.contains("resolve source-dependent output operations"),
+        "{error}"
+    );
 }

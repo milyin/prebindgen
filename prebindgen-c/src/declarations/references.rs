@@ -7,17 +7,16 @@ pub fn source_items<'a>(
     functions: impl IntoIterator<Item = &'a DeclCFunction>,
 ) -> Vec<String> {
     fn input(tree: &CInput<CInputRequest, COutputRequest>, names: &mut Vec<String>) {
-        match tree.pending_request() {
-            Some(CInputRequest::Conversion(declaration)) => {
+        match tree {
+            CInput::Request(CInputRequest::Conversion(declaration)) => {
                 prebindgen_declarations::conversion_source_items(declaration, names)
             }
-            Some(CInputRequest::Call(name)) => names.push(name.clone()),
+            CInput::Request(CInputRequest::Call(name)) => names.push(name.clone()),
             _ => {}
         }
         match tree {
             CInput::Unary {
-                operation:
-                    prebindgen_declarations::Operation::Resolved(CInputUnary::Convert { conversion }),
+                operation: CInputUnary::Convert { conversion },
                 ..
             } => {
                 if let prebindgen_flat::ValueSource::Function(name) = &conversion.source {
@@ -25,8 +24,7 @@ pub fn source_items<'a>(
                 }
             }
             CInput::Branch {
-                operation:
-                    prebindgen_declarations::Operation::Resolved(CInputBranch::Constructor { function }),
+                operation: CInputBranch::Constructor { function },
                 ..
             } => names.push(function.clone()),
             _ => {}
@@ -34,13 +32,12 @@ pub fn source_items<'a>(
         prebindgen_declarations::input_children(tree, names, &mut input, &mut output);
     }
     fn output(tree: &COutput<CInputRequest, COutputRequest>, names: &mut Vec<String>) {
-        if let Some(COutputRequest::Conversion(declaration)) = tree.pending_request() {
+        if let COutput::Request(COutputRequest::Conversion(declaration)) = tree {
             prebindgen_declarations::conversion_source_items(declaration, names)
         }
         match tree {
             COutput::Unary {
-                operation:
-                    prebindgen_declarations::Operation::Resolved(COutputUnary::Convert { conversion }),
+                operation: COutputUnary::Convert { conversion },
                 ..
             } => {
                 if let prebindgen_flat::ValueSource::Function(name) = &conversion.source {
@@ -48,17 +45,11 @@ pub fn source_items<'a>(
                 }
             }
             COutput::Unary {
-                operation:
-                    prebindgen_declarations::Operation::Resolved(
-                        COutputUnary::Getter { function } | COutputUnary::Into { function },
-                    ),
+                operation: COutputUnary::Getter { function } | COutputUnary::Into { function },
                 ..
             } => names.push(function.clone()),
             COutput::Unary {
-                operation:
-                    prebindgen_declarations::Operation::Resolved(COutputUnary::Result {
-                        error: Some(name),
-                    }),
+                operation: COutputUnary::Result { error: Some(name) },
                 ..
             } => names.push(name.clone()),
             _ => {}

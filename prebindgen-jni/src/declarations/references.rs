@@ -7,17 +7,16 @@ pub fn source_items<'a>(
     functions: impl IntoIterator<Item = &'a DeclJniFunction>,
 ) -> Vec<String> {
     fn input(tree: &JniInput<JniInputRequest, JniOutputRequest>, names: &mut Vec<String>) {
-        match tree.pending_request() {
-            Some(JniInputRequest::Conversion(declaration)) => {
+        match tree {
+            JniInput::Request(JniInputRequest::Conversion(declaration)) => {
                 prebindgen_declarations::conversion_source_items(declaration, names)
             }
-            Some(JniInputRequest::Call(name)) => names.push(name.clone()),
+            JniInput::Request(JniInputRequest::Call(name)) => names.push(name.clone()),
             _ => {}
         }
         match tree {
             JniInput::Unary {
-                operation:
-                    prebindgen_declarations::Operation::Resolved(JniInputUnary::Convert { conversion }),
+                operation: JniInputUnary::Convert { conversion },
                 ..
             } => {
                 if let prebindgen_flat::ValueSource::Function(name) = &conversion.source {
@@ -25,10 +24,7 @@ pub fn source_items<'a>(
                 }
             }
             JniInput::Branch {
-                operation:
-                    prebindgen_declarations::Operation::Resolved(JniInputBranch::Constructor {
-                        function,
-                    }),
+                operation: JniInputBranch::Constructor { function },
                 ..
             } => names.push(function.clone()),
             _ => {}
@@ -36,13 +32,12 @@ pub fn source_items<'a>(
         prebindgen_declarations::input_children(tree, names, &mut input, &mut output);
     }
     fn output(tree: &JniOutput<JniInputRequest, JniOutputRequest>, names: &mut Vec<String>) {
-        if let Some(JniOutputRequest::Conversion(declaration)) = tree.pending_request() {
+        if let JniOutput::Request(JniOutputRequest::Conversion(declaration)) = tree {
             prebindgen_declarations::conversion_source_items(declaration, names)
         }
         match tree {
             JniOutput::Unary {
-                operation:
-                    prebindgen_declarations::Operation::Resolved(JniOutputUnary::Convert { conversion }),
+                operation: JniOutputUnary::Convert { conversion },
                 ..
             } => {
                 if let prebindgen_flat::ValueSource::Function(name) = &conversion.source {
@@ -50,17 +45,11 @@ pub fn source_items<'a>(
                 }
             }
             JniOutput::Unary {
-                operation:
-                    prebindgen_declarations::Operation::Resolved(
-                        JniOutputUnary::Getter { function } | JniOutputUnary::Into { function },
-                    ),
+                operation: JniOutputUnary::Getter { function } | JniOutputUnary::Into { function },
                 ..
             } => names.push(function.clone()),
             JniOutput::Unary {
-                operation:
-                    prebindgen_declarations::Operation::Resolved(JniOutputUnary::Result {
-                        error: Some(name),
-                    }),
+                operation: JniOutputUnary::Result { error: Some(name) },
                 ..
             } => names.push(name.clone()),
             _ => {}
