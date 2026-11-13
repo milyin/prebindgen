@@ -94,7 +94,7 @@
 <a href=#94 id=94 data-nosnippet>94</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format!</span>(<span class="string">"constructor `{function}`: wrong argument count"</span>));
 <a href=#95 id=95 data-nosnippet>95</a>    }
 <a href=#96 id=96 data-nosnippet>96</a>    <span class="prelude-val">Ok</span>(InputNode::Branch {
-<a href=#97 id=97 data-nosnippet>97</a>        operation: (operation(function.to_owned())).into(),
+<a href=#97 id=97 data-nosnippet>97</a>        operation: operation(function.to_owned()),
 <a href=#98 id=98 data-nosnippet>98</a>        children: f
 <a href=#99 id=99 data-nosnippet>99</a>            .params
 <a href=#100 id=100 data-nosnippet>100</a>            .iter()
@@ -1033,7 +1033,7 @@
 <a href=#1033 id=1033 data-nosnippet>1033</a>        )
 <a href=#1034 id=1034 data-nosnippet>1034</a>        .unwrap();
 <a href=#1035 id=1035 data-nosnippet>1035</a>        <span class="macro">assert!</span>(
-<a href=#1036 id=1036 data-nosnippet>1036</a>            <span class="macro">matches!</span>(resolved, ConstructorInput::Branch {operation, children} <span class="kw">if </span>operation.resolved() == <span class="string">"make" </span>&amp;&amp; <span class="macro">matches!</span>(children.as_slice(),[ConstructorInput::Leaf(<span class="number">42</span>)]))
+<a href=#1036 id=1036 data-nosnippet>1036</a>            <span class="macro">matches!</span>(resolved, ConstructorInput::Branch {operation, children} <span class="kw">if </span>operation == <span class="string">"make" </span>&amp;&amp; <span class="macro">matches!</span>(children.as_slice(),[ConstructorInput::Leaf(<span class="number">42</span>)]))
 <a href=#1037 id=1037 data-nosnippet>1037</a>        );
 <a href=#1038 id=1038 data-nosnippet>1038</a>        <span class="macro">assert!</span>(resolve_constructor(
 <a href=#1039 id=1039 data-nosnippet>1039</a>            <span class="kw-2">&amp;</span>flat,

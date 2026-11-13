@@ -630,7 +630,7 @@
 <a href=#630 id=630 data-nosnippet>630</a>            };
 <a href=#631 id=631 data-nosnippet>631</a>            callback::validate_source_occurrence(
 <a href=#632 id=632 data-nosnippet>632</a>                <span class="kw-2">&amp;</span>flat,
-<a href=#633 id=633 data-nosnippet>633</a>                configuration.resolved(),
+<a href=#633 id=633 data-nosnippet>633</a>                configuration.bound_callback()<span class="question-mark">?</span>,
 <a href=#634 id=634 data-nosnippet>634</a>                <span class="kw-2">&amp;</span>callback_sources,
 <a href=#635 id=635 data-nosnippet>635</a>            )<span class="question-mark">?</span>;
 <a href=#636 id=636 data-nosnippet>636</a>            flat.metadata.callback_recipes.push(recipe);
@@ -854,7 +854,7 @@
 <a href=#854 id=854 data-nosnippet>854</a>            <span class="kw">let </span>plan = prebindgen_declarations::compile_input_value(
 <a href=#855 id=855 data-nosnippet>855</a>                flat,
 <a href=#856 id=856 data-nosnippet>856</a>                <span class="self">self</span>,
-<a href=#857 id=857 data-nosnippet>857</a>                <span class="kw-2">&amp;</span>operation.resolved().ty,
+<a href=#857 id=857 data-nosnippet>857</a>                <span class="kw-2">&amp;</span>operation.bound_callback()<span class="question-mark">?</span>.ty,
 <a href=#858 id=858 data-nosnippet>858</a>                <span class="kw-2">&amp;</span>recipe,
 <a href=#859 id=859 data-nosnippet>859</a>                <span class="kw-2">&amp;</span>(),
 <a href=#860 id=860 data-nosnippet>860</a>            )<span class="question-mark">?</span>;
@@ -2516,7 +2516,7 @@
 <a href=#2516 id=2516 data-nosnippet>2516</a></span><span class="kw">pub mod </span>operations;
 <a href=#2517 id=2517 data-nosnippet>2517</a>
 <a href=#2518 id=2518 data-nosnippet>2518</a><span class="kw">pub use </span>operations::{
-<a href=#2519 id=2519 data-nosnippet>2519</a>    JniInput, JniInputBranch, JniInputLeafOp, JniInputOps, JniInputUnary, JniOutput,
+<a href=#2519 id=2519 data-nosnippet>2519</a>    JniInput, JniInputArrow, JniInputBranch, JniInputLeafOp, JniInputOps, JniInputUnary, JniOutput,
 <a href=#2520 id=2520 data-nosnippet>2520</a>    JniOutputBranch, JniOutputLeafOp, JniOutputOps, JniOutputUnary,
 <a href=#2521 id=2521 data-nosnippet>2521</a>};
 <a href=#2522 id=2522 data-nosnippet>2522</a>
