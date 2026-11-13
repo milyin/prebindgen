@@ -212,7 +212,7 @@ fn canonical_helpers_validate_source_signatures() {
 #[test]
 fn canonical_conversions_use_existing_flat_type_entries() {
     let mut flat = model(VALUE);
-    prebindgen_declarations::prepare_value_conversions(&mut flat, vec![conversion()]).unwrap();
+    prebindgen_declarations::prepare_value_conversions(&mut flat, &[conversion()]).unwrap();
     assert!(flat
         .type_info(&flat.resolve_type(&syn::parse_quote!(Value)).unwrap())
         .unwrap()
@@ -239,7 +239,23 @@ fn source_selection_includes_local_trait_representations() {
     .map(|i| (i, Default::default()))
     .collect::<Vec<_>>();
     let function = fun!(echo).expand_param("v", convert!(Value).input(from!(crate::Repr)));
-    let names = prebindgen_declarations::declarations::source_items(&[], &[], &[], [&function]);
+    let names = crate::declarations::source_items(&[], &[], &[], [&function]);
     let selected: JniBindings = JniBindings::parse_selected(items, &names, &[]).unwrap();
     assert!(selected.type_info(&syn::parse_quote!(crate::Repr)).is_ok());
+}
+
+#[test]
+fn local_conversion_views_and_selectors_keep_container_scope() {
+    let source = format!("{VALUE} pub fn option(v:Option<Value>)->Option<Value>{{}}");
+    let input: JniInput<JniInputRequest, JniOutputRequest> = conversion().into();
+    let output: JniOutput<JniInputRequest, JniOutputRequest> = conversion().into();
+    let generated = builder(&source)
+        .input(input.variant("make"))
+        .output(output.field("read"))
+        .package(package!().fun(fun!(option)))
+        .build()
+        .unwrap();
+    assert!(generated.rust.contains("make"));
+    assert!(generated.rust.contains("read"));
+    assert!(generated.kotlin["test/Functions.kt"].contains("option"));
 }

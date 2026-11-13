@@ -1,109 +1,229 @@
 # Implementing a language conversion compiler
 
-`InputNode<InOps, OutOps>` and `OutputNode<InOps, OutOps>` describe composition: a leaf, a unary
-operation, a branch, or an arrow. `None` represents unit. An arrow's domain uses
-the opposite conversion direction and its codomain uses the enclosing direction.
-The adapter supplies the meanings of all operations through the separate
-`InputOps` and `OutputOps` traits. The first operation parameter requires
-`InputOps`; the second requires `OutputOps`. Each built-in operation set implements its corresponding trait.
+A language adapter owns its conversion operations and deferred choices. There is
+no shared declaration operation vocabulary and no translation into adapter operations.
+The shared crate provides tree structure, typed configuration containers, source-aware
+resolution helpers and compilation helpers.
 
-C and JNI define their own operation enums in their `operations` modules. For
-example, JNI has bulk packing and JVM object-record operations; C has neither.
-An adapter can introduce a different operation without extending a common enum
-or teaching a shared interpreter its meaning.
+## Trees and names
 
-## Names and direction parameters
+`InputNode<InOps, OutOps, InRequest, OutRequest>` describes foreign-to-Rust
+conversion; `OutputNode` describes Rust-to-foreign conversion. `InputOps` and
+`OutputOps` are separate traits. Both node directions keep the same parameter
+order, including inside callable domains.
 
-Each representation has an explicit prefix:
+The structural variants are `None`, `Request`, `Leaf`, `Unary`, `Branch` and
+`Arrow`. Each adapter selects the operation types carried by the four latter
+variants. An arrow's domain uses the opposite conversion direction; its
+codomain uses the enclosing direction. Its argument and result conversions are
+ordinary visible subtrees.
 
-| Role | C | JNI | Declaration syntax |
-| --- | --- | --- | --- |
-| Input tree | `CInput` | `JniInput` | `DeclInput` |
-| Output tree | `COutput` | `JniOutput` | `DeclOutput` |
-| Input operations | `CInputOps` | `JniInputOps` | `DeclInputOps` |
-| Output operations | `COutputOps` | `JniOutputOps` | `DeclOutputOps` |
-| Prepared converter | `CInputConverter` / `COutputConverter` | `JniInputConverter` / `JniOutputConverter` | — |
-| Binding model | `CBindings` | `JniBindings` | — |
+| Role | C | JNI |
+| --- | --- | --- |
+| Conversion trees | `CInput` / `COutput` | `JniInput` / `JniOutput` |
+| Operation sets | `CInputOps` / `COutputOps` | `JniInputOps` / `JniOutputOps` |
+| Deferred choices | `CInputRequest` / `COutputRequest` | `JniInputRequest` / `JniOutputRequest` |
+| Function declaration | `DeclCFunction` | `DeclJniFunction` |
+| Callback declaration | `DeclCCallback` | `DeclJniCallback` |
+| Prepared converters | `CInputConverter` / `COutputConverter` | `JniInputConverter` / `JniOutputConverter` |
+| Binding model | `CBindings` / `CSchema` | `JniBindings` / `JniSchema` |
 
-C converters are concrete plan aliases. JNI converters are containers that can
-retain independent converter implementations. Both serve the corresponding
-schema’s input/output slots.
+Unary, branch and arrow fields hold `InOps::Unary`, `InOps::Branch` and
+`InOps::Arrow` directly (and the corresponding output associated types).
+Each adapter defines the complete metadata for each shape, including any
+source-dependent operations. There is no common operation wrapper or structural
+request vocabulary. A leaf `Request(r)` describes a choice without explicitly
+supplied children, such as a configured default or an inferred constructor.
 
-`CBindings` uses `CSchema`; `JniBindings<InConverter, OutConverter>` uses
-`JniSchema<InConverter, OutConverter>`. Generic plans use `PlanBindings` and
-`PlanSchema`. The intermediate model uses `Flat<ResolvedSchema<C>>`.
-
-Both tree directions keep the same parameter order:
+Explicit recipes always use `child`, `children`, `domain` and `codomain`.
+Request metadata contains names, indices, types and settings, never nested
+conversion trees. For example, a type-specific override is a unary node:
 
 ```rust,ignore
-InputNode<InOps, OutOps, InRequest, OutRequest>
-OutputNode<InOps, OutOps, InRequest, OutRequest>
-DeclInput<DeclInputRequest, DeclOutputRequest>
-DeclOutput<DeclInputRequest, DeclOutputRequest>
+CInput::Unary {
+    operation: CInputUnary::ForType { ty },
+    child: Box::new(recipe),
+}
 ```
 
-Callbacks reverse the node direction while retaining that parameter order.
+Named record fields are branch children with parallel field names in metadata.
+Partial enums contain variant branches, each naming its explicit field children.
+A pending callback is already an arrow: its domain contains explicit argument
+recipes and its codomain contains the result recipe. Argument indices and an
+explicit-result flag describe which source defaults these children override.
+Callback declarations and field builders can keep maps while being configured;
+they place their recipes on structural edges when converted into a tree.
 
-Shared declaration builders use names such as `DeclFunction`, `DeclCallback`,
-`DeclExpandParam` and `DeclExpandReturn`. JNI-specific declaration builders use
-`DeclJniPackage`, `DeclJniPtrClass`, `DeclJniDataClass`, `DeclJniEnumClass` and
-`DeclJniSealedClass`.
+`map_requests` transforms leaf requests in both directions while preserving
+adapter metadata. The shared child walkers traverse every supplied conversion,
+including the children of source-dependent operations. Adapters inspect their
+own metadata during source resolution and source-reference discovery.
 
-Migration: former prepared converter names `JniInput::new(...)` and
-`JniOutput::new(...)` become `JniInputConverter::new(...)` and
-`JniOutputConverter::new(...)`. `JniInput` and `JniOutput` now name resolved trees;
-they are not converter containers.
+Resolution replaces source-dependent operations and fills missing defaults.
+`Infallible` on both request parameters excludes leaf requests. The adapter's
+compiler also rejects source-dependent metadata that has not gone through
+resolution; the shared tree does not impose a metadata-phase protocol on adapters.
+Metadata from the wrong node shape is rejected by Rust's type checker.
 
-## Resolving and compiling
+Both phases use the same adapter operations:
 
-A `Flat<ResolvedSchema<C>>` stores the adapter's request-free conversion trees, source
-metadata, codec and occurrence settings. `compile_resolved(flat)` consumes that
-model and produces `Flat<C::Schema>` containing conversion plans for wrapper
-emission. It needs no configuration registry outside the model. Standalone
-callback and typed error recipes also live in Flat; `compile_declarations`
-compiles them before the function conversions.
+```rust,ignore
+// Configuration and source-dependent requests:
+JniInput<JniInputRequest, JniOutputRequest>
+JniOutput<JniInputRequest, JniOutputRequest>
+
+// Trees after adapter resolution, with no leaf requests:
+JniInput   // both request types default to Infallible
+JniOutput
+```
+
+C follows the same scheme. C has no bulk or JVM-record operation variants and
+its builders do not expose `.bulk()`. Import a language adapter's macros for
+configuration (`fun!`, `callback!`, `expand_param!`, `expand_return!`, `fields!`).
+Direct tree construction uses its `prelude` extension traits, for example
+`use prebindgen_jni::prelude::*`.
+
+## Configuration uses concrete adapter trees
+
+`DeclFunction<InTree, OutTree>`, `DeclCallback<InTree, OutTree>` and
+`DeclDefaults<InTree, OutTree>` are generic data containers. They do not select
+an operation vocabulary. `DeclJniFunction`, for example, fixes its tree types to
+JNI input/output nodes carrying JNI requests. Callbacks store output trees for
+their arguments and input trees for their results.
+
+Defaults and function-local overrides remain order-independent. Resolution
+checks source signatures and applies local choices over type-wide defaults.
+Callback overrides replace the corresponding argument/result tree and retain
+the existing scoped-versus-transferred ownership rules.
+
+## Shared helpers require only their operation's dependencies
+
+Each adapter matches its own request and operation enums and calls shared
+source-aware helpers. Helpers take concrete trees, source metadata and small
+callbacks instead of a trait describing every supported operation.
+
+| Helper | Shared responsibility | Adapter supplies |
+| --- | --- | --- |
+| `resolve_function` | Validate occurrence overrides and preserve prebound slots | Parameter/result resolution |
+| `resolve_constructor` | Check constructor signature and resolve arguments | Child resolution and constructor operation |
+| `resolve_getter` | Check borrowed or consuming receiver and select result type | Child resolution |
+| `resolve_record_fields` / `resolve_named_fields` | Check fields and select local/default recipes | Field resolution |
+| `resolve_enum_fields` / `resolve_enum_variants` | Check variant/member names and counts, preserve source order | Field resolution |
+| `resolve_type_default` | Look up defaults and reject recursion | Resolution of the selected recipe |
+| `resolve_typed_expansion` | Apply a typed override through Option/collection layers | Resolution and container construction |
+| `resolve_conversion` | Follow canonical representations and reject cycles | Representation resolution |
+| `resolve_callback` | Merge callback overrides, determine ownership and reverse directions | Argument and result resolution |
+| `input_children` / `output_children` | Traverse structural children across arrow directions | Adapter-specific source-reference handling |
+
+The declaration family is generic over the adapter's tree types and extension
+settings. `DeclExpandParam<In, FunctionDecl, Extension>`,
+`DeclExpandReturn<Out, FunctionDecl, Extension>` and `DeclFields<Out, Extension>` own
+the complete fluent API. `DeclExpand<ParamDecl, ReturnDecl, ErrorDecl>` is their common
+registration enum. C and JNI provide aliases and small factory functions that
+supply node constructors. An adapter should also expose its own `fun!` macro
+using its concrete function alias, including that alias's extension type, as C
+and JNI already do. The shared `fun!` starts with no extension type;
+`with_extension(options)` can attach settings explicitly. Expansion factories
+are also available as `expand_param`, `expand_return` and `fields`, alongside the familiar macros of the same names.
+An adapter's aliases cannot add inherent methods to shared Rust types; JNI adds
+`bulk()` with `JniBulkExpansion`, exported by its `prelude`.
+
+Each declaration carries an optional adapter-defined `extension`. The default
+extension type is `Infallible`, so adapters without additional settings have no
+extension values to configure. The same extension mechanism exists on
+`DeclFunction<In, Out, Extension>`, `DeclCallback<In, Out, Extension>`,
+`DeclError<FunctionDecl, Extension>` and `DeclConvert<Extension>`. Common fluent
+methods retain these options. An adapter adds its own fluent methods through a
+local extension trait and interprets the settings when resolving or constructing
+its tree. It can put the resulting policy in its own operations or Flat metadata;
+compilation still reads the complete resolved Flat.
+
+Callback defaults inherit the whole extension value unless an occurrence supplies
+one. `resolve_callback` retains that value in `CallbackOperation<Extension>`, so
+it survives in the resolved arrow. `resolve_callback_arrow` shares signature and
+arity validation and resolves arguments outward and the result inward.
+`CallbackInput` is the purpose-specific construction bridge for converting a
+shared `DeclCallback` into an adapter's complete input tree. The adapter delegates
+to `callback_input`, supplying its typed-scope, argument-group and arrow
+constructors. It does not return a request containing the declaration's trees.
+`resolve_callback_tree` borrows the arrow's structural children; declaration
+objects and structural arrows use one default/ownership resolution algorithm.
+`callback_variant` preserves a function's extension settings. The compiler's
+`InputArrow::operation` uses the adapter's `InputOps::Arrow` type, so callback
+settings can reach its compilation hook. Undecorated source helper references
+reject configured function extensions, just as they reject
+parameter overrides; binding options must not silently disappear from a getter,
+constructor or error mapper.
+
+`LocalConversion` is the corresponding construction bridge for `DeclConvert`: it
+keeps a local conversion inside a structural type-scope node, so appended
+selectors and getters still apply to the declared type inside containers.
+
+`prepare_value_conversions` borrows declarations. Its shared job is Rust
+conversion validation and registration; the adapter can still read its extension
+settings and apply them to its own metadata. `DeclDefaults` stores only error
+mapper names. An adapter must apply error extensions to its own Flat metadata
+before registering these mapper defaults.
+Canonical conversion declarations may select opposite directions for one source
+type; the adapter defines compatibility checks for their extension settings.
+Extension data is not interpreted by the shared compiler. The independent
+adapter tests extend input, return, field,
+function, callback, error and conversion declarations without C/JNI operations.
+
+`resolve_container` shares Option/sequence fallback where payloads and elements
+use the same child rule; adapters choose whether a collection is a native leaf
+and construct their own wrappers. The direct-value paths that select different
+payload/element defaults or check collection projections keep that logic local.
+`input_value_conversion` and `output_value_conversion` share canonical conversion
+lookup and direction checks. `override_output_field` edits named fields through
+adapter-identified wrappers in place, without cloning the tree or substituting a
+placeholder node.
+
+Small enum constructors, request dispatch and source-reference matching stay in
+each adapter.
+C ownership decisions and JNI record/bulk policies stay there as well. Sharing
+those matches would require another common operation dictionary or a set of
+callbacks larger than the local operation itself. The shared helpers instead own
+the multi-step behavior that must remain consistent between adapters.
+
+For example, constructor resolution does not require a complete `Codec` or
+support for optionals, collections, callbacks or bulk transport:
+
+```rust,ignore
+resolve_constructor(
+    flat,
+    expected_type,
+    "make_item",
+    arguments,
+    |ty, child| resolve_jni_input(ty, child),
+    |function| JniInputBranch::Constructor { function },
+)
+```
+
+The executable tests in `prebindgen-declarations/src/source.rs` exercise this
+helper with an input vocabulary containing only scalar leaves and constructor
+branches, and an uninhabited output vocabulary. No codec is implemented there.
+The compiler conformance fixture has its own test-only operation vocabulary and
+uses the same source helpers as C and JNI.
+
+## Resolved Flat and compilation
+
+`resolve_bindings` installs request-free adapter trees in
+`Flat<ResolvedSchema<C>>`, where `C` is the compilation codec. The model owns
+source declarations, adapter metadata, compiler settings and resolved standalone
+callback/error recipes. `compile_resolved(flat)` needs no external defaults table.
+Explicitly supplied converters remain authoritative unless explicitly overridden.
 
 The adapter implements `Codec::compile_input_tree` and `compile_output_tree` to
-interpret its own nodes. `compile_output_root` and `compile_output_return` allow
-the adapter to preserve source-error routing and references returned by Rust.
-The `Compiler` context provides source metadata, deterministic names, nested
-compilation and reusable operations for constructors, fields, optional values,
-sequences, enum payloads, conversions and getters. These helpers accept adapter
-trees or compiled children; they do not match a shared operation enum.
-`CompileState` belongs to the adapter. JNI uses it for nested bulk and ordinary
-collection scopes; C has no such state.
+interpret its operations. Compilation produces `Flat<C::Schema>` for wrapper
+emission. Shared `bind_input` and `bind_output` accept request-free adapter trees;
+the adapters also expose convenience functions of those names that first resolve
+their own requests with an empty defaults table.
 
-An adapter can construct the resolved model directly using
-`ResolvedModule::new`. The executable test
-[`independent_operation_vocabularies_compile_without_declaration_frontend`](../prebindgen-declarations/src/operation_tests.rs)
-builds and runs a wrapper with custom arithmetic input/output operations and
-never implements `DeclCodec`.
-
-## The optional declaration frontend
-
-`DeclDefaults` implements the existing expansion, conversion and callback
-configuration language. Its `DeclInput` / `DeclOutput` trees
-are configuration syntax, distinct from the adapter trees stored in resolved
-Flat. The syntax enums are in `prebindgen_declarations::frontend`.
-
-Adapters using that syntax also implement `DeclCodec`. Resolution applies
-defaults and local overrides recursively, interpreting each syntax operation
-into the adapter's vocabulary. `expand_input` and `expand_output` can return
-adapter-specific trees directly. Their `DeclResolve` context resolves nested values
-with the same defaults, recursion stack and occurrence policy. For example, a
-JNI record expansion resolves each field before constructing its JVM-record
-node. A callback's arguments and result use this same process in opposite
-directions.
-
-`finish_input_tree` / `finish_output_tree` normalize the resolved adapter tree.
-JNI owns bulk promotion here. Per-element callback delivery is selected before
-this promotion, preserving the callback element boundary.
-
-Application authors normally use `Cbindgen` or `JniGen` declarations.
-`DeclDefaults::fill` remains available for individual functions and uses the
-same resolution and compilation pipeline. Direct compiler callers supply
-`prebindgen_c::{CInput, COutput}` or `prebindgen_jni::{JniInput, JniOutput}`;
-declaration syntax cannot accidentally be passed as a resolved adapter tree.
+`Codec` still selects compiled converter types, physical representations and
+compilation hooks. Narrowing that compilation interface is separate from removing
+the declaration vocabulary. Generation and all helper dispatch happen at build
+time; generated calls gain no dispatch or allocations from this refactoring.
 
 ## Leaf and wire helpers
 
@@ -206,6 +326,31 @@ structured error outputs; JNI keeps typed domain-error callbacks and the
 separate binding-error callback, with user handlers invoked after native return.
 
 ## Migration
+
+The adapter factories replace direct expansion-builder constructors:
+
+| Previous call | Replacement |
+| --- | --- |
+| `DeclCExpandParam::new(ty)` / JNI equivalent | `prebindgen_c::expand_param(ty)` / JNI equivalent |
+| `DeclCExpandReturn::new(ty)` / JNI equivalent | `prebindgen_c::expand_return(ty)` / JNI equivalent |
+| `DeclCFields::new(function)` / JNI equivalent | `prebindgen_c::fields(function)` / JNI equivalent |
+
+Literal unary, branch and arrow constructors take their metadata directly:
+`operation: CInputUnary::Optional`. Patterns use the same adapter variant without
+an extra wrapper. A type-scoping operation is `CInputUnary::ForType`; named output fields
+belong to `COutputBranch`; enum field groups belong to `CInputBranch` or
+`COutputBranch` according to direction; callbacks use `CInputArrow` (JNI
+uses the corresponding `Jni*` names). Leaf request enums contain only childless
+choices.
+
+The declaration macros retain their spelling. JNI expansion `.bulk()` now
+requires `use prebindgen_jni::prelude::*` (or `JniBulkExpansion` directly).
+`prepare_value_conversions` now accepts a borrowed declaration slice. Data-only
+function/callback/error/conversion declarations can use `with_extension` to select
+a new extension type; expansion factories fix their extension type because their
+node constructors interpret it. `with_extension` replaces the whole previous
+option value, including any options already selected by adapter methods.
+
 
 | Former API | Replacement |
 | --- | --- |

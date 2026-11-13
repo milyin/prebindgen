@@ -1,10 +1,5 @@
 //! Single-value conversion declarations and preparation into Flat.
-use crate::{DeclFunction, DeclInput, DeclInputRequest, DeclOutput, DeclOutputRequest};
-use crate::{
-    DeclInputBranch, DeclInputLeafOp, DeclInputUnary, DeclOutputBranch, DeclOutputLeafOp,
-    DeclOutputUnary,
-};
-use crate::{InputNode, OutputNode};
+use crate::DeclFunction;
 use prebindgen_flat::{
     same_type, type_key, Flat, Primitive, Result, Schema, ValueConversion, ValueSource,
 };
@@ -12,7 +7,7 @@ use syn::Type;
 
 /// Declare a Rust type's canonical single-value representation.
 #[macro_export]
-macro_rules! convert {($($ty:tt)+)=>{$crate::DeclConvert::new($crate::declarations::parse_type(stringify!($($ty)+)))};}
+macro_rules! convert {($($ty:tt)+)=>{$crate::DeclConvert::<::std::convert::Infallible>::new($crate::declarations::parse_type(stringify!($($ty)+)))};}
 /// Construct a source value through `Repr: Into<T>`.
 #[macro_export]
 macro_rules! from {($($ty:tt)+)=>{$crate::DeclConvertSource::input($crate::declarations::parse_type(stringify!($($ty)+)),false)};}
@@ -53,7 +48,8 @@ impl DeclConvertSource {
             result_value: false,
         }
     }
-    pub(crate) fn resolve<S: Schema>(
+    /// Check the source signature and resolve its representation type.
+    pub fn resolve<S: Schema>(
         &self,
         flat: &Flat<S>,
         ty: &Type,
@@ -119,8 +115,10 @@ impl DeclConvertSource {
         })
     }
 }
-impl From<DeclFunction> for DeclConvertSource {
-    fn from(mut f: DeclFunction) -> Self {
+impl<InTree, OutTree, Extension> From<DeclFunction<InTree, OutTree, Extension>>
+    for DeclConvertSource
+{
+    fn from(mut f: DeclFunction<InTree, OutTree, Extension>) -> Self {
         let result_value = f.result_value;
         f.result_value = false;
         Self {
@@ -133,21 +131,36 @@ impl From<DeclFunction> for DeclConvertSource {
 }
 /// Canonical conversions for one source type. Directions are independent.
 #[derive(Clone, Debug)]
-pub struct DeclConvert {
+pub struct DeclConvert<Extension = std::convert::Infallible> {
+    /// Adapter-defined canonical conversion settings.
+    pub extension: Option<Extension>,
     /// Source type whose representation is selected.
     pub ty: Type,
-    pub(crate) input: Option<DeclConvertSource>,
-    pub(crate) output: Option<DeclConvertSource>,
+    /// Canonical incoming representation, when selected.
+    pub input: Option<DeclConvertSource>,
+    /// Canonical outgoing representation, when selected.
+    pub output: Option<DeclConvertSource>,
     duplicate: bool,
 }
-impl DeclConvert {
+impl<Extension> DeclConvert<Extension> {
     /// Start a single-value conversion declaration for a source type.
     pub fn new(ty: Type) -> Self {
         Self {
+            extension: None,
             ty,
             input: None,
             output: None,
             duplicate: false,
+        }
+    }
+    /// Configure adapter-specific conversion settings.
+    pub fn with_extension<Next>(self, extension: Next) -> DeclConvert<Next> {
+        DeclConvert {
+            extension: Some(extension),
+            ty: self.ty,
+            input: self.input,
+            output: self.output,
+            duplicate: self.duplicate,
         }
     }
     /// Convert one representation into the source value.
@@ -162,7 +175,8 @@ impl DeclConvert {
         self.output = Some(source.into());
         self
     }
-    pub(crate) fn validate(&self) -> Result<()> {
+    /// Reject duplicate or directionally invalid conversion declarations.
+    pub fn validate(&self) -> Result<()> {
         if self.duplicate {
             return Err("duplicate conversion direction".into());
         }
@@ -191,27 +205,11 @@ impl DeclConvert {
             .collect()
     }
 }
-impl From<DeclConvert> for DeclInput<DeclInputRequest, DeclOutputRequest> {
-    fn from(decl: DeclConvert) -> Self {
-        Self::for_type(
-            decl.ty.clone(),
-            Self::Request(DeclInputRequest::Conversion(Box::new(decl))),
-        )
-    }
-}
-impl From<DeclConvert> for DeclOutput<DeclInputRequest, DeclOutputRequest> {
-    fn from(decl: DeclConvert) -> Self {
-        Self::for_type(
-            decl.ty.clone(),
-            Self::Request(DeclOutputRequest::Conversion(Box::new(decl))),
-        )
-    }
-}
-/// Prepare canonical type conversions in the authoritative Flat type table.
-/// No slots are compiled here; declarations and independent codecs can use them.
-pub fn prepare_value_conversions<S: Schema>(
+/// Resolve canonical value conversions into the authoritative Flat type table.
+/// Declarations remain borrowed so the adapter can interpret and retain their extension settings.
+pub fn prepare_value_conversions<S: Schema, Extension>(
     flat: &mut Flat<S>,
-    decls: Vec<DeclConvert>,
+    decls: &[DeclConvert<Extension>],
 ) -> Result<()> {
     let mut selected = std::collections::BTreeMap::new();
     for decl in decls {
@@ -235,7 +233,7 @@ pub fn prepare_value_conversions<S: Schema>(
                 .map(|i| i.conversion.clone())
                 .unwrap_or_default()
         });
-        for (input, source) in [(true, decl.input), (false, decl.output)] {
+        for (input, source) in [(true, decl.input.as_ref()), (false, decl.output.as_ref())] {
             if let Some(source) = source {
                 let dest = if input {
                     &mut pair.input
@@ -294,203 +292,8 @@ pub fn prepare_value_conversions<S: Schema>(
     Ok(())
 }
 
-use crate::{DeclCodec, DeclDefaults};
-impl DeclDefaults {
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) fn resolve_input_conversion<C: DeclCodec>(
-        &self,
-        flat: &Flat<C::Schema>,
-        codec: &C,
-        ty: &Type,
-        conversion: ValueConversion,
-        child: &DeclInput<DeclInputRequest, DeclOutputRequest>,
-        extra: &C::Extra,
-        stack: &mut Vec<String>,
-    ) -> Result<crate::ResolvedInput<C>> {
-        let key = format!("value-input:{}", type_key(ty));
-        if stack.contains(&key) {
-            return Err(format!("recursive canonical conversion `{}`", type_key(ty)));
-        }
-        stack.push(key);
-        let input = self.input(flat, codec, &conversion.representation, child, extra, stack);
-        stack.pop();
-        Ok(InputNode::Unary {
-            operation: codec.resolve_input_unary(DeclInputUnary::Convert {
-                conversion: Box::new(conversion),
-            })?,
-            child: Box::new(input?),
-        })
-    }
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) fn resolve_output_conversion<C: DeclCodec>(
-        &self,
-        flat: &Flat<C::Schema>,
-        codec: &C,
-        ty: &Type,
-        conversion: ValueConversion,
-        child: &DeclOutput<DeclInputRequest, DeclOutputRequest>,
-        extra: &C::Extra,
-        stack: &mut Vec<String>,
-    ) -> Result<crate::ResolvedOutput<C>> {
-        let key = format!("value-output:{}", type_key(ty));
-        if stack.contains(&key) {
-            return Err(format!("recursive canonical conversion `{}`", type_key(ty)));
-        }
-        stack.push(key);
-        let output = self.output(
-            flat,
-            codec,
-            &conversion.representation,
-            child,
-            extra,
-            stack,
-            true,
-        );
-        stack.pop();
-        Ok(OutputNode::Unary {
-            operation: codec.resolve_output_unary(DeclOutputUnary::Convert {
-                conversion: Box::new(conversion),
-            })?,
-            child: Box::new(output?),
-        })
-    }
-    pub(crate) fn resolve_input_value<C: DeclCodec>(
-        &self,
-        flat: &Flat<C::Schema>,
-        codec: &C,
-        ty: &Type,
-        extra: &C::Extra,
-        stack: &mut Vec<String>,
-    ) -> Result<crate::ResolvedInput<C>> {
-        if type_key(ty) == "()" {
-            return Ok(InputNode::Branch {
-                operation: codec.resolve_input_branch(DeclInputBranch::Fields)?,
-                children: vec![],
-            });
-        }
-        if let Some(c) = flat
-            .type_info(ty)
-            .ok()
-            .and_then(|i| i.conversion.input.clone())
-        {
-            return self.resolve_input_conversion(
-                flat,
-                codec,
-                ty,
-                c,
-                &DeclInput::value(),
-                extra,
-                stack,
-            );
-        }
-        if let Some(inner) = prebindgen_flat::option_inner(ty) {
-            return Ok(InputNode::Unary {
-                operation: codec.resolve_input_unary(DeclInputUnary::Optional)?,
-                child: Box::new(self.resolve_input_value(flat, codec, inner, extra, stack)?),
-            });
-        }
-        if let Some((inner, _)) = prebindgen_flat::sequence_parts(ty)
-            .filter(|_| !codec.input_collection_is_leaf(flat, ty, self.input_role.get(), extra))
-        {
-            return Ok(InputNode::Unary {
-                operation: codec.resolve_input_unary(DeclInputUnary::Sequence)?,
-                child: Box::new(self.resolve_input_value(flat, codec, inner, extra, stack)?),
-            });
-        }
-        self.input(
-            flat,
-            codec,
-            ty,
-            &DeclInput::Leaf(DeclInputLeafOp::Value),
-            extra,
-            stack,
-        )
-    }
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) fn resolve_output_value<C: DeclCodec>(
-        &self,
-        flat: &Flat<C::Schema>,
-        codec: &C,
-        ty: &Type,
-        extra: &C::Extra,
-        stack: &mut Vec<String>,
-        getter: bool,
-        policy: Option<&crate::Projection>,
-    ) -> Result<crate::ResolvedOutput<C>> {
-        if type_key(ty) == "()" {
-            return Ok(OutputNode::Branch {
-                operation: codec.resolve_output_branch(DeclOutputBranch::Fields)?,
-                children: vec![],
-            });
-        }
-        let c = flat
-            .type_info(ty)
-            .ok()
-            .and_then(|i| i.conversion.output.clone())
-            .or_else(|| {
-                crate::output_referent(ty)
-                    .and_then(|t| flat.type_info(t).ok())
-                    .and_then(|i| i.conversion.output.clone())
-            });
-        if let Some(c) = c {
-            if policy.is_some_and(|p| !p.fields.is_empty()) {
-                return Err(
-                    "field projections on a canonical value require an explicit output tree".into(),
-                );
-            }
-            if policy.is_some_and(|p| p.mode == crate::ProjectionMode::Borrowed)
-                && !conversion_borrows(flat, &c)?
-            {
-                return Err(
-                    "a borrowed projection requires a shared-reference conversion helper".into(),
-                );
-            }
-            return self.resolve_output_conversion(
-                flat,
-                codec,
-                ty,
-                c,
-                &DeclOutput::value(),
-                extra,
-                stack,
-            );
-        }
-        if let Some(inner) = prebindgen_flat::option_inner(ty) {
-            return Ok(OutputNode::Unary {
-                operation: codec.resolve_output_unary(DeclOutputUnary::Optional)?,
-                child: Box::new(
-                    self.resolve_output_value(flat, codec, inner, extra, stack, getter, policy)?,
-                ),
-            });
-        }
-        if let Some((inner, _)) = prebindgen_flat::sequence_parts(ty)
-            .filter(|_| !codec.output_collection_is_leaf(flat, ty, extra))
-        {
-            return Ok(OutputNode::Unary {
-                operation: codec.resolve_output_unary(DeclOutputUnary::Sequence {
-                    delivery: crate::SequenceDelivery::Value,
-                    mode: policy.map(|p| p.mode),
-                })?,
-                child: Box::new(
-                    self.resolve_output_value(flat, codec, inner, extra, stack, getter, policy)?,
-                ),
-            });
-        }
-        self.output(
-            flat,
-            codec,
-            ty,
-            &policy.map_or(DeclOutput::Leaf(DeclOutputLeafOp::Value), |p| {
-                DeclOutput::Leaf(DeclOutputLeafOp::Projected(p.clone()))
-            }),
-            extra,
-            stack,
-            getter,
-        )
-    }
-}
-
-fn conversion_borrows<S: Schema>(flat: &Flat<S>, conversion: &ValueConversion) -> Result<bool> {
+/// Whether a source conversion observes its value through a shared reference.
+pub fn conversion_borrows<S: Schema>(flat: &Flat<S>, conversion: &ValueConversion) -> Result<bool> {
     match &conversion.source {
         ValueSource::Function(name) => Ok(flat
             .function(name)?
@@ -500,7 +303,8 @@ fn conversion_borrows<S: Schema>(flat: &Flat<S>, conversion: &ValueConversion) -
         ValueSource::Into { .. } => Ok(false),
     }
 }
-pub(crate) fn validate_conversion<S: Schema>(
+/// Verify a resolved conversion against its source signature and representation.
+pub fn validate_conversion<S: Schema>(
     flat: &Flat<S>,
     ty: &Type,
     conversion: &ValueConversion,
@@ -530,4 +334,34 @@ pub(crate) fn validate_conversion<S: Schema>(
         return Err("conversion representation does not match its helper signature".into());
     }
     Ok(())
+}
+
+/// Adapter construction of a locally selected single-value conversion.
+///
+/// The implementation preserves the declaration's source-type scope around the
+/// conversion leaf. This keeps later selectors, projections and representation
+/// modifiers scoped to the same source type. The recipe may be incoming or
+/// outgoing; the adapter's request type selects the direction.
+pub trait LocalConversion<Recipe, Extension = std::convert::Infallible> {
+    /// Construct the complete scoped recipe, with children on structural edges.
+    fn local_conversion(declaration: DeclConvert<Extension>) -> Recipe;
+}
+
+impl<I: crate::InputOps, O: crate::OutputOps, IR, OR, E> From<DeclConvert<E>>
+    for crate::InputNode<I, O, IR, OR>
+where
+    IR: LocalConversion<crate::InputNode<I, O, IR, OR>, E>,
+{
+    fn from(declaration: DeclConvert<E>) -> Self {
+        IR::local_conversion(declaration)
+    }
+}
+impl<I: crate::InputOps, O: crate::OutputOps, IR, OR, E> From<DeclConvert<E>>
+    for crate::OutputNode<I, O, IR, OR>
+where
+    OR: LocalConversion<crate::OutputNode<I, O, IR, OR>, E>,
+{
+    fn from(declaration: DeclConvert<E>) -> Self {
+        OR::local_conversion(declaration)
+    }
 }

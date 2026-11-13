@@ -1,6 +1,5 @@
 //! Preparation and emission of retained source callbacks.
 use super::*;
-use crate::operations::JniOutputParts;
 use crate::operations::{JniInput, JniInputBranch};
 use prebindgen_conversions::{InputFragment, OutputFragment, TemplateContext};
 use prebindgen_flat::{callback_signature, InputConversion, Wire, WireNode};
@@ -104,6 +103,7 @@ pub(crate) fn input(
         active,
         ..
     } = request;
+    let configuration = configuration.bound_callback()?;
     let ty = &configuration.ty;
     let argument_recipes = domain.argument_nodes()?;
     let signature = callback_signature(ty)?.ok_or("expected source callback")?;

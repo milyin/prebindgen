@@ -125,7 +125,6 @@ struct CodecImpl {
     unknown_validation_read: bool,
     row_only_leaf: bool,
 }
-test_frontend!(CodecImpl);
 impl Codec for CodecImpl {
     test_operations!();
     type Schema = prebindgen_conversions::PlanSchema<Type, (), PacketChain, Metadata>;
@@ -388,7 +387,7 @@ fn pointer_length_round_trip(reverse: bool, row_only: bool) {
         source.items.into_iter().map(|i| (i, Default::default())),
     )
     .unwrap();
-    let defaults = DeclDefaults::new(&flat, vec![], vec![], vec![]).unwrap();
+    let defaults = TestDefaults::new(&flat, vec![], vec![], vec![]).unwrap();
     let filled = defaults.fill(
         &mut flat,
         &CodecImpl {
@@ -396,7 +395,7 @@ fn pointer_length_round_trip(reverse: bool, row_only: bool) {
             row_only_leaf: row_only,
             ..Default::default()
         },
-        &fun!(echo),
+        &test_fun!(echo),
         &(),
     );
     filled.unwrap();
@@ -477,34 +476,34 @@ fn malformed_nested_sequence_bindings_are_rejected_before_installation() {
         bad_sequence: true,
         ..Default::default()
     };
-    let recipe = DeclOutput::Unary {
-        operation: DeclOutputUnary::Sequence {
+    let recipe = TestOutput::Unary {
+        operation: TestOutputUnary::Sequence {
             delivery: SequenceDelivery::Value,
             mode: None,
         },
-        child: Box::new(DeclOutput::Unary {
-            operation: DeclOutputUnary::Sequence {
+        child: Box::new(TestOutput::Unary {
+            operation: TestOutputUnary::Sequence {
                 delivery: SequenceDelivery::Value,
                 mode: None,
             },
-            child: Box::new(DeclOutput::Leaf(DeclOutputLeafOp::Value)),
+            child: Box::new(TestOutput::Leaf(TestOutputLeafOp::Value)),
         }),
     };
-    let error = bind_output(&mut flat, &bad, "output", &recipe, &()).unwrap_err();
+    let error = test_bind_output(&mut flat, &bad, "output", &recipe, &()).unwrap_err();
     assert!(error.contains("missing output binding"), "{error}");
     assert!(flat.function("output").unwrap().ret.slot.is_none());
     let bad = CodecImpl {
         unknown_validation_read: true,
         ..Default::default()
     };
-    let error = bind_input(
+    let error = test_bind_input(
         &mut flat,
         &bad,
         "input",
         "values",
-        &DeclInput::Unary {
-            operation: DeclInputUnary::Sequence,
-            child: Box::new(DeclInput::Leaf(DeclInputLeafOp::Value)),
+        &TestInput::Unary {
+            operation: TestInputUnary::Sequence,
+            child: Box::new(TestInput::Leaf(TestInputLeafOp::Value)),
         },
         &(),
     )
@@ -524,13 +523,13 @@ fn rows_lend_temporary_values_and_construct_once() {
     )
     .unwrap();
     let codec = CodecImpl::default();
-    let recipe = DeclInput::Unary {
-        operation: DeclInputUnary::Sequence,
-        child: Box::new(DeclInput::constructor(
+    let recipe = TestInput::Unary {
+        operation: TestInputUnary::Sequence,
+        child: Box::new(TestInput::constructor(
             "row",
-            [DeclInput::Unary {
-                operation: DeclInputUnary::Temporary,
-                child: Box::new(DeclInput::Leaf(DeclInputLeafOp::Value)),
+            [TestInput::Unary {
+                operation: TestInputUnary::Temporary,
+                child: Box::new(TestInput::Leaf(TestInputLeafOp::Value)),
             }],
         )),
     };

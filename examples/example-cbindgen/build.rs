@@ -1,5 +1,5 @@
 //! Migrated from main; unsupported declarations remain commented in place.
-use prebindgen_declarations::fun;
+use prebindgen_c::fun;
 use syn::parse_quote as pq;
 
 fn main() {
@@ -77,8 +77,8 @@ fn main() {
     /* Unsupported: this declaration requires unsupported conversions or builder options.
     cbindgen = cbindgen.convert(
             prebindgen_declarations::convert!(Millis)
-                .input(prebindgen_declarations::fun!(millis_from_raw))
-                .output(prebindgen_declarations::fun!(millis_to_raw)),
+                .input(prebindgen_c::fun!(millis_from_raw))
+                .output(prebindgen_c::fun!(millis_to_raw)),
         );
     */
     /* Unsupported: this declaration requires unsupported conversions or builder options.
@@ -212,3 +212,10 @@ fn main() {
     generation.write_rust(out.join("bindings.rs")).unwrap();
     generation.write_header(out.join("bindings.h")).unwrap();
 }
+
+// Check declaration macros with only the language adapter as a generator dependency.
+const _: fn() = || {
+    let _ = prebindgen_c::expand_param!(i64).variant_self();
+    let _ = prebindgen_c::expand_return!(i64).field_self();
+    let _ = prebindgen_c::callback!(impl Fn(i64));
+};

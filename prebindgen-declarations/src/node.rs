@@ -27,13 +27,35 @@ pub trait OutputOps: Clone + std::fmt::Debug {
 /// A foreign-to-Rust conversion, with structurally visible reverse-direction domains.
 /// The first operation set must implement InputOps:
 /// ```compile_fail
-/// use prebindgen_declarations::{InputNode, frontend::DeclOutputOps};
-/// let _: InputNode<DeclOutputOps, DeclOutputOps> = InputNode::None;
+/// use std::convert::Infallible;
+/// use prebindgen_declarations::{InputNode, OutputNode, InputOps, OutputOps};
+/// #[derive(Clone, Debug)] struct Incoming;
+/// #[derive(Clone, Debug)] struct Outgoing;
+/// impl InputOps for Incoming {
+///     type Leaf = (); type Unary = Infallible;
+///     type Branch = (); type Arrow = Infallible;
+/// }
+/// impl OutputOps for Outgoing {
+///     type Leaf = (); type Unary = Infallible;
+///     type Branch = (); type Arrow = Infallible;
+/// }
+/// let _: InputNode<Outgoing, Outgoing> = InputNode::None;
 /// ```
 /// The second operation set must implement OutputOps:
 /// ```compile_fail
-/// use prebindgen_declarations::{InputNode, frontend::DeclInputOps};
-/// let _: InputNode<DeclInputOps, DeclInputOps> = InputNode::None;
+/// use std::convert::Infallible;
+/// use prebindgen_declarations::{InputNode, OutputNode, InputOps, OutputOps};
+/// #[derive(Clone, Debug)] struct Incoming;
+/// #[derive(Clone, Debug)] struct Outgoing;
+/// impl InputOps for Incoming {
+///     type Leaf = (); type Unary = Infallible;
+///     type Branch = (); type Arrow = Infallible;
+/// }
+/// impl OutputOps for Outgoing {
+///     type Leaf = (); type Unary = Infallible;
+///     type Branch = (); type Arrow = Infallible;
+/// }
+/// let _: InputNode<Incoming, Incoming> = InputNode::None;
 /// ```
 #[derive(Clone, Debug)]
 pub enum InputNode<
@@ -76,13 +98,35 @@ pub enum InputNode<
 /// A Rust-to-foreign conversion, with structurally visible reverse-direction domains.
 /// The first operation set must implement InputOps:
 /// ```compile_fail
-/// use prebindgen_declarations::{OutputNode, frontend::DeclOutputOps};
-/// let _: OutputNode<DeclOutputOps, DeclOutputOps> = OutputNode::None;
+/// use std::convert::Infallible;
+/// use prebindgen_declarations::{InputNode, OutputNode, InputOps, OutputOps};
+/// #[derive(Clone, Debug)] struct Incoming;
+/// #[derive(Clone, Debug)] struct Outgoing;
+/// impl InputOps for Incoming {
+///     type Leaf = (); type Unary = Infallible;
+///     type Branch = (); type Arrow = Infallible;
+/// }
+/// impl OutputOps for Outgoing {
+///     type Leaf = (); type Unary = Infallible;
+///     type Branch = (); type Arrow = Infallible;
+/// }
+/// let _: OutputNode<Outgoing, Outgoing> = OutputNode::None;
 /// ```
 /// The second operation set must implement OutputOps:
 /// ```compile_fail
-/// use prebindgen_declarations::{OutputNode, frontend::DeclInputOps};
-/// let _: OutputNode<DeclInputOps, DeclInputOps> = OutputNode::None;
+/// use std::convert::Infallible;
+/// use prebindgen_declarations::{InputNode, OutputNode, InputOps, OutputOps};
+/// #[derive(Clone, Debug)] struct Incoming;
+/// #[derive(Clone, Debug)] struct Outgoing;
+/// impl InputOps for Incoming {
+///     type Leaf = (); type Unary = Infallible;
+///     type Branch = (); type Arrow = Infallible;
+/// }
+/// impl OutputOps for Outgoing {
+///     type Leaf = (); type Unary = Infallible;
+///     type Branch = (); type Arrow = Infallible;
+/// }
+/// let _: OutputNode<Incoming, Incoming> = OutputNode::None;
 /// ```
 #[derive(Clone, Debug)]
 pub enum OutputNode<
@@ -125,7 +169,7 @@ pub enum OutputNode<
 impl<InOps: InputOps, OutOps: OutputOps, InRequest, OutRequest>
     InputNode<InOps, OutOps, InRequest, OutRequest>
 {
-    /// Transform requests throughout the tree, including reverse-direction domains.
+    /// Transform leaf requests throughout the tree, preserving all adapter metadata.
     pub fn map_requests<InRequest2, OutRequest2>(
         self,
         input: &mut impl FnMut(InRequest) -> InRequest2,
@@ -165,7 +209,7 @@ impl<InOps: InputOps, OutOps: OutputOps, InRequest, OutRequest>
 impl<InOps: InputOps, OutOps: OutputOps, InRequest, OutRequest>
     OutputNode<InOps, OutOps, InRequest, OutRequest>
 {
-    /// Transform requests throughout the tree, including reverse-direction domains.
+    /// Transform leaf requests throughout the tree, preserving all adapter metadata.
     pub fn map_requests<InRequest2, OutRequest2>(
         self,
         input: &mut impl FnMut(InRequest) -> InRequest2,
@@ -199,6 +243,19 @@ impl<InOps: InputOps, OutOps: OutputOps, InRequest, OutRequest>
                 codomain: Box::new(codomain.map_requests(input, output)),
             },
         }
+    }
+}
+
+impl<I: InputOps, O: OutputOps> InputNode<I, O> {
+    /// Embed a tree with no leaf requests in preparation without changing its operations.
+    pub fn into_preparation<IR, OR>(self) -> InputNode<I, O, IR, OR> {
+        self.map_requests(&mut |never| match never {}, &mut |never| match never {})
+    }
+}
+impl<I: InputOps, O: OutputOps> OutputNode<I, O> {
+    /// Embed a tree with no leaf requests in preparation without changing its operations.
+    pub fn into_preparation<IR, OR>(self) -> OutputNode<I, O, IR, OR> {
+        self.map_requests(&mut |never| match never {}, &mut |never| match never {})
     }
 }
 

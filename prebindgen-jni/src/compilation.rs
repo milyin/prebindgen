@@ -1,8 +1,10 @@
 //! Interpretation of this adapter's resolved conversion operations.
 #![allow(missing_docs)]
+use crate::{JniInputExt, JniOutputExt};
+
 use super::operations::{
-    JniInput, JniInputBranch, JniInputLeafOp, JniInputOps, JniInputParts, JniInputUnary, JniOutput,
-    JniOutputBranch, JniOutputLeafOp, JniOutputOps, JniOutputParts, JniOutputUnary,
+    JniInput, JniInputArrow, JniInputBranch, JniInputLeafOp, JniInputOps, JniInputUnary, JniOutput,
+    JniOutputBranch, JniOutputLeafOp, JniOutputOps, JniOutputUnary,
 };
 use prebindgen_declarations::*;
 use prebindgen_flat::{Flat, Result};
@@ -196,7 +198,7 @@ impl<C: Codec<InOps = JniInputOps, OutOps = JniOutputOps, CompileState = JniComp
                     .bulk_input(self.flat, ty, extra, wire, child?, active)
             }
             JniInput::Arrow {
-                operation: callback,
+                operation: operation @ JniInputArrow::BoundCallback(callback),
                 domain,
                 codomain,
             } => {
@@ -208,7 +210,7 @@ impl<C: Codec<InOps = JniInputOps, OutOps = JniOutputOps, CompileState = JniComp
                 }
                 self.codec.input_arrow(InputArrow {
                     flat: self.flat,
-                    operation: callback,
+                    operation,
                     domain,
                     codomain,
                     extra,
@@ -282,6 +284,18 @@ impl<C: Codec<InOps = JniInputOps, OutOps = JniOutputOps, CompileState = JniComp
                 })
             }
             JniInput::Request(never) => match *never {},
+            JniInput::Unary {
+                operation: JniInputUnary::ForType { .. },
+                ..
+            }
+            | JniInput::Branch {
+                operation: JniInputBranch::EnumFields | JniInputBranch::VariantFields { .. },
+                ..
+            }
+            | JniInput::Arrow {
+                operation: JniInputArrow::Callback(_),
+                ..
+            } => Err("resolve source-dependent input operations before compilation".into()),
             JniInput::Branch {
                 operation: JniInputBranch::Fields,
                 children,
@@ -433,7 +447,9 @@ impl<C: Codec<InOps = JniInputOps, OutOps = JniOutputOps, CompileState = JniComp
             JniOutput::None => {
                 return self.cx.output_unit(ty, out);
             }
-            JniOutput::Arrow { operation, .. } => match *operation {},
+            JniOutput::Arrow {
+                operation: never, ..
+            } => match *never {},
             JniOutput::Branch {
                 operation: JniOutputBranch::Variant | JniOutputBranch::Arguments,
                 ..
@@ -567,6 +583,19 @@ impl<C: Codec<InOps = JniInputOps, OutOps = JniOutputOps, CompileState = JniComp
                     .output_optional(ty, extra, value, borrowed, wire_name, inner);
             }
             JniOutput::Request(never) => match *never {},
+            JniOutput::Unary {
+                operation: JniOutputUnary::ForType { .. } | JniOutputUnary::SequenceCallback { .. },
+                ..
+            }
+            | JniOutput::Branch {
+                operation:
+                    JniOutputBranch::EnumFields
+                    | JniOutputBranch::VariantFields { .. }
+                    | JniOutputBranch::NamedFields { .. },
+                ..
+            } => {
+                return Err("resolve source-dependent output operations before compilation".into())
+            }
             JniOutput::Leaf(JniOutputLeafOp::Value) => {
                 let representation = if self.state.bulk.get() {
                     Representation::Bulk

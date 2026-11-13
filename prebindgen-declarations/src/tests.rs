@@ -82,7 +82,6 @@ fn wire(kind: Kind, ty: &Type, extra: &Extra) -> TestWire {
         component: Default::default(),
     }
 }
-test_frontend!(TestCodec);
 #[allow(clippy::type_complexity)] // Keep the test codec metadata roles visible.
 impl Codec for TestCodec {
     test_operations!();
@@ -320,8 +319,8 @@ fn model() -> TestBindings<TestWire> {
 fn extra(name: &'static str) -> Extra {
     Extra { name, copy: false }
 }
-fn fill(flat: &mut TestBindings<TestWire>, decl: &DeclFunction) -> Result<()> {
-    DeclDefaults::new(flat, vec![], vec![], vec![])?.fill(
+fn fill(flat: &mut TestBindings<TestWire>, decl: &TestFunction) -> Result<()> {
+    TestDefaults::new(flat, vec![], vec![], vec![])?.fill(
         flat,
         &TEST_CODEC,
         decl,
@@ -331,32 +330,32 @@ fn fill(flat: &mut TestBindings<TestWire>, decl: &DeclFunction) -> Result<()> {
 #[test]
 fn different_occurrences_have_different_converters() {
     let mut flat = model();
-    bind_input(
+    test_bind_input(
         &mut flat,
         &TEST_CODEC,
         "foo",
         "x",
-        &DeclInput::selector([
-            DeclInput::Leaf(DeclInputLeafOp::Value),
-            DeclInput::constructor("make", [DeclInput::Leaf(DeclInputLeafOp::Value)]),
+        &TestInput::selector([
+            TestInput::Leaf(TestInputLeafOp::Value),
+            TestInput::constructor("make", [TestInput::Leaf(TestInputLeafOp::Value)]),
         ]),
         &extra("x"),
     )
     .unwrap();
-    bind_input(
+    test_bind_input(
         &mut flat,
         &TEST_CODEC,
         "foo",
         "y",
-        &DeclInput::Leaf(DeclInputLeafOp::Value),
+        &TestInput::Leaf(TestInputLeafOp::Value),
         &extra("y"),
     )
     .unwrap();
-    bind_output(
+    test_bind_output(
         &mut flat,
         &TEST_CODEC,
         "foo",
-        &DeclOutput::Leaf(DeclOutputLeafOp::Value),
+        &TestOutput::Leaf(TestOutputLeafOp::Value),
         &extra("result"),
     )
     .unwrap();
@@ -372,11 +371,11 @@ fn different_occurrences_have_different_converters() {
 #[test]
 fn rejects_incomplete_slots() {
     let mut flat = model();
-    bind_output(
+    test_bind_output(
         &mut flat,
         &TEST_CODEC,
         "foo",
-        &DeclOutput::Leaf(DeclOutputLeafOp::Value),
+        &TestOutput::Leaf(TestOutputLeafOp::Value),
         &Extra::default(),
     )
     .unwrap();
@@ -385,12 +384,12 @@ fn rejects_incomplete_slots() {
 #[test]
 fn rejects_inputs_without_a_result_converter() {
     let mut flat = model();
-    bind_input(
+    test_bind_input(
         &mut flat,
         &TEST_CODEC,
         "foo",
         "x",
-        &DeclInput::Leaf(DeclInputLeafOp::Value),
+        &TestInput::Leaf(TestInputLeafOp::Value),
         &Extra::default(),
     )
     .unwrap();
@@ -402,7 +401,7 @@ fn rejects_inputs_without_a_result_converter() {
 fn binding_keeps_helpers_records_locations_and_guards() {
     let mut flat = model();
     let before = flat.clone();
-    fill(&mut flat, &fun!(foo)).unwrap();
+    fill(&mut flat, &test_fun!(foo)).unwrap();
     validate_bindings(&flat).unwrap();
     let helper = flat.function("make").unwrap();
     assert!(helper.ret.slot.is_none());
@@ -422,38 +421,40 @@ fn binding_keeps_helpers_records_locations_and_guards() {
 #[test]
 fn failed_rebinding_preserves_existing_converter() {
     let mut flat = model();
-    fill(&mut flat, &fun!(foo)).unwrap();
+    fill(&mut flat, &test_fun!(foo)).unwrap();
     let before = format!("{flat:?}");
-    let error = bind_input(
+    let error = test_bind_input(
         &mut flat,
         &TEST_CODEC,
         "foo",
         "x",
-        &DeclInput::constructor("foo", []),
+        &TestInput::constructor("foo", []),
         &Extra::default(),
     )
     .unwrap_err();
     assert!(error.contains("argument count"));
     assert_eq!(format!("{flat:?}"), before);
     for output in [
-        DeclOutput::combine([
-            DeclOutput::Leaf(DeclOutputLeafOp::Value),
-            DeclOutput::Leaf(DeclOutputLeafOp::Value),
+        TestOutput::combine([
+            TestOutput::Leaf(TestOutputLeafOp::Value),
+            TestOutput::Leaf(TestOutputLeafOp::Value),
         ]),
-        DeclOutput::fields([
-            DeclOutput::Leaf(DeclOutputLeafOp::Value),
-            DeclOutput::Leaf(DeclOutputLeafOp::Value),
+        TestOutput::fields([
+            TestOutput::Leaf(TestOutputLeafOp::Value),
+            TestOutput::Leaf(TestOutputLeafOp::Value),
         ]),
     ] {
-        assert!(bind_output(&mut flat, &TEST_CODEC, "foo", &output, &Extra::default()).is_err());
+        assert!(
+            test_bind_output(&mut flat, &TEST_CODEC, "foo", &output, &Extra::default()).is_err()
+        );
         assert_eq!(format!("{flat:?}"), before);
     }
-    assert!(bind_input(
+    assert!(test_bind_input(
         &mut flat,
         &TEST_CODEC,
         "foo",
         "missing",
-        &DeclInput::Leaf(DeclInputLeafOp::Value),
+        &TestInput::Leaf(TestInputLeafOp::Value),
         &Extra::default()
     )
     .unwrap_err()
@@ -462,13 +463,13 @@ fn failed_rebinding_preserves_existing_converter() {
 #[test]
 fn observations_precede_move_but_wires_keep_order() {
     let mut flat = model();
-    bind_output(
+    test_bind_output(
         &mut flat,
         &TEST_CODEC,
         "foo",
-        &DeclOutput::combine([
-            DeclOutput::Leaf(DeclOutputLeafOp::Value),
-            DeclOutput::fields([DeclOutput::Leaf(DeclOutputLeafOp::Value)]),
+        &TestOutput::combine([
+            TestOutput::Leaf(TestOutputLeafOp::Value),
+            TestOutput::fields([TestOutput::Leaf(TestOutputLeafOp::Value)]),
         ]),
         &Extra::default(),
     )
@@ -491,18 +492,18 @@ fn declarations_reject_unknown_or_mismatched_field_overrides() {
     for (field, output, message) in [
         (
             "missing",
-            expand_return!(Vec<u8>).field_self(),
+            test_expand_return!(Vec<u8>).field_self(),
             "unknown output field",
         ),
         (
             "data",
-            expand_return!(String).field_self(),
+            test_expand_return!(String).field_self(),
             "does not match occurrence",
         ),
     ] {
         let mut flat = parse(source);
-        let function = fun!(read).expand_return(
-            expand_return!(Payload).fields(fields!(parts).field_override(field, output)),
+        let function = test_fun!(read).expand_return(
+            test_expand_return!(Payload).fields(test_fields!(parts).field_override(field, output)),
         );
         assert!(fill(&mut flat, &function).unwrap_err().contains(message));
         let f = flat.function("read").unwrap();
@@ -513,30 +514,30 @@ fn declarations_reject_unknown_or_mismatched_field_overrides() {
 #[test]
 fn declarations_preserve_converters_and_replace_explicit_overrides() {
     let mut flat = model();
-    bind_input(
+    test_bind_input(
         &mut flat,
         &TEST_CODEC,
         "foo",
         "x",
-        &DeclInput::selector([
-            DeclInput::constructor("make", [DeclInput::Leaf(DeclInputLeafOp::Value)]),
-            DeclInput::Leaf(DeclInputLeafOp::Value),
+        &TestInput::selector([
+            TestInput::constructor("make", [TestInput::Leaf(TestInputLeafOp::Value)]),
+            TestInput::Leaf(TestInputLeafOp::Value),
         ]),
         &extra("x"),
     )
     .unwrap();
-    bind_output(
+    test_bind_output(
         &mut flat,
         &TEST_CODEC,
         "foo",
-        &DeclOutput::Leaf(DeclOutputLeafOp::Value),
+        &TestOutput::Leaf(TestOutputLeafOp::Value),
         &extra("result"),
     )
     .unwrap();
-    let declarations = DeclDefaults::new(
+    let declarations = TestDefaults::new(
         &flat,
-        vec![expand_param!(Payload)
-            .variant(fun!(make))
+        vec![test_expand_param!(Payload)
+            .variant(test_fun!(make))
             .variant_self()
             .into()],
         vec![],
@@ -544,7 +545,7 @@ fn declarations_preserve_converters_and_replace_explicit_overrides() {
     )
     .unwrap();
     declarations
-        .fill(&mut flat, &TEST_CODEC, &fun!(foo), &extra("defaults"))
+        .fill(&mut flat, &TEST_CODEC, &test_fun!(foo), &extra("defaults"))
         .unwrap();
     assert_eq!(
         TestAbi::wires(
@@ -562,7 +563,7 @@ fn declarations_preserve_converters_and_replace_explicit_overrides() {
         .fill(
             &mut flat,
             &TEST_CODEC,
-            &fun!(foo).expand_param("y", expand_param!(Payload).variant_self()),
+            &test_fun!(foo).expand_param("y", test_expand_param!(Payload).variant_self()),
             &extra("override"),
         )
         .unwrap();
@@ -592,11 +593,11 @@ fn declarations_preserve_converters_and_replace_explicit_overrides() {
 #[test]
 fn declaration_compilation_is_atomic_even_when_output_fails() {
     let mut flat = model();
-    fill(&mut flat, &fun!(foo)).unwrap();
+    fill(&mut flat, &test_fun!(foo)).unwrap();
     let before = format!("{flat:?}");
-    let function = fun!(foo)
-        .expand_param("x", expand_param!(Payload).variant(fun!(make)))
-        .expand_return(expand_return!(Payload).field(fun!(make)));
+    let function = test_fun!(foo)
+        .expand_param("x", test_expand_param!(Payload).variant(test_fun!(make)))
+        .expand_return(test_expand_return!(Payload).field(test_fun!(make)));
     assert!(fill(&mut flat, &function)
         .unwrap_err()
         .contains("must take exactly"));
@@ -608,35 +609,35 @@ fn independent_binding_and_rebinding_keeps_names_unique_and_stable() {
     let mut reversed = model();
     for (model, order) in [(&mut flat, ["x", "y"]), (&mut reversed, ["y", "x"])] {
         for parameter in order {
-            bind_input(
+            test_bind_input(
                 model,
                 &TEST_CODEC,
                 "foo",
                 parameter,
-                &DeclInput::Leaf(DeclInputLeafOp::Value),
+                &TestInput::Leaf(TestInputLeafOp::Value),
                 &Extra::default(),
             )
             .unwrap();
         }
-        bind_output(
+        test_bind_output(
             model,
             &TEST_CODEC,
             "foo",
-            &DeclOutput::Leaf(DeclOutputLeafOp::Value),
+            &TestOutput::Leaf(TestOutputLeafOp::Value),
             &Extra::default(),
         )
         .unwrap();
     }
     assert_eq!(format!("{flat:?}"), format!("{reversed:?}"));
     let old_y = format!("{:?}", flat.function("foo").unwrap().params[1].ty.slot);
-    bind_input(
+    test_bind_input(
         &mut flat,
         &TEST_CODEC,
         "foo",
         "x",
-        &DeclInput::selector([
-            DeclInput::Leaf(DeclInputLeafOp::Value),
-            DeclInput::constructor("make", [DeclInput::Leaf(DeclInputLeafOp::Value)]),
+        &TestInput::selector([
+            TestInput::Leaf(TestInputLeafOp::Value),
+            TestInput::constructor("make", [TestInput::Leaf(TestInputLeafOp::Value)]),
         ]),
         &Extra::default(),
     )
@@ -662,17 +663,17 @@ fn independent_binding_and_rebinding_keeps_names_unique_and_stable() {
 #[test]
 fn field_defaults_follow_type_expansions() {
     let mut flat = parse("pub type Key=String; pub struct Payload { pub key: Key, pub data: Vec<u8> } pub fn parts(p: &Payload) -> Payload {} pub fn key_text(k: &Key) -> String {} pub fn read(p: Payload) -> Payload {}");
-    DeclDefaults::new(
+    TestDefaults::new(
         &flat,
         vec![],
-        vec![expand_return!(Key).field(fun!(key_text)).into()],
+        vec![test_expand_return!(Key).field(test_fun!(key_text)).into()],
         vec![],
     )
     .unwrap()
     .fill(
         &mut flat,
         &TEST_CODEC,
-        &fun!(read).expand_return(expand_return!(Payload).fields(fields!(parts))),
+        &test_fun!(read).expand_return(test_expand_return!(Payload).fields(test_fields!(parts))),
         &Extra::default(),
     )
     .unwrap();
@@ -713,15 +714,15 @@ fn field_defaults_follow_type_expansions() {
 #[test]
 fn explicit_scalar_identity_is_a_value_conversion() {
     let mut flat = parse("pub fn f(x:i64)->i64{}");
-    let defaults = DeclDefaults::new(
+    let defaults = TestDefaults::new(
         &flat,
-        vec![expand_param!(i64).variant_self().into()],
-        vec![expand_return!(i64).field_self().into()],
+        vec![test_expand_param!(i64).variant_self().into()],
+        vec![test_expand_return!(i64).field_self().into()],
         vec![],
     )
     .unwrap();
     defaults
-        .fill(&mut flat, &TEST_CODEC, &fun!(f), &extra("scalar"))
+        .fill(&mut flat, &TEST_CODEC, &test_fun!(f), &extra("scalar"))
         .unwrap();
     let f = flat.function("f").unwrap();
     let input = f.params[0].ty.slot.as_ref().unwrap();
@@ -767,53 +768,53 @@ fn explicit_scalar_identity_is_a_value_conversion() {
 fn nested_recipes_use_only_the_callers_extra() {
     let mut flat = parse("pub type Key=String; pub struct Payload { pub key:Key } pub fn make(k:Key)->Payload {} pub fn parts(p:&Payload)->Payload {} pub fn foo(x:Payload,y:Payload)->Payload {}");
     // Independently bound helpers must not affect the enclosing conversion.
-    bind_input(
+    test_bind_input(
         &mut flat,
         &TEST_CODEC,
         "make",
         "k",
-        &DeclInput::Leaf(DeclInputLeafOp::Value),
+        &TestInput::Leaf(TestInputLeafOp::Value),
         &extra("constructor declaration"),
     )
     .unwrap();
-    bind_output(
+    test_bind_output(
         &mut flat,
         &TEST_CODEC,
         "parts",
-        &DeclOutput::Leaf(DeclOutputLeafOp::Value),
+        &TestOutput::Leaf(TestOutputLeafOp::Value),
         &extra("getter declaration"),
     )
     .unwrap();
-    bind_input(
+    test_bind_input(
         &mut flat,
         &TEST_CODEC,
         "foo",
         "x",
-        &DeclInput::selector([
-            DeclInput::Leaf(DeclInputLeafOp::Value),
-            DeclInput::constructor("make", [DeclInput::Leaf(DeclInputLeafOp::Value)]),
+        &TestInput::selector([
+            TestInput::Leaf(TestInputLeafOp::Value),
+            TestInput::constructor("make", [TestInput::Leaf(TestInputLeafOp::Value)]),
         ]),
         &extra("x"),
     )
     .unwrap();
-    bind_input(
+    test_bind_input(
         &mut flat,
         &TEST_CODEC,
         "foo",
         "y",
-        &DeclInput::fields([DeclInput::Leaf(DeclInputLeafOp::Value)]),
+        &TestInput::fields([TestInput::Leaf(TestInputLeafOp::Value)]),
         &extra("y"),
     )
     .unwrap();
-    bind_output(
+    test_bind_output(
         &mut flat,
         &TEST_CODEC,
         "foo",
-        &DeclOutput::combine([
-            DeclOutput::Leaf(DeclOutputLeafOp::Value),
-            DeclOutput::getter(
+        &TestOutput::combine([
+            TestOutput::Leaf(TestOutputLeafOp::Value),
+            TestOutput::getter(
                 "parts",
-                DeclOutput::fields([DeclOutput::Leaf(DeclOutputLeafOp::Value)]),
+                TestOutput::fields([TestOutput::Leaf(TestOutputLeafOp::Value)]),
             ),
         ]),
         &Extra {
@@ -852,13 +853,13 @@ fn nested_recipes_use_only_the_callers_extra() {
 }
 #[test]
 fn extra_controls_consumption_without_changing_the_recipe() {
-    let recipe = DeclOutput::combine([
-        DeclOutput::Leaf(DeclOutputLeafOp::Value),
-        DeclOutput::Leaf(DeclOutputLeafOp::Value),
+    let recipe = TestOutput::combine([
+        TestOutput::Leaf(TestOutputLeafOp::Value),
+        TestOutput::Leaf(TestOutputLeafOp::Value),
     ]);
     for copy in [false, true] {
         let mut flat = model();
-        let result = bind_output(
+        let result = test_bind_output(
             &mut flat,
             &TEST_CODEC,
             "foo",
@@ -879,13 +880,13 @@ fn extra_controls_consumption_without_changing_the_recipe() {
 #[test]
 fn record_projection_retains_field_mappings_in_prepared_flat() {
     let mut flat = parse("pub struct Point { pub x:i64, pub y:i64 } pub fn point()->Point {}");
-    bind_output(
+    test_bind_output(
         &mut flat,
         &TEST_CODEC,
         "point",
-        &DeclOutput::fields([
-            DeclOutput::Leaf(DeclOutputLeafOp::Value),
-            DeclOutput::Leaf(DeclOutputLeafOp::Value),
+        &TestOutput::fields([
+            TestOutput::Leaf(TestOutputLeafOp::Value),
+            TestOutput::Leaf(TestOutputLeafOp::Value),
         ]),
         &Extra::default(),
     )
@@ -903,7 +904,7 @@ fn record_projection_retains_field_mappings_in_prepared_flat() {
 #[test]
 fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
     struct FinalizingCodec;
-    test_frontend!(FinalizingCodec);
+
     impl Codec for FinalizingCodec {
         test_operations!();
         type Schema = prebindgen_conversions::PlanSchema<TestWire, (), TestGroup, TestGroup>;
@@ -1052,16 +1053,16 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
     }
     let source = "pub struct Pair { pub a:i32, pub b:i32 } pub fn pair(a:i32,b:i32)->Pair {} pub fn take(p:Pair) {}";
     let mut conflicting = parse(source);
-    assert!(bind_input(
+    assert!(test_bind_input(
         &mut conflicting,
         &FinalizingCodec,
         "take",
         "p",
-        &DeclInput::constructor(
+        &TestInput::constructor(
             "pair",
             [
-                DeclInput::Leaf(DeclInputLeafOp::Value),
-                DeclInput::Leaf(DeclInputLeafOp::Value)
+                TestInput::Leaf(TestInputLeafOp::Value),
+                TestInput::Leaf(TestInputLeafOp::Value)
             ]
         ),
         &Extra {
@@ -1076,16 +1077,16 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
         .slot
         .is_none());
     let mut direct = parse(source);
-    bind_input(
+    test_bind_input(
         &mut direct,
         &FinalizingCodec,
         "take",
         "p",
-        &DeclInput::constructor(
+        &TestInput::constructor(
             "pair",
             [
-                DeclInput::Leaf(DeclInputLeafOp::Value),
-                DeclInput::Leaf(DeclInputLeafOp::Value),
+                TestInput::Leaf(TestInputLeafOp::Value),
+                TestInput::Leaf(TestInputLeafOp::Value),
             ],
         ),
         &Extra::default(),
@@ -1103,21 +1104,21 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
             ..
         }
     ));
-    bind_output(
+    test_bind_output(
         &mut direct,
         &FinalizingCodec,
         "take",
-        &DeclOutput::fields([]),
+        &TestOutput::fields([]),
         &Extra::default(),
     )
     .unwrap();
-    let declarations = DeclDefaults::new(&direct, vec![], vec![], vec![]).unwrap();
-    let decl = DeclFunction::new(syn::parse_quote!(take)).input(
+    let declarations = TestDefaults::new(&direct, vec![], vec![], vec![]).unwrap();
+    let decl = TestFunction::new(syn::parse_quote!(take)).input(
         "p",
-        DeclInput::for_type(
+        TestInput::for_type(
             syn::parse_quote!(Pair),
-            DeclInput::Branch {
-                operation: DeclInputBranch::Selector,
+            TestInput::Branch {
+                operation: TestInputBranch::Selector,
                 children: vec![],
             },
         )
@@ -1168,13 +1169,13 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
 #[test]
 fn generation_needs_no_preparation_registry_or_record_lookup() {
     let mut flat = parse("pub struct Point { pub x:i64, pub y:i64 } pub fn point()->Point {}");
-    bind_output(
+    test_bind_output(
         &mut flat,
         &TEST_CODEC,
         "point",
-        &DeclOutput::fields([
-            DeclOutput::Leaf(DeclOutputLeafOp::Value),
-            DeclOutput::Leaf(DeclOutputLeafOp::Value),
+        &TestOutput::fields([
+            TestOutput::Leaf(TestOutputLeafOp::Value),
+            TestOutput::Leaf(TestOutputLeafOp::Value),
         ]),
         &Extra::default(),
     )
@@ -1396,17 +1397,18 @@ fn owned_record_cleanup_covers_partial_conversion_and_failed_delivery() {
 #[test]
 fn consuming_field_accessors_validate_signatures_and_order_observers() {
     let mut flat = parse("pub struct Pair { pub first:i64, pub second:i64 } pub fn make()->Pair {} pub fn into_pair(value:Pair)->Pair {} pub fn copy_pair(value:&Pair)->Pair {} pub fn count(value:&Pair)->i64 {}");
-    let declarations = DeclDefaults::new(&flat, vec![], vec![], vec![]).unwrap();
+    let declarations = TestDefaults::new(&flat, vec![], vec![], vec![]).unwrap();
     declarations
         .fill(
             &mut flat,
             &TEST_CODEC,
-            &fun!(make).expand_return(
-                expand_return!(Pair)
+            &test_fun!(make).expand_return(
+                test_expand_return!(Pair)
                     .fields_into(
-                        fields!(into_pair).field("first", expand_return!(i64).field_self_ref()),
+                        test_fields!(into_pair)
+                            .field("first", test_expand_return!(i64).field_self_ref()),
                     )
-                    .field(fun!(count)),
+                    .field(test_fun!(count)),
             ),
             &Extra::default(),
         )
@@ -1425,7 +1427,8 @@ fn consuming_field_accessors_validate_signatures_and_order_observers() {
         .fill(
             &mut flat,
             &TEST_CODEC,
-            &fun!(make).expand_return(expand_return!(Pair).fields_into(fields!(copy_pair))),
+            &test_fun!(make)
+                .expand_return(test_expand_return!(Pair).fields_into(test_fields!(copy_pair))),
             &Extra::default(),
         )
         .unwrap_err();
@@ -1437,7 +1440,8 @@ fn consuming_field_accessors_validate_signatures_and_order_observers() {
         .fill(
             &mut flat,
             &TEST_CODEC,
-            &fun!(make).expand_return(expand_return!(Pair).fields(fields!(into_pair))),
+            &test_fun!(make)
+                .expand_return(test_expand_return!(Pair).fields(test_fields!(into_pair))),
             &Extra::default(),
         )
         .unwrap_err();
@@ -1519,27 +1523,27 @@ fn optional_output_drops_prepared_owners_on_failure_and_skips_absent_payloads() 
 fn field_groups_preserve_empty_and_multiwire_fields_in_both_directions() {
     use prebindgen_flat::WireNode;
     let mut flat = parse("pub struct Empty {} pub struct Pair { pub x: i32, pub y: i32 } pub struct Record { pub maybe: Option<i32>, pub empty: Empty, pub pair: Pair } pub fn echo(value: Record) -> Record { value }");
-    let input = DeclInput::Branch {
-        operation: DeclInputBranch::Fields,
+    let input = TestInput::Branch {
+        operation: TestInputBranch::Fields,
         children: vec![
-            DeclInput::Unary {
-                operation: DeclInputUnary::Optional,
-                child: Box::new(DeclInput::Leaf(DeclInputLeafOp::Value)),
+            TestInput::Unary {
+                operation: TestInputUnary::Optional,
+                child: Box::new(TestInput::Leaf(TestInputLeafOp::Value)),
             },
-            DeclInput::Branch {
-                operation: DeclInputBranch::Fields,
+            TestInput::Branch {
+                operation: TestInputBranch::Fields,
                 children: vec![],
             },
-            DeclInput::Branch {
-                operation: DeclInputBranch::Fields,
+            TestInput::Branch {
+                operation: TestInputBranch::Fields,
                 children: vec![
-                    DeclInput::Leaf(DeclInputLeafOp::Value),
-                    DeclInput::Leaf(DeclInputLeafOp::Value),
+                    TestInput::Leaf(TestInputLeafOp::Value),
+                    TestInput::Leaf(TestInputLeafOp::Value),
                 ],
             },
         ],
     };
-    bind_input(
+    test_bind_input(
         &mut flat,
         &TEST_CODEC,
         "echo",
@@ -1594,34 +1598,34 @@ fn field_groups_preserve_empty_and_multiwire_fields_in_both_directions() {
     );
     for owned in [false, true] {
         let fields = vec![
-            DeclOutput::Unary {
-                operation: DeclOutputUnary::Optional,
-                child: Box::new(DeclOutput::Leaf(DeclOutputLeafOp::Value)),
+            TestOutput::Unary {
+                operation: TestOutputUnary::Optional,
+                child: Box::new(TestOutput::Leaf(TestOutputLeafOp::Value)),
             },
-            DeclOutput::Branch {
-                operation: DeclOutputBranch::Fields,
+            TestOutput::Branch {
+                operation: TestOutputBranch::Fields,
                 children: vec![],
             },
-            DeclOutput::Branch {
-                operation: DeclOutputBranch::Fields,
+            TestOutput::Branch {
+                operation: TestOutputBranch::Fields,
                 children: vec![
-                    DeclOutput::Leaf(DeclOutputLeafOp::Value),
-                    DeclOutput::Leaf(DeclOutputLeafOp::Value),
+                    TestOutput::Leaf(TestOutputLeafOp::Value),
+                    TestOutput::Leaf(TestOutputLeafOp::Value),
                 ],
             },
         ];
         let output = if owned {
-            DeclOutput::Branch {
-                operation: DeclOutputBranch::OwnedFields,
+            TestOutput::Branch {
+                operation: TestOutputBranch::OwnedFields,
                 children: fields,
             }
         } else {
-            DeclOutput::Branch {
-                operation: DeclOutputBranch::Fields,
+            TestOutput::Branch {
+                operation: TestOutputBranch::Fields,
                 children: fields,
             }
         };
-        bind_output(&mut flat, &TEST_CODEC, "echo", &output, &Extra::default()).unwrap();
+        test_bind_output(&mut flat, &TEST_CODEC, "echo", &output, &Extra::default()).unwrap();
         let plan = flat.function("echo").unwrap().ret.slot.as_ref().unwrap();
         check(&plan.outcomes.success);
         assert_eq!(plan.values.len(), 4);
@@ -1690,7 +1694,7 @@ fn record_helpers_check_source_field_names_without_reading_group_metadata() {
 #[test]
 fn result_defaults_overrides_and_borrowed_error_mappers_reuse_success_plans() {
     let mut flat = parse("pub type E=String; pub fn message(e:&E)->String{} pub fn other(e:E)->String{} pub fn echo(x:i64)->Result<Option<i64>,E>{}");
-    let defaults = DeclDefaults::new(
+    let defaults = TestDefaults::new(
         &flat,
         vec![],
         vec![],
@@ -1698,7 +1702,7 @@ fn result_defaults_overrides_and_borrowed_error_mappers_reuse_success_plans() {
     )
     .unwrap();
     defaults
-        .fill(&mut flat, &TEST_CODEC, &fun!(echo), &Extra::default())
+        .fill(&mut flat, &TEST_CODEC, &test_fun!(echo), &Extra::default())
         .unwrap();
     let output = flat.function("echo").unwrap().ret.slot.as_ref().unwrap();
     assert_eq!(TestAbi::wires(&output.outcomes.success).len(), 2);
@@ -1710,7 +1714,7 @@ fn result_defaults_overrides_and_borrowed_error_mappers_reuse_success_plans() {
         .fill(
             &mut flat,
             &TEST_CODEC,
-            &fun!(echo).on_error(fun!(other)),
+            &test_fun!(echo).on_error(test_fun!(other)),
             &Extra::default(),
         )
         .unwrap();
@@ -1730,7 +1734,7 @@ fn result_defaults_overrides_and_borrowed_error_mappers_reuse_success_plans() {
 fn invalid_result_policies_leave_all_function_slots_unchanged() {
     for mapper in [None, Some("wrong"), Some("missing")] {
         let mut flat = parse("pub type E=String; pub fn message(e:E)->String{} pub fn wrong(e:&mut E)->String{} pub fn f(x:i64)->Result<i64,E>{}");
-        let mut decl = fun!(f);
+        let mut decl = test_fun!(f);
         if let Some(mapper) = mapper {
             decl = decl.on_error(mapper);
         }
@@ -1747,7 +1751,7 @@ fn invalid_result_policies_leave_all_function_slots_unchanged() {
     ] {
         let mut flat = parse(source);
         assert!(
-            fill(&mut flat, &fun!(f).on_error(fun!(message))).is_err(),
+            fill(&mut flat, &test_fun!(f).on_error(test_fun!(message))).is_err(),
             "{source}"
         );
     }
@@ -1760,7 +1764,7 @@ fn result_data_occurrences_are_not_implicitly_error_channels() {
         "pub fn f(x:Option<&Result<i64,String>>){}",
     ] {
         let mut flat = parse(source);
-        fill(&mut flat, &fun!(f)).unwrap();
+        fill(&mut flat, &test_fun!(f)).unwrap();
         assert!(flat
             .function("f")
             .unwrap()
@@ -1775,21 +1779,21 @@ fn result_data_occurrences_are_not_implicitly_error_channels() {
     for (source, recipe) in [
         (
             "pub fn f()->Option<Result<i64,String>>{}",
-            DeclOutput::Unary {
-                operation: DeclOutputUnary::Optional,
-                child: Box::new(DeclOutput::Leaf(DeclOutputLeafOp::Value)),
+            TestOutput::Unary {
+                operation: TestOutputUnary::Optional,
+                child: Box::new(TestOutput::Leaf(TestOutputLeafOp::Value)),
             },
         ),
         (
             "pub struct R{pub value:Result<i64,String>}pub fn f()->R{}",
-            DeclOutput::Branch {
-                operation: DeclOutputBranch::OwnedFields,
-                children: vec![DeclOutput::Leaf(DeclOutputLeafOp::Value)],
+            TestOutput::Branch {
+                operation: TestOutputBranch::OwnedFields,
+                children: vec![TestOutput::Leaf(TestOutputLeafOp::Value)],
             },
         ),
     ] {
         let mut flat = parse(source);
-        bind_output(&mut flat, &TEST_CODEC, "f", &recipe, &Extra::default()).unwrap();
+        test_bind_output(&mut flat, &TEST_CODEC, "f", &recipe, &Extra::default()).unwrap();
         assert!(flat
             .function("f")
             .unwrap()
@@ -1803,7 +1807,7 @@ fn result_data_occurrences_are_not_implicitly_error_channels() {
     }
     let mut flat =
         parse("pub fn message(e:String)->String{}pub fn f()->Result<Result<i64,String>,String>{}");
-    fill(&mut flat, &fun!(f).on_error(fun!(message))).unwrap();
+    fill(&mut flat, &test_fun!(f).on_error(test_fun!(message))).unwrap();
     assert!(flat
         .function("f")
         .unwrap()
@@ -1814,16 +1818,16 @@ fn result_data_occurrences_are_not_implicitly_error_channels() {
         .outcomes
         .source_error
         .is_some());
-    assert!(DeclDefaults::new(
+    assert!(TestDefaults::new(
         &flat,
         vec![],
-        vec![expand_return!(Result<i64,String>).field_self().into()],
+        vec![test_expand_return!(Result<i64,String>).field_self().into()],
         vec![]
     )
     .is_ok());
-    assert!(DeclDefaults::new(
+    assert!(TestDefaults::new(
         &flat,
-        vec![expand_param!(Result<i64,String>).variant_self().into()],
+        vec![test_expand_param!(Result<i64,String>).variant_self().into()],
         vec![],
         vec![]
     )
@@ -1833,7 +1837,7 @@ fn result_data_occurrences_are_not_implicitly_error_channels() {
 #[test]
 fn result_error_defaults_are_explicit_unique_and_selected_with_helpers() {
     let flat = parse("pub type E=String;pub fn message(e:E)->String{}pub fn f()->Result<i64,E>{}");
-    assert!(DeclDefaults::new(
+    assert!(TestDefaults::new(
         &flat,
         vec![],
         vec![],
@@ -1844,7 +1848,12 @@ fn result_error_defaults_are_explicit_unique_and_selected_with_helpers() {
     )
     .is_err());
     let errors = vec![(syn::parse_quote!(E), "message".into())];
-    let names = declarations::source_items(&[], &[], &errors, [&fun!(f).on_error(fun!(message))]);
+    let names = test_language::source_items(
+        &[],
+        &[],
+        &errors,
+        [&test_fun!(f).on_error(test_fun!(message))],
+    );
     assert!(names.contains(&"f".into()) && names.contains(&"message".into()));
 }
 
@@ -1852,14 +1861,14 @@ fn result_error_defaults_are_explicit_unique_and_selected_with_helpers() {
 fn selector_schema_separates_control_from_mutually_exclusive_payloads() {
     use prebindgen_flat::WireNode;
     let mut model = parse("pub struct Item {} pub fn empty()->Item{} pub fn numbered(n:i32)->Item{} pub fn take(v:Item){}");
-    bind_input(
+    test_bind_input(
         &mut model,
         &TEST_CODEC,
         "take",
         "v",
-        &DeclInput::selector([
-            DeclInput::constructor("empty", []),
-            DeclInput::constructor("numbered", [DeclInput::Leaf(DeclInputLeafOp::Value)]),
+        &TestInput::selector([
+            TestInput::constructor("empty", []),
+            TestInput::constructor("numbered", [TestInput::Leaf(TestInputLeafOp::Value)]),
         ]),
         &Extra::default(),
     )
@@ -2004,12 +2013,12 @@ fn nested_output_completion_channels_are_rejected_without_losing_unit_errors() {
 fn constructor_and_output_components_keep_groups_at_every_arity() {
     let mut flat = parse("pub fn zero()->i64{} pub fn one(a:i64)->i64{} pub fn two(a:i64,b:i64)->i64{} pub fn observe(v:&i64)->i64{} pub fn f(value:i64)->i64{}");
     for (name, count) in [("zero", 0), ("one", 1), ("two", 2)] {
-        bind_input(
+        test_bind_input(
             &mut flat,
             &TEST_CODEC,
             "f",
             "value",
-            &DeclInput::constructor(name, vec![DeclInput::Leaf(DeclInputLeafOp::Value); count]),
+            &TestInput::constructor(name, vec![TestInput::Leaf(TestInputLeafOp::Value); count]),
             &Extra::default(),
         )
         .unwrap();
@@ -2024,14 +2033,14 @@ fn constructor_and_output_components_keep_groups_at_every_arity() {
         if count == 0 {
             continue;
         } // Empty combinations are intentionally rejected.
-        bind_output(
+        test_bind_output(
             &mut flat,
             &TEST_CODEC,
             "f",
-            &DeclOutput::combine(vec![
-                DeclOutput::getter(
+            &TestOutput::combine(vec![
+                TestOutput::getter(
                     "observe",
-                    DeclOutput::Leaf(DeclOutputLeafOp::Value)
+                    TestOutput::Leaf(TestOutputLeafOp::Value)
                 );
                 count
             ]),
@@ -2048,11 +2057,11 @@ fn constructor_and_output_components_keep_groups_at_every_arity() {
 #[test]
 fn malformed_error_channel_is_rejected_before_replacing_output() {
     let mut flat = parse("pub fn f()->i64{}");
-    bind_output(
+    test_bind_output(
         &mut flat,
         &TEST_CODEC,
         "f",
-        &DeclOutput::Leaf(DeclOutputLeafOp::Value),
+        &TestOutput::Leaf(TestOutputLeafOp::Value),
         &Extra::default(),
     )
     .unwrap();
@@ -2065,11 +2074,11 @@ fn malformed_error_channel_is_rejected_before_replacing_output() {
         .unwrap()
         .statements
         .to_string();
-    let error = bind_output(
+    let error = test_bind_output(
         &mut flat,
         &TEST_CODEC,
         "f",
-        &DeclOutput::Leaf(DeclOutputLeafOp::Value),
+        &TestOutput::Leaf(TestOutputLeafOp::Value),
         &Extra {
             name: "malformed_binding_failure",
             ..Extra::default()
@@ -2085,11 +2094,11 @@ fn malformed_error_channel_is_rejected_before_replacing_output() {
 #[test]
 fn failed_metadata_construction_preserves_installed_conversions() {
     let mut flat=parse("pub fn empty()->Option<i64>{} pub fn some(v:i64)->Option<i64>{} pub fn f(v:Option<i64>)->Option<i64>{}");
-    let optional = DeclInput::Unary {
-        operation: DeclInputUnary::Optional,
-        child: Box::new(DeclInput::Leaf(DeclInputLeafOp::Value)),
+    let optional = TestInput::Unary {
+        operation: TestInputUnary::Optional,
+        child: Box::new(TestInput::Leaf(TestInputLeafOp::Value)),
     };
-    bind_input(
+    test_bind_input(
         &mut flat,
         &TEST_CODEC,
         "f",
@@ -2098,13 +2107,13 @@ fn failed_metadata_construction_preserves_installed_conversions() {
         &Extra::default(),
     )
     .unwrap();
-    bind_output(
+    test_bind_output(
         &mut flat,
         &TEST_CODEC,
         "f",
-        &DeclOutput::Unary {
-            operation: DeclOutputUnary::Optional,
-            child: Box::new(DeclOutput::Leaf(DeclOutputLeafOp::Value)),
+        &TestOutput::Unary {
+            operation: TestOutputUnary::Optional,
+            child: Box::new(TestOutput::Leaf(TestOutputLeafOp::Value)),
         },
         &Extra::default(),
     )
@@ -2132,15 +2141,15 @@ fn failed_metadata_construction_preserves_installed_conversions() {
             "optional metadata rejected",
         ),
         (
-            DeclInput::selector([
-                DeclInput::constructor("empty", []),
-                DeclInput::constructor("some", [DeclInput::Leaf(DeclInputLeafOp::Value)]),
+            TestInput::selector([
+                TestInput::constructor("empty", []),
+                TestInput::constructor("some", [TestInput::Leaf(TestInputLeafOp::Value)]),
             ]),
             "reject_alternative_metadata",
             "alternative metadata rejected",
         ),
     ] {
-        let error = bind_input(
+        let error = test_bind_input(
             &mut flat,
             &TEST_CODEC,
             "f",
@@ -2164,13 +2173,13 @@ fn failed_metadata_construction_preserves_installed_conversions() {
             input_before
         );
     }
-    let error = bind_output(
+    let error = test_bind_output(
         &mut flat,
         &TEST_CODEC,
         "f",
-        &DeclOutput::Unary {
-            operation: DeclOutputUnary::Optional,
-            child: Box::new(DeclOutput::Leaf(DeclOutputLeafOp::Value)),
+        &TestOutput::Unary {
+            operation: TestOutputUnary::Optional,
+            child: Box::new(TestOutput::Leaf(TestOutputLeafOp::Value)),
         },
         &Extra {
             name: "reject_optional_metadata",
@@ -2195,10 +2204,10 @@ fn failed_metadata_construction_preserves_installed_conversions() {
 #[test]
 fn preparation_fills_one_fixed_schema_and_emission_needs_no_defaults() {
     let source = parse("pub struct R { pub n:i64 } pub fn make(n:i64)->R{} pub fn inspect(r:&R)->i64{} pub fn echo(r:Option<R>)->Option<R>{}");
-    let defaults = DeclDefaults::new(
+    let defaults = TestDefaults::new(
         &source,
-        vec![expand_param!(R).variant(fun!(make)).into()],
-        vec![expand_return!(R).field(fun!(inspect)).into()],
+        vec![test_expand_param!(R).variant(test_fun!(make)).into()],
+        vec![test_expand_return!(R).field(test_fun!(inspect)).into()],
         vec![],
     )
     .unwrap();
@@ -2208,7 +2217,7 @@ fn preparation_fills_one_fixed_schema_and_emission_needs_no_defaults() {
             &source,
             &TEST_CODEC,
             &source.function("echo").unwrap().params[0].ty.ty,
-            &DeclInput::auto(),
+            &TestInput::auto(),
             &Extra::default(),
         )
         .unwrap();
@@ -2217,19 +2226,24 @@ fn preparation_fills_one_fixed_schema_and_emission_needs_no_defaults() {
             &source,
             &TEST_CODEC,
             &source.function("echo").unwrap().ret.ty,
-            &DeclOutput::auto(),
+            &TestOutput::auto(),
             &Extra::default(),
         )
         .unwrap();
     assert!(
-        matches!(&input,DeclInput::Unary { operation: DeclInputUnary::Optional, child } if matches!(child.as_ref(),DeclInput::Branch { operation: DeclInputBranch::Constructor { function, .. }, .. } if function=="make"))
+        matches!(&input,TestInput::Unary { operation: TestInputUnary::Optional, child } if matches!(child.as_ref(),TestInput::Branch { operation: TestInputBranch::Constructor { function, .. }, .. } if function=="make"))
     );
     assert!(
-        matches!(&output,DeclOutput::Unary { operation: DeclOutputUnary::Optional, child } if matches!(child.as_ref(),DeclOutput::Unary { operation: DeclOutputUnary::Getter { function, .. }, .. } if function=="inspect"))
+        matches!(&output,TestOutput::Unary { operation: TestOutputUnary::Optional, child } if matches!(child.as_ref(),TestOutput::Unary { operation: TestOutputUnary::Getter { function, .. }, .. } if function=="inspect"))
     );
     assert!(source.function("echo").unwrap().ret.slot.is_none());
     defaults
-        .fill(&mut source, &TEST_CODEC, &fun!(echo), &Extra::default())
+        .fill(
+            &mut source,
+            &TEST_CODEC,
+            &test_fun!(echo),
+            &Extra::default(),
+        )
         .unwrap();
     drop(defaults);
     validate_bindings(&source).unwrap();
@@ -2241,11 +2255,11 @@ fn preparation_fills_one_fixed_schema_and_emission_needs_no_defaults() {
 #[test]
 fn sequence_identity_uses_element_defaults_and_staged_errors_name_the_function() {
     let source = model();
-    let defaults = DeclDefaults::new(
+    let defaults = TestDefaults::new(
         &source,
         vec![
-            expand_param!(Payload).variant(fun!(make)).into(),
-            expand_param!(Vec<Payload>).variant_self().into(),
+            test_expand_param!(Payload).variant(test_fun!(make)).into(),
+            test_expand_param!(Vec<Payload>).variant_self().into(),
         ],
         vec![],
         vec![],
@@ -2258,19 +2272,19 @@ fn sequence_identity_uses_element_defaults_and_staged_errors_name_the_function()
             &source
                 .resolve_type(&syn::parse_quote!(Vec<Payload>))
                 .unwrap(),
-            &DeclInput::auto(),
+            &TestInput::auto(),
             &Extra::default(),
         )
         .unwrap();
     assert!(
-        matches!(resolved,DeclInput::Unary { operation: DeclInputUnary::Sequence, child } if matches!(&*child,DeclInput::Branch { operation: DeclInputBranch::Constructor { function, .. }, .. } if function=="make"))
+        matches!(resolved,TestInput::Unary { operation: TestInputUnary::Sequence, child } if matches!(&*child,TestInput::Branch { operation: TestInputBranch::Constructor { function, .. }, .. } if function=="make"))
     );
     let mut source = source;
     let error = defaults
         .fill(
             &mut source,
             &TEST_CODEC,
-            &fun!(foo).input("x", DeclInput::call("missing")),
+            &test_fun!(foo).input("x", TestInput::call("missing")),
             &Extra::default(),
         )
         .unwrap_err();
@@ -2280,9 +2294,9 @@ fn sequence_identity_uses_element_defaults_and_staged_errors_name_the_function()
         .fill(
             &mut invalid,
             &TEST_CODEC,
-            &fun!(broken).output(DeclOutput::Unary {
-                operation: DeclOutputUnary::Optional,
-                child: Box::new(DeclOutput::Leaf(DeclOutputLeafOp::Value)),
+            &test_fun!(broken).output(TestOutput::Unary {
+                operation: TestOutputUnary::Optional,
+                child: Box::new(TestOutput::Leaf(TestOutputLeafOp::Value)),
             }),
             &Extra::default(),
         )
@@ -2293,32 +2307,35 @@ fn sequence_identity_uses_element_defaults_and_staged_errors_name_the_function()
 #[test]
 fn omitted_typed_fields_drop_all_enclosing_option_and_sequence_wires() {
     let mut model = parse("pub type Hidden=String;pub type Other=u32;pub struct Record{pub optional:Option<Hidden>,pub nested:Option<Vec<Option<Hidden>>>,pub visible:i64}pub fn parts(value:Record)->Record{}pub fn read()->Record{}");
-    let output: DeclOutput<DeclInputRequest, DeclOutputRequest> = expand_return!(Record)
+    let output: TestOutput<TestInputRequest, TestOutputRequest> = test_expand_return!(Record)
         .fields_into(
-            fields!(parts)
-                .field("optional", expand_return!(Hidden))
-                .field_override("nested", expand_return!(Hidden)),
+            test_fields!(parts)
+                .field("optional", test_expand_return!(Hidden))
+                .field_override("nested", test_expand_return!(Hidden)),
         )
         .into();
-    bind_output(&mut model, &TEST_CODEC, "read", &output, &Extra::default()).unwrap();
+    test_bind_output(&mut model, &TEST_CODEC, "read", &output, &Extra::default()).unwrap();
     let plan = model.function("read").unwrap().ret.slot.as_ref().unwrap();
     assert_eq!(
         prebindgen_flat::wire_definitions(std::iter::once(&plan.outcomes.success)).count(),
         1
     );
     assert_eq!(plan.values.len(), 1);
-    let invalid: DeclOutput<DeclInputRequest, DeclOutputRequest> = expand_return!(Record)
-        .fields_into(fields!(parts).field("optional", expand_return!(Other)))
+    let invalid: TestOutput<TestInputRequest, TestOutputRequest> = test_expand_return!(Record)
+        .fields_into(test_fields!(parts).field("optional", test_expand_return!(Other)))
         .into();
-    assert!(bind_output(&mut model, &TEST_CODEC, "read", &invalid, &Extra::default()).is_err());
+    assert!(
+        test_bind_output(&mut model, &TEST_CODEC, "read", &invalid, &Extra::default()).is_err()
+    );
 }
 
 #[test]
 fn named_getter_resolution_preserves_the_selected_name_in_the_tree() {
     let model = parse("pub type T=String;pub fn length(value:&T)->i64{}");
-    let defaults = DeclDefaults::new(&model, vec![], vec![], vec![]).unwrap();
-    let tree: DeclOutput<DeclInputRequest, DeclOutputRequest> =
-        expand_return!(T).field(fun!(length).name("size")).into();
+    let defaults = TestDefaults::new(&model, vec![], vec![], vec![]).unwrap();
+    let tree: TestOutput<TestInputRequest, TestOutputRequest> = test_expand_return!(T)
+        .field(test_fun!(length).name("size"))
+        .into();
     let tree = defaults
         .resolve_output(
             &model,
@@ -2329,43 +2346,46 @@ fn named_getter_resolution_preserves_the_selected_name_in_the_tree() {
         )
         .unwrap();
     assert!(
-        matches!(tree,DeclOutput::Unary { operation: DeclOutputUnary::Named { name }, child: output,  } if name=="size" && matches!(output.as_ref(),DeclOutput::Unary { operation: DeclOutputUnary::Getter { function }, child: output,  } if function=="length"&&matches!(output.as_ref(),DeclOutput::Leaf(DeclOutputLeafOp::Value))))
+        matches!(tree,TestOutput::Unary { operation: TestOutputUnary::Named { name }, child: output,  } if name=="size" && matches!(output.as_ref(),TestOutput::Unary { operation: TestOutputUnary::Getter { function }, child: output,  } if function=="length"&&matches!(output.as_ref(),TestOutput::Leaf(TestOutputLeafOp::Value))))
     );
 }
 
 #[test]
 fn helper_references_reject_binding_only_decorations() {
-    assert!(
-        std::panic::catch_unwind(|| expand_param!(T).variant(fun!(make).name("renamed"))).is_err()
-    );
-    assert!(std::panic::catch_unwind(|| fun!(f).on_error(fun!(message).name("renamed"))).is_err());
     assert!(std::panic::catch_unwind(
-        || expand_return!(T).field(fun!(get).expand_return(expand_return!(i64).field_self()))
+        || test_expand_param!(T).variant(test_fun!(make).name("renamed"))
     )
+    .is_err());
+    assert!(
+        std::panic::catch_unwind(|| test_fun!(f).on_error(test_fun!(message).name("renamed")))
+            .is_err()
+    );
+    assert!(std::panic::catch_unwind(|| test_expand_return!(T)
+        .field(test_fun!(get).expand_return(test_expand_return!(i64).field_self())))
     .is_err());
 }
 
 #[test]
 fn nested_requests_resolve_into_strict_schemas_before_compilation() {
     let source = parse("pub type R=String;pub fn make(a:i32,b:Option<i64>)->R{}pub fn narrow(v:i16)->i64{}pub fn run(value:R)->i64{}");
-    let defaults = DeclDefaults::new(
+    let defaults = TestDefaults::new(
         &source,
-        vec![expand_param!(i64).variant(fun!(narrow)).into()],
+        vec![test_expand_param!(i64).variant(test_fun!(narrow)).into()],
         vec![],
         vec![],
     )
     .unwrap();
-    let requested: DeclInput<DeclInputRequest, DeclOutputRequest> = DeclInput::constructor(
+    let requested: TestInput<TestInputRequest, TestOutputRequest> = TestInput::constructor(
         "make",
         [
-            DeclInput::Leaf(DeclInputLeafOp::Value),
-            DeclInput::Unary {
-                operation: DeclInputUnary::Optional,
-                child: Box::new(DeclInput::auto()),
+            TestInput::Leaf(TestInputLeafOp::Value),
+            TestInput::Unary {
+                operation: TestInputUnary::Optional,
+                child: Box::new(TestInput::auto()),
             },
         ],
     );
-    let resolved: DeclInput = defaults
+    let resolved: TestInput = defaults
         .resolve_input(
             &source,
             &TEST_CODEC,
@@ -2374,17 +2394,17 @@ fn nested_requests_resolve_into_strict_schemas_before_compilation() {
             &Extra::default(),
         )
         .unwrap();
-    let DeclInput::Branch {
-        operation: DeclInputBranch::Constructor { .. },
+    let TestInput::Branch {
+        operation: TestInputBranch::Constructor { .. },
         children: args,
         ..
     } = &resolved
     else {
         panic!("constructor not resolved")
     };
-    assert!(matches!(&args[0], DeclInput::Leaf(DeclInputLeafOp::Value)));
+    assert!(matches!(&args[0], TestInput::Leaf(TestInputLeafOp::Value)));
     assert!(
-        matches!(&args[1],DeclInput::Unary { operation: DeclInputUnary::Optional, child } if matches!(child.as_ref(),DeclInput::Branch { operation: DeclInputBranch::Constructor { function }, children: args,  } if function=="narrow"&&matches!(args.as_slice(),[DeclInput::Leaf(DeclInputLeafOp::Value)])))
+        matches!(&args[1],TestInput::Unary { operation: TestInputUnary::Optional, child } if matches!(child.as_ref(),TestInput::Branch { operation: TestInputBranch::Constructor { function }, children: args,  } if function=="narrow"&&matches!(args.as_slice(),[TestInput::Leaf(TestInputLeafOp::Value)])))
     );
     compile_input(
         &source,
@@ -2401,18 +2421,18 @@ fn nested_requests_resolve_into_strict_schemas_before_compilation() {
 #[test]
 fn completed_subtrees_keep_explicit_choices_when_used_in_preparation() {
     let source=parse("pub type R=String;pub fn direct(v:i64)->R{}pub fn narrow(v:i16)->i64{}pub fn observe(r:&R)->i64{}pub fn sign(v:&i64)->i8{}pub fn run(value:R,count:i64)->R{}");
-    let defaults = DeclDefaults::new(
+    let defaults = TestDefaults::new(
         &source,
-        vec![expand_param!(i64).variant(fun!(narrow)).into()],
-        vec![expand_return!(i64).field(fun!(sign)).into()],
+        vec![test_expand_param!(i64).variant(test_fun!(narrow)).into()],
+        vec![test_expand_return!(i64).field(test_fun!(sign)).into()],
         vec![],
     )
     .unwrap();
-    let input: DeclInput =
-        DeclInput::constructor("direct", [DeclInput::Leaf(DeclInputLeafOp::Value)]);
-    let output: DeclOutput =
-        DeclOutput::getter("observe", DeclOutput::Leaf(DeclOutputLeafOp::Value));
-    let decl = fun!(run)
+    let input: TestInput =
+        TestInput::constructor("direct", [TestInput::Leaf(TestInputLeafOp::Value)]);
+    let output: TestOutput =
+        TestOutput::getter("observe", TestOutput::Leaf(TestOutputLeafOp::Value));
+    let decl = test_fun!(run)
         .input("value", input.into_preparation())
         .output(output.into_preparation());
     let run = source.function("run").unwrap();
@@ -2430,7 +2450,7 @@ fn completed_subtrees_keep_explicit_choices_when_used_in_preparation() {
             &source,
             &TEST_CODEC,
             &run.params[1].ty.ty,
-            &DeclInput::auto(),
+            &TestInput::auto(),
             &Extra::default(),
         )
         .unwrap();
@@ -2444,13 +2464,13 @@ fn completed_subtrees_keep_explicit_choices_when_used_in_preparation() {
         )
         .unwrap();
     assert!(
-        matches!(&input,DeclInput::Branch { operation: DeclInputBranch::Constructor { function }, children: args,  } if function=="direct"&&matches!(args.as_slice(),[DeclInput::Leaf(DeclInputLeafOp::Value)]))
+        matches!(&input,TestInput::Branch { operation: TestInputBranch::Constructor { function }, children: args,  } if function=="direct"&&matches!(args.as_slice(),[TestInput::Leaf(TestInputLeafOp::Value)]))
     );
     assert!(
-        matches!(&count,DeclInput::Branch { operation: DeclInputBranch::Constructor { function, .. }, .. } if function=="narrow")
+        matches!(&count,TestInput::Branch { operation: TestInputBranch::Constructor { function, .. }, .. } if function=="narrow")
     );
     assert!(
-        matches!(&output,DeclOutput::Unary { operation: DeclOutputUnary::Getter { function }, child: output,  } if function=="observe"&&matches!(output.as_ref(),DeclOutput::Leaf(DeclOutputLeafOp::Value)))
+        matches!(&output,TestOutput::Unary { operation: TestOutputUnary::Getter { function }, child: output,  } if function=="observe"&&matches!(output.as_ref(),TestOutput::Leaf(TestOutputLeafOp::Value)))
     );
     let mut source = source;
     defaults
@@ -2461,23 +2481,23 @@ fn completed_subtrees_keep_explicit_choices_when_used_in_preparation() {
 #[test]
 fn result_resolution_consumes_nested_requests_and_preserves_error_mapper() {
     let source = parse("pub type E=String;pub fn message(e:&E)->String{}pub fn sign(v:&i64)->i8{}pub fn run()->Result<Option<i64>,E>{}");
-    let defaults = DeclDefaults::new(
+    let defaults = TestDefaults::new(
         &source,
         vec![],
-        vec![expand_return!(i64).field(fun!(sign)).into()],
+        vec![test_expand_return!(i64).field(test_fun!(sign)).into()],
         vec![],
     )
     .unwrap();
-    let request = DeclOutput::Unary {
-        operation: DeclOutputUnary::Result {
+    let request = TestOutput::Unary {
+        operation: TestOutputUnary::Result {
             error: Some("message".into()),
         },
-        child: Box::new(DeclOutput::Unary {
-            operation: DeclOutputUnary::Optional,
-            child: Box::new(DeclOutput::auto()),
+        child: Box::new(TestOutput::Unary {
+            operation: TestOutputUnary::Optional,
+            child: Box::new(TestOutput::auto()),
         }),
     };
-    let resolved: DeclOutput = defaults
+    let resolved: TestOutput = defaults
         .resolve_output(
             &source,
             &TEST_CODEC,
@@ -2486,8 +2506,8 @@ fn result_resolution_consumes_nested_requests_and_preserves_error_mapper() {
             &Extra::default(),
         )
         .unwrap();
-    let DeclOutput::Unary {
-        operation: DeclOutputUnary::Result { error },
+    let TestOutput::Unary {
+        operation: TestOutputUnary::Result { error },
         child: ok,
     } = &resolved
     else {
@@ -2495,7 +2515,7 @@ fn result_resolution_consumes_nested_requests_and_preserves_error_mapper() {
     };
     assert_eq!(error.as_deref(), Some("message"));
     assert!(
-        matches!(ok.as_ref(),DeclOutput::Unary { operation: DeclOutputUnary::Optional, child } if matches!(child.as_ref(),DeclOutput::Unary { operation: DeclOutputUnary::Getter { function }, child: output,  } if function=="sign" && matches!(output.as_ref(),DeclOutput::Leaf(DeclOutputLeafOp::Value))))
+        matches!(ok.as_ref(),TestOutput::Unary { operation: TestOutputUnary::Optional, child } if matches!(child.as_ref(),TestOutput::Unary { operation: TestOutputUnary::Getter { function }, child: output,  } if function=="sign" && matches!(output.as_ref(),TestOutput::Leaf(TestOutputLeafOp::Value))))
     );
     compile_output(&source, &TEST_CODEC, "run", &resolved, &Extra::default()).unwrap();
     let mut source = source;
@@ -2503,12 +2523,12 @@ fn result_resolution_consumes_nested_requests_and_preserves_error_mapper() {
         .fill(
             &mut source,
             &TEST_CODEC,
-            &fun!(run)
-                .output(DeclOutput::Unary {
-                    operation: DeclOutputUnary::Optional,
-                    child: Box::new(DeclOutput::auto()),
+            &test_fun!(run)
+                .output(TestOutput::Unary {
+                    operation: TestOutputUnary::Optional,
+                    child: Box::new(TestOutput::auto()),
                 })
-                .on_error(fun!(message)),
+                .on_error(test_fun!(message)),
             &Extra::default(),
         )
         .unwrap();
@@ -2527,20 +2547,20 @@ fn result_resolution_consumes_nested_requests_and_preserves_error_mapper() {
 #[test]
 fn resolved_omissions_and_sequence_policies_survive_preparation_round_trip() {
     let source = parse("pub type Hidden=String;pub struct R{pub hidden:Option<Vec<Option<Hidden>>>,pub rows:Vec<i64>}pub fn read()->R{}");
-    let defaults = DeclDefaults::new(&source, vec![], vec![], vec![]).unwrap();
-    let tree = DeclOutput::Branch {
-        operation: DeclOutputBranch::OwnedFields,
+    let defaults = TestDefaults::new(&source, vec![], vec![], vec![]).unwrap();
+    let tree = TestOutput::Branch {
+        operation: TestOutputBranch::OwnedFields,
         children: vec![
-            DeclOutput::for_type(
+            TestOutput::for_type(
                 syn::parse_quote!(Hidden),
-                DeclOutput::Leaf(DeclOutputLeafOp::Discard),
+                TestOutput::Leaf(TestOutputLeafOp::Discard),
             ),
-            DeclOutput::Unary {
-                operation: DeclOutputUnary::Sequence {
+            TestOutput::Unary {
+                operation: TestOutputUnary::Sequence {
                     delivery: SequenceDelivery::Callback,
                     mode: Some(ProjectionMode::Owned),
                 },
-                child: Box::new(DeclOutput::auto()),
+                child: Box::new(TestOutput::auto()),
             },
         ],
     };
@@ -2554,7 +2574,7 @@ fn resolved_omissions_and_sequence_policies_survive_preparation_round_trip() {
         )
         .unwrap();
     assert!(
-        matches!(&resolved,DeclOutput::Branch { operation: DeclOutputBranch::OwnedFields, children: fields } if matches!(fields.as_slice(),[DeclOutput::Leaf(DeclOutputLeafOp::Discard),DeclOutput::Unary { operation: DeclOutputUnary::Sequence { delivery: SequenceDelivery::Callback, mode: Some(ProjectionMode::Owned), .. }, .. }]))
+        matches!(&resolved,TestOutput::Branch { operation: TestOutputBranch::OwnedFields, children: fields } if matches!(fields.as_slice(),[TestOutput::Leaf(TestOutputLeafOp::Discard),TestOutput::Unary { operation: TestOutputUnary::Sequence { delivery: SequenceDelivery::Callback, mode: Some(ProjectionMode::Owned), .. }, .. }]))
     );
     let round_trip = defaults
         .resolve_output(
@@ -2571,16 +2591,16 @@ fn resolved_omissions_and_sequence_policies_survive_preparation_round_trip() {
 #[test]
 fn bulk_normalization_preserves_callback_boundaries_inside_structural_nodes() {
     let flat = parse("pub fn values()->Vec<Vec<i64>>{}");
-    let defaults = DeclDefaults::new(&flat, vec![], vec![], vec![]).unwrap();
-    let callback = DeclOutput::Unary {
-        operation: DeclOutputUnary::Sequence {
+    let defaults = TestDefaults::new(&flat, vec![], vec![], vec![]).unwrap();
+    let callback = TestOutput::Unary {
+        operation: TestOutputUnary::Sequence {
             delivery: SequenceDelivery::Callback,
             mode: None,
         },
-        child: Box::new(DeclOutput::Leaf(DeclOutputLeafOp::Value).bulk()),
+        child: Box::new(TestOutput::Leaf(TestOutputLeafOp::Value).bulk()),
     };
-    let recipe = DeclOutput::Unary {
-        operation: DeclOutputUnary::Sequence {
+    let recipe = TestOutput::Unary {
+        operation: TestOutputUnary::Sequence {
             delivery: SequenceDelivery::Value,
             mode: None,
         },
@@ -2596,21 +2616,21 @@ fn bulk_normalization_preserves_callback_boundaries_inside_structural_nodes() {
         )
         .unwrap();
     assert!(
-        matches!(resolved,DeclOutput::Unary { operation: DeclOutputUnary::Sequence { .. }, child: element, .. } if matches!(*element,DeclOutput::Unary { operation: DeclOutputUnary::Sequence { delivery: SequenceDelivery::Callback, .. }, .. }))
+        matches!(resolved,TestOutput::Unary { operation: TestOutputUnary::Sequence { .. }, child: element, .. } if matches!(*element,TestOutput::Unary { operation: TestOutputUnary::Sequence { delivery: SequenceDelivery::Callback, .. }, .. }))
     );
 }
 
 #[test]
 fn unsupported_bulk_is_diagnosed_before_adapter_lowering() {
     let flat = parse("pub fn values()->Option<Vec<i64>>{}");
-    let recipe = DeclOutput::Unary {
-        operation: DeclOutputUnary::Optional,
-        child: Box::new(DeclOutput::Unary {
-            operation: DeclOutputUnary::Sequence {
+    let recipe = TestOutput::Unary {
+        operation: TestOutputUnary::Optional,
+        child: Box::new(TestOutput::Unary {
+            operation: TestOutputUnary::Sequence {
                 delivery: SequenceDelivery::Callback,
                 mode: None,
             },
-            child: Box::new(DeclOutput::Leaf(DeclOutputLeafOp::Value)),
+            child: Box::new(TestOutput::Leaf(TestOutputLeafOp::Value)),
         }),
     }
     .bulk();
@@ -2634,12 +2654,12 @@ fn optional_fields_have_one_continuation_and_linear_generated_code_size() {
         let flat = parse(&format!(
             "pub struct Wide{{{fields}}} pub fn consume(value:Wide){{}}"
         ));
-        let recipe = DeclInput::Branch {
-            operation: DeclInputBranch::Fields,
+        let recipe = TestInput::Branch {
+            operation: TestInputBranch::Fields,
             children: (0..width)
-                .map(|_| DeclInput::Unary {
-                    operation: DeclInputUnary::Optional,
-                    child: Box::new(DeclInput::Leaf(DeclInputLeafOp::Value)),
+                .map(|_| TestInput::Unary {
+                    operation: TestInputUnary::Optional,
+                    child: Box::new(TestInput::Leaf(TestInputLeafOp::Value)),
                 })
                 .collect(),
         };
@@ -2664,11 +2684,11 @@ fn optional_fields_have_one_continuation_and_linear_generated_code_size() {
 #[test]
 fn optional_temporary_borrows_survive_through_the_next_parameter_and_source_call() {
     let flat = parse("pub fn combine(first:Option<&str>,second:Option<&str>)->usize{}");
-    let recipe = DeclInput::Unary {
-        operation: DeclInputUnary::Optional,
-        child: Box::new(DeclInput::Unary {
-            operation: DeclInputUnary::Temporary,
-            child: Box::new(DeclInput::Leaf(DeclInputLeafOp::Value)),
+    let recipe = TestInput::Unary {
+        operation: TestInputUnary::Optional,
+        child: Box::new(TestInput::Unary {
+            operation: TestInputUnary::Temporary,
+            child: Box::new(TestInput::Leaf(TestInputLeafOp::Value)),
         }),
     };
     let first = compile_input(

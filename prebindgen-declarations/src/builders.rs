@@ -1,148 +1,227 @@
-//! Production declaration syntax writing directly into conversion descriptions.
-use crate::{DeclFunction, DeclInput, DeclInputRequest, DeclOutput, DeclOutputRequest, Projection};
-use crate::{DeclInputBranch, DeclInputUnary, DeclOutputBranch, DeclOutputLeafOp, DeclOutputUnary};
-use std::collections::BTreeMap;
+//! Source expansion builders specialized by adapter-provided node constructors.
+use crate::{DeclFunction, InputNode, InputOps, OutputNode, OutputOps, Projection};
+use std::{collections::BTreeMap, convert::Infallible};
+use syn::Type;
 
-/// Input alternatives for a source type, built directly as a [`DeclInput`] tree.
+/// Alternatives used to construct a source input, optionally as a borrowed temporary.
 #[derive(Clone, Debug)]
-pub struct DeclExpandParam {
-    /// Source type targeted by this default or occurrence override.
-    pub ty: syn::Type,
-    input: DeclInput<DeclInputRequest, DeclOutputRequest>,
-    bulk: bool,
+pub struct DeclInputAlternatives<T> {
+    alternatives: Vec<T>,
     reconstruct: bool,
 }
-impl DeclExpandParam {
-    /// Start an input declaration; add at least one alternative before use.
-    pub fn new(ty: syn::Type) -> Self {
+impl<T> Default for DeclInputAlternatives<T> {
+    fn default() -> Self {
         Self {
-            ty,
-            input: DeclInput::Branch {
-                operation: DeclInputBranch::Selector,
-                children: vec![],
-            },
-            bulk: false,
+            alternatives: Vec::new(),
             reconstruct: false,
         }
     }
-    /// Group this expansion into a C-representation bulk carrier.
-    /// The adapter chooses storage; constructor and local conversion rules are retained.
-    pub fn bulk(mut self) -> Self {
-        self.bulk = true;
-        self
-    }
-    /// Explicitly construct an owned temporary and borrow it for the source call.
-    /// With no alternatives, use the owned value's default input conversion.
-    /// Alternatives describe the owned referent, not the reference itself.
-    pub fn reconstruct(mut self) -> Self {
-        self.reconstruct = true;
-        self
-    }
-    /// Append a constructor reference; its arguments use their type defaults.
-    pub fn variant(mut self, function: impl Into<DeclFunction>) -> Self {
-        self.input = self.input.variant(function.into().reference_name(false));
-        self
-    }
-    /// Append the type's direct language representation.
-    pub fn variant_self(mut self) -> Self {
-        self.input = self.input.variant_self();
-        self
-    }
 }
-impl From<DeclExpandParam> for DeclInput<DeclInputRequest, DeclOutputRequest> {
-    fn from(decl: DeclExpandParam) -> Self {
-        let mut input = decl.input;
-        if decl.reconstruct {
-            if matches!(&input, DeclInput::Branch { operation: DeclInputBranch::Selector, children: arms } if arms.is_empty())
-            {
-                input = DeclInput::auto();
-            }
-            input = DeclInput::Unary {
-                operation: DeclInputUnary::Temporary,
-                child: Box::new(input),
-            };
+impl<T> DeclInputAlternatives<T> {
+    /// Append an input alternative.
+    pub fn push(&mut self, input: T) {
+        self.alternatives.push(input);
+    }
+    /// Use an owned temporary to supply a shared-reference occurrence.
+    pub fn reconstruct(&mut self) {
+        self.reconstruct = true;
+    }
+    /// Build alternatives; an empty reconstructed expansion uses the owned default.
+    pub fn build(
+        self,
+        selector: impl FnOnce(Vec<T>) -> T,
+        default: impl FnOnce() -> T,
+        temporary: impl FnOnce(T) -> T,
+    ) -> T {
+        let input = if self.reconstruct && self.alternatives.is_empty() {
+            default()
+        } else {
+            selector(self.alternatives)
+        };
+        if self.reconstruct {
+            temporary(input)
+        } else {
+            input
         }
-        if decl.bulk {
-            input = DeclInput::Unary {
-                operation: DeclInputUnary::Bulk,
-                child: Box::new(input),
-            };
-        }
-        DeclInput::for_type(decl.ty, input)
     }
 }
 
-/// Simultaneous views of a source return value, built directly as a [`DeclOutput`] tree.
-#[derive(Clone, Debug)]
-pub struct DeclExpandReturn {
+/// A source type's input alternatives, with optional adapter-defined settings.
+/// The adapter supplies node constructors; the fluent declaration logic is shared.
+pub struct DeclExpandParam<In, FunctionDecl, Extension = Infallible> {
     /// Source type targeted by this default or occurrence override.
-    pub ty: syn::Type,
-    output: DeclOutput<DeclInputRequest, DeclOutputRequest>,
-    bulk: bool,
+    pub ty: Type,
+    /// Adapter-defined settings; absent until explicitly configured.
+    pub extension: Option<Extension>,
+    input: DeclInputAlternatives<In>,
+    constructor: fn(FunctionDecl) -> In,
+    direct: fn() -> In,
+    finish: fn(Type, DeclInputAlternatives<In>, Option<Extension>) -> In,
 }
-impl DeclExpandReturn {
-    /// Start an output declaration; add views before registering a type default.
-    pub fn new(ty: syn::Type) -> Self {
+impl<In: Clone, F, E: Clone> Clone for DeclExpandParam<In, F, E> {
+    fn clone(&self) -> Self {
         Self {
-            ty,
-            output: DeclOutput::Branch {
-                operation: DeclOutputBranch::Combine,
-                children: vec![],
-            },
-            bulk: false,
+            ty: self.ty.clone(),
+            extension: self.extension.clone(),
+            input: self.input.clone(),
+            constructor: self.constructor,
+            direct: self.direct,
+            finish: self.finish,
         }
     }
-    /// Group this expansion into a C-representation bulk carrier.
-    /// Getter, ownership and local conversion rules are retained. Ordinary
-    /// collections combine these expansions into one frame. Callback delivery
-    /// keeps the expansion within each callback element instead: bulk `Row`
-    /// produces one frame per row of `Vec<Row>`, while bulk `Vec<Row>` produces
-    /// one frame per inner collection of `Vec<Vec<Row>>`.
-    pub fn bulk(mut self) -> Self {
-        self.bulk = true;
+}
+impl<In: std::fmt::Debug, F, E: std::fmt::Debug> std::fmt::Debug for DeclExpandParam<In, F, E> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DeclExpandParam")
+            .field("ty", &self.ty)
+            .field("extension", &self.extension)
+            .field("input", &self.input)
+            .finish_non_exhaustive()
+    }
+}
+impl<In, F, E> DeclExpandParam<In, F, E> {
+    /// Specialize input expansion for one adapter's constructor, direct value and final tree.
+    pub fn new(
+        ty: Type,
+        constructor: fn(F) -> In,
+        direct: fn() -> In,
+        finish: fn(Type, DeclInputAlternatives<In>, Option<E>) -> In,
+    ) -> Self {
+        Self {
+            ty,
+            extension: None,
+            input: Default::default(),
+            constructor,
+            direct,
+            finish,
+        }
+    }
+    /// Configure adapter-specific options without replacing the common declaration.
+    pub fn with_extension(mut self, extension: E) -> Self {
+        self.extension = Some(extension);
         self
     }
-    /// Append a getter view. An explicit `.name()` labels the delivered view.
+    /// Explicitly construct an owned temporary and borrow it for the source call.
+    /// With no alternatives, use the owned referent's default input conversion.
+    /// Alternatives describe the owned referent, not the reference itself.
+    pub fn reconstruct(mut self) -> Self {
+        self.input.reconstruct();
+        self
+    }
+    /// Append a source constructor whose arguments use their type defaults.
+    pub fn variant(mut self, function: impl Into<F>) -> Self {
+        self.input.push((self.constructor)(function.into()));
+        self
+    }
+    /// Append the adapter's direct value representation.
+    pub fn variant_self(mut self) -> Self {
+        self.input.push((self.direct)());
+        self
+    }
+    /// Produce the adapter's typed input tree, including its extension settings.
+    pub fn into_input(self) -> In {
+        (self.finish)(self.ty, self.input, self.extension)
+    }
+}
+impl<I: InputOps, O: OutputOps, IR, OR, F, E> From<DeclExpandParam<InputNode<I, O, IR, OR>, F, E>>
+    for InputNode<I, O, IR, OR>
+{
+    fn from(declaration: DeclExpandParam<Self, F, E>) -> Self {
+        declaration.into_input()
+    }
+}
+
+/// Simultaneous observations of a source return value, with adapter-defined settings.
+pub struct DeclExpandReturn<Out, FunctionDecl, Extension = Infallible> {
+    /// Source type targeted by this default or occurrence override.
+    pub ty: Type,
+    /// Adapter-defined settings; absent until explicitly configured.
+    pub extension: Option<Extension>,
+    views: Vec<Out>,
+    getter: fn(FunctionDecl) -> Out,
+    direct: fn() -> Out,
+    projected: fn(Projection) -> Out,
+    owned_fields: fn(Out) -> Out,
+    finish: fn(Type, Vec<Out>, Option<Extension>) -> Out,
+}
+impl<Out: Clone, F, E: Clone> Clone for DeclExpandReturn<Out, F, E> {
+    fn clone(&self) -> Self {
+        Self {
+            ty: self.ty.clone(),
+            extension: self.extension.clone(),
+            views: self.views.clone(),
+            getter: self.getter,
+            direct: self.direct,
+            projected: self.projected,
+            owned_fields: self.owned_fields,
+            finish: self.finish,
+        }
+    }
+}
+impl<Out: std::fmt::Debug, F, E: std::fmt::Debug> std::fmt::Debug for DeclExpandReturn<Out, F, E> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DeclExpandReturn")
+            .field("ty", &self.ty)
+            .field("extension", &self.extension)
+            .field("views", &self.views)
+            .finish_non_exhaustive()
+    }
+}
+impl<Out, F, E> DeclExpandReturn<Out, F, E> {
+    /// Specialize getter views, direct/projected values, owned fields and the final tree.
+    pub fn new(
+        ty: Type,
+        getter: fn(F) -> Out,
+        direct: fn() -> Out,
+        projected: fn(Projection) -> Out,
+        owned_fields: fn(Out) -> Out,
+        finish: fn(Type, Vec<Out>, Option<E>) -> Out,
+    ) -> Self {
+        Self {
+            ty,
+            extension: None,
+            views: Vec::new(),
+            getter,
+            direct,
+            projected,
+            owned_fields,
+            finish,
+        }
+    }
+    /// Configure adapter-specific options, preserving previously declared views.
+    pub fn with_extension(mut self, extension: E) -> Self {
+        self.extension = Some(extension);
+        self
+    }
+    /// Append a checked getter view; an explicit helper name labels the view.
     /// Shared results are observed before another view moves the owner. An
     /// owning opaque copy requires an explicit projection or cloning accessor.
-    pub fn field(mut self, function: impl Into<DeclFunction>) -> Self {
-        let function = function.into();
-        let name = function.foreign.clone();
-        let getter = DeclOutput::getter(function.reference_name(true), DeclOutput::auto());
-        self.output = self.output.view(match name {
-            Some(name) => DeclOutput::Unary {
-                operation: DeclOutputUnary::Named { name },
-                child: Box::new(getter),
-            },
-            None => getter,
-        });
+    pub fn field(mut self, function: impl Into<F>) -> Self {
+        self.views.push((self.getter)(function.into()));
         self
     }
-    /// Append a getter's named record fields as separate output values.
-    pub fn fields(self, fields: DeclFields) -> Self {
-        self.view(fields)
+    /// Append a getter's named fields as separate output values.
+    pub fn fields<FE>(self, fields: DeclFields<Out, FE>) -> Self {
+        self.view(fields.into_output())
     }
-    /// Append another explicit output view.
-    pub fn view(
-        mut self,
-        output: impl Into<DeclOutput<DeclInputRequest, DeclOutputRequest>>,
-    ) -> Self {
-        self.output = self.output.view(output.into());
+    /// Append another output observation in declaration order.
+    pub fn view(mut self, output: impl Into<Out>) -> Self {
+        self.views.push(output.into());
         self
     }
     /// Append a consuming accessor followed by owned field decomposition.
-    pub fn fields_into(mut self, fields: DeclFields) -> Self {
-        self.output = self.output.fields_into(fields.into());
+    pub fn fields_into<FE>(mut self, fields: DeclFields<Out, FE>) -> Self {
+        self.views.push((self.owned_fields)(fields.into_output()));
         self
     }
     /// Deprecated spelling of [`Self::fields_into`].
     #[deprecated(note = "use fields_into instead")]
-    pub fn fields_self_into(self, fields: DeclFields) -> Self {
+    pub fn fields_self_into<FE>(self, fields: DeclFields<Out, FE>) -> Self {
         self.fields_into(fields)
     }
-    /// Append the language's direct representation, bypassing this type's default.
+    /// Append the direct value representation, bypassing this type's boundary default.
     pub fn field_self(mut self) -> Self {
-        self.output = self.output.field_self();
+        self.views.push((self.direct)());
         self
     }
     /// Append an explicit shared projection. Owning opaque representations clone
@@ -156,115 +235,146 @@ impl DeclExpandReturn {
     }
     /// Append a projection with explicit ownership and field policies.
     pub fn project_self(mut self, policy: Projection) -> Self {
-        self.output = self.output.project_self(policy);
+        self.views.push((self.projected)(policy));
         self
     }
+    /// Produce the adapter's typed output tree, preserving empty and singleton views.
+    pub fn into_output(self) -> Out {
+        (self.finish)(self.ty, self.views, self.extension)
+    }
 }
-impl From<DeclExpandReturn> for DeclOutput<DeclInputRequest, DeclOutputRequest> {
-    fn from(decl: DeclExpandReturn) -> Self {
-        DeclOutput::for_type(
-            decl.ty,
-            if decl.bulk {
-                DeclOutput::Unary {
-                    operation: DeclOutputUnary::Bulk,
-                    child: Box::new(decl.output),
-                }
-            } else {
-                decl.output
-            },
-        )
+impl<I: InputOps, O: OutputOps, IR, OR, F, E> From<DeclExpandReturn<OutputNode<I, O, IR, OR>, F, E>>
+    for OutputNode<I, O, IR, OR>
+{
+    fn from(declaration: DeclExpandReturn<Self, F, E>) -> Self {
+        declaration.into_output()
     }
 }
 
-/// A source accessor followed by named field decomposition.
-/// Field adjustments edit the accessor's output tree directly.
+/// A source accessor and named field overrides, specialized by the adapter's output tree.
 #[derive(Clone, Debug)]
-pub struct DeclFields {
+pub struct DeclFields<Out, Extension = Infallible> {
+    /// Adapter-defined field-decomposition options.
+    pub extension: Option<Extension>,
     function: String,
-    overrides: BTreeMap<String, DeclOutput<DeclInputRequest, DeclOutputRequest>>,
+    overrides: BTreeMap<String, Out>,
+    normalize: fn(Out) -> Out,
+    finish: fn(String, BTreeMap<String, Out>, Option<Extension>) -> Out,
 }
-impl DeclFields {
-    /// Select a getter whose returned record supplies the fields.
-    pub fn new(function: syn::Ident) -> Self {
+impl<Out, E> DeclFields<Out, E> {
+    /// Select an accessor and the adapter's omission normalization and output constructor.
+    pub fn new(
+        function: syn::Ident,
+        normalize: fn(Out) -> Out,
+        finish: fn(String, BTreeMap<String, Out>, Option<E>) -> Out,
+    ) -> Self {
         Self {
+            extension: None,
             function: function.to_string(),
             overrides: BTreeMap::new(),
+            normalize,
+            finish,
         }
     }
-    /// Replace one field's conversion. An empty declaration omits the whole field,
-    /// including any enclosing Option or sequence representation.
-    pub fn field(self, name: impl AsRef<str>, output: DeclExpandReturn) -> Self {
+    /// Configure adapter-specific options, preserving field overrides.
+    pub fn with_extension(mut self, extension: E) -> Self {
+        self.extension = Some(extension);
+        self
+    }
+    /// Replace a field conversion; the adapter recognizes empty-expansion omission.
+    pub fn field(self, name: impl AsRef<str>, output: impl Into<Out>) -> Self {
         self.field_override(name.as_ref().to_owned(), output)
     }
-    /// Set an explicit conversion tree for one field, with the same omission
-    /// semantics as [`Self::field`] for an empty typed declaration.
-    pub fn field_override(
-        mut self,
-        name: impl Into<String>,
-        output: impl Into<DeclOutput<DeclInputRequest, DeclOutputRequest>>,
-    ) -> Self {
-        let output = match output.into() {
-            DeclOutput::Request(DeclOutputRequest::ForType { ty, output }) if matches!(output.as_ref(),DeclOutput::Branch { operation: DeclOutputBranch::Combine, children: parts } if parts.is_empty()) => {
-                DeclOutput::for_type(*ty, DeclOutput::Leaf(DeclOutputLeafOp::Discard))
-            }
-            output => output,
-        };
+    /// Replace a field conversion, rejecting duplicate overrides.
+    pub fn field_override(mut self, name: impl Into<String>, output: impl Into<Out>) -> Self {
         assert!(
-            self.overrides.insert(name.into(), output).is_none(),
+            self.overrides
+                .insert(name.into(), (self.normalize)(output.into()))
+                .is_none(),
             "duplicate field override"
         );
         self
     }
+    /// Produce the accessor's output tree with all field and extension settings.
+    pub fn into_output(self) -> Out {
+        (self.finish)(self.function, self.overrides, self.extension)
+    }
 }
-impl From<DeclFields> for DeclOutput<DeclInputRequest, DeclOutputRequest> {
-    fn from(fields: DeclFields) -> Self {
-        DeclOutput::getter(
-            fields.function,
-            DeclOutput::Request(DeclOutputRequest::NamedFields {
-                overrides: fields.overrides,
-                mode: crate::ProjectionMode::Borrowed,
-            }),
-        )
+impl<I: InputOps, O: OutputOps, IR, OR, E> From<DeclFields<OutputNode<I, O, IR, OR>, E>>
+    for OutputNode<I, O, IR, OR>
+{
+    fn from(declaration: DeclFields<Self, E>) -> Self {
+        declaration.into_output()
     }
 }
 
-/// A type-wide source-error message mapping.
-#[derive(Clone, Debug)]
-pub struct DeclError {
-    /// Source error type.
-    pub ty: syn::Type,
-    /// Source helper taking E or &E and returning String.
-    pub mapper: DeclFunction,
-}
-impl DeclError {
-    /// Select the source helper for this error type.
-    pub fn new(ty: syn::Type, mapper: DeclFunction) -> Self {
-        Self { ty, mapper }
+/// Build a getter observation, preserving its foreign name and checking helper settings.
+pub fn getter_view<I, O, E>(
+    function: DeclFunction<I, O, E>,
+    getter: impl FnOnce(String) -> O,
+    named: impl FnOnce(String, O) -> O,
+) -> O {
+    let name = function.foreign.clone();
+    let output = getter(function.reference_name(true));
+    match name {
+        Some(name) => named(name, output),
+        None => output,
     }
 }
-/// A type-wide input, output, or error-mapping declaration.
-/// Generators immediately consume these builders into their conversion trees.
+
+/// A source-error mapping with an adapter's function reference and optional settings.
 #[derive(Clone, Debug)]
-pub enum DeclExpand {
-    /// Input alternatives.
-    Param(DeclExpandParam),
-    /// Simultaneous output views.
-    Return(DeclExpandReturn),
-    /// A source-error message mapping.
-    Error(Box<DeclError>),
+pub struct DeclError<FunctionDecl, Extension = Infallible> {
+    /// Source error type.
+    pub ty: Type,
+    /// Source helper taking E or &E and returning String.
+    pub mapper: FunctionDecl,
+    /// Adapter-defined error delivery settings.
+    pub extension: Option<Extension>,
 }
-impl From<DeclExpandParam> for DeclExpand {
-    fn from(value: DeclExpandParam) -> Self {
+impl<F, E> DeclError<F, E> {
+    /// Select the source helper for this error type.
+    pub fn new(ty: Type, mapper: F) -> Self {
+        Self {
+            ty,
+            mapper,
+            extension: None,
+        }
+    }
+    /// Configure adapter-specific error settings.
+    pub fn with_extension<Next>(self, extension: Next) -> DeclError<F, Next> {
+        DeclError {
+            ty: self.ty,
+            mapper: self.mapper,
+            extension: Some(extension),
+        }
+    }
+}
+
+/// Register an input expansion, output expansion or source-error mapping.
+#[derive(Clone, Debug)]
+pub enum DeclExpand<ParamDecl, ReturnDecl, ErrorDecl> {
+    /// Input alternatives.
+    Param(ParamDecl),
+    /// Simultaneous output views.
+    Return(ReturnDecl),
+    /// Source-error mapping.
+    Error(Box<ErrorDecl>),
+}
+impl<I, F, E, R, X> From<DeclExpandParam<I, F, E>> for DeclExpand<DeclExpandParam<I, F, E>, R, X> {
+    fn from(value: DeclExpandParam<I, F, E>) -> Self {
         Self::Param(value)
     }
 }
-impl From<DeclExpandReturn> for DeclExpand {
-    fn from(value: DeclExpandReturn) -> Self {
+impl<O, F, E, P, X> From<DeclExpandReturn<O, F, E>>
+    for DeclExpand<P, DeclExpandReturn<O, F, E>, X>
+{
+    fn from(value: DeclExpandReturn<O, F, E>) -> Self {
         Self::Return(value)
     }
 }
-impl From<DeclError> for DeclExpand {
-    fn from(value: DeclError) -> Self {
+impl<F, E, P, R> From<DeclError<F, E>> for DeclExpand<P, R, DeclError<F, E>> {
+    fn from(value: DeclError<F, E>) -> Self {
         Self::Error(Box::new(value))
     }
 }

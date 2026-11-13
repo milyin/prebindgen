@@ -74,7 +74,7 @@ mod tests {
             "pub enum E { A = -2, B, C = 7, D, Min = -2147483648 } pub fn echo(x:E)->E{}",
         ))
         .enum_type("code", syn::parse_quote!(E))
-        .function(prebindgen_declarations::fun!(echo))
+        .function(crate::fun!(echo))
         .panic()
         .build()
         .unwrap();
@@ -91,7 +91,7 @@ mod tests {
         let source = "pub enum E { A, B } pub fn code(x:E)->E {}";
         assert!(Cbindgen::new(flat(source))
             .enum_type("code", syn::parse_quote!(E))
-            .function(prebindgen_declarations::fun!(code))
+            .function(crate::fun!(code))
             .panic()
             .build()
             .err()
@@ -132,7 +132,7 @@ mod tests {
         assert!(
             Cbindgen::new(flat("pub enum E { A, B } pub fn echo(x:E)->E{}"))
                 .enum_type("echo_result", syn::parse_quote!(E))
-                .function(prebindgen_declarations::fun!(echo))
+                .function(crate::fun!(echo))
                 .panic()
                 .build()
                 .err()
@@ -167,23 +167,16 @@ mod tests {
                 name: "code".into(),
                 mapping: mapping.clone(),
             }));
-            prebindgen_declarations::bind_input(
+            crate::bind_input(
                 &mut model,
                 &codec,
                 "echo",
                 "value",
-                &prebindgen_declarations::DeclInput::auto(),
+                &crate::CInput::auto(),
                 &(),
             )
             .unwrap();
-            prebindgen_declarations::bind_output(
-                &mut model,
-                &codec,
-                "echo",
-                &prebindgen_declarations::DeclOutput::auto(),
-                &(),
-            )
-            .unwrap();
+            crate::bind_output(&mut model, &codec, "echo", &crate::COutput::auto(), &()).unwrap();
             let function = model.function("echo").unwrap();
             let input = function.params[0].ty.slot.as_ref().unwrap();
             let output = function.ret.slot.as_ref().unwrap();

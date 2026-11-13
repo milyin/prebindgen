@@ -1,8 +1,10 @@
 //! Interpretation of this adapter's resolved conversion operations.
 #![allow(missing_docs)]
+use crate::{CInputExt, COutputExt};
+
 use super::operations::{
-    CInput, CInputBranch, CInputLeafOp, CInputOps, CInputParts, CInputUnary, COutput,
-    COutputBranch, COutputLeafOp, COutputOps, COutputParts, COutputUnary,
+    CInput, CInputArrow, CInputBranch, CInputLeafOp, CInputOps, CInputUnary, COutput,
+    COutputBranch, COutputLeafOp, COutputOps, COutputUnary,
 };
 use prebindgen_declarations::*;
 use prebindgen_flat::{Flat, Result};
@@ -164,7 +166,7 @@ impl<C: Codec<InOps = CInputOps, OutOps = COutputOps, CompileState = CCompileSta
                 child: inner,
             } => self.cx.input_temporary(ty, extra, active, names, inner),
             CInput::Arrow {
-                operation: callback,
+                operation: operation @ CInputArrow::BoundCallback(callback),
                 domain,
                 codomain,
             } => {
@@ -176,7 +178,7 @@ impl<C: Codec<InOps = CInputOps, OutOps = COutputOps, CompileState = CCompileSta
                 }
                 self.codec.input_arrow(InputArrow {
                     flat: self.flat,
-                    operation: callback,
+                    operation,
                     domain,
                     codomain,
                     extra,
@@ -214,6 +216,18 @@ impl<C: Codec<InOps = CInputOps, OutOps = COutputOps, CompileState = CCompileSta
                 })
             }
             CInput::Request(never) => match *never {},
+            CInput::Unary {
+                operation: CInputUnary::ForType { .. },
+                ..
+            }
+            | CInput::Branch {
+                operation: CInputBranch::EnumFields | CInputBranch::VariantFields { .. },
+                ..
+            }
+            | CInput::Arrow {
+                operation: CInputArrow::Callback(_),
+                ..
+            } => Err("resolve source-dependent input operations before compilation".into()),
             CInput::Branch {
                 operation: CInputBranch::Fields,
                 children,
@@ -348,7 +362,9 @@ impl<C: Codec<InOps = CInputOps, OutOps = COutputOps, CompileState = CCompileSta
             COutput::None => {
                 return self.cx.output_unit(ty, out);
             }
-            COutput::Arrow { operation, .. } => match *operation {},
+            COutput::Arrow {
+                operation: never, ..
+            } => match *never {},
             COutput::Branch {
                 operation: COutputBranch::Variant | COutputBranch::Arguments,
                 ..
@@ -411,6 +427,19 @@ impl<C: Codec<InOps = CInputOps, OutOps = COutputOps, CompileState = CCompileSta
                     .output_optional(ty, extra, value, borrowed, wire_name, inner);
             }
             COutput::Request(never) => match *never {},
+            COutput::Unary {
+                operation: COutputUnary::ForType { .. } | COutputUnary::SequenceCallback { .. },
+                ..
+            }
+            | COutput::Branch {
+                operation:
+                    COutputBranch::EnumFields
+                    | COutputBranch::VariantFields { .. }
+                    | COutputBranch::NamedFields { .. },
+                ..
+            } => {
+                return Err("resolve source-dependent output operations before compilation".into())
+            }
             COutput::Leaf(COutputLeafOp::Value) => {
                 let representation = Representation::Ordinary;
                 return self

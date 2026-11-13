@@ -389,7 +389,7 @@ fn local_error_handlers_are_independent_for_overloads() {
 }
 #[test]
 fn nested_error_layouts_must_match_even_with_the_same_outer_byte_array() {
-    use crate::operations::{JniOutput, JniOutputLeafOp, JniOutputParts, JniOutputUnary};
+    use crate::operations::{JniOutput, JniOutputLeafOp, JniOutputUnary};
 
     let source = syn::parse_file("pub fn failed()->Result<i64,Vec<i64>>{}").unwrap();
     let mut flat = JniGen::builder()

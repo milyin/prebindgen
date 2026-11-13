@@ -34,13 +34,13 @@
 //! | `.method()` / `.constructor()`       | `Storage` + `Summary` + `Stamp` members |
 //! | `expand_param!` `.variant()` (+`_self`)| `Summary` default input (splittable, checked #52) |
 //! | Optional combined-selector expansion  | `summary_total_opt(Option<&Summary>)` — selector `-1` = absent, borrow-identity arm clones |
-//! | `DeclFunction::split_on_param` (#52)  | single: `archiveStore`/`storageMatchesSummary` (class-default) + `storageExpectSummary` (per-fn); cartesian product: `summaryPrefer` (2 params); manual same-named overload in `ManualOverloads.kt` |
+//! | `DeclJniFunction::split_on_param` (#52)  | single: `archiveStore`/`storageMatchesSummary` (class-default) + `storageExpectSummary` (per-fn); cartesian product: `summaryPrefer` (2 params); manual same-named overload in `ManualOverloads.kt` |
 //! | split × builder-delivered return (#87) | `summaryMerge` — cartesian split + generic `<R>` wrapper; every overload re-declares `<R>` |
 //! | JNI native-symbol escaping (#86)      | `esc_pkg.Esc_Probe` — underscored subpackage + class (escaped `freePtr` symbol) + hook-mangled `escape_probe_value` harness extern |
 //! | `expand_return!` `.field()` (+`_self`) | `Summary` fields + `StorageError` `message` + self (error handle → `onError`) |
 //! | `expand_return!` `.fields(fields!(…))` (#213) | `Report` — boundary DERIVED from the value form instead of restated; covers every per-field rule (spliced `Summary`, inlined `Stamp`, `Option<data class>`, a sum with a handle payload, a plain leaf) |
 //! | `expand_return!` `.fields_into(fields!(…))` | `report_into_struct(r: Report)` — the CONSUMING value form: the value is given away and its fields MOVED out, so the clones the borrowing `report_to_struct` pays are not emitted at all |
-//! | `DeclJniPackage::fun` / `DeclFunction::name`| every free function; `.name` renames `millis_add` → `addMillis` |
+//! | `DeclJniPackage::fun` / `DeclJniFunction::name`| every free function; `.name` renames `millis_add` → `addMillis` |
 //! | `JniGen::report()` (C7)               | `kotlin/REPORT.md` — the resolved surface, committed next to the regen |
 //! | contextual method names               | method hook strips `storage`/`stamp` class prefixes; `summary_new`→`.name("of")` still overrides |
 //! | per-class `.name()`                  | `Summary` → Kotlin `SummaryValue` (literal, bypasses mangles) |
@@ -103,17 +103,16 @@
 //! `.ignore(matching(…))` predicate. Both suppress the per-item
 //! "skipping undeclared" build warning while emitting nothing.
 
-use prebindgen_declarations::{
-    frontend::DeclInputBranch, frontend::DeclInputLeafOp, frontend::DeclInputUnary,
-    frontend::DeclOutputBranch, frontend::DeclOutputLeafOp, frontend::DeclOutputUnary,
+use prebindgen_jni::prelude::*;
+use prebindgen_jni::{
+    JniInputBranch, JniInputLeafOp, JniInputUnary, JniOutputBranch, JniOutputLeafOp, JniOutputUnary,
 };
 /* Unsupported: imports and helpers for the disabled declarations.
 use prebindgen_jni::{
     constant, data_class, enum_class, matching, package, ptr_class, sealed_class, variant, JniGen,
 };
-use prebindgen_declarations::{
-    convert, expand_param, expand_return, expr, fields, from, fun, into, path, sig, try_from, ty,
-};
+use prebindgen_declarations::{convert,expr,from,into,path,sig,try_from,ty};
+use prebindgen_jni::{expand_param,expand_return,fields,fun};
 
 fn strip_flat_class_prefix(class: &str, name: &str) -> String {
     if name
@@ -131,27 +130,23 @@ fn strip_flat_class_prefix(class: &str, name: &str) -> String {
 
 
 */
-use prebindgen_declarations::{
-    convert, expand_param, expand_return, fields, from, fun, into, try_from, try_into,
-};
+use prebindgen_declarations::{convert, from, into, try_from, try_into};
 use prebindgen_jni::{
-    callback, data_class, enum_class, package, ptr_class, sealed_class, DeclInput, JniGen,
+    callback, data_class, enum_class, package, ptr_class, sealed_class, JniGen, JniInput,
 };
+use prebindgen_jni::{expand_param, expand_return, fields, fun};
 
 fn bulk_replay_input_with(
     redundant_bulk: bool,
     bulk_rows: bool,
-) -> prebindgen_declarations::DeclInput<
-    prebindgen_jni::DeclInputRequest,
-    prebindgen_declarations::DeclOutputRequest,
-> {
-    let borrowed = |function: &str| DeclInput::Unary {
-        operation: DeclInputUnary::Optional,
-        child: Box::new(DeclInput::Branch {
-            operation: DeclInputBranch::Constructor {
+) -> prebindgen_jni::JniInput<prebindgen_jni::JniInputRequest, prebindgen_jni::JniOutputRequest> {
+    let borrowed = |function: &str| JniInput::Unary {
+        operation: JniInputUnary::Optional,
+        child: Box::new(JniInput::Branch {
+            operation: JniInputBranch::Constructor {
                 function: function.into(),
             },
-            children: vec![DeclInput::Leaf(DeclInputLeafOp::Value)],
+            children: vec![JniInput::Leaf(JniInputLeafOp::Value)],
         }),
     };
     let buffer = |function: &str| {
@@ -162,12 +157,12 @@ fn bulk_replay_input_with(
             input.bulk()
         }
     };
-    let input = DeclInput::Unary {
-        operation: DeclInputUnary::Sequence,
-        child: Box::new(DeclInput::Branch {
-            operation: DeclInputBranch::Record,
+    let input = JniInput::Unary {
+        operation: JniInputUnary::Sequence,
+        child: Box::new(JniInput::Branch {
+            operation: JniInputBranch::Record,
             children: vec![
-                DeclInput::Leaf(DeclInputLeafOp::Value),
+                JniInput::Leaf(JniInputLeafOp::Value),
                 if redundant_bulk || !bulk_rows {
                     borrowed("bulk_replay_text").bulk()
                 } else {
@@ -175,7 +170,7 @@ fn bulk_replay_input_with(
                 },
                 buffer("bulk_replay_bytes"),
                 borrowed("bulk_replay_kind"),
-                DeclInput::Leaf(DeclInputLeafOp::Value),
+                JniInput::Leaf(JniInputLeafOp::Value),
             ],
         }),
     };
@@ -186,10 +181,8 @@ fn bulk_replay_input_with(
     }
 }
 
-fn bulk_replay_input() -> prebindgen_declarations::DeclInput<
-    prebindgen_jni::DeclInputRequest,
-    prebindgen_declarations::DeclOutputRequest,
-> {
+fn bulk_replay_input(
+) -> prebindgen_jni::JniInput<prebindgen_jni::JniInputRequest, prebindgen_jni::JniOutputRequest> {
     bulk_replay_input_with(false, true)
 }
 
@@ -199,15 +192,16 @@ mod input_contracts;
 mod output_contracts;
 
 fn main() {
-    use prebindgen_declarations::{DeclOutput, DeclOutputRequest, SequenceDelivery};
-    let ordinary_rows = |element| DeclOutput::Unary {
-        operation: DeclOutputUnary::Sequence {
+    use prebindgen_declarations::SequenceDelivery;
+    use prebindgen_jni::{JniOutput, JniOutputRequest};
+    let ordinary_rows = |element| JniOutput::Unary {
+        operation: JniOutputUnary::Sequence {
             delivery: SequenceDelivery::Value,
             mode: None,
         },
         child: Box::new(element),
     };
-    let row = || DeclOutput::Request(DeclOutputRequest::Auto);
+    let row = || JniOutput::Request(JniOutputRequest::Auto);
     let getter_views = || {
         expand_return!(GetterOwner)
             .field(fun!(getter_owner_child))
@@ -220,22 +214,22 @@ fn main() {
         views.field(fun!(jni_buffer_row_text))
     });
     let wide_return = (0..130).fold(expand_return!(i64), |views, _| views.field_self_ref());
-    let type_rows = || DeclInput::Unary {
-        operation: DeclInputUnary::Sequence,
-        child: Box::new(DeclInput::Branch {
-            operation: DeclInputBranch::Record,
-            children: vec![DeclInput::Leaf(DeclInputLeafOp::Value); 2],
+    let type_rows = || JniInput::Unary {
+        operation: JniInputUnary::Sequence,
+        child: Box::new(JniInput::Branch {
+            operation: JniInputBranch::Record,
+            children: vec![JniInput::Leaf(JniInputLeafOp::Value); 2],
         }),
     };
-    let type_nested = || DeclInput::Unary {
-        operation: DeclInputUnary::Sequence,
+    let type_nested = || JniInput::Unary {
+        operation: JniInputUnary::Sequence,
         child: Box::new(type_rows()),
     };
     let binding = JniGen::builder()
         .convert(convert!(WireMarker).input(fun!(wire_marker_new)).output(fun!(wire_marker_value)))
         .expand(expand_return!(WireReply).fields_into(fields!(wire_reply_into_struct)))
-        .expand(expand_return!(WireReplyResult).view(prebindgen_declarations::DeclOutput::enum_fields([])))
-        .expand(expand_return!(WireReplySample).view(prebindgen_declarations::DeclOutput::Branch { operation: DeclOutputBranch::OwnedFields, children: vec![prebindgen_declarations::DeclOutput::auto();2] }))
+        .expand(expand_return!(WireReplyResult).view(prebindgen_jni::JniOutput::enum_fields([])))
+        .expand(expand_return!(WireReplySample).view(prebindgen_jni::JniOutput::Branch { operation: JniOutputBranch::OwnedFields, children: vec![prebindgen_jni::JniOutput::auto();2] }))
         .expand(expand_return!(WireReplyError).fields(fields!(wire_reply_error_view)))
         .convert(convert!(WireDuration).input(fun!(wire_duration_new)).output(fun!(wire_duration_millis)))
         .package(package!("payloadenums")
@@ -255,9 +249,9 @@ fn main() {
             .fun(fun!(wire_owned_bench))
             .fun(fun!(wire_manual_owned_bench))
             .fun(fun!(wire_bench_total))
-            .fun(fun!(wire_bench_scalar_bulk).expand_param("value",DeclInput::value().bulk()))
+            .fun(fun!(wire_bench_scalar_bulk).expand_param("value",JniInput::value().bulk()))
             .fun(fun!(wire_manual_total))
-            .fun(fun!(wire_bench_bulk).expand_param("values",DeclInput::Unary { operation: DeclInputUnary::Sequence, child: Box::new(DeclInput::value()) }.bulk()))
+            .fun(fun!(wire_bench_bulk).expand_param("values",JniInput::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInput::value()) }.bulk()))
             .fun(fun!(wire_bench_objects))
             .class(sealed_class!(WireCheckedEvent))
             .fun(fun!(wire_checked_new))
@@ -268,11 +262,11 @@ fn main() {
             .fun(fun!(wire_composite_owned_new))
             .class(data_class!(WireOptionalOwner))
             .class(sealed_class!(WireNicheEvent))
-            .fun(fun!(wire_niche_rows).expand_param("values",DeclInput::Unary { operation: DeclInputUnary::Sequence, child: Box::new(DeclInput::enum_variants(vec![vec![],vec![DeclInput::Unary { operation: DeclInputUnary::Optional, child: Box::new(DeclInput::Branch { operation: DeclInputBranch::Record, children: vec![DeclInput::value();2] }) },DeclInput::value()]], true)) }.bulk()))
+            .fun(fun!(wire_niche_rows).expand_param("values",JniInput::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInput::enum_variants(vec![vec![],vec![JniInput::Unary { operation: JniInputUnary::Optional, child: Box::new(JniInput::Branch { operation: JniInputBranch::Record, children: vec![JniInput::value();2] }) },JniInput::value()]], true)) }.bulk()))
             .fun(fun!(wire_owned_new))
             .fun(fun!(wire_owned_echo))
             .fun(fun!(wire_owned_callback))
-            .fun(fun!(wire_owned_rows).expand_param("values",DeclInput::Unary { operation: DeclInputUnary::Sequence, child: Box::new(DeclInput::value()) }.bulk()))
+            .fun(fun!(wire_owned_rows).expand_param("values",JniInput::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInput::value()) }.bulk()))
             .fun(fun!(wire_owned_rows_new))
             .class(sealed_class!(WireRecoveryMode))
             .class(data_class!(WireRecoveryConfig))
@@ -281,12 +275,12 @@ fn main() {
             .class(enum_class!(WireInterceptionPoint))
             .class(data_class!(WireTimestampStackRecord))
             .fun(fun!(wire_recovery_echo))
-            .fun(fun!(wire_timestamps).expand_param("values",DeclInput::Unary { operation: DeclInputUnary::Sequence, child: Box::new(DeclInput::value()) }.bulk()))
+            .fun(fun!(wire_timestamps).expand_param("values",JniInput::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInput::value()) }.bulk()))
             .class(sealed_class!(Result<i64,String>).name("WireDecision"))
             .class(sealed_class!(Result<(),String>).name("WireNotice"))
-            .fun(fun!(wire_event_rows).expand_param("values",DeclInput::Unary { operation: DeclInputUnary::Sequence, child: Box::new(DeclInput::value()) }.bulk()))
+            .fun(fun!(wire_event_rows).expand_param("values",JniInput::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInput::value()) }.bulk()))
             .fun(fun!(wire_event_rows_callback))
-            .fun(fun!(wire_bare_echo).expand_param("value",DeclInput::enum_fields([])).expand_return(prebindgen_declarations::DeclOutput::enum_fields([])))
+            .fun(fun!(wire_bare_echo).expand_param("value",JniInput::enum_fields([])).expand_return(prebindgen_jni::JniOutput::enum_fields([])))
             .fun(fun!(wire_event_echo))
             .fun(fun!(wire_event_callback))
             .fun(fun!(wire_result_echo).result_as_value())
@@ -334,7 +328,7 @@ fn main() {
                 .fun(fun!(canonical_millis_notify))
                 .fun(fun!(canonical_millis_static))
                 .fun(
-                    fun!(canonical_millis_views).expand_return(DeclOutput::combine([
+                    fun!(canonical_millis_views).expand_return(JniOutput::combine([
                         convert!(CanonMillis)
                             .output(fun!(canonical_millis_value))
                             .into(),
@@ -352,7 +346,7 @@ fn main() {
                 .fun(fun!(canonical_settings))
                 .fun(
                     fun!(canonical_settings_rows)
-                        .expand_param("value", DeclInput::Unary { operation: DeclInputUnary::Sequence, child: Box::new(DeclInput::value()) }.bulk()),
+                        .expand_param("value", JniInput::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInput::value()) }.bulk()),
                 )
                 .fun(fun!(canonical_settings_callback))
                 .fun(fun!(canonical_view_echo))
@@ -362,7 +356,7 @@ fn main() {
                 .fun(fun!(canonical_live))
                 .fun(fun!(canonical_output_rows))
                 .fun(
-                    fun!(canonical_output_rows_plain).expand_return(DeclOutput::Unary { operation: DeclOutputUnary::Sequence { delivery: SequenceDelivery::Value, mode: None }, child: Box::new(DeclOutput::value()),  }),
+                    fun!(canonical_output_rows_plain).expand_return(JniOutput::Unary { operation: JniOutputUnary::Sequence { delivery: SequenceDelivery::Value, mode: None }, child: Box::new(JniOutput::value()),  }),
                 )
                 .fun(fun!(canonical_output_notify))
                 .fun(fun!(canonical_consume_rows))
@@ -404,8 +398,8 @@ fn main() {
             .fun(fun!(type_input_mixed)
                 .expand_param("reads",expand_param!(i64).variant(fun!(type_input_a_read)).bulk())
                 .expand_param("writes",expand_param!(i64).variant(fun!(type_input_a_mut)).bulk()))
-            .fun(fun!(type_input_row).expand_param("value",DeclInput::Branch { operation: DeclInputBranch::Record, children: vec![DeclInput::Leaf(DeclInputLeafOp::Value);2] }))
-            .fun(fun!(type_input_holder).expand_param("value",DeclInput::Branch { operation: DeclInputBranch::Record, children: vec![DeclInput::Unary { operation: DeclInputUnary::Optional, child: Box::new(DeclInput::Branch { operation: DeclInputBranch::Record, children: vec![DeclInput::Leaf(DeclInputLeafOp::Value);2] }) }] }))
+            .fun(fun!(type_input_row).expand_param("value",JniInput::Branch { operation: JniInputBranch::Record, children: vec![JniInput::Leaf(JniInputLeafOp::Value);2] }))
+            .fun(fun!(type_input_holder).expand_param("value",JniInput::Branch { operation: JniInputBranch::Record, children: vec![JniInput::Unary { operation: JniInputUnary::Optional, child: Box::new(JniInput::Branch { operation: JniInputBranch::Record, children: vec![JniInput::Leaf(JniInputLeafOp::Value);2] }) }] }))
             .fun(fun!(type_input_rows).expand_param("values",type_rows().bulk()))
             .fun(fun!(type_input_rows_plain).expand_param("values",type_rows()))
             .fun(fun!(type_input_nested).expand_param("values",type_nested().bulk()))
@@ -485,31 +479,31 @@ fn main() {
             .class(data_class!(BulkReplayRow))
             .fun(fun!(bulk_replay_rows).expand_param("rows",bulk_replay_input()))
             .fun(fun!(bulk_replay_redundant_rows).expand_param("rows",bulk_replay_input_with(true, true)))
-            .fun(fun!(bulk_replay_nested_rows).expand_param("rows",DeclInput::Unary { operation: DeclInputUnary::Sequence, child: Box::new(bulk_replay_input_with(true,true)) }.bulk()))
-            .fun(fun!(bulk_replay_nested_callback).expand_param("callback",callback!(impl Fn()->Vec<Vec<BulkReplayRow>>).name("BulkReplayNestedCallback").expand_return(DeclInput::Unary { operation: DeclInputUnary::Sequence, child: Box::new(bulk_replay_input_with(true,true)) }.bulk())))
+            .fun(fun!(bulk_replay_nested_rows).expand_param("rows",JniInput::Unary { operation: JniInputUnary::Sequence, child: Box::new(bulk_replay_input_with(true,true)) }.bulk()))
+            .fun(fun!(bulk_replay_nested_callback).expand_param("callback",callback!(impl Fn()->Vec<Vec<BulkReplayRow>>).name("BulkReplayNestedCallback").expand_return(JniInput::Unary { operation: JniInputUnary::Sequence, child: Box::new(bulk_replay_input_with(true,true)) }.bulk())))
             .fun(fun!(bulk_replay_object_rows).expand_param("rows",bulk_replay_input_with(false, false)))
             .fun(fun!(bulk_replay_callback).expand_param("callback",callback!(impl Fn()->Vec<BulkReplayRow>).name("BulkReplayCallback").expand_return(bulk_replay_input())))
-            .fun(fun!(bulk_nested_handles_input).expand_param("values",DeclInput::Unary { operation: DeclInputUnary::Sequence, child: Box::new(DeclInput::Unary { operation: DeclInputUnary::Optional, child: Box::new(DeclInput::Unary { operation: DeclInputUnary::Sequence, child: Box::new(DeclInput::Unary { operation: DeclInputUnary::Optional, child: Box::new(DeclInput::Leaf(DeclInputLeafOp::Value).bulk()) }) }) }) }.bulk()))
+            .fun(fun!(bulk_nested_handles_input).expand_param("values",JniInput::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInput::Unary { operation: JniInputUnary::Optional, child: Box::new(JniInput::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInput::Unary { operation: JniInputUnary::Optional, child: Box::new(JniInput::Leaf(JniInputLeafOp::Value).bulk()) }) }) }) }.bulk()))
             .fun(fun!(bulk_cleanup_nested_callback).expand_param("callback",
                 callback!(impl Fn()->Vec<Option<Vec<Option<BulkHandle>>>> + Send + 'static).name("BulkCleanupNestedCallback")
-                    .expand_return(DeclInput::Unary { operation: DeclInputUnary::Sequence, child: Box::new(DeclInput::Unary { operation: DeclInputUnary::Optional, child: Box::new(DeclInput::Unary { operation: DeclInputUnary::Sequence, child: Box::new(DeclInput::Unary { operation: DeclInputUnary::Optional, child: Box::new(DeclInput::Leaf(DeclInputLeafOp::Value).bulk()) }) }) }) }.bulk())))
+                    .expand_return(JniInput::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInput::Unary { operation: JniInputUnary::Optional, child: Box::new(JniInput::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInput::Unary { operation: JniInputUnary::Optional, child: Box::new(JniInput::Leaf(JniInputLeafOp::Value).bulk()) }) }) }) }.bulk())))
             .fun(fun!(bulk_cleanup_pair_callback).expand_param("callback",
                 callback!(impl Fn()->BulkPairText).name("BulkCleanupPairCallback")
-                    .expand_return(DeclInput::Branch { operation: DeclInputBranch::Record, children: vec![DeclInput::Branch { operation: DeclInputBranch::Constructor { function: "bulk_handle_copy".into() }, children: vec![DeclInput::Leaf(DeclInputLeafOp::Value)],  },DeclInput::Leaf(DeclInputLeafOp::Value),DeclInput::Leaf(DeclInputLeafOp::Value)] }.bulk())))
+                    .expand_return(JniInput::Branch { operation: JniInputBranch::Record, children: vec![JniInput::Branch { operation: JniInputBranch::Constructor { function: "bulk_handle_copy".into() }, children: vec![JniInput::Leaf(JniInputLeafOp::Value)],  },JniInput::Leaf(JniInputLeafOp::Value),JniInput::Leaf(JniInputLeafOp::Value)] }.bulk())))
             .fun(fun!(bulk_replay_reset)).fun(fun!(bulk_replay_count))
-            .fun(fun!(bulk_patch_rows).expand_param("row",DeclInput::Branch { operation: DeclInputBranch::Constructor { function: "bulk_patch_row_new".into() }, children: vec![
-                DeclInput::Unary { operation: DeclInputUnary::Optional, child: Box::new(DeclInput::Leaf(DeclInputLeafOp::Value)) },
-                DeclInput::Unary { operation: DeclInputUnary::Optional, child: Box::new(DeclInput::Unary { operation: DeclInputUnary::Sequence, child: Box::new(DeclInput::Unary { operation: DeclInputUnary::Optional, child: Box::new(DeclInput::Unary { operation: DeclInputUnary::Sequence, child: Box::new(DeclInput::Unary { operation: DeclInputUnary::Optional, child: Box::new(DeclInput::Leaf(DeclInputLeafOp::Value)) }) }) }) }) },
-                DeclInput::Leaf(DeclInputLeafOp::Value),
+            .fun(fun!(bulk_patch_rows).expand_param("row",JniInput::Branch { operation: JniInputBranch::Constructor { function: "bulk_patch_row_new".into() }, children: vec![
+                JniInput::Unary { operation: JniInputUnary::Optional, child: Box::new(JniInput::Leaf(JniInputLeafOp::Value)) },
+                JniInput::Unary { operation: JniInputUnary::Optional, child: Box::new(JniInput::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInput::Unary { operation: JniInputUnary::Optional, child: Box::new(JniInput::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInput::Unary { operation: JniInputUnary::Optional, child: Box::new(JniInput::Leaf(JniInputLeafOp::Value)) }) }) }) }) },
+                JniInput::Leaf(JniInputLeafOp::Value),
             ],  }.bulk()))
-            .fun(fun!(bulk_patch_callback).expand_param("callback",callback!(impl Fn()->Vec<Option<Vec<Option<BulkHandle>>>>).name("BulkPatchCallback").expand_return(DeclInput::Unary { operation: DeclInputUnary::Sequence, child: Box::new(DeclInput::Unary { operation: DeclInputUnary::Optional, child: Box::new(DeclInput::Unary { operation: DeclInputUnary::Sequence, child: Box::new(DeclInput::Unary { operation: DeclInputUnary::Optional, child: Box::new(DeclInput::Leaf(DeclInputLeafOp::Value).bulk()) }) }) }) }.bulk())))
-            .fun(fun!(bulk_nested_envelope).expand_param("values",DeclInput::Unary { operation: DeclInputUnary::Sequence, child: Box::new(DeclInput::Branch { operation: DeclInputBranch::Constructor { function: "bulk_input_envelope_new".into() }, children: vec![DeclInput::Unary { operation: DeclInputUnary::Sequence, child: Box::new(DeclInput::Unary { operation: DeclInputUnary::Sequence, child: Box::new(DeclInput::Leaf(DeclInputLeafOp::Value)) }) }.bulk()],  }) }))
-            .fun(fun!(bulk_pair_text_callback).expand_param("callback",callback!(impl Fn()->Vec<BulkPairText>).name("BulkPairTextCallback").expand_return(DeclInput::Unary { operation: DeclInputUnary::Sequence, child: Box::new(DeclInput::Branch { operation: DeclInputBranch::Record, children: vec![DeclInput::Branch { operation: DeclInputBranch::Constructor { function: "bulk_handle_copy".into() }, children: vec![DeclInput::Leaf(DeclInputLeafOp::Value)],  },DeclInput::Leaf(DeclInputLeafOp::Value),DeclInput::Leaf(DeclInputLeafOp::Value)] }) }.bulk())))
-            .fun(fun!(bulk_handle_texts).expand_param("values",DeclInput::Unary { operation: DeclInputUnary::Sequence, child: Box::new(DeclInput::Branch { operation: DeclInputBranch::Record, children: vec![DeclInput::Leaf(DeclInputLeafOp::Value);2] }) }.bulk()))
+            .fun(fun!(bulk_patch_callback).expand_param("callback",callback!(impl Fn()->Vec<Option<Vec<Option<BulkHandle>>>>).name("BulkPatchCallback").expand_return(JniInput::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInput::Unary { operation: JniInputUnary::Optional, child: Box::new(JniInput::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInput::Unary { operation: JniInputUnary::Optional, child: Box::new(JniInput::Leaf(JniInputLeafOp::Value).bulk()) }) }) }) }.bulk())))
+            .fun(fun!(bulk_nested_envelope).expand_param("values",JniInput::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInput::Branch { operation: JniInputBranch::Constructor { function: "bulk_input_envelope_new".into() }, children: vec![JniInput::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInput::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInput::Leaf(JniInputLeafOp::Value)) }) }.bulk()],  }) }))
+            .fun(fun!(bulk_pair_text_callback).expand_param("callback",callback!(impl Fn()->Vec<BulkPairText>).name("BulkPairTextCallback").expand_return(JniInput::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInput::Branch { operation: JniInputBranch::Record, children: vec![JniInput::Branch { operation: JniInputBranch::Constructor { function: "bulk_handle_copy".into() }, children: vec![JniInput::Leaf(JniInputLeafOp::Value)],  },JniInput::Leaf(JniInputLeafOp::Value),JniInput::Leaf(JniInputLeafOp::Value)] }) }.bulk())))
+            .fun(fun!(bulk_handle_texts).expand_param("values",JniInput::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInput::Branch { operation: JniInputBranch::Record, children: vec![JniInput::Leaf(JniInputLeafOp::Value);2] }) }.bulk()))
             .fun(fun!(bulk_collection_lock_groups).expand_param("probe",callback!(impl Fn()->bool).name("CollectionLocksProbe")))
-            .fun(fun!(bulk_handle_nested).expand_param("values",DeclInput::Unary { operation: DeclInputUnary::Sequence, child: Box::new(DeclInput::Unary { operation: DeclInputUnary::Sequence, child: Box::new(DeclInput::Leaf(DeclInputLeafOp::Value)) }.bulk()) }))
-            .fun(fun!(bulk_handle_text_callback).expand_param("callback",callback!(impl Fn()->Vec<BulkHandleText>).name("BulkHandleTextCallback").expand_return(DeclInput::Unary { operation: DeclInputUnary::Sequence, child: Box::new(DeclInput::Branch { operation: DeclInputBranch::Record, children: vec![DeclInput::Leaf(DeclInputLeafOp::Value);2] }) }.bulk())))
-            .fun(fun!(bulk_optional_borrow_pair).expand_param("value",DeclInput::Unary { operation: DeclInputUnary::Optional, child: Box::new(DeclInput::Branch { operation: DeclInputBranch::Constructor { function: "bulk_borrow_pair_new".into() }, children: vec![DeclInput::Leaf(DeclInputLeafOp::Value);2],  }) }.bulk()))
+            .fun(fun!(bulk_handle_nested).expand_param("values",JniInput::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInput::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInput::Leaf(JniInputLeafOp::Value)) }.bulk()) }))
+            .fun(fun!(bulk_handle_text_callback).expand_param("callback",callback!(impl Fn()->Vec<BulkHandleText>).name("BulkHandleTextCallback").expand_return(JniInput::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInput::Branch { operation: JniInputBranch::Record, children: vec![JniInput::Leaf(JniInputLeafOp::Value);2] }) }.bulk())))
+            .fun(fun!(bulk_optional_borrow_pair).expand_param("value",JniInput::Unary { operation: JniInputUnary::Optional, child: Box::new(JniInput::Branch { operation: JniInputBranch::Constructor { function: "bulk_borrow_pair_new".into() }, children: vec![JniInput::Leaf(JniInputLeafOp::Value);2],  }) }.bulk()))
             .fun(fun!(bulk_select).expand_param("value",expand_param!(i64).variant(fun!(bulk_scalar)).variant_self().bulk()).expand_return(expand_return!(i64).field_self().bulk()))
             .fun(fun!(bulk_kinds).expand_param("value",expand_param!(BulkKind).variant_self().bulk()).expand_return(expand_return!(BulkKind).field_self().bulk()))
             .fun(fun!(bulk_units).expand_param("value",expand_param!(Vec<()>).variant_self().bulk()).expand_return(expand_return!(Vec<()>).field_self_into().bulk()))
@@ -628,10 +622,10 @@ fn main() {
                 .field(fun!(getter_child_number)).field(fun!(getter_child_name))))
             .fun(fun!(getter_counts))
             .fun(fun!(getter_two_clones_new).expand_return(expand_return!(GetterOwner)
-                .view(prebindgen_declarations::DeclOutput::getter("getter_owner_leaf",
-                    prebindgen_declarations::DeclOutput::combine([
-                        prebindgen_declarations::DeclOutput::Leaf(DeclOutputLeafOp::Projected(prebindgen_declarations::Projection::borrowed())),
-                        prebindgen_declarations::DeclOutput::Leaf(DeclOutputLeafOp::Projected(prebindgen_declarations::Projection::borrowed()))])))))
+                .view(prebindgen_jni::JniOutput::getter("getter_owner_leaf",
+                    prebindgen_jni::JniOutput::combine([
+                        prebindgen_jni::JniOutput::Leaf(JniOutputLeafOp::Projected(prebindgen_declarations::Projection::borrowed())),
+                        prebindgen_jni::JniOutput::Leaf(JniOutputLeafOp::Projected(prebindgen_declarations::Projection::borrowed()))])))))
             .fun(fun!(getter_fields_new).expand_return(expand_return!(GetterOwner)
                 .field_self_into().fields(fields!(getter_owner_details))))
             .fun(fun!(getter_callback).expand_param("callback",
@@ -644,7 +638,7 @@ fn main() {
         .package(package!("nativeoutputs")
             .fun(fun!(jni_output_optional)
                 .expand_return(expand_return!(CallbackRow).field_self_ref())
-                .output(ordinary_rows(DeclOutput::Unary { operation: DeclOutputUnary::Optional, child: Box::new(ordinary_rows(row())) })))
+                .output(ordinary_rows(JniOutput::Unary { operation: JniOutputUnary::Optional, child: Box::new(ordinary_rows(row())) })))
             .fun(fun!(jni_output_mixed))
             .fun(fun!(jni_output_mixed_frames).callback_return_only()
                 .expand_return(expand_return!(Vec<CallbackRowResource>).field_self_ref().bulk()))
@@ -657,7 +651,7 @@ fn main() {
                 .output(ordinary_rows(ordinary_rows(row()))))
             .fun(fun!(c_output_pair).name("jniOutputPair")
                 .expand_return(expand_return!(CallbackRow).field_self_ref())
-                .output(DeclOutput::Branch { operation: DeclOutputBranch::OwnedFields, children: vec![ordinary_rows(row()); 2] }))
+                .output(JniOutput::Branch { operation: JniOutputBranch::OwnedFields, children: vec![ordinary_rows(row()); 2] }))
             .fun(fun!(jni_output_fold).name("jniOutput")
                 .expand_return(expand_return!(CallbackRow).field_self_ref()).callback_return_only()))
         .package(package!("callbackboundaries")
@@ -690,7 +684,7 @@ fn main() {
                     .name("FlagArgumentHandler")
                     .expand_param(0, expand_return!(CallbackConfigValue).field(fun!(callback_config_positive)))))
             .fun(fun!(callback_config_nested).expand_param("handlers",
-                DeclInput::for_type(syn::parse_quote!(CallbackConfigHandler), DeclInput::constructor("callback_config_handler", [
+                JniInput::for_type(syn::parse_quote!(CallbackConfigHandler), JniInput::constructor("callback_config_handler", [
                     callback!(impl Fn(CallbackConfigValue, i64) -> CallbackConfigValue)
                         .name("NestedHandler")
                         .expand_param(0, expand_return!(CallbackConfigValue).field(fun!(callback_config_positive)))
@@ -715,52 +709,52 @@ fn main() {
             .class(data_class!(CallbackOptionalBatch))
             .fun(fun!(callback_mixed_optional_batches).expand_param("callback",
                 callback!(impl Fn() -> Vec<CallbackOptionalBatch>).name("MixedOptionalBatchesCallback")
-                    .expand_return(DeclInput::Unary { operation: DeclInputUnary::Sequence, child: Box::new(DeclInput::Branch { operation: DeclInputBranch::Record, children: vec![DeclInput::Leaf(DeclInputLeafOp::Value),
-                        DeclInput::Unary { operation: DeclInputUnary::Sequence, child: Box::new(callback_result_row_input()) }.bulk(), DeclInput::Leaf(DeclInputLeafOp::Value)] }) })))
+                    .expand_return(JniInput::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInput::Branch { operation: JniInputBranch::Record, children: vec![JniInput::Leaf(JniInputLeafOp::Value),
+                        JniInput::Unary { operation: JniInputUnary::Sequence, child: Box::new(callback_result_row_input()) }.bulk(), JniInput::Leaf(JniInputLeafOp::Value)] }) })))
             .class(data_class!(CallbackScalarBatch))
             .fun(fun!(callback_mixed_scalars).expand_param("callback",
                 callback!(impl Fn() -> Vec<CallbackScalarBatch>).name("MixedScalarBatchesCallback")
-                    .expand_return(DeclInput::Unary { operation: DeclInputUnary::Sequence, child: Box::new(DeclInput::Branch { operation: DeclInputBranch::Record, children: vec![DeclInput::Leaf(DeclInputLeafOp::Value),
-                        DeclInput::Unary { operation: DeclInputUnary::Sequence, child: Box::new(DeclInput::Branch { operation: DeclInputBranch::Record, children: vec![DeclInput::Leaf(DeclInputLeafOp::Value);2] }) }.bulk()] }) })))
+                    .expand_return(JniInput::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInput::Branch { operation: JniInputBranch::Record, children: vec![JniInput::Leaf(JniInputLeafOp::Value),
+                        JniInput::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInput::Branch { operation: JniInputBranch::Record, children: vec![JniInput::Leaf(JniInputLeafOp::Value);2] }) }.bulk()] }) })))
             .fun(fun!(callback_return_resource_audit_start)).fun(fun!(callback_return_resource_audit_finish))
             .fun(fun!(callback_mixed_batch).expand_param("callback",
                 callback!(impl Fn() -> CallbackNestedBatch).name("MixedBatchCallback")
                     .expand_return(callback_mixed_batch_input(true, false))))
-            .fun(fun!(callback_mixed_batches_echo).expand_param("batches", DeclInput::Unary { operation: DeclInputUnary::Sequence, child: Box::new(callback_mixed_batch_input(false, true)) }))
+            .fun(fun!(callback_mixed_batches_echo).expand_param("batches", JniInput::Unary { operation: JniInputUnary::Sequence, child: Box::new(callback_mixed_batch_input(false, true)) }))
             .fun(fun!(callback_mixed_batches).expand_param("callback",
                 callback!(impl Fn() -> Vec<CallbackNestedBatch>).name("MixedBatchesCallback")
-                    .expand_return(DeclInput::Unary { operation: DeclInputUnary::Sequence, child: Box::new(callback_mixed_batch_input(true, true)) })))
-            .fun(fun!(callback_nested_batch_echo).expand_param("batch",DeclInput::Branch { operation: DeclInputBranch::Record, children: vec![
-                DeclInput::Leaf(DeclInputLeafOp::Value), DeclInput::Leaf(DeclInputLeafOp::Value), callback_nested_rows_input(), DeclInput::Leaf(DeclInputLeafOp::Value),
-                DeclInput::Unary { operation: DeclInputUnary::Sequence, child: Box::new(callback_result_row_input()) }, DeclInput::Leaf(DeclInputLeafOp::Value)] }))
+                    .expand_return(JniInput::Unary { operation: JniInputUnary::Sequence, child: Box::new(callback_mixed_batch_input(true, true)) })))
+            .fun(fun!(callback_nested_batch_echo).expand_param("batch",JniInput::Branch { operation: JniInputBranch::Record, children: vec![
+                JniInput::Leaf(JniInputLeafOp::Value), JniInput::Leaf(JniInputLeafOp::Value), callback_nested_rows_input(), JniInput::Leaf(JniInputLeafOp::Value),
+                JniInput::Unary { operation: JniInputUnary::Sequence, child: Box::new(callback_result_row_input()) }, JniInput::Leaf(JniInputLeafOp::Value)] }))
             .fun(fun!(callback_nested_results).expand_param("callback",
                 callback!(impl Fn() -> Vec<Option<Vec<CallbackFixedResult>>>).name("NestedResultsCallback")
                     .expand_return(callback_nested_rows_input())))
             .fun(fun!(callback_nested_batch).expand_param("callback",
                 callback!(impl Fn() -> CallbackNestedBatch).name("NestedBatchCallback")
-                    .expand_return(DeclInput::Branch { operation: DeclInputBranch::Record, children: vec![DeclInput::Leaf(DeclInputLeafOp::Value),
-                        DeclInput::constructor("callback_return_resource_copy",[DeclInput::Leaf(DeclInputLeafOp::Value)]),
+                    .expand_return(JniInput::Branch { operation: JniInputBranch::Record, children: vec![JniInput::Leaf(JniInputLeafOp::Value),
+                        JniInput::constructor("callback_return_resource_copy",[JniInput::Leaf(JniInputLeafOp::Value)]),
                         callback_nested_rows_input(),
-                        DeclInput::constructor("callback_fixed_marker",[DeclInput::Leaf(DeclInputLeafOp::Value)]),
-                        DeclInput::Unary { operation: DeclInputUnary::Sequence, child: Box::new(callback_result_row_input()) },DeclInput::Leaf(DeclInputLeafOp::Value)] })))
+                        JniInput::constructor("callback_fixed_marker",[JniInput::Leaf(JniInputLeafOp::Value)]),
+                        JniInput::Unary { operation: JniInputUnary::Sequence, child: Box::new(callback_result_row_input()) },JniInput::Leaf(JniInputLeafOp::Value)] })))
             .fun(fun!(callback_fixed_result).expand_param("callback",
                 callback!(impl Fn() -> CallbackFixedResult).name("FixedResultCallback")
-                    .expand_return(DeclInput::Branch { operation: DeclInputBranch::Record, children: vec![DeclInput::Leaf(DeclInputLeafOp::Value),DeclInput::Leaf(DeclInputLeafOp::Value),
-                        DeclInput::constructor("callback_fixed_marker",[DeclInput::Leaf(DeclInputLeafOp::Value)]),DeclInput::Leaf(DeclInputLeafOp::Value)] })))
+                    .expand_return(JniInput::Branch { operation: JniInputBranch::Record, children: vec![JniInput::Leaf(JniInputLeafOp::Value),JniInput::Leaf(JniInputLeafOp::Value),
+                        JniInput::constructor("callback_fixed_marker",[JniInput::Leaf(JniInputLeafOp::Value)]),JniInput::Leaf(JniInputLeafOp::Value)] })))
             .fun(fun!(callback_fixed_results).expand_param("callback",
                 callback!(impl Fn() -> Vec<CallbackFixedResult>).name("FixedResultsCallback")
-                    .expand_return(DeclInput::Unary { operation: DeclInputUnary::Sequence, child: Box::new(DeclInput::Branch { operation: DeclInputBranch::Record, children: vec![DeclInput::Leaf(DeclInputLeafOp::Value),DeclInput::Leaf(DeclInputLeafOp::Value),
-                        DeclInput::constructor("callback_fixed_marker",[DeclInput::Leaf(DeclInputLeafOp::Value)]),DeclInput::Leaf(DeclInputLeafOp::Value)] }) })))
+                    .expand_return(JniInput::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInput::Branch { operation: JniInputBranch::Record, children: vec![JniInput::Leaf(JniInputLeafOp::Value),JniInput::Leaf(JniInputLeafOp::Value),
+                        JniInput::constructor("callback_fixed_marker",[JniInput::Leaf(JniInputLeafOp::Value)]),JniInput::Leaf(JniInputLeafOp::Value)] }) })))
             .fun(fun!(callback_fixed_optional_results).expand_param("callback",
                 callback!(impl Fn() -> Option<Vec<CallbackFixedResult>>).name("OptionalFixedResultsCallback")
-                    .expand_return(DeclInput::Unary { operation: DeclInputUnary::Optional, child: Box::new(DeclInput::Unary { operation: DeclInputUnary::Sequence, child: Box::new(DeclInput::Branch { operation: DeclInputBranch::Record, children: vec![DeclInput::Leaf(DeclInputLeafOp::Value);4] }) }) })))
+                    .expand_return(JniInput::Unary { operation: JniInputUnary::Optional, child: Box::new(JniInput::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInput::Branch { operation: JniInputBranch::Record, children: vec![JniInput::Leaf(JniInputLeafOp::Value);4] }) }) })))
             .fun(fun!(callback_fixed_borrowed_results).expand_param("callback",
                 callback!(impl Fn() -> Vec<CallbackFixedResult>).name("BorrowedFixedResultsCallback")
-                    .expand_return(DeclInput::Unary { operation: DeclInputUnary::Sequence, child: Box::new(DeclInput::Branch { operation: DeclInputBranch::Record, children: vec![
-                        DeclInput::constructor("callback_return_resource_copy",[DeclInput::Leaf(DeclInputLeafOp::Value)]),DeclInput::Leaf(DeclInputLeafOp::Value),
-                        DeclInput::constructor("callback_fixed_marker",[DeclInput::Leaf(DeclInputLeafOp::Value)]),DeclInput::Leaf(DeclInputLeafOp::Value)] }) })))
-            .fun(fun!(callback_return_wire_rows_catch).expand_param("callback", callback!(impl Fn() -> Vec<CallbackWireRow>).expand_return(DeclInput::Unary { operation: DeclInputUnary::Sequence, child: Box::new(DeclInput::Branch { operation: DeclInputBranch::Record, children: vec![DeclInput::Leaf(DeclInputLeafOp::Value); 2] }) })))
-            .fun(fun!(callback_return_wire_row_catch).expand_param("callback", callback!(impl Fn() -> CallbackWireRow).expand_return(prebindgen_jni::DeclInput::Branch { operation: DeclInputBranch::Record, children: vec![prebindgen_jni::DeclInput::Leaf(DeclInputLeafOp::Value); 2] })))
+                    .expand_return(JniInput::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInput::Branch { operation: JniInputBranch::Record, children: vec![
+                        JniInput::constructor("callback_return_resource_copy",[JniInput::Leaf(JniInputLeafOp::Value)]),JniInput::Leaf(JniInputLeafOp::Value),
+                        JniInput::constructor("callback_fixed_marker",[JniInput::Leaf(JniInputLeafOp::Value)]),JniInput::Leaf(JniInputLeafOp::Value)] }) })))
+            .fun(fun!(callback_return_wire_rows_catch).expand_param("callback", callback!(impl Fn() -> Vec<CallbackWireRow>).expand_return(JniInput::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInput::Branch { operation: JniInputBranch::Record, children: vec![JniInput::Leaf(JniInputLeafOp::Value); 2] }) })))
+            .fun(fun!(callback_return_wire_row_catch).expand_param("callback", callback!(impl Fn() -> CallbackWireRow).expand_return(prebindgen_jni::JniInput::Branch { operation: JniInputBranch::Record, children: vec![prebindgen_jni::JniInput::Leaf(JniInputLeafOp::Value); 2] })))
             .class(data_class!(CallbackReturnRecord)).class(enum_class!(CallbackReturnChoice))
             .class(ptr_class!(CallbackReturnResource)).class(ptr_class!(CallbackReturnJob)).class(ptr_class!(CallbackReturnHandler))
             .fun(fun!(callback_return_i64)).fun(fun!(callback_return_i8)).fun(fun!(callback_return_i16)).fun(fun!(callback_return_f32)).fun(fun!(callback_return_u128)).fun(fun!(callback_return_zero)).fun(fun!(callback_return_bool))
@@ -844,23 +838,23 @@ fn main() {
             .class(data_class!(OutputCleanupRow))
             .fun(fun!(native_bulk_rows).expand_return(expand_return!(CallbackRow).field_self_ref().bulk()))
             .fun(fun!(native_bulk_nested).expand_return(expand_return!(CallbackRow).field_self_ref().bulk()))
-            .fun(fun!(native_bulk_pair).output(prebindgen_declarations::DeclOutput::Branch { operation: DeclOutputBranch::OwnedFields, children: vec![prebindgen_declarations::DeclOutput::Request(prebindgen_declarations::DeclOutputRequest::Auto); 2] }))
+            .fun(fun!(native_bulk_pair).output(prebindgen_jni::JniOutput::Branch { operation: JniOutputBranch::OwnedFields, children: vec![prebindgen_jni::JniOutput::Request(prebindgen_jni::JniOutputRequest::Auto); 2] }))
             .fun(fun!(native_bulk_callback).expand_param("callback", callback!(impl Fn(Vec<Vec<CallbackRow>>)).name("NativeBulkCallback")))
-            .fun(fun!(output_cleanup_surround).output(prebindgen_declarations::DeclOutput::Branch { operation: DeclOutputBranch::OwnedFields, children: vec![
-                prebindgen_declarations::DeclOutput::Request(prebindgen_declarations::DeclOutputRequest::Auto),
-                prebindgen_declarations::DeclOutput::Unary { operation: DeclOutputUnary::Sequence { delivery: prebindgen_declarations::SequenceDelivery::Value, mode: None }, child: Box::new(prebindgen_declarations::DeclOutput::Request(prebindgen_declarations::DeclOutputRequest::Auto)),  },
-                prebindgen_declarations::DeclOutput::Request(prebindgen_declarations::DeclOutputRequest::Auto),
+            .fun(fun!(output_cleanup_surround).output(prebindgen_jni::JniOutput::Branch { operation: JniOutputBranch::OwnedFields, children: vec![
+                prebindgen_jni::JniOutput::Request(prebindgen_jni::JniOutputRequest::Auto),
+                prebindgen_jni::JniOutput::Unary { operation: JniOutputUnary::Sequence { delivery: prebindgen_declarations::SequenceDelivery::Value, mode: None }, child: Box::new(prebindgen_jni::JniOutput::Request(prebindgen_jni::JniOutputRequest::Auto)),  },
+                prebindgen_jni::JniOutput::Request(prebindgen_jni::JniOutputRequest::Auto),
             ] }))
-            .fun(fun!(output_cleanup_surround_bulk).output(prebindgen_declarations::DeclOutput::Branch { operation: DeclOutputBranch::OwnedFields, children: vec![
-                prebindgen_declarations::DeclOutput::Request(prebindgen_declarations::DeclOutputRequest::Auto),
-                prebindgen_declarations::DeclOutput::Request(prebindgen_declarations::DeclOutputRequest::Auto),
-                prebindgen_declarations::DeclOutput::Request(prebindgen_declarations::DeclOutputRequest::Auto),
+            .fun(fun!(output_cleanup_surround_bulk).output(prebindgen_jni::JniOutput::Branch { operation: JniOutputBranch::OwnedFields, children: vec![
+                prebindgen_jni::JniOutput::Request(prebindgen_jni::JniOutputRequest::Auto),
+                prebindgen_jni::JniOutput::Request(prebindgen_jni::JniOutputRequest::Auto),
+                prebindgen_jni::JniOutput::Request(prebindgen_jni::JniOutputRequest::Auto),
             ] }))
-            .fun(fun!(output_cleanup_rows).callback_return().output(prebindgen_declarations::DeclOutput::Unary { operation: DeclOutputUnary::Sequence { delivery: prebindgen_declarations::SequenceDelivery::Value, mode: None }, child: Box::new(prebindgen_declarations::DeclOutput::Request(prebindgen_declarations::DeclOutputRequest::Auto)),  }))
+            .fun(fun!(output_cleanup_rows).callback_return().output(prebindgen_jni::JniOutput::Unary { operation: JniOutputUnary::Sequence { delivery: prebindgen_declarations::SequenceDelivery::Value, mode: None }, child: Box::new(prebindgen_jni::JniOutput::Request(prebindgen_jni::JniOutputRequest::Auto)),  }))
             .fun(fun!(output_cleanup_rows_bulk).callback_return().expand_return(expand_return!(OutputCleanupRow).field_self_into().bulk()))
-            .fun(fun!(output_cleanup_nested).callback_return().output(prebindgen_declarations::DeclOutput::Unary { operation: DeclOutputUnary::Sequence { delivery: prebindgen_declarations::SequenceDelivery::Value, mode: None }, child: Box::new(prebindgen_declarations::DeclOutput::Request(prebindgen_declarations::DeclOutputRequest::Auto)),  }))
+            .fun(fun!(output_cleanup_nested).callback_return().output(prebindgen_jni::JniOutput::Unary { operation: JniOutputUnary::Sequence { delivery: prebindgen_declarations::SequenceDelivery::Value, mode: None }, child: Box::new(prebindgen_jni::JniOutput::Request(prebindgen_jni::JniOutputRequest::Auto)),  }))
             .fun(fun!(output_cleanup_nested_bulk).callback_return().expand_return(expand_return!(OutputCleanupRow).field_self_into().bulk()))
-            .fun(fun!(output_cleanup_callback).expand_param("callback",callback!(impl Fn(Vec<Option<Vec<OutputCleanupRow>>>)).name("OutputCleanupCallback").expand_param(0, prebindgen_declarations::DeclOutput::Unary { operation: DeclOutputUnary::Sequence { delivery: prebindgen_declarations::SequenceDelivery::Value, mode: None }, child: Box::new(prebindgen_declarations::DeclOutput::Request(prebindgen_declarations::DeclOutputRequest::Auto)),  })))
+            .fun(fun!(output_cleanup_callback).expand_param("callback",callback!(impl Fn(Vec<Option<Vec<OutputCleanupRow>>>)).name("OutputCleanupCallback").expand_param(0, prebindgen_jni::JniOutput::Unary { operation: JniOutputUnary::Sequence { delivery: prebindgen_declarations::SequenceDelivery::Value, mode: None }, child: Box::new(prebindgen_jni::JniOutput::Request(prebindgen_jni::JniOutputRequest::Auto)),  })))
             .fun(fun!(output_cleanup_callback_bulk).expand_param("callback",callback!(impl Fn(Vec<Option<Vec<OutputCleanupRow>>>)).name("OutputCleanupBulkCallback").expand_param(0,expand_return!(OutputCleanupRow).field_self_into().bulk()))))
         .configure(|flat| {
             use prebindgen_flat::{OutputConversion, Outcomes, WireNode};
@@ -871,7 +865,7 @@ fn main() {
             let conversion=prebindgen_declarations::compile_output(flat,&prebindgen_jni::JniCodec::raw(),"jni_output_mixed",&recipe,&())?;
             flat.function_mut("jni_output_mixed")?.ret.slot=Some(conversion);
             let mut probe = flat.clone();
-            let declarations = prebindgen_declarations::DeclDefaults::new(&probe, vec![],vec![],vec![])?;
+            let declarations = prebindgen_jni::DeclJniDefaults::new(&probe, vec![],vec![],vec![])?;
             declarations.fill(&mut probe, &prebindgen_jni::JniCodec::raw(), &fun!(collection_probe).expand_return(expand_return!(Vec<char>).field_self()), &())?;
             // Observe a clone so the builder still installs its own codec.
             // Collections.kt exercises the separately generated JNI boundary.
@@ -2129,14 +2123,14 @@ fn main() {
                 .fun(fun!(scoped_input_pair))
                 .fun(fun!(scoped_input_failure).expand_param(
                     "second",
-                    DeclInput::constructor(
+                    JniInput::constructor(
                         "scoped_input_checked",
                         [
-                            DeclInput::constructor(
+                            JniInput::constructor(
                                 "scoped_input_mode",
-                                [DeclInput::Leaf(DeclInputLeafOp::Value)],
+                                [JniInput::Leaf(JniInputLeafOp::Value)],
                             ),
-                            DeclInput::Leaf(DeclInputLeafOp::Value),
+                            JniInput::Leaf(JniInputLeafOp::Value),
                         ],
                     ),
                 )),
@@ -2231,28 +2225,28 @@ fn main() {
 }
 
 fn callback_result_row_input(
-) -> DeclInput<prebindgen_jni::DeclInputRequest, prebindgen_declarations::DeclOutputRequest> {
-    DeclInput::Branch {
-        operation: DeclInputBranch::Record,
+) -> JniInput<prebindgen_jni::JniInputRequest, prebindgen_jni::JniOutputRequest> {
+    JniInput::Branch {
+        operation: JniInputBranch::Record,
         children: vec![
-            DeclInput::Leaf(DeclInputLeafOp::Value),
-            DeclInput::Leaf(DeclInputLeafOp::Value),
-            DeclInput::constructor(
+            JniInput::Leaf(JniInputLeafOp::Value),
+            JniInput::Leaf(JniInputLeafOp::Value),
+            JniInput::constructor(
                 "callback_fixed_marker",
-                [DeclInput::Leaf(DeclInputLeafOp::Value)],
+                [JniInput::Leaf(JniInputLeafOp::Value)],
             ),
-            DeclInput::Leaf(DeclInputLeafOp::Value),
+            JniInput::Leaf(JniInputLeafOp::Value),
         ],
     }
 }
 fn callback_nested_rows_input(
-) -> DeclInput<prebindgen_jni::DeclInputRequest, prebindgen_declarations::DeclOutputRequest> {
-    DeclInput::Unary {
-        operation: DeclInputUnary::Sequence,
-        child: Box::new(DeclInput::Unary {
-            operation: DeclInputUnary::Optional,
-            child: Box::new(DeclInput::Unary {
-                operation: DeclInputUnary::Sequence,
+) -> JniInput<prebindgen_jni::JniInputRequest, prebindgen_jni::JniOutputRequest> {
+    JniInput::Unary {
+        operation: JniInputUnary::Sequence,
+        child: Box::new(JniInput::Unary {
+            operation: JniInputUnary::Optional,
+            child: Box::new(JniInput::Unary {
+                operation: JniInputUnary::Sequence,
                 child: Box::new(callback_result_row_input()),
             }),
         }),
@@ -2262,37 +2256,37 @@ fn callback_nested_rows_input(
 fn callback_mixed_batch_input(
     borrowed: bool,
     bulk_tail: bool,
-) -> DeclInput<prebindgen_jni::DeclInputRequest, prebindgen_declarations::DeclOutputRequest> {
-    DeclInput::Branch {
-        operation: DeclInputBranch::Record,
+) -> JniInput<prebindgen_jni::JniInputRequest, prebindgen_jni::JniOutputRequest> {
+    JniInput::Branch {
+        operation: JniInputBranch::Record,
         children: vec![
-            DeclInput::Leaf(DeclInputLeafOp::Value),
+            JniInput::Leaf(JniInputLeafOp::Value),
             if borrowed {
-                DeclInput::constructor(
+                JniInput::constructor(
                     "callback_return_resource_copy",
-                    [DeclInput::Leaf(DeclInputLeafOp::Value)],
+                    [JniInput::Leaf(JniInputLeafOp::Value)],
                 )
             } else {
-                DeclInput::Leaf(DeclInputLeafOp::Value)
+                JniInput::Leaf(JniInputLeafOp::Value)
             },
             callback_nested_rows_input().bulk(),
-            DeclInput::constructor(
+            JniInput::constructor(
                 "callback_fixed_marker",
-                [DeclInput::Leaf(DeclInputLeafOp::Value)],
+                [JniInput::Leaf(JniInputLeafOp::Value)],
             ),
             if bulk_tail {
-                DeclInput::Unary {
-                    operation: DeclInputUnary::Sequence,
+                JniInput::Unary {
+                    operation: JniInputUnary::Sequence,
                     child: Box::new(callback_result_row_input()),
                 }
                 .bulk()
             } else {
-                DeclInput::Unary {
-                    operation: DeclInputUnary::Sequence,
+                JniInput::Unary {
+                    operation: JniInputUnary::Sequence,
                     child: Box::new(callback_result_row_input()),
                 }
             },
-            DeclInput::Leaf(DeclInputLeafOp::Value),
+            JniInput::Leaf(JniInputLeafOp::Value),
         ],
     }
 }

@@ -1,7 +1,8 @@
-//! Adapter-owned conversion operations, after declaration requests have been resolved.
+//! Adapter-owned conversion metadata for source resolution and compilation.
+use crate::JniOutputRequests;
 use prebindgen_declarations::{
-    CallbackArgumentOwnership, CallbackOperation, InputNode, InputOps, OutputNode, OutputOps,
-    Projection, ProjectionMode, SequenceDelivery,
+    CallbackArgumentOwnership, InputNode, InputOps, OutputNode, OutputOps, Projection,
+    ProjectionMode, SequenceDelivery,
 };
 use prebindgen_flat::Result;
 use std::convert::Infallible;
@@ -15,7 +16,7 @@ impl InputOps for JniInputOps {
     type Leaf = JniInputLeafOp;
     type Unary = JniInputUnary;
     type Branch = JniInputBranch;
-    type Arrow = Box<CallbackOperation>;
+    type Arrow = JniInputArrow;
 }
 impl OutputOps for JniOutputOps {
     type Leaf = JniOutputLeafOp;
@@ -23,10 +24,35 @@ impl OutputOps for JniOutputOps {
     type Branch = JniOutputBranch;
     type Arrow = Infallible;
 }
-/// Resolved input conversion for this adapter.
-pub type JniInput = InputNode<JniInputOps, JniOutputOps>;
-/// Resolved output conversion for this adapter.
-pub type JniOutput = OutputNode<JniInputOps, JniOutputOps>;
+/// Input conversion, optionally carrying this adapter's unresolved requests.
+/// ```
+/// use prebindgen_jni::{JniInput,JniOutput,JniInputRequest,JniOutputRequest,prelude::*};
+/// let _: JniInput<JniInputRequest,JniOutputRequest> = JniInput::auto();
+/// let _: JniOutput<JniInputRequest,JniOutputRequest> = JniOutput::auto();
+/// ```
+pub type JniInput<InRequest = Infallible, OutRequest = Infallible> =
+    InputNode<JniInputOps, JniOutputOps, InRequest, OutRequest>;
+/// Output conversion for this adapter. Leaf requests default to Infallible.
+pub type JniOutput<InRequest = Infallible, OutRequest = Infallible> =
+    OutputNode<JniInputOps, JniOutputOps, InRequest, OutRequest>;
+
+/// Incoming callback configuration and its resolved retained-callback binding.
+#[derive(Clone, Debug)]
+pub enum JniInputArrow {
+    /// Resolve explicit argument/result conversions against callback defaults.
+    Callback(Box<prebindgen_declarations::CallbackRequest>),
+    /// Canonical callback signature and settings with resolved argument/result children.
+    BoundCallback(Box<prebindgen_declarations::CallbackOperation>),
+}
+
+impl JniInputArrow {
+    pub(crate) fn bound_callback(&self) -> Result<&prebindgen_declarations::CallbackOperation> {
+        match self {
+            Self::BoundCallback(callback) => Ok(callback),
+            Self::Callback(_) => Err("resolve callback defaults before compilation".into()),
+        }
+    }
+}
 
 /// Terminal input operations.
 #[derive(Clone, Debug)]
@@ -37,6 +63,12 @@ pub enum JniInputLeafOp {
 /// Single-child input operations.
 #[derive(Clone, Debug)]
 pub enum JniInputUnary {
+    /// Apply the child conversion at this source type, including nested occurrences.
+    ForType {
+        /// Source type at which the child applies.
+        ty: Box<syn::Type>,
+    },
+
     /// Apply an explicitly selected Rust value conversion.
     Convert {
         /// Checked source/representation conversion.
@@ -54,6 +86,16 @@ pub enum JniInputUnary {
 /// Multiple-child input operations.
 #[derive(Clone, Debug)]
 pub enum JniInputBranch {
+    /// Partially specified enum fields; children are variant branches.
+    EnumFields,
+    /// Partially specified fields of one source variant.
+    VariantFields {
+        /// Source variant name.
+        variant: String,
+        /// Source field names corresponding to the child conversions.
+        fields: Vec<String>,
+    },
+
     /// Convert source record fields in declaration order.
     Fields,
     /// Group converted fields into the declared foreign record representation.
@@ -86,6 +128,17 @@ pub enum JniOutputLeafOp {
 /// Single-child output operations.
 #[derive(Clone, Debug)]
 pub enum JniOutputUnary {
+    /// Apply the child conversion at this source type, including nested occurrences.
+    ForType {
+        /// Source type at which the child applies.
+        ty: Box<syn::Type>,
+    },
+    /// Select per-element callback delivery of the child's sequence.
+    SequenceCallback {
+        /// Permit decomposition of an ordinary collection identity.
+        structural: bool,
+    },
+
     /// Ownership contract of one callable argument; interpreted by its arrow.
     CallbackArgument {
         /// Whether produced foreign owners expire at the end of invocation.
@@ -131,6 +184,23 @@ pub enum JniOutputUnary {
 /// Multiple-child output operations.
 #[derive(Clone, Debug)]
 pub enum JniOutputBranch {
+    /// Partially specified enum fields; children are variant branches.
+    EnumFields,
+    /// Partially specified fields of one source variant.
+    VariantFields {
+        /// Source variant name.
+        variant: String,
+        /// Source field names corresponding to the child conversions.
+        fields: Vec<String>,
+    },
+    /// Partially specified record fields, in the same order as the child conversions.
+    NamedFields {
+        /// Source field names corresponding to the child conversions.
+        fields: Vec<String>,
+        /// Observe or move the selected fields.
+        mode: ProjectionMode,
+    },
+
     /// Convert source record fields in declaration order.
     Fields,
     /// Move source record fields into their conversions.
@@ -153,73 +223,6 @@ pub enum JniOutputBranch {
     Variant,
     /// A callable domain in source parameter order.
     Arguments,
-}
-
-pub(crate) trait JniInputParts {
-    fn variant_fields(&self) -> Result<&[Self]>
-    where
-        Self: Sized;
-}
-impl JniInputParts for JniInput {
-    fn variant_fields(&self) -> Result<&[Self]> {
-        match self {
-            Self::Branch {
-                operation: JniInputBranch::Variant,
-                children,
-            } => Ok(children),
-            _ => Err("enum children must be variant branches".into()),
-        }
-    }
-}
-pub(crate) trait JniOutputParts {
-    #[cfg(test)]
-    fn bulk(self) -> Self
-    where
-        Self: Sized;
-    fn variant_fields(&self) -> Result<&[Self]>
-    where
-        Self: Sized;
-    fn argument_nodes(&self) -> Result<&[Self]>
-    where
-        Self: Sized;
-    fn callback_argument_parts(&self) -> Result<(CallbackArgumentOwnership, &Self)>;
-}
-impl JniOutputParts for JniOutput {
-    #[cfg(test)]
-    fn bulk(self) -> Self {
-        Self::Unary {
-            operation: JniOutputUnary::Bulk,
-            child: Box::new(self),
-        }
-    }
-    fn variant_fields(&self) -> Result<&[Self]> {
-        match self {
-            Self::Branch {
-                operation: JniOutputBranch::Variant,
-                children,
-            } => Ok(children),
-            _ => Err("enum children must be variant branches".into()),
-        }
-    }
-    fn argument_nodes(&self) -> Result<&[Self]> {
-        match self {
-            Self::None => Ok(&[]),
-            Self::Branch {
-                operation: JniOutputBranch::Arguments,
-                children,
-            } => Ok(children),
-            _ => Err("callback domain requires an argument branch or None".into()),
-        }
-    }
-    fn callback_argument_parts(&self) -> Result<(CallbackArgumentOwnership, &Self)> {
-        match self {
-            Self::Unary {
-                operation: JniOutputUnary::CallbackArgument { ownership },
-                child,
-            } => Ok((*ownership, child)),
-            _ => Err("callback argument requires an ownership contract".into()),
-        }
-    }
 }
 
 pub(crate) fn lift_input_bulk(tree: JniInput) -> JniInput {
@@ -576,7 +579,7 @@ fn output_has_bulk(tree: &JniOutput) -> bool {
 }
 
 pub(crate) fn sequence_callback(
-    cx: &mut prebindgen_declarations::DeclResolve<'_, crate::JniCodec>,
+    cx: &mut crate::JniResolve<'_>,
     ty: &syn::Type,
     mut output: JniOutput,
     structural_default: bool,
@@ -642,29 +645,24 @@ pub(crate) fn sequence_callback(
         fn structural(
             ty: &syn::Type,
             output: &JniOutput,
-        ) -> Option<
-            prebindgen_declarations::DeclOutput<
-                prebindgen_declarations::DeclInputRequest,
-                prebindgen_declarations::DeclOutputRequest,
-            >,
-        > {
+        ) -> Option<crate::JniOutput<crate::JniInputRequest, crate::JniOutputRequest>> {
             match output {
                 JniOutput::Leaf(JniOutputLeafOp::Value)
                     if prebindgen_flat::sequence_parts(ty).is_some() =>
                 {
-                    Some(prebindgen_declarations::DeclOutput::Unary {
-                        operation: prebindgen_declarations::frontend::DeclOutputUnary::Sequence {
+                    Some(crate::JniOutput::Unary {
+                        operation: crate::JniOutputUnary::Sequence {
                             delivery: SequenceDelivery::Callback,
                             mode: None,
                         },
-                        child: Box::new(prebindgen_declarations::DeclOutput::auto()),
+                        child: Box::new(crate::JniOutput::auto()),
                     })
                 }
                 JniOutput::Unary {
                     operation: JniOutputUnary::Optional,
                     child,
-                } => Some(prebindgen_declarations::DeclOutput::Unary {
-                    operation: prebindgen_declarations::frontend::DeclOutputUnary::Optional,
+                } => Some(crate::JniOutput::Unary {
+                    operation: crate::JniOutputUnary::Optional,
                     child: Box::new(structural(prebindgen_flat::option_inner(ty)?, child)?),
                 }),
                 _ => None,

@@ -1,6 +1,5 @@
 //! Typed C callbacks retained by source closures.
 use super::*;
-use crate::operations::COutputParts;
 use prebindgen_conversions::{InputFragment, OutputFragment, TemplateContext};
 use prebindgen_flat::{callback_signature, type_key, InputConversion, WireNode};
 use std::{
@@ -128,6 +127,7 @@ pub(crate) fn input(
         active,
         ..
     } = request;
+    let configuration = configuration.bound_callback()?;
     let argument_recipes = domain.argument_nodes()?;
     let signature = callback_signature(&configuration.ty)?.ok_or("expected source callback")?;
     let unit = matches!(&signature.return_type, syn::Type::Tuple(t) if t.elems.is_empty());

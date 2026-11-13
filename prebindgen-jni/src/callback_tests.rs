@@ -1,5 +1,5 @@
 use super::*;
-use prebindgen_declarations::frontend::DeclOutputLeafOp;
+use crate::JniOutputLeafOp;
 
 const SOURCE: &str = "
 pub type Value=String;
@@ -26,7 +26,7 @@ fn builder() -> JniGenBuilder {
         )
         .set_package_prefix("example")
 }
-fn declaration() -> DeclCallback {
+fn declaration() -> DeclJniCallback {
     callback!(impl Fn(Value, i64) -> Value)
         .name("Handler")
         .expand_param(0, expand_return!(Value).field(fun!(number)))
@@ -88,9 +88,9 @@ fn local_result_and_nested_constructor_overrides_inherit_arguments() {
                 .fun(
                     fun!(nested).expand_param(
                         "handlers",
-                        DeclInput::for_type(
+                        JniInput::for_type(
                             syn::parse_quote!(Handler),
-                            DeclInput::constructor(
+                            JniInput::constructor(
                                 "make",
                                 [callback!(impl Fn(Value, i64) -> Value)
                                     .name("Nested")
@@ -323,7 +323,7 @@ fn callback_overrides_validate_positions_types_and_foreign_names() {
     for (local, expected) in [
         (
             callback!(impl Fn(Value, i64) -> Value)
-                .expand_param(2, DeclOutput::Leaf(DeclOutputLeafOp::Value)),
+                .expand_param(2, JniOutput::Leaf(JniOutputLeafOp::Value)),
             "out of range",
         ),
         (
@@ -505,12 +505,13 @@ fn c_preserves_automatic_callbacks_and_rejects_callback_specific_settings() {
         )
         .unwrap();
         let declaration = if configured {
-            fun!(f).expand_param(
+            prebindgen_c::fun!(f).expand_param(
                 "cb",
-                callback!(impl Fn(i64) -> i64).expand_return(expand_param!(i64).variant_self()),
+                prebindgen_c::callback!(impl Fn(i64) -> i64)
+                    .expand_return(prebindgen_c::expand_param!(i64).variant_self()),
             )
         } else {
-            fun!(f)
+            prebindgen_c::fun!(f)
         };
         let result = prebindgen_c::Cbindgen::new(flat)
             .function(declaration)

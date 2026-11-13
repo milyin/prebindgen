@@ -63,7 +63,7 @@ pub enum DeclJniClass {
     /// A source payload enum represented as a sealed interface.
     Sealed(DeclJniSealedClass),
     /// A retained callback interface and its signature defaults.
-    Callback(prebindgen_declarations::DeclCallback),
+    Callback(crate::DeclJniCallback),
 }
 impl From<DeclJniPtrClass> for DeclJniClass {
     fn from(value: DeclJniPtrClass) -> Self {
@@ -85,8 +85,8 @@ impl From<DeclJniEnumClass> for DeclJniClass {
         Self::Enum(value)
     }
 }
-impl From<prebindgen_declarations::DeclCallback> for DeclJniClass {
-    fn from(value: prebindgen_declarations::DeclCallback) -> Self {
+impl From<crate::DeclJniCallback> for DeclJniClass {
+    fn from(value: crate::DeclJniCallback) -> Self {
         Self::Callback(value)
     }
 }
@@ -868,14 +868,13 @@ mod group_tests {
         }));
         prepare(&mut flat).unwrap();
         let codec = JniCodec::declared();
-        let defaults =
-            prebindgen_declarations::DeclDefaults::new(&flat, vec![], vec![], vec![]).unwrap();
-        let request = DeclOutput::Unary {
-            operation: DeclOutputUnary::Sequence {
+        let defaults = crate::DeclJniDefaults::new(&flat, vec![], vec![], vec![]).unwrap();
+        let request = JniOutput::Unary {
+            operation: JniOutputUnary::Sequence {
                 delivery: prebindgen_declarations::SequenceDelivery::Callback,
                 mode: Some(ProjectionMode::Owned),
             },
-            child: Box::new(DeclOutput::Leaf(DeclOutputLeafOp::Projected(
+            child: Box::new(JniOutput::Leaf(JniOutputLeafOp::Projected(
                 Projection::owned(),
             ))),
         };

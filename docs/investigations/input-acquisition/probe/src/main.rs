@@ -1,6 +1,7 @@
 //! Regression controls for the former mixed-input generation restriction.
+use prebindgen_c::fun;
 use prebindgen_c::{CBindings, CCodec, Cbindgen};
-use prebindgen_declarations::{fun, Codec, Condition, InputLeaf};
+use prebindgen_declarations::{Codec, Condition, InputLeaf};
 use prebindgen_flat::Result;
 use quote::format_ident;
 

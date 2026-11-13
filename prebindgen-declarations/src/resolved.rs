@@ -29,11 +29,12 @@ impl<C: Codec> Schema for ResolvedSchema<C> {
 pub struct ResolvedModule<C: Codec> {
     /// Source module's foreign declarations and generation settings.
     pub source: <C::Schema as Schema>::Module,
-    compilation: Option<(C, C::Extra)>,
+    /// Compiler and occurrence settings; absent only in an unfinished model.
+    pub compilation: Option<(C, C::Extra)>,
 }
 impl<C: Codec> ResolvedModule<C> {
     /// Own the adapter and occurrence settings needed to compile this model.
-    /// Language generators can build resolved trees directly without DeclDefaults.
+    /// Language generators can build resolved trees directly with their own source resolver.
     pub fn new(source: <C::Schema as Schema>::Module, codec: C, extra: C::Extra) -> Self {
         Self {
             source,
@@ -50,87 +51,12 @@ impl<C: Codec> Default for ResolvedModule<C> {
     }
 }
 
-pub(crate) struct FunctionRecipe<C: Codec> {
-    pub inputs: Vec<Option<ResolvedInput<C>>>,
-    pub output: Option<ResolvedOutput<C>>,
-}
-
-impl DeclDefaults {
-    /// Resolve function occurrences into an independently compilable Flat.
-    ///
-    /// Defaults and local overrides are consumed here. The returned model owns
-    /// its compiler policy and occurrence settings; drop this DeclDefaults value
-    /// before calling [`compile_resolved`] if desired.
-    pub fn resolve<C: DeclCodec>(
-        &self,
-        flat: Flat<C::Schema>,
-        codec: C,
-        declarations: &[DeclFunction],
-        extra: C::Extra,
-    ) -> Result<Flat<ResolvedSchema<C>>> {
-        let mut recipes = BTreeMap::new();
-        for decl in declarations {
-            let recipe = self
-                .resolve_function(&flat, &codec, decl, &extra)
-                .map_err(|e| format!("{}: {e}", decl.name))?;
-            if recipes.insert(decl.name.clone(), recipe).is_some() {
-                return Err(format!("duplicate function declaration `{}`", decl.name));
-            }
-        }
-        let functions = flat
-            .functions
-            .into_iter()
-            .map(|(name, function)| {
-                let recipe = recipes.remove(&name).unwrap_or_else(|| FunctionRecipe {
-                    inputs: (0..function.params.len()).map(|_| None).collect(),
-                    output: None,
-                });
-                let params = function
-                    .params
-                    .into_iter()
-                    .zip(recipe.inputs)
-                    .map(|(p, tree)| Param {
-                        name: p.name,
-                        ty: TypeUse {
-                            ty: p.ty.ty,
-                            slot: tree
-                                .map(ResolvedSlot::Tree)
-                                .or_else(|| p.ty.slot.map(ResolvedSlot::Prepared)),
-                        },
-                    })
-                    .collect();
-                (
-                    name,
-                    Function {
-                        metadata: function.metadata,
-                        name: function.name,
-                        path: function.path,
-                        location: function.location,
-                        params,
-                        ret: TypeUse {
-                            ty: function.ret.ty,
-                            slot: recipe
-                                .output
-                                .map(ResolvedSlot::Tree)
-                                .or_else(|| function.ret.slot.map(ResolvedSlot::Prepared)),
-                        },
-                    },
-                )
-            })
-            .collect();
-        Ok(Flat {
-            metadata: ResolvedModule {
-                source: flat.metadata,
-                compilation: Some((codec, extra)),
-            },
-            functions,
-            records: flat.records,
-            enums: flat.enums,
-            payload_enums: flat.payload_enums,
-            types: flat.types,
-            guards: flat.guards,
-        })
-    }
+/// Independently resolved conversions of one function's parameter and result occurrences.
+pub struct FunctionRecipe<InTree, OutTree> {
+    /// Source-ordered parameter recipes; None preserves a supplied converter.
+    pub inputs: Vec<Option<InTree>>,
+    /// Result recipe; None preserves a supplied converter.
+    pub output: Option<OutTree>,
 }
 
 /// Compile a resolved Flat without any external configuration or default registry.
@@ -200,14 +126,20 @@ fn separate<T, P>(slot: Option<ResolvedSlot<T, P>>) -> (Option<T>, Option<P>) {
     }
 }
 
-pub(crate) fn compile_function<C: Codec>(
+/// Compile and atomically install the resolved conversions of one function.
+pub fn compile_function<C: Codec>(
     flat: &mut Flat<C::Schema>,
     codec: &C,
     name: &str,
-    recipe: FunctionRecipe<C>,
+    recipe: FunctionRecipe<ResolvedInput<C>, ResolvedOutput<C>>,
     extra: &C::Extra,
 ) -> Result<()> {
     let source = flat.function(name)?;
+    if recipe.inputs.len() != source.params.len() {
+        return Err(format!(
+            "`{name}`: input recipe count does not match source parameters"
+        ));
+    }
     let mut inputs = Vec::with_capacity(source.params.len());
     for (index, (p, tree)) in source.params.iter().zip(recipe.inputs).enumerate() {
         let plan = if let Some(tree) = tree {
@@ -255,4 +187,86 @@ pub(crate) fn compile_function<C: Codec>(
         dest.ret.slot = Some(plan.into());
     }
     Ok(())
+}
+
+/// Resolve declarations into a complete Flat using the caller's resolution function.
+pub fn resolve_bindings<C: Codec, I, O, E>(
+    flat: Flat<C::Schema>,
+    codec: C,
+    declarations: &[DeclFunction<I, O, E>],
+    mut resolve: impl FnMut(
+        &Flat<C::Schema>,
+        &C,
+        &DeclFunction<I, O, E>,
+        &C::Extra,
+    ) -> Result<FunctionRecipe<ResolvedInput<C>, ResolvedOutput<C>>>,
+    extra: C::Extra,
+) -> Result<Flat<ResolvedSchema<C>>> {
+    let mut recipes = BTreeMap::new();
+    for decl in declarations {
+        let recipe =
+            resolve(&flat, &codec, decl, &extra).map_err(|e| format!("{}: {e}", decl.name))?;
+        if recipe.inputs.len() != flat.function(&decl.name)?.params.len() {
+            return Err(format!(
+                "`{}`: input recipe count does not match source parameters",
+                decl.name
+            ));
+        }
+        if recipes.insert(decl.name.clone(), recipe).is_some() {
+            return Err(format!("duplicate function declaration `{}`", decl.name));
+        }
+    }
+    let functions = flat
+        .functions
+        .into_iter()
+        .map(|(name, function)| {
+            let recipe = recipes.remove(&name).unwrap_or_else(|| FunctionRecipe {
+                inputs: (0..function.params.len()).map(|_| None).collect(),
+                output: None,
+            });
+            let params = function
+                .params
+                .into_iter()
+                .zip(recipe.inputs)
+                .map(|(p, tree)| Param {
+                    name: p.name,
+                    ty: TypeUse {
+                        ty: p.ty.ty,
+                        slot: tree
+                            .map(ResolvedSlot::Tree)
+                            .or_else(|| p.ty.slot.map(ResolvedSlot::Prepared)),
+                    },
+                })
+                .collect();
+            (
+                name,
+                Function {
+                    metadata: function.metadata,
+                    name: function.name,
+                    path: function.path,
+                    location: function.location,
+                    params,
+                    ret: TypeUse {
+                        ty: function.ret.ty,
+                        slot: recipe
+                            .output
+                            .map(ResolvedSlot::Tree)
+                            .or_else(|| function.ret.slot.map(ResolvedSlot::Prepared)),
+                    },
+                },
+            )
+        })
+        .collect();
+    Ok(Flat {
+        metadata: ResolvedModule {
+            source: flat.metadata,
+            compilation: Some((codec, extra)),
+        },
+        functions,
+        records: flat.records,
+        enums: flat.enums,
+        payload_enums: flat.payload_enums,
+        types: flat.types,
+        guards: flat.guards,
+    })
 }

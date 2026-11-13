@@ -1,7 +1,8 @@
-//! Adapter-owned conversion operations, after declaration requests have been resolved.
+//! Adapter-owned conversion metadata for source resolution and compilation.
+use crate::COutputRequests;
 use prebindgen_declarations::{
-    CallbackArgumentOwnership, CallbackOperation, InputNode, InputOps, OutputNode, OutputOps,
-    Projection, ProjectionMode, SequenceDelivery,
+    CallbackArgumentOwnership, InputNode, InputOps, OutputNode, OutputOps, Projection,
+    ProjectionMode, SequenceDelivery,
 };
 use prebindgen_flat::Result;
 use std::convert::Infallible;
@@ -15,7 +16,7 @@ impl InputOps for CInputOps {
     type Leaf = CInputLeafOp;
     type Unary = CInputUnary;
     type Branch = CInputBranch;
-    type Arrow = Box<CallbackOperation>;
+    type Arrow = CInputArrow;
 }
 impl OutputOps for COutputOps {
     type Leaf = COutputLeafOp;
@@ -23,10 +24,38 @@ impl OutputOps for COutputOps {
     type Branch = COutputBranch;
     type Arrow = Infallible;
 }
-/// Resolved input conversion for this adapter.
-pub type CInput = InputNode<CInputOps, COutputOps>;
-/// Resolved output conversion for this adapter.
-pub type COutput = OutputNode<CInputOps, COutputOps>;
+/// Input conversion for this adapter. Leaf requests default to Infallible.
+/// Metadata from one structural shape cannot be used at another:
+/// ```compile_fail
+/// use prebindgen_c::{CInput,CInputUnary,CInputBranch};
+/// let _:CInput=CInput::Unary {
+///     operation:CInputBranch::EnumFields,
+///     child:Box::new(CInput::None),
+/// };
+/// ```
+pub type CInput<InRequest = Infallible, OutRequest = Infallible> =
+    InputNode<CInputOps, COutputOps, InRequest, OutRequest>;
+/// Output conversion for this adapter. Leaf requests default to Infallible.
+pub type COutput<InRequest = Infallible, OutRequest = Infallible> =
+    OutputNode<CInputOps, COutputOps, InRequest, OutRequest>;
+
+/// Incoming callback configuration and its resolved retained-callback binding.
+#[derive(Clone, Debug)]
+pub enum CInputArrow {
+    /// Resolve explicit argument/result conversions against callback defaults.
+    Callback(Box<prebindgen_declarations::CallbackRequest>),
+    /// Canonical callback signature and settings with resolved argument/result children.
+    BoundCallback(Box<prebindgen_declarations::CallbackOperation>),
+}
+
+impl CInputArrow {
+    pub(crate) fn bound_callback(&self) -> Result<&prebindgen_declarations::CallbackOperation> {
+        match self {
+            Self::BoundCallback(callback) => Ok(callback),
+            Self::Callback(_) => Err("resolve callback defaults before compilation".into()),
+        }
+    }
+}
 
 /// Terminal input operations.
 #[derive(Clone, Debug)]
@@ -37,6 +66,12 @@ pub enum CInputLeafOp {
 /// Single-child input operations.
 #[derive(Clone, Debug)]
 pub enum CInputUnary {
+    /// Apply the child conversion at this source type, including nested occurrences.
+    ForType {
+        /// Source type at which the child applies.
+        ty: Box<syn::Type>,
+    },
+
     /// Apply an explicitly selected Rust value conversion.
     Convert {
         /// Checked source/representation conversion.
@@ -52,6 +87,16 @@ pub enum CInputUnary {
 /// Multiple-child input operations.
 #[derive(Clone, Debug)]
 pub enum CInputBranch {
+    /// Partially specified enum fields; children are variant branches.
+    EnumFields,
+    /// Partially specified fields of one source variant.
+    VariantFields {
+        /// Source variant name.
+        variant: String,
+        /// Source field names corresponding to the child conversions.
+        fields: Vec<String>,
+    },
+
     /// Convert source record fields in declaration order.
     Fields,
     /// Select one constructor alternative by its incoming tag.
@@ -82,6 +127,17 @@ pub enum COutputLeafOp {
 /// Single-child output operations.
 #[derive(Clone, Debug)]
 pub enum COutputUnary {
+    /// Apply the child conversion at this source type, including nested occurrences.
+    ForType {
+        /// Source type at which the child applies.
+        ty: Box<syn::Type>,
+    },
+    /// Select per-element callback delivery of the child's sequence.
+    SequenceCallback {
+        /// Permit decomposition of an ordinary collection identity.
+        structural: bool,
+    },
+
     /// Ownership contract of one callable argument; interpreted by its arrow.
     CallbackArgument {
         /// Whether produced foreign owners expire at the end of invocation.
@@ -125,6 +181,23 @@ pub enum COutputUnary {
 /// Multiple-child output operations.
 #[derive(Clone, Debug)]
 pub enum COutputBranch {
+    /// Partially specified enum fields; children are variant branches.
+    EnumFields,
+    /// Partially specified fields of one source variant.
+    VariantFields {
+        /// Source variant name.
+        variant: String,
+        /// Source field names corresponding to the child conversions.
+        fields: Vec<String>,
+    },
+    /// Partially specified record fields, in the same order as the child conversions.
+    NamedFields {
+        /// Source field names corresponding to the child conversions.
+        fields: Vec<String>,
+        /// Observe or move the selected fields.
+        mode: ProjectionMode,
+    },
+
     /// Convert source record fields in declaration order.
     Fields,
     /// Move source record fields into their conversions.
@@ -144,64 +217,8 @@ pub enum COutputBranch {
     Arguments,
 }
 
-pub(crate) trait CInputParts {
-    fn variant_fields(&self) -> Result<&[Self]>
-    where
-        Self: Sized;
-}
-impl CInputParts for CInput {
-    fn variant_fields(&self) -> Result<&[Self]> {
-        match self {
-            Self::Branch {
-                operation: CInputBranch::Variant,
-                children,
-            } => Ok(children),
-            _ => Err("enum children must be variant branches".into()),
-        }
-    }
-}
-pub(crate) trait COutputParts {
-    fn variant_fields(&self) -> Result<&[Self]>
-    where
-        Self: Sized;
-    fn argument_nodes(&self) -> Result<&[Self]>
-    where
-        Self: Sized;
-    fn callback_argument_parts(&self) -> Result<(CallbackArgumentOwnership, &Self)>;
-}
-impl COutputParts for COutput {
-    fn variant_fields(&self) -> Result<&[Self]> {
-        match self {
-            Self::Branch {
-                operation: COutputBranch::Variant,
-                children,
-            } => Ok(children),
-            _ => Err("enum children must be variant branches".into()),
-        }
-    }
-    fn argument_nodes(&self) -> Result<&[Self]> {
-        match self {
-            Self::None => Ok(&[]),
-            Self::Branch {
-                operation: COutputBranch::Arguments,
-                children,
-            } => Ok(children),
-            _ => Err("callback domain requires an argument branch or None".into()),
-        }
-    }
-    fn callback_argument_parts(&self) -> Result<(CallbackArgumentOwnership, &Self)> {
-        match self {
-            Self::Unary {
-                operation: COutputUnary::CallbackArgument { ownership },
-                child,
-            } => Ok((*ownership, child)),
-            _ => Err("callback argument requires an ownership contract".into()),
-        }
-    }
-}
-
 pub(crate) fn sequence_callback(
-    cx: &mut prebindgen_declarations::DeclResolve<'_, crate::CCodec>,
+    cx: &mut crate::CResolve<'_>,
     ty: &syn::Type,
     mut output: COutput,
     structural_default: bool,
@@ -258,29 +275,24 @@ pub(crate) fn sequence_callback(
         fn structural(
             ty: &syn::Type,
             output: &COutput,
-        ) -> Option<
-            prebindgen_declarations::DeclOutput<
-                prebindgen_declarations::DeclInputRequest,
-                prebindgen_declarations::DeclOutputRequest,
-            >,
-        > {
+        ) -> Option<crate::COutput<crate::CInputRequest, crate::COutputRequest>> {
             match output {
                 COutput::Leaf(COutputLeafOp::Value)
                     if prebindgen_flat::sequence_parts(ty).is_some() =>
                 {
-                    Some(prebindgen_declarations::DeclOutput::Unary {
-                        operation: prebindgen_declarations::frontend::DeclOutputUnary::Sequence {
+                    Some(crate::COutput::Unary {
+                        operation: crate::COutputUnary::Sequence {
                             delivery: SequenceDelivery::Callback,
                             mode: None,
                         },
-                        child: Box::new(prebindgen_declarations::DeclOutput::auto()),
+                        child: Box::new(crate::COutput::auto()),
                     })
                 }
                 COutput::Unary {
                     operation: COutputUnary::Optional,
                     child,
-                } => Some(prebindgen_declarations::DeclOutput::Unary {
-                    operation: prebindgen_declarations::frontend::DeclOutputUnary::Optional,
+                } => Some(crate::COutput::Unary {
+                    operation: crate::COutputUnary::Optional,
                     child: Box::new(structural(prebindgen_flat::option_inner(ty)?, child)?),
                 }),
                 _ => None,
