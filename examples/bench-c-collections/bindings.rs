@@ -1,6 +1,9 @@
 use prebindgen_c::prelude::*;
-use prebindgen_c::{COutputUnary,SequenceDelivery};
-use prebindgen_c::{expand_param,expand_return,fields,fun,CInputRequest,COutput,COutputRequest};
+use prebindgen_c::COutputUnary;
+use prebindgen_c::{
+    expand_param, expand_return, fields, fun, CInputRequest, COutput, COutputRequest,
+};
+use prebindgen_declarations::SequenceDelivery;
 fn rows(element: COutput<CInputRequest, COutputRequest>) -> COutput<CInputRequest, COutputRequest> {
     COutput::Unary {
         operation: COutputUnary::Sequence {

@@ -348,7 +348,7 @@ impl DeclJniDefaults {
                     &input_body((**input).clone()),
                     tree,
                     stack,
-                    |ty, tree, stack| resolve(ty, tree, stack),
+                    resolve,
                     |child| JniInput::Unary {
                         operation: JniInputUnary::Optional,
                         child: Box::new(child),
@@ -457,7 +457,7 @@ impl DeclJniDefaults {
                     &JniInput::auto(),
                     &JniOutput::auto(),
                     stack,
-                    |ty, tree, stack| resolve(ty, tree, stack),
+                    resolve,
                     |ty, tree, ownership| {
                         Ok(self
                             .output(flat, codec, ty, tree, extra, &mut vec![], true)?
@@ -769,7 +769,7 @@ impl DeclJniDefaults {
                     &output_body((**output).clone()),
                     tree,
                     stack,
-                    |ty, tree, stack| resolve(ty, tree, stack),
+                    resolve,
                     |child| {
                         if matches!(&child, JniOutput::Leaf(JniOutputLeafOp::Discard)) {
                             child

@@ -1,10 +1,10 @@
 //! Source-shape checks and controls for Zenoh's nested expansion requirements.
-use prebindgen_jni::prelude::*;
 use super::{items, rejected};
+use prebindgen_jni::prelude::*;
 
-use prebindgen_jni::{expand_return,fun,JniOutput};
 use prebindgen_flat::{Flat, Result};
 use prebindgen_jni::{callback, data_class, package, JniGen};
+use prebindgen_jni::{expand_return, fun, JniOutput};
 use quote::ToTokens;
 use std::{collections::BTreeMap, path::Path, process::Command};
 
@@ -156,7 +156,10 @@ pub fn run() -> Result<()> {
             .items(items(source))
             .set_package_prefix("example")
             .expand(expand_return!(NativePayload).field(fun!(payload_size)))
-            .expand(expand_return!(Envelope).view(JniOutput::OwnedFields(vec![JniOutput::auto()])))
+            .expand(expand_return!(Envelope).view(JniOutput::Branch {
+                operation: prebindgen_jni::JniOutputBranch::OwnedFields,
+                children: vec![JniOutput::auto()],
+            }))
     };
     let expanded = builder()
         .package(

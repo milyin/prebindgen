@@ -2,9 +2,9 @@
 use prebindgen_jni::prelude::*;
 mod zenoh;
 
-use prebindgen_jni::{fun,JniInput,JniOutput};
 use prebindgen_flat::{Flat, Result};
 use prebindgen_jni::{callback, enum_class, package, sealed_class, JniGen};
+use prebindgen_jni::{fun, JniInput, JniOutput};
 fn items(source: &str) -> Vec<(syn::Item, prebindgen::SourceLocation)> {
     syn::parse_file(source)
         .unwrap()
@@ -33,7 +33,7 @@ fn main() -> Result<()> {
     let source = "pub enum State{Idle=4,Ready=9}pub fn echo(value:State)->State{value}";
     let c = prebindgen_c::Cbindgen::new(Flat::parse(items(source))?)
         .enum_type("state", syn::parse_quote!(State))
-        .function(fun!(echo))
+        .function(prebindgen_c::fun!(echo))
         .build()?;
     syn::parse_file(&c.rust).map_err(|e| e.to_string())?;
     let jni = JniGen::builder()
@@ -61,7 +61,7 @@ fn main() -> Result<()> {
     let source = "pub fn echo(value:Result<i64,String>)->Result<i64,String>{value}";
     let c = prebindgen_c::Cbindgen::new(Flat::parse(items(source))?)
         .tagged_union("decision", syn::parse_quote!(Result<i64,String>))
-        .function(fun!(echo).result_as_value())
+        .function(prebindgen_c::fun!(echo).result_as_value())
         .panic()
         .build()?;
     syn::parse_file(&c.rust).map_err(|e| e.to_string())?;

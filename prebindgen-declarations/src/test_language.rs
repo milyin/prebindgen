@@ -1191,7 +1191,7 @@ impl TestDefaults {
                     &input_body((**input).clone()),
                     tree,
                     stack,
-                    |ty, tree, stack| resolve(ty, tree, stack),
+                    resolve,
                     |child| TestInput::Unary {
                         operation: TestInputUnary::Optional,
                         child: Box::new(child),
@@ -1300,7 +1300,7 @@ impl TestDefaults {
                     &TestInput::auto(),
                     &TestOutput::auto(),
                     stack,
-                    |ty, tree, stack| resolve(ty, tree, stack),
+                    resolve,
                     |ty, tree, ownership| {
                         Ok(self
                             .output(flat, codec, ty, tree, extra, &mut vec![], true)?
@@ -1597,7 +1597,7 @@ impl TestDefaults {
                     &output_body((**output).clone()),
                     tree,
                     stack,
-                    |ty, tree, stack| resolve(ty, tree, stack),
+                    resolve,
                     |child| {
                         if matches!(&child, TestOutput::Leaf(TestOutputLeafOp::Discard)) {
                             child

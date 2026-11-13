@@ -1,10 +1,11 @@
 //! Independent input/output entry-point controls for the completed contracts.
 use prebindgen_conversions::{InputFragment, OutputFragment};
-use prebindgen_declarations::{Codec,Condition};
+use prebindgen_declarations::{Codec, Condition};
 use prebindgen_flat::{Conversion, InputConversion, OutputConversion, Result, Schema};
 use prebindgen_jni::{
-    fun, package, JniBranch, JniChain, JniContext, JniGen, JniInputConverter, JniOutputConverter, JniSchema, JniWire,
-    KotlinContext, KotlinInput, KotlinInputConversion, KotlinOutput, KotlinOutputConversion,
+    fun, package, JniBranch, JniChain, JniContext, JniGen, JniInputConverter, JniOutputConverter,
+    JniSchema, JniWire, KotlinContext, KotlinInput, KotlinInputConversion, KotlinOutput,
+    KotlinOutputConversion,
 };
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -95,7 +96,9 @@ fn main() -> Result<()> {
         as fn(&prebindgen_flat::Flat<JniSchema<IndependentInput>>) -> Result<JniGen>;
     #[cfg(feature = "independent-output")]
     let _ = independent_output
-        as fn(&prebindgen_flat::Flat<JniSchema<JniInputConverter, IndependentOutput>>) -> Result<JniGen>;
+        as fn(
+            &prebindgen_flat::Flat<JniSchema<JniInputConverter, IndependentOutput>>,
+        ) -> Result<JniGen>;
     fn input_contract<T: InputConversion + KotlinInputConversion>() {}
     fn output_contract<T: OutputConversion + KotlinOutputConversion>() {}
     input_contract::<IndependentInput>();
@@ -127,7 +130,7 @@ fn main() -> Result<()> {
                     &Condition::default(),
                 ),
             )?;
-            plan.statements
+            plan.storage
                 .extend(quote!(let __pb_contract_probe_marker = ();));
             flat.function_mut("echo")?.params[0].ty.slot = Some(plan.into());
             Ok(())

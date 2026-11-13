@@ -1,5 +1,4 @@
-
-use prebindgen_jni::{expand_param,expand_return,fun};
+use prebindgen_jni::{expand_param, expand_return, fun};
 use prebindgen_jni::{package, ptr_class, JniGen};
 fn main() {
     let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());

@@ -335,7 +335,7 @@ impl DeclCDefaults {
                     &input_body((**input).clone()),
                     tree,
                     stack,
-                    |ty, tree, stack| resolve(ty, tree, stack),
+                    resolve,
                     |child| CInput::Unary {
                         operation: CInputUnary::Optional,
                         child: Box::new(child),
@@ -443,7 +443,7 @@ impl DeclCDefaults {
                     &CInput::auto(),
                     &COutput::auto(),
                     stack,
-                    |ty, tree, stack| resolve(ty, tree, stack),
+                    resolve,
                     |ty, tree, ownership| {
                         Ok(self
                             .output(flat, codec, ty, tree, extra, &mut vec![], true)?
@@ -728,7 +728,7 @@ impl DeclCDefaults {
                     &output_body((**output).clone()),
                     tree,
                     stack,
-                    |ty, tree, stack| resolve(ty, tree, stack),
+                    resolve,
                     |child| {
                         if matches!(&child, COutput::Leaf(COutputLeafOp::Discard)) {
                             child
