@@ -30,7 +30,7 @@ pub fn expand_param(ty: Type) -> DeclCExpandParam {
         || CInput::Leaf(CInputLeafOp::Value),
         |ty, alternatives, extension| {
             let input = alternatives.build(CInput::selector, CInput::auto, |child| CInput::Unary {
-                operation: CInputUnary::Temporary,
+                operation: (CInputUnary::Temporary).into(),
                 child: Box::new(child),
             });
             let _ = extension;
@@ -47,7 +47,7 @@ pub fn expand_return(ty: Type) -> DeclCExpandReturn {
                 function,
                 |name| COutput::getter(name, COutput::auto()),
                 |name, child| COutput::Unary {
-                    operation: COutputUnary::Named { name },
+                    operation: (COutputUnary::Named { name }).into(),
                     child: Box::new(child),
                 },
             )
@@ -67,18 +67,28 @@ pub fn fields(function: syn::Ident) -> DeclCFields {
     prebindgen_declarations::DeclFields::new(
         function,
         |output| match output {
-            COutput::Request(COutputRequest::ForType { ty, output }) if matches!(output.as_ref(),COutput::Branch {operation:COutputBranch::Combine,children} if children.is_empty()) => {
+            COutput::Unary {
+                operation:
+                    prebindgen_declarations::Operation::Request(COutputRequest::ForType { ty }),
+                child: output,
+            } if matches!(output.as_ref(),COutput::Branch {operation:prebindgen_declarations::Operation::Resolved(COutputBranch::Combine),children} if children.is_empty()) => {
                 COutput::for_type(*ty, COutput::Leaf(COutputLeafOp::Discard))
             }
             output => output,
         },
         |function, overrides, _extension| {
+            let (fields, children) = overrides.into_iter().unzip();
             COutput::getter(
                 function,
-                COutput::Request(COutputRequest::NamedFields {
-                    overrides,
-                    mode: prebindgen_declarations::ProjectionMode::Borrowed,
-                }),
+                COutput::Branch {
+                    operation: prebindgen_declarations::Operation::Request(
+                        COutputRequest::NamedFields {
+                            fields,
+                            mode: prebindgen_declarations::ProjectionMode::Borrowed,
+                        },
+                    ),
+                    children,
+                },
             )
         },
     )
@@ -93,11 +103,28 @@ pub type DeclCCallback = prebindgen_declarations::DeclCallback<
     CInput<CInputRequest, COutputRequest>,
     COutput<CInputRequest, COutputRequest>,
 >;
-impl From<DeclCCallback> for CInputRequest {
-    fn from(decl: DeclCCallback) -> Self {
-        Self::ForType {
-            ty: Box::new(decl.ty.clone()),
-            input: Box::new(CInput::Request(Self::Callback(Box::new(decl)))),
-        }
+impl
+    prebindgen_declarations::CallbackInput<
+        CInput<CInputRequest, COutputRequest>,
+        COutput<CInputRequest, COutputRequest>,
+    > for CInputRequest
+{
+    fn callback_input(declaration: DeclCCallback) -> CInput<CInputRequest, COutputRequest> {
+        prebindgen_declarations::callback_input(
+            declaration,
+            CInput::auto,
+            |children| COutput::Branch {
+                operation: COutputBranch::Arguments.into(),
+                children,
+            },
+            |metadata, domain, codomain| CInput::Arrow {
+                operation: prebindgen_declarations::Operation::Request(Self::Callback(Box::new(
+                    metadata,
+                ))),
+                domain: Box::new(domain),
+                codomain: Box::new(codomain),
+            },
+            CInput::for_type,
+        )
     }
 }

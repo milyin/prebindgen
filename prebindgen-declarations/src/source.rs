@@ -94,7 +94,7 @@ pub fn resolve_constructor<I: InputOps, O: OutputOps, IR, OR>(
         return Err(format!("constructor `{function}`: wrong argument count"));
     }
     Ok(InputNode::Branch {
-        operation: operation(function.to_owned()),
+        operation: (operation(function.to_owned())).into(),
         children: f
             .params
             .iter()
@@ -128,11 +128,46 @@ pub fn resolve_record_fields<M: Schema, T, R>(
         .collect()
 }
 
+/// Associate explicit structural children with source field names.
+/// Checks correspondence and duplicates before any source-dependent conversion runs.
+pub fn named_children<'a, T>(
+    names: &[String],
+    children: &'a [T],
+) -> Result<BTreeMap<String, &'a T>> {
+    if names.len() != children.len() {
+        return Err("field name and child counts do not match".into());
+    }
+    let mut fields = BTreeMap::new();
+    for (name, child) in names.iter().zip(children) {
+        if fields.insert(name.clone(), child).is_some() {
+            return Err(format!("duplicate field override `{name}`"));
+        }
+    }
+    Ok(fields)
+}
+/// Associate partial variant branches with their source variant and field names.
+pub fn enum_children<T>(
+    children: &[T],
+    fields: impl Fn(&T) -> Result<(&str, &[String], &[T])>,
+) -> Result<BTreeMap<String, BTreeMap<String, &T>>> {
+    let mut variants = BTreeMap::new();
+    for child in children {
+        let (variant, names, children) = fields(child)?;
+        if variants
+            .insert(variant.to_owned(), named_children(names, children)?)
+            .is_some()
+        {
+            return Err(format!("duplicate enum variant override `{variant}`"));
+        }
+    }
+    Ok(variants)
+}
+
 /// Resolve named enum field overrides in source order and diagnose unknown names.
-pub fn resolve_enum_fields<M: Schema, T, R>(
+pub fn resolve_enum_fields<M: Schema, T, R, B: std::borrow::Borrow<T>>(
     flat: &Flat<M>,
     ty: &Type,
-    entries: &BTreeMap<String, BTreeMap<String, T>>,
+    entries: &BTreeMap<String, BTreeMap<String, B>>,
     default: &T,
     mut resolve: impl FnMut(&Type, &T) -> Result<R>,
 ) -> Result<Vec<Vec<R>>> {
@@ -146,7 +181,10 @@ pub fn resolve_enum_fields<M: Schema, T, R>(
             arm.fields
                 .iter()
                 .map(|field| {
-                    let recipe = fields.and_then(|f| f.get(&field.key())).unwrap_or(default);
+                    let recipe = fields
+                        .and_then(|f| f.get(&field.key()))
+                        .map(std::borrow::Borrow::borrow)
+                        .unwrap_or(default);
                     resolve(&field.ty, recipe)
                         .map_err(|e| format!("{}::{}.{}: {e}", type_key(ty), arm.name, field.key()))
                 })
@@ -242,10 +280,10 @@ pub fn resolve_getter<M: Schema, T, R>(
 }
 
 /// Resolve record fields by source name, inheriting defaults for unspecified members.
-pub fn resolve_named_fields<M: Schema, T, R>(
+pub fn resolve_named_fields<M: Schema, T, R, B: std::borrow::Borrow<T>>(
     flat: &Flat<M>,
     ty: &Type,
-    overrides: &BTreeMap<String, T>,
+    overrides: &BTreeMap<String, B>,
     default: &T,
     mut resolve: impl FnMut(&Type, &T) -> Result<R>,
 ) -> Result<Vec<R>> {
@@ -265,6 +303,7 @@ pub fn resolve_named_fields<M: Schema, T, R>(
                 &f.ty,
                 overrides
                     .get(f.name.to_string().trim_start_matches("r#"))
+                    .map(std::borrow::Borrow::borrow)
                     .unwrap_or(default),
             )
         })
@@ -369,17 +408,20 @@ pub fn override_output_field<T>(
     mut tree: T,
     name: String,
     output: T,
-    fields: impl Fn(&mut T) -> Option<&mut BTreeMap<String, T>>,
+    fields: impl Fn(&mut T) -> Option<(&mut Vec<String>, &mut Vec<T>)>,
     child: impl Fn(&mut T) -> Option<&mut T>,
 ) -> T {
     let mut current = &mut tree;
     loop {
-        // Keep the mutable borrows separate: either edit this map or descend.
-        if let Some(overrides) = fields(current) {
-            assert!(
-                overrides.insert(name, output).is_none(),
-                "duplicate field override"
+        if let Some((names, children)) = fields(current) {
+            assert_eq!(
+                names.len(),
+                children.len(),
+                "field name and child counts do not match"
             );
+            assert!(!names.contains(&name), "duplicate field override");
+            names.push(name);
+            children.push(output);
             return tree;
         }
         current = child(current).expect("field override requires named field decomposition");
@@ -429,13 +471,127 @@ pub fn output_value_conversion<M: Schema>(
     Ok(conversion)
 }
 
-/// Merge callback defaults and local overrides, then resolve arguments and the result in opposite directions.
+/// A pending callback's explicit structural domain and codomain.
+/// Argument indices and source/adapter settings are metadata; recipes are borrowed
+/// from ordinary tree children and are never embedded in request payloads.
+pub struct CallbackTree<'a, I, O, E = std::convert::Infallible> {
+    /// Metadata attached to the arrow operation.
+    pub request: &'a crate::CallbackRequest<E>,
+    /// Explicit argument recipes from its domain, in the metadata's index order.
+    pub arguments: &'a [O],
+    /// Codomain recipe; used only when an explicit result override was declared.
+    pub result: &'a I,
+}
+struct CallbackChoices<'a, I, O, E> {
+    ty: &'a Type,
+    foreign: Option<&'a str>,
+    namespace: Option<&'a str>,
+    extension: Option<&'a E>,
+    params: BTreeMap<usize, &'a O>,
+    ret: Option<&'a I>,
+}
+impl<'a, I, O, E> CallbackChoices<'a, I, O, E> {
+    fn declaration(declaration: &'a crate::DeclCallback<I, O, E>) -> Self {
+        Self {
+            ty: &declaration.ty,
+            foreign: declaration.foreign.as_deref(),
+            namespace: declaration.namespace.as_deref(),
+            extension: declaration.extension.as_ref(),
+            params: declaration
+                .params
+                .iter()
+                .map(|(index, recipe)| (*index, recipe))
+                .collect(),
+            ret: declaration.ret.as_ref(),
+        }
+    }
+    fn tree(tree: CallbackTree<'a, I, O, E>, is_auto: &impl Fn(&I) -> bool) -> Result<Self> {
+        if !tree.request.operation.explicit_return && !is_auto(tree.result) {
+            return Err("callback without an explicit return must have an Auto codomain".into());
+        }
+        if tree.request.arguments.len() != tree.arguments.len() {
+            return Err("callback argument index and child counts do not match".into());
+        }
+        let mut params = BTreeMap::new();
+        for (index, recipe) in tree.request.arguments.iter().zip(tree.arguments) {
+            if params.insert(*index, recipe).is_some() {
+                return Err("duplicate callback parameter override".into());
+            }
+        }
+        let operation = &tree.request.operation;
+        Ok(Self {
+            ty: &operation.ty,
+            foreign: operation.foreign.as_deref(),
+            namespace: operation.namespace.as_deref(),
+            extension: operation.extension.as_ref(),
+            params,
+            ret: operation.explicit_return.then_some(tree.result),
+        })
+    }
+}
+/// Resolve callback declaration objects using the same rules as structural arrows.
 #[allow(clippy::too_many_arguments)]
-pub fn resolve_callback<M: Schema, I: Clone, O: Clone, RI, RO, E: Clone>(
+pub fn resolve_callback<M: Schema, I, O, RI, RO, E: Clone>(
     flat: &Flat<M>,
     ty: &Type,
     declaration: &crate::DeclCallback<I, O, E>,
     default: Option<&crate::DeclCallback<I, O, E>>,
+    output_defaults: &BTreeMap<String, O>,
+    auto_input: &I,
+    auto_output: &O,
+    stack: &mut Vec<String>,
+    input: impl FnMut(&Type, &I, &mut Vec<String>) -> Result<RI>,
+    output: impl FnMut(&Type, &O, crate::CallbackArgumentOwnership) -> Result<RO>,
+) -> Result<(crate::CallbackOperation<E>, Vec<RO>, RI)> {
+    resolve_callback_choices(
+        flat,
+        ty,
+        CallbackChoices::declaration(declaration),
+        default.map(CallbackChoices::declaration),
+        output_defaults,
+        auto_input,
+        auto_output,
+        stack,
+        input,
+        output,
+    )
+}
+/// Resolve callback overrides borrowed from structural domain/codomain edges.
+#[allow(clippy::too_many_arguments)]
+pub fn resolve_callback_tree<M: Schema, I, O, RI, RO, E: Clone>(
+    flat: &Flat<M>,
+    ty: &Type,
+    declaration: CallbackTree<'_, I, O, E>,
+    default: Option<CallbackTree<'_, I, O, E>>,
+    output_defaults: &BTreeMap<String, O>,
+    auto_input: &I,
+    auto_output: &O,
+    is_auto_input: impl Fn(&I) -> bool,
+    stack: &mut Vec<String>,
+    input: impl FnMut(&Type, &I, &mut Vec<String>) -> Result<RI>,
+    output: impl FnMut(&Type, &O, crate::CallbackArgumentOwnership) -> Result<RO>,
+) -> Result<(crate::CallbackOperation<E>, Vec<RO>, RI)> {
+    resolve_callback_choices(
+        flat,
+        ty,
+        CallbackChoices::tree(declaration, &is_auto_input)?,
+        default
+            .map(|tree| CallbackChoices::tree(tree, &is_auto_input))
+            .transpose()?,
+        output_defaults,
+        auto_input,
+        auto_output,
+        stack,
+        input,
+        output,
+    )
+}
+#[allow(clippy::too_many_arguments)]
+fn resolve_callback_choices<M: Schema, I, O, RI, RO, E: Clone>(
+    flat: &Flat<M>,
+    ty: &Type,
+    declaration: CallbackChoices<'_, I, O, E>,
+    default: Option<CallbackChoices<'_, I, O, E>>,
     output_defaults: &BTreeMap<String, O>,
     auto_input: &I,
     auto_output: &O,
@@ -446,44 +602,41 @@ pub fn resolve_callback<M: Schema, I: Clone, O: Clone, RI, RO, E: Clone>(
     let canonical = crate::callback::input_type(flat, ty)?;
     if !same_type(
         &canonical,
-        &crate::callback::input_type(flat, &declaration.ty)?,
+        &crate::callback::input_type(flat, declaration.ty)?,
     ) {
         return Err("callback declaration type does not match occurrence".into());
     }
-    let recursion_key = format!("callback:{}", type_key(&canonical));
-    if stack.contains(&recursion_key) {
+    let key = format!("callback:{}", type_key(&canonical));
+    if stack.contains(&key) {
         return Err("recursive callback conversion".into());
     }
-    stack.push(recursion_key);
+    stack.push(key);
     let result = (|| {
         let signature = prebindgen_flat::callback_signature(&canonical)?
             .ok_or("callback declaration requires impl Fn(...) -> R")?;
-        let mut selected = default
-            .cloned()
-            .unwrap_or_else(|| crate::DeclCallback::new(canonical.clone()));
-        if declaration.extension.is_some() {
-            selected.extension = declaration.extension.clone();
-        }
-        if declaration.foreign.is_some() {
-            selected.foreign = declaration.foreign.clone()
-        }
-        if declaration.namespace.is_some() {
-            selected.namespace = declaration.namespace.clone()
-        }
-        selected.params.extend(declaration.params.clone());
-        if declaration.ret.is_some() {
-            selected.ret = declaration.ret.clone()
-        }
+        let mut selected = default.unwrap_or(CallbackChoices {
+            ty: declaration.ty,
+            foreign: None,
+            namespace: None,
+            extension: None,
+            params: BTreeMap::new(),
+            ret: None,
+        });
+        selected.foreign = declaration.foreign.or(selected.foreign);
+        selected.namespace = declaration.namespace.or(selected.namespace);
+        selected.extension = declaration.extension.or(selected.extension);
+        selected.params.extend(declaration.params);
+        selected.ret = declaration.ret.or(selected.ret);
         if selected
             .params
             .keys()
-            .any(|&i| i >= signature.arguments.len())
+            .any(|&index| index >= signature.arguments.len())
         {
             return Err("callback parameter override index is out of range".into());
         }
         fn subject(ty: &Type) -> &Type {
             match ty {
-                Type::Reference(r) => subject(&r.elem),
+                Type::Reference(reference) => subject(&reference.elem),
                 _ => crate::option_inner(ty).map(subject).unwrap_or(ty),
             }
         }
@@ -503,22 +656,22 @@ pub fn resolve_callback<M: Schema, I: Clone, O: Clone, RI, RO, E: Clone>(
                 };
                 output(
                     source,
-                    selected.params.get(&index).unwrap_or(auto_output),
+                    selected.params.get(&index).copied().unwrap_or(auto_output),
                     ownership,
                 )
             })
             .collect::<Result<Vec<_>>>()?;
         let ret = input(
             &signature.return_type,
-            selected.ret.as_ref().unwrap_or(auto_input),
+            selected.ret.unwrap_or(auto_input),
             stack,
         )?;
         Ok((
             crate::CallbackOperation {
-                extension: selected.extension,
                 ty: canonical,
-                foreign: selected.foreign,
-                namespace: selected.namespace,
+                foreign: selected.foreign.map(str::to_owned),
+                namespace: selected.namespace.map(str::to_owned),
+                extension: selected.extension.cloned(),
                 explicit_return: selected.ret.is_some(),
             },
             arguments,
@@ -823,23 +976,24 @@ mod tests {
     #[test]
     fn named_field_edits_need_no_cloning_or_placeholder_operation() {
         enum View {
-            Fields(BTreeMap<String, Self>),
+            Fields {
+                names: Vec<String>,
+                children: Vec<Self>,
+            },
             Wrapper(Box<Self>),
             Value,
         }
-        let tree = View::Wrapper(Box::new(View::Wrapper(Box::new(View::Fields(
-            BTreeMap::new(),
-        )))));
+        let tree = View::Wrapper(Box::new(View::Wrapper(Box::new(View::Fields {
+            names: vec![],
+            children: vec![],
+        }))));
         let result = override_output_field(
             tree,
             "field".into(),
             View::Value,
-            |tree| {
-                if let View::Fields(fields) = tree {
-                    Some(fields)
-                } else {
-                    None
-                }
+            |tree| match tree {
+                View::Fields { names, children } => Some((names, children)),
+                _ => None,
             },
             |tree| {
                 if let View::Wrapper(child) = tree {
@@ -855,10 +1009,11 @@ mod tests {
         let View::Wrapper(inner) = *outer else {
             panic!("lost inner wrapper")
         };
-        let View::Fields(fields) = *inner else {
+        let View::Fields { names, children } = *inner else {
             panic!("lost fields")
         };
-        assert!(matches!(fields.get("field"), Some(View::Value)));
+        assert_eq!(names, ["field"]);
+        assert!(matches!(&children[..], [View::Value]));
     }
 
     #[test]
@@ -878,7 +1033,7 @@ mod tests {
         )
         .unwrap();
         assert!(
-            matches!(resolved, ConstructorInput::Branch {operation, children} if operation == "make" && matches!(children.as_slice(),[ConstructorInput::Leaf(42)]))
+            matches!(resolved, ConstructorInput::Branch {operation, children} if operation.resolved() == "make" && matches!(children.as_slice(),[ConstructorInput::Leaf(42)]))
         );
         assert!(resolve_constructor(
             &flat,

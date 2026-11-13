@@ -19,9 +19,9 @@ fn flat(source: &str) -> JniBindings {
 fn kotlin_preflight_removes_native_row_staging_for_both_transports() {
     let source = "pub type Handle=String;pub enum Kind{A,B}pub struct Row{pub h:Handle,pub text:Option<String>,pub bytes:Option<Vec<u8>>,pub kind:Option<Kind>}pub fn rows(values:Vec<Row>)->usize{}";
     let recipe = JniInput::Unary {
-        operation: JniInputUnary::Sequence,
+        operation: (JniInputUnary::Sequence).into(),
         child: Box::new(JniInput::Branch {
-            operation: JniInputBranch::Record,
+            operation: (JniInputBranch::Record).into(),
             children: vec![JniInput::Leaf(JniInputLeafOp::Value); 4],
         }),
     };
@@ -62,21 +62,22 @@ fn nested_bulk_modifiers_do_not_force_prepared_handle_rows() {
             JniInput::Leaf(JniInputLeafOp::Value)
         };
         let row = JniInput::Branch {
-            operation: JniInputBranch::Record,
+            operation: (JniInputBranch::Record).into(),
             children: vec![
                 JniInput::Branch {
-                    operation: JniInputBranch::Constructor {
+                    operation: (JniInputBranch::Constructor {
                         function: "make".into(),
-                    },
+                    })
+                    .into(),
                     children: vec![handle],
                 },
                 JniInput::Leaf(JniInputLeafOp::Value),
             ],
         };
         let input = JniInput::Unary {
-            operation: JniInputUnary::Sequence,
+            operation: (JniInputUnary::Sequence).into(),
             child: Box::new(JniInput::Unary {
-                operation: JniInputUnary::Sequence,
+                operation: (JniInputUnary::Sequence).into(),
                 child: Box::new(row),
             }),
         };
@@ -943,11 +944,11 @@ fn optional_unannotated_fields_keep_outer_presence_in_both_directions() {
     use prebindgen_declarations::bind_input;
     let mut source = flat("pub struct Wrapped { pub value: Option<i64> } pub fn wrapped_fields(x: &Wrapped) -> Wrapped {} pub fn echo(value: Option<Wrapped>) -> Option<Wrapped> {}");
     let input = JniInput::Unary {
-        operation: JniInputUnary::Optional,
+        operation: (JniInputUnary::Optional).into(),
         child: Box::new(JniInput::Branch {
-            operation: JniInputBranch::Fields,
+            operation: (JniInputBranch::Fields).into(),
             children: vec![JniInput::Unary {
-                operation: JniInputUnary::Optional,
+                operation: (JniInputUnary::Optional).into(),
                 child: Box::new(JniInput::Leaf(JniInputLeafOp::Value)),
             }],
         }),
@@ -1071,9 +1072,9 @@ fn nested_optional_selectors_reserve_distinct_tags_and_disable_arm_niches() {
         "echo",
         "x",
         &JniInput::Unary {
-            operation: JniInputUnary::Optional,
+            operation: (JniInputUnary::Optional).into(),
             child: Box::new(JniInput::Unary {
-                operation: JniInputUnary::Optional,
+                operation: (JniInputUnary::Optional).into(),
                 child: Box::new(selector),
             }),
         },
@@ -1274,10 +1275,11 @@ fn callback_returns_do_not_guess_prebound_or_extra_output_projections() {
         &JniCodec::raw(),
         "values",
         &crate::JniOutput::Unary {
-            operation: JniOutputUnary::Sequence {
+            operation: (JniOutputUnary::Sequence {
                 delivery: prebindgen_declarations::SequenceDelivery::Value,
                 mode: None,
-            },
+            })
+            .into(),
             child: Box::new(crate::JniOutput::Leaf(JniOutputLeafOp::Value)),
         },
         &(),
@@ -2376,11 +2378,12 @@ fn default_record_outputs_follow_source_ownership_and_allow_copy_overrides() {
     let source =
         format!("{records}pub type Owner=String;pub fn maybe(owner:&Owner)->Option<&Bundle>{{}}");
     let view = crate::JniOutput::Unary {
-        operation: JniOutputUnary::Optional,
+        operation: (JniOutputUnary::Optional).into(),
         child: Box::new(crate::JniOutput::Branch {
-            operation: JniOutputBranch::Record {
+            operation: (JniOutputBranch::Record {
                 mode: Some(prebindgen_declarations::ProjectionMode::Borrowed),
-            },
+            })
+            .into(),
             children: vec![crate::JniOutput::Leaf(JniOutputLeafOp::Value); 4],
         }),
     };
@@ -3588,18 +3591,20 @@ fn resolved_callback_elements_can_keep_optional_presence_outside_a_bulk_frame() 
     // Preserve support for direct request-free trees as well as the public
     // declaration spelling, which normalizes this to Bulk(Optional(...)).
     let recipe = JniOutput::Unary {
-        operation: JniOutputUnary::Sequence {
+        operation: (JniOutputUnary::Sequence {
             delivery: SequenceDelivery::Callback,
             mode: None,
-        },
+        })
+        .into(),
         child: Box::new(JniOutput::Unary {
-            operation: JniOutputUnary::Optional,
+            operation: (JniOutputUnary::Optional).into(),
             child: Box::new(
                 JniOutput::Unary {
-                    operation: JniOutputUnary::Sequence {
+                    operation: (JniOutputUnary::Sequence {
                         delivery: SequenceDelivery::Value,
                         mode: None,
-                    },
+                    })
+                    .into(),
                     child: Box::new(JniOutput::Leaf(JniOutputLeafOp::Value)),
                 }
                 .bulk(),
@@ -4162,9 +4167,9 @@ fn raw_borrowed_leaf_composes_with_declared_inputs_using_wire_access() {
 fn callback_results_and_arguments_omit_all_native_alias_history() {
     for bulk in [false, true] {
         let rows = JniInput::Unary {
-            operation: JniInputUnary::Sequence,
+            operation: (JniInputUnary::Sequence).into(),
             child: Box::new(JniInput::Branch {
-                operation: JniInputBranch::Record,
+                operation: (JniInputBranch::Record).into(),
                 children: vec![JniInput::Leaf(JniInputLeafOp::Value); 2],
             }),
         };
@@ -4198,7 +4203,7 @@ fn callback_results_defer_ownership_tracking_through_ordinary_result_trees() {
         (
             "fixed",
             JniInput::Branch {
-                operation: JniInputBranch::Record,
+                operation: (JniInputBranch::Record).into(),
                 children: vec![JniInput::Leaf(JniInputLeafOp::Value); 4],
             },
             true,
@@ -4206,9 +4211,9 @@ fn callback_results_defer_ownership_tracking_through_ordinary_result_trees() {
         (
             "rows",
             JniInput::Unary {
-                operation: JniInputUnary::Sequence,
+                operation: (JniInputUnary::Sequence).into(),
                 child: Box::new(JniInput::Branch {
-                    operation: JniInputBranch::Record,
+                    operation: (JniInputBranch::Record).into(),
                     children: vec![JniInput::Leaf(JniInputLeafOp::Value); 4],
                 }),
             },
@@ -4217,11 +4222,11 @@ fn callback_results_defer_ownership_tracking_through_ordinary_result_trees() {
         (
             "nested",
             JniInput::Unary {
-                operation: JniInputUnary::Sequence,
+                operation: (JniInputUnary::Sequence).into(),
                 child: Box::new(JniInput::Unary {
-                    operation: JniInputUnary::Sequence,
+                    operation: (JniInputUnary::Sequence).into(),
                     child: Box::new(JniInput::Branch {
-                        operation: JniInputBranch::Record,
+                        operation: (JniInputBranch::Record).into(),
                         children: vec![JniInput::Leaf(JniInputLeafOp::Value); 4],
                     }),
                 }),
@@ -4272,15 +4277,15 @@ fn callback_results_defer_ownership_tracking_through_ordinary_result_trees() {
 #[test]
 fn ordinary_callback_with_a_packed_child_uses_failure_only_cleanup() {
     let returned = JniInput::Unary {
-        operation: JniInputUnary::Sequence,
+        operation: (JniInputUnary::Sequence).into(),
         child: Box::new(JniInput::Branch {
-            operation: JniInputBranch::Record,
+            operation: (JniInputBranch::Record).into(),
             children: vec![
                 JniInput::Leaf(JniInputLeafOp::Value),
                 JniInput::Unary {
-                    operation: JniInputUnary::Sequence,
+                    operation: (JniInputUnary::Sequence).into(),
                     child: Box::new(JniInput::Branch {
-                        operation: JniInputBranch::Record,
+                        operation: (JniInputBranch::Record).into(),
                         children: vec![JniInput::Leaf(JniInputLeafOp::Value); 4],
                     }),
                 }
@@ -4342,21 +4347,21 @@ fn data_class_collection_fields_reuse_logical_types_and_check_recursion() {
 #[test]
 fn mixed_callback_rows_reject_multi_argument_constructor_alternatives() {
     let returned = JniInput::Unary {
-        operation: JniInputUnary::Sequence,
+        operation: (JniInputUnary::Sequence).into(),
         child: Box::new(JniInput::Branch {
-            operation: JniInputBranch::Record,
+            operation: (JniInputBranch::Record).into(),
             children: vec![
                 JniInput::Branch {
-                    operation: JniInputBranch::Selector,
+                    operation: (JniInputBranch::Selector).into(),
                     children: vec![
                         JniInput::Leaf(JniInputLeafOp::Value),
                         JniInput::Leaf(JniInputLeafOp::Value),
                     ],
                 },
                 JniInput::Unary {
-                    operation: JniInputUnary::Sequence,
+                    operation: (JniInputUnary::Sequence).into(),
                     child: Box::new(JniInput::Branch {
-                        operation: JniInputBranch::Record,
+                        operation: (JniInputBranch::Record).into(),
                         children: vec![JniInput::Leaf(JniInputLeafOp::Value); 2],
                     }),
                 }
@@ -4384,7 +4389,7 @@ fn named_output_groups_keep_name_validation_in_both_codec_policies() {
     for codec in [JniCodec::raw(), JniCodec::declared()] {
         for name in ["", "1bad", "bad-name", "line\nbreak"] {
             let recipe = JniOutput::Unary {
-                operation: JniOutputUnary::Named { name: name.into() },
+                operation: (JniOutputUnary::Named { name: name.into() }).into(),
                 child: Box::new(JniOutput::Leaf(JniOutputLeafOp::Value)),
             };
             assert!(
@@ -4468,7 +4473,7 @@ fn callback_variant_selects_delivery_before_wires_exist() {
         )
         .unwrap();
     let JniOutput::Unary {
-        operation: JniOutputUnary::Optional,
+        operation: prebindgen_declarations::Operation::Resolved(JniOutputUnary::Optional),
         child,
     } = tree
     else {
@@ -4477,10 +4482,10 @@ fn callback_variant_selects_delivery_before_wires_exist() {
     assert!(matches!(
         *child,
         JniOutput::Unary {
-            operation: JniOutputUnary::Sequence {
+            operation: prebindgen_declarations::Operation::Resolved(JniOutputUnary::Sequence {
                 delivery: SequenceDelivery::Callback,
                 ..
-            },
+            }),
             ..
         }
     ));
@@ -4506,7 +4511,7 @@ fn callback_delivery_is_selected_before_bulk_promotion() {
     assert!(matches!(
         ordinary,
         JniOutput::Unary {
-            operation: JniOutputUnary::Bulk,
+            operation: prebindgen_declarations::Operation::Resolved(JniOutputUnary::Bulk),
             child: _
         }
     ));
@@ -4529,14 +4534,14 @@ fn callback_delivery_is_selected_before_bulk_promotion() {
         )
         .unwrap();
     let JniOutput::Unary {
-        operation: JniOutputUnary::Optional,
+        operation: prebindgen_declarations::Operation::Resolved(JniOutputUnary::Optional),
         child,
     } = callback
     else {
         panic!("callback presence moved into a whole-collection bulk frame")
     };
     assert!(
-        matches!(*child,JniOutput::Unary { operation: JniOutputUnary::Sequence { delivery: SequenceDelivery::Callback, .. }, child: element, .. } if matches!(*element,JniOutput::Unary { operation: JniOutputUnary::Bulk, child: _ }))
+        matches!(*child,JniOutput::Unary { operation: prebindgen_declarations::Operation::Resolved(JniOutputUnary::Sequence { delivery: SequenceDelivery::Callback, .. }), child: element, .. } if matches!(*element,JniOutput::Unary { operation: prebindgen_declarations::Operation::Resolved(JniOutputUnary::Bulk), child: _ }))
     );
 }
 #[test]

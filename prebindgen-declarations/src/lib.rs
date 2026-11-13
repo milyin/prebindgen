@@ -18,7 +18,7 @@ pub use builders::{
 mod convert;
 pub use convert::{
     conversion_borrows, prepare_value_conversions, validate_conversion, DeclConvert,
-    DeclConvertSource,
+    DeclConvertSource, LocalConversion,
 };
 
 use prebindgen_conversions::{InputPlan, OutputPlan};
@@ -29,7 +29,10 @@ use quote::{format_ident, quote};
 use syn::Type;
 
 pub mod callback;
-pub use callback::{CallbackArgumentOwnership, CallbackOperation, DeclCallback};
+pub use callback::{
+    callback_input, CallbackArgumentOwnership, CallbackInput, CallbackOperation, CallbackRequest,
+    DeclCallback,
+};
 
 mod node;
 

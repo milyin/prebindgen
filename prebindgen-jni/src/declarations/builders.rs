@@ -52,13 +52,13 @@ pub fn expand_param(ty: Type) -> DeclJniExpandParam {
         |ty, alternatives, extension| {
             let mut input = alternatives.build(JniInput::selector, JniInput::auto, |child| {
                 JniInput::Unary {
-                    operation: JniInputUnary::Temporary,
+                    operation: (JniInputUnary::Temporary).into(),
                     child: Box::new(child),
                 }
             });
             if extension.is_some_and(|options| options.bulk) {
                 input = JniInput::Unary {
-                    operation: JniInputUnary::Bulk,
+                    operation: (JniInputUnary::Bulk).into(),
                     child: Box::new(input),
                 };
             }
@@ -75,7 +75,7 @@ pub fn expand_return(ty: Type) -> DeclJniExpandReturn {
                 function,
                 |name| JniOutput::getter(name, JniOutput::auto()),
                 |name, child| JniOutput::Unary {
-                    operation: JniOutputUnary::Named { name },
+                    operation: (JniOutputUnary::Named { name }).into(),
                     child: Box::new(child),
                 },
             )
@@ -87,7 +87,7 @@ pub fn expand_return(ty: Type) -> DeclJniExpandReturn {
             let mut output = JniOutput::combine(views);
             if extension.is_some_and(|options| options.bulk) {
                 output = JniOutput::Unary {
-                    operation: JniOutputUnary::Bulk,
+                    operation: (JniOutputUnary::Bulk).into(),
                     child: Box::new(output),
                 };
             }
@@ -100,18 +100,28 @@ pub fn fields(function: syn::Ident) -> DeclJniFields {
     prebindgen_declarations::DeclFields::new(
         function,
         |output| match output {
-            JniOutput::Request(JniOutputRequest::ForType { ty, output }) if matches!(output.as_ref(),JniOutput::Branch {operation:JniOutputBranch::Combine,children} if children.is_empty()) => {
+            JniOutput::Unary {
+                operation:
+                    prebindgen_declarations::Operation::Request(JniOutputRequest::ForType { ty }),
+                child: output,
+            } if matches!(output.as_ref(),JniOutput::Branch {operation:prebindgen_declarations::Operation::Resolved(JniOutputBranch::Combine),children} if children.is_empty()) => {
                 JniOutput::for_type(*ty, JniOutput::Leaf(JniOutputLeafOp::Discard))
             }
             output => output,
         },
         |function, overrides, _extension| {
+            let (fields, children) = overrides.into_iter().unzip();
             JniOutput::getter(
                 function,
-                JniOutput::Request(JniOutputRequest::NamedFields {
-                    overrides,
-                    mode: prebindgen_declarations::ProjectionMode::Borrowed,
-                }),
+                JniOutput::Branch {
+                    operation: prebindgen_declarations::Operation::Request(
+                        JniOutputRequest::NamedFields {
+                            fields,
+                            mode: prebindgen_declarations::ProjectionMode::Borrowed,
+                        },
+                    ),
+                    children,
+                },
             )
         },
     )
@@ -134,11 +144,28 @@ pub type DeclJniCallback = prebindgen_declarations::DeclCallback<
     JniInput<JniInputRequest, JniOutputRequest>,
     JniOutput<JniInputRequest, JniOutputRequest>,
 >;
-impl From<DeclJniCallback> for JniInputRequest {
-    fn from(decl: DeclJniCallback) -> Self {
-        Self::ForType {
-            ty: Box::new(decl.ty.clone()),
-            input: Box::new(JniInput::Request(Self::Callback(Box::new(decl)))),
-        }
+impl
+    prebindgen_declarations::CallbackInput<
+        JniInput<JniInputRequest, JniOutputRequest>,
+        JniOutput<JniInputRequest, JniOutputRequest>,
+    > for JniInputRequest
+{
+    fn callback_input(declaration: DeclJniCallback) -> JniInput<JniInputRequest, JniOutputRequest> {
+        prebindgen_declarations::callback_input(
+            declaration,
+            JniInput::auto,
+            |children| JniOutput::Branch {
+                operation: JniOutputBranch::Arguments.into(),
+                children,
+            },
+            |metadata, domain, codomain| JniInput::Arrow {
+                operation: prebindgen_declarations::Operation::Request(Self::Callback(Box::new(
+                    metadata,
+                ))),
+                domain: Box::new(domain),
+                codomain: Box::new(codomain),
+            },
+            JniInput::for_type,
+        )
     }
 }

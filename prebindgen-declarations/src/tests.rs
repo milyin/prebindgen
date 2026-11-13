@@ -1118,7 +1118,7 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
         TestInput::for_type(
             syn::parse_quote!(Pair),
             TestInput::Branch {
-                operation: TestInputBranch::Selector,
+                operation: (TestInputBranch::Selector).into(),
                 children: vec![],
             },
         )
@@ -1524,18 +1524,18 @@ fn field_groups_preserve_empty_and_multiwire_fields_in_both_directions() {
     use prebindgen_flat::WireNode;
     let mut flat = parse("pub struct Empty {} pub struct Pair { pub x: i32, pub y: i32 } pub struct Record { pub maybe: Option<i32>, pub empty: Empty, pub pair: Pair } pub fn echo(value: Record) -> Record { value }");
     let input = TestInput::Branch {
-        operation: TestInputBranch::Fields,
+        operation: (TestInputBranch::Fields).into(),
         children: vec![
             TestInput::Unary {
-                operation: TestInputUnary::Optional,
+                operation: (TestInputUnary::Optional).into(),
                 child: Box::new(TestInput::Leaf(TestInputLeafOp::Value)),
             },
             TestInput::Branch {
-                operation: TestInputBranch::Fields,
+                operation: (TestInputBranch::Fields).into(),
                 children: vec![],
             },
             TestInput::Branch {
-                operation: TestInputBranch::Fields,
+                operation: (TestInputBranch::Fields).into(),
                 children: vec![
                     TestInput::Leaf(TestInputLeafOp::Value),
                     TestInput::Leaf(TestInputLeafOp::Value),
@@ -1599,15 +1599,15 @@ fn field_groups_preserve_empty_and_multiwire_fields_in_both_directions() {
     for owned in [false, true] {
         let fields = vec![
             TestOutput::Unary {
-                operation: TestOutputUnary::Optional,
+                operation: (TestOutputUnary::Optional).into(),
                 child: Box::new(TestOutput::Leaf(TestOutputLeafOp::Value)),
             },
             TestOutput::Branch {
-                operation: TestOutputBranch::Fields,
+                operation: (TestOutputBranch::Fields).into(),
                 children: vec![],
             },
             TestOutput::Branch {
-                operation: TestOutputBranch::Fields,
+                operation: (TestOutputBranch::Fields).into(),
                 children: vec![
                     TestOutput::Leaf(TestOutputLeafOp::Value),
                     TestOutput::Leaf(TestOutputLeafOp::Value),
@@ -1616,12 +1616,12 @@ fn field_groups_preserve_empty_and_multiwire_fields_in_both_directions() {
         ];
         let output = if owned {
             TestOutput::Branch {
-                operation: TestOutputBranch::OwnedFields,
+                operation: (TestOutputBranch::OwnedFields).into(),
                 children: fields,
             }
         } else {
             TestOutput::Branch {
-                operation: TestOutputBranch::Fields,
+                operation: (TestOutputBranch::Fields).into(),
                 children: fields,
             }
         };
@@ -1780,14 +1780,14 @@ fn result_data_occurrences_are_not_implicitly_error_channels() {
         (
             "pub fn f()->Option<Result<i64,String>>{}",
             TestOutput::Unary {
-                operation: TestOutputUnary::Optional,
+                operation: (TestOutputUnary::Optional).into(),
                 child: Box::new(TestOutput::Leaf(TestOutputLeafOp::Value)),
             },
         ),
         (
             "pub struct R{pub value:Result<i64,String>}pub fn f()->R{}",
             TestOutput::Branch {
-                operation: TestOutputBranch::OwnedFields,
+                operation: (TestOutputBranch::OwnedFields).into(),
                 children: vec![TestOutput::Leaf(TestOutputLeafOp::Value)],
             },
         ),
@@ -2095,7 +2095,7 @@ fn malformed_error_channel_is_rejected_before_replacing_output() {
 fn failed_metadata_construction_preserves_installed_conversions() {
     let mut flat=parse("pub fn empty()->Option<i64>{} pub fn some(v:i64)->Option<i64>{} pub fn f(v:Option<i64>)->Option<i64>{}");
     let optional = TestInput::Unary {
-        operation: TestInputUnary::Optional,
+        operation: (TestInputUnary::Optional).into(),
         child: Box::new(TestInput::Leaf(TestInputLeafOp::Value)),
     };
     test_bind_input(
@@ -2112,7 +2112,7 @@ fn failed_metadata_construction_preserves_installed_conversions() {
         &TEST_CODEC,
         "f",
         &TestOutput::Unary {
-            operation: TestOutputUnary::Optional,
+            operation: (TestOutputUnary::Optional).into(),
             child: Box::new(TestOutput::Leaf(TestOutputLeafOp::Value)),
         },
         &Extra::default(),
@@ -2178,7 +2178,7 @@ fn failed_metadata_construction_preserves_installed_conversions() {
         &TEST_CODEC,
         "f",
         &TestOutput::Unary {
-            operation: TestOutputUnary::Optional,
+            operation: (TestOutputUnary::Optional).into(),
             child: Box::new(TestOutput::Leaf(TestOutputLeafOp::Value)),
         },
         &Extra {
@@ -2231,10 +2231,10 @@ fn preparation_fills_one_fixed_schema_and_emission_needs_no_defaults() {
         )
         .unwrap();
     assert!(
-        matches!(&input,TestInput::Unary { operation: TestInputUnary::Optional, child } if matches!(child.as_ref(),TestInput::Branch { operation: TestInputBranch::Constructor { function, .. }, .. } if function=="make"))
+        matches!(&input,TestInput::Unary { operation: crate::Operation::Resolved(TestInputUnary::Optional), child } if matches!(child.as_ref(),TestInput::Branch { operation: crate::Operation::Resolved(TestInputBranch::Constructor { function, .. }), .. } if function=="make"))
     );
     assert!(
-        matches!(&output,TestOutput::Unary { operation: TestOutputUnary::Optional, child } if matches!(child.as_ref(),TestOutput::Unary { operation: TestOutputUnary::Getter { function, .. }, .. } if function=="inspect"))
+        matches!(&output,TestOutput::Unary { operation: crate::Operation::Resolved(TestOutputUnary::Optional), child } if matches!(child.as_ref(),TestOutput::Unary { operation: crate::Operation::Resolved(TestOutputUnary::Getter { function, .. }), .. } if function=="inspect"))
     );
     assert!(source.function("echo").unwrap().ret.slot.is_none());
     defaults
@@ -2277,7 +2277,7 @@ fn sequence_identity_uses_element_defaults_and_staged_errors_name_the_function()
         )
         .unwrap();
     assert!(
-        matches!(resolved,TestInput::Unary { operation: TestInputUnary::Sequence, child } if matches!(&*child,TestInput::Branch { operation: TestInputBranch::Constructor { function, .. }, .. } if function=="make"))
+        matches!(resolved,TestInput::Unary { operation: crate::Operation::Resolved(TestInputUnary::Sequence), child } if matches!(&*child,TestInput::Branch { operation: crate::Operation::Resolved(TestInputBranch::Constructor { function, .. }), .. } if function=="make"))
     );
     let mut source = source;
     let error = defaults
@@ -2295,7 +2295,7 @@ fn sequence_identity_uses_element_defaults_and_staged_errors_name_the_function()
             &mut invalid,
             &TEST_CODEC,
             &test_fun!(broken).output(TestOutput::Unary {
-                operation: TestOutputUnary::Optional,
+                operation: (TestOutputUnary::Optional).into(),
                 child: Box::new(TestOutput::Leaf(TestOutputLeafOp::Value)),
             }),
             &Extra::default(),
@@ -2346,7 +2346,7 @@ fn named_getter_resolution_preserves_the_selected_name_in_the_tree() {
         )
         .unwrap();
     assert!(
-        matches!(tree,TestOutput::Unary { operation: TestOutputUnary::Named { name }, child: output,  } if name=="size" && matches!(output.as_ref(),TestOutput::Unary { operation: TestOutputUnary::Getter { function }, child: output,  } if function=="length"&&matches!(output.as_ref(),TestOutput::Leaf(TestOutputLeafOp::Value))))
+        matches!(tree,TestOutput::Unary { operation: crate::Operation::Resolved(TestOutputUnary::Named { name }), child: output,  } if name=="size" && matches!(output.as_ref(),TestOutput::Unary { operation: crate::Operation::Resolved(TestOutputUnary::Getter { function }), child: output,  } if function=="length"&&matches!(output.as_ref(),TestOutput::Leaf(TestOutputLeafOp::Value))))
     );
 }
 
@@ -2380,7 +2380,7 @@ fn nested_requests_resolve_into_strict_schemas_before_compilation() {
         [
             TestInput::Leaf(TestInputLeafOp::Value),
             TestInput::Unary {
-                operation: TestInputUnary::Optional,
+                operation: (TestInputUnary::Optional).into(),
                 child: Box::new(TestInput::auto()),
             },
         ],
@@ -2395,7 +2395,7 @@ fn nested_requests_resolve_into_strict_schemas_before_compilation() {
         )
         .unwrap();
     let TestInput::Branch {
-        operation: TestInputBranch::Constructor { .. },
+        operation: crate::Operation::Resolved(TestInputBranch::Constructor { .. }),
         children: args,
         ..
     } = &resolved
@@ -2404,7 +2404,7 @@ fn nested_requests_resolve_into_strict_schemas_before_compilation() {
     };
     assert!(matches!(&args[0], TestInput::Leaf(TestInputLeafOp::Value)));
     assert!(
-        matches!(&args[1],TestInput::Unary { operation: TestInputUnary::Optional, child } if matches!(child.as_ref(),TestInput::Branch { operation: TestInputBranch::Constructor { function }, children: args,  } if function=="narrow"&&matches!(args.as_slice(),[TestInput::Leaf(TestInputLeafOp::Value)])))
+        matches!(&args[1],TestInput::Unary { operation: crate::Operation::Resolved(TestInputUnary::Optional), child } if matches!(child.as_ref(),TestInput::Branch { operation: crate::Operation::Resolved(TestInputBranch::Constructor { function }), children: args,  } if function=="narrow"&&matches!(args.as_slice(),[TestInput::Leaf(TestInputLeafOp::Value)])))
     );
     compile_input(
         &source,
@@ -2464,13 +2464,13 @@ fn completed_subtrees_keep_explicit_choices_when_used_in_preparation() {
         )
         .unwrap();
     assert!(
-        matches!(&input,TestInput::Branch { operation: TestInputBranch::Constructor { function }, children: args,  } if function=="direct"&&matches!(args.as_slice(),[TestInput::Leaf(TestInputLeafOp::Value)]))
+        matches!(&input,TestInput::Branch { operation: crate::Operation::Resolved(TestInputBranch::Constructor { function }), children: args,  } if function=="direct"&&matches!(args.as_slice(),[TestInput::Leaf(TestInputLeafOp::Value)]))
     );
     assert!(
-        matches!(&count,TestInput::Branch { operation: TestInputBranch::Constructor { function, .. }, .. } if function=="narrow")
+        matches!(&count,TestInput::Branch { operation: crate::Operation::Resolved(TestInputBranch::Constructor { function, .. }), .. } if function=="narrow")
     );
     assert!(
-        matches!(&output,TestOutput::Unary { operation: TestOutputUnary::Getter { function }, child: output,  } if function=="observe"&&matches!(output.as_ref(),TestOutput::Leaf(TestOutputLeafOp::Value)))
+        matches!(&output,TestOutput::Unary { operation: crate::Operation::Resolved(TestOutputUnary::Getter { function }), child: output,  } if function=="observe"&&matches!(output.as_ref(),TestOutput::Leaf(TestOutputLeafOp::Value)))
     );
     let mut source = source;
     defaults
@@ -2489,11 +2489,12 @@ fn result_resolution_consumes_nested_requests_and_preserves_error_mapper() {
     )
     .unwrap();
     let request = TestOutput::Unary {
-        operation: TestOutputUnary::Result {
+        operation: (TestOutputUnary::Result {
             error: Some("message".into()),
-        },
+        })
+        .into(),
         child: Box::new(TestOutput::Unary {
-            operation: TestOutputUnary::Optional,
+            operation: (TestOutputUnary::Optional).into(),
             child: Box::new(TestOutput::auto()),
         }),
     };
@@ -2507,7 +2508,7 @@ fn result_resolution_consumes_nested_requests_and_preserves_error_mapper() {
         )
         .unwrap();
     let TestOutput::Unary {
-        operation: TestOutputUnary::Result { error },
+        operation: crate::Operation::Resolved(TestOutputUnary::Result { error }),
         child: ok,
     } = &resolved
     else {
@@ -2515,7 +2516,7 @@ fn result_resolution_consumes_nested_requests_and_preserves_error_mapper() {
     };
     assert_eq!(error.as_deref(), Some("message"));
     assert!(
-        matches!(ok.as_ref(),TestOutput::Unary { operation: TestOutputUnary::Optional, child } if matches!(child.as_ref(),TestOutput::Unary { operation: TestOutputUnary::Getter { function }, child: output,  } if function=="sign" && matches!(output.as_ref(),TestOutput::Leaf(TestOutputLeafOp::Value))))
+        matches!(ok.as_ref(),TestOutput::Unary { operation: crate::Operation::Resolved(TestOutputUnary::Optional), child } if matches!(child.as_ref(),TestOutput::Unary { operation: crate::Operation::Resolved(TestOutputUnary::Getter { function }), child: output,  } if function=="sign" && matches!(output.as_ref(),TestOutput::Leaf(TestOutputLeafOp::Value))))
     );
     compile_output(&source, &TEST_CODEC, "run", &resolved, &Extra::default()).unwrap();
     let mut source = source;
@@ -2525,7 +2526,7 @@ fn result_resolution_consumes_nested_requests_and_preserves_error_mapper() {
             &TEST_CODEC,
             &test_fun!(run)
                 .output(TestOutput::Unary {
-                    operation: TestOutputUnary::Optional,
+                    operation: (TestOutputUnary::Optional).into(),
                     child: Box::new(TestOutput::auto()),
                 })
                 .on_error(test_fun!(message)),
@@ -2549,17 +2550,18 @@ fn resolved_omissions_and_sequence_policies_survive_preparation_round_trip() {
     let source = parse("pub type Hidden=String;pub struct R{pub hidden:Option<Vec<Option<Hidden>>>,pub rows:Vec<i64>}pub fn read()->R{}");
     let defaults = TestDefaults::new(&source, vec![], vec![], vec![]).unwrap();
     let tree = TestOutput::Branch {
-        operation: TestOutputBranch::OwnedFields,
+        operation: (TestOutputBranch::OwnedFields).into(),
         children: vec![
             TestOutput::for_type(
                 syn::parse_quote!(Hidden),
                 TestOutput::Leaf(TestOutputLeafOp::Discard),
             ),
             TestOutput::Unary {
-                operation: TestOutputUnary::Sequence {
+                operation: (TestOutputUnary::Sequence {
                     delivery: SequenceDelivery::Callback,
                     mode: Some(ProjectionMode::Owned),
-                },
+                })
+                .into(),
                 child: Box::new(TestOutput::auto()),
             },
         ],
@@ -2574,7 +2576,7 @@ fn resolved_omissions_and_sequence_policies_survive_preparation_round_trip() {
         )
         .unwrap();
     assert!(
-        matches!(&resolved,TestOutput::Branch { operation: TestOutputBranch::OwnedFields, children: fields } if matches!(fields.as_slice(),[TestOutput::Leaf(TestOutputLeafOp::Discard),TestOutput::Unary { operation: TestOutputUnary::Sequence { delivery: SequenceDelivery::Callback, mode: Some(ProjectionMode::Owned), .. }, .. }]))
+        matches!(&resolved,TestOutput::Branch { operation: crate::Operation::Resolved(TestOutputBranch::OwnedFields), children: fields } if matches!(fields.as_slice(),[TestOutput::Leaf(TestOutputLeafOp::Discard),TestOutput::Unary { operation: crate::Operation::Resolved(TestOutputUnary::Sequence { delivery: SequenceDelivery::Callback, mode: Some(ProjectionMode::Owned), .. }), .. }]))
     );
     let round_trip = defaults
         .resolve_output(
@@ -2593,17 +2595,19 @@ fn bulk_normalization_preserves_callback_boundaries_inside_structural_nodes() {
     let flat = parse("pub fn values()->Vec<Vec<i64>>{}");
     let defaults = TestDefaults::new(&flat, vec![], vec![], vec![]).unwrap();
     let callback = TestOutput::Unary {
-        operation: TestOutputUnary::Sequence {
+        operation: (TestOutputUnary::Sequence {
             delivery: SequenceDelivery::Callback,
             mode: None,
-        },
+        })
+        .into(),
         child: Box::new(TestOutput::Leaf(TestOutputLeafOp::Value).bulk()),
     };
     let recipe = TestOutput::Unary {
-        operation: TestOutputUnary::Sequence {
+        operation: (TestOutputUnary::Sequence {
             delivery: SequenceDelivery::Value,
             mode: None,
-        },
+        })
+        .into(),
         child: Box::new(callback),
     };
     let resolved = defaults
@@ -2616,7 +2620,7 @@ fn bulk_normalization_preserves_callback_boundaries_inside_structural_nodes() {
         )
         .unwrap();
     assert!(
-        matches!(resolved,TestOutput::Unary { operation: TestOutputUnary::Sequence { .. }, child: element, .. } if matches!(*element,TestOutput::Unary { operation: TestOutputUnary::Sequence { delivery: SequenceDelivery::Callback, .. }, .. }))
+        matches!(resolved,TestOutput::Unary { operation: crate::Operation::Resolved(TestOutputUnary::Sequence { .. }), child: element, .. } if matches!(*element,TestOutput::Unary { operation: crate::Operation::Resolved(TestOutputUnary::Sequence { delivery: SequenceDelivery::Callback, .. }), .. }))
     );
 }
 
@@ -2624,12 +2628,13 @@ fn bulk_normalization_preserves_callback_boundaries_inside_structural_nodes() {
 fn unsupported_bulk_is_diagnosed_before_adapter_lowering() {
     let flat = parse("pub fn values()->Option<Vec<i64>>{}");
     let recipe = TestOutput::Unary {
-        operation: TestOutputUnary::Optional,
+        operation: (TestOutputUnary::Optional).into(),
         child: Box::new(TestOutput::Unary {
-            operation: TestOutputUnary::Sequence {
+            operation: (TestOutputUnary::Sequence {
                 delivery: SequenceDelivery::Callback,
                 mode: None,
-            },
+            })
+            .into(),
             child: Box::new(TestOutput::Leaf(TestOutputLeafOp::Value)),
         }),
     }
@@ -2655,10 +2660,10 @@ fn optional_fields_have_one_continuation_and_linear_generated_code_size() {
             "pub struct Wide{{{fields}}} pub fn consume(value:Wide){{}}"
         ));
         let recipe = TestInput::Branch {
-            operation: TestInputBranch::Fields,
+            operation: (TestInputBranch::Fields).into(),
             children: (0..width)
                 .map(|_| TestInput::Unary {
-                    operation: TestInputUnary::Optional,
+                    operation: (TestInputUnary::Optional).into(),
                     child: Box::new(TestInput::Leaf(TestInputLeafOp::Value)),
                 })
                 .collect(),
@@ -2685,9 +2690,9 @@ fn optional_fields_have_one_continuation_and_linear_generated_code_size() {
 fn optional_temporary_borrows_survive_through_the_next_parameter_and_source_call() {
     let flat = parse("pub fn combine(first:Option<&str>,second:Option<&str>)->usize{}");
     let recipe = TestInput::Unary {
-        operation: TestInputUnary::Optional,
+        operation: (TestInputUnary::Optional).into(),
         child: Box::new(TestInput::Unary {
-            operation: TestInputUnary::Temporary,
+            operation: (TestInputUnary::Temporary).into(),
             child: Box::new(TestInput::Leaf(TestInputLeafOp::Value)),
         }),
     };

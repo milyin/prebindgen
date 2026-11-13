@@ -13,21 +13,21 @@ fn input_body(
 ) -> JniInput<JniInputRequest, JniOutputRequest> {
     match input {
         JniInput::Branch {
-            operation: JniInputBranch::Selector,
+            operation: prebindgen_declarations::Operation::Resolved(JniInputBranch::Selector),
             children: mut arms,
         } if arms.len() == 1 => arms.remove(0),
         JniInput::Unary {
-            operation: JniInputUnary::Bulk,
+            operation: prebindgen_declarations::Operation::Resolved(JniInputUnary::Bulk),
             child,
         } => JniInput::Unary {
-            operation: JniInputUnary::Bulk,
+            operation: (JniInputUnary::Bulk).into(),
             child: Box::new(input_body(*child)),
         },
         JniInput::Unary {
-            operation: JniInputUnary::Temporary,
+            operation: prebindgen_declarations::Operation::Resolved(JniInputUnary::Temporary),
             child,
         } => JniInput::Unary {
-            operation: JniInputUnary::Temporary,
+            operation: (JniInputUnary::Temporary).into(),
             child: Box::new(input_body(*child)),
         },
         other => other,
@@ -38,14 +38,14 @@ fn output_body(
 ) -> JniOutput<JniInputRequest, JniOutputRequest> {
     match output {
         JniOutput::Branch {
-            operation: JniOutputBranch::Combine,
+            operation: prebindgen_declarations::Operation::Resolved(JniOutputBranch::Combine),
             children: mut parts,
         } if parts.len() == 1 => parts.remove(0),
         JniOutput::Unary {
-            operation: JniOutputUnary::Bulk,
+            operation: prebindgen_declarations::Operation::Resolved(JniOutputUnary::Bulk),
             child,
         } => JniOutput::Unary {
-            operation: JniOutputUnary::Bulk,
+            operation: (JniOutputUnary::Bulk).into(),
             child: Box::new(output_body(*child)),
         },
         other => other,
@@ -64,21 +64,30 @@ impl DeclJniDefaults {
         let inputs = inputs
             .into_iter()
             .map(|tree| match tree {
-                JniInput::Request(JniInputRequest::ForType { ty, input }) => {
-                    Ok((*ty, input_body(*input)))
-                }
+                JniInput::Unary {
+                    operation:
+                        prebindgen_declarations::Operation::Request(JniInputRequest::ForType { ty }),
+                    child: input,
+                } => Ok((*ty, input_body(*input))),
+
                 _ => Err("input defaults require a source type".into()),
             })
             .collect::<Result<Vec<_>>>()?;
-        let outputs = outputs
-            .into_iter()
-            .map(|tree| match tree {
-                JniOutput::Request(JniOutputRequest::ForType { ty, output }) => {
-                    Ok((*ty, output_body(*output)))
-                }
-                _ => Err("output defaults require a source type".into()),
-            })
-            .collect::<Result<Vec<_>>>()?;
+        let outputs =
+            outputs
+                .into_iter()
+                .map(|tree| match tree {
+                    JniOutput::Unary {
+                        operation:
+                            prebindgen_declarations::Operation::Request(JniOutputRequest::ForType {
+                                ty,
+                            }),
+                        child: output,
+                    } => Ok((*ty, output_body(*output))),
+
+                    _ => Err("output defaults require a source type".into()),
+                })
+                .collect::<Result<Vec<_>>>()?;
         Ok(Self {
             values: prebindgen_declarations::DeclDefaults::new(flat, inputs, outputs, errors)?,
         })
@@ -100,10 +109,12 @@ impl DeclJniDefaults {
         <JniSchema as prebindgen_flat::Schema>::Function: Clone,
     {
         prebindgen_declarations::callback_variant(flat, decl, name, |output, structural| {
-            JniOutput::Request(JniOutputRequest::SequenceCallback {
-                output: Box::new(output.cloned().unwrap_or_else(JniOutput::auto)),
-                structural,
-            })
+            JniOutput::Unary {
+                operation: prebindgen_declarations::Operation::Request(
+                    JniOutputRequest::SequenceCallback { structural },
+                ),
+                child: Box::new(output.cloned().unwrap_or_else(JniOutput::auto)),
+            }
         })
     }
 
@@ -160,7 +171,7 @@ impl DeclJniDefaults {
             &self.values.errors,
             JniOutput::auto(),
             |error, child| JniOutput::Unary {
-                operation: JniOutputUnary::Result { error },
+                operation: (JniOutputUnary::Result { error }).into(),
                 child: Box::new(child),
             },
         );
@@ -189,10 +200,15 @@ impl DeclJniDefaults {
             flat,
             codec,
             ty,
-            &JniOutput::Request(JniOutputRequest::NamedFields {
-                overrides: BTreeMap::new(),
-                mode: ProjectionMode::Owned,
-            }),
+            &JniOutput::Branch {
+                operation: prebindgen_declarations::Operation::Request(
+                    JniOutputRequest::NamedFields {
+                        fields: vec![],
+                        mode: ProjectionMode::Owned,
+                    },
+                ),
+                children: vec![],
+            },
             extra,
         )
     }
@@ -241,14 +257,29 @@ impl DeclJniDefaults {
                 }
             }
             JniInput::Branch {
-                operation: JniInputBranch::Variant,
+                operation: prebindgen_declarations::Operation::Resolved(JniInputBranch::Variant),
                 ..
             } => Err("variant branch requires an enum parent".into()),
-            JniInput::Request(JniInputRequest::EnumFields(entries)) => {
-                self.enum_input_recipe(flat, codec, ty, extra, entries, false, stack)
+            JniInput::Branch {
+                operation: prebindgen_declarations::Operation::Request(JniInputRequest::EnumFields),
+                children,
+            } => {
+                let entries =
+                    prebindgen_declarations::enum_children(children, |tree| match tree {
+                        JniInput::Branch {
+                            operation:
+                                prebindgen_declarations::Operation::Request(
+                                    JniInputRequest::VariantFields { variant, fields },
+                                ),
+                            children,
+                        } => Ok((variant.as_str(), fields.as_slice(), children.as_slice())),
+                        _ => Err("named enum fields require variant branches".into()),
+                    })?;
+                self.enum_input_recipe(flat, codec, ty, extra, &entries, false, stack)
             }
             JniInput::Branch {
-                operation: JniInputBranch::Enum { value },
+                operation:
+                    prebindgen_declarations::Operation::Resolved(JniInputBranch::Enum { value }),
                 children: variants,
             } => {
                 let variants = prebindgen_declarations::resolve_enum_variants(
@@ -281,7 +312,8 @@ impl DeclJniDefaults {
                 )
             }
             JniInput::Unary {
-                operation: JniInputUnary::Convert { conversion },
+                operation:
+                    prebindgen_declarations::Operation::Resolved(JniInputUnary::Convert { conversion }),
                 child: input,
             } => self.resolve_input_conversion(
                 flat,
@@ -293,10 +325,10 @@ impl DeclJniDefaults {
                 stack,
             ),
             JniInput::Unary {
-                operation: JniInputUnary::Temporary,
+                operation: prebindgen_declarations::Operation::Resolved(JniInputUnary::Temporary),
                 child,
             } => Ok(InputNode::Unary {
-                operation: JniInputUnary::Temporary,
+                operation: (JniInputUnary::Temporary).into(),
                 child: Box::new(resolve(
                     &prebindgen_declarations::temporary_input_type(ty)?,
                     &input_body((**child).clone()),
@@ -304,10 +336,10 @@ impl DeclJniDefaults {
                 )?),
             }),
             JniInput::Unary {
-                operation: JniInputUnary::Bulk,
+                operation: prebindgen_declarations::Operation::Resolved(JniInputUnary::Bulk),
                 child,
             } => Ok(InputNode::Unary {
-                operation: JniInputUnary::Bulk,
+                operation: (JniInputUnary::Bulk).into(),
                 child: Box::new(resolve(ty, &input_body((**child).clone()), stack)?),
             }),
             JniInput::Request(JniInputRequest::Auto) => {
@@ -326,11 +358,11 @@ impl DeclJniDefaults {
                     true,
                     |inner| resolve(inner, &JniInput::auto(), stack),
                     |child| JniInput::Unary {
-                        operation: JniInputUnary::Optional,
+                        operation: (JniInputUnary::Optional).into(),
                         child: Box::new(child),
                     },
                     |child| JniInput::Unary {
-                        operation: JniInputUnary::Sequence,
+                        operation: (JniInputUnary::Sequence).into(),
                         child: Box::new(child),
                     },
                 )? {
@@ -341,7 +373,11 @@ impl DeclJniDefaults {
                 }
                 resolve(ty, &JniInput::Leaf(JniInputLeafOp::Value), stack)
             }
-            JniInput::Request(JniInputRequest::ForType { ty: target, input }) => {
+            JniInput::Unary {
+                operation:
+                    prebindgen_declarations::Operation::Request(JniInputRequest::ForType { ty: target }),
+                child: input,
+            } => {
                 let target = prebindgen_declarations::callback::input_type(flat, target)?;
                 let matched =
                     prebindgen_declarations::callback::input_key(flat, ty)? == type_key(&target);
@@ -353,11 +389,11 @@ impl DeclJniDefaults {
                     stack,
                     resolve,
                     |child| JniInput::Unary {
-                        operation: JniInputUnary::Optional,
+                        operation: (JniInputUnary::Optional).into(),
                         child: Box::new(child),
                     },
                     |child| JniInput::Unary {
-                        operation: JniInputUnary::Sequence,
+                        operation: (JniInputUnary::Sequence).into(),
                         child: Box::new(child),
                     },
                     prebindgen_declarations::Direction::Input,
@@ -378,17 +414,11 @@ impl DeclJniDefaults {
                 }
 
                 if prebindgen_flat::callback_signature(ty)?.is_some() {
-                    return resolve(
-                        ty,
-                        &JniInput::Request(JniInputRequest::Callback(Box::new(
-                            crate::DeclJniCallback::new(ty.clone()),
-                        ))),
-                        stack,
-                    );
+                    return resolve(ty, &JniInput::from(DeclJniCallback::new(ty.clone())), stack);
                 }
                 if let Some(inner) = option_inner(ty) {
                     return Ok(InputNode::Unary {
-                        operation: JniInputUnary::Optional,
+                        operation: (JniInputUnary::Optional).into(),
                         child: Box::new(resolve(
                             inner,
                             &JniInput::Leaf(JniInputLeafOp::Value),
@@ -398,14 +428,14 @@ impl DeclJniDefaults {
                 }
                 if let Some((element, _)) = sequence_parts(ty) {
                     return Ok(InputNode::Unary {
-                        operation: JniInputUnary::Sequence,
+                        operation: (JniInputUnary::Sequence).into(),
                         child: Box::new(resolve(element, &JniInput::auto(), stack)?),
                     });
                 }
                 self.resolve_input_representation(flat, codec, ty, tree, stack)
             }
             JniInput::Arrow {
-                operation: callback,
+                operation: prebindgen_declarations::Operation::Resolved(callback),
                 domain,
                 codomain,
             } => {
@@ -419,27 +449,46 @@ impl DeclJniDefaults {
                     |ty, tree| resolve(ty, tree, stack),
                 )?;
                 Ok(InputNode::Arrow {
-                    operation: callback.clone(),
+                    operation: (callback.clone()).into(),
                     domain: Box::new(JniOutput::arguments(arguments)),
                     codomain: Box::new(result),
                 })
             }
-            JniInput::Request(JniInputRequest::Callback(declaration)) => {
+            JniInput::Arrow {
+                operation:
+                    prebindgen_declarations::Operation::Request(JniInputRequest::Callback(declaration)),
+                domain,
+                codomain,
+            } => {
                 let canonical = prebindgen_declarations::callback::input_key(flat, ty)?;
                 let default = match self.values.inputs.get(&canonical) {
-                    Some(JniInput::Request(JniInputRequest::Callback(default))) => {
-                        Some(default.as_ref())
-                    }
+                    Some(JniInput::Arrow {
+                        operation:
+                            prebindgen_declarations::Operation::Request(JniInputRequest::Callback(
+                                request,
+                            )),
+                        domain,
+                        codomain,
+                    }) => Some(prebindgen_declarations::CallbackTree {
+                        request,
+                        arguments: domain.argument_nodes()?,
+                        result: codomain.as_ref(),
+                    }),
                     _ => None,
                 };
-                let (operation, arguments, ret) = prebindgen_declarations::resolve_callback(
+                let (operation, arguments, ret) = prebindgen_declarations::resolve_callback_tree(
                     flat,
                     ty,
-                    declaration,
+                    prebindgen_declarations::CallbackTree {
+                        request: declaration,
+                        arguments: domain.argument_nodes()?,
+                        result: codomain.as_ref(),
+                    },
                     default,
                     &self.values.outputs,
                     &JniInput::auto(),
                     &JniOutput::auto(),
+                    |tree| matches!(tree, JniInput::Request(JniInputRequest::Auto)),
                     stack,
                     resolve,
                     |ty, tree, ownership| {
@@ -449,26 +498,31 @@ impl DeclJniDefaults {
                     },
                 )?;
                 Ok(InputNode::Arrow {
-                    operation: Box::new(operation),
+                    operation: Box::new(operation).into(),
                     domain: Box::new(JniOutput::arguments(arguments)),
                     codomain: Box::new(ret),
                 })
             }
+
             JniInput::Request(JniInputRequest::Call(function)) => {
                 let f = flat.function(function)?;
                 resolve(
                     ty,
                     &JniInput::Branch {
-                        operation: JniInputBranch::Constructor {
+                        operation: (JniInputBranch::Constructor {
                             function: function.clone(),
-                        },
+                        })
+                        .into(),
                         children: vec![JniInput::auto(); f.params.len()],
                     },
                     stack,
                 )
             }
             JniInput::Branch {
-                operation: JniInputBranch::Constructor { function },
+                operation:
+                    prebindgen_declarations::Operation::Resolved(JniInputBranch::Constructor {
+                        function,
+                    }),
                 children: args,
             } => prebindgen_declarations::resolve_constructor(
                 flat,
@@ -479,32 +533,32 @@ impl DeclJniDefaults {
                 |function| JniInputBranch::Constructor { function },
             ),
             JniInput::Unary {
-                operation: JniInputUnary::Optional,
+                operation: prebindgen_declarations::Operation::Resolved(JniInputUnary::Optional),
                 child,
             } => {
                 let inner = option_inner(ty).ok_or("optional recipe requires Option<T>")?;
                 Ok(InputNode::Unary {
-                    operation: JniInputUnary::Optional,
+                    operation: (JniInputUnary::Optional).into(),
                     child: Box::new(resolve(inner, child, stack)?),
                 })
             }
             JniInput::Unary {
-                operation: JniInputUnary::Sequence,
+                operation: prebindgen_declarations::Operation::Resolved(JniInputUnary::Sequence),
                 child,
             } => {
                 let (element, _) =
                     sequence_parts(ty).ok_or("sequence input requires Vec<T>, &[T] or &Vec<T>")?;
                 Ok(InputNode::Unary {
-                    operation: JniInputUnary::Sequence,
+                    operation: (JniInputUnary::Sequence).into(),
                     child: Box::new(resolve(element, child, stack)?),
                 })
             }
             JniInput::Branch {
-                operation: JniInputBranch::Fields,
+                operation: prebindgen_declarations::Operation::Resolved(JniInputBranch::Fields),
                 children,
             }
             | JniInput::Branch {
-                operation: JniInputBranch::Record,
+                operation: prebindgen_declarations::Operation::Resolved(JniInputBranch::Record),
                 children,
             } => {
                 if type_key(ty) == "()" && children.is_empty() {
@@ -520,37 +574,52 @@ impl DeclJniDefaults {
                     if matches!(
                         tree,
                         JniInput::Branch {
-                            operation: JniInputBranch::Record,
+                            operation: prebindgen_declarations::Operation::Resolved(
+                                JniInputBranch::Record
+                            ),
                             children: _
                         }
                     ) {
                         InputNode::Branch {
-                            operation: JniInputBranch::Record,
+                            operation: (JniInputBranch::Record).into(),
                             children,
                         }
                     } else {
                         InputNode::Branch {
-                            operation: JniInputBranch::Fields,
+                            operation: (JniInputBranch::Fields).into(),
                             children,
                         }
                     },
                 )
             }
             JniInput::Branch {
-                operation: JniInputBranch::Selector,
+                operation: prebindgen_declarations::Operation::Resolved(JniInputBranch::Selector),
                 children: arms,
             } => {
                 if arms.is_empty() {
                     return Err("an input selector needs at least one alternative".into());
                 }
                 Ok(InputNode::Branch {
-                    operation: JniInputBranch::Selector,
+                    operation: (JniInputBranch::Selector).into(),
                     children: arms
                         .iter()
                         .map(|child| resolve(ty, child, stack))
                         .collect::<Result<_>>()?,
                 })
             }
+            JniInput::Request(_)
+            | JniInput::Unary {
+                operation: prebindgen_declarations::Operation::Request(_),
+                ..
+            }
+            | JniInput::Branch {
+                operation: prebindgen_declarations::Operation::Request(_),
+                ..
+            }
+            | JniInput::Arrow {
+                operation: prebindgen_declarations::Operation::Request(_),
+                ..
+            } => Err("pending operation has the wrong structural node shape".into()),
         }
     }
     /// Resolve every output operation, source reference and ownership choice before compilation.
@@ -584,8 +653,8 @@ impl DeclJniDefaults {
         if let Some(referent) = prebindgen_declarations::output_referent(ty) {
             if (getter_result || !matches!(tree, JniOutput::Leaf(JniOutputLeafOp::Value)))
                 && !matches!(
-                    tree,
-                    JniOutput::Request(
+                    tree.pending_request(),
+                    Some(
                         JniOutputRequest::Auto
                             | JniOutputRequest::ForType { .. }
                             | JniOutputRequest::SequenceCallback { .. }
@@ -596,7 +665,13 @@ impl DeclJniDefaults {
             }
         }
         match tree {
-            JniOutput::Request(JniOutputRequest::SequenceCallback { output, structural }) => {
+            JniOutput::Unary {
+                operation:
+                    prebindgen_declarations::Operation::Request(JniOutputRequest::SequenceCallback {
+                        structural,
+                    }),
+                child: output,
+            } => {
                 let output = resolve(ty, output, stack)?;
                 operations::sequence_callback(
                     &mut crate::declarations::JniResolve {
@@ -614,7 +689,10 @@ impl DeclJniDefaults {
             }
 
             JniOutput::Unary {
-                operation: JniOutputUnary::CallbackArgument { ownership },
+                operation:
+                    prebindgen_declarations::Operation::Resolved(JniOutputUnary::CallbackArgument {
+                        ownership,
+                    }),
                 child,
             } => Ok((resolve(ty, child, stack)?).callback_argument(*ownership)),
             JniOutput::None => {
@@ -624,23 +702,47 @@ impl DeclJniDefaults {
                     Err("None output requires unit".into())
                 }
             }
-            JniOutput::Arrow { operation, .. } => match *operation {},
+            JniOutput::Arrow {
+                operation: prebindgen_declarations::Operation::Resolved(never),
+                ..
+            } => match *never {},
             JniOutput::Branch {
-                operation: JniOutputBranch::Variant | JniOutputBranch::Arguments,
+                operation:
+                    prebindgen_declarations::Operation::Resolved(
+                        JniOutputBranch::Variant | JniOutputBranch::Arguments,
+                    ),
                 ..
             } => Err("variant/argument branch requires its parent operation".into()),
-            JniOutput::Request(JniOutputRequest::EnumFields(entries)) => self.enum_output_recipe(
-                flat,
-                codec,
-                prebindgen_declarations::output_referent(ty).unwrap_or(ty),
-                extra,
-                entries,
-                false,
-                stack,
-                getter_result,
-            ),
             JniOutput::Branch {
-                operation: JniOutputBranch::Enum { value, mode },
+                operation: prebindgen_declarations::Operation::Request(JniOutputRequest::EnumFields),
+                children,
+            } => {
+                let entries =
+                    prebindgen_declarations::enum_children(children, |tree| match tree {
+                        JniOutput::Branch {
+                            operation:
+                                prebindgen_declarations::Operation::Request(
+                                    JniOutputRequest::VariantFields { variant, fields },
+                                ),
+                            children,
+                        } => Ok((variant.as_str(), fields.as_slice(), children.as_slice())),
+                        _ => Err("named enum fields require variant branches".into()),
+                    })?;
+                self.enum_output_recipe(
+                    flat,
+                    codec,
+                    prebindgen_declarations::output_referent(ty).unwrap_or(ty),
+                    extra,
+                    &entries,
+                    false,
+                    stack,
+                    getter_result,
+                )
+            }
+
+            JniOutput::Branch {
+                operation:
+                    prebindgen_declarations::Operation::Resolved(JniOutputBranch::Enum { value, mode }),
                 children: variants,
             } => {
                 let variants = prebindgen_declarations::resolve_enum_variants(
@@ -680,7 +782,8 @@ impl DeclJniDefaults {
                 )
             }
             JniOutput::Unary {
-                operation: JniOutputUnary::Convert { conversion },
+                operation:
+                    prebindgen_declarations::Operation::Resolved(JniOutputUnary::Convert { conversion }),
                 child: output,
             } => self.resolve_output_conversion(
                 flat,
@@ -692,20 +795,21 @@ impl DeclJniDefaults {
                 stack,
             ),
             JniOutput::Unary {
-                operation: JniOutputUnary::Bulk,
+                operation: prebindgen_declarations::Operation::Resolved(JniOutputUnary::Bulk),
                 child,
             } => Ok(OutputNode::Unary {
-                operation: JniOutputUnary::Bulk,
+                operation: (JniOutputUnary::Bulk).into(),
                 child: Box::new(resolve(ty, &output_body((**child).clone()), stack)?),
             }),
             JniOutput::Leaf(JniOutputLeafOp::Discard) => {
                 Ok(OutputNode::Leaf(JniOutputLeafOp::Discard))
             }
             JniOutput::Unary {
-                operation: JniOutputUnary::Named { name },
+                operation:
+                    prebindgen_declarations::Operation::Resolved(JniOutputUnary::Named { name }),
                 child: output,
             } => Ok(OutputNode::Unary {
-                operation: JniOutputUnary::Named { name: name.clone() },
+                operation: (JniOutputUnary::Named { name: name.clone() }).into(),
                 child: Box::new(resolve(ty, output, stack)?),
             }),
             JniOutput::Request(JniOutputRequest::Auto) => {
@@ -729,14 +833,15 @@ impl DeclJniDefaults {
                     true,
                     |inner| resolve(inner, &JniOutput::auto(), stack),
                     |child| JniOutput::Unary {
-                        operation: JniOutputUnary::Optional,
+                        operation: (JniOutputUnary::Optional).into(),
                         child: Box::new(child),
                     },
                     |child| JniOutput::Unary {
-                        operation: JniOutputUnary::Sequence {
+                        operation: (JniOutputUnary::Sequence {
                             delivery: SequenceDelivery::Auto,
                             mode: None,
-                        },
+                        })
+                        .into(),
                         child: Box::new(child),
                     },
                 )? {
@@ -747,7 +852,13 @@ impl DeclJniDefaults {
                 }
                 resolve(ty, &JniOutput::Leaf(JniOutputLeafOp::Value), stack)
             }
-            JniOutput::Request(JniOutputRequest::ForType { ty: target, output }) => {
+            JniOutput::Unary {
+                operation:
+                    prebindgen_declarations::Operation::Request(JniOutputRequest::ForType {
+                        ty: target,
+                    }),
+                child: output,
+            } => {
                 let target = flat.resolve_type(target)?;
                 let matched = same_type(ty, &target);
                 prebindgen_declarations::resolve_typed_expansion(
@@ -762,7 +873,7 @@ impl DeclJniDefaults {
                             child
                         } else {
                             JniOutput::Unary {
-                                operation: JniOutputUnary::Optional,
+                                operation: (JniOutputUnary::Optional).into(),
                                 child: Box::new(child),
                             }
                         }
@@ -772,10 +883,11 @@ impl DeclJniDefaults {
                             child
                         } else {
                             JniOutput::Unary {
-                                operation: JniOutputUnary::Sequence {
+                                operation: (JniOutputUnary::Sequence {
                                     delivery: SequenceDelivery::Auto,
                                     mode: None,
-                                },
+                                })
+                                .into(),
                                 child: Box::new(child),
                             }
                         }
@@ -812,7 +924,7 @@ impl DeclJniDefaults {
 
                 if let Some(inner) = option_inner(ty) {
                     return Ok(OutputNode::Unary {
-                        operation: JniOutputUnary::Optional,
+                        operation: (JniOutputUnary::Optional).into(),
                         child: Box::new(resolve(inner, tree, stack)?),
                     });
                 }
@@ -828,69 +940,85 @@ impl DeclJniDefaults {
                         None
                     };
                     return Ok(OutputNode::Unary {
-                        operation: JniOutputUnary::Sequence {
+                        operation: (JniOutputUnary::Sequence {
                             delivery: SequenceDelivery::Value,
                             mode,
-                        },
+                        })
+                        .into(),
                         child: Box::new(resolve(element, &JniOutput::auto(), stack)?),
                     });
                 }
                 self.resolve_output_representation(flat, codec, ty, tree, stack, getter_result)
             }
             JniOutput::Unary {
-                operation: JniOutputUnary::Optional,
+                operation: prebindgen_declarations::Operation::Resolved(JniOutputUnary::Optional),
                 child,
             } => {
                 let inner = option_inner(ty).ok_or("optional recipe requires Option<T>")?;
                 Ok(OutputNode::Unary {
-                    operation: JniOutputUnary::Optional,
+                    operation: (JniOutputUnary::Optional).into(),
                     child: Box::new(resolve(inner, child, stack)?),
                 })
             }
             JniOutput::Unary {
-                operation: JniOutputUnary::Sequence { delivery, mode },
+                operation:
+                    prebindgen_declarations::Operation::Resolved(JniOutputUnary::Sequence {
+                        delivery,
+                        mode,
+                    }),
                 child: element,
             } => {
                 let (ty, _) =
                     sequence_parts(ty).ok_or("sequence output requires a collection source")?;
                 Ok(OutputNode::Unary {
-                    operation: JniOutputUnary::Sequence {
+                    operation: (JniOutputUnary::Sequence {
                         delivery: *delivery,
                         mode: *mode,
-                    },
+                    })
+                    .into(),
                     child: Box::new(resolve(ty, element, stack)?),
                 })
             }
-            JniOutput::Request(JniOutputRequest::NamedFields { overrides, mode }) => {
+            JniOutput::Branch {
+                operation:
+                    prebindgen_declarations::Operation::Request(JniOutputRequest::NamedFields {
+                        fields,
+                        mode,
+                    }),
+                children: recipes,
+            } => {
+                let overrides = prebindgen_declarations::named_children(fields, recipes)?;
                 let children = prebindgen_declarations::resolve_named_fields(
                     flat,
                     ty,
-                    overrides,
+                    &overrides,
                     &JniOutput::auto(),
                     |ty, tree| resolve(ty, tree, stack),
                 )?;
                 Ok(if *mode == ProjectionMode::Owned {
                     OutputNode::Branch {
-                        operation: JniOutputBranch::OwnedFields,
+                        operation: (JniOutputBranch::OwnedFields).into(),
                         children,
                     }
                 } else {
                     OutputNode::Branch {
-                        operation: JniOutputBranch::Fields,
+                        operation: (JniOutputBranch::Fields).into(),
                         children,
                     }
                 })
             }
             JniOutput::Branch {
-                operation: JniOutputBranch::Fields,
+                operation: prebindgen_declarations::Operation::Resolved(JniOutputBranch::Fields),
                 children,
             }
             | JniOutput::Branch {
-                operation: JniOutputBranch::OwnedFields,
+                operation:
+                    prebindgen_declarations::Operation::Resolved(JniOutputBranch::OwnedFields),
                 children,
             }
             | JniOutput::Branch {
-                operation: JniOutputBranch::Record { .. },
+                operation:
+                    prebindgen_declarations::Operation::Resolved(JniOutputBranch::Record { .. }),
                 children,
                 ..
             } => {
@@ -905,35 +1033,43 @@ impl DeclJniDefaults {
                 )?;
                 Ok(match tree {
                     JniOutput::Branch {
-                        operation: JniOutputBranch::Fields,
+                        operation:
+                            prebindgen_declarations::Operation::Resolved(JniOutputBranch::Fields),
                         children: _,
                     } => OutputNode::Branch {
-                        operation: JniOutputBranch::Fields,
+                        operation: (JniOutputBranch::Fields).into(),
                         children,
                     },
                     JniOutput::Branch {
-                        operation: JniOutputBranch::OwnedFields,
+                        operation:
+                            prebindgen_declarations::Operation::Resolved(JniOutputBranch::OwnedFields),
                         children: _,
                     } => OutputNode::Branch {
-                        operation: JniOutputBranch::OwnedFields,
+                        operation: (JniOutputBranch::OwnedFields).into(),
                         children,
                     },
                     JniOutput::Branch {
-                        operation: JniOutputBranch::Record { mode, .. },
+                        operation:
+                            prebindgen_declarations::Operation::Resolved(JniOutputBranch::Record {
+                                mode,
+                                ..
+                            }),
                         ..
                     } => OutputNode::Branch {
-                        operation: JniOutputBranch::Record { mode: *mode },
+                        operation: (JniOutputBranch::Record { mode: *mode }).into(),
                         children,
                     },
                     _ => unreachable!(),
                 })
             }
             JniOutput::Unary {
-                operation: JniOutputUnary::Getter { function },
+                operation:
+                    prebindgen_declarations::Operation::Resolved(JniOutputUnary::Getter { function }),
                 child: output,
             }
             | JniOutput::Unary {
-                operation: JniOutputUnary::Into { function },
+                operation:
+                    prebindgen_declarations::Operation::Resolved(JniOutputUnary::Into { function }),
                 child: output,
             } => {
                 let output = Box::new(prebindgen_declarations::resolve_getter(
@@ -943,7 +1079,9 @@ impl DeclJniDefaults {
                     matches!(
                         tree,
                         JniOutput::Unary {
-                            operation: JniOutputUnary::Into { .. },
+                            operation: prebindgen_declarations::Operation::Resolved(
+                                JniOutputUnary::Into { .. }
+                            ),
                             ..
                         }
                     ),
@@ -954,35 +1092,39 @@ impl DeclJniDefaults {
                     if matches!(
                         tree,
                         JniOutput::Unary {
-                            operation: JniOutputUnary::Into { .. },
+                            operation: prebindgen_declarations::Operation::Resolved(
+                                JniOutputUnary::Into { .. }
+                            ),
                             ..
                         }
                     ) {
                         OutputNode::Unary {
-                            operation: JniOutputUnary::Into {
+                            operation: (JniOutputUnary::Into {
                                 function: function.clone(),
-                            },
+                            })
+                            .into(),
                             child: output,
                         }
                     } else {
                         OutputNode::Unary {
-                            operation: JniOutputUnary::Getter {
+                            operation: (JniOutputUnary::Getter {
                                 function: function.clone(),
-                            },
+                            })
+                            .into(),
                             child: output,
                         }
                     },
                 )
             }
             JniOutput::Branch {
-                operation: JniOutputBranch::Combine,
+                operation: prebindgen_declarations::Operation::Resolved(JniOutputBranch::Combine),
                 children: parts,
             } => {
                 if parts.is_empty() {
                     return Err("an output combination needs at least one part".into());
                 }
                 Ok(OutputNode::Branch {
-                    operation: JniOutputBranch::Combine,
+                    operation: (JniOutputBranch::Combine).into(),
                     children: parts
                         .iter()
                         .map(|child| resolve(ty, child, stack))
@@ -990,7 +1132,8 @@ impl DeclJniDefaults {
                 })
             }
             JniOutput::Unary {
-                operation: JniOutputUnary::Result { error },
+                operation:
+                    prebindgen_declarations::Operation::Resolved(JniOutputUnary::Result { error }),
                 child: ok,
             } => {
                 let (success, failure) =
@@ -999,12 +1142,26 @@ impl DeclJniDefaults {
                     prebindgen_declarations::validate_error_mapper(flat, failure, name)?;
                 }
                 Ok(OutputNode::Unary {
-                    operation: JniOutputUnary::Result {
+                    operation: (JniOutputUnary::Result {
                         error: error.clone(),
-                    },
+                    })
+                    .into(),
                     child: Box::new(resolve(success, ok, stack)?),
                 })
             }
+            JniOutput::Request(_)
+            | JniOutput::Unary {
+                operation: prebindgen_declarations::Operation::Request(_),
+                ..
+            }
+            | JniOutput::Branch {
+                operation: prebindgen_declarations::Operation::Request(_),
+                ..
+            }
+            | JniOutput::Arrow {
+                operation: prebindgen_declarations::Operation::Request(_),
+                ..
+            } => Err("pending operation has the wrong structural node shape".into()),
         }
     }
 }
@@ -1030,9 +1187,10 @@ impl DeclJniDefaults {
             |ty, child, stack| self.input(flat, codec, ty, child, extra, stack),
         )?;
         Ok(JniInput::Unary {
-            operation: JniInputUnary::Convert {
+            operation: (JniInputUnary::Convert {
                 conversion: Box::new(conversion),
-            },
+            })
+            .into(),
             child: Box::new(child),
         })
     }
@@ -1056,9 +1214,10 @@ impl DeclJniDefaults {
             |ty, child, stack| self.output(flat, codec, ty, child, extra, stack, true),
         )?;
         Ok(JniOutput::Unary {
-            operation: JniOutputUnary::Convert {
+            operation: (JniOutputUnary::Convert {
                 conversion: Box::new(conversion),
-            },
+            })
+            .into(),
             child: Box::new(child),
         })
     }
@@ -1072,7 +1231,7 @@ impl DeclJniDefaults {
     ) -> Result<JniInput> {
         if type_key(ty) == "()" {
             return Ok(InputNode::Branch {
-                operation: JniInputBranch::Fields,
+                operation: (JniInputBranch::Fields).into(),
                 children: vec![],
             });
         }
@@ -1092,11 +1251,11 @@ impl DeclJniDefaults {
             true,
             |inner| self.resolve_input_value(flat, codec, inner, extra, stack),
             |child| JniInput::Unary {
-                operation: JniInputUnary::Optional,
+                operation: (JniInputUnary::Optional).into(),
                 child: Box::new(child),
             },
             |child| JniInput::Unary {
-                operation: JniInputUnary::Sequence,
+                operation: (JniInputUnary::Sequence).into(),
                 child: Box::new(child),
             },
         )? {
@@ -1124,7 +1283,7 @@ impl DeclJniDefaults {
     ) -> Result<JniOutput> {
         if type_key(ty) == "()" {
             return Ok(OutputNode::Branch {
-                operation: JniOutputBranch::Fields,
+                operation: (JniOutputBranch::Fields).into(),
                 children: vec![],
             });
         }
@@ -1144,14 +1303,15 @@ impl DeclJniDefaults {
             true,
             |inner| self.resolve_output_value(flat, codec, inner, extra, stack, getter, policy),
             |child| JniOutput::Unary {
-                operation: JniOutputUnary::Optional,
+                operation: (JniOutputUnary::Optional).into(),
                 child: Box::new(child),
             },
             |child| JniOutput::Unary {
-                operation: JniOutputUnary::Sequence {
+                operation: (JniOutputUnary::Sequence {
                     delivery: prebindgen_declarations::SequenceDelivery::Value,
                     mode: policy.map(|p| p.mode),
-                },
+                })
+                .into(),
                 child: Box::new(child),
             },
         )? {
@@ -1179,7 +1339,7 @@ impl DeclJniDefaults {
         codec: &JniCodec,
         ty: &Type,
         extra: &(),
-        entries: &BTreeMap<String, BTreeMap<String, JniInput<JniInputRequest, JniOutputRequest>>>,
+        entries: &BTreeMap<String, BTreeMap<String, &JniInput<JniInputRequest, JniOutputRequest>>>,
         value: bool,
         stack: &mut Vec<String>,
     ) -> Result<JniInput> {
@@ -1204,7 +1364,7 @@ impl DeclJniDefaults {
         codec: &JniCodec,
         ty: &Type,
         extra: &(),
-        entries: &BTreeMap<String, BTreeMap<String, JniOutput<JniInputRequest, JniOutputRequest>>>,
+        entries: &BTreeMap<String, BTreeMap<String, &JniOutput<JniInputRequest, JniOutputRequest>>>,
         value: bool,
         stack: &mut Vec<String>,
         getter: bool,
@@ -1342,7 +1502,7 @@ impl DeclJniDefaults {
                 ));
             }
             Ok(Some(JniInput::Branch {
-                operation: JniInputBranch::Record,
+                operation: (JniInputBranch::Record).into(),
                 children: vec![JniInput::value(); flat.record(ty)?.fields.len()],
             }))
         })();
@@ -1428,9 +1588,10 @@ impl DeclJniDefaults {
             Ok(JniOutput::Request(JniOutputRequest::Value {projection:Some(child.clone())}))
         }).collect::<Result<Vec<_>>>()?;
             Ok(Some(JniOutput::Branch {
-                operation: JniOutputBranch::Record {
+                operation: (JniOutputBranch::Record {
                     mode: policy.map(|p| p.mode),
-                },
+                })
+                .into(),
                 children,
             }))
         })();

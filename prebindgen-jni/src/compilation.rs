@@ -50,7 +50,11 @@ impl Consumes for JniOutput {
     ) -> bool {
         match self {
             JniOutput::Unary {
-                operation: JniOutputUnary::Convert { conversion, .. },
+                operation:
+                    prebindgen_declarations::Operation::Resolved(JniOutputUnary::Convert {
+                        conversion,
+                        ..
+                    }),
                 ..
             } => match &conversion.source {
                 prebindgen_flat::ValueSource::Function(name) => {
@@ -63,23 +67,27 @@ impl Consumes for JniOutput {
                 prebindgen_flat::ValueSource::Into { .. } => true,
             },
             JniOutput::Unary {
-                operation: JniOutputUnary::Sequence { mode, .. },
+                operation:
+                    prebindgen_declarations::Operation::Resolved(JniOutputUnary::Sequence {
+                        mode, ..
+                    }),
                 ..
             } => match mode {
                 Some(mode) => *mode == ProjectionMode::Owned,
                 None => !borrowed && sequence_parts(ty).is_some_and(|(_, view)| view.is_owned()),
             },
             JniOutput::Unary {
-                operation: JniOutputUnary::Bulk,
+                operation: prebindgen_declarations::Operation::Resolved(JniOutputUnary::Bulk),
                 child,
             } => child.consumes(flat, ty, extra, codec, borrowed),
             JniOutput::Unary {
-                operation: JniOutputUnary::Named { .. },
+                operation:
+                    prebindgen_declarations::Operation::Resolved(JniOutputUnary::Named { .. }),
                 child,
                 ..
             } => child.consumes(flat, ty, extra, codec, borrowed),
             JniOutput::Unary {
-                operation: JniOutputUnary::Optional,
+                operation: prebindgen_declarations::Operation::Resolved(JniOutputUnary::Optional),
                 child,
             } => child.consumes(flat, option_inner(ty).unwrap_or(ty), extra, codec, borrowed),
             JniOutput::Leaf(JniOutputLeafOp::Value) => {
@@ -87,32 +95,38 @@ impl Consumes for JniOutput {
             }
             JniOutput::Leaf(JniOutputLeafOp::Projected(p)) => p.mode == ProjectionMode::Owned,
             JniOutput::Branch {
-                operation: JniOutputBranch::OwnedFields,
+                operation:
+                    prebindgen_declarations::Operation::Resolved(JniOutputBranch::OwnedFields),
                 children: _,
             }
             | JniOutput::Unary {
-                operation: JniOutputUnary::Into { .. },
+                operation: prebindgen_declarations::Operation::Resolved(JniOutputUnary::Into { .. }),
                 ..
             }
             | JniOutput::Unary {
-                operation: JniOutputUnary::Result { .. },
+                operation:
+                    prebindgen_declarations::Operation::Resolved(JniOutputUnary::Result { .. }),
                 ..
             } => true,
             JniOutput::Branch {
-                operation: JniOutputBranch::Record { mode, .. },
+                operation:
+                    prebindgen_declarations::Operation::Resolved(JniOutputBranch::Record {
+                        mode, ..
+                    }),
                 ..
             } => mode.map_or(!borrowed && output_referent(ty).is_none(), |m| {
                 m == ProjectionMode::Owned
             }),
             JniOutput::Branch {
-                operation: JniOutputBranch::Enum { mode, .. },
+                operation:
+                    prebindgen_declarations::Operation::Resolved(JniOutputBranch::Enum { mode, .. }),
                 ..
             } => mode.map_or(!borrowed && output_referent(ty).is_none(), |m| {
                 m == ProjectionMode::Owned
             }),
             JniOutput::Request(never) => match *never {},
             JniOutput::Branch {
-                operation: JniOutputBranch::Combine,
+                operation: prebindgen_declarations::Operation::Resolved(JniOutputBranch::Combine),
                 children: p,
             } => p
                 .iter()
@@ -157,11 +171,12 @@ impl<C: Codec<InOps = JniInputOps, OutOps = JniOutputOps, CompileState = JniComp
         match recipe {
             JniInput::None => self.cx.input_unit(ty),
             JniInput::Branch {
-                operation: JniInputBranch::Variant,
+                operation: prebindgen_declarations::Operation::Resolved(JniInputBranch::Variant),
                 ..
             } => Err("variant branch requires an enum parent".into()),
             JniInput::Branch {
-                operation: JniInputBranch::Enum { value },
+                operation:
+                    prebindgen_declarations::Operation::Resolved(JniInputBranch::Enum { value }),
                 children: variants,
             } => self.cx.enum_input(
                 ty,
@@ -175,15 +190,16 @@ impl<C: Codec<InOps = JniInputOps, OutOps = JniOutputOps, CompileState = JniComp
                 names,
             ),
             JniInput::Unary {
-                operation: JniInputUnary::Convert { conversion },
+                operation:
+                    prebindgen_declarations::Operation::Resolved(JniInputUnary::Convert { conversion }),
                 child: input,
             } => self.input_conversion(ty, conversion, input, extra, active, names),
             JniInput::Unary {
-                operation: JniInputUnary::Temporary,
+                operation: prebindgen_declarations::Operation::Resolved(JniInputUnary::Temporary),
                 child: inner,
             } => self.cx.input_temporary(ty, extra, active, names, inner),
             JniInput::Unary {
-                operation: JniInputUnary::Bulk,
+                operation: prebindgen_declarations::Operation::Resolved(JniInputUnary::Bulk),
                 child: inner,
             } => {
                 require_bulk(self.codec, Direction::Input)?;
@@ -198,7 +214,7 @@ impl<C: Codec<InOps = JniInputOps, OutOps = JniOutputOps, CompileState = JniComp
                     .bulk_input(self.flat, ty, extra, wire, child?, active)
             }
             JniInput::Arrow {
-                operation: callback,
+                operation: prebindgen_declarations::Operation::Resolved(callback),
                 domain,
                 codomain,
             } => {
@@ -222,21 +238,21 @@ impl<C: Codec<InOps = JniInputOps, OutOps = JniOutputOps, CompileState = JniComp
                 })
             }
             JniInput::Unary {
-                operation: JniInputUnary::Sequence,
+                operation: prebindgen_declarations::Operation::Resolved(JniInputUnary::Sequence),
                 child: element_recipe,
             } => {
                 if !self.state.bulk.get() {
                     if let JniInput::Unary {
-                        operation: JniInputUnary::Bulk,
+                        operation: prebindgen_declarations::Operation::Resolved(JniInputUnary::Bulk),
                         child: inner,
                     } = element_recipe.as_ref()
                     {
                         return self.input_named(
                             ty,
                             &JniInput::Unary {
-                                operation: JniInputUnary::Bulk,
+                                operation: (JniInputUnary::Bulk).into(),
                                 child: Box::new(JniInput::Unary {
-                                    operation: JniInputUnary::Sequence,
+                                    operation: (JniInputUnary::Sequence).into(),
                                     child: inner.clone(),
                                 }),
                             },
@@ -257,7 +273,7 @@ impl<C: Codec<InOps = JniInputOps, OutOps = JniOutputOps, CompileState = JniComp
                 )
             }
             JniInput::Unary {
-                operation: JniInputUnary::Optional,
+                operation: prebindgen_declarations::Operation::Resolved(JniInputUnary::Optional),
                 child: inner,
             } => self.cx.input_optional(ty, extra, active, names, var, inner),
             JniInput::Leaf(JniInputLeafOp::Value) => {
@@ -285,11 +301,11 @@ impl<C: Codec<InOps = JniInputOps, OutOps = JniOutputOps, CompileState = JniComp
             }
             JniInput::Request(never) => match *never {},
             JniInput::Branch {
-                operation: JniInputBranch::Fields,
+                operation: prebindgen_declarations::Operation::Resolved(JniInputBranch::Fields),
                 children,
             }
             | JniInput::Branch {
-                operation: JniInputBranch::Record,
+                operation: prebindgen_declarations::Operation::Resolved(JniInputBranch::Record),
                 children,
             } => self.cx.input_fields(
                 ty,
@@ -301,21 +317,38 @@ impl<C: Codec<InOps = JniInputOps, OutOps = JniOutputOps, CompileState = JniComp
                 matches!(
                     recipe,
                     JniInput::Branch {
-                        operation: JniInputBranch::Record,
+                        operation: prebindgen_declarations::Operation::Resolved(
+                            JniInputBranch::Record
+                        ),
                         ..
                     }
                 ),
             ),
             JniInput::Branch {
-                operation: JniInputBranch::Constructor { function },
+                operation:
+                    prebindgen_declarations::Operation::Resolved(JniInputBranch::Constructor {
+                        function,
+                    }),
                 children: args,
             } => self
                 .cx
                 .input_constructor(ty, extra, active, var, function, args),
             JniInput::Branch {
-                operation: JniInputBranch::Selector,
+                operation: prebindgen_declarations::Operation::Resolved(JniInputBranch::Selector),
                 children: arms,
             } => self.cx.input_selector(ty, extra, active, var, arms),
+            JniInput::Unary {
+                operation: prebindgen_declarations::Operation::Request(never),
+                ..
+            }
+            | JniInput::Branch {
+                operation: prebindgen_declarations::Operation::Request(never),
+                ..
+            }
+            | JniInput::Arrow {
+                operation: prebindgen_declarations::Operation::Request(never),
+                ..
+            } => match *never {},
         }
     }
 
@@ -329,7 +362,8 @@ impl<C: Codec<InOps = JniInputOps, OutOps = JniOutputOps, CompileState = JniComp
         reference_return: bool,
     ) -> Result<CodecOutputPlan<C>> {
         if let JniOutput::Unary {
-            operation: JniOutputUnary::Result { error },
+            operation:
+                prebindgen_declarations::Operation::Resolved(JniOutputUnary::Result { error }),
             child: ok,
         } = recipe
         {
@@ -356,7 +390,8 @@ impl<C: Codec<InOps = JniInputOps, OutOps = JniOutputOps, CompileState = JniComp
         if !borrowed {
             if matches!(ty, Type::Reference(_)) {
                 if let JniOutput::Branch {
-                    operation: JniOutputBranch::Combine,
+                    operation:
+                        prebindgen_declarations::Operation::Resolved(JniOutputBranch::Combine),
                     children: parts,
                 } = recipe
                 {
@@ -381,7 +416,8 @@ impl<C: Codec<InOps = JniInputOps, OutOps = JniOutputOps, CompileState = JniComp
             if let (
                 Some(payload_ty),
                 JniOutput::Unary {
-                    operation: JniOutputUnary::Optional,
+                    operation:
+                        prebindgen_declarations::Operation::Resolved(JniOutputUnary::Optional),
                     child: inner,
                 },
             ) = (option_inner(ty), recipe)
@@ -429,23 +465,32 @@ impl<C: Codec<InOps = JniInputOps, OutOps = JniOutputOps, CompileState = JniComp
         let mut out = self.cx.empty_output()?;
         match recipe {
             JniOutput::Unary {
-                operation: JniOutputUnary::CallbackArgument { .. },
+                operation:
+                    prebindgen_declarations::Operation::Resolved(JniOutputUnary::CallbackArgument {
+                        ..
+                    }),
                 ..
             } => return Err("callback argument ownership requires an arrow domain".into()),
             JniOutput::None => {
                 return self.cx.output_unit(ty, out);
             }
-            JniOutput::Arrow { operation, .. } => match *operation {},
+            JniOutput::Arrow {
+                operation: prebindgen_declarations::Operation::Resolved(never),
+                ..
+            } => match *never {},
             JniOutput::Branch {
-                operation: JniOutputBranch::Variant | JniOutputBranch::Arguments,
+                operation:
+                    prebindgen_declarations::Operation::Resolved(
+                        JniOutputBranch::Variant | JniOutputBranch::Arguments,
+                    ),
                 ..
             } => return Err("variant/argument branch requires its parent operation".into()),
             JniOutput::Branch {
                 operation:
-                    JniOutputBranch::Enum {
+                    prebindgen_declarations::Operation::Resolved(JniOutputBranch::Enum {
                         value: grouped,
                         mode,
-                    },
+                    }),
                 children: variants,
             } => {
                 return self.cx.enum_output(
@@ -463,11 +508,12 @@ impl<C: Codec<InOps = JniInputOps, OutOps = JniOutputOps, CompileState = JniComp
                 );
             }
             JniOutput::Unary {
-                operation: JniOutputUnary::Convert { conversion },
+                operation:
+                    prebindgen_declarations::Operation::Resolved(JniOutputUnary::Convert { conversion }),
                 child: output,
             } => return self.output_conversion(ty, conversion, output, extra, value, borrowed),
             JniOutput::Unary {
-                operation: JniOutputUnary::Bulk,
+                operation: prebindgen_declarations::Operation::Resolved(JniOutputUnary::Bulk),
                 child: inner,
             } => {
                 require_bulk(self.codec, Direction::Output)?;
@@ -482,7 +528,8 @@ impl<C: Codec<InOps = JniInputOps, OutOps = JniOutputOps, CompileState = JniComp
             }
             JniOutput::Leaf(JniOutputLeafOp::Discard) => return Ok(out),
             JniOutput::Unary {
-                operation: JniOutputUnary::Named { name },
+                operation:
+                    prebindgen_declarations::Operation::Resolved(JniOutputUnary::Named { name }),
                 child: output,
             } => {
                 return self
@@ -490,7 +537,11 @@ impl<C: Codec<InOps = JniInputOps, OutOps = JniOutputOps, CompileState = JniComp
                     .output_named_view(ty, extra, value, borrowed, wire_name, name, output);
             }
             JniOutput::Unary {
-                operation: JniOutputUnary::Sequence { delivery, mode },
+                operation:
+                    prebindgen_declarations::Operation::Resolved(JniOutputUnary::Sequence {
+                        delivery,
+                        mode,
+                    }),
                 child: element,
             } => {
                 if self.state.bulk.get() && *delivery == SequenceDelivery::Callback {
@@ -504,7 +555,7 @@ impl<C: Codec<InOps = JniInputOps, OutOps = JniOutputOps, CompileState = JniComp
                     return self.output_named(
                         ty,
                         &JniOutput::Unary {
-                            operation: JniOutputUnary::Bulk,
+                            operation: (JniOutputUnary::Bulk).into(),
                             child: Box::new(recipe.clone()),
                         },
                         extra,
@@ -515,19 +566,21 @@ impl<C: Codec<InOps = JniInputOps, OutOps = JniOutputOps, CompileState = JniComp
                 }
                 if !self.state.bulk.get() && *delivery != SequenceDelivery::Callback {
                     if let JniOutput::Unary {
-                        operation: JniOutputUnary::Bulk,
+                        operation:
+                            prebindgen_declarations::Operation::Resolved(JniOutputUnary::Bulk),
                         child: inner,
                     } = element.as_ref()
                     {
                         return self.output_named(
                             ty,
                             &JniOutput::Unary {
-                                operation: JniOutputUnary::Bulk,
+                                operation: (JniOutputUnary::Bulk).into(),
                                 child: Box::new(JniOutput::Unary {
-                                    operation: JniOutputUnary::Sequence {
+                                    operation: (JniOutputUnary::Sequence {
                                         delivery: *delivery,
                                         mode: *mode,
-                                    },
+                                    })
+                                    .into(),
                                     child: inner.clone(),
                                 }),
                             },
@@ -555,13 +608,14 @@ impl<C: Codec<InOps = JniInputOps, OutOps = JniOutputOps, CompileState = JniComp
                 return result;
             }
             JniOutput::Unary {
-                operation: JniOutputUnary::Result { .. },
+                operation:
+                    prebindgen_declarations::Operation::Resolved(JniOutputUnary::Result { .. }),
                 ..
             } => {
                 return Err("Result error routing is supported only at the outermost return".into())
             }
             JniOutput::Unary {
-                operation: JniOutputUnary::Optional,
+                operation: prebindgen_declarations::Operation::Resolved(JniOutputUnary::Optional),
                 child: inner,
             } => {
                 return self
@@ -596,32 +650,40 @@ impl<C: Codec<InOps = JniInputOps, OutOps = JniOutputOps, CompileState = JniComp
                 );
             }
             JniOutput::Branch {
-                operation: JniOutputBranch::Fields,
+                operation: prebindgen_declarations::Operation::Resolved(JniOutputBranch::Fields),
                 children,
             }
             | JniOutput::Branch {
-                operation: JniOutputBranch::OwnedFields,
+                operation:
+                    prebindgen_declarations::Operation::Resolved(JniOutputBranch::OwnedFields),
                 children,
             }
             | JniOutput::Branch {
-                operation: JniOutputBranch::Record { .. },
+                operation:
+                    prebindgen_declarations::Operation::Resolved(JniOutputBranch::Record { .. }),
                 children,
                 ..
             } => {
                 let grouped = matches!(
                     recipe,
                     JniOutput::Branch {
-                        operation: JniOutputBranch::Record { .. },
+                        operation: prebindgen_declarations::Operation::Resolved(
+                            JniOutputBranch::Record { .. }
+                        ),
                         ..
                     }
                 );
                 let owned = match recipe {
                     JniOutput::Branch {
-                        operation: JniOutputBranch::OwnedFields,
+                        operation:
+                            prebindgen_declarations::Operation::Resolved(JniOutputBranch::OwnedFields),
                         ..
                     } => true,
                     JniOutput::Branch {
-                        operation: JniOutputBranch::Record { mode },
+                        operation:
+                            prebindgen_declarations::Operation::Resolved(JniOutputBranch::Record {
+                                mode,
+                            }),
                         ..
                     } => mode.map_or(!borrowed, |m| m == ProjectionMode::Owned),
                     _ => false,
@@ -629,9 +691,11 @@ impl<C: Codec<InOps = JniInputOps, OutOps = JniOutputOps, CompileState = JniComp
                 let explicit_copy = matches!(
                     recipe,
                     JniOutput::Branch {
-                        operation: JniOutputBranch::Record {
-                            mode: Some(ProjectionMode::Borrowed)
-                        },
+                        operation: prebindgen_declarations::Operation::Resolved(
+                            JniOutputBranch::Record {
+                                mode: Some(ProjectionMode::Borrowed)
+                            }
+                        ),
                         ..
                     }
                 );
@@ -649,17 +713,21 @@ impl<C: Codec<InOps = JniInputOps, OutOps = JniOutputOps, CompileState = JniComp
                 );
             }
             JniOutput::Unary {
-                operation: JniOutputUnary::Getter { function },
+                operation:
+                    prebindgen_declarations::Operation::Resolved(JniOutputUnary::Getter { function }),
                 child: output,
             }
             | JniOutput::Unary {
-                operation: JniOutputUnary::Into { function },
+                operation:
+                    prebindgen_declarations::Operation::Resolved(JniOutputUnary::Into { function }),
                 child: output,
             } => {
                 let consuming = matches!(
                     recipe,
                     JniOutput::Unary {
-                        operation: JniOutputUnary::Into { .. },
+                        operation: prebindgen_declarations::Operation::Resolved(
+                            JniOutputUnary::Into { .. }
+                        ),
                         ..
                     }
                 );
@@ -668,7 +736,7 @@ impl<C: Codec<InOps = JniInputOps, OutOps = JniOutputOps, CompileState = JniComp
                     .output_getter(ty, extra, value, borrowed, function, output, consuming, out);
             }
             JniOutput::Branch {
-                operation: JniOutputBranch::Combine,
+                operation: prebindgen_declarations::Operation::Resolved(JniOutputBranch::Combine),
                 children: parts,
             } => {
                 if parts.is_empty() {
@@ -707,6 +775,18 @@ impl<C: Codec<InOps = JniInputOps, OutOps = JniOutputOps, CompileState = JniComp
                     out.statements.extend(body);
                 }
             }
+            JniOutput::Unary {
+                operation: prebindgen_declarations::Operation::Request(never),
+                ..
+            }
+            | JniOutput::Branch {
+                operation: prebindgen_declarations::Operation::Request(never),
+                ..
+            }
+            | JniOutput::Arrow {
+                operation: prebindgen_declarations::Operation::Request(never),
+                ..
+            } => match *never {},
         }
         Ok(out)
     }
@@ -741,7 +821,10 @@ impl<C: Codec<InOps = JniInputOps, OutOps = JniOutputOps, CompileState = JniComp
             .iter()
             .map(|part| match part {
                 JniOutput::Unary {
-                    operation: JniOutputUnary::Getter { function },
+                    operation:
+                        prebindgen_declarations::Operation::Resolved(JniOutputUnary::Getter {
+                            function,
+                        }),
                     child,
                 } => Some((function.as_str(), child.as_ref())),
                 _ => None,

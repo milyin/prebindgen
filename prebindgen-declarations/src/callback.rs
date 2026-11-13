@@ -10,7 +10,7 @@ use syn::Type;
 pub struct CallbackOperation<Extension = std::convert::Infallible> {
     /// Adapter-specific callback settings retained in the resolved tree.
     pub extension: Option<Extension>,
-    /// Canonical source callback signature, excluding marker bounds.
+    /// Source callback signature; canonicalized when the request resolves.
     pub ty: Type,
     /// Literal foreign interface name, if explicitly selected.
     pub foreign: Option<String>,
@@ -134,21 +134,53 @@ impl<InTree, OutTree, Extension> DeclCallback<InTree, OutTree, Extension> {
     }
 }
 
-impl<I: crate::InputOps, O: crate::OutputOps, IR, OR, Extension>
-    From<DeclCallback<crate::InputNode<I, O, IR, OR>, crate::OutputNode<I, O, IR, OR>, Extension>>
+/// Metadata for a callback whose explicit conversions live on structural tree edges.
+#[derive(Clone, Debug)]
+pub struct CallbackRequest<Extension = std::convert::Infallible> {
+    /// Source identity, foreign placement and adapter settings.
+    pub operation: CallbackOperation<Extension>,
+    /// Source argument indices corresponding to the domain's explicit children.
+    pub arguments: Vec<usize>,
+}
+/// Adapter construction of a retained callback's complete input tree.
+/// This bridge permits the shared declaration's `Into<InputNode>` implementation
+/// while the adapter selects its own operation and grouping metadata.
+pub trait CallbackInput<InTree, OutTree, Extension = std::convert::Infallible> {
+    /// Put explicit argument/result recipes on structural edges, preserving type scope.
+    fn callback_input(declaration: DeclCallback<InTree, OutTree, Extension>) -> InTree;
+}
+/// Assemble a callback declaration using the adapter's structural node constructors.
+pub fn callback_input<I, O, E>(
+    declaration: DeclCallback<I, O, E>,
+    auto: impl FnOnce() -> I,
+    arguments: impl FnOnce(Vec<O>) -> O,
+    arrow: impl FnOnce(CallbackRequest<E>, O, I) -> I,
+    typed: impl FnOnce(Type, I) -> I,
+) -> I {
+    let ty = declaration.ty;
+    let explicit_return = declaration.ret.is_some();
+    let (indices, children) = declaration.params.into_iter().unzip();
+    let metadata = CallbackRequest {
+        operation: CallbackOperation {
+            ty: ty.clone(),
+            foreign: declaration.foreign,
+            namespace: declaration.namespace,
+            extension: declaration.extension,
+            explicit_return,
+        },
+        arguments: indices,
+    };
+    let domain = arguments(children);
+    let codomain = declaration.ret.unwrap_or_else(auto);
+    typed(ty, arrow(metadata, domain, codomain))
+}
+impl<I: crate::InputOps, O: crate::OutputOps, IR, OR, E>
+    From<DeclCallback<crate::InputNode<I, O, IR, OR>, crate::OutputNode<I, O, IR, OR>, E>>
     for crate::InputNode<I, O, IR, OR>
 where
-    IR: From<
-        DeclCallback<crate::InputNode<I, O, IR, OR>, crate::OutputNode<I, O, IR, OR>, Extension>,
-    >,
+    IR: CallbackInput<crate::InputNode<I, O, IR, OR>, crate::OutputNode<I, O, IR, OR>, E>,
 {
-    fn from(
-        declaration: DeclCallback<
-            crate::InputNode<I, O, IR, OR>,
-            crate::OutputNode<I, O, IR, OR>,
-            Extension,
-        >,
-    ) -> Self {
-        Self::Request(declaration.into())
+    fn from(declaration: DeclCallback<Self, crate::OutputNode<I, O, IR, OR>, E>) -> Self {
+        IR::callback_input(declaration)
     }
 }

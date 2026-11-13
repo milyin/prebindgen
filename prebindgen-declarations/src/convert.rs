@@ -336,17 +336,32 @@ pub fn validate_conversion<S: Schema>(
     Ok(())
 }
 
-impl<I: crate::InputOps, O: crate::OutputOps, IR: From<DeclConvert<E>>, OR, E> From<DeclConvert<E>>
+/// Adapter construction of a locally selected single-value conversion.
+///
+/// The implementation preserves the declaration's source-type scope around the
+/// conversion leaf. This keeps later selectors, projections and representation
+/// modifiers scoped to the same source type. The recipe may be incoming or
+/// outgoing; the adapter's request type selects the direction.
+pub trait LocalConversion<Recipe, Extension = std::convert::Infallible> {
+    /// Construct the complete scoped recipe, with children on structural edges.
+    fn local_conversion(declaration: DeclConvert<Extension>) -> Recipe;
+}
+
+impl<I: crate::InputOps, O: crate::OutputOps, IR, OR, E> From<DeclConvert<E>>
     for crate::InputNode<I, O, IR, OR>
+where
+    IR: LocalConversion<crate::InputNode<I, O, IR, OR>, E>,
 {
-    fn from(decl: DeclConvert<E>) -> Self {
-        Self::Request(decl.into())
+    fn from(declaration: DeclConvert<E>) -> Self {
+        IR::local_conversion(declaration)
     }
 }
-impl<I: crate::InputOps, O: crate::OutputOps, IR, OR: From<DeclConvert<E>>, E> From<DeclConvert<E>>
+impl<I: crate::InputOps, O: crate::OutputOps, IR, OR, E> From<DeclConvert<E>>
     for crate::OutputNode<I, O, IR, OR>
+where
+    OR: LocalConversion<crate::OutputNode<I, O, IR, OR>, E>,
 {
-    fn from(decl: DeclConvert<E>) -> Self {
-        Self::Request(decl.into())
+    fn from(declaration: DeclConvert<E>) -> Self {
+        OR::local_conversion(declaration)
     }
 }

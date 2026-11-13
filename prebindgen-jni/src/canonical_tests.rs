@@ -243,3 +243,19 @@ fn source_selection_includes_local_trait_representations() {
     let selected: JniBindings = JniBindings::parse_selected(items, &names, &[]).unwrap();
     assert!(selected.type_info(&syn::parse_quote!(crate::Repr)).is_ok());
 }
+
+#[test]
+fn local_conversion_views_and_selectors_keep_container_scope() {
+    let source = format!("{VALUE} pub fn option(v:Option<Value>)->Option<Value>{{}}");
+    let input: JniInput<JniInputRequest, JniOutputRequest> = conversion().into();
+    let output: JniOutput<JniInputRequest, JniOutputRequest> = conversion().into();
+    let generated = builder(&source)
+        .input(input.variant("make"))
+        .output(output.field("read"))
+        .package(package!().fun(fun!(option)))
+        .build()
+        .unwrap();
+    assert!(generated.rust.contains("make"));
+    assert!(generated.rust.contains("read"));
+    assert!(generated.kotlin["test/Functions.kt"].contains("option"));
+}

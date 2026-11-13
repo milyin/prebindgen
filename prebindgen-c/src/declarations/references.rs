@@ -1,5 +1,5 @@
 use super::*;
-/// Collect source helper and representation-type names needed by `Flat::parse_selected`.
+/// Collect source names; all recursive traversal follows structural edges.
 pub fn source_items<'a>(
     inputs: &[CInput<CInputRequest, COutputRequest>],
     outputs: &[COutput<CInputRequest, COutputRequest>],
@@ -7,57 +7,40 @@ pub fn source_items<'a>(
     functions: impl IntoIterator<Item = &'a DeclCFunction>,
 ) -> Vec<String> {
     fn input(tree: &CInput<CInputRequest, COutputRequest>, names: &mut Vec<String>) {
+        match tree.pending_request() {
+            Some(CInputRequest::Conversion(declaration)) => {
+                prebindgen_declarations::conversion_source_items(declaration, names)
+            }
+            Some(CInputRequest::Call(name)) => names.push(name.clone()),
+            _ => {}
+        }
         match tree {
-            CInput::Request(CInputRequest::EnumFields(variants)) => {
-                for child in variants.values().flat_map(|v| v.values()) {
-                    input(child, names)
-                }
-            }
-            CInput::Request(CInputRequest::Conversion(d)) => {
-                prebindgen_declarations::conversion_source_items(d, names)
-            }
             CInput::Unary {
-                operation: CInputUnary::Convert { conversion },
+                operation:
+                    prebindgen_declarations::Operation::Resolved(CInputUnary::Convert { conversion }),
                 ..
             } => {
                 if let prebindgen_flat::ValueSource::Function(name) = &conversion.source {
                     names.push(name.clone())
                 }
             }
-            CInput::Request(CInputRequest::Callback(declaration)) => {
-                for tree in declaration.params.values() {
-                    output(tree, names)
-                }
-                if let Some(tree) = &declaration.ret {
-                    input(tree, names)
-                }
-            }
-            CInput::Request(CInputRequest::Call(name)) => names.push(name.clone()),
             CInput::Branch {
-                operation: CInputBranch::Constructor { function },
+                operation:
+                    prebindgen_declarations::Operation::Resolved(CInputBranch::Constructor { function }),
                 ..
             } => names.push(function.clone()),
-            CInput::Request(CInputRequest::ForType { input: child, .. }) => input(child, names),
             _ => {}
         }
         prebindgen_declarations::input_children(tree, names, &mut input, &mut output);
     }
     fn output(tree: &COutput<CInputRequest, COutputRequest>, names: &mut Vec<String>) {
+        if let Some(COutputRequest::Conversion(declaration)) = tree.pending_request() {
+            prebindgen_declarations::conversion_source_items(declaration, names)
+        }
         match tree {
-            COutput::Request(COutputRequest::SequenceCallback { output: child, .. })
-            | COutput::Request(COutputRequest::ForType { output: child, .. }) => {
-                output(child, names)
-            }
-            COutput::Request(COutputRequest::EnumFields(variants)) => {
-                for child in variants.values().flat_map(|v| v.values()) {
-                    output(child, names)
-                }
-            }
-            COutput::Request(COutputRequest::Conversion(d)) => {
-                prebindgen_declarations::conversion_source_items(d, names)
-            }
             COutput::Unary {
-                operation: COutputUnary::Convert { conversion },
+                operation:
+                    prebindgen_declarations::Operation::Resolved(COutputUnary::Convert { conversion }),
                 ..
             } => {
                 if let prebindgen_flat::ValueSource::Function(name) = &conversion.source {
@@ -65,22 +48,19 @@ pub fn source_items<'a>(
                 }
             }
             COutput::Unary {
-                operation: COutputUnary::Getter { function },
-                ..
-            }
-            | COutput::Unary {
-                operation: COutputUnary::Into { function },
+                operation:
+                    prebindgen_declarations::Operation::Resolved(
+                        COutputUnary::Getter { function } | COutputUnary::Into { function },
+                    ),
                 ..
             } => names.push(function.clone()),
             COutput::Unary {
-                operation: COutputUnary::Result { error: Some(name) },
+                operation:
+                    prebindgen_declarations::Operation::Resolved(COutputUnary::Result {
+                        error: Some(name),
+                    }),
                 ..
             } => names.push(name.clone()),
-            COutput::Request(COutputRequest::NamedFields { overrides, .. }) => {
-                for child in overrides.values() {
-                    output(child, names)
-                }
-            }
             _ => {}
         }
         prebindgen_declarations::output_children(tree, names, &mut input, &mut output);

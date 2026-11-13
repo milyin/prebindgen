@@ -15,14 +15,14 @@ fn input_body(
 ) -> CInput<CInputRequest, COutputRequest> {
     match input {
         CInput::Branch {
-            operation: CInputBranch::Selector,
+            operation: prebindgen_declarations::Operation::Resolved(CInputBranch::Selector),
             children: mut arms,
         } if arms.len() == 1 => arms.remove(0),
         CInput::Unary {
-            operation: CInputUnary::Temporary,
+            operation: prebindgen_declarations::Operation::Resolved(CInputUnary::Temporary),
             child,
         } => CInput::Unary {
-            operation: CInputUnary::Temporary,
+            operation: (CInputUnary::Temporary).into(),
             child: Box::new(input_body(*child)),
         },
         other => other,
@@ -33,7 +33,7 @@ fn output_body(
 ) -> COutput<CInputRequest, COutputRequest> {
     match output {
         COutput::Branch {
-            operation: COutputBranch::Combine,
+            operation: prebindgen_declarations::Operation::Resolved(COutputBranch::Combine),
             children: mut parts,
         } if parts.len() == 1 => parts.remove(0),
         other => other,
@@ -52,18 +52,24 @@ impl DeclCDefaults {
         let inputs = inputs
             .into_iter()
             .map(|tree| match tree {
-                CInput::Request(CInputRequest::ForType { ty, input }) => {
-                    Ok((*ty, input_body(*input)))
-                }
+                CInput::Unary {
+                    operation:
+                        prebindgen_declarations::Operation::Request(CInputRequest::ForType { ty }),
+                    child: input,
+                } => Ok((*ty, input_body(*input))),
+
                 _ => Err("input defaults require a source type".into()),
             })
             .collect::<Result<Vec<_>>>()?;
         let outputs = outputs
             .into_iter()
             .map(|tree| match tree {
-                COutput::Request(COutputRequest::ForType { ty, output }) => {
-                    Ok((*ty, output_body(*output)))
-                }
+                COutput::Unary {
+                    operation:
+                        prebindgen_declarations::Operation::Request(COutputRequest::ForType { ty }),
+                    child: output,
+                } => Ok((*ty, output_body(*output))),
+
                 _ => Err("output defaults require a source type".into()),
             })
             .collect::<Result<Vec<_>>>()?;
@@ -89,10 +95,12 @@ impl DeclCDefaults {
         <CSchema as prebindgen_flat::Schema>::Function: Clone,
     {
         prebindgen_declarations::callback_variant(flat, decl, name, |output, structural| {
-            COutput::Request(COutputRequest::SequenceCallback {
-                output: Box::new(output.cloned().unwrap_or_else(COutput::auto)),
-                structural,
-            })
+            COutput::Unary {
+                operation: prebindgen_declarations::Operation::Request(
+                    COutputRequest::SequenceCallback { structural },
+                ),
+                child: Box::new(output.cloned().unwrap_or_else(COutput::auto)),
+            }
         })
     }
 
@@ -143,7 +151,7 @@ impl DeclCDefaults {
             &self.values.errors,
             COutput::auto(),
             |error, child| COutput::Unary {
-                operation: COutputUnary::Result { error },
+                operation: (COutputUnary::Result { error }).into(),
                 child: Box::new(child),
             },
         );
@@ -172,10 +180,15 @@ impl DeclCDefaults {
             flat,
             codec,
             ty,
-            &COutput::Request(COutputRequest::NamedFields {
-                overrides: BTreeMap::new(),
-                mode: ProjectionMode::Owned,
-            }),
+            &COutput::Branch {
+                operation: prebindgen_declarations::Operation::Request(
+                    COutputRequest::NamedFields {
+                        fields: vec![],
+                        mode: ProjectionMode::Owned,
+                    },
+                ),
+                children: vec![],
+            },
             extra,
         )
     }
@@ -223,14 +236,29 @@ impl DeclCDefaults {
                 }
             }
             CInput::Branch {
-                operation: CInputBranch::Variant,
+                operation: prebindgen_declarations::Operation::Resolved(CInputBranch::Variant),
                 ..
             } => Err("variant branch requires an enum parent".into()),
-            CInput::Request(CInputRequest::EnumFields(entries)) => {
-                self.enum_input_recipe(flat, codec, ty, extra, entries, false, stack)
+            CInput::Branch {
+                operation: prebindgen_declarations::Operation::Request(CInputRequest::EnumFields),
+                children,
+            } => {
+                let entries =
+                    prebindgen_declarations::enum_children(children, |tree| match tree {
+                        CInput::Branch {
+                            operation:
+                                prebindgen_declarations::Operation::Request(
+                                    CInputRequest::VariantFields { variant, fields },
+                                ),
+                            children,
+                        } => Ok((variant.as_str(), fields.as_slice(), children.as_slice())),
+                        _ => Err("named enum fields require variant branches".into()),
+                    })?;
+                self.enum_input_recipe(flat, codec, ty, extra, &entries, false, stack)
             }
             CInput::Branch {
-                operation: CInputBranch::Enum { value },
+                operation:
+                    prebindgen_declarations::Operation::Resolved(CInputBranch::Enum { value }),
                 children: variants,
             } => {
                 let variants = prebindgen_declarations::resolve_enum_variants(
@@ -271,7 +299,8 @@ impl DeclCDefaults {
                 )
             }
             CInput::Unary {
-                operation: CInputUnary::Convert { conversion },
+                operation:
+                    prebindgen_declarations::Operation::Resolved(CInputUnary::Convert { conversion }),
                 child: input,
             } => self.resolve_input_conversion(
                 flat,
@@ -283,10 +312,10 @@ impl DeclCDefaults {
                 stack,
             ),
             CInput::Unary {
-                operation: CInputUnary::Temporary,
+                operation: prebindgen_declarations::Operation::Resolved(CInputUnary::Temporary),
                 child,
             } => Ok(InputNode::Unary {
-                operation: CInputUnary::Temporary,
+                operation: (CInputUnary::Temporary).into(),
                 child: Box::new(resolve(
                     &prebindgen_declarations::temporary_input_type(ty)?,
                     &input_body((**child).clone()),
@@ -311,11 +340,11 @@ impl DeclCDefaults {
                             && owned::declaration(flat, ty).is_some())),
                     |inner| resolve(inner, &CInput::auto(), stack),
                     |child| CInput::Unary {
-                        operation: CInputUnary::Optional,
+                        operation: (CInputUnary::Optional).into(),
                         child: Box::new(child),
                     },
                     |child| CInput::Unary {
-                        operation: CInputUnary::Sequence,
+                        operation: (CInputUnary::Sequence).into(),
                         child: Box::new(child),
                     },
                 )? {
@@ -326,7 +355,11 @@ impl DeclCDefaults {
                 }
                 resolve(ty, &CInput::Leaf(CInputLeafOp::Value), stack)
             }
-            CInput::Request(CInputRequest::ForType { ty: target, input }) => {
+            CInput::Unary {
+                operation:
+                    prebindgen_declarations::Operation::Request(CInputRequest::ForType { ty: target }),
+                child: input,
+            } => {
                 let target = prebindgen_declarations::callback::input_type(flat, target)?;
                 let matched =
                     prebindgen_declarations::callback::input_key(flat, ty)? == type_key(&target);
@@ -338,11 +371,11 @@ impl DeclCDefaults {
                     stack,
                     resolve,
                     |child| CInput::Unary {
-                        operation: CInputUnary::Optional,
+                        operation: (CInputUnary::Optional).into(),
                         child: Box::new(child),
                     },
                     |child| CInput::Unary {
-                        operation: CInputUnary::Sequence,
+                        operation: (CInputUnary::Sequence).into(),
                         child: Box::new(child),
                     },
                     prebindgen_declarations::Direction::Input,
@@ -362,17 +395,11 @@ impl DeclCDefaults {
                     );
                 }
                 if prebindgen_flat::callback_signature(ty)?.is_some() {
-                    return resolve(
-                        ty,
-                        &CInput::Request(CInputRequest::Callback(Box::new(
-                            crate::DeclCCallback::new(ty.clone()),
-                        ))),
-                        stack,
-                    );
+                    return resolve(ty, &CInput::from(DeclCCallback::new(ty.clone())), stack);
                 }
                 if let Some(inner) = option_inner(ty) {
                     return Ok(InputNode::Unary {
-                        operation: CInputUnary::Optional,
+                        operation: (CInputUnary::Optional).into(),
                         child: Box::new(resolve(inner, &CInput::Leaf(CInputLeafOp::Value), stack)?),
                     });
                 }
@@ -382,14 +409,14 @@ impl DeclCDefaults {
                             && owned::declaration(flat, ty).is_some()))
                 }) {
                     return Ok(InputNode::Unary {
-                        operation: CInputUnary::Sequence,
+                        operation: (CInputUnary::Sequence).into(),
                         child: Box::new(resolve(element, &CInput::auto(), stack)?),
                     });
                 }
                 self.resolve_input_representation(flat, codec, ty, tree, stack)
             }
             CInput::Arrow {
-                operation: callback,
+                operation: prebindgen_declarations::Operation::Resolved(callback),
                 domain,
                 codomain,
             } => {
@@ -403,27 +430,46 @@ impl DeclCDefaults {
                     |ty, tree| resolve(ty, tree, stack),
                 )?;
                 Ok(InputNode::Arrow {
-                    operation: callback.clone(),
+                    operation: (callback.clone()).into(),
                     domain: Box::new(COutput::arguments(arguments)),
                     codomain: Box::new(result),
                 })
             }
-            CInput::Request(CInputRequest::Callback(declaration)) => {
+            CInput::Arrow {
+                operation:
+                    prebindgen_declarations::Operation::Request(CInputRequest::Callback(declaration)),
+                domain,
+                codomain,
+            } => {
                 let canonical = prebindgen_declarations::callback::input_key(flat, ty)?;
                 let default = match self.values.inputs.get(&canonical) {
-                    Some(CInput::Request(CInputRequest::Callback(default))) => {
-                        Some(default.as_ref())
-                    }
+                    Some(CInput::Arrow {
+                        operation:
+                            prebindgen_declarations::Operation::Request(CInputRequest::Callback(
+                                request,
+                            )),
+                        domain,
+                        codomain,
+                    }) => Some(prebindgen_declarations::CallbackTree {
+                        request,
+                        arguments: domain.argument_nodes()?,
+                        result: codomain.as_ref(),
+                    }),
                     _ => None,
                 };
-                let (operation, arguments, ret) = prebindgen_declarations::resolve_callback(
+                let (operation, arguments, ret) = prebindgen_declarations::resolve_callback_tree(
                     flat,
                     ty,
-                    declaration,
+                    prebindgen_declarations::CallbackTree {
+                        request: declaration,
+                        arguments: domain.argument_nodes()?,
+                        result: codomain.as_ref(),
+                    },
                     default,
                     &self.values.outputs,
                     &CInput::auto(),
                     &COutput::auto(),
+                    |tree| matches!(tree, CInput::Request(CInputRequest::Auto)),
                     stack,
                     resolve,
                     |ty, tree, ownership| {
@@ -433,26 +479,29 @@ impl DeclCDefaults {
                     },
                 )?;
                 Ok(InputNode::Arrow {
-                    operation: Box::new(operation),
+                    operation: Box::new(operation).into(),
                     domain: Box::new(COutput::arguments(arguments)),
                     codomain: Box::new(ret),
                 })
             }
+
             CInput::Request(CInputRequest::Call(function)) => {
                 let f = flat.function(function)?;
                 resolve(
                     ty,
                     &CInput::Branch {
-                        operation: CInputBranch::Constructor {
+                        operation: (CInputBranch::Constructor {
                             function: function.clone(),
-                        },
+                        })
+                        .into(),
                         children: vec![CInput::auto(); f.params.len()],
                     },
                     stack,
                 )
             }
             CInput::Branch {
-                operation: CInputBranch::Constructor { function },
+                operation:
+                    prebindgen_declarations::Operation::Resolved(CInputBranch::Constructor { function }),
                 children: args,
             } => prebindgen_declarations::resolve_constructor(
                 flat,
@@ -463,28 +512,28 @@ impl DeclCDefaults {
                 |function| CInputBranch::Constructor { function },
             ),
             CInput::Unary {
-                operation: CInputUnary::Optional,
+                operation: prebindgen_declarations::Operation::Resolved(CInputUnary::Optional),
                 child,
             } => {
                 let inner = option_inner(ty).ok_or("optional recipe requires Option<T>")?;
                 Ok(InputNode::Unary {
-                    operation: CInputUnary::Optional,
+                    operation: (CInputUnary::Optional).into(),
                     child: Box::new(resolve(inner, child, stack)?),
                 })
             }
             CInput::Unary {
-                operation: CInputUnary::Sequence,
+                operation: prebindgen_declarations::Operation::Resolved(CInputUnary::Sequence),
                 child,
             } => {
                 let (element, _) =
                     sequence_parts(ty).ok_or("sequence input requires Vec<T>, &[T] or &Vec<T>")?;
                 Ok(InputNode::Unary {
-                    operation: CInputUnary::Sequence,
+                    operation: (CInputUnary::Sequence).into(),
                     child: Box::new(resolve(element, child, stack)?),
                 })
             }
             CInput::Branch {
-                operation: CInputBranch::Fields,
+                operation: prebindgen_declarations::Operation::Resolved(CInputBranch::Fields),
                 children,
             } => {
                 if type_key(ty) == "()" && children.is_empty() {
@@ -498,26 +547,39 @@ impl DeclCDefaults {
                 )?;
                 Ok({
                     InputNode::Branch {
-                        operation: CInputBranch::Fields,
+                        operation: (CInputBranch::Fields).into(),
                         children,
                     }
                 })
             }
             CInput::Branch {
-                operation: CInputBranch::Selector,
+                operation: prebindgen_declarations::Operation::Resolved(CInputBranch::Selector),
                 children: arms,
             } => {
                 if arms.is_empty() {
                     return Err("an input selector needs at least one alternative".into());
                 }
                 Ok(InputNode::Branch {
-                    operation: CInputBranch::Selector,
+                    operation: (CInputBranch::Selector).into(),
                     children: arms
                         .iter()
                         .map(|child| resolve(ty, child, stack))
                         .collect::<Result<_>>()?,
                 })
             }
+            CInput::Request(_)
+            | CInput::Unary {
+                operation: prebindgen_declarations::Operation::Request(_),
+                ..
+            }
+            | CInput::Branch {
+                operation: prebindgen_declarations::Operation::Request(_),
+                ..
+            }
+            | CInput::Arrow {
+                operation: prebindgen_declarations::Operation::Request(_),
+                ..
+            } => Err("pending operation has the wrong structural node shape".into()),
         }
     }
     /// Resolve every output operation, source reference and ownership choice before compilation.
@@ -550,8 +612,8 @@ impl DeclCDefaults {
         if let Some(referent) = prebindgen_declarations::output_referent(ty) {
             if (getter_result || !matches!(tree, COutput::Leaf(COutputLeafOp::Value)))
                 && !matches!(
-                    tree,
-                    COutput::Request(
+                    tree.pending_request(),
+                    Some(
                         COutputRequest::Auto
                             | COutputRequest::ForType { .. }
                             | COutputRequest::SequenceCallback { .. }
@@ -562,7 +624,13 @@ impl DeclCDefaults {
             }
         }
         match tree {
-            COutput::Request(COutputRequest::SequenceCallback { output, structural }) => {
+            COutput::Unary {
+                operation:
+                    prebindgen_declarations::Operation::Request(COutputRequest::SequenceCallback {
+                        structural,
+                    }),
+                child: output,
+            } => {
                 let output = resolve(ty, output, stack)?;
                 operations::sequence_callback(
                     &mut crate::declarations::CResolve {
@@ -579,7 +647,10 @@ impl DeclCDefaults {
                 )
             }
             COutput::Unary {
-                operation: COutputUnary::CallbackArgument { ownership },
+                operation:
+                    prebindgen_declarations::Operation::Resolved(COutputUnary::CallbackArgument {
+                        ownership,
+                    }),
                 child,
             } => Ok((resolve(ty, child, stack)?).callback_argument(*ownership)),
             COutput::None => {
@@ -589,23 +660,47 @@ impl DeclCDefaults {
                     Err("None output requires unit".into())
                 }
             }
-            COutput::Arrow { operation, .. } => match *operation {},
+            COutput::Arrow {
+                operation: prebindgen_declarations::Operation::Resolved(never),
+                ..
+            } => match *never {},
             COutput::Branch {
-                operation: COutputBranch::Variant | COutputBranch::Arguments,
+                operation:
+                    prebindgen_declarations::Operation::Resolved(
+                        COutputBranch::Variant | COutputBranch::Arguments,
+                    ),
                 ..
             } => Err("variant/argument branch requires its parent operation".into()),
-            COutput::Request(COutputRequest::EnumFields(entries)) => self.enum_output_recipe(
-                flat,
-                codec,
-                prebindgen_declarations::output_referent(ty).unwrap_or(ty),
-                extra,
-                entries,
-                false,
-                stack,
-                getter_result,
-            ),
             COutput::Branch {
-                operation: COutputBranch::Enum { value, mode },
+                operation: prebindgen_declarations::Operation::Request(COutputRequest::EnumFields),
+                children,
+            } => {
+                let entries =
+                    prebindgen_declarations::enum_children(children, |tree| match tree {
+                        COutput::Branch {
+                            operation:
+                                prebindgen_declarations::Operation::Request(
+                                    COutputRequest::VariantFields { variant, fields },
+                                ),
+                            children,
+                        } => Ok((variant.as_str(), fields.as_slice(), children.as_slice())),
+                        _ => Err("named enum fields require variant branches".into()),
+                    })?;
+                self.enum_output_recipe(
+                    flat,
+                    codec,
+                    prebindgen_declarations::output_referent(ty).unwrap_or(ty),
+                    extra,
+                    &entries,
+                    false,
+                    stack,
+                    getter_result,
+                )
+            }
+
+            COutput::Branch {
+                operation:
+                    prebindgen_declarations::Operation::Resolved(COutputBranch::Enum { value, mode }),
                 children: variants,
             } => {
                 let variants = prebindgen_declarations::resolve_enum_variants(
@@ -644,7 +739,8 @@ impl DeclCDefaults {
                 )
             }
             COutput::Unary {
-                operation: COutputUnary::Convert { conversion },
+                operation:
+                    prebindgen_declarations::Operation::Resolved(COutputUnary::Convert { conversion }),
                 child: output,
             } => self.resolve_output_conversion(
                 flat,
@@ -657,10 +753,11 @@ impl DeclCDefaults {
             ),
             COutput::Leaf(COutputLeafOp::Discard) => Ok(OutputNode::Leaf(COutputLeafOp::Discard)),
             COutput::Unary {
-                operation: COutputUnary::Named { name },
+                operation:
+                    prebindgen_declarations::Operation::Resolved(COutputUnary::Named { name }),
                 child: output,
             } => Ok(OutputNode::Unary {
-                operation: COutputUnary::Named { name: name.clone() },
+                operation: (COutputUnary::Named { name: name.clone() }).into(),
                 child: Box::new(resolve(ty, output, stack)?),
             }),
             COutput::Request(COutputRequest::Auto) => {
@@ -684,14 +781,15 @@ impl DeclCDefaults {
                     !owned::native_output(flat, ty),
                     |inner| resolve(inner, &COutput::auto(), stack),
                     |child| COutput::Unary {
-                        operation: COutputUnary::Optional,
+                        operation: (COutputUnary::Optional).into(),
                         child: Box::new(child),
                     },
                     |child| COutput::Unary {
-                        operation: COutputUnary::Sequence {
+                        operation: (COutputUnary::Sequence {
                             delivery: SequenceDelivery::Auto,
                             mode: None,
-                        },
+                        })
+                        .into(),
                         child: Box::new(child),
                     },
                 )? {
@@ -702,7 +800,11 @@ impl DeclCDefaults {
                 }
                 resolve(ty, &COutput::Leaf(COutputLeafOp::Value), stack)
             }
-            COutput::Request(COutputRequest::ForType { ty: target, output }) => {
+            COutput::Unary {
+                operation:
+                    prebindgen_declarations::Operation::Request(COutputRequest::ForType { ty: target }),
+                child: output,
+            } => {
                 let target = flat.resolve_type(target)?;
                 let matched = same_type(ty, &target);
                 prebindgen_declarations::resolve_typed_expansion(
@@ -717,7 +819,7 @@ impl DeclCDefaults {
                             child
                         } else {
                             COutput::Unary {
-                                operation: COutputUnary::Optional,
+                                operation: (COutputUnary::Optional).into(),
                                 child: Box::new(child),
                             }
                         }
@@ -727,10 +829,11 @@ impl DeclCDefaults {
                             child
                         } else {
                             COutput::Unary {
-                                operation: COutputUnary::Sequence {
+                                operation: (COutputUnary::Sequence {
                                     delivery: SequenceDelivery::Auto,
                                     mode: None,
-                                },
+                                })
+                                .into(),
                                 child: Box::new(child),
                             }
                         }
@@ -765,7 +868,7 @@ impl DeclCDefaults {
                 }
                 if let Some(inner) = option_inner(ty) {
                     return Ok(OutputNode::Unary {
-                        operation: COutputUnary::Optional,
+                        operation: (COutputUnary::Optional).into(),
                         child: Box::new(resolve(inner, tree, stack)?),
                     });
                 }
@@ -783,65 +886,79 @@ impl DeclCDefaults {
                         None
                     };
                     return Ok(OutputNode::Unary {
-                        operation: COutputUnary::Sequence {
+                        operation: (COutputUnary::Sequence {
                             delivery: SequenceDelivery::Value,
                             mode,
-                        },
+                        })
+                        .into(),
                         child: Box::new(resolve(element, &COutput::auto(), stack)?),
                     });
                 }
                 self.resolve_output_representation(flat, codec, ty, tree, stack, getter_result)
             }
             COutput::Unary {
-                operation: COutputUnary::Optional,
+                operation: prebindgen_declarations::Operation::Resolved(COutputUnary::Optional),
                 child,
             } => {
                 let inner = option_inner(ty).ok_or("optional recipe requires Option<T>")?;
                 Ok(OutputNode::Unary {
-                    operation: COutputUnary::Optional,
+                    operation: (COutputUnary::Optional).into(),
                     child: Box::new(resolve(inner, child, stack)?),
                 })
             }
             COutput::Unary {
-                operation: COutputUnary::Sequence { delivery, mode },
+                operation:
+                    prebindgen_declarations::Operation::Resolved(COutputUnary::Sequence {
+                        delivery,
+                        mode,
+                    }),
                 child: element,
             } => {
                 let (ty, _) =
                     sequence_parts(ty).ok_or("sequence output requires a collection source")?;
                 Ok(OutputNode::Unary {
-                    operation: COutputUnary::Sequence {
+                    operation: (COutputUnary::Sequence {
                         delivery: *delivery,
                         mode: *mode,
-                    },
+                    })
+                    .into(),
                     child: Box::new(resolve(ty, element, stack)?),
                 })
             }
-            COutput::Request(COutputRequest::NamedFields { overrides, mode }) => {
+            COutput::Branch {
+                operation:
+                    prebindgen_declarations::Operation::Request(COutputRequest::NamedFields {
+                        fields,
+                        mode,
+                    }),
+                children: recipes,
+            } => {
+                let overrides = prebindgen_declarations::named_children(fields, recipes)?;
                 let children = prebindgen_declarations::resolve_named_fields(
                     flat,
                     ty,
-                    overrides,
+                    &overrides,
                     &COutput::auto(),
                     |ty, tree| resolve(ty, tree, stack),
                 )?;
                 Ok(if *mode == ProjectionMode::Owned {
                     OutputNode::Branch {
-                        operation: COutputBranch::OwnedFields,
+                        operation: (COutputBranch::OwnedFields).into(),
                         children,
                     }
                 } else {
                     OutputNode::Branch {
-                        operation: COutputBranch::Fields,
+                        operation: (COutputBranch::Fields).into(),
                         children,
                     }
                 })
             }
             COutput::Branch {
-                operation: COutputBranch::Fields,
+                operation: prebindgen_declarations::Operation::Resolved(COutputBranch::Fields),
                 children,
             }
             | COutput::Branch {
-                operation: COutputBranch::OwnedFields,
+                operation: prebindgen_declarations::Operation::Resolved(COutputBranch::OwnedFields),
                 children,
             } => {
                 if type_key(ty) == "()" && children.is_empty() {
@@ -855,28 +972,32 @@ impl DeclCDefaults {
                 )?;
                 Ok(match tree {
                     COutput::Branch {
-                        operation: COutputBranch::Fields,
+                        operation:
+                            prebindgen_declarations::Operation::Resolved(COutputBranch::Fields),
                         children: _,
                     } => OutputNode::Branch {
-                        operation: COutputBranch::Fields,
+                        operation: (COutputBranch::Fields).into(),
                         children,
                     },
                     COutput::Branch {
-                        operation: COutputBranch::OwnedFields,
+                        operation:
+                            prebindgen_declarations::Operation::Resolved(COutputBranch::OwnedFields),
                         children: _,
                     } => OutputNode::Branch {
-                        operation: COutputBranch::OwnedFields,
+                        operation: (COutputBranch::OwnedFields).into(),
                         children,
                     },
                     _ => unreachable!(),
                 })
             }
             COutput::Unary {
-                operation: COutputUnary::Getter { function },
+                operation:
+                    prebindgen_declarations::Operation::Resolved(COutputUnary::Getter { function }),
                 child: output,
             }
             | COutput::Unary {
-                operation: COutputUnary::Into { function },
+                operation:
+                    prebindgen_declarations::Operation::Resolved(COutputUnary::Into { function }),
                 child: output,
             } => {
                 let output = Box::new(prebindgen_declarations::resolve_getter(
@@ -886,7 +1007,9 @@ impl DeclCDefaults {
                     matches!(
                         tree,
                         COutput::Unary {
-                            operation: COutputUnary::Into { .. },
+                            operation: prebindgen_declarations::Operation::Resolved(
+                                COutputUnary::Into { .. }
+                            ),
                             ..
                         }
                     ),
@@ -897,35 +1020,39 @@ impl DeclCDefaults {
                     if matches!(
                         tree,
                         COutput::Unary {
-                            operation: COutputUnary::Into { .. },
+                            operation: prebindgen_declarations::Operation::Resolved(
+                                COutputUnary::Into { .. }
+                            ),
                             ..
                         }
                     ) {
                         OutputNode::Unary {
-                            operation: COutputUnary::Into {
+                            operation: (COutputUnary::Into {
                                 function: function.clone(),
-                            },
+                            })
+                            .into(),
                             child: output,
                         }
                     } else {
                         OutputNode::Unary {
-                            operation: COutputUnary::Getter {
+                            operation: (COutputUnary::Getter {
                                 function: function.clone(),
-                            },
+                            })
+                            .into(),
                             child: output,
                         }
                     },
                 )
             }
             COutput::Branch {
-                operation: COutputBranch::Combine,
+                operation: prebindgen_declarations::Operation::Resolved(COutputBranch::Combine),
                 children: parts,
             } => {
                 if parts.is_empty() {
                     return Err("an output combination needs at least one part".into());
                 }
                 Ok(OutputNode::Branch {
-                    operation: COutputBranch::Combine,
+                    operation: (COutputBranch::Combine).into(),
                     children: parts
                         .iter()
                         .map(|child| resolve(ty, child, stack))
@@ -933,7 +1060,8 @@ impl DeclCDefaults {
                 })
             }
             COutput::Unary {
-                operation: COutputUnary::Result { error },
+                operation:
+                    prebindgen_declarations::Operation::Resolved(COutputUnary::Result { error }),
                 child: ok,
             } => {
                 let (success, failure) =
@@ -942,12 +1070,26 @@ impl DeclCDefaults {
                     prebindgen_declarations::validate_error_mapper(flat, failure, name)?;
                 }
                 Ok(OutputNode::Unary {
-                    operation: COutputUnary::Result {
+                    operation: (COutputUnary::Result {
                         error: error.clone(),
-                    },
+                    })
+                    .into(),
                     child: Box::new(resolve(success, ok, stack)?),
                 })
             }
+            COutput::Request(_)
+            | COutput::Unary {
+                operation: prebindgen_declarations::Operation::Request(_),
+                ..
+            }
+            | COutput::Branch {
+                operation: prebindgen_declarations::Operation::Request(_),
+                ..
+            }
+            | COutput::Arrow {
+                operation: prebindgen_declarations::Operation::Request(_),
+                ..
+            } => Err("pending operation has the wrong structural node shape".into()),
         }
     }
 }
@@ -972,9 +1114,10 @@ impl DeclCDefaults {
             |ty, child, stack| self.input(flat, codec, ty, child, extra, stack),
         )?;
         Ok(CInput::Unary {
-            operation: CInputUnary::Convert {
+            operation: (CInputUnary::Convert {
                 conversion: Box::new(conversion),
-            },
+            })
+            .into(),
             child: Box::new(child),
         })
     }
@@ -998,9 +1141,10 @@ impl DeclCDefaults {
             |ty, child, stack| self.output(flat, codec, ty, child, extra, stack, true),
         )?;
         Ok(COutput::Unary {
-            operation: COutputUnary::Convert {
+            operation: (COutputUnary::Convert {
                 conversion: Box::new(conversion),
-            },
+            })
+            .into(),
             child: Box::new(child),
         })
     }
@@ -1014,7 +1158,7 @@ impl DeclCDefaults {
     ) -> Result<CInput> {
         if type_key(ty) == "()" {
             return Ok(InputNode::Branch {
-                operation: CInputBranch::Fields,
+                operation: (CInputBranch::Fields).into(),
                 children: vec![],
             });
         }
@@ -1036,11 +1180,11 @@ impl DeclCDefaults {
                     && owned::declaration(flat, ty).is_some())),
             |inner| self.resolve_input_value(flat, codec, inner, extra, stack),
             |child| CInput::Unary {
-                operation: CInputUnary::Optional,
+                operation: (CInputUnary::Optional).into(),
                 child: Box::new(child),
             },
             |child| CInput::Unary {
-                operation: CInputUnary::Sequence,
+                operation: (CInputUnary::Sequence).into(),
                 child: Box::new(child),
             },
         )? {
@@ -1068,7 +1212,7 @@ impl DeclCDefaults {
     ) -> Result<COutput> {
         if type_key(ty) == "()" {
             return Ok(OutputNode::Branch {
-                operation: COutputBranch::Fields,
+                operation: (COutputBranch::Fields).into(),
                 children: vec![],
             });
         }
@@ -1088,14 +1232,15 @@ impl DeclCDefaults {
             !owned::native_output(flat, ty),
             |inner| self.resolve_output_value(flat, codec, inner, extra, stack, getter, policy),
             |child| COutput::Unary {
-                operation: COutputUnary::Optional,
+                operation: (COutputUnary::Optional).into(),
                 child: Box::new(child),
             },
             |child| COutput::Unary {
-                operation: COutputUnary::Sequence {
+                operation: (COutputUnary::Sequence {
                     delivery: prebindgen_declarations::SequenceDelivery::Value,
                     mode: policy.map(|p| p.mode),
-                },
+                })
+                .into(),
                 child: Box::new(child),
             },
         )? {
@@ -1122,7 +1267,7 @@ impl DeclCDefaults {
         codec: &CCodec,
         ty: &Type,
         extra: &(),
-        entries: &BTreeMap<String, BTreeMap<String, CInput<CInputRequest, COutputRequest>>>,
+        entries: &BTreeMap<String, BTreeMap<String, &CInput<CInputRequest, COutputRequest>>>,
         value: bool,
         stack: &mut Vec<String>,
     ) -> Result<CInput> {
@@ -1155,7 +1300,7 @@ impl DeclCDefaults {
         codec: &CCodec,
         ty: &Type,
         extra: &(),
-        entries: &BTreeMap<String, BTreeMap<String, COutput<CInputRequest, COutputRequest>>>,
+        entries: &BTreeMap<String, BTreeMap<String, &COutput<CInputRequest, COutputRequest>>>,
         value: bool,
         stack: &mut Vec<String>,
         getter: bool,

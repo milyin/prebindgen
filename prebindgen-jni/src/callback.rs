@@ -109,7 +109,7 @@ pub(crate) fn input(
     let returns_unit = matches!(&signature.return_type, syn::Type::Tuple(t) if t.elems.is_empty());
     if returns_unit
         && !matches!(codomain, JniInput::None)
-        && !matches!(codomain, JniInput::Branch { operation: JniInputBranch::Fields, children } if children.is_empty())
+        && !matches!(codomain, JniInput::Branch { operation: prebindgen_declarations::Operation::Resolved(JniInputBranch::Fields), children } if children.is_empty())
     {
         return Err("unit callback returns require an empty unit input representation".into());
     }

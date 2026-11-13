@@ -170,7 +170,7 @@ impl<InRequest, OutRequest> TestOutput<InRequest, OutRequest> {
             Self::None
         } else {
             Self::Branch {
-                operation: TestOutputBranch::Arguments,
+                operation: (TestOutputBranch::Arguments).into(),
                 children,
             }
         }
@@ -180,7 +180,7 @@ impl<InRequest, OutRequest> TestOutput<InRequest, OutRequest> {
         match self {
             Self::None => Ok(&[]),
             Self::Branch {
-                operation: TestOutputBranch::Arguments,
+                operation: crate::Operation::Resolved(TestOutputBranch::Arguments),
                 children,
             } => Ok(children),
             _ => Err("callback domain requires an argument branch or None".into()),
@@ -192,11 +192,11 @@ impl<InRequest, OutRequest> TestInput<InRequest, OutRequest> {
     /// Describe source variants, each with an ordinary branch of field conversions.
     pub fn enum_variants(variants: Vec<Vec<Self>>, value: bool) -> Self {
         Self::Branch {
-            operation: TestInputBranch::Enum { value },
+            operation: (TestInputBranch::Enum { value }).into(),
             children: variants
                 .into_iter()
                 .map(|children| Self::Branch {
-                    operation: TestInputBranch::Variant,
+                    operation: (TestInputBranch::Variant).into(),
                     children,
                 })
                 .collect(),
@@ -206,7 +206,7 @@ impl<InRequest, OutRequest> TestInput<InRequest, OutRequest> {
     pub fn variant_fields(&self) -> crate::Result<&[Self]> {
         match self {
             Self::Branch {
-                operation: TestInputBranch::Variant,
+                operation: crate::Operation::Resolved(TestInputBranch::Variant),
                 children,
             } => Ok(children),
             _ => Err("enum children must be variant branches".into()),
@@ -222,11 +222,11 @@ impl<InRequest, OutRequest> TestOutput<InRequest, OutRequest> {
         mode: Option<ProjectionMode>,
     ) -> Self {
         Self::Branch {
-            operation: TestOutputBranch::Enum { value, mode },
+            operation: (TestOutputBranch::Enum { value, mode }).into(),
             children: variants
                 .into_iter()
                 .map(|children| Self::Branch {
-                    operation: TestOutputBranch::Variant,
+                    operation: (TestOutputBranch::Variant).into(),
                     children,
                 })
                 .collect(),
@@ -236,7 +236,7 @@ impl<InRequest, OutRequest> TestOutput<InRequest, OutRequest> {
     pub fn variant_fields(&self) -> crate::Result<&[Self]> {
         match self {
             Self::Branch {
-                operation: TestOutputBranch::Variant,
+                operation: crate::Operation::Resolved(TestOutputBranch::Variant),
                 children,
             } => Ok(children),
             _ => Err("enum children must be variant branches".into()),
@@ -248,7 +248,7 @@ impl<InRequest, OutRequest> TestInput<InRequest, OutRequest> {
     /// Convert each incoming collection element using the supplied subtree.
     pub fn sequence(element: Self) -> Self {
         Self::Unary {
-            operation: TestInputUnary::Sequence,
+            operation: (TestInputUnary::Sequence).into(),
             child: Box::new(element),
         }
     }
@@ -258,7 +258,7 @@ impl<InRequest, OutRequest> TestOutput<InRequest, OutRequest> {
     /// Attach the lifetime of produced foreign owners to this callable argument.
     pub fn callback_argument(self, ownership: crate::CallbackArgumentOwnership) -> Self {
         Self::Unary {
-            operation: TestOutputUnary::CallbackArgument { ownership },
+            operation: (TestOutputUnary::CallbackArgument { ownership }).into(),
             child: Box::new(self),
         }
     }
@@ -268,7 +268,8 @@ impl<InRequest, OutRequest> TestOutput<InRequest, OutRequest> {
     ) -> crate::Result<(crate::CallbackArgumentOwnership, &Self)> {
         match self {
             Self::Unary {
-                operation: TestOutputUnary::CallbackArgument { ownership },
+                operation:
+                    crate::Operation::Resolved(TestOutputUnary::CallbackArgument { ownership }),
                 child,
             } => Ok((*ownership, child)),
             _ => Err("callback argument requires an explicit ownership contract".into()),
@@ -278,30 +279,26 @@ impl<InRequest, OutRequest> TestOutput<InRequest, OutRequest> {
 
 /// Source-dependent choices accepted only while preparing an input tree.
 #[derive(Clone, Debug)]
+/// Metadata-only input choices. Explicit conversions use structural node children.
 pub enum TestInputRequest {
-    /// Expand enum fields, inheriting defaults for fields not explicitly overridden.
-    EnumFields(
-        std::collections::BTreeMap<
-            String,
-            std::collections::BTreeMap<String, TestInput<TestInputRequest, TestOutputRequest>>,
-        >,
-    ),
-    /// Resolve only the canonical value form, independently of boundary defaults.
-    Value,
-    /// Select a local single-value conversion.
-    Conversion(Box<DeclConvert>),
-    /// Select the configured default for this source occurrence.
-    Auto,
-    /// Select or override a callback signature's argument and result conversions.
-    Callback(Box<TestCallback>),
-    /// Apply a type-specific override, including inside optional/sequence sources.
-    ForType {
-        /// Source type targeted by the override.
-        ty: Box<Type>,
-        /// The requested conversion for that type.
-        input: Box<TestInput<TestInputRequest, TestOutputRequest>>,
+    /// Partial named enum fields; children are variant branches.
+    EnumFields,
+    /// One partial variant; the children correspond to these source field names.
+    VariantFields {
+        variant: String,
+        fields: Vec<String>,
     },
-    /// Infer a constructor's argument conversions from its source signature.
+    /// Resolve the canonical value representation.
+    Value,
+    /// Select a local Rust value conversion.
+    Conversion(Box<DeclConvert>),
+    /// Resolve this occurrence's configured default.
+    Auto,
+    /// Partial callback metadata; domain/codomain own all conversion children.
+    Callback(Box<crate::CallbackRequest>),
+    /// Apply the unary child at this source type, including nested occurrences.
+    ForType { ty: Box<Type> },
+    /// Infer constructor arguments from their defaults.
     Call(String),
 }
 
@@ -311,9 +308,23 @@ impl TestInput<TestInputRequest, TestOutputRequest> {
     pub fn enum_fields<'a>(
         overrides: impl IntoIterator<Item = (&'a str, Vec<(&'a str, Self)>)>,
     ) -> Self {
-        TestInput::Request(TestInputRequest::EnumFields(crate::enum_overrides(
-            overrides,
-        )))
+        let overrides = crate::enum_overrides(overrides);
+        TestInput::Branch {
+            operation: crate::Operation::Request(TestInputRequest::EnumFields),
+            children: overrides
+                .into_iter()
+                .map(|(variant, fields)| {
+                    let (fields, children) = fields.into_iter().unzip();
+                    TestInput::Branch {
+                        operation: crate::Operation::Request(TestInputRequest::VariantFields {
+                            variant,
+                            fields,
+                        }),
+                        children,
+                    }
+                })
+                .collect(),
+        }
     }
     /// Request the canonical value representation, bypassing boundary defaults.
     pub fn value() -> Self {
@@ -325,10 +336,10 @@ impl TestInput<TestInputRequest, TestOutputRequest> {
     }
     /// Associate a conversion with a source type for a default or nested override.
     pub fn for_type(ty: Type, input: Self) -> Self {
-        TestInput::Request(TestInputRequest::ForType {
-            ty: Box::new(ty),
-            input: Box::new(input),
-        })
+        TestInput::Unary {
+            operation: crate::Operation::Request(TestInputRequest::ForType { ty: Box::new(ty) }),
+            child: Box::new(input),
+        }
     }
     /// Infer a source constructor's argument conversions from registered defaults.
     pub fn call(name: impl Into<String>) -> Self {
@@ -340,15 +351,18 @@ impl TestInput<TestInputRequest, TestOutputRequest> {
     /// semantics; this operation authorizes the temporary's allocation/copying.
     pub fn reconstruct(self) -> Self {
         match self {
-            TestInput::Request(TestInputRequest::ForType { ty, input }) => TestInput::for_type(
+            TestInput::Unary {
+                operation: crate::Operation::Request(TestInputRequest::ForType { ty }),
+                child: input,
+            } => TestInput::for_type(
                 *ty,
                 TestInput::Unary {
-                    operation: TestInputUnary::Temporary,
+                    operation: (TestInputUnary::Temporary).into(),
                     child: input,
                 },
             ),
             other => TestInput::Unary {
-                operation: TestInputUnary::Temporary,
+                operation: (TestInputUnary::Temporary).into(),
                 child: Box::new(other),
             },
         }
@@ -363,21 +377,22 @@ impl TestInput<TestInputRequest, TestOutputRequest> {
     }
     fn add_alternative(self, arm: Self) -> Self {
         match self {
-            TestInput::Request(TestInputRequest::ForType { ty, input }) => {
-                TestInput::for_type(*ty, input.add_alternative(arm))
-            }
+            TestInput::Unary {
+                operation: crate::Operation::Request(TestInputRequest::ForType { ty }),
+                child: input,
+            } => TestInput::for_type(*ty, input.add_alternative(arm)),
             TestInput::Branch {
-                operation: TestInputBranch::Selector,
+                operation: crate::Operation::Resolved(TestInputBranch::Selector),
                 children: mut arms,
             } => {
                 arms.push(arm);
                 TestInput::Branch {
-                    operation: TestInputBranch::Selector,
+                    operation: (TestInputBranch::Selector).into(),
                     children: arms,
                 }
             }
             other => TestInput::Branch {
-                operation: TestInputBranch::Selector,
+                operation: (TestInputBranch::Selector).into(),
                 children: vec![other, arm],
             },
         }
@@ -387,7 +402,7 @@ impl<InRequest, OutRequest> TestInput<InRequest, OutRequest> {
     /// Group this explicit expansion into a bulk carrier.
     pub fn bulk(self) -> Self {
         TestInput::Unary {
-            operation: TestInputUnary::Bulk,
+            operation: (TestInputUnary::Bulk).into(),
             child: Box::new(self),
         }
     }
@@ -397,7 +412,7 @@ impl<InRequest, OutRequest> TestInput<InRequest, OutRequest> {
     /// order. Binding verifies the count against the record.
     pub fn fields(fields: impl IntoIterator<Item = TestInput<InRequest, OutRequest>>) -> Self {
         TestInput::Branch {
-            operation: TestInputBranch::Fields,
+            operation: (TestInputBranch::Fields).into(),
             children: fields.into_iter().collect(),
         }
     }
@@ -416,9 +431,10 @@ impl<InRequest, OutRequest> TestInput<InRequest, OutRequest> {
         args: impl IntoIterator<Item = TestInput<InRequest, OutRequest>>,
     ) -> Self {
         TestInput::Branch {
-            operation: TestInputBranch::Constructor {
+            operation: (TestInputBranch::Constructor {
                 function: name.into(),
-            },
+            })
+            .into(),
             children: args.into_iter().collect(),
         }
     }
@@ -432,50 +448,35 @@ impl<InRequest, OutRequest> TestInput<InRequest, OutRequest> {
     /// merge equivalent wire parameters or generate destination-language overloads.
     pub fn selector(arms: impl IntoIterator<Item = TestInput<InRequest, OutRequest>>) -> Self {
         TestInput::Branch {
-            operation: TestInputBranch::Selector,
+            operation: (TestInputBranch::Selector).into(),
             children: arms.into_iter().collect(),
         }
     }
 }
 /// Source-dependent choices accepted only while preparing an output tree.
 #[derive(Clone, Debug)]
+/// Metadata-only output choices. Explicit conversions use structural node children.
 pub enum TestOutputRequest {
-    /// Select per-element delivery after resolving defaults and local expansion.
-    SequenceCallback {
-        /// Expansion whose outer sequence supplies callback elements.
-        output: Box<TestOutput<TestInputRequest, TestOutputRequest>>,
-        /// Allow structural decomposition of a default collection identity.
-        structural: bool,
+    /// Select per-element delivery of the unary child's resolved sequence.
+    SequenceCallback { structural: bool },
+    /// Partial named enum fields; children are variant branches.
+    EnumFields,
+    /// One partial variant; children correspond to these source field names.
+    VariantFields {
+        variant: String,
+        fields: Vec<String>,
     },
-    /// Expand enum fields, inheriting boundary defaults for unspecified fields.
-    EnumFields(
-        std::collections::BTreeMap<
-            String,
-            std::collections::BTreeMap<String, TestOutput<TestInputRequest, TestOutputRequest>>,
-        >,
-    ),
-    /// Resolve only the canonical value form, independently of boundary defaults.
-    Value {
-        /// Explicit field ownership/projection policy, if any.
-        projection: Option<Projection>,
-    },
-    /// Select a local single-value conversion.
+    /// Resolve the canonical value representation with optional projection policy.
+    Value { projection: Option<Projection> },
+    /// Select a local Rust value conversion.
     Conversion(Box<DeclConvert>),
-    /// Select the configured output default for this source occurrence.
+    /// Resolve this occurrence's configured default.
     Auto,
-    /// Apply a type-specific override, including inside optional/sequence sources.
-    ForType {
-        /// Source type targeted by the override.
-        ty: Box<Type>,
-        /// Requested conversion for the matching type.
-        output: Box<TestOutput<TestInputRequest, TestOutputRequest>>,
-    },
-    /// Resolve source record fields by name and fill unspecified conversions.
+    /// Apply the unary child at this source type, including nested occurrences.
+    ForType { ty: Box<Type> },
+    /// Partial record fields, corresponding to the branch children.
     NamedFields {
-        /// Explicit conversions keyed by source field name.
-        overrides:
-            std::collections::BTreeMap<String, TestOutput<TestInputRequest, TestOutputRequest>>,
-        /// Ownership of field decomposition.
+        fields: Vec<String>,
         mode: ProjectionMode,
     },
 }
@@ -485,9 +486,23 @@ impl TestOutput<TestInputRequest, TestOutputRequest> {
     pub fn enum_fields<'a>(
         overrides: impl IntoIterator<Item = (&'a str, Vec<(&'a str, Self)>)>,
     ) -> Self {
-        TestOutput::Request(TestOutputRequest::EnumFields(crate::enum_overrides(
-            overrides,
-        )))
+        let overrides = crate::enum_overrides(overrides);
+        TestOutput::Branch {
+            operation: crate::Operation::Request(TestOutputRequest::EnumFields),
+            children: overrides
+                .into_iter()
+                .map(|(variant, fields)| {
+                    let (fields, children) = fields.into_iter().unzip();
+                    TestOutput::Branch {
+                        operation: crate::Operation::Request(TestOutputRequest::VariantFields {
+                            variant,
+                            fields,
+                        }),
+                        children,
+                    }
+                })
+                .collect(),
+        }
     }
     /// Request the canonical value representation, bypassing boundary defaults.
     pub fn value() -> Self {
@@ -499,30 +514,31 @@ impl TestOutput<TestInputRequest, TestOutputRequest> {
     }
     /// Associate a conversion with a source type for a default or nested override.
     pub fn for_type(ty: Type, output: Self) -> Self {
-        TestOutput::Request(TestOutputRequest::ForType {
-            ty: Box::new(ty),
-            output: Box::new(output),
-        })
+        TestOutput::Unary {
+            operation: crate::Operation::Request(TestOutputRequest::ForType { ty: Box::new(ty) }),
+            child: Box::new(output),
+        }
     }
     /// Append another simultaneous output view.
     pub fn view(self, view: impl Into<Self>) -> Self {
         let view = view.into();
         match self {
-            TestOutput::Request(TestOutputRequest::ForType { ty, output }) => {
-                TestOutput::for_type(*ty, output.view(view))
-            }
+            TestOutput::Unary {
+                operation: crate::Operation::Request(TestOutputRequest::ForType { ty }),
+                child: output,
+            } => TestOutput::for_type(*ty, output.view(view)),
             TestOutput::Branch {
-                operation: TestOutputBranch::Combine,
+                operation: crate::Operation::Resolved(TestOutputBranch::Combine),
                 children: mut parts,
             } => {
                 parts.push(view);
                 TestOutput::Branch {
-                    operation: TestOutputBranch::Combine,
+                    operation: (TestOutputBranch::Combine).into(),
                     children: parts,
                 }
             }
             other => TestOutput::Branch {
-                operation: TestOutputBranch::Combine,
+                operation: (TestOutputBranch::Combine).into(),
                 children: vec![other, view],
             },
         }
@@ -563,19 +579,22 @@ impl TestOutput<TestInputRequest, TestOutputRequest> {
             name.into(),
             output,
             |tree| match tree {
-                TestOutput::Request(TestOutputRequest::NamedFields { overrides, .. }) => {
-                    Some(overrides)
-                }
+                TestOutput::Branch {
+                    operation:
+                        crate::Operation::Request(TestOutputRequest::NamedFields { fields, .. }),
+                    children,
+                } => Some((fields, children)),
                 _ => None,
             },
             |tree| match tree {
                 TestOutput::Unary {
-                    operation: TestOutputUnary::Getter { .. } | TestOutputUnary::Into { .. },
+                    operation:
+                        crate::Operation::Resolved(
+                            TestOutputUnary::Getter { .. } | TestOutputUnary::Into { .. },
+                        )
+                        | crate::Operation::Request(TestOutputRequest::ForType { .. }),
                     child,
-                }
-                | TestOutput::Request(TestOutputRequest::ForType { output: child, .. }) => {
-                    Some(child)
-                }
+                } => Some(child),
                 _ => None,
             },
         )
@@ -585,7 +604,7 @@ impl<InRequest, OutRequest> TestOutput<InRequest, OutRequest> {
     /// Group this explicit expansion into a bulk carrier.
     pub fn bulk(self) -> Self {
         TestOutput::Unary {
-            operation: TestOutputUnary::Bulk,
+            operation: (TestOutputUnary::Bulk).into(),
             child: Box::new(self),
         }
     }
@@ -594,7 +613,7 @@ impl<InRequest, OutRequest> TestOutput<InRequest, OutRequest> {
     /// `fields` holds one recipe per field of the source record, in declaration order.
     pub fn fields(fields: impl IntoIterator<Item = TestOutput<InRequest, OutRequest>>) -> Self {
         TestOutput::Branch {
-            operation: TestOutputBranch::Fields,
+            operation: (TestOutputBranch::Fields).into(),
             children: fields.into_iter().collect(),
         }
     }
@@ -610,9 +629,10 @@ impl<InRequest, OutRequest> TestOutput<InRequest, OutRequest> {
     /// * `output` — recipe for the getter's result.
     pub fn getter(name: impl Into<String>, output: TestOutput<InRequest, OutRequest>) -> Self {
         TestOutput::Unary {
-            operation: TestOutputUnary::Getter {
+            operation: (TestOutputUnary::Getter {
                 function: name.into(),
-            },
+            })
+            .into(),
             child: Box::new(output),
         }
     }
@@ -624,7 +644,7 @@ impl<InRequest, OutRequest> TestOutput<InRequest, OutRequest> {
     /// unless [`Codec::output_owner`] first retains the final output allocation.
     pub fn combine(parts: impl IntoIterator<Item = TestOutput<InRequest, OutRequest>>) -> Self {
         TestOutput::Branch {
-            operation: TestOutputBranch::Combine,
+            operation: (TestOutputBranch::Combine).into(),
             children: parts.into_iter().collect(),
         }
     }
@@ -675,13 +695,13 @@ pub fn expand_param(ty: Type) -> TestExpandParam {
         |ty, alternatives, extension| {
             let mut input = alternatives.build(TestInput::selector, TestInput::auto, |child| {
                 TestInput::Unary {
-                    operation: TestInputUnary::Temporary,
+                    operation: (TestInputUnary::Temporary).into(),
                     child: Box::new(child),
                 }
             });
             if extension.is_some_and(|options| options.bulk) {
                 input = TestInput::Unary {
-                    operation: TestInputUnary::Bulk,
+                    operation: (TestInputUnary::Bulk).into(),
                     child: Box::new(input),
                 };
             }
@@ -698,7 +718,7 @@ pub fn expand_return(ty: Type) -> TestExpandReturn {
                 function,
                 |name| TestOutput::getter(name, TestOutput::auto()),
                 |name, child| TestOutput::Unary {
-                    operation: TestOutputUnary::Named { name },
+                    operation: (TestOutputUnary::Named { name }).into(),
                     child: Box::new(child),
                 },
             )
@@ -710,7 +730,7 @@ pub fn expand_return(ty: Type) -> TestExpandReturn {
             let mut output = TestOutput::combine(views);
             if extension.is_some_and(|options| options.bulk) {
                 output = TestOutput::Unary {
-                    operation: TestOutputUnary::Bulk,
+                    operation: (TestOutputUnary::Bulk).into(),
                     child: Box::new(output),
                 };
             }
@@ -723,18 +743,25 @@ pub fn fields(function: syn::Ident) -> TestFields {
     crate::DeclFields::new(
         function,
         |output| match output {
-            TestOutput::Request(TestOutputRequest::ForType { ty, output }) if matches!(output.as_ref(),TestOutput::Branch {operation:TestOutputBranch::Combine,children} if children.is_empty()) => {
+            TestOutput::Unary {
+                operation: crate::Operation::Request(TestOutputRequest::ForType { ty }),
+                child: output,
+            } if matches!(output.as_ref(),TestOutput::Branch {operation:crate::Operation::Resolved(TestOutputBranch::Combine),children} if children.is_empty()) => {
                 TestOutput::for_type(*ty, TestOutput::Leaf(TestOutputLeafOp::Discard))
             }
             output => output,
         },
         |function, overrides, _extension| {
+            let (fields, children) = overrides.into_iter().unzip();
             TestOutput::getter(
                 function,
-                TestOutput::Request(TestOutputRequest::NamedFields {
-                    overrides,
-                    mode: crate::ProjectionMode::Borrowed,
-                }),
+                TestOutput::Branch {
+                    operation: crate::Operation::Request(TestOutputRequest::NamedFields {
+                        fields,
+                        mode: crate::ProjectionMode::Borrowed,
+                    }),
+                    children,
+                },
             )
         },
     )
@@ -748,12 +775,27 @@ pub type TestCallback = crate::DeclCallback<
     TestInput<TestInputRequest, TestOutputRequest>,
     TestOutput<TestInputRequest, TestOutputRequest>,
 >;
-impl From<TestCallback> for TestInputRequest {
-    fn from(decl: TestCallback) -> Self {
-        Self::ForType {
-            ty: Box::new(decl.ty.clone()),
-            input: Box::new(TestInput::Request(Self::Callback(Box::new(decl)))),
-        }
+impl
+    crate::CallbackInput<
+        TestInput<TestInputRequest, TestOutputRequest>,
+        TestOutput<TestInputRequest, TestOutputRequest>,
+    > for TestInputRequest
+{
+    fn callback_input(declaration: TestCallback) -> TestInput<TestInputRequest, TestOutputRequest> {
+        crate::callback_input(
+            declaration,
+            TestInput::auto,
+            |children| TestOutput::Branch {
+                operation: TestOutputBranch::Arguments.into(),
+                children,
+            },
+            |metadata, domain, codomain| TestInput::Arrow {
+                operation: crate::Operation::Request(Self::Callback(Box::new(metadata))),
+                domain: Box::new(domain),
+                codomain: Box::new(codomain),
+            },
+            TestInput::for_type,
+        )
     }
 }
 #[derive(Clone)]
@@ -769,21 +811,21 @@ fn input_body(
 ) -> TestInput<TestInputRequest, TestOutputRequest> {
     match input {
         TestInput::Branch {
-            operation: TestInputBranch::Selector,
+            operation: crate::Operation::Resolved(TestInputBranch::Selector),
             children: mut arms,
         } if arms.len() == 1 => arms.remove(0),
         TestInput::Unary {
-            operation: TestInputUnary::Bulk,
+            operation: crate::Operation::Resolved(TestInputUnary::Bulk),
             child,
         } => TestInput::Unary {
-            operation: TestInputUnary::Bulk,
+            operation: (TestInputUnary::Bulk).into(),
             child: Box::new(input_body(*child)),
         },
         TestInput::Unary {
-            operation: TestInputUnary::Temporary,
+            operation: crate::Operation::Resolved(TestInputUnary::Temporary),
             child,
         } => TestInput::Unary {
-            operation: TestInputUnary::Temporary,
+            operation: (TestInputUnary::Temporary).into(),
             child: Box::new(input_body(*child)),
         },
         other => other,
@@ -794,14 +836,14 @@ fn output_body(
 ) -> TestOutput<TestInputRequest, TestOutputRequest> {
     match output {
         TestOutput::Branch {
-            operation: TestOutputBranch::Combine,
+            operation: crate::Operation::Resolved(TestOutputBranch::Combine),
             children: mut parts,
         } if parts.len() == 1 => parts.remove(0),
         TestOutput::Unary {
-            operation: TestOutputUnary::Bulk,
+            operation: crate::Operation::Resolved(TestOutputUnary::Bulk),
             child,
         } => TestOutput::Unary {
-            operation: TestOutputUnary::Bulk,
+            operation: (TestOutputUnary::Bulk).into(),
             child: Box::new(output_body(*child)),
         },
         other => other,
@@ -820,18 +862,20 @@ impl TestDefaults {
         let inputs = inputs
             .into_iter()
             .map(|tree| match tree {
-                TestInput::Request(TestInputRequest::ForType { ty, input }) => {
-                    Ok((*ty, input_body(*input)))
-                }
+                TestInput::Unary {
+                    operation: crate::Operation::Request(TestInputRequest::ForType { ty }),
+                    child: input,
+                } => Ok((*ty, input_body(*input))),
                 _ => Err("input defaults require a source type".into()),
             })
             .collect::<Result<Vec<_>>>()?;
         let outputs = outputs
             .into_iter()
             .map(|tree| match tree {
-                TestOutput::Request(TestOutputRequest::ForType { ty, output }) => {
-                    Ok((*ty, output_body(*output)))
-                }
+                TestOutput::Unary {
+                    operation: crate::Operation::Request(TestOutputRequest::ForType { ty }),
+                    child: output,
+                } => Ok((*ty, output_body(*output))),
                 _ => Err("output defaults require a source type".into()),
             })
             .collect::<Result<Vec<_>>>()?;
@@ -888,9 +932,10 @@ impl TestDefaults {
     ) -> Result<crate::ResolvedOutput<C>> {
         let tree = if let Some((_, error)) = result_parts(ty).filter(|_| !decl.result_value) {
             TestOutput::Unary {
-                operation: TestOutputUnary::Result {
+                operation: (TestOutputUnary::Result {
                     error: self.error_mapper_for(decl, error).map(str::to_owned),
-                },
+                })
+                .into(),
                 child: Box::new(decl.ret.clone().unwrap_or_else(TestOutput::auto)),
             }
         } else {
@@ -943,14 +988,28 @@ impl TestDefaults {
                 }
             }
             TestInput::Branch {
-                operation: TestInputBranch::Variant,
+                operation: crate::Operation::Resolved(TestInputBranch::Variant),
                 ..
             } => Err("variant branch requires an enum parent".into()),
-            TestInput::Request(TestInputRequest::EnumFields(entries)) => {
-                self.enum_input_recipe(flat, codec, ty, extra, entries, false, stack)
+            TestInput::Branch {
+                operation: crate::Operation::Request(TestInputRequest::EnumFields),
+                children,
+            } => {
+                let entries = crate::enum_children(children, |tree| match tree {
+                    TestInput::Branch {
+                        operation:
+                            crate::Operation::Request(TestInputRequest::VariantFields {
+                                variant,
+                                fields,
+                            }),
+                        children,
+                    } => Ok((variant.as_str(), fields.as_slice(), children.as_slice())),
+                    _ => Err("named enum fields require variant branches".into()),
+                })?;
+                self.enum_input_recipe(flat, codec, ty, extra, &entries, false, stack)
             }
             TestInput::Branch {
-                operation: TestInputBranch::Enum { value },
+                operation: crate::Operation::Resolved(TestInputBranch::Enum { value }),
                 children: variants,
             } => {
                 let variants = crate::resolve_enum_variants(
@@ -983,7 +1042,7 @@ impl TestDefaults {
                 )
             }
             TestInput::Unary {
-                operation: TestInputUnary::Convert { conversion },
+                operation: crate::Operation::Resolved(TestInputUnary::Convert { conversion }),
                 child: input,
             } => self.resolve_input_conversion(
                 flat,
@@ -995,10 +1054,10 @@ impl TestDefaults {
                 stack,
             ),
             TestInput::Unary {
-                operation: TestInputUnary::Temporary,
+                operation: crate::Operation::Resolved(TestInputUnary::Temporary),
                 child,
             } => Ok(InputNode::Unary {
-                operation: TestInputUnary::Temporary,
+                operation: (TestInputUnary::Temporary).into(),
                 child: Box::new(resolve(
                     &crate::temporary_input_type(ty)?,
                     &input_body((**child).clone()),
@@ -1006,10 +1065,10 @@ impl TestDefaults {
                 )?),
             }),
             TestInput::Unary {
-                operation: TestInputUnary::Bulk,
+                operation: crate::Operation::Resolved(TestInputUnary::Bulk),
                 child,
             } => Ok(InputNode::Unary {
-                operation: TestInputUnary::Bulk,
+                operation: (TestInputUnary::Bulk).into(),
                 child: Box::new(resolve(ty, &input_body((**child).clone()), stack)?),
             }),
             TestInput::Request(TestInputRequest::Auto) => {
@@ -1028,11 +1087,11 @@ impl TestDefaults {
                     true,
                     |inner| resolve(inner, &TestInput::auto(), stack),
                     |child| TestInput::Unary {
-                        operation: TestInputUnary::Optional,
+                        operation: (TestInputUnary::Optional).into(),
                         child: Box::new(child),
                     },
                     |child| TestInput::Unary {
-                        operation: TestInputUnary::Sequence,
+                        operation: (TestInputUnary::Sequence).into(),
                         child: Box::new(child),
                     },
                 )? {
@@ -1043,7 +1102,10 @@ impl TestDefaults {
                 }
                 resolve(ty, &TestInput::Leaf(TestInputLeafOp::Value), stack)
             }
-            TestInput::Request(TestInputRequest::ForType { ty: target, input }) => {
+            TestInput::Unary {
+                operation: crate::Operation::Request(TestInputRequest::ForType { ty: target }),
+                child: input,
+            } => {
                 let target = crate::callback::input_type(flat, target)?;
                 let matched = crate::callback::input_key(flat, ty)? == type_key(&target);
                 crate::resolve_typed_expansion(
@@ -1054,11 +1116,11 @@ impl TestDefaults {
                     stack,
                     resolve,
                     |child| TestInput::Unary {
-                        operation: TestInputUnary::Optional,
+                        operation: (TestInputUnary::Optional).into(),
                         child: Box::new(child),
                     },
                     |child| TestInput::Unary {
-                        operation: TestInputUnary::Sequence,
+                        operation: (TestInputUnary::Sequence).into(),
                         child: Box::new(child),
                     },
                     crate::Direction::Input,
@@ -1078,17 +1140,11 @@ impl TestDefaults {
                 }
 
                 if prebindgen_flat::callback_signature(ty)?.is_some() {
-                    return resolve(
-                        ty,
-                        &TestInput::Request(TestInputRequest::Callback(Box::new(
-                            crate::TestCallback::new(ty.clone()),
-                        ))),
-                        stack,
-                    );
+                    return resolve(ty, &TestInput::from(TestCallback::new(ty.clone())), stack);
                 }
                 if let Some(inner) = option_inner(ty) {
                     return Ok(InputNode::Unary {
-                        operation: TestInputUnary::Optional,
+                        operation: (TestInputUnary::Optional).into(),
                         child: Box::new(resolve(
                             inner,
                             &TestInput::Leaf(TestInputLeafOp::Value),
@@ -1098,14 +1154,14 @@ impl TestDefaults {
                 }
                 if let Some((element, _)) = sequence_parts(ty) {
                     return Ok(InputNode::Unary {
-                        operation: TestInputUnary::Sequence,
+                        operation: (TestInputUnary::Sequence).into(),
                         child: Box::new(resolve(element, &TestInput::auto(), stack)?),
                     });
                 }
                 Ok(TestInput::Leaf(TestInputLeafOp::Value))
             }
             TestInput::Arrow {
-                operation: callback,
+                operation: crate::Operation::Resolved(callback),
                 domain,
                 codomain,
             } => {
@@ -1119,27 +1175,42 @@ impl TestDefaults {
                     |ty, tree| resolve(ty, tree, stack),
                 )?;
                 Ok(InputNode::Arrow {
-                    operation: callback.clone(),
+                    operation: (callback.clone()).into(),
                     domain: Box::new(TestOutput::arguments(arguments)),
                     codomain: Box::new(result),
                 })
             }
-            TestInput::Request(TestInputRequest::Callback(declaration)) => {
+            TestInput::Arrow {
+                operation: crate::Operation::Request(TestInputRequest::Callback(declaration)),
+                domain,
+                codomain,
+            } => {
                 let canonical = crate::callback::input_key(flat, ty)?;
                 let default = match self.values.inputs.get(&canonical) {
-                    Some(TestInput::Request(TestInputRequest::Callback(default))) => {
-                        Some(default.as_ref())
-                    }
+                    Some(TestInput::Arrow {
+                        operation: crate::Operation::Request(TestInputRequest::Callback(request)),
+                        domain,
+                        codomain,
+                    }) => Some(crate::CallbackTree {
+                        request,
+                        arguments: domain.argument_nodes()?,
+                        result: codomain.as_ref(),
+                    }),
                     _ => None,
                 };
-                let (operation, arguments, ret) = crate::resolve_callback(
+                let (operation, arguments, ret) = crate::resolve_callback_tree(
                     flat,
                     ty,
-                    declaration,
+                    crate::CallbackTree {
+                        request: declaration,
+                        arguments: domain.argument_nodes()?,
+                        result: codomain.as_ref(),
+                    },
                     default,
                     &self.values.outputs,
                     &TestInput::auto(),
                     &TestOutput::auto(),
+                    |tree| matches!(tree, TestInput::Request(TestInputRequest::Auto)),
                     stack,
                     resolve,
                     |ty, tree, ownership| {
@@ -1149,26 +1220,28 @@ impl TestDefaults {
                     },
                 )?;
                 Ok(InputNode::Arrow {
-                    operation: Box::new(operation),
+                    operation: Box::new(operation).into(),
                     domain: Box::new(TestOutput::arguments(arguments)),
                     codomain: Box::new(ret),
                 })
             }
+
             TestInput::Request(TestInputRequest::Call(function)) => {
                 let f = flat.function(function)?;
                 resolve(
                     ty,
                     &TestInput::Branch {
-                        operation: TestInputBranch::Constructor {
+                        operation: (TestInputBranch::Constructor {
                             function: function.clone(),
-                        },
+                        })
+                        .into(),
                         children: vec![TestInput::auto(); f.params.len()],
                     },
                     stack,
                 )
             }
             TestInput::Branch {
-                operation: TestInputBranch::Constructor { function },
+                operation: crate::Operation::Resolved(TestInputBranch::Constructor { function }),
                 children: args,
             } => crate::resolve_constructor(
                 flat,
@@ -1179,32 +1252,32 @@ impl TestDefaults {
                 |function| TestInputBranch::Constructor { function },
             ),
             TestInput::Unary {
-                operation: TestInputUnary::Optional,
+                operation: crate::Operation::Resolved(TestInputUnary::Optional),
                 child,
             } => {
                 let inner = option_inner(ty).ok_or("optional recipe requires Option<T>")?;
                 Ok(InputNode::Unary {
-                    operation: TestInputUnary::Optional,
+                    operation: (TestInputUnary::Optional).into(),
                     child: Box::new(resolve(inner, child, stack)?),
                 })
             }
             TestInput::Unary {
-                operation: TestInputUnary::Sequence,
+                operation: crate::Operation::Resolved(TestInputUnary::Sequence),
                 child,
             } => {
                 let (element, _) =
                     sequence_parts(ty).ok_or("sequence input requires Vec<T>, &[T] or &Vec<T>")?;
                 Ok(InputNode::Unary {
-                    operation: TestInputUnary::Sequence,
+                    operation: (TestInputUnary::Sequence).into(),
                     child: Box::new(resolve(element, child, stack)?),
                 })
             }
             TestInput::Branch {
-                operation: TestInputBranch::Fields,
+                operation: crate::Operation::Resolved(TestInputBranch::Fields),
                 children,
             }
             | TestInput::Branch {
-                operation: TestInputBranch::Record,
+                operation: crate::Operation::Resolved(TestInputBranch::Record),
                 children,
             } => {
                 if type_key(ty) == "()" && children.is_empty() {
@@ -1217,37 +1290,50 @@ impl TestDefaults {
                     if matches!(
                         tree,
                         TestInput::Branch {
-                            operation: TestInputBranch::Record,
+                            operation: crate::Operation::Resolved(TestInputBranch::Record),
                             children: _
                         }
                     ) {
                         InputNode::Branch {
-                            operation: TestInputBranch::Record,
+                            operation: (TestInputBranch::Record).into(),
                             children,
                         }
                     } else {
                         InputNode::Branch {
-                            operation: TestInputBranch::Fields,
+                            operation: (TestInputBranch::Fields).into(),
                             children,
                         }
                     },
                 )
             }
             TestInput::Branch {
-                operation: TestInputBranch::Selector,
+                operation: crate::Operation::Resolved(TestInputBranch::Selector),
                 children: arms,
             } => {
                 if arms.is_empty() {
                     return Err("an input selector needs at least one alternative".into());
                 }
                 Ok(InputNode::Branch {
-                    operation: TestInputBranch::Selector,
+                    operation: (TestInputBranch::Selector).into(),
                     children: arms
                         .iter()
                         .map(|child| resolve(ty, child, stack))
                         .collect::<Result<_>>()?,
                 })
             }
+            TestInput::Request(_)
+            | TestInput::Unary {
+                operation: crate::Operation::Request(_),
+                ..
+            }
+            | TestInput::Branch {
+                operation: crate::Operation::Request(_),
+                ..
+            }
+            | TestInput::Arrow {
+                operation: crate::Operation::Request(_),
+                ..
+            } => Err("pending operation has the wrong structural node shape".into()),
         }
     }
     /// Resolve every output operation, source reference and ownership choice before compilation.
@@ -1280,8 +1366,8 @@ impl TestDefaults {
         if let Some(referent) = crate::output_referent(ty) {
             if (getter_result || !matches!(tree, TestOutput::Leaf(TestOutputLeafOp::Value)))
                 && !matches!(
-                    tree,
-                    TestOutput::Request(
+                    tree.pending_request(),
+                    Some(
                         TestOutputRequest::Auto
                             | TestOutputRequest::ForType { .. }
                             | TestOutputRequest::SequenceCallback { .. }
@@ -1292,14 +1378,19 @@ impl TestDefaults {
             }
         }
         match tree {
-            TestOutput::Request(TestOutputRequest::SequenceCallback { output, structural }) => {
+            TestOutput::Unary {
+                operation:
+                    crate::Operation::Request(TestOutputRequest::SequenceCallback { structural }),
+                child: output,
+            } => {
                 let _ = structural;
                 let _ = resolve(ty, output, stack)?;
                 Err("callback return is unsupported by this adapter".into())
             }
 
             TestOutput::Unary {
-                operation: TestOutputUnary::CallbackArgument { ownership },
+                operation:
+                    crate::Operation::Resolved(TestOutputUnary::CallbackArgument { ownership }),
                 child,
             } => Ok((resolve(ty, child, stack)?).callback_argument(*ownership)),
             TestOutput::None => {
@@ -1309,23 +1400,44 @@ impl TestDefaults {
                     Err("None output requires unit".into())
                 }
             }
-            TestOutput::Arrow { operation, .. } => match *operation {},
+            TestOutput::Arrow {
+                operation: crate::Operation::Resolved(never),
+                ..
+            } => match *never {},
             TestOutput::Branch {
-                operation: TestOutputBranch::Variant | TestOutputBranch::Arguments,
+                operation:
+                    crate::Operation::Resolved(TestOutputBranch::Variant | TestOutputBranch::Arguments),
                 ..
             } => Err("variant/argument branch requires its parent operation".into()),
-            TestOutput::Request(TestOutputRequest::EnumFields(entries)) => self.enum_output_recipe(
-                flat,
-                codec,
-                crate::output_referent(ty).unwrap_or(ty),
-                extra,
-                entries,
-                false,
-                stack,
-                getter_result,
-            ),
             TestOutput::Branch {
-                operation: TestOutputBranch::Enum { value, mode },
+                operation: crate::Operation::Request(TestOutputRequest::EnumFields),
+                children,
+            } => {
+                let entries = crate::enum_children(children, |tree| match tree {
+                    TestOutput::Branch {
+                        operation:
+                            crate::Operation::Request(TestOutputRequest::VariantFields {
+                                variant,
+                                fields,
+                            }),
+                        children,
+                    } => Ok((variant.as_str(), fields.as_slice(), children.as_slice())),
+                    _ => Err("named enum fields require variant branches".into()),
+                })?;
+                self.enum_output_recipe(
+                    flat,
+                    codec,
+                    crate::output_referent(ty).unwrap_or(ty),
+                    extra,
+                    &entries,
+                    false,
+                    stack,
+                    getter_result,
+                )
+            }
+
+            TestOutput::Branch {
+                operation: crate::Operation::Resolved(TestOutputBranch::Enum { value, mode }),
                 children: variants,
             } => {
                 let variants = crate::resolve_enum_variants(
@@ -1365,7 +1477,7 @@ impl TestDefaults {
                 )
             }
             TestOutput::Unary {
-                operation: TestOutputUnary::Convert { conversion },
+                operation: crate::Operation::Resolved(TestOutputUnary::Convert { conversion }),
                 child: output,
             } => self.resolve_output_conversion(
                 flat,
@@ -1377,20 +1489,20 @@ impl TestDefaults {
                 stack,
             ),
             TestOutput::Unary {
-                operation: TestOutputUnary::Bulk,
+                operation: crate::Operation::Resolved(TestOutputUnary::Bulk),
                 child,
             } => Ok(OutputNode::Unary {
-                operation: TestOutputUnary::Bulk,
+                operation: (TestOutputUnary::Bulk).into(),
                 child: Box::new(resolve(ty, &output_body((**child).clone()), stack)?),
             }),
             TestOutput::Leaf(TestOutputLeafOp::Discard) => {
                 Ok(OutputNode::Leaf(TestOutputLeafOp::Discard))
             }
             TestOutput::Unary {
-                operation: TestOutputUnary::Named { name },
+                operation: crate::Operation::Resolved(TestOutputUnary::Named { name }),
                 child: output,
             } => Ok(OutputNode::Unary {
-                operation: TestOutputUnary::Named { name: name.clone() },
+                operation: (TestOutputUnary::Named { name: name.clone() }).into(),
                 child: Box::new(resolve(ty, output, stack)?),
             }),
             TestOutput::Request(TestOutputRequest::Auto) => {
@@ -1414,14 +1526,15 @@ impl TestDefaults {
                     true,
                     |inner| resolve(inner, &TestOutput::auto(), stack),
                     |child| TestOutput::Unary {
-                        operation: TestOutputUnary::Optional,
+                        operation: (TestOutputUnary::Optional).into(),
                         child: Box::new(child),
                     },
                     |child| TestOutput::Unary {
-                        operation: TestOutputUnary::Sequence {
+                        operation: (TestOutputUnary::Sequence {
                             delivery: SequenceDelivery::Auto,
                             mode: None,
-                        },
+                        })
+                        .into(),
                         child: Box::new(child),
                     },
                 )? {
@@ -1432,7 +1545,10 @@ impl TestDefaults {
                 }
                 resolve(ty, &TestOutput::Leaf(TestOutputLeafOp::Value), stack)
             }
-            TestOutput::Request(TestOutputRequest::ForType { ty: target, output }) => {
+            TestOutput::Unary {
+                operation: crate::Operation::Request(TestOutputRequest::ForType { ty: target }),
+                child: output,
+            } => {
                 let target = flat.resolve_type(target)?;
                 let matched = same_type(ty, &target);
                 crate::resolve_typed_expansion(
@@ -1447,7 +1563,7 @@ impl TestDefaults {
                             child
                         } else {
                             TestOutput::Unary {
-                                operation: TestOutputUnary::Optional,
+                                operation: (TestOutputUnary::Optional).into(),
                                 child: Box::new(child),
                             }
                         }
@@ -1457,10 +1573,11 @@ impl TestDefaults {
                             child
                         } else {
                             TestOutput::Unary {
-                                operation: TestOutputUnary::Sequence {
+                                operation: (TestOutputUnary::Sequence {
                                     delivery: SequenceDelivery::Auto,
                                     mode: None,
-                                },
+                                })
+                                .into(),
                                 child: Box::new(child),
                             }
                         }
@@ -1495,7 +1612,7 @@ impl TestDefaults {
 
                 if let Some(inner) = option_inner(ty) {
                     return Ok(OutputNode::Unary {
-                        operation: TestOutputUnary::Optional,
+                        operation: (TestOutputUnary::Optional).into(),
                         child: Box::new(resolve(inner, tree, stack)?),
                     });
                 }
@@ -1511,10 +1628,11 @@ impl TestDefaults {
                         None
                     };
                     return Ok(OutputNode::Unary {
-                        operation: TestOutputUnary::Sequence {
+                        operation: (TestOutputUnary::Sequence {
                             delivery: SequenceDelivery::Value,
                             mode,
-                        },
+                        })
+                        .into(),
                         child: Box::new(resolve(element, &TestOutput::auto(), stack)?),
                     });
                 }
@@ -1529,59 +1647,65 @@ impl TestDefaults {
                 })
             }
             TestOutput::Unary {
-                operation: TestOutputUnary::Optional,
+                operation: crate::Operation::Resolved(TestOutputUnary::Optional),
                 child,
             } => {
                 let inner = option_inner(ty).ok_or("optional recipe requires Option<T>")?;
                 Ok(OutputNode::Unary {
-                    operation: TestOutputUnary::Optional,
+                    operation: (TestOutputUnary::Optional).into(),
                     child: Box::new(resolve(inner, child, stack)?),
                 })
             }
             TestOutput::Unary {
-                operation: TestOutputUnary::Sequence { delivery, mode },
+                operation: crate::Operation::Resolved(TestOutputUnary::Sequence { delivery, mode }),
                 child: element,
             } => {
                 let (ty, _) =
                     sequence_parts(ty).ok_or("sequence output requires a collection source")?;
                 Ok(OutputNode::Unary {
-                    operation: TestOutputUnary::Sequence {
+                    operation: (TestOutputUnary::Sequence {
                         delivery: *delivery,
                         mode: *mode,
-                    },
+                    })
+                    .into(),
                     child: Box::new(resolve(ty, element, stack)?),
                 })
             }
-            TestOutput::Request(TestOutputRequest::NamedFields { overrides, mode }) => {
+            TestOutput::Branch {
+                operation:
+                    crate::Operation::Request(TestOutputRequest::NamedFields { fields, mode }),
+                children: recipes,
+            } => {
+                let overrides = crate::named_children(fields, recipes)?;
                 let children = crate::resolve_named_fields(
                     flat,
                     ty,
-                    overrides,
+                    &overrides,
                     &TestOutput::auto(),
                     |ty, tree| resolve(ty, tree, stack),
                 )?;
                 Ok(if *mode == ProjectionMode::Owned {
                     OutputNode::Branch {
-                        operation: TestOutputBranch::OwnedFields,
+                        operation: (TestOutputBranch::OwnedFields).into(),
                         children,
                     }
                 } else {
                     OutputNode::Branch {
-                        operation: TestOutputBranch::Fields,
+                        operation: (TestOutputBranch::Fields).into(),
                         children,
                     }
                 })
             }
             TestOutput::Branch {
-                operation: TestOutputBranch::Fields,
+                operation: crate::Operation::Resolved(TestOutputBranch::Fields),
                 children,
             }
             | TestOutput::Branch {
-                operation: TestOutputBranch::OwnedFields,
+                operation: crate::Operation::Resolved(TestOutputBranch::OwnedFields),
                 children,
             }
             | TestOutput::Branch {
-                operation: TestOutputBranch::Record { .. },
+                operation: crate::Operation::Resolved(TestOutputBranch::Record { .. }),
                 children,
                 ..
             } => {
@@ -1593,35 +1717,35 @@ impl TestDefaults {
                 })?;
                 Ok(match tree {
                     TestOutput::Branch {
-                        operation: TestOutputBranch::Fields,
+                        operation: crate::Operation::Resolved(TestOutputBranch::Fields),
                         children: _,
                     } => OutputNode::Branch {
-                        operation: TestOutputBranch::Fields,
+                        operation: (TestOutputBranch::Fields).into(),
                         children,
                     },
                     TestOutput::Branch {
-                        operation: TestOutputBranch::OwnedFields,
+                        operation: crate::Operation::Resolved(TestOutputBranch::OwnedFields),
                         children: _,
                     } => OutputNode::Branch {
-                        operation: TestOutputBranch::OwnedFields,
+                        operation: (TestOutputBranch::OwnedFields).into(),
                         children,
                     },
                     TestOutput::Branch {
-                        operation: TestOutputBranch::Record { mode, .. },
+                        operation: crate::Operation::Resolved(TestOutputBranch::Record { mode, .. }),
                         ..
                     } => OutputNode::Branch {
-                        operation: TestOutputBranch::Record { mode: *mode },
+                        operation: (TestOutputBranch::Record { mode: *mode }).into(),
                         children,
                     },
                     _ => unreachable!(),
                 })
             }
             TestOutput::Unary {
-                operation: TestOutputUnary::Getter { function },
+                operation: crate::Operation::Resolved(TestOutputUnary::Getter { function }),
                 child: output,
             }
             | TestOutput::Unary {
-                operation: TestOutputUnary::Into { function },
+                operation: crate::Operation::Resolved(TestOutputUnary::Into { function }),
                 child: output,
             } => {
                 let output = Box::new(crate::resolve_getter(
@@ -1631,7 +1755,7 @@ impl TestDefaults {
                     matches!(
                         tree,
                         TestOutput::Unary {
-                            operation: TestOutputUnary::Into { .. },
+                            operation: crate::Operation::Resolved(TestOutputUnary::Into { .. }),
                             ..
                         }
                     ),
@@ -1642,35 +1766,37 @@ impl TestDefaults {
                     if matches!(
                         tree,
                         TestOutput::Unary {
-                            operation: TestOutputUnary::Into { .. },
+                            operation: crate::Operation::Resolved(TestOutputUnary::Into { .. }),
                             ..
                         }
                     ) {
                         OutputNode::Unary {
-                            operation: TestOutputUnary::Into {
+                            operation: (TestOutputUnary::Into {
                                 function: function.clone(),
-                            },
+                            })
+                            .into(),
                             child: output,
                         }
                     } else {
                         OutputNode::Unary {
-                            operation: TestOutputUnary::Getter {
+                            operation: (TestOutputUnary::Getter {
                                 function: function.clone(),
-                            },
+                            })
+                            .into(),
                             child: output,
                         }
                     },
                 )
             }
             TestOutput::Branch {
-                operation: TestOutputBranch::Combine,
+                operation: crate::Operation::Resolved(TestOutputBranch::Combine),
                 children: parts,
             } => {
                 if parts.is_empty() {
                     return Err("an output combination needs at least one part".into());
                 }
                 Ok(OutputNode::Branch {
-                    operation: TestOutputBranch::Combine,
+                    operation: (TestOutputBranch::Combine).into(),
                     children: parts
                         .iter()
                         .map(|child| resolve(ty, child, stack))
@@ -1678,7 +1804,7 @@ impl TestDefaults {
                 })
             }
             TestOutput::Unary {
-                operation: TestOutputUnary::Result { error },
+                operation: crate::Operation::Resolved(TestOutputUnary::Result { error }),
                 child: ok,
             } => {
                 let (success, failure) =
@@ -1696,12 +1822,26 @@ impl TestDefaults {
                     }
                 }
                 Ok(OutputNode::Unary {
-                    operation: TestOutputUnary::Result {
+                    operation: (TestOutputUnary::Result {
                         error: error.clone(),
-                    },
+                    })
+                    .into(),
                     child: Box::new(resolve(success, ok, stack)?),
                 })
             }
+            TestOutput::Request(_)
+            | TestOutput::Unary {
+                operation: crate::Operation::Request(_),
+                ..
+            }
+            | TestOutput::Branch {
+                operation: crate::Operation::Request(_),
+                ..
+            }
+            | TestOutput::Arrow {
+                operation: crate::Operation::Request(_),
+                ..
+            } => Err("pending operation has the wrong structural node shape".into()),
         }
     }
 }
@@ -1729,9 +1869,10 @@ impl TestDefaults {
             |ty, child, stack| self.input(flat, codec, ty, child, extra, stack),
         )?;
         Ok(TestInput::Unary {
-            operation: TestInputUnary::Convert {
+            operation: (TestInputUnary::Convert {
                 conversion: Box::new(conversion),
-            },
+            })
+            .into(),
             child: Box::new(child),
         })
     }
@@ -1757,9 +1898,10 @@ impl TestDefaults {
             |ty, child, stack| self.output(flat, codec, ty, child, extra, stack, true),
         )?;
         Ok(TestOutput::Unary {
-            operation: TestOutputUnary::Convert {
+            operation: (TestOutputUnary::Convert {
                 conversion: Box::new(conversion),
-            },
+            })
+            .into(),
             child: Box::new(child),
         })
     }
@@ -1773,7 +1915,7 @@ impl TestDefaults {
     ) -> Result<crate::ResolvedInput<C>> {
         if type_key(ty) == "()" {
             return Ok(InputNode::Branch {
-                operation: TestInputBranch::Fields,
+                operation: (TestInputBranch::Fields).into(),
                 children: vec![],
             });
         }
@@ -1793,11 +1935,11 @@ impl TestDefaults {
             true,
             |inner| self.resolve_input_value(flat, codec, inner, extra, stack),
             |child| TestInput::Unary {
-                operation: TestInputUnary::Optional,
+                operation: (TestInputUnary::Optional).into(),
                 child: Box::new(child),
             },
             |child| TestInput::Unary {
-                operation: TestInputUnary::Sequence,
+                operation: (TestInputUnary::Sequence).into(),
                 child: Box::new(child),
             },
         )? {
@@ -1825,7 +1967,7 @@ impl TestDefaults {
     ) -> Result<crate::ResolvedOutput<C>> {
         if type_key(ty) == "()" {
             return Ok(OutputNode::Branch {
-                operation: TestOutputBranch::Fields,
+                operation: (TestOutputBranch::Fields).into(),
                 children: vec![],
             });
         }
@@ -1845,14 +1987,15 @@ impl TestDefaults {
             true,
             |inner| self.resolve_output_value(flat, codec, inner, extra, stack, getter, policy),
             |child| TestOutput::Unary {
-                operation: TestOutputUnary::Optional,
+                operation: (TestOutputUnary::Optional).into(),
                 child: Box::new(child),
             },
             |child| TestOutput::Unary {
-                operation: TestOutputUnary::Sequence {
+                operation: (TestOutputUnary::Sequence {
                     delivery: crate::SequenceDelivery::Value,
                     mode: policy.map(|p| p.mode),
-                },
+                })
+                .into(),
                 child: Box::new(child),
             },
         )? {
@@ -1881,7 +2024,7 @@ impl TestDefaults {
         extra: &C::Extra,
         entries: &BTreeMap<
             String,
-            BTreeMap<String, TestInput<TestInputRequest, TestOutputRequest>>,
+            BTreeMap<String, &TestInput<TestInputRequest, TestOutputRequest>>,
         >,
         value: bool,
         stack: &mut Vec<String>,
@@ -1905,7 +2048,7 @@ impl TestDefaults {
         extra: &C::Extra,
         entries: &BTreeMap<
             String,
-            BTreeMap<String, TestOutput<TestInputRequest, TestOutputRequest>>,
+            BTreeMap<String, &TestOutput<TestInputRequest, TestOutputRequest>>,
         >,
         value: bool,
         stack: &mut Vec<String>,
@@ -1945,21 +2088,25 @@ impl TestDefaults {
     }
 }
 
-impl From<DeclConvert> for TestInputRequest {
-    fn from(decl: DeclConvert) -> Self {
-        Self::ForType {
-            ty: Box::new(decl.ty.clone()),
-            input: Box::new(TestInput::Request(Self::Conversion(Box::new(decl)))),
-        }
+impl crate::LocalConversion<TestInput<TestInputRequest, TestOutputRequest>> for TestInputRequest {
+    fn local_conversion(
+        declaration: DeclConvert,
+    ) -> TestInput<TestInputRequest, TestOutputRequest> {
+        TestInput::for_type(
+            declaration.ty.clone(),
+            TestInput::Request(Self::Conversion(Box::new(declaration))),
+        )
     }
 }
 
-impl From<DeclConvert> for TestOutputRequest {
-    fn from(decl: DeclConvert) -> Self {
-        Self::ForType {
-            ty: Box::new(decl.ty.clone()),
-            output: Box::new(TestOutput::Request(Self::Conversion(Box::new(decl)))),
-        }
+impl crate::LocalConversion<TestOutput<TestInputRequest, TestOutputRequest>> for TestOutputRequest {
+    fn local_conversion(
+        declaration: DeclConvert,
+    ) -> TestOutput<TestInputRequest, TestOutputRequest> {
+        TestOutput::for_type(
+            declaration.ty.clone(),
+            TestOutput::Request(Self::Conversion(Box::new(declaration))),
+        )
     }
 }
 pub fn test_bind_input<C: Codec<InOps = TestInputOps, OutOps = TestOutputOps>>(
@@ -2041,7 +2188,7 @@ macro_rules! test_fields {
 #[macro_export]
 macro_rules! test_callback {($($ty:tt)+)=>{$crate::test_language::TestCallback::new($crate::declarations::parse_type(stringify!($($ty)+)))};}
 
-/// Collect source helper and representation-type names needed by `Flat::parse_selected`.
+/// Collect source names; all recursive traversal follows structural edges.
 pub fn source_items<'a>(
     inputs: &[TestInput<TestInputRequest, TestOutputRequest>],
     outputs: &[TestOutput<TestInputRequest, TestOutputRequest>],
@@ -2049,59 +2196,37 @@ pub fn source_items<'a>(
     functions: impl IntoIterator<Item = &'a TestFunction>,
 ) -> Vec<String> {
     fn input(tree: &TestInput<TestInputRequest, TestOutputRequest>, names: &mut Vec<String>) {
+        match tree.pending_request() {
+            Some(TestInputRequest::Conversion(declaration)) => {
+                crate::conversion_source_items(declaration, names)
+            }
+            Some(TestInputRequest::Call(name)) => names.push(name.clone()),
+            _ => {}
+        }
         match tree {
-            TestInput::Request(TestInputRequest::EnumFields(variants)) => {
-                for child in variants.values().flat_map(|v| v.values()) {
-                    input(child, names)
-                }
-            }
-            TestInput::Request(TestInputRequest::Conversion(d)) => {
-                crate::conversion_source_items(d, names)
-            }
             TestInput::Unary {
-                operation: TestInputUnary::Convert { conversion },
+                operation: crate::Operation::Resolved(TestInputUnary::Convert { conversion }),
                 ..
             } => {
                 if let prebindgen_flat::ValueSource::Function(name) = &conversion.source {
                     names.push(name.clone())
                 }
             }
-            TestInput::Request(TestInputRequest::Callback(declaration)) => {
-                for tree in declaration.params.values() {
-                    output(tree, names)
-                }
-                if let Some(tree) = &declaration.ret {
-                    input(tree, names)
-                }
-            }
-            TestInput::Request(TestInputRequest::Call(name)) => names.push(name.clone()),
             TestInput::Branch {
-                operation: TestInputBranch::Constructor { function },
+                operation: crate::Operation::Resolved(TestInputBranch::Constructor { function }),
                 ..
             } => names.push(function.clone()),
-            TestInput::Request(TestInputRequest::ForType { input: child, .. }) => {
-                input(child, names)
-            }
             _ => {}
         }
         crate::input_children(tree, names, &mut input, &mut output);
     }
     fn output(tree: &TestOutput<TestInputRequest, TestOutputRequest>, names: &mut Vec<String>) {
+        if let Some(TestOutputRequest::Conversion(declaration)) = tree.pending_request() {
+            crate::conversion_source_items(declaration, names)
+        }
         match tree {
-            TestOutput::Request(TestOutputRequest::SequenceCallback { output: child, .. })
-            | TestOutput::Request(TestOutputRequest::ForType { output: child, .. }) => {
-                output(child, names)
-            }
-            TestOutput::Request(TestOutputRequest::EnumFields(variants)) => {
-                for child in variants.values().flat_map(|v| v.values()) {
-                    output(child, names)
-                }
-            }
-            TestOutput::Request(TestOutputRequest::Conversion(d)) => {
-                crate::conversion_source_items(d, names)
-            }
             TestOutput::Unary {
-                operation: TestOutputUnary::Convert { conversion },
+                operation: crate::Operation::Resolved(TestOutputUnary::Convert { conversion }),
                 ..
             } => {
                 if let prebindgen_flat::ValueSource::Function(name) = &conversion.source {
@@ -2109,22 +2234,16 @@ pub fn source_items<'a>(
                 }
             }
             TestOutput::Unary {
-                operation: TestOutputUnary::Getter { function },
-                ..
-            }
-            | TestOutput::Unary {
-                operation: TestOutputUnary::Into { function },
+                operation:
+                    crate::Operation::Resolved(
+                        TestOutputUnary::Getter { function } | TestOutputUnary::Into { function },
+                    ),
                 ..
             } => names.push(function.clone()),
             TestOutput::Unary {
-                operation: TestOutputUnary::Result { error: Some(name) },
+                operation: crate::Operation::Resolved(TestOutputUnary::Result { error: Some(name) }),
                 ..
             } => names.push(name.clone()),
-            TestOutput::Request(TestOutputRequest::NamedFields { overrides, .. }) => {
-                for child in overrides.values() {
-                    output(child, names)
-                }
-            }
             _ => {}
         }
         crate::output_children(tree, names, &mut input, &mut output);
@@ -2136,20 +2255,27 @@ fn owned_field_view(
     view: TestOutput<TestInputRequest, TestOutputRequest>,
 ) -> TestOutput<TestInputRequest, TestOutputRequest> {
     let TestOutput::Unary {
-        operation: TestOutputUnary::Getter { function },
-        child: output,
+        operation: crate::Operation::Resolved(TestOutputUnary::Getter { function }),
+        child,
     } = view
     else {
-        panic!("fields_into requires a test_fields! accessor")
+        panic!("fields_into requires a fields! accessor")
     };
-    let TestOutput::Request(TestOutputRequest::NamedFields { overrides, .. }) = *output else {
+    let TestOutput::Branch {
+        operation: crate::Operation::Request(TestOutputRequest::NamedFields { fields, .. }),
+        children,
+    } = *child
+    else {
         panic!("fields_into requires named fields")
     };
     TestOutput::Unary {
-        operation: TestOutputUnary::Into { function },
-        child: Box::new(TestOutput::Request(TestOutputRequest::NamedFields {
-            overrides,
-            mode: ProjectionMode::Owned,
-        })),
+        operation: TestOutputUnary::Into { function }.into(),
+        child: Box::new(TestOutput::Branch {
+            operation: crate::Operation::Request(TestOutputRequest::NamedFields {
+                fields,
+                mode: ProjectionMode::Owned,
+            }),
+            children,
+        }),
     }
 }

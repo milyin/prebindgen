@@ -635,16 +635,19 @@ mod tests {
         let error = Cbindgen::new(flat(source))
             .opaque_ptr("owner", syn::parse_quote!(Owner))
             .opaque_ptr("inner", syn::parse_quote!(Inner))
-            .function(fun!(borrow).output(COutput::getter(
-                "list",
-                COutput::Unary {
-                    operation: COutputUnary::Sequence {
-                        delivery: SequenceDelivery::Value,
-                        mode: Some(ProjectionMode::Borrowed),
+            .function(
+                fun!(borrow).output(COutput::getter(
+                    "list",
+                    COutput::Unary {
+                        operation: (COutputUnary::Sequence {
+                            delivery: SequenceDelivery::Value,
+                            mode: Some(ProjectionMode::Borrowed),
+                        })
+                        .into(),
+                        child: Box::new(COutput::getter("name", COutput::auto())),
                     },
-                    child: Box::new(COutput::getter("name", COutput::auto())),
-                },
-            )))
+                )),
+            )
             .panic()
             .build()
             .err()

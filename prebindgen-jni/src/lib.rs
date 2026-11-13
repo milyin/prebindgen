@@ -628,7 +628,11 @@ impl JniGenBuilder {
             else {
                 return Err("callback declaration requires a callback conversion".into());
             };
-            callback::validate_source_occurrence(&flat, configuration, &callback_sources)?;
+            callback::validate_source_occurrence(
+                &flat,
+                configuration.resolved(),
+                &callback_sources,
+            )?;
             flat.metadata.callback_recipes.push(recipe);
         }
 
@@ -850,7 +854,7 @@ impl Codec for JniCodec {
             let plan = prebindgen_declarations::compile_input_value(
                 flat,
                 self,
-                &operation.ty,
+                &operation.resolved().ty,
                 &recipe,
                 &(),
             )?;

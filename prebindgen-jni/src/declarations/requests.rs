@@ -1,70 +1,68 @@
 use super::*;
 #[derive(Clone, Debug)]
-/// Source-dependent input choices resolved before compilation.
+/// Metadata-only input choices. Explicit conversions use structural node children.
 pub enum JniInputRequest {
-    /// Expand enum fields, inheriting defaults for fields not explicitly overridden.
-    EnumFields(
-        std::collections::BTreeMap<
-            String,
-            std::collections::BTreeMap<String, JniInput<JniInputRequest, JniOutputRequest>>,
-        >,
-    ),
-    /// Resolve only the canonical value form, independently of boundary defaults.
-    Value,
-    /// Select a local single-value conversion.
-    Conversion(Box<DeclConvert>),
-    /// Select the configured default for this source occurrence.
-    Auto,
-    /// Select or override a callback signature's argument and result conversions.
-    Callback(Box<DeclJniCallback>),
-    /// Apply a type-specific override, including inside optional/sequence sources.
-    ForType {
-        /// Source type targeted by the override.
-        ty: Box<Type>,
-        /// The requested conversion for that type.
-        input: Box<JniInput<JniInputRequest, JniOutputRequest>>,
+    /// Partial named enum fields; children are variant branches.
+    EnumFields,
+    /// One partial variant; the children correspond to these source field names.
+    VariantFields {
+        /// Source variant name.
+        variant: String,
+        /// Source field names corresponding to the structural children.
+        fields: Vec<String>,
     },
-    /// Infer a constructor's argument conversions from its source signature.
+    /// Resolve the canonical value representation.
+    Value,
+    /// Select a local Rust value conversion.
+    Conversion(Box<DeclConvert>),
+    /// Resolve this occurrence's configured default.
+    Auto,
+    /// Partial callback metadata; domain/codomain own all conversion children.
+    Callback(Box<prebindgen_declarations::CallbackRequest>),
+    /// Apply the unary child at this source type, including nested occurrences.
+    ForType {
+        /// Source type at which the unary child applies.
+        ty: Box<Type>,
+    },
+    /// Infer constructor arguments from their defaults.
     Call(String),
 }
 #[derive(Clone, Debug)]
-/// Source-dependent output choices resolved before compilation.
+/// Metadata-only output choices. Explicit conversions use structural node children.
 pub enum JniOutputRequest {
-    /// Select per-element delivery after resolving defaults and local expansion.
+    /// Select per-element delivery of the unary child's resolved sequence.
     SequenceCallback {
-        /// Expansion whose outer sequence supplies callback elements.
-        output: Box<JniOutput<JniInputRequest, JniOutputRequest>>,
-        /// Allow structural decomposition of a default collection identity.
+        /// Permit decomposition of an ordinary collection identity.
         structural: bool,
     },
-    /// Expand enum fields, inheriting boundary defaults for unspecified fields.
-    EnumFields(
-        std::collections::BTreeMap<
-            String,
-            std::collections::BTreeMap<String, JniOutput<JniInputRequest, JniOutputRequest>>,
-        >,
-    ),
-    /// Resolve only the canonical value form, independently of boundary defaults.
+    /// Partial named enum fields; children are variant branches.
+    EnumFields,
+    /// One partial variant; children correspond to these source field names.
+    VariantFields {
+        /// Source variant name.
+        variant: String,
+        /// Source field names corresponding to the structural children.
+        fields: Vec<String>,
+    },
+    /// Resolve the canonical value representation with optional projection policy.
     Value {
-        /// Explicit field ownership/projection policy, if any.
+        /// Explicit ownership and field projection policy.
         projection: Option<Projection>,
     },
-    /// Select a local single-value conversion.
+    /// Select a local Rust value conversion.
     Conversion(Box<DeclConvert>),
-    /// Select the configured output default for this source occurrence.
+    /// Resolve this occurrence's configured default.
     Auto,
-    /// Apply a type-specific override, including inside optional/sequence sources.
+    /// Apply the unary child at this source type, including nested occurrences.
     ForType {
-        /// Source type targeted by the override.
+        /// Source type at which the unary child applies.
         ty: Box<Type>,
-        /// Requested conversion for the matching type.
-        output: Box<JniOutput<JniInputRequest, JniOutputRequest>>,
     },
-    /// Resolve source record fields by name and fill unspecified conversions.
+    /// Partial record fields, corresponding to the branch children.
     NamedFields {
-        /// Explicit conversions keyed by source field name.
-        overrides: std::collections::BTreeMap<String, JniOutput<JniInputRequest, JniOutputRequest>>,
-        /// Ownership of field decomposition.
+        /// Source field names corresponding to the structural children.
+        fields: Vec<String>,
+        /// Observe or move the selected fields.
         mode: ProjectionMode,
     },
 }
@@ -99,7 +97,7 @@ impl<InRequest, OutRequest> JniInputExt<InRequest, OutRequest> for JniInput<InRe
     /// Group this explicit expansion into a bulk carrier.
     fn bulk(self) -> Self {
         JniInput::Unary {
-            operation: JniInputUnary::Bulk,
+            operation: (JniInputUnary::Bulk).into(),
             child: Box::new(self),
         }
     }
@@ -109,7 +107,7 @@ impl<InRequest, OutRequest> JniInputExt<InRequest, OutRequest> for JniInput<InRe
     /// order. Binding verifies the count against the record.
     fn fields(fields: impl IntoIterator<Item = JniInput<InRequest, OutRequest>>) -> Self {
         JniInput::Branch {
-            operation: JniInputBranch::Fields,
+            operation: (JniInputBranch::Fields).into(),
             children: fields.into_iter().collect(),
         }
     }
@@ -128,9 +126,10 @@ impl<InRequest, OutRequest> JniInputExt<InRequest, OutRequest> for JniInput<InRe
         args: impl IntoIterator<Item = JniInput<InRequest, OutRequest>>,
     ) -> Self {
         JniInput::Branch {
-            operation: JniInputBranch::Constructor {
+            operation: (JniInputBranch::Constructor {
                 function: name.into(),
-            },
+            })
+            .into(),
             children: args.into_iter().collect(),
         }
     }
@@ -144,7 +143,7 @@ impl<InRequest, OutRequest> JniInputExt<InRequest, OutRequest> for JniInput<InRe
     /// merge equivalent wire parameters or generate destination-language overloads.
     fn selector(arms: impl IntoIterator<Item = JniInput<InRequest, OutRequest>>) -> Self {
         JniInput::Branch {
-            operation: JniInputBranch::Selector,
+            operation: (JniInputBranch::Selector).into(),
             children: arms.into_iter().collect(),
         }
     }
@@ -152,11 +151,11 @@ impl<InRequest, OutRequest> JniInputExt<InRequest, OutRequest> for JniInput<InRe
     /// Describe source variants, each with an ordinary branch of field conversions.
     fn enum_variants(variants: Vec<Vec<Self>>, value: bool) -> Self {
         Self::Branch {
-            operation: JniInputBranch::Enum { value },
+            operation: (JniInputBranch::Enum { value }).into(),
             children: variants
                 .into_iter()
                 .map(|children| Self::Branch {
-                    operation: JniInputBranch::Variant,
+                    operation: (JniInputBranch::Variant).into(),
                     children,
                 })
                 .collect(),
@@ -166,7 +165,7 @@ impl<InRequest, OutRequest> JniInputExt<InRequest, OutRequest> for JniInput<InRe
     fn variant_fields(&self) -> crate::Result<&[Self]> {
         match self {
             Self::Branch {
-                operation: JniInputBranch::Variant,
+                operation: prebindgen_declarations::Operation::Resolved(JniInputBranch::Variant),
                 children,
             } => Ok(children),
             _ => Err("enum children must be variant branches".into()),
@@ -176,7 +175,7 @@ impl<InRequest, OutRequest> JniInputExt<InRequest, OutRequest> for JniInput<InRe
     /// Convert each incoming collection element using the supplied subtree.
     fn sequence(element: Self) -> Self {
         Self::Unary {
-            operation: JniInputUnary::Sequence,
+            operation: (JniInputUnary::Sequence).into(),
             child: Box::new(element),
         }
     }
@@ -212,9 +211,22 @@ impl JniInputRequests for JniInput<JniInputRequest, JniOutputRequest> {
     fn enum_fields<'a>(
         overrides: impl IntoIterator<Item = (&'a str, Vec<(&'a str, Self)>)>,
     ) -> Self {
-        JniInput::Request(JniInputRequest::EnumFields(
-            prebindgen_declarations::enum_overrides(overrides),
-        ))
+        let overrides = prebindgen_declarations::enum_overrides(overrides);
+        JniInput::Branch {
+            operation: prebindgen_declarations::Operation::Request(JniInputRequest::EnumFields),
+            children: overrides
+                .into_iter()
+                .map(|(variant, fields)| {
+                    let (fields, children) = fields.into_iter().unzip();
+                    JniInput::Branch {
+                        operation: prebindgen_declarations::Operation::Request(
+                            JniInputRequest::VariantFields { variant, fields },
+                        ),
+                        children,
+                    }
+                })
+                .collect(),
+        }
     }
     /// Request the canonical value representation, bypassing boundary defaults.
     fn value() -> Self {
@@ -226,10 +238,12 @@ impl JniInputRequests for JniInput<JniInputRequest, JniOutputRequest> {
     }
     /// Associate a conversion with a source type for a default or nested override.
     fn for_type(ty: Type, input: Self) -> Self {
-        JniInput::Request(JniInputRequest::ForType {
-            ty: Box::new(ty),
-            input: Box::new(input),
-        })
+        JniInput::Unary {
+            operation: prebindgen_declarations::Operation::Request(JniInputRequest::ForType {
+                ty: Box::new(ty),
+            }),
+            child: Box::new(input),
+        }
     }
     /// Infer a source constructor's argument conversions from registered defaults.
     fn call(name: impl Into<String>) -> Self {
@@ -241,15 +255,19 @@ impl JniInputRequests for JniInput<JniInputRequest, JniOutputRequest> {
     /// semantics; this operation authorizes the temporary's allocation/copying.
     fn reconstruct(self) -> Self {
         match self {
-            JniInput::Request(JniInputRequest::ForType { ty, input }) => JniInput::for_type(
+            JniInput::Unary {
+                operation:
+                    prebindgen_declarations::Operation::Request(JniInputRequest::ForType { ty }),
+                child: input,
+            } => JniInput::for_type(
                 *ty,
                 JniInput::Unary {
-                    operation: JniInputUnary::Temporary,
+                    operation: (JniInputUnary::Temporary).into(),
                     child: input,
                 },
             ),
             other => JniInput::Unary {
-                operation: JniInputUnary::Temporary,
+                operation: (JniInputUnary::Temporary).into(),
                 child: Box::new(other),
             },
         }
@@ -264,21 +282,23 @@ impl JniInputRequests for JniInput<JniInputRequest, JniOutputRequest> {
     }
     fn add_alternative(self, arm: Self) -> Self {
         match self {
-            JniInput::Request(JniInputRequest::ForType { ty, input }) => {
-                JniInput::for_type(*ty, input.add_alternative(arm))
-            }
+            JniInput::Unary {
+                operation:
+                    prebindgen_declarations::Operation::Request(JniInputRequest::ForType { ty }),
+                child: input,
+            } => JniInput::for_type(*ty, input.add_alternative(arm)),
             JniInput::Branch {
-                operation: JniInputBranch::Selector,
+                operation: prebindgen_declarations::Operation::Resolved(JniInputBranch::Selector),
                 children: mut arms,
             } => {
                 arms.push(arm);
                 JniInput::Branch {
-                    operation: JniInputBranch::Selector,
+                    operation: (JniInputBranch::Selector).into(),
                     children: arms,
                 }
             }
             other => JniInput::Branch {
-                operation: JniInputBranch::Selector,
+                operation: (JniInputBranch::Selector).into(),
                 children: vec![other, arm],
             },
         }
@@ -314,7 +334,7 @@ impl<InRequest, OutRequest> JniOutputExt<InRequest, OutRequest>
     /// Group this explicit expansion into a bulk carrier.
     fn bulk(self) -> Self {
         JniOutput::Unary {
-            operation: JniOutputUnary::Bulk,
+            operation: (JniOutputUnary::Bulk).into(),
             child: Box::new(self),
         }
     }
@@ -323,7 +343,7 @@ impl<InRequest, OutRequest> JniOutputExt<InRequest, OutRequest>
     /// `fields` holds one recipe per field of the source record, in declaration order.
     fn fields(fields: impl IntoIterator<Item = JniOutput<InRequest, OutRequest>>) -> Self {
         JniOutput::Branch {
-            operation: JniOutputBranch::Fields,
+            operation: (JniOutputBranch::Fields).into(),
             children: fields.into_iter().collect(),
         }
     }
@@ -339,9 +359,10 @@ impl<InRequest, OutRequest> JniOutputExt<InRequest, OutRequest>
     /// * `output` — recipe for the getter's result.
     fn getter(name: impl Into<String>, output: JniOutput<InRequest, OutRequest>) -> Self {
         JniOutput::Unary {
-            operation: JniOutputUnary::Getter {
+            operation: (JniOutputUnary::Getter {
                 function: name.into(),
-            },
+            })
+            .into(),
             child: Box::new(output),
         }
     }
@@ -353,7 +374,7 @@ impl<InRequest, OutRequest> JniOutputExt<InRequest, OutRequest>
     /// unless [`Codec::output_owner`] first retains the final output allocation.
     fn combine(parts: impl IntoIterator<Item = JniOutput<InRequest, OutRequest>>) -> Self {
         JniOutput::Branch {
-            operation: JniOutputBranch::Combine,
+            operation: (JniOutputBranch::Combine).into(),
             children: parts.into_iter().collect(),
         }
     }
@@ -364,7 +385,7 @@ impl<InRequest, OutRequest> JniOutputExt<InRequest, OutRequest>
             Self::None
         } else {
             Self::Branch {
-                operation: JniOutputBranch::Arguments,
+                operation: (JniOutputBranch::Arguments).into(),
                 children,
             }
         }
@@ -374,7 +395,7 @@ impl<InRequest, OutRequest> JniOutputExt<InRequest, OutRequest>
         match self {
             Self::None => Ok(&[]),
             Self::Branch {
-                operation: JniOutputBranch::Arguments,
+                operation: prebindgen_declarations::Operation::Resolved(JniOutputBranch::Arguments),
                 children,
             } => Ok(children),
             _ => Err("callback domain requires an argument branch or None".into()),
@@ -384,11 +405,11 @@ impl<InRequest, OutRequest> JniOutputExt<InRequest, OutRequest>
     /// Describe source variants, each with an ordinary branch of field conversions.
     fn enum_variants(variants: Vec<Vec<Self>>, value: bool, mode: Option<ProjectionMode>) -> Self {
         Self::Branch {
-            operation: JniOutputBranch::Enum { value, mode },
+            operation: (JniOutputBranch::Enum { value, mode }).into(),
             children: variants
                 .into_iter()
                 .map(|children| Self::Branch {
-                    operation: JniOutputBranch::Variant,
+                    operation: (JniOutputBranch::Variant).into(),
                     children,
                 })
                 .collect(),
@@ -398,7 +419,7 @@ impl<InRequest, OutRequest> JniOutputExt<InRequest, OutRequest>
     fn variant_fields(&self) -> crate::Result<&[Self]> {
         match self {
             Self::Branch {
-                operation: JniOutputBranch::Variant,
+                operation: prebindgen_declarations::Operation::Resolved(JniOutputBranch::Variant),
                 children,
             } => Ok(children),
             _ => Err("enum children must be variant branches".into()),
@@ -408,7 +429,7 @@ impl<InRequest, OutRequest> JniOutputExt<InRequest, OutRequest>
     /// Attach the lifetime of produced foreign owners to this callable argument.
     fn callback_argument(self, ownership: CallbackArgumentOwnership) -> Self {
         Self::Unary {
-            operation: JniOutputUnary::CallbackArgument { ownership },
+            operation: (JniOutputUnary::CallbackArgument { ownership }).into(),
             child: Box::new(self),
         }
     }
@@ -416,7 +437,10 @@ impl<InRequest, OutRequest> JniOutputExt<InRequest, OutRequest>
     fn callback_argument_parts(&self) -> crate::Result<(CallbackArgumentOwnership, &Self)> {
         match self {
             Self::Unary {
-                operation: JniOutputUnary::CallbackArgument { ownership },
+                operation:
+                    prebindgen_declarations::Operation::Resolved(JniOutputUnary::CallbackArgument {
+                        ownership,
+                    }),
                 child,
             } => Ok((*ownership, child)),
             _ => Err("callback argument requires an explicit ownership contract".into()),
@@ -461,9 +485,22 @@ impl JniOutputRequests for JniOutput<JniInputRequest, JniOutputRequest> {
     fn enum_fields<'a>(
         overrides: impl IntoIterator<Item = (&'a str, Vec<(&'a str, Self)>)>,
     ) -> Self {
-        JniOutput::Request(JniOutputRequest::EnumFields(
-            prebindgen_declarations::enum_overrides(overrides),
-        ))
+        let overrides = prebindgen_declarations::enum_overrides(overrides);
+        JniOutput::Branch {
+            operation: prebindgen_declarations::Operation::Request(JniOutputRequest::EnumFields),
+            children: overrides
+                .into_iter()
+                .map(|(variant, fields)| {
+                    let (fields, children) = fields.into_iter().unzip();
+                    JniOutput::Branch {
+                        operation: prebindgen_declarations::Operation::Request(
+                            JniOutputRequest::VariantFields { variant, fields },
+                        ),
+                        children,
+                    }
+                })
+                .collect(),
+        }
     }
     /// Request the canonical value representation, bypassing boundary defaults.
     fn value() -> Self {
@@ -475,30 +512,34 @@ impl JniOutputRequests for JniOutput<JniInputRequest, JniOutputRequest> {
     }
     /// Associate a conversion with a source type for a default or nested override.
     fn for_type(ty: Type, output: Self) -> Self {
-        JniOutput::Request(JniOutputRequest::ForType {
-            ty: Box::new(ty),
-            output: Box::new(output),
-        })
+        JniOutput::Unary {
+            operation: prebindgen_declarations::Operation::Request(JniOutputRequest::ForType {
+                ty: Box::new(ty),
+            }),
+            child: Box::new(output),
+        }
     }
     /// Append another simultaneous output view.
     fn view(self, view: impl Into<Self>) -> Self {
         let view = view.into();
         match self {
-            JniOutput::Request(JniOutputRequest::ForType { ty, output }) => {
-                JniOutput::for_type(*ty, output.view(view))
-            }
+            JniOutput::Unary {
+                operation:
+                    prebindgen_declarations::Operation::Request(JniOutputRequest::ForType { ty }),
+                child: output,
+            } => JniOutput::for_type(*ty, output.view(view)),
             JniOutput::Branch {
-                operation: JniOutputBranch::Combine,
+                operation: prebindgen_declarations::Operation::Resolved(JniOutputBranch::Combine),
                 children: mut parts,
             } => {
                 parts.push(view);
                 JniOutput::Branch {
-                    operation: JniOutputBranch::Combine,
+                    operation: (JniOutputBranch::Combine).into(),
                     children: parts,
                 }
             }
             other => JniOutput::Branch {
-                operation: JniOutputBranch::Combine,
+                operation: (JniOutputBranch::Combine).into(),
                 children: vec![other, view],
             },
         }
@@ -538,39 +579,51 @@ impl JniOutputRequests for JniOutput<JniInputRequest, JniOutputRequest> {
             name.into(),
             output,
             |tree| match tree {
-                JniOutput::Request(JniOutputRequest::NamedFields { overrides, .. }) => {
-                    Some(overrides)
-                }
+                JniOutput::Branch {
+                    operation:
+                        prebindgen_declarations::Operation::Request(JniOutputRequest::NamedFields {
+                            fields,
+                            ..
+                        }),
+                    children,
+                } => Some((fields, children)),
                 _ => None,
             },
             |tree| match tree {
                 JniOutput::Unary {
-                    operation: JniOutputUnary::Getter { .. } | JniOutputUnary::Into { .. },
+                    operation:
+                        prebindgen_declarations::Operation::Resolved(
+                            JniOutputUnary::Getter { .. } | JniOutputUnary::Into { .. },
+                        )
+                        | prebindgen_declarations::Operation::Request(JniOutputRequest::ForType {
+                            ..
+                        }),
                     child,
-                }
-                | JniOutput::Request(JniOutputRequest::ForType { output: child, .. }) => {
-                    Some(child)
-                }
+                } => Some(child),
                 _ => None,
             },
         )
     }
 }
 
-impl From<DeclConvert> for JniInputRequest {
-    fn from(decl: DeclConvert) -> Self {
-        Self::ForType {
-            ty: Box::new(decl.ty.clone()),
-            input: Box::new(JniInput::Request(Self::Conversion(Box::new(decl)))),
-        }
+impl prebindgen_declarations::LocalConversion<JniInput<JniInputRequest, JniOutputRequest>>
+    for JniInputRequest
+{
+    fn local_conversion(declaration: DeclConvert) -> JniInput<JniInputRequest, JniOutputRequest> {
+        JniInput::for_type(
+            declaration.ty.clone(),
+            JniInput::Request(Self::Conversion(Box::new(declaration))),
+        )
     }
 }
-impl From<DeclConvert> for JniOutputRequest {
-    fn from(decl: DeclConvert) -> Self {
-        Self::ForType {
-            ty: Box::new(decl.ty.clone()),
-            output: Box::new(JniOutput::Request(Self::Conversion(Box::new(decl)))),
-        }
+impl prebindgen_declarations::LocalConversion<JniOutput<JniInputRequest, JniOutputRequest>>
+    for JniOutputRequest
+{
+    fn local_conversion(declaration: DeclConvert) -> JniOutput<JniInputRequest, JniOutputRequest> {
+        JniOutput::for_type(
+            declaration.ty.clone(),
+            JniOutput::Request(Self::Conversion(Box::new(declaration))),
+        )
     }
 }
 
@@ -578,20 +631,30 @@ pub(super) fn owned_field_view(
     view: JniOutput<JniInputRequest, JniOutputRequest>,
 ) -> JniOutput<JniInputRequest, JniOutputRequest> {
     let JniOutput::Unary {
-        operation: JniOutputUnary::Getter { function },
-        child: output,
+        operation: prebindgen_declarations::Operation::Resolved(JniOutputUnary::Getter { function }),
+        child,
     } = view
     else {
         panic!("fields_into requires a fields! accessor")
     };
-    let JniOutput::Request(JniOutputRequest::NamedFields { overrides, .. }) = *output else {
+    let JniOutput::Branch {
+        operation:
+            prebindgen_declarations::Operation::Request(JniOutputRequest::NamedFields {
+                fields, ..
+            }),
+        children,
+    } = *child
+    else {
         panic!("fields_into requires named fields")
     };
     JniOutput::Unary {
-        operation: JniOutputUnary::Into { function },
-        child: Box::new(JniOutput::Request(JniOutputRequest::NamedFields {
-            overrides,
-            mode: ProjectionMode::Owned,
-        })),
+        operation: JniOutputUnary::Into { function }.into(),
+        child: Box::new(JniOutput::Branch {
+            operation: prebindgen_declarations::Operation::Request(JniOutputRequest::NamedFields {
+                fields,
+                mode: ProjectionMode::Owned,
+            }),
+            children,
+        }),
     }
 }

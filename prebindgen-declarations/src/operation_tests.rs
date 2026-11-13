@@ -137,16 +137,16 @@ fn minimal_codec_rejects_optional_features_and_bulk_before_decoding() {
         (
             ty.clone(),
             TestInput::Unary {
-                operation: TestInputUnary::Bulk,
+                operation: (TestInputUnary::Bulk).into(),
                 child: Box::new(TestInput::Leaf(TestInputLeafOp::Value)),
             },
         ),
         (
             syn::parse_quote!(()),
             TestInput::Unary {
-                operation: TestInputUnary::Bulk,
+                operation: (TestInputUnary::Bulk).into(),
                 child: Box::new(TestInput::Branch {
-                    operation: TestInputBranch::Fields,
+                    operation: (TestInputBranch::Fields).into(),
                     children: vec![],
                 }),
             },
@@ -154,9 +154,9 @@ fn minimal_codec_rejects_optional_features_and_bulk_before_decoding() {
         (
             syn::parse_quote!(Vec<i64>),
             TestInput::Unary {
-                operation: TestInputUnary::Bulk,
+                operation: (TestInputUnary::Bulk).into(),
                 child: Box::new(TestInput::Unary {
-                    operation: TestInputUnary::Sequence,
+                    operation: (TestInputUnary::Sequence).into(),
                     child: Box::new(TestInput::Leaf(TestInputLeafOp::Value)),
                 }),
             },
@@ -169,14 +169,14 @@ fn minimal_codec_rejects_optional_features_and_bulk_before_decoding() {
         (
             ty.clone(),
             TestOutput::Unary {
-                operation: TestOutputUnary::Bulk,
+                operation: (TestOutputUnary::Bulk).into(),
                 child: Box::new(TestOutput::Leaf(TestOutputLeafOp::Value)),
             },
         ),
         (
             ty.clone(),
             TestOutput::Unary {
-                operation: TestOutputUnary::Bulk,
+                operation: (TestOutputUnary::Bulk).into(),
                 child: Box::new(TestOutput::Leaf(TestOutputLeafOp::Projected(
                     Projection::owned(),
                 ))),
@@ -185,9 +185,9 @@ fn minimal_codec_rejects_optional_features_and_bulk_before_decoding() {
         (
             syn::parse_quote!(()),
             TestOutput::Unary {
-                operation: TestOutputUnary::Bulk,
+                operation: (TestOutputUnary::Bulk).into(),
                 child: Box::new(TestOutput::Branch {
-                    operation: TestOutputBranch::Fields,
+                    operation: (TestOutputBranch::Fields).into(),
                     children: vec![],
                 }),
             },
@@ -195,12 +195,13 @@ fn minimal_codec_rejects_optional_features_and_bulk_before_decoding() {
         (
             syn::parse_quote!(Vec<i64>),
             TestOutput::Unary {
-                operation: TestOutputUnary::Bulk,
+                operation: (TestOutputUnary::Bulk).into(),
                 child: Box::new(TestOutput::Unary {
-                    operation: TestOutputUnary::Sequence {
+                    operation: (TestOutputUnary::Sequence {
                         delivery: SequenceDelivery::Value,
                         mode: None,
-                    },
+                    })
+                    .into(),
                     child: Box::new(TestOutput::Leaf(TestOutputLeafOp::Value)),
                 }),
             },
@@ -214,7 +215,7 @@ fn minimal_codec_rejects_optional_features_and_bulk_before_decoding() {
         &Scalars,
         &syn::parse_quote!(Option<i64>),
         &TestInput::Unary {
-            operation: TestInputUnary::Optional,
+            operation: (TestInputUnary::Optional).into(),
             child: Box::new(TestInput::Leaf(TestInputLeafOp::Value)),
         },
         &(),
@@ -355,7 +356,7 @@ fn input_context_preserves_all_dispatch_cases_and_callback_roles() {
         &codec,
         &syn::parse_quote!(()),
         &TestInput::Branch {
-            operation: TestInputBranch::Fields,
+            operation: (TestInputBranch::Fields).into(),
             children: vec![],
         },
         &(),
@@ -386,7 +387,7 @@ fn input_context_preserves_all_dispatch_cases_and_callback_roles() {
         &codec,
         &ty,
         &TestOutput::Unary {
-            operation: TestOutputUnary::Bulk,
+            operation: (TestOutputUnary::Bulk).into(),
             child: Box::new(TestOutput::Leaf(TestOutputLeafOp::Value)),
         },
         &(),
@@ -479,7 +480,7 @@ fn malformed_optional_encodings_are_rejected_before_installing_a_slot() {
                 "f",
                 "value",
                 &TestInput::Unary {
-                    operation: TestInputUnary::Optional,
+                    operation: (TestInputUnary::Optional).into(),
                     child: Box::new(TestInput::Leaf(TestInputLeafOp::Value)),
                 },
                 &(),
@@ -490,7 +491,7 @@ fn malformed_optional_encodings_are_rejected_before_installing_a_slot() {
                 &MalformedOptional(mode),
                 "f",
                 &TestOutput::Unary {
-                    operation: TestOutputUnary::Optional,
+                    operation: (TestOutputUnary::Optional).into(),
                     child: Box::new(TestOutput::Leaf(TestOutputLeafOp::Value)),
                 },
                 &(),
@@ -509,12 +510,13 @@ fn enabled_bulk_still_rejects_enclosing_callback_delivery_before_element_lowerin
     let codec = Probe::default();
     codec.1.set(true);
     let recipe = TestOutput::Unary {
-        operation: TestOutputUnary::Bulk,
+        operation: (TestOutputUnary::Bulk).into(),
         child: Box::new(TestOutput::Unary {
-            operation: TestOutputUnary::Sequence {
+            operation: (TestOutputUnary::Sequence {
                 delivery: SequenceDelivery::Callback,
                 mode: None,
-            },
+            })
+            .into(),
             child: Box::new(TestOutput::Leaf(TestOutputLeafOp::Value)),
         }),
     };
@@ -662,7 +664,7 @@ impl Codec for Arithmetic {
                 active,
             )),
             InputNode::Unary {
-                operation: AddInput(amount),
+                operation: crate::Operation::Resolved(AddInput(amount)),
                 child,
             } => {
                 let plan = cx.input_named(ty, child, extra, active, names)?;
@@ -714,7 +716,7 @@ fn independent_operation_vocabularies_compile_without_declaration_frontend() {
     let f = model.function_mut("add").unwrap();
     for (i, p) in f.params.iter_mut().enumerate() {
         p.ty.slot = Some(ResolvedSlot::Tree(InputNode::Unary {
-            operation: AddInput(i as i64 + 1),
+            operation: (AddInput(i as i64 + 1)).into(),
             child: Box::new(InputNode::Leaf(())),
         }));
     }

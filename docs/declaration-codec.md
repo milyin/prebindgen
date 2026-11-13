@@ -28,6 +28,39 @@ ordinary visible subtrees.
 | Prepared converters | `CInputConverter` / `COutputConverter` | `JniInputConverter` / `JniOutputConverter` |
 | Binding model | `CBindings` / `CSchema` | `JniBindings` / `JniSchema` |
 
+Unary, branch and arrow metadata uses `Operation<AdapterOperation, Request>`.
+`Operation::Resolved(op)` carries the adapter operation; `Operation::Request(r)`
+carries a source-dependent choice at the same structural position. Ordinary
+operation values convert with `.into()`. A leaf `Request(r)` remains useful for
+choices such as defaults or an inferred constructor, which have no supplied
+child recipes.
+
+Explicit recipes always use `child`, `children`, `domain` and `codomain`.
+Request metadata contains names, indices, types and settings, never nested
+conversion trees. For example, a type-specific override is a unary node:
+
+```rust,ignore
+CInput::Unary {
+    operation: Operation::Request(CInputRequest::ForType { ty }),
+    child: Box::new(recipe),
+}
+```
+
+Named record fields are branch children with parallel field names in metadata.
+Partial enums contain variant branches, each naming its explicit field children.
+A pending callback is already an arrow: its domain contains explicit argument
+recipes and its codomain contains the result recipe. Argument indices and an
+explicit-result flag describe which source defaults these children override.
+Callback declarations and field builders can keep maps while being configured;
+they place their recipes on structural edges when converted into a tree.
+
+`map_requests` visits pending metadata at every arity, and the shared child
+walkers traverse all supplied recipes without interpreting adapter requests.
+Adapters' source-reference visitors inspect metadata only. Resolving a tree
+replaces pending operations and fills missing source defaults. `Infallible` on
+both request parameters excludes pending operations at every arity as well as
+leaf requests; compilation accepts only that resolved type.
+
 Both phases use the same adapter operations:
 
 ```rust,ignore
@@ -105,12 +138,22 @@ Callback defaults inherit the whole extension value unless an occurrence supplie
 one. `resolve_callback` retains that value in `CallbackOperation<Extension>`, so
 it survives in the resolved arrow. `resolve_callback_arrow` shares signature and
 arity validation and resolves arguments outward and the result inward.
+`CallbackInput` is the purpose-specific construction bridge for converting a
+shared `DeclCallback` into an adapter's complete input tree. The adapter delegates
+to `callback_input`, supplying its typed-scope, argument-group and arrow
+constructors. It does not return a request containing the declaration's trees.
+`resolve_callback_tree` borrows the arrow's structural children; declaration
+objects and structural arrows use one default/ownership resolution algorithm.
 `callback_variant` preserves a function's extension settings. The compiler's
 `InputArrow::operation` uses the adapter's `InputOps::Arrow` type, so callback
 settings can reach its compilation hook. Undecorated source helper references
 reject configured function extensions, just as they reject
 parameter overrides; binding options must not silently disappear from a getter,
 constructor or error mapper.
+
+`LocalConversion` is the corresponding construction bridge for `DeclConvert`: it
+keeps a local conversion inside a structural type-scope node, so appended
+selectors and getters still apply to the declared type inside containers.
 
 `prepare_value_conversions` borrows declarations. Its shared job is Rust
 conversion validation and registration; the adapter can still read its extension
@@ -287,6 +330,13 @@ The adapter factories replace direct expansion-builder constructors:
 | `DeclCExpandParam::new(ty)` / JNI equivalent | `prebindgen_c::expand_param(ty)` / JNI equivalent |
 | `DeclCExpandReturn::new(ty)` / JNI equivalent | `prebindgen_c::expand_return(ty)` / JNI equivalent |
 | `DeclCFields::new(function)` / JNI equivalent | `prebindgen_c::fields(function)` / JNI equivalent |
+
+Literal unary, branch and arrow constructors wrap ordinary operation metadata:
+`operation: CInputUnary::Optional.into()`. Matching uses
+`Operation::Resolved(CInputUnary::Optional)`. `Operation::Request(...)` is reserved
+for pending metadata on the appropriate shape; a malformed shape is diagnosed
+during source resolution. Resolved consumers use `operation.resolved()` when
+they need the underlying metadata.
 
 The declaration macros retain their spelling. JNI expansion `.bulk()` now
 requires `use prebindgen_jni::prelude::*` (or `JniBulkExpansion` directly).

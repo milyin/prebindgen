@@ -410,10 +410,11 @@ fn nested_error_layouts_must_match_even_with_the_same_outer_byte_array() {
         &JniCodec::raw(),
         &syn::parse_quote!(Vec<i32>),
         &JniOutput::Unary {
-            operation: JniOutputUnary::Sequence {
+            operation: (JniOutputUnary::Sequence {
                 delivery: prebindgen_declarations::SequenceDelivery::Value,
                 mode: None,
-            },
+            })
+            .into(),
             child: Box::new(JniOutput::Leaf(JniOutputLeafOp::Value)),
         }
         .bulk(),

@@ -1,5 +1,5 @@
 use super::*;
-/// Collect source helper and representation-type names needed by `Flat::parse_selected`.
+/// Collect source names; all recursive traversal follows structural edges.
 pub fn source_items<'a>(
     inputs: &[JniInput<JniInputRequest, JniOutputRequest>],
     outputs: &[JniOutput<JniInputRequest, JniOutputRequest>],
@@ -7,57 +7,42 @@ pub fn source_items<'a>(
     functions: impl IntoIterator<Item = &'a DeclJniFunction>,
 ) -> Vec<String> {
     fn input(tree: &JniInput<JniInputRequest, JniOutputRequest>, names: &mut Vec<String>) {
+        match tree.pending_request() {
+            Some(JniInputRequest::Conversion(declaration)) => {
+                prebindgen_declarations::conversion_source_items(declaration, names)
+            }
+            Some(JniInputRequest::Call(name)) => names.push(name.clone()),
+            _ => {}
+        }
         match tree {
-            JniInput::Request(JniInputRequest::EnumFields(variants)) => {
-                for child in variants.values().flat_map(|v| v.values()) {
-                    input(child, names)
-                }
-            }
-            JniInput::Request(JniInputRequest::Conversion(d)) => {
-                prebindgen_declarations::conversion_source_items(d, names)
-            }
             JniInput::Unary {
-                operation: JniInputUnary::Convert { conversion },
+                operation:
+                    prebindgen_declarations::Operation::Resolved(JniInputUnary::Convert { conversion }),
                 ..
             } => {
                 if let prebindgen_flat::ValueSource::Function(name) = &conversion.source {
                     names.push(name.clone())
                 }
             }
-            JniInput::Request(JniInputRequest::Callback(declaration)) => {
-                for tree in declaration.params.values() {
-                    output(tree, names)
-                }
-                if let Some(tree) = &declaration.ret {
-                    input(tree, names)
-                }
-            }
-            JniInput::Request(JniInputRequest::Call(name)) => names.push(name.clone()),
             JniInput::Branch {
-                operation: JniInputBranch::Constructor { function },
+                operation:
+                    prebindgen_declarations::Operation::Resolved(JniInputBranch::Constructor {
+                        function,
+                    }),
                 ..
             } => names.push(function.clone()),
-            JniInput::Request(JniInputRequest::ForType { input: child, .. }) => input(child, names),
             _ => {}
         }
         prebindgen_declarations::input_children(tree, names, &mut input, &mut output);
     }
     fn output(tree: &JniOutput<JniInputRequest, JniOutputRequest>, names: &mut Vec<String>) {
+        if let Some(JniOutputRequest::Conversion(declaration)) = tree.pending_request() {
+            prebindgen_declarations::conversion_source_items(declaration, names)
+        }
         match tree {
-            JniOutput::Request(JniOutputRequest::SequenceCallback { output: child, .. })
-            | JniOutput::Request(JniOutputRequest::ForType { output: child, .. }) => {
-                output(child, names)
-            }
-            JniOutput::Request(JniOutputRequest::EnumFields(variants)) => {
-                for child in variants.values().flat_map(|v| v.values()) {
-                    output(child, names)
-                }
-            }
-            JniOutput::Request(JniOutputRequest::Conversion(d)) => {
-                prebindgen_declarations::conversion_source_items(d, names)
-            }
             JniOutput::Unary {
-                operation: JniOutputUnary::Convert { conversion },
+                operation:
+                    prebindgen_declarations::Operation::Resolved(JniOutputUnary::Convert { conversion }),
                 ..
             } => {
                 if let prebindgen_flat::ValueSource::Function(name) = &conversion.source {
@@ -65,22 +50,19 @@ pub fn source_items<'a>(
                 }
             }
             JniOutput::Unary {
-                operation: JniOutputUnary::Getter { function },
-                ..
-            }
-            | JniOutput::Unary {
-                operation: JniOutputUnary::Into { function },
+                operation:
+                    prebindgen_declarations::Operation::Resolved(
+                        JniOutputUnary::Getter { function } | JniOutputUnary::Into { function },
+                    ),
                 ..
             } => names.push(function.clone()),
             JniOutput::Unary {
-                operation: JniOutputUnary::Result { error: Some(name) },
+                operation:
+                    prebindgen_declarations::Operation::Resolved(JniOutputUnary::Result {
+                        error: Some(name),
+                    }),
                 ..
             } => names.push(name.clone()),
-            JniOutput::Request(JniOutputRequest::NamedFields { overrides, .. }) => {
-                for child in overrides.values() {
-                    output(child, names)
-                }
-            }
             _ => {}
         }
         prebindgen_declarations::output_children(tree, names, &mut input, &mut output);

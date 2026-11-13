@@ -25,6 +25,15 @@ impl OutputOps for COutputOps {
     type Arrow = Infallible;
 }
 /// Resolved input conversion for this adapter.
+/// Pending operations cannot be inserted into a resolved input tree:
+/// ```compile_fail
+/// use prebindgen_c::{CInput,CInputRequest};
+/// use prebindgen_declarations::Operation;
+/// let _:CInput=CInput::Unary {
+///     operation:Operation::Request(CInputRequest::ForType {ty:Box::new(syn::parse_quote!(i64))}),
+///     child:Box::new(CInput::None),
+/// };
+/// ```
 pub type CInput<InRequest = Infallible, OutRequest = Infallible> =
     InputNode<CInputOps, COutputOps, InRequest, OutRequest>;
 /// Resolved output conversion for this adapter.
@@ -156,46 +165,51 @@ pub(crate) fn sequence_callback(
     fn select(output: &mut COutput) -> usize {
         match output {
             COutput::Unary {
-                operation: COutputUnary::Sequence { delivery, .. },
+                operation:
+                    prebindgen_declarations::Operation::Resolved(COutputUnary::Sequence {
+                        delivery,
+                        ..
+                    }),
                 ..
             } => {
                 *delivery = SequenceDelivery::Callback;
                 1
             }
             COutput::Unary {
-                operation: COutputUnary::Optional,
+                operation: prebindgen_declarations::Operation::Resolved(COutputUnary::Optional),
                 child,
             }
             | COutput::Unary {
-                operation: COutputUnary::Named { .. },
-                child,
-                ..
-            }
-            | COutput::Unary {
-                operation: COutputUnary::Getter { .. },
+                operation: prebindgen_declarations::Operation::Resolved(COutputUnary::Named { .. }),
                 child,
                 ..
             }
             | COutput::Unary {
-                operation: COutputUnary::Into { .. },
+                operation: prebindgen_declarations::Operation::Resolved(COutputUnary::Getter { .. }),
                 child,
                 ..
             }
             | COutput::Unary {
-                operation: COutputUnary::Convert { .. },
+                operation: prebindgen_declarations::Operation::Resolved(COutputUnary::Into { .. }),
+                child,
+                ..
+            }
+            | COutput::Unary {
+                operation:
+                    prebindgen_declarations::Operation::Resolved(COutputUnary::Convert { .. }),
                 child,
                 ..
             } => select(child),
             COutput::Branch {
-                operation: COutputBranch::Combine,
+                operation: prebindgen_declarations::Operation::Resolved(COutputBranch::Combine),
                 children,
             }
             | COutput::Branch {
-                operation: COutputBranch::Fields,
+                operation: prebindgen_declarations::Operation::Resolved(COutputBranch::Fields),
                 children,
             }
             | COutput::Branch {
-                operation: COutputBranch::OwnedFields,
+                operation: prebindgen_declarations::Operation::Resolved(COutputBranch::OwnedFields),
                 children,
             } => children.iter_mut().map(select).sum(),
             _ => 0,
@@ -211,18 +225,19 @@ pub(crate) fn sequence_callback(
                     if prebindgen_flat::sequence_parts(ty).is_some() =>
                 {
                     Some(crate::COutput::Unary {
-                        operation: crate::COutputUnary::Sequence {
+                        operation: (crate::COutputUnary::Sequence {
                             delivery: SequenceDelivery::Callback,
                             mode: None,
-                        },
+                        })
+                        .into(),
                         child: Box::new(crate::COutput::auto()),
                     })
                 }
                 COutput::Unary {
-                    operation: COutputUnary::Optional,
+                    operation: prebindgen_declarations::Operation::Resolved(COutputUnary::Optional),
                     child,
                 } => Some(crate::COutput::Unary {
-                    operation: crate::COutputUnary::Optional,
+                    operation: (crate::COutputUnary::Optional).into(),
                     child: Box::new(structural(prebindgen_flat::option_inner(ty)?, child)?),
                 }),
                 _ => None,

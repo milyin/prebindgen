@@ -54,7 +54,7 @@ fn fields_only_callback_inherits_owned_payload_expansion_without_classes() {
     let source="pub struct Sample{pub n:i64}pub enum ReplyResult{Sample(Sample),Error(String)}pub struct ReplyStruct{pub result:ReplyResult,pub replier_id:Option<i64>}pub type Reply=String;pub fn reply_into_struct(value:Reply)->ReplyStruct{}pub fn receive(cb:impl Fn(Reply)){}";
     let generated = build(source)
         .expand(expand_return!(Sample).view(JniOutput::Branch {
-            operation: JniOutputBranch::OwnedFields,
+            operation: (JniOutputBranch::OwnedFields).into(),
             children: vec![JniOutput::auto()],
         }))
         .expand(expand_return!(ReplyResult).view(JniOutput::enum_fields([])))
@@ -166,7 +166,7 @@ fn canonical_output_helper_can_return_result_as_data() {
 #[test]
 fn bulk_enums_use_target_union_offsets() {
     let generated=build("pub enum Event{Idle,Count(u64),Packet{id:u64,bytes:Vec<u8>}}pub fn echo(values:Vec<Event>)->Vec<Event>{values}")
-        .package(package!().class(sealed_class!(Event)).fun(fun!(echo).expand_param("values",JniInput::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInput::value()) }.bulk()))).build().unwrap();
+        .package(package!().class(sealed_class!(Event)).fun(fun!(echo).expand_param("values",JniInput::Unary { operation: (JniInputUnary::Sequence).into(), child: Box::new(JniInput::value()) }.bulk()))).build().unwrap();
     syn::parse_file(&generated.rust).unwrap();
     assert!(generated.rust.contains("pub union __PbBulk_"));
     assert!(generated.rust.contains("offset_of!"));
@@ -196,7 +196,7 @@ fn grouped_enum_fields_reject_multiple_logical_output_values() {
                 .fun(fun!(echo).expand_return(JniOutput::enum_variants(
                     vec![
                         vec![JniOutput::Branch {
-                            operation: JniOutputBranch::Combine,
+                            operation: (JniOutputBranch::Combine).into(),
                             children: vec![
                                 JniOutput::Leaf(JniOutputLeafOp::Value),
                                 JniOutput::Leaf(JniOutputLeafOp::Value),
