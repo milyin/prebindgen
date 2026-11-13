@@ -190,14 +190,14 @@ pub fn compile_function<C: Codec>(
 }
 
 /// Resolve declarations into a complete Flat using the caller's resolution function.
-pub fn resolve_bindings<C: Codec, I, O>(
+pub fn resolve_bindings<C: Codec, I, O, E>(
     flat: Flat<C::Schema>,
     codec: C,
-    declarations: &[DeclFunction<I, O>],
+    declarations: &[DeclFunction<I, O, E>],
     mut resolve: impl FnMut(
         &Flat<C::Schema>,
         &C,
-        &DeclFunction<I, O>,
+        &DeclFunction<I, O, E>,
         &C::Extra,
     ) -> Result<FunctionRecipe<ResolvedInput<C>, ResolvedOutput<C>>>,
     extra: C::Extra,

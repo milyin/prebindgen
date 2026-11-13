@@ -78,15 +78,51 @@ callbacks instead of a trait describing every supported operation.
 | `resolve_callback` | Merge callback overrides, determine ownership and reverse directions | Argument and result resolution |
 | `input_children` / `output_children` | Traverse structural children across arrow directions | Adapter-specific source-reference handling |
 
-The same rule applies to the user-facing builders. `DeclInputAlternatives<T>`
-handles alternative order and explicit temporary reconstruction, including the
-empty expansion's fallback to the owned type's default. `getter_view` checks
-accessor references and preserves view names. The C and JNI facades supply the
-few node constructors needed by these operations and keep their existing fluent
-methods. Return views use an ordinary `Vec`; field builders keep their small
-accessor/override maps locally. `DeclError<I, O>` holds an error type and its mapper.
-The independent test adapter uses `DeclInputAlternatives`, `getter_view` and the
-shared source-resolution helpers too.
+The declaration family is generic over the adapter's tree types and extension
+settings. `DeclExpandParam<In, Function, Extension>`,
+`DeclExpandReturn<Out, Function, Extension>` and `DeclFields<Out, Extension>` own
+the complete fluent API. `DeclExpand<Param, Return, Error>` is their common
+registration enum. C and JNI provide aliases and small factory functions that
+supply node constructors. An adapter should also expose its own `fun!` macro
+using its concrete function alias, including that alias's extension type, as C
+and JNI already do. The shared `fun!` starts with no extension type;
+`with_extension(options)` can attach settings explicitly. Expansion factories
+are also available as `expand_param`,
+`expand_return` and `fields`, alongside the familiar macros of the same names.
+An adapter's aliases cannot add inherent methods to shared Rust types; JNI adds
+`bulk()` with `JniBulkExpansion`, exported by its `prelude`.
+
+Each declaration carries an optional adapter-defined `extension`. The default
+extension type is `Infallible`, so adapters without additional settings have no
+extension values to configure. The same extension mechanism exists on
+`DeclFunction<In, Out, Extension>`, `DeclCallback<In, Out, Extension>`,
+`DeclError<Function, Extension>` and `DeclConvert<Extension>`. Common fluent
+methods retain these options. An adapter adds its own fluent methods through a
+local extension trait and interprets the settings when resolving or constructing
+its tree. It can put the resulting policy in its own operations or Flat metadata;
+compilation still reads the complete resolved Flat.
+
+Callback defaults inherit the whole extension value unless an occurrence supplies
+one. `resolve_callback` retains that value in `CallbackOperation<Extension>`, so
+it survives in the resolved arrow. `resolve_callback_arrow` shares signature and
+arity validation and resolves arguments outward and the result inward.
+`callback_variant` preserves a function's extension settings. The compiler's
+`InputArrow::operation` uses the adapter's `InputOps::Arrow` type, so callback
+settings can reach its compilation hook. Undecorated source helper references
+reject configured function extensions, just as they reject
+parameter overrides; binding options must not silently disappear from a getter,
+constructor or error mapper.
+
+`prepare_value_conversions` borrows declarations. Its shared job is Rust
+conversion validation and registration; the adapter can still read its extension
+settings and apply them to its own metadata. `DeclDefaults` stores only error
+mapper names. An adapter must apply error extensions to its own Flat metadata
+before registering these mapper defaults.
+Canonical conversion declarations may select opposite directions for one source
+type; the adapter defines compatibility checks for their extension settings.
+Extension data is not interpreted by the shared compiler. The independent
+adapter tests extend input, return, field,
+function, callback, error and conversion declarations without C/JNI operations.
 
 `resolve_container` shares Option/sequence fallback where payloads and elements
 use the same child rule; adapters choose whether a collection is a native leaf
@@ -97,8 +133,8 @@ lookup and direction checks. `override_output_field` edits named fields through
 adapter-identified wrappers in place, without cloning the tree or substituting a
 placeholder node.
 
-Generalization stops where it adds more machinery than it removes. Small enum
-constructors, request dispatch and source-reference matching stay in each adapter.
+Small enum constructors, request dispatch and source-reference matching stay in
+each adapter.
 C ownership decisions and JNI record/bulk policies stay there as well. Sharing
 those matches would require another common operation dictionary or a set of
 callbacks larger than the local operation itself. The shared helpers instead own
@@ -244,6 +280,23 @@ structured error outputs; JNI keeps typed domain-error callbacks and the
 separate binding-error callback, with user handlers invoked after native return.
 
 ## Migration
+
+The adapter factories replace direct expansion-builder constructors:
+
+| Previous call | Replacement |
+| --- | --- |
+| `DeclCExpandParam::new(ty)` / JNI equivalent | `prebindgen_c::expand_param(ty)` / JNI equivalent |
+| `DeclCExpandReturn::new(ty)` / JNI equivalent | `prebindgen_c::expand_return(ty)` / JNI equivalent |
+| `DeclCFields::new(function)` / JNI equivalent | `prebindgen_c::fields(function)` / JNI equivalent |
+
+The declaration macros retain their spelling. JNI expansion `.bulk()` now
+requires `use prebindgen_jni::prelude::*` (or `JniBulkExpansion` directly).
+`prepare_value_conversions` now accepts a borrowed declaration slice. Data-only
+function/callback/error/conversion declarations can use `with_extension` to select
+a new extension type; expansion factories fix their extension type because their
+node constructors interpret it. `with_extension` replaces the whole previous
+option value, including any options already selected by adapter methods.
+
 
 | Former API | Replacement |
 | --- | --- |

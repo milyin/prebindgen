@@ -614,7 +614,7 @@ impl JniGenBuilder {
             }
         }
         validate_declaration_names(&flat)?;
-        prebindgen_declarations::prepare_value_conversions(&mut flat, self.conversions)?;
+        prebindgen_declarations::prepare_value_conversions(&mut flat, &self.conversions)?;
         data::prepare(&mut flat)?;
         let defaults =
             crate::DeclJniDefaults::new(&flat, self.inputs, self.outputs, self.error_mappers)?;
@@ -2531,5 +2531,7 @@ macro_rules! fun {
 
 /// Traits for constructing and inspecting this adapter's conversion trees.
 pub mod prelude {
-    pub use crate::{JniInputExt, JniInputRequests, JniOutputExt, JniOutputRequests};
+    pub use crate::{
+        JniBulkExpansion, JniInputExt, JniInputRequests, JniOutputExt, JniOutputRequests,
+    };
 }

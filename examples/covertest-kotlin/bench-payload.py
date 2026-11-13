@@ -39,8 +39,8 @@ konst="0.3.0"
     + dependency("prebindgen-jni") + dependency("prebindgen-declarations")
     + '[workspace]\n')
 (fixture / "build.rs").write_text(r'''
-use prebindgen_jni::{JniGen,package,ptr_class,sealed_class};
-use prebindgen_declarations::{fun,Input};
+use prebindgen_jni::{JniGen,package,ptr_class,sealed_class,fun,JniInput as Input};
+use prebindgen_jni::prelude::*;
 fn main() {
     let generated=JniGen::builder().source(perftest_flat::PREBINDGEN_OUT_DIR)
         .set_package_prefix("io.prebindgen.covertest")

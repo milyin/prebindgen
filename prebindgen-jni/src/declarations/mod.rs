@@ -33,17 +33,15 @@ mod references;
 pub(crate) use references::source_items;
 #[macro_export]
 /// Start a typed input declaration using the production builder API.
-macro_rules! expand_param {($($ty:tt)+)=>{$crate::DeclJniExpandParam::new($crate::__declaration_type(stringify!($($ty)+)))};}
+macro_rules! expand_param {($($ty:tt)+)=>{$crate::expand_param($crate::__declaration_type(stringify!($($ty)+)))};}
 #[macro_export]
 /// Start a typed output declaration using the production builder API.
-macro_rules! expand_return {($($ty:tt)+)=>{$crate::DeclJniExpandReturn::new($crate::__declaration_type(stringify!($($ty)+)))};}
+macro_rules! expand_return {($($ty:tt)+)=>{$crate::expand_return($crate::__declaration_type(stringify!($($ty)+)))};}
 #[macro_export]
 /// Decompose a source getter's returned record into named field views.
 macro_rules! fields {
     ($name:ident) => {
-        $crate::DeclJniFields::new(
-            $crate::__declaration_ident(stringify!($name)).expect("function identifier"),
-        )
+        $crate::fields($crate::__declaration_ident(stringify!($name)).expect("function identifier"))
     };
 }
 

@@ -630,218 +630,114 @@ impl<InRequest, OutRequest> TestOutput<InRequest, OutRequest> {
     }
 }
 
-/// Input alternatives for a source type, built directly as a [`TestInput`] tree.
-#[derive(Clone, Debug)]
-pub struct TestExpandParam {
-    /// Source type targeted by this default or occurrence override.
-    pub ty: syn::Type,
-    input: crate::DeclInputAlternatives<TestInput<TestInputRequest, TestOutputRequest>>,
+/// Input expansion declaration specialized for this adapter.
+pub type TestExpandParam = crate::DeclExpandParam<
+    TestInput<TestInputRequest, TestOutputRequest>,
+    TestFunction,
+    TestExpansionOptions,
+>;
+/// Return expansion declaration specialized for this adapter.
+pub type TestExpandReturn = crate::DeclExpandReturn<
+    TestOutput<TestInputRequest, TestOutputRequest>,
+    TestFunction,
+    TestExpansionOptions,
+>;
+/// Named-field declaration specialized for this adapter.
+pub type TestFields = crate::DeclFields<TestOutput<TestInputRequest, TestOutputRequest>>;
+/// Adapter-specific options applied after the common expansion is built.
+#[derive(Clone, Debug, Default)]
+pub struct TestExpansionOptions {
     bulk: bool,
 }
-impl TestExpandParam {
-    /// Start an input declaration; add at least one alternative before use.
-    pub fn new(ty: syn::Type) -> Self {
-        Self {
-            ty,
-            input: Default::default(),
-            bulk: false,
-        }
-    }
-    /// Group this expansion into a C-representation bulk carrier.
-    /// The adapter chooses storage; constructor and local conversion rules are retained.
-    pub fn bulk(mut self) -> Self {
-        self.bulk = true;
-        self
-    }
-    /// Explicitly construct an owned temporary and borrow it for the source call.
-    /// With no alternatives, use the owned value's default input conversion.
-    /// Alternatives describe the owned referent, not the reference itself.
-    pub fn reconstruct(mut self) -> Self {
-        self.input.reconstruct();
-        self
-    }
-    /// Append a constructor reference; its arguments use their type defaults.
-    pub fn variant(mut self, function: impl Into<TestFunction>) -> Self {
-        self.input
-            .push(TestInput::call(function.into().reference_name(false)));
-        self
-    }
-    /// Append the type's direct language representation.
-    pub fn variant_self(mut self) -> Self {
-        self.input.push(TestInput::Leaf(TestInputLeafOp::Value));
+/// Select this independent adapter's bulk carrier for an expansion.
+pub trait TestBulkExpansion: Sized {
+    /// Group the expansion in a bulk C-representation carrier.
+    fn bulk(self) -> Self;
+}
+impl TestBulkExpansion for TestExpandParam {
+    fn bulk(mut self) -> Self {
+        self.extension.get_or_insert_with(Default::default).bulk = true;
         self
     }
 }
-impl From<TestExpandParam> for TestInput<TestInputRequest, TestOutputRequest> {
-    fn from(decl: TestExpandParam) -> Self {
-        let mut input = decl
-            .input
-            .build(TestInput::selector, TestInput::auto, |input| {
+impl TestBulkExpansion for TestExpandReturn {
+    fn bulk(mut self) -> Self {
+        self.extension.get_or_insert_with(Default::default).bulk = true;
+        self
+    }
+}
+/// Start input expansion using this adapter's node constructors.
+pub fn expand_param(ty: Type) -> TestExpandParam {
+    crate::DeclExpandParam::new(
+        ty,
+        |function: TestFunction| TestInput::call(function.reference_name(false)),
+        || TestInput::Leaf(TestInputLeafOp::Value),
+        |ty, alternatives, extension| {
+            let mut input = alternatives.build(TestInput::selector, TestInput::auto, |child| {
                 TestInput::Unary {
                     operation: TestInputUnary::Temporary,
-                    child: Box::new(input),
+                    child: Box::new(child),
                 }
             });
-        if decl.bulk {
-            input = TestInput::Unary {
-                operation: TestInputUnary::Bulk,
-                child: Box::new(input),
-            };
-        }
-        TestInput::for_type(decl.ty, input)
-    }
+            if extension.is_some_and(|options| options.bulk) {
+                input = TestInput::Unary {
+                    operation: TestInputUnary::Bulk,
+                    child: Box::new(input),
+                };
+            }
+            TestInput::for_type(ty, input)
+        },
+    )
 }
-
-/// Simultaneous views of a source return value, built directly as a [`TestOutput`] tree.
-#[derive(Clone, Debug)]
-pub struct TestExpandReturn {
-    /// Source type targeted by this default or occurrence override.
-    pub ty: syn::Type,
-    output: Vec<TestOutput<TestInputRequest, TestOutputRequest>>,
-    bulk: bool,
-}
-impl TestExpandReturn {
-    /// Start an output declaration; add views before registering a type default.
-    pub fn new(ty: syn::Type) -> Self {
-        Self {
-            ty,
-            output: Default::default(),
-            bulk: false,
-        }
-    }
-    /// Group this expansion into a C-representation bulk carrier.
-    /// Getter, ownership and local conversion rules are retained. Ordinary
-    /// collections combine these expansions into one frame. Callback delivery
-    /// keeps the expansion within each callback element instead: bulk `Row`
-    /// produces one frame per row of `Vec<Row>`, while bulk `Vec<Row>` produces
-    /// one frame per inner collection of `Vec<Vec<Row>>`.
-    pub fn bulk(mut self) -> Self {
-        self.bulk = true;
-        self
-    }
-    /// Append a getter view. An explicit `.name()` labels the delivered view.
-    /// Shared results are observed before another view moves the owner. An
-    /// owning opaque copy requires an explicit projection or cloning accessor.
-    pub fn field(mut self, function: impl Into<TestFunction>) -> Self {
-        self.output.push(crate::getter_view(
-            function.into(),
-            |name| TestOutput::getter(name, TestOutput::auto()),
-            |name, output| TestOutput::Unary {
-                operation: TestOutputUnary::Named { name },
-                child: Box::new(output),
-            },
-        ));
-        self
-    }
-    /// Append a getter's named record fields as separate output values.
-    pub fn fields(self, fields: TestFields) -> Self {
-        self.view(fields)
-    }
-    /// Append another explicit output view.
-    pub fn view(
-        mut self,
-        output: impl Into<TestOutput<TestInputRequest, TestOutputRequest>>,
-    ) -> Self {
-        self.output.push(output.into());
-        self
-    }
-    /// Append a consuming accessor followed by owned field decomposition.
-    pub fn fields_into(mut self, fields: TestFields) -> Self {
-        self.output.push(owned_field_view(fields.into()));
-        self
-    }
-    /// Deprecated spelling of [`Self::fields_into`].
-    #[deprecated(note = "use fields_into instead")]
-    pub fn fields_self_into(self, fields: TestFields) -> Self {
-        self.fields_into(fields)
-    }
-    /// Append the language's direct representation, bypassing this type's default.
-    pub fn field_self(mut self) -> Self {
-        self.output.push(TestOutput::Leaf(TestOutputLeafOp::Value));
-        self
-    }
-    /// Append an explicit shared projection. Owning opaque representations clone
-    /// the value; record/collection projections permit copying borrowed leaves.
-    pub fn field_self_ref(self) -> Self {
-        self.project_self(Projection::borrowed())
-    }
-    /// Append an explicit owned projection.
-    pub fn field_self_into(self) -> Self {
-        self.project_self(Projection::owned())
-    }
-    /// Append a projection with explicit ownership and field policies.
-    pub fn project_self(mut self, policy: Projection) -> Self {
-        self.output
-            .push(TestOutput::Leaf(TestOutputLeafOp::Projected(policy)));
-        self
-    }
-}
-impl From<TestExpandReturn> for TestOutput<TestInputRequest, TestOutputRequest> {
-    fn from(decl: TestExpandReturn) -> Self {
-        TestOutput::for_type(
-            decl.ty,
-            if decl.bulk {
-                TestOutput::Unary {
+/// Start return expansion using this adapter's node constructors.
+pub fn expand_return(ty: Type) -> TestExpandReturn {
+    crate::DeclExpandReturn::new(
+        ty,
+        |function| {
+            crate::getter_view(
+                function,
+                |name| TestOutput::getter(name, TestOutput::auto()),
+                |name, child| TestOutput::Unary {
+                    operation: TestOutputUnary::Named { name },
+                    child: Box::new(child),
+                },
+            )
+        },
+        || TestOutput::Leaf(TestOutputLeafOp::Value),
+        |policy| TestOutput::Leaf(TestOutputLeafOp::Projected(policy)),
+        owned_field_view,
+        |ty, views, extension| {
+            let mut output = TestOutput::combine(views);
+            if extension.is_some_and(|options| options.bulk) {
+                output = TestOutput::Unary {
                     operation: TestOutputUnary::Bulk,
-                    child: Box::new(TestOutput::combine(decl.output)),
-                }
-            } else {
-                TestOutput::combine(decl.output)
-            },
-        )
-    }
+                    child: Box::new(output),
+                };
+            }
+            TestOutput::for_type(ty, output)
+        },
+    )
 }
-
-/// A source accessor followed by named field decomposition.
-/// Field adjustments edit the accessor's output tree directly.
-#[derive(Clone, Debug)]
-pub struct TestFields {
-    function: String,
-    overrides: BTreeMap<String, TestOutput<TestInputRequest, TestOutputRequest>>,
-}
-impl TestFields {
-    /// Select a getter whose returned record supplies the fields.
-    pub fn new(function: syn::Ident) -> Self {
-        Self {
-            function: function.to_string(),
-            overrides: BTreeMap::new(),
-        }
-    }
-    /// Replace one field's conversion. An empty declaration omits the whole field,
-    /// including any enclosing Option or sequence representation.
-    pub fn field(self, name: impl AsRef<str>, output: TestExpandReturn) -> Self {
-        self.field_override(name.as_ref().to_owned(), output)
-    }
-    /// Set an explicit conversion tree for one field, with the same omission
-    /// semantics as [`Self::field`] for an empty typed declaration.
-    pub fn field_override(
-        mut self,
-        name: impl Into<String>,
-        output: impl Into<TestOutput<TestInputRequest, TestOutputRequest>>,
-    ) -> Self {
-        let output = match output.into() {
-            TestOutput::Request(TestOutputRequest::ForType { ty, output }) if matches!(output.as_ref(), TestOutput::Branch { operation: TestOutputBranch::Combine, children } if children.is_empty()) => {
+/// Decompose a source accessor's returned record into named field views.
+pub fn fields(function: syn::Ident) -> TestFields {
+    crate::DeclFields::new(
+        function,
+        |output| match output {
+            TestOutput::Request(TestOutputRequest::ForType { ty, output }) if matches!(output.as_ref(),TestOutput::Branch {operation:TestOutputBranch::Combine,children} if children.is_empty()) => {
                 TestOutput::for_type(*ty, TestOutput::Leaf(TestOutputLeafOp::Discard))
             }
             output => output,
-        };
-        assert!(
-            self.overrides.insert(name.into(), output).is_none(),
-            "duplicate field override"
-        );
-        self
-    }
-}
-impl From<TestFields> for TestOutput<TestInputRequest, TestOutputRequest> {
-    fn from(fields: TestFields) -> Self {
-        TestOutput::getter(
-            fields.function,
-            TestOutput::Request(TestOutputRequest::NamedFields {
-                overrides: fields.overrides,
-                mode: crate::ProjectionMode::Borrowed,
-            }),
-        )
-    }
+        },
+        |function, overrides, _extension| {
+            TestOutput::getter(
+                function,
+                TestOutput::Request(TestOutputRequest::NamedFields {
+                    overrides,
+                    mode: crate::ProjectionMode::Borrowed,
+                }),
+            )
+        },
+    )
 }
 
 pub type TestFunction = crate::DeclFunction<
@@ -1213,25 +1109,19 @@ impl TestDefaults {
                 domain,
                 codomain,
             } => {
-                callback.validate_for(flat, ty)?;
-                let signature = prebindgen_flat::callback_signature(ty)?
-                    .ok_or("arrow requires a callable source")?;
-                let arguments = domain.argument_nodes()?;
-                if arguments.len() != signature.arguments.len() {
-                    return Err("wrong arrow domain arity".into());
-                }
+                let (arguments, result) = crate::resolve_callback_arrow(
+                    flat,
+                    ty,
+                    callback,
+                    domain.argument_nodes()?,
+                    codomain,
+                    |ty, tree| self.output(flat, codec, ty, tree, extra, &mut vec![], true),
+                    |ty, tree| resolve(ty, tree, stack),
+                )?;
                 Ok(InputNode::Arrow {
                     operation: callback.clone(),
-                    domain: Box::new(TestOutput::arguments(
-                        arguments
-                            .iter()
-                            .zip(&signature.arguments)
-                            .map(|(tree, ty)| {
-                                self.output(flat, codec, ty, tree, extra, &mut vec![], true)
-                            })
-                            .collect::<Result<Vec<_>>>()?,
-                    )),
-                    codomain: Box::new(resolve(&signature.return_type, codomain, stack)?),
+                    domain: Box::new(TestOutput::arguments(arguments)),
+                    codomain: Box::new(result),
                 })
             }
             TestInput::Request(TestInputRequest::Callback(declaration)) => {
@@ -2139,13 +2029,13 @@ macro_rules! test_fun {
     };
 }
 #[macro_export]
-macro_rules! test_expand_param {($($ty:tt)+)=>{$crate::test_language::TestExpandParam::new($crate::declarations::parse_type(stringify!($($ty)+)))};}
+macro_rules! test_expand_param {($($ty:tt)+)=>{$crate::test_language::expand_param($crate::declarations::parse_type(stringify!($($ty)+)))};}
 #[macro_export]
-macro_rules! test_expand_return {($($ty:tt)+)=>{$crate::test_language::TestExpandReturn::new($crate::declarations::parse_type(stringify!($($ty)+)))};}
+macro_rules! test_expand_return {($($ty:tt)+)=>{$crate::test_language::expand_return($crate::declarations::parse_type(stringify!($($ty)+)))};}
 #[macro_export]
 macro_rules! test_fields {
     ($name:ident) => {
-        $crate::test_language::TestFields::new($crate::ident(stringify!($name)).unwrap())
+        $crate::test_language::fields($crate::ident(stringify!($name)).unwrap())
     };
 }
 #[macro_export]

@@ -1320,7 +1320,9 @@ ordinary project-wide. Explicit `.bulk()` continues to work with automatic
 selection disabled. Generated public Kotlin types remain the same, but the native
 carrier signatures change; regenerate Kotlin and native bindings together.
 
-Add `.bulk()` to an existing JNI expansion to select bulk transport explicitly:
+Import `prebindgen_jni::prelude::*` to enable JNI-specific declaration methods
+such as `.bulk()`. Add `.bulk()` to an existing expansion to select bulk transport
+explicitly:
 
 ```rust,ignore
 JniGen::builder()

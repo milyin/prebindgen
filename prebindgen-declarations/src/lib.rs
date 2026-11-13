@@ -9,7 +9,12 @@
 //! All generation settings and resolved conversions belong to Flat.
 #![warn(missing_docs)]
 mod builders;
-pub use builders::{getter_view, DeclError, DeclInputAlternatives};
+#[cfg(test)]
+mod extension_tests;
+pub use builders::{
+    getter_view, DeclError, DeclExpand, DeclExpandParam, DeclExpandReturn, DeclFields,
+    DeclInputAlternatives,
+};
 mod convert;
 pub use convert::{
     conversion_borrows, prepare_value_conversions, validate_conversion, DeclConvert,

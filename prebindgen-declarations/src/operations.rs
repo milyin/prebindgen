@@ -11,7 +11,7 @@ pub struct InputArrow<'a, C: Codec + ?Sized> {
     /// Source types and resolved binding declarations.
     pub flat: &'a Flat<C::Schema>,
     /// Callable representation and invocation policy.
-    pub operation: &'a CallbackOperation,
+    pub operation: &'a <C::InOps as InputOps>::Arrow,
     /// Reverse-direction argument tree.
     pub domain: &'a ResolvedOutput<C>,
     /// Same-direction result tree.

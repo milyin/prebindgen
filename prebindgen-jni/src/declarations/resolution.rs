@@ -409,25 +409,19 @@ impl DeclJniDefaults {
                 domain,
                 codomain,
             } => {
-                callback.validate_for(flat, ty)?;
-                let signature = prebindgen_flat::callback_signature(ty)?
-                    .ok_or("arrow requires a callable source")?;
-                let arguments = domain.argument_nodes()?;
-                if arguments.len() != signature.arguments.len() {
-                    return Err("wrong arrow domain arity".into());
-                }
+                let (arguments, result) = prebindgen_declarations::resolve_callback_arrow(
+                    flat,
+                    ty,
+                    callback,
+                    domain.argument_nodes()?,
+                    codomain,
+                    |ty, tree| self.output(flat, codec, ty, tree, extra, &mut vec![], true),
+                    |ty, tree| resolve(ty, tree, stack),
+                )?;
                 Ok(InputNode::Arrow {
                     operation: callback.clone(),
-                    domain: Box::new(JniOutput::arguments(
-                        arguments
-                            .iter()
-                            .zip(&signature.arguments)
-                            .map(|(tree, ty)| {
-                                self.output(flat, codec, ty, tree, extra, &mut vec![], true)
-                            })
-                            .collect::<Result<Vec<_>>>()?,
-                    )),
-                    codomain: Box::new(resolve(&signature.return_type, codomain, stack)?),
+                    domain: Box::new(JniOutput::arguments(arguments)),
+                    codomain: Box::new(result),
                 })
             }
             JniInput::Request(JniInputRequest::Callback(declaration)) => {

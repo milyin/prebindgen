@@ -26,9 +26,9 @@ impl<I, O> Default for DeclDefaults<I, O> {
 
 /// Resolve function occurrences, preserving explicitly prepared slots unless overridden.
 /// The caller supplies input defaults and its policy for the complete function result.
-pub fn resolve_function<M: Schema, I, O, RI, RO>(
+pub fn resolve_function<M: Schema, I, O, RI, RO, E>(
     flat: &Flat<M>,
-    decl: &DeclFunction<I, O>,
+    decl: &DeclFunction<I, O, E>,
     mut input: impl FnMut(&Type, Option<&I>) -> Result<RI>,
     output: impl FnOnce(&Type) -> Result<RO>,
 ) -> Result<FunctionRecipe<RI, RO>> {
@@ -431,18 +431,18 @@ pub fn output_value_conversion<M: Schema>(
 
 /// Merge callback defaults and local overrides, then resolve arguments and the result in opposite directions.
 #[allow(clippy::too_many_arguments)]
-pub fn resolve_callback<M: Schema, I: Clone, O: Clone, RI, RO>(
+pub fn resolve_callback<M: Schema, I: Clone, O: Clone, RI, RO, E: Clone>(
     flat: &Flat<M>,
     ty: &Type,
-    declaration: &crate::DeclCallback<I, O>,
-    default: Option<&crate::DeclCallback<I, O>>,
+    declaration: &crate::DeclCallback<I, O, E>,
+    default: Option<&crate::DeclCallback<I, O, E>>,
     output_defaults: &BTreeMap<String, O>,
     auto_input: &I,
     auto_output: &O,
     stack: &mut Vec<String>,
     mut input: impl FnMut(&Type, &I, &mut Vec<String>) -> Result<RI>,
     mut output: impl FnMut(&Type, &O, crate::CallbackArgumentOwnership) -> Result<RO>,
-) -> Result<(crate::CallbackOperation, Vec<RO>, RI)> {
+) -> Result<(crate::CallbackOperation<E>, Vec<RO>, RI)> {
     let canonical = crate::callback::input_type(flat, ty)?;
     if !same_type(
         &canonical,
@@ -461,6 +461,9 @@ pub fn resolve_callback<M: Schema, I: Clone, O: Clone, RI, RO>(
         let mut selected = default
             .cloned()
             .unwrap_or_else(|| crate::DeclCallback::new(canonical.clone()));
+        if declaration.extension.is_some() {
+            selected.extension = declaration.extension.clone();
+        }
         if declaration.foreign.is_some() {
             selected.foreign = declaration.foreign.clone()
         }
@@ -512,6 +515,7 @@ pub fn resolve_callback<M: Schema, I: Clone, O: Clone, RI, RO>(
         )?;
         Ok((
             crate::CallbackOperation {
+                extension: selected.extension,
                 ty: canonical,
                 foreign: selected.foreign,
                 namespace: selected.namespace,
@@ -523,6 +527,34 @@ pub fn resolve_callback<M: Schema, I: Clone, O: Clone, RI, RO>(
     })();
     stack.pop();
     result
+}
+
+/// Resolve a prepared callback arrow against its Rust signature.
+/// Checks identity and arity, then resolves arguments outward and the result inward.
+/// Adapter-specific callback settings stay on `operation`; child resolution is supplied.
+#[allow(clippy::too_many_arguments)]
+pub fn resolve_callback_arrow<M: Schema, I, O, RI, RO, E>(
+    flat: &Flat<M>,
+    ty: &Type,
+    operation: &crate::CallbackOperation<E>,
+    arguments: &[O],
+    result: &I,
+    mut output: impl FnMut(&Type, &O) -> Result<RO>,
+    input: impl FnOnce(&Type, &I) -> Result<RI>,
+) -> Result<(Vec<RO>, RI)> {
+    operation.validate_for(flat, ty)?;
+    let signature =
+        prebindgen_flat::callback_signature(ty)?.ok_or("arrow requires a callable source")?;
+    if arguments.len() != signature.arguments.len() {
+        return Err("wrong arrow domain arity".into());
+    }
+    let arguments = arguments
+        .iter()
+        .zip(&signature.arguments)
+        .map(|(tree, ty)| output(ty, tree))
+        .collect::<Result<Vec<_>>>()?;
+    let result = input(&signature.return_type, result)?;
+    Ok((arguments, result))
 }
 
 /// Walk the input-direction children of one node, including an arrow's opposite domain.
@@ -572,7 +604,7 @@ pub fn output_children<I: InputOps, O: OutputOps, IR, OR, S>(
     }
 }
 /// Collect helper-function and representation-type references from a value conversion declaration.
-pub fn conversion_source_items(decl: &crate::DeclConvert, names: &mut Vec<String>) {
+pub fn conversion_source_items<E>(decl: &crate::DeclConvert<E>, names: &mut Vec<String>) {
     struct References<'a>(&'a mut Vec<String>);
     impl syn::visit_mut::VisitMut for References<'_> {
         fn visit_type_path_mut(&mut self, path: &mut syn::TypePath) {
@@ -590,11 +622,11 @@ pub fn conversion_source_items(decl: &crate::DeclConvert, names: &mut Vec<String
     }
 }
 /// Collect selected source references using the caller's tree walkers.
-pub fn collect_source_items<'a, I: 'a, O: 'a>(
+pub fn collect_source_items<'a, I: 'a, O: 'a, E: 'a>(
     inputs: &[I],
     outputs: &[O],
     errors: &[(Type, String)],
-    functions: impl IntoIterator<Item = &'a DeclFunction<I, O>>,
+    functions: impl IntoIterator<Item = &'a DeclFunction<I, O, E>>,
     mut input: impl FnMut(&I, &mut Vec<String>),
     mut output: impl FnMut(&O, &mut Vec<String>),
 ) -> Vec<String> {
@@ -652,9 +684,9 @@ impl<I, O> DeclDefaults<I, O> {
     }
 }
 /// Choose a function's result recipe, including its explicit or type-wide source-error mapper.
-pub fn function_output<I, O: Clone>(
+pub fn function_output<I, O: Clone, E>(
     ty: &Type,
-    decl: &DeclFunction<I, O>,
+    decl: &DeclFunction<I, O, E>,
     errors: &BTreeMap<String, String>,
     auto: O,
     result: impl FnOnce(Option<String>, O) -> O,
@@ -683,12 +715,12 @@ pub fn validate_error_mapper<M: Schema>(flat: &Flat<M>, error: &Type, name: &str
     Ok(())
 }
 /// Clone a source binding for another sequence delivery policy, retaining existing input slots.
-pub fn callback_variant<M: Schema, I: Clone, O: Clone>(
+pub fn callback_variant<M: Schema, I: Clone, O: Clone, E: Clone>(
     flat: &mut Flat<M>,
-    decl: &DeclFunction<I, O>,
+    decl: &DeclFunction<I, O, E>,
     name: &str,
     output: impl FnOnce(Option<&O>, bool) -> O,
-) -> Result<DeclFunction<I, O>>
+) -> Result<DeclFunction<I, O, E>>
 where
     M::Input: Clone,
     M::Output: Clone,
@@ -876,10 +908,10 @@ mod tests {
     fn callback_resolution_merges_local_choices_and_preserves_argument_ownership() {
         let flat = model("pub fn register(handler:impl Fn(i64,i64)->i64){}");
         let ty: Type = syn::parse_quote!(impl Fn(i64, i64) -> i64);
-        let mut default = crate::DeclCallback::new(ty.clone());
+        let mut default = crate::DeclCallback::<i32, i32>::new(ty.clone());
         default.params.insert(0, 10);
         default.ret = Some(30);
-        let mut local = crate::DeclCallback::new(ty.clone());
+        let mut local = crate::DeclCallback::<i32, i32>::new(ty.clone());
         local.params.insert(1, 20);
         local.ret = Some(40);
         let mut stack = vec![];
@@ -909,7 +941,7 @@ mod tests {
         let (_, arguments, _) = resolve_callback(
             &flat,
             &ty,
-            &crate::DeclCallback::new(ty.clone()),
+            &crate::DeclCallback::<i32, i32>::new(ty.clone()),
             None,
             &BTreeMap::new(),
             &0,
@@ -932,7 +964,7 @@ mod tests {
         let failure = resolve_callback(
             &flat,
             &ty,
-            &crate::DeclCallback::new(ty.clone()),
+            &crate::DeclCallback::<i32, i32>::new(ty.clone()),
             None,
             &BTreeMap::new(),
             &0,

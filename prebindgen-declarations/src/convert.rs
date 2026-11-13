@@ -7,7 +7,7 @@ use syn::Type;
 
 /// Declare a Rust type's canonical single-value representation.
 #[macro_export]
-macro_rules! convert {($($ty:tt)+)=>{$crate::DeclConvert::new($crate::declarations::parse_type(stringify!($($ty)+)))};}
+macro_rules! convert {($($ty:tt)+)=>{$crate::DeclConvert::<::std::convert::Infallible>::new($crate::declarations::parse_type(stringify!($($ty)+)))};}
 /// Construct a source value through `Repr: Into<T>`.
 #[macro_export]
 macro_rules! from {($($ty:tt)+)=>{$crate::DeclConvertSource::input($crate::declarations::parse_type(stringify!($($ty)+)),false)};}
@@ -115,8 +115,10 @@ impl DeclConvertSource {
         })
     }
 }
-impl<InTree, OutTree> From<DeclFunction<InTree, OutTree>> for DeclConvertSource {
-    fn from(mut f: DeclFunction<InTree, OutTree>) -> Self {
+impl<InTree, OutTree, Extension> From<DeclFunction<InTree, OutTree, Extension>>
+    for DeclConvertSource
+{
+    fn from(mut f: DeclFunction<InTree, OutTree, Extension>) -> Self {
         let result_value = f.result_value;
         f.result_value = false;
         Self {
@@ -129,7 +131,9 @@ impl<InTree, OutTree> From<DeclFunction<InTree, OutTree>> for DeclConvertSource 
 }
 /// Canonical conversions for one source type. Directions are independent.
 #[derive(Clone, Debug)]
-pub struct DeclConvert {
+pub struct DeclConvert<Extension = std::convert::Infallible> {
+    /// Adapter-defined canonical conversion settings.
+    pub extension: Option<Extension>,
     /// Source type whose representation is selected.
     pub ty: Type,
     /// Canonical incoming representation, when selected.
@@ -138,14 +142,25 @@ pub struct DeclConvert {
     pub output: Option<DeclConvertSource>,
     duplicate: bool,
 }
-impl DeclConvert {
+impl<Extension> DeclConvert<Extension> {
     /// Start a single-value conversion declaration for a source type.
     pub fn new(ty: Type) -> Self {
         Self {
+            extension: None,
             ty,
             input: None,
             output: None,
             duplicate: false,
+        }
+    }
+    /// Configure adapter-specific conversion settings.
+    pub fn with_extension<Next>(self, extension: Next) -> DeclConvert<Next> {
+        DeclConvert {
+            extension: Some(extension),
+            ty: self.ty,
+            input: self.input,
+            output: self.output,
+            duplicate: self.duplicate,
         }
     }
     /// Convert one representation into the source value.
@@ -191,9 +206,10 @@ impl DeclConvert {
     }
 }
 /// Resolve canonical value conversions into the authoritative Flat type table.
-pub fn prepare_value_conversions<S: Schema>(
+/// Declarations remain borrowed so the adapter can interpret and retain their extension settings.
+pub fn prepare_value_conversions<S: Schema, Extension>(
     flat: &mut Flat<S>,
-    decls: Vec<DeclConvert>,
+    decls: &[DeclConvert<Extension>],
 ) -> Result<()> {
     let mut selected = std::collections::BTreeMap::new();
     for decl in decls {
@@ -217,7 +233,7 @@ pub fn prepare_value_conversions<S: Schema>(
                 .map(|i| i.conversion.clone())
                 .unwrap_or_default()
         });
-        for (input, source) in [(true, decl.input), (false, decl.output)] {
+        for (input, source) in [(true, decl.input.as_ref()), (false, decl.output.as_ref())] {
             if let Some(source) = source {
                 let dest = if input {
                     &mut pair.input
@@ -320,17 +336,17 @@ pub fn validate_conversion<S: Schema>(
     Ok(())
 }
 
-impl<I: crate::InputOps, O: crate::OutputOps, IR: From<DeclConvert>, OR> From<DeclConvert>
+impl<I: crate::InputOps, O: crate::OutputOps, IR: From<DeclConvert<E>>, OR, E> From<DeclConvert<E>>
     for crate::InputNode<I, O, IR, OR>
 {
-    fn from(decl: DeclConvert) -> Self {
+    fn from(decl: DeclConvert<E>) -> Self {
         Self::Request(decl.into())
     }
 }
-impl<I: crate::InputOps, O: crate::OutputOps, IR, OR: From<DeclConvert>> From<DeclConvert>
+impl<I: crate::InputOps, O: crate::OutputOps, IR, OR: From<DeclConvert<E>>, E> From<DeclConvert<E>>
     for crate::OutputNode<I, O, IR, OR>
 {
-    fn from(decl: DeclConvert) -> Self {
+    fn from(decl: DeclConvert<E>) -> Self {
         Self::Request(decl.into())
     }
 }

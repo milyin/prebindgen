@@ -1,3 +1,4 @@
+use prebindgen_jni::JniBulkExpansion;
 use prebindgen_jni::{expand_param, expand_return, fun};
 use prebindgen_jni::{package, ptr_class, JniGen};
 fn main() {

@@ -622,8 +622,7 @@ mod tests {
             "&[i64;3]",
         ] {
             let source = format!("pub fn inspect(values:{ty})->usize{{}}");
-            let declaration =
-                crate::DeclCExpandParam::new(syn::parse_str(ty).unwrap()).reconstruct();
+            let declaration = crate::expand_param(syn::parse_str(ty).unwrap()).reconstruct();
             let g = Cbindgen::new(model(&source))
                 .function(fun!(inspect).expand_param("values", declaration))
                 .panic()
@@ -687,7 +686,7 @@ mod tests {
             let error = Cbindgen::new(model(&source))
                 .function(fun!(echo).expand_param(
                     "values",
-                    crate::DeclCExpandParam::new(syn::parse_str(ty).unwrap()).reconstruct(),
+                    crate::expand_param(syn::parse_str(ty).unwrap()).reconstruct(),
                 ))
                 .panic()
                 .build()
@@ -703,7 +702,7 @@ mod tests {
             let error = Cbindgen::new(model(&source))
                 .function(fun!(inspect).expand_param(
                     "values",
-                    crate::DeclCExpandParam::new(syn::parse_str(ty).unwrap()).reconstruct(),
+                    crate::expand_param(syn::parse_str(ty).unwrap()).reconstruct(),
                 ))
                 .panic()
                 .build()

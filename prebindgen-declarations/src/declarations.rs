@@ -5,7 +5,9 @@ use std::collections::BTreeMap;
 /// Reference a source function and configure its exported binding.
 macro_rules! fun {
     ($name:ident) => {
-        $crate::DeclFunction::new($crate::ident(stringify!($name)).expect("function identifier"))
+        $crate::DeclFunction::<_, _>::new(
+            $crate::ident(stringify!($name)).expect("function identifier"),
+        )
     };
 }
 /// Which sequence return variants an adapter should expose.
@@ -20,7 +22,9 @@ pub enum CallbackReturn {
 
 /// A source callable to export, with optional destination name and occurrence overrides.
 #[derive(Clone, Debug)]
-pub struct DeclFunction<InTree, OutTree> {
+pub struct DeclFunction<InTree, OutTree, Extension = std::convert::Infallible> {
+    /// Adapter-defined settings, preserved by common fluent methods.
+    pub extension: Option<Extension>,
     /// Treat an outer standard Result as ordinary variant data.
     pub result_value: bool,
     /// Also emit an explicit callback-delivery variant for a sequence return.
@@ -36,12 +40,13 @@ pub struct DeclFunction<InTree, OutTree> {
     /// Source mapper for a top-level Result error; it takes E or &E and returns String.
     pub error: Option<String>,
 }
-impl<InTree, OutTree> DeclFunction<InTree, OutTree> {
+impl<InTree, OutTree, Extension> DeclFunction<InTree, OutTree, Extension> {
     /// Reference a source function without overriding names or conversions.
     ///
     /// `name` is the function's unqualified source name.
     pub fn new(name: syn::Ident) -> Self {
         Self {
+            extension: None,
             result_value: false,
             callback_return: None,
             name: name.to_string(),
@@ -49,6 +54,19 @@ impl<InTree, OutTree> DeclFunction<InTree, OutTree> {
             params: BTreeMap::new(),
             ret: None,
             error: None,
+        }
+    }
+    /// Configure adapter-specific settings without replacing common declaration data.
+    pub fn with_extension<Next>(self, extension: Next) -> DeclFunction<InTree, OutTree, Next> {
+        DeclFunction {
+            extension: Some(extension),
+            result_value: self.result_value,
+            callback_return: self.callback_return,
+            name: self.name,
+            foreign: self.foreign,
+            params: self.params,
+            ret: self.ret,
+            error: self.error,
         }
     }
     /// Extract an undecorated helper's source name, rejecting binding-only settings.
@@ -59,7 +77,8 @@ impl<InTree, OutTree> DeclFunction<InTree, OutTree> {
     /// Extract a helper source name, optionally accepting a getter view name.
     pub fn reference_name(self, allow_name: bool) -> String {
         assert!(
-            self.params.is_empty()
+            self.extension.is_none()
+                && self.params.is_empty()
                 && self.ret.is_none()
                 && self.error.is_none()
                 && !self.result_value
@@ -127,7 +146,7 @@ impl<InTree, OutTree> DeclFunction<InTree, OutTree> {
     /// source name is accepted; it is selected for capture but is not exported.
     /// The success value uses normal return defaults and `expand_return` overrides.
     /// Replaces any previously selected mapper. Non-Result returns reject this option.
-    pub fn on_error(mut self, mapper: impl Into<DeclFunction<InTree, OutTree>>) -> Self {
+    pub fn on_error(mut self, mapper: impl Into<DeclFunction<InTree, OutTree, Extension>>) -> Self {
         self.error = Some(mapper.into().reference_name(false));
         self
     }
@@ -168,12 +187,12 @@ impl<InTree, OutTree> DeclFunction<InTree, OutTree> {
     }
 }
 
-impl<InTree, OutTree> From<&str> for DeclFunction<InTree, OutTree> {
+impl<InTree, OutTree, Extension> From<&str> for DeclFunction<InTree, OutTree, Extension> {
     fn from(name: &str) -> Self {
         Self::new(crate::ident(name).expect("source function identifier"))
     }
 }
-impl<InTree, OutTree> From<String> for DeclFunction<InTree, OutTree> {
+impl<InTree, OutTree, Extension> From<String> for DeclFunction<InTree, OutTree, Extension> {
     fn from(name: String) -> Self {
         Self::from(name.as_str())
     }

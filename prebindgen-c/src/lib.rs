@@ -1505,7 +1505,7 @@ impl Cbindgen {
                 explicit: true,
             }));
         }
-        prebindgen_declarations::prepare_value_conversions(&mut flat, self.conversions)?;
+        prebindgen_declarations::prepare_value_conversions(&mut flat, &self.conversions)?;
         let mut automatic = std::collections::BTreeMap::new();
         for f in flat.functions.values() {
             owned::collect(&f.ret.ty, &mut automatic);

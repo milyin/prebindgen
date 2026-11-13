@@ -1,206 +1,93 @@
 use super::*;
-/// Input alternatives for a source type, built directly as a [`CInput`] tree.
-#[derive(Clone, Debug)]
-pub struct DeclCExpandParam {
-    /// Source type targeted by this default or occurrence override.
-    pub ty: syn::Type,
-    input: prebindgen_declarations::DeclInputAlternatives<CInput<CInputRequest, COutputRequest>>,
-}
-impl DeclCExpandParam {
-    /// Start an input declaration; add at least one alternative before use.
-    pub fn new(ty: syn::Type) -> Self {
-        Self {
-            ty,
-            input: Default::default(),
-        }
-    }
-    /// Explicitly construct an owned temporary and borrow it for the source call.
-    /// With no alternatives, use the owned value's default input conversion.
-    /// Alternatives describe the owned referent, not the reference itself.
-    pub fn reconstruct(mut self) -> Self {
-        self.input.reconstruct();
-        self
-    }
-    /// Append a constructor reference; its arguments use their type defaults.
-    pub fn variant(mut self, function: impl Into<DeclCFunction>) -> Self {
-        self.input
-            .push(CInput::call(function.into().reference_name(false)));
-        self
-    }
-    /// Append the type's direct language representation.
-    pub fn variant_self(mut self) -> Self {
-        self.input.push(CInput::Leaf(CInputLeafOp::Value));
-        self
-    }
-}
-impl From<DeclCExpandParam> for CInput<CInputRequest, COutputRequest> {
-    fn from(decl: DeclCExpandParam) -> Self {
-        let input = decl
-            .input
-            .build(CInput::selector, CInput::auto, |input| CInput::Unary {
+/// Input expansion declaration specialized for this adapter.
+pub type DeclCExpandParam = prebindgen_declarations::DeclExpandParam<
+    CInput<CInputRequest, COutputRequest>,
+    DeclCFunction,
+    std::convert::Infallible,
+>;
+/// Return expansion declaration specialized for this adapter.
+/// Field-decomposition methods require a fields declaration:
+/// ```compile_fail
+/// use prebindgen_c::{expand_return, COutput};
+/// let _ = expand_return!(Row).fields(COutput::None);
+/// ```
+/// ```compile_fail
+/// use prebindgen_c::{expand_return, COutput};
+/// let _ = expand_return!(Row).fields_into(COutput::None);
+/// ```
+pub type DeclCExpandReturn = prebindgen_declarations::DeclExpandReturn<
+    COutput<CInputRequest, COutputRequest>,
+    DeclCFunction,
+    std::convert::Infallible,
+>;
+/// Named-field declaration specialized for this adapter.
+pub type DeclCFields = prebindgen_declarations::DeclFields<COutput<CInputRequest, COutputRequest>>;
+/// Start input expansion using this adapter's node constructors.
+pub fn expand_param(ty: Type) -> DeclCExpandParam {
+    prebindgen_declarations::DeclExpandParam::new(
+        ty,
+        |function: DeclCFunction| CInput::call(function.reference_name(false)),
+        || CInput::Leaf(CInputLeafOp::Value),
+        |ty, alternatives, extension| {
+            let input = alternatives.build(CInput::selector, CInput::auto, |child| CInput::Unary {
                 operation: CInputUnary::Temporary,
-                child: Box::new(input),
+                child: Box::new(child),
             });
-        CInput::for_type(decl.ty, input)
-    }
+            let _ = extension;
+            CInput::for_type(ty, input)
+        },
+    )
 }
-/// Simultaneous views of a source return value, built directly as a [`COutput`] tree.
-#[derive(Clone, Debug)]
-pub struct DeclCExpandReturn {
-    /// Source type targeted by this default or occurrence override.
-    pub ty: syn::Type,
-    output: Vec<COutput<CInputRequest, COutputRequest>>,
+/// Start return expansion using this adapter's node constructors.
+pub fn expand_return(ty: Type) -> DeclCExpandReturn {
+    prebindgen_declarations::DeclExpandReturn::new(
+        ty,
+        |function| {
+            prebindgen_declarations::getter_view(
+                function,
+                |name| COutput::getter(name, COutput::auto()),
+                |name, child| COutput::Unary {
+                    operation: COutputUnary::Named { name },
+                    child: Box::new(child),
+                },
+            )
+        },
+        || COutput::Leaf(COutputLeafOp::Value),
+        |policy| COutput::Leaf(COutputLeafOp::Projected(policy)),
+        super::requests::owned_field_view,
+        |ty, views, extension| {
+            let output = COutput::combine(views);
+            let _ = extension;
+            COutput::for_type(ty, output)
+        },
+    )
 }
-impl DeclCExpandReturn {
-    /// Start an output declaration; add views before registering a type default.
-    pub fn new(ty: syn::Type) -> Self {
-        Self {
-            ty,
-            output: Default::default(),
-        }
-    }
-    /// Append a getter view. An explicit `.name()` labels the delivered view.
-    /// Shared results are observed before another view moves the owner. An
-    /// owning opaque copy requires an explicit projection or cloning accessor.
-    pub fn field(mut self, function: impl Into<DeclCFunction>) -> Self {
-        self.output.push(prebindgen_declarations::getter_view(
-            function.into(),
-            |name| COutput::getter(name, COutput::auto()),
-            |name, output| COutput::Unary {
-                operation: COutputUnary::Named { name },
-                child: Box::new(output),
-            },
-        ));
-        self
-    }
-    /// Append a getter's named record fields as separate output values.
-    pub fn fields(self, fields: DeclCFields) -> Self {
-        self.view(fields)
-    }
-    /// Append another explicit output view.
-    pub fn view(mut self, output: impl Into<COutput<CInputRequest, COutputRequest>>) -> Self {
-        self.output.push(output.into());
-        self
-    }
-    /// Append a consuming accessor followed by owned field decomposition.
-    pub fn fields_into(mut self, fields: DeclCFields) -> Self {
-        self.output
-            .push(super::requests::owned_field_view(fields.into()));
-        self
-    }
-    /// Deprecated spelling of [`Self::fields_into`].
-    #[deprecated(note = "use fields_into instead")]
-    pub fn fields_self_into(self, fields: DeclCFields) -> Self {
-        self.fields_into(fields)
-    }
-    /// Append the language's direct representation, bypassing this type's default.
-    pub fn field_self(mut self) -> Self {
-        self.output.push(COutput::Leaf(COutputLeafOp::Value));
-        self
-    }
-    /// Append an explicit shared projection. Owning opaque representations clone
-    /// the value; record/collection projections permit copying borrowed leaves.
-    pub fn field_self_ref(self) -> Self {
-        self.project_self(Projection::borrowed())
-    }
-    /// Append an explicit owned projection.
-    pub fn field_self_into(self) -> Self {
-        self.project_self(Projection::owned())
-    }
-    /// Append a projection with explicit ownership and field policies.
-    pub fn project_self(mut self, policy: Projection) -> Self {
-        self.output
-            .push(COutput::Leaf(COutputLeafOp::Projected(policy)));
-        self
-    }
-}
-impl From<DeclCExpandReturn> for COutput<CInputRequest, COutputRequest> {
-    fn from(decl: DeclCExpandReturn) -> Self {
-        COutput::for_type(decl.ty, COutput::combine(decl.output))
-    }
-}
-/// A source accessor followed by named field decomposition.
-/// Field adjustments edit the accessor's output tree directly.
-#[derive(Clone, Debug)]
-pub struct DeclCFields {
-    function: String,
-    overrides: BTreeMap<String, COutput<CInputRequest, COutputRequest>>,
-}
-impl DeclCFields {
-    /// Select a getter whose returned record supplies the fields.
-    pub fn new(function: syn::Ident) -> Self {
-        Self {
-            function: function.to_string(),
-            overrides: BTreeMap::new(),
-        }
-    }
-    /// Replace one field's conversion. An empty declaration omits the whole field,
-    /// including any enclosing Option or sequence representation.
-    pub fn field(self, name: impl AsRef<str>, output: DeclCExpandReturn) -> Self {
-        self.field_override(name.as_ref().to_owned(), output)
-    }
-    /// Set an explicit conversion tree for one field, with the same omission
-    /// semantics as [`Self::field`] for an empty typed declaration.
-    pub fn field_override(
-        mut self,
-        name: impl Into<String>,
-        output: impl Into<COutput<CInputRequest, COutputRequest>>,
-    ) -> Self {
-        let output = match output.into() {
-            COutput::Request(COutputRequest::ForType { ty, output }) if matches!(output.as_ref(), COutput::Branch { operation: COutputBranch::Combine, children } if children.is_empty()) => {
+/// Decompose a source accessor's returned record into named field views.
+pub fn fields(function: syn::Ident) -> DeclCFields {
+    prebindgen_declarations::DeclFields::new(
+        function,
+        |output| match output {
+            COutput::Request(COutputRequest::ForType { ty, output }) if matches!(output.as_ref(),COutput::Branch {operation:COutputBranch::Combine,children} if children.is_empty()) => {
                 COutput::for_type(*ty, COutput::Leaf(COutputLeafOp::Discard))
             }
             output => output,
-        };
-        assert!(
-            self.overrides.insert(name.into(), output).is_none(),
-            "duplicate field override"
-        );
-        self
-    }
+        },
+        |function, overrides, _extension| {
+            COutput::getter(
+                function,
+                COutput::Request(COutputRequest::NamedFields {
+                    overrides,
+                    mode: prebindgen_declarations::ProjectionMode::Borrowed,
+                }),
+            )
+        },
+    )
 }
-impl From<DeclCFields> for COutput<CInputRequest, COutputRequest> {
-    fn from(fields: DeclCFields) -> Self {
-        COutput::getter(
-            fields.function,
-            COutput::Request(COutputRequest::NamedFields {
-                overrides: fields.overrides,
-                mode: prebindgen_declarations::ProjectionMode::Borrowed,
-            }),
-        )
-    }
-}
-/// A type-wide source-error mapping using this adapter's function declaration.
-pub type DeclCError = prebindgen_declarations::DeclError<
-    CInput<CInputRequest, COutputRequest>,
-    COutput<CInputRequest, COutputRequest>,
->;
-/// A type-wide input, output, or error-mapping declaration.
-/// Generators immediately consume these builders into their conversion trees.
-#[derive(Clone, Debug)]
-pub enum DeclCExpand {
-    /// Input alternatives.
-    Param(DeclCExpandParam),
-    /// Simultaneous output views.
-    Return(DeclCExpandReturn),
-    /// A source-error message mapping.
-    Error(Box<DeclCError>),
-}
-impl From<DeclCExpandParam> for DeclCExpand {
-    fn from(value: DeclCExpandParam) -> Self {
-        Self::Param(value)
-    }
-}
-impl From<DeclCExpandReturn> for DeclCExpand {
-    fn from(value: DeclCExpandReturn) -> Self {
-        Self::Return(value)
-    }
-}
-impl From<DeclCError> for DeclCExpand {
-    fn from(value: DeclCError) -> Self {
-        Self::Error(Box::new(value))
-    }
-}
+/// Source-error declaration using this adapter's function reference.
+pub type DeclCError = prebindgen_declarations::DeclError<DeclCFunction>;
+/// Registration of this adapter's input/output/error declarations.
+pub type DeclCExpand =
+    prebindgen_declarations::DeclExpand<DeclCExpandParam, DeclCExpandReturn, DeclCError>;
 /// Callback declaration containing this language's argument and result trees.
 pub type DeclCCallback = prebindgen_declarations::DeclCallback<
     CInput<CInputRequest, COutputRequest>,

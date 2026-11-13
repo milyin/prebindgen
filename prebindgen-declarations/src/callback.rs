@@ -7,7 +7,9 @@ use syn::Type;
 /// The Arrow's domain and codomain own the conversions. Both directions are
 /// fully resolved before the adapter compiles the callback.
 #[derive(Clone, Debug)]
-pub struct CallbackOperation {
+pub struct CallbackOperation<Extension = std::convert::Infallible> {
+    /// Adapter-specific callback settings retained in the resolved tree.
+    pub extension: Option<Extension>,
     /// Canonical source callback signature, excluding marker bounds.
     pub ty: Type,
     /// Literal foreign interface name, if explicitly selected.
@@ -18,7 +20,7 @@ pub struct CallbackOperation {
     pub explicit_return: bool,
 }
 
-impl CallbackOperation {
+impl<Extension> CallbackOperation<Extension> {
     /// Verify the configured signature against this source callback occurrence.
     pub fn validate_for<M: Schema>(&self, flat: &Flat<M>, ty: &Type) -> Result<()> {
         if input_key(flat, ty)? != prebindgen_flat::type_key(&self.ty) {
@@ -72,7 +74,9 @@ use std::collections::BTreeMap;
 /// Each overridden argument/result replaces its entire conversion tree.
 ///
 #[derive(Clone, Debug)]
-pub struct DeclCallback<InTree, OutTree> {
+pub struct DeclCallback<InTree, OutTree, Extension = std::convert::Infallible> {
+    /// Adapter-defined settings, preserved by common fluent methods.
+    pub extension: Option<Extension>,
     /// Source `impl Fn(...) -> R` signature; marker bounds do not identify defaults.
     pub ty: Type,
     /// Literal destination interface name.
@@ -84,15 +88,27 @@ pub struct DeclCallback<InTree, OutTree> {
     /// Returned-value input override.
     pub ret: Option<InTree>,
 }
-impl<InTree, OutTree> DeclCallback<InTree, OutTree> {
+impl<InTree, OutTree, Extension> DeclCallback<InTree, OutTree, Extension> {
     /// Declare defaults or an occurrence override for a source callback signature.
     pub fn new(ty: Type) -> Self {
         Self {
+            extension: None,
             ty,
             foreign: None,
             namespace: None,
             params: BTreeMap::new(),
             ret: None,
+        }
+    }
+    /// Configure adapter-specific settings without replacing common declaration data.
+    pub fn with_extension<Next>(self, extension: Next) -> DeclCallback<InTree, OutTree, Next> {
+        DeclCallback {
+            extension: Some(extension),
+            ty: self.ty,
+            foreign: self.foreign,
+            namespace: self.namespace,
+            params: self.params,
+            ret: self.ret,
         }
     }
     /// Set a literal destination interface name.
@@ -118,14 +134,20 @@ impl<InTree, OutTree> DeclCallback<InTree, OutTree> {
     }
 }
 
-impl<I: crate::InputOps, O: crate::OutputOps, IR, OR>
-    From<DeclCallback<crate::InputNode<I, O, IR, OR>, crate::OutputNode<I, O, IR, OR>>>
+impl<I: crate::InputOps, O: crate::OutputOps, IR, OR, Extension>
+    From<DeclCallback<crate::InputNode<I, O, IR, OR>, crate::OutputNode<I, O, IR, OR>, Extension>>
     for crate::InputNode<I, O, IR, OR>
 where
-    IR: From<DeclCallback<crate::InputNode<I, O, IR, OR>, crate::OutputNode<I, O, IR, OR>>>,
+    IR: From<
+        DeclCallback<crate::InputNode<I, O, IR, OR>, crate::OutputNode<I, O, IR, OR>, Extension>,
+    >,
 {
     fn from(
-        declaration: DeclCallback<crate::InputNode<I, O, IR, OR>, crate::OutputNode<I, O, IR, OR>>,
+        declaration: DeclCallback<
+            crate::InputNode<I, O, IR, OR>,
+            crate::OutputNode<I, O, IR, OR>,
+            Extension,
+        >,
     ) -> Self {
         Self::Request(declaration.into())
     }
