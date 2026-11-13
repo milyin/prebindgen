@@ -4,21 +4,17 @@ use super::*;
 pub struct DeclJniExpandParam {
     /// Source type targeted by this default or occurrence override.
     pub ty: syn::Type,
-    input: JniInput<JniInputRequest, JniOutputRequest>,
+    input:
+        prebindgen_declarations::DeclInputAlternatives<JniInput<JniInputRequest, JniOutputRequest>>,
     bulk: bool,
-    reconstruct: bool,
 }
 impl DeclJniExpandParam {
     /// Start an input declaration; add at least one alternative before use.
     pub fn new(ty: syn::Type) -> Self {
         Self {
             ty,
-            input: JniInput::Branch {
-                operation: JniInputBranch::Selector,
-                children: vec![],
-            },
+            input: Default::default(),
             bulk: false,
-            reconstruct: false,
         }
     }
     /// Group this expansion into a C-representation bulk carrier.
@@ -31,33 +27,31 @@ impl DeclJniExpandParam {
     /// With no alternatives, use the owned value's default input conversion.
     /// Alternatives describe the owned referent, not the reference itself.
     pub fn reconstruct(mut self) -> Self {
-        self.reconstruct = true;
+        self.input.reconstruct();
         self
     }
     /// Append a constructor reference; its arguments use their type defaults.
     pub fn variant(mut self, function: impl Into<DeclJniFunction>) -> Self {
-        self.input = self.input.variant(function.into().reference_name(false));
+        self.input
+            .push(JniInput::call(function.into().reference_name(false)));
         self
     }
     /// Append the type's direct language representation.
     pub fn variant_self(mut self) -> Self {
-        self.input = self.input.variant_self();
+        self.input.push(JniInput::Leaf(JniInputLeafOp::Value));
         self
     }
 }
 impl From<DeclJniExpandParam> for JniInput<JniInputRequest, JniOutputRequest> {
     fn from(decl: DeclJniExpandParam) -> Self {
-        let mut input = decl.input;
-        if decl.reconstruct {
-            if matches!(&input, JniInput::Branch { operation: JniInputBranch::Selector, children: arms } if arms.is_empty())
-            {
-                input = JniInput::auto();
-            }
-            input = JniInput::Unary {
-                operation: JniInputUnary::Temporary,
-                child: Box::new(input),
-            };
-        }
+        let mut input = decl
+            .input
+            .build(JniInput::selector, JniInput::auto, |input| {
+                JniInput::Unary {
+                    operation: JniInputUnary::Temporary,
+                    child: Box::new(input),
+                }
+            });
         if decl.bulk {
             input = JniInput::Unary {
                 operation: JniInputUnary::Bulk,
@@ -73,7 +67,7 @@ impl From<DeclJniExpandParam> for JniInput<JniInputRequest, JniOutputRequest> {
 pub struct DeclJniExpandReturn {
     /// Source type targeted by this default or occurrence override.
     pub ty: syn::Type,
-    output: JniOutput<JniInputRequest, JniOutputRequest>,
+    output: Vec<JniOutput<JniInputRequest, JniOutputRequest>>,
     bulk: bool,
 }
 impl DeclJniExpandReturn {
@@ -81,10 +75,7 @@ impl DeclJniExpandReturn {
     pub fn new(ty: syn::Type) -> Self {
         Self {
             ty,
-            output: JniOutput::Branch {
-                operation: JniOutputBranch::Combine,
-                children: vec![],
-            },
+            output: Default::default(),
             bulk: false,
         }
     }
@@ -102,16 +93,14 @@ impl DeclJniExpandReturn {
     /// Shared results are observed before another view moves the owner. An
     /// owning opaque copy requires an explicit projection or cloning accessor.
     pub fn field(mut self, function: impl Into<DeclJniFunction>) -> Self {
-        let function = function.into();
-        let name = function.foreign.clone();
-        let getter = JniOutput::getter(function.reference_name(true), JniOutput::auto());
-        self.output = self.output.view(match name {
-            Some(name) => JniOutput::Unary {
+        self.output.push(prebindgen_declarations::getter_view(
+            function.into(),
+            |name| JniOutput::getter(name, JniOutput::auto()),
+            |name, output| JniOutput::Unary {
                 operation: JniOutputUnary::Named { name },
-                child: Box::new(getter),
+                child: Box::new(output),
             },
-            None => getter,
-        });
+        ));
         self
     }
     /// Append a getter's named record fields as separate output values.
@@ -120,12 +109,13 @@ impl DeclJniExpandReturn {
     }
     /// Append another explicit output view.
     pub fn view(mut self, output: impl Into<JniOutput<JniInputRequest, JniOutputRequest>>) -> Self {
-        self.output = self.output.view(output.into());
+        self.output.push(output.into());
         self
     }
     /// Append a consuming accessor followed by owned field decomposition.
     pub fn fields_into(mut self, fields: DeclJniFields) -> Self {
-        self.output = self.output.fields_into(fields.into());
+        self.output
+            .push(super::requests::owned_field_view(fields.into()));
         self
     }
     /// Deprecated spelling of [`Self::fields_into`].
@@ -135,7 +125,7 @@ impl DeclJniExpandReturn {
     }
     /// Append the language's direct representation, bypassing this type's default.
     pub fn field_self(mut self) -> Self {
-        self.output = self.output.field_self();
+        self.output.push(JniOutput::Leaf(JniOutputLeafOp::Value));
         self
     }
     /// Append an explicit shared projection. Owning opaque representations clone
@@ -149,7 +139,8 @@ impl DeclJniExpandReturn {
     }
     /// Append a projection with explicit ownership and field policies.
     pub fn project_self(mut self, policy: Projection) -> Self {
-        self.output = self.output.project_self(policy);
+        self.output
+            .push(JniOutput::Leaf(JniOutputLeafOp::Projected(policy)));
         self
     }
 }
@@ -160,10 +151,10 @@ impl From<DeclJniExpandReturn> for JniOutput<JniInputRequest, JniOutputRequest> 
             if decl.bulk {
                 JniOutput::Unary {
                     operation: JniOutputUnary::Bulk,
-                    child: Box::new(decl.output),
+                    child: Box::new(JniOutput::combine(decl.output)),
                 }
             } else {
-                decl.output
+                JniOutput::combine(decl.output)
             },
         )
     }
@@ -197,7 +188,7 @@ impl DeclJniFields {
         output: impl Into<JniOutput<JniInputRequest, JniOutputRequest>>,
     ) -> Self {
         let output = match output.into() {
-            JniOutput::Request(JniOutputRequest::ForType { ty, output }) if matches!(output.as_ref(),JniOutput::Branch { operation: JniOutputBranch::Combine, children: parts } if parts.is_empty()) => {
+            JniOutput::Request(JniOutputRequest::ForType { ty, output }) if matches!(output.as_ref(), JniOutput::Branch { operation: JniOutputBranch::Combine, children } if children.is_empty()) => {
                 JniOutput::for_type(*ty, JniOutput::Leaf(JniOutputLeafOp::Discard))
             }
             output => output,
@@ -221,20 +212,11 @@ impl From<DeclJniFields> for JniOutput<JniInputRequest, JniOutputRequest> {
     }
 }
 
-/// A type-wide source-error message mapping.
-#[derive(Clone, Debug)]
-pub struct DeclJniError {
-    /// Source error type.
-    pub ty: syn::Type,
-    /// Source helper taking E or &E and returning String.
-    pub mapper: DeclJniFunction,
-}
-impl DeclJniError {
-    /// Select the source helper for this error type.
-    pub fn new(ty: syn::Type, mapper: DeclJniFunction) -> Self {
-        Self { ty, mapper }
-    }
-}
+/// A type-wide source-error mapping using this adapter's function declaration.
+pub type DeclJniError = prebindgen_declarations::DeclError<
+    JniInput<JniInputRequest, JniOutputRequest>,
+    JniOutput<JniInputRequest, JniOutputRequest>,
+>;
 /// A type-wide input, output, or error-mapping declaration.
 /// Generators immediately consume these builders into their conversion trees.
 #[derive(Clone, Debug)]

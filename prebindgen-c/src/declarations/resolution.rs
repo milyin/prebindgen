@@ -304,21 +304,22 @@ impl DeclCDefaults {
                 )? {
                     return Ok(tree);
                 }
-                if let Some(inner) = option_inner(ty) {
-                    return Ok(InputNode::Unary {
-                        operation: CInputUnary::Optional,
-                        child: Box::new(resolve(inner, &CInput::auto(), stack)?),
-                    });
-                }
-                if let Some((element, _)) = sequence_parts(ty).filter(|_| {
+                if let Some(tree) = prebindgen_declarations::resolve_container(
+                    ty,
                     !(owned::native_input(flat, ty)
                         || (self.input_role.get() == InputRole::EnumField
-                            && owned::declaration(flat, ty).is_some()))
-                }) {
-                    return Ok(InputNode::Unary {
+                            && owned::declaration(flat, ty).is_some())),
+                    |inner| resolve(inner, &CInput::auto(), stack),
+                    |child| CInput::Unary {
+                        operation: CInputUnary::Optional,
+                        child: Box::new(child),
+                    },
+                    |child| CInput::Unary {
                         operation: CInputUnary::Sequence,
-                        child: Box::new(resolve(element, &CInput::auto(), stack)?),
-                    });
+                        child: Box::new(child),
+                    },
+                )? {
+                    return Ok(tree);
                 }
                 if type_key(ty) == "()" {
                     return Ok(InputNode::None);
@@ -348,20 +349,7 @@ impl DeclCDefaults {
                 )
             }
             CInput::Leaf(CInputLeafOp::Value) => {
-                if flat
-                    .type_info(ty)
-                    .ok()
-                    .is_some_and(|i| i.conversion.input.is_none() && i.conversion.output.is_some())
-                {
-                    return Err(format!(
-                        "`{}` has no canonical input conversion",
-                        type_key(ty)
-                    ));
-                }
-                if let Some(conversion) = flat
-                    .type_info(ty)
-                    .ok()
-                    .and_then(|i| i.conversion.input.clone())
+                if let Some(conversion) = prebindgen_declarations::input_value_conversion(flat, ty)?
                 {
                     return self.resolve_input_conversion(
                         flat,
@@ -697,22 +685,23 @@ impl DeclCDefaults {
                         return resolve(referent, tree, stack);
                     }
                 }
-                if let Some(inner) = option_inner(ty) {
-                    return Ok(OutputNode::Unary {
+                if let Some(tree) = prebindgen_declarations::resolve_container(
+                    ty,
+                    !owned::native_output(flat, ty),
+                    |inner| resolve(inner, &COutput::auto(), stack),
+                    |child| COutput::Unary {
                         operation: COutputUnary::Optional,
-                        child: Box::new(resolve(inner, &COutput::auto(), stack)?),
-                    });
-                }
-                if let Some((element, _)) =
-                    sequence_parts(ty).filter(|_| !owned::native_output(flat, ty))
-                {
-                    return Ok(OutputNode::Unary {
+                        child: Box::new(child),
+                    },
+                    |child| COutput::Unary {
                         operation: COutputUnary::Sequence {
                             delivery: SequenceDelivery::Auto,
                             mode: None,
                         },
-                        child: Box::new(resolve(element, &COutput::auto(), stack)?),
-                    });
+                        child: Box::new(child),
+                    },
+                )? {
+                    return Ok(tree);
                 }
                 if type_key(ty) == "()" {
                     return Ok(OutputNode::None);
@@ -756,27 +745,9 @@ impl DeclCDefaults {
                 )
             }
             COutput::Leaf(COutputLeafOp::Value) | COutput::Leaf(COutputLeafOp::Projected(_)) => {
-                let conversion_type = prebindgen_declarations::output_referent(ty).unwrap_or(ty);
-                if flat
-                    .type_info(conversion_type)
-                    .ok()
-                    .is_some_and(|i| i.conversion.output.is_none() && i.conversion.input.is_some())
+                if let Some(conversion) =
+                    prebindgen_declarations::output_value_conversion(flat, ty, None)?
                 {
-                    return Err(format!(
-                        "`{}` has no canonical output conversion",
-                        type_key(ty)
-                    ));
-                }
-                let converted = flat
-                    .type_info(ty)
-                    .ok()
-                    .and_then(|i| i.conversion.output.clone())
-                    .or_else(|| {
-                        prebindgen_declarations::output_referent(ty)
-                            .and_then(|t| flat.type_info(t).ok())
-                            .and_then(|i| i.conversion.output.clone())
-                    });
-                if let Some(conversion) = converted {
                     if let COutput::Leaf(COutputLeafOp::Projected(policy)) = tree {
                         return self.resolve_output_value(
                             flat,
@@ -1053,11 +1024,7 @@ impl DeclCDefaults {
                 children: vec![],
             });
         }
-        if let Some(c) = flat
-            .type_info(ty)
-            .ok()
-            .and_then(|i| i.conversion.input.clone())
-        {
+        if let Some(c) = prebindgen_declarations::input_value_conversion(flat, ty)? {
             return self.resolve_input_conversion(
                 flat,
                 codec,
@@ -1068,21 +1035,22 @@ impl DeclCDefaults {
                 stack,
             );
         }
-        if let Some(inner) = prebindgen_flat::option_inner(ty) {
-            return Ok(InputNode::Unary {
-                operation: CInputUnary::Optional,
-                child: Box::new(self.resolve_input_value(flat, codec, inner, extra, stack)?),
-            });
-        }
-        if let Some((inner, _)) = prebindgen_flat::sequence_parts(ty).filter(|_| {
+        if let Some(tree) = prebindgen_declarations::resolve_container(
+            ty,
             !(owned::native_input(flat, ty)
                 || (self.input_role.get() == InputRole::EnumField
-                    && owned::declaration(flat, ty).is_some()))
-        }) {
-            return Ok(InputNode::Unary {
+                    && owned::declaration(flat, ty).is_some())),
+            |inner| self.resolve_input_value(flat, codec, inner, extra, stack),
+            |child| CInput::Unary {
+                operation: CInputUnary::Optional,
+                child: Box::new(child),
+            },
+            |child| CInput::Unary {
                 operation: CInputUnary::Sequence,
-                child: Box::new(self.resolve_input_value(flat, codec, inner, extra, stack)?),
-            });
+                child: Box::new(child),
+            },
+        )? {
+            return Ok(tree);
         }
         self.input(
             flat,
@@ -1121,26 +1089,23 @@ impl DeclCDefaults {
                 stack,
             );
         }
-        if let Some(inner) = prebindgen_flat::option_inner(ty) {
-            return Ok(OutputNode::Unary {
+        if let Some(tree) = prebindgen_declarations::resolve_container(
+            ty,
+            !owned::native_output(flat, ty),
+            |inner| self.resolve_output_value(flat, codec, inner, extra, stack, getter, policy),
+            |child| COutput::Unary {
                 operation: COutputUnary::Optional,
-                child: Box::new(
-                    self.resolve_output_value(flat, codec, inner, extra, stack, getter, policy)?,
-                ),
-            });
-        }
-        if let Some((inner, _)) =
-            prebindgen_flat::sequence_parts(ty).filter(|_| !owned::native_output(flat, ty))
-        {
-            return Ok(OutputNode::Unary {
+                child: Box::new(child),
+            },
+            |child| COutput::Unary {
                 operation: COutputUnary::Sequence {
                     delivery: prebindgen_declarations::SequenceDelivery::Value,
                     mode: policy.map(|p| p.mode),
                 },
-                child: Box::new(
-                    self.resolve_output_value(flat, codec, inner, extra, stack, getter, policy)?,
-                ),
-            });
+                child: Box::new(child),
+            },
+        )? {
+            return Ok(tree);
         }
         self.output(
             flat,

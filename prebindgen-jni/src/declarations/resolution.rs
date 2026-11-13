@@ -321,17 +321,20 @@ impl DeclJniDefaults {
                 )? {
                     return Ok(tree);
                 }
-                if let Some(inner) = option_inner(ty) {
-                    return Ok(InputNode::Unary {
+                if let Some(tree) = prebindgen_declarations::resolve_container(
+                    ty,
+                    true,
+                    |inner| resolve(inner, &JniInput::auto(), stack),
+                    |child| JniInput::Unary {
                         operation: JniInputUnary::Optional,
-                        child: Box::new(resolve(inner, &JniInput::auto(), stack)?),
-                    });
-                }
-                if let Some((element, _)) = sequence_parts(ty) {
-                    return Ok(InputNode::Unary {
+                        child: Box::new(child),
+                    },
+                    |child| JniInput::Unary {
                         operation: JniInputUnary::Sequence,
-                        child: Box::new(resolve(element, &JniInput::auto(), stack)?),
-                    });
+                        child: Box::new(child),
+                    },
+                )? {
+                    return Ok(tree);
                 }
                 if type_key(ty) == "()" {
                     return Ok(InputNode::None);
@@ -361,20 +364,7 @@ impl DeclJniDefaults {
                 )
             }
             JniInput::Leaf(JniInputLeafOp::Value) => {
-                if flat
-                    .type_info(ty)
-                    .ok()
-                    .is_some_and(|i| i.conversion.input.is_none() && i.conversion.output.is_some())
-                {
-                    return Err(format!(
-                        "`{}` has no canonical input conversion",
-                        type_key(ty)
-                    ));
-                }
-                if let Some(conversion) = flat
-                    .type_info(ty)
-                    .ok()
-                    .and_then(|i| i.conversion.input.clone())
+                if let Some(conversion) = prebindgen_declarations::input_value_conversion(flat, ty)?
                 {
                     return self.resolve_input_conversion(
                         flat,
@@ -740,20 +730,23 @@ impl DeclJniDefaults {
                         return resolve(referent, tree, stack);
                     }
                 }
-                if let Some(inner) = option_inner(ty) {
-                    return Ok(OutputNode::Unary {
+                if let Some(tree) = prebindgen_declarations::resolve_container(
+                    ty,
+                    true,
+                    |inner| resolve(inner, &JniOutput::auto(), stack),
+                    |child| JniOutput::Unary {
                         operation: JniOutputUnary::Optional,
-                        child: Box::new(resolve(inner, &JniOutput::auto(), stack)?),
-                    });
-                }
-                if let Some((element, _)) = sequence_parts(ty) {
-                    return Ok(OutputNode::Unary {
+                        child: Box::new(child),
+                    },
+                    |child| JniOutput::Unary {
                         operation: JniOutputUnary::Sequence {
                             delivery: SequenceDelivery::Auto,
                             mode: None,
                         },
-                        child: Box::new(resolve(element, &JniOutput::auto(), stack)?),
-                    });
+                        child: Box::new(child),
+                    },
+                )? {
+                    return Ok(tree);
                 }
                 if type_key(ty) == "()" {
                     return Ok(OutputNode::None);
@@ -798,27 +791,9 @@ impl DeclJniDefaults {
             }
             JniOutput::Leaf(JniOutputLeafOp::Value)
             | JniOutput::Leaf(JniOutputLeafOp::Projected(_)) => {
-                let conversion_type = prebindgen_declarations::output_referent(ty).unwrap_or(ty);
-                if flat
-                    .type_info(conversion_type)
-                    .ok()
-                    .is_some_and(|i| i.conversion.output.is_none() && i.conversion.input.is_some())
+                if let Some(conversion) =
+                    prebindgen_declarations::output_value_conversion(flat, ty, None)?
                 {
-                    return Err(format!(
-                        "`{}` has no canonical output conversion",
-                        type_key(ty)
-                    ));
-                }
-                let converted = flat
-                    .type_info(ty)
-                    .ok()
-                    .and_then(|i| i.conversion.output.clone())
-                    .or_else(|| {
-                        prebindgen_declarations::output_referent(ty)
-                            .and_then(|t| flat.type_info(t).ok())
-                            .and_then(|i| i.conversion.output.clone())
-                    });
-                if let Some(conversion) = converted {
                     if let JniOutput::Leaf(JniOutputLeafOp::Projected(policy)) = tree {
                         return self.resolve_output_value(
                             flat,
@@ -1107,11 +1082,7 @@ impl DeclJniDefaults {
                 children: vec![],
             });
         }
-        if let Some(c) = flat
-            .type_info(ty)
-            .ok()
-            .and_then(|i| i.conversion.input.clone())
-        {
+        if let Some(c) = prebindgen_declarations::input_value_conversion(flat, ty)? {
             return self.resolve_input_conversion(
                 flat,
                 codec,
@@ -1122,17 +1093,20 @@ impl DeclJniDefaults {
                 stack,
             );
         }
-        if let Some(inner) = prebindgen_flat::option_inner(ty) {
-            return Ok(InputNode::Unary {
+        if let Some(tree) = prebindgen_declarations::resolve_container(
+            ty,
+            true,
+            |inner| self.resolve_input_value(flat, codec, inner, extra, stack),
+            |child| JniInput::Unary {
                 operation: JniInputUnary::Optional,
-                child: Box::new(self.resolve_input_value(flat, codec, inner, extra, stack)?),
-            });
-        }
-        if let Some((inner, _)) = prebindgen_flat::sequence_parts(ty) {
-            return Ok(InputNode::Unary {
+                child: Box::new(child),
+            },
+            |child| JniInput::Unary {
                 operation: JniInputUnary::Sequence,
-                child: Box::new(self.resolve_input_value(flat, codec, inner, extra, stack)?),
-            });
+                child: Box::new(child),
+            },
+        )? {
+            return Ok(tree);
         }
         self.input(
             flat,
@@ -1171,24 +1145,23 @@ impl DeclJniDefaults {
                 stack,
             );
         }
-        if let Some(inner) = prebindgen_flat::option_inner(ty) {
-            return Ok(OutputNode::Unary {
+        if let Some(tree) = prebindgen_declarations::resolve_container(
+            ty,
+            true,
+            |inner| self.resolve_output_value(flat, codec, inner, extra, stack, getter, policy),
+            |child| JniOutput::Unary {
                 operation: JniOutputUnary::Optional,
-                child: Box::new(
-                    self.resolve_output_value(flat, codec, inner, extra, stack, getter, policy)?,
-                ),
-            });
-        }
-        if let Some((inner, _)) = prebindgen_flat::sequence_parts(ty) {
-            return Ok(OutputNode::Unary {
+                child: Box::new(child),
+            },
+            |child| JniOutput::Unary {
                 operation: JniOutputUnary::Sequence {
                     delivery: prebindgen_declarations::SequenceDelivery::Value,
                     mode: policy.map(|p| p.mode),
                 },
-                child: Box::new(
-                    self.resolve_output_value(flat, codec, inner, extra, stack, getter, policy)?,
-                ),
-            });
+                child: Box::new(child),
+            },
+        )? {
+            return Ok(tree);
         }
         self.output(
             flat,

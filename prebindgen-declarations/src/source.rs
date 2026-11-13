@@ -327,12 +327,82 @@ pub fn resolve_conversion<T, R>(
     result
 }
 
+/// Resolve an Option or sequence payload, leaving non-container types to the caller.
+/// Adapters can keep native collection carriers as leaves by disabling sequence expansion.
+/// Child resolution and node construction are independent of the adapter vocabulary.
+pub fn resolve_container<T>(
+    ty: &Type,
+    expand_sequence: bool,
+    resolve: impl FnOnce(&Type) -> Result<T>,
+    optional: impl FnOnce(T) -> T,
+    sequence: impl FnOnce(T) -> T,
+) -> Result<Option<T>> {
+    if let Some(inner) = prebindgen_flat::option_inner(ty) {
+        return resolve(inner).map(optional).map(Some);
+    }
+    if let Some((element, _)) = prebindgen_flat::sequence_parts(ty).filter(|_| expand_sequence) {
+        return resolve(element).map(sequence).map(Some);
+    }
+    Ok(None)
+}
+
+/// Find a canonical input representation, rejecting a type configured only for output.
+pub fn input_value_conversion<M: Schema>(
+    flat: &Flat<M>,
+    ty: &Type,
+) -> Result<Option<prebindgen_flat::ValueConversion>> {
+    let Some(info) = flat.type_info(ty).ok() else {
+        return Ok(None);
+    };
+    if info.conversion.input.is_none() && info.conversion.output.is_some() {
+        return Err(format!(
+            "`{}` has no canonical input conversion",
+            type_key(ty)
+        ));
+    }
+    Ok(info.conversion.input.clone())
+}
+
+/// Override a named field through accessor and typed-expansion wrappers.
+/// The adapter identifies the field map and transparent wrapper child; no tree copy is needed.
+pub fn override_output_field<T>(
+    mut tree: T,
+    name: String,
+    output: T,
+    fields: impl Fn(&mut T) -> Option<&mut BTreeMap<String, T>>,
+    child: impl Fn(&mut T) -> Option<&mut T>,
+) -> T {
+    let mut current = &mut tree;
+    loop {
+        // Keep the mutable borrows separate: either edit this map or descend.
+        if let Some(overrides) = fields(current) {
+            assert!(
+                overrides.insert(name, output).is_none(),
+                "duplicate field override"
+            );
+            return tree;
+        }
+        current = child(current).expect("field override requires named field decomposition");
+    }
+}
+
 /// Find a canonical output representation and validate an explicit projection of it.
 pub fn output_value_conversion<M: Schema>(
     flat: &Flat<M>,
     ty: &Type,
     policy: Option<&crate::Projection>,
 ) -> Result<Option<prebindgen_flat::ValueConversion>> {
+    let conversion_type = crate::output_referent(ty).unwrap_or(ty);
+    if flat
+        .type_info(conversion_type)
+        .ok()
+        .is_some_and(|i| i.conversion.output.is_none() && i.conversion.input.is_some())
+    {
+        return Err(format!(
+            "`{}` has no canonical output conversion",
+            type_key(ty)
+        ));
+    }
     let conversion = flat
         .type_info(ty)
         .ok()
@@ -671,6 +741,92 @@ mod tests {
                 .map(|i| (i, Default::default())),
         )
         .unwrap()
+    }
+
+    #[test]
+    fn container_fallback_respects_native_collection_leaves_and_child_errors() {
+        let resolve = |ty: &Type| Ok(type_key(ty));
+        assert_eq!(
+            resolve_container(
+                &syn::parse_quote!(Option<i64>),
+                false,
+                resolve,
+                |child| format!("optional({child})"),
+                |child| format!("sequence({child})")
+            )
+            .unwrap(),
+            Some("optional(i64)".into())
+        );
+        assert_eq!(
+            resolve_container(
+                &syn::parse_quote!(Vec<i64>),
+                true,
+                resolve,
+                |child| format!("optional({child})"),
+                |child| format!("sequence({child})")
+            )
+            .unwrap(),
+            Some("sequence(i64)".into())
+        );
+        let native: Option<String> = resolve_container(
+            &syn::parse_quote!(Vec<i64>),
+            false,
+            |_| panic!("native collection must remain a leaf"),
+            |_| unreachable!(),
+            |_| unreachable!(),
+        )
+        .unwrap();
+        assert!(native.is_none());
+        let error = resolve_container(
+            &syn::parse_quote!(Option<i64>),
+            true,
+            |_| Err::<String, _>("child conversion failed".into()),
+            |child| child,
+            |child| child,
+        )
+        .unwrap_err();
+        assert_eq!(error, "child conversion failed");
+    }
+
+    #[test]
+    fn named_field_edits_need_no_cloning_or_placeholder_operation() {
+        enum View {
+            Fields(BTreeMap<String, Self>),
+            Wrapper(Box<Self>),
+            Value,
+        }
+        let tree = View::Wrapper(Box::new(View::Wrapper(Box::new(View::Fields(
+            BTreeMap::new(),
+        )))));
+        let result = override_output_field(
+            tree,
+            "field".into(),
+            View::Value,
+            |tree| {
+                if let View::Fields(fields) = tree {
+                    Some(fields)
+                } else {
+                    None
+                }
+            },
+            |tree| {
+                if let View::Wrapper(child) = tree {
+                    Some(child)
+                } else {
+                    None
+                }
+            },
+        );
+        let View::Wrapper(outer) = result else {
+            panic!("lost outer wrapper")
+        };
+        let View::Wrapper(inner) = *outer else {
+            panic!("lost inner wrapper")
+        };
+        let View::Fields(fields) = *inner else {
+            panic!("lost fields")
+        };
+        assert!(matches!(fields.get("field"), Some(View::Value)));
     }
 
     #[test]

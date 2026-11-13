@@ -8,6 +8,8 @@
 //! [`compile_resolved`] compiles that model using the adapter's [`Codec`].
 //! All generation settings and resolved conversions belong to Flat.
 #![warn(missing_docs)]
+mod builders;
+pub use builders::{getter_view, DeclError, DeclInputAlternatives};
 mod convert;
 pub use convert::{
     conversion_borrows, prepare_value_conversions, validate_conversion, DeclConvert,

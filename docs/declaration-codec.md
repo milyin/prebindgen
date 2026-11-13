@@ -78,6 +78,32 @@ callbacks instead of a trait describing every supported operation.
 | `resolve_callback` | Merge callback overrides, determine ownership and reverse directions | Argument and result resolution |
 | `input_children` / `output_children` | Traverse structural children across arrow directions | Adapter-specific source-reference handling |
 
+The same rule applies to the user-facing builders. `DeclInputAlternatives<T>`
+handles alternative order and explicit temporary reconstruction, including the
+empty expansion's fallback to the owned type's default. `getter_view` checks
+accessor references and preserves view names. The C and JNI facades supply the
+few node constructors needed by these operations and keep their existing fluent
+methods. Return views use an ordinary `Vec`; field builders keep their small
+accessor/override maps locally. `DeclError<I, O>` holds an error type and its mapper.
+The independent test adapter uses `DeclInputAlternatives`, `getter_view` and the
+shared source-resolution helpers too.
+
+`resolve_container` shares Option/sequence fallback where payloads and elements
+use the same child rule; adapters choose whether a collection is a native leaf
+and construct their own wrappers. The direct-value paths that select different
+payload/element defaults or check collection projections keep that logic local.
+`input_value_conversion` and `output_value_conversion` share canonical conversion
+lookup and direction checks. `override_output_field` edits named fields through
+adapter-identified wrappers in place, without cloning the tree or substituting a
+placeholder node.
+
+Generalization stops where it adds more machinery than it removes. Small enum
+constructors, request dispatch and source-reference matching stay in each adapter.
+C ownership decisions and JNI record/bulk policies stay there as well. Sharing
+those matches would require another common operation dictionary or a set of
+callbacks larger than the local operation itself. The shared helpers instead own
+the multi-step behavior that must remain consistent between adapters.
+
 For example, constructor resolution does not require a complete `Codec` or
 support for optionals, collections, callbacks or bulk transport:
 

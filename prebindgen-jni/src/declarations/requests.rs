@@ -525,54 +525,35 @@ impl JniOutputRequests for JniOutput<JniInputRequest, JniOutputRequest> {
     }
     /// Append a consuming accessor followed by owned field decomposition.
     fn fields_into(self, view: Self) -> Self {
-        let JniOutput::Unary {
-            operation: JniOutputUnary::Getter { function },
-            child: output,
-        } = view
-        else {
-            panic!("fields_into requires a fields! accessor")
-        };
-        let JniOutput::Request(JniOutputRequest::NamedFields { overrides, .. }) = *output else {
-            panic!("fields_into requires named fields")
-        };
-        self.view(JniOutput::Unary {
-            operation: JniOutputUnary::Into { function },
-            child: Box::new(JniOutput::Request(JniOutputRequest::NamedFields {
-                overrides,
-                mode: ProjectionMode::Owned,
-            })),
-        })
+        self.view(owned_field_view(view))
     }
     /// Deprecated spelling of [`JniOutput::fields_into`].
     fn fields_self_into(self, view: Self) -> Self {
         self.fields_into(view)
     }
     /// Override one named source field, preserving defaults for its siblings.
-    fn field_override(mut self, name: impl Into<String>, output: Self) -> Self {
-        match &mut self {
-            JniOutput::Request(JniOutputRequest::NamedFields { overrides, .. }) => {
-                assert!(
-                    overrides.insert(name.into(), output).is_none(),
-                    "duplicate field override"
-                );
-            }
-            JniOutput::Unary {
-                operation: JniOutputUnary::Getter { .. },
-                child: inner,
-                ..
-            }
-            | JniOutput::Unary {
-                operation: JniOutputUnary::Into { .. },
-                child: inner,
-                ..
-            }
-            | JniOutput::Request(JniOutputRequest::ForType { output: inner, .. }) => {
-                let old = std::mem::replace(inner, Box::new(JniOutput::auto()));
-                **inner = old.field_override(name, output);
-            }
-            _ => panic!("field override requires named field decomposition"),
-        }
-        self
+    fn field_override(self, name: impl Into<String>, output: Self) -> Self {
+        prebindgen_declarations::override_output_field(
+            self,
+            name.into(),
+            output,
+            |tree| match tree {
+                JniOutput::Request(JniOutputRequest::NamedFields { overrides, .. }) => {
+                    Some(overrides)
+                }
+                _ => None,
+            },
+            |tree| match tree {
+                JniOutput::Unary {
+                    operation: JniOutputUnary::Getter { .. } | JniOutputUnary::Into { .. },
+                    child,
+                }
+                | JniOutput::Request(JniOutputRequest::ForType { output: child, .. }) => {
+                    Some(child)
+                }
+                _ => None,
+            },
+        )
     }
 }
 
@@ -590,5 +571,27 @@ impl From<DeclConvert> for JniOutputRequest {
             ty: Box::new(decl.ty.clone()),
             output: Box::new(JniOutput::Request(Self::Conversion(Box::new(decl)))),
         }
+    }
+}
+
+pub(super) fn owned_field_view(
+    view: JniOutput<JniInputRequest, JniOutputRequest>,
+) -> JniOutput<JniInputRequest, JniOutputRequest> {
+    let JniOutput::Unary {
+        operation: JniOutputUnary::Getter { function },
+        child: output,
+    } = view
+    else {
+        panic!("fields_into requires a fields! accessor")
+    };
+    let JniOutput::Request(JniOutputRequest::NamedFields { overrides, .. }) = *output else {
+        panic!("fields_into requires named fields")
+    };
+    JniOutput::Unary {
+        operation: JniOutputUnary::Into { function },
+        child: Box::new(JniOutput::Request(JniOutputRequest::NamedFields {
+            overrides,
+            mode: ProjectionMode::Owned,
+        })),
     }
 }

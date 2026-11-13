@@ -549,23 +549,7 @@ impl TestOutput<TestInputRequest, TestOutputRequest> {
     }
     /// Append a consuming accessor followed by owned field decomposition.
     pub fn fields_into(self, view: Self) -> Self {
-        let TestOutput::Unary {
-            operation: TestOutputUnary::Getter { function },
-            child: output,
-        } = view
-        else {
-            panic!("fields_into requires a test_fields! accessor")
-        };
-        let TestOutput::Request(TestOutputRequest::NamedFields { overrides, .. }) = *output else {
-            panic!("fields_into requires named fields")
-        };
-        self.view(TestOutput::Unary {
-            operation: TestOutputUnary::Into { function },
-            child: Box::new(TestOutput::Request(TestOutputRequest::NamedFields {
-                overrides,
-                mode: ProjectionMode::Owned,
-            })),
-        })
+        self.view(owned_field_view(view))
     }
     /// Deprecated spelling of [`TestOutput::fields_into`].
     #[deprecated(note = "use fields_into instead")]
@@ -573,31 +557,28 @@ impl TestOutput<TestInputRequest, TestOutputRequest> {
         self.fields_into(view)
     }
     /// Override one named source field, preserving defaults for its siblings.
-    pub fn field_override(mut self, name: impl Into<String>, output: Self) -> Self {
-        match &mut self {
-            TestOutput::Request(TestOutputRequest::NamedFields { overrides, .. }) => {
-                assert!(
-                    overrides.insert(name.into(), output).is_none(),
-                    "duplicate field override"
-                );
-            }
-            TestOutput::Unary {
-                operation: TestOutputUnary::Getter { .. },
-                child: inner,
-                ..
-            }
-            | TestOutput::Unary {
-                operation: TestOutputUnary::Into { .. },
-                child: inner,
-                ..
-            }
-            | TestOutput::Request(TestOutputRequest::ForType { output: inner, .. }) => {
-                let old = std::mem::replace(inner, Box::new(TestOutput::auto()));
-                **inner = old.field_override(name, output);
-            }
-            _ => panic!("field override requires named field decomposition"),
-        }
-        self
+    pub fn field_override(self, name: impl Into<String>, output: Self) -> Self {
+        crate::override_output_field(
+            self,
+            name.into(),
+            output,
+            |tree| match tree {
+                TestOutput::Request(TestOutputRequest::NamedFields { overrides, .. }) => {
+                    Some(overrides)
+                }
+                _ => None,
+            },
+            |tree| match tree {
+                TestOutput::Unary {
+                    operation: TestOutputUnary::Getter { .. } | TestOutputUnary::Into { .. },
+                    child,
+                }
+                | TestOutput::Request(TestOutputRequest::ForType { output: child, .. }) => {
+                    Some(child)
+                }
+                _ => None,
+            },
+        )
     }
 }
 impl<InRequest, OutRequest> TestOutput<InRequest, OutRequest> {
@@ -654,21 +635,16 @@ impl<InRequest, OutRequest> TestOutput<InRequest, OutRequest> {
 pub struct TestExpandParam {
     /// Source type targeted by this default or occurrence override.
     pub ty: syn::Type,
-    input: TestInput<TestInputRequest, TestOutputRequest>,
+    input: crate::DeclInputAlternatives<TestInput<TestInputRequest, TestOutputRequest>>,
     bulk: bool,
-    reconstruct: bool,
 }
 impl TestExpandParam {
     /// Start an input declaration; add at least one alternative before use.
     pub fn new(ty: syn::Type) -> Self {
         Self {
             ty,
-            input: TestInput::Branch {
-                operation: TestInputBranch::Selector,
-                children: vec![],
-            },
+            input: Default::default(),
             bulk: false,
-            reconstruct: false,
         }
     }
     /// Group this expansion into a C-representation bulk carrier.
@@ -681,33 +657,31 @@ impl TestExpandParam {
     /// With no alternatives, use the owned value's default input conversion.
     /// Alternatives describe the owned referent, not the reference itself.
     pub fn reconstruct(mut self) -> Self {
-        self.reconstruct = true;
+        self.input.reconstruct();
         self
     }
     /// Append a constructor reference; its arguments use their type defaults.
     pub fn variant(mut self, function: impl Into<TestFunction>) -> Self {
-        self.input = self.input.variant(function.into().reference_name(false));
+        self.input
+            .push(TestInput::call(function.into().reference_name(false)));
         self
     }
     /// Append the type's direct language representation.
     pub fn variant_self(mut self) -> Self {
-        self.input = self.input.variant_self();
+        self.input.push(TestInput::Leaf(TestInputLeafOp::Value));
         self
     }
 }
 impl From<TestExpandParam> for TestInput<TestInputRequest, TestOutputRequest> {
     fn from(decl: TestExpandParam) -> Self {
-        let mut input = decl.input;
-        if decl.reconstruct {
-            if matches!(&input, TestInput::Branch { operation: TestInputBranch::Selector, children: arms } if arms.is_empty())
-            {
-                input = TestInput::auto();
-            }
-            input = TestInput::Unary {
-                operation: TestInputUnary::Temporary,
-                child: Box::new(input),
-            };
-        }
+        let mut input = decl
+            .input
+            .build(TestInput::selector, TestInput::auto, |input| {
+                TestInput::Unary {
+                    operation: TestInputUnary::Temporary,
+                    child: Box::new(input),
+                }
+            });
         if decl.bulk {
             input = TestInput::Unary {
                 operation: TestInputUnary::Bulk,
@@ -723,7 +697,7 @@ impl From<TestExpandParam> for TestInput<TestInputRequest, TestOutputRequest> {
 pub struct TestExpandReturn {
     /// Source type targeted by this default or occurrence override.
     pub ty: syn::Type,
-    output: TestOutput<TestInputRequest, TestOutputRequest>,
+    output: Vec<TestOutput<TestInputRequest, TestOutputRequest>>,
     bulk: bool,
 }
 impl TestExpandReturn {
@@ -731,10 +705,7 @@ impl TestExpandReturn {
     pub fn new(ty: syn::Type) -> Self {
         Self {
             ty,
-            output: TestOutput::Branch {
-                operation: TestOutputBranch::Combine,
-                children: vec![],
-            },
+            output: Default::default(),
             bulk: false,
         }
     }
@@ -752,16 +723,14 @@ impl TestExpandReturn {
     /// Shared results are observed before another view moves the owner. An
     /// owning opaque copy requires an explicit projection or cloning accessor.
     pub fn field(mut self, function: impl Into<TestFunction>) -> Self {
-        let function = function.into();
-        let name = function.foreign.clone();
-        let getter = TestOutput::getter(function.reference_name(true), TestOutput::auto());
-        self.output = self.output.view(match name {
-            Some(name) => TestOutput::Unary {
+        self.output.push(crate::getter_view(
+            function.into(),
+            |name| TestOutput::getter(name, TestOutput::auto()),
+            |name, output| TestOutput::Unary {
                 operation: TestOutputUnary::Named { name },
-                child: Box::new(getter),
+                child: Box::new(output),
             },
-            None => getter,
-        });
+        ));
         self
     }
     /// Append a getter's named record fields as separate output values.
@@ -773,12 +742,12 @@ impl TestExpandReturn {
         mut self,
         output: impl Into<TestOutput<TestInputRequest, TestOutputRequest>>,
     ) -> Self {
-        self.output = self.output.view(output.into());
+        self.output.push(output.into());
         self
     }
     /// Append a consuming accessor followed by owned field decomposition.
     pub fn fields_into(mut self, fields: TestFields) -> Self {
-        self.output = self.output.fields_into(fields.into());
+        self.output.push(owned_field_view(fields.into()));
         self
     }
     /// Deprecated spelling of [`Self::fields_into`].
@@ -788,7 +757,7 @@ impl TestExpandReturn {
     }
     /// Append the language's direct representation, bypassing this type's default.
     pub fn field_self(mut self) -> Self {
-        self.output = self.output.field_self();
+        self.output.push(TestOutput::Leaf(TestOutputLeafOp::Value));
         self
     }
     /// Append an explicit shared projection. Owning opaque representations clone
@@ -802,7 +771,8 @@ impl TestExpandReturn {
     }
     /// Append a projection with explicit ownership and field policies.
     pub fn project_self(mut self, policy: Projection) -> Self {
-        self.output = self.output.project_self(policy);
+        self.output
+            .push(TestOutput::Leaf(TestOutputLeafOp::Projected(policy)));
         self
     }
 }
@@ -813,10 +783,10 @@ impl From<TestExpandReturn> for TestOutput<TestInputRequest, TestOutputRequest> 
             if decl.bulk {
                 TestOutput::Unary {
                     operation: TestOutputUnary::Bulk,
-                    child: Box::new(decl.output),
+                    child: Box::new(TestOutput::combine(decl.output)),
                 }
             } else {
-                decl.output
+                TestOutput::combine(decl.output)
             },
         )
     }
@@ -850,7 +820,7 @@ impl TestFields {
         output: impl Into<TestOutput<TestInputRequest, TestOutputRequest>>,
     ) -> Self {
         let output = match output.into() {
-            TestOutput::Request(TestOutputRequest::ForType { ty, output }) if matches!(output.as_ref(),TestOutput::Branch { operation: TestOutputBranch::Combine, children: parts } if parts.is_empty()) => {
+            TestOutput::Request(TestOutputRequest::ForType { ty, output }) if matches!(output.as_ref(), TestOutput::Branch { operation: TestOutputBranch::Combine, children } if children.is_empty()) => {
                 TestOutput::for_type(*ty, TestOutput::Leaf(TestOutputLeafOp::Discard))
             }
             output => output,
@@ -893,9 +863,10 @@ impl From<TestCallback> for TestInputRequest {
 #[derive(Clone)]
 /// This environment is discarded after prepared conversions have been installed.
 pub struct TestDefaults {
-    inputs: BTreeMap<String, TestInput<TestInputRequest, TestOutputRequest>>,
-    outputs: BTreeMap<String, TestOutput<TestInputRequest, TestOutputRequest>>,
-    errors: BTreeMap<String, String>,
+    values: crate::DeclDefaults<
+        TestInput<TestInputRequest, TestOutputRequest>,
+        TestOutput<TestInputRequest, TestOutputRequest>,
+    >,
 }
 fn input_body(
     input: TestInput<TestInputRequest, TestOutputRequest>,
@@ -950,36 +921,27 @@ impl TestDefaults {
         outputs: Vec<TestOutput<TestInputRequest, TestOutputRequest>>,
         errors: Vec<(syn::Type, String)>,
     ) -> Result<Self> {
-        let mut out = Self {
-            inputs: BTreeMap::new(),
-            outputs: BTreeMap::new(),
-            errors: BTreeMap::new(),
-        };
-        for input in inputs {
-            let TestInput::Request(TestInputRequest::ForType { ty, input }) = input else {
-                return Err("input defaults require a source type".into());
-            };
-            let key = type_key(&crate::callback::input_type(flat, &ty)?);
-            if out.inputs.insert(key, input_body(*input)).is_some() {
-                return Err("duplicate input expansion".into());
-            }
-        }
-        for output in outputs {
-            let TestOutput::Request(TestOutputRequest::ForType { ty, output }) = output else {
-                return Err("output defaults require a source type".into());
-            };
-            let key = type_key(&flat.resolve_type(&ty)?);
-            if out.outputs.insert(key, output_body(*output)).is_some() {
-                return Err("duplicate output expansion".into());
-            }
-        }
-        for (ty, function) in errors {
-            let key = type_key(&flat.resolve_type(&ty)?);
-            if out.errors.insert(key, function).is_some() {
-                return Err("duplicate error mapper for source type".into());
-            }
-        }
-        Ok(out)
+        let inputs = inputs
+            .into_iter()
+            .map(|tree| match tree {
+                TestInput::Request(TestInputRequest::ForType { ty, input }) => {
+                    Ok((*ty, input_body(*input)))
+                }
+                _ => Err("input defaults require a source type".into()),
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let outputs = outputs
+            .into_iter()
+            .map(|tree| match tree {
+                TestOutput::Request(TestOutputRequest::ForType { ty, output }) => {
+                    Ok((*ty, output_body(*output)))
+                }
+                _ => Err("output defaults require a source type".into()),
+            })
+            .collect::<Result<Vec<_>>>()?;
+        Ok(Self {
+            values: crate::DeclDefaults::new(flat, inputs, outputs, errors)?,
+        })
     }
 
     /// Resolve source-dependent operations, compile them, and atomically install one binding.
@@ -1048,7 +1010,7 @@ impl TestDefaults {
     ) -> Option<&'a str> {
         decl.error
             .as_deref()
-            .or_else(|| self.errors.get(&type_key(ty)).map(String::as_str))
+            .or_else(|| self.values.errors.get(&type_key(ty)).map(String::as_str))
     }
 
     /// Resolve every input operation against canonical source declarations before compilation.
@@ -1158,24 +1120,27 @@ impl TestDefaults {
                 let key = crate::callback::input_key(flat, ty)?;
                 if let Some(tree) = crate::resolve_type_default(
                     &key,
-                    &self.inputs,
+                    &self.values.inputs,
                     stack,
                     crate::Direction::Input,
                     |tree, stack| resolve(ty, tree, stack),
                 )? {
                     return Ok(tree);
                 }
-                if let Some(inner) = option_inner(ty) {
-                    return Ok(InputNode::Unary {
+                if let Some(tree) = crate::resolve_container(
+                    ty,
+                    true,
+                    |inner| resolve(inner, &TestInput::auto(), stack),
+                    |child| TestInput::Unary {
                         operation: TestInputUnary::Optional,
-                        child: Box::new(resolve(inner, &TestInput::auto(), stack)?),
-                    });
-                }
-                if let Some((element, _)) = sequence_parts(ty) {
-                    return Ok(InputNode::Unary {
+                        child: Box::new(child),
+                    },
+                    |child| TestInput::Unary {
                         operation: TestInputUnary::Sequence,
-                        child: Box::new(resolve(element, &TestInput::auto(), stack)?),
-                    });
+                        child: Box::new(child),
+                    },
+                )? {
+                    return Ok(tree);
                 }
                 if type_key(ty) == "()" {
                     return Ok(InputNode::None);
@@ -1204,21 +1169,7 @@ impl TestDefaults {
                 )
             }
             TestInput::Leaf(TestInputLeafOp::Value) => {
-                if flat
-                    .type_info(ty)
-                    .ok()
-                    .is_some_and(|i| i.conversion.input.is_none() && i.conversion.output.is_some())
-                {
-                    return Err(format!(
-                        "`{}` has no canonical input conversion",
-                        type_key(ty)
-                    ));
-                }
-                if let Some(conversion) = flat
-                    .type_info(ty)
-                    .ok()
-                    .and_then(|i| i.conversion.input.clone())
-                {
+                if let Some(conversion) = crate::input_value_conversion(flat, ty)? {
                     return self.resolve_input_conversion(
                         flat,
                         codec,
@@ -1285,7 +1236,7 @@ impl TestDefaults {
             }
             TestInput::Request(TestInputRequest::Callback(declaration)) => {
                 let canonical = crate::callback::input_key(flat, ty)?;
-                let default = match self.inputs.get(&canonical) {
+                let default = match self.values.inputs.get(&canonical) {
                     Some(TestInput::Request(TestInputRequest::Callback(default))) => {
                         Some(default.as_ref())
                     }
@@ -1296,7 +1247,7 @@ impl TestDefaults {
                     ty,
                     declaration,
                     default,
-                    &self.outputs,
+                    &self.values.outputs,
                     &TestInput::auto(),
                     &TestOutput::auto(),
                     stack,
@@ -1556,7 +1507,7 @@ impl TestDefaults {
                 let key = type_key(ty);
                 if let Some(tree) = crate::resolve_type_default(
                     &key,
-                    &self.outputs,
+                    &self.values.outputs,
                     stack,
                     crate::Direction::Output,
                     |tree, stack| resolve(ty, tree, stack),
@@ -1568,20 +1519,23 @@ impl TestDefaults {
                         return resolve(referent, tree, stack);
                     }
                 }
-                if let Some(inner) = option_inner(ty) {
-                    return Ok(OutputNode::Unary {
+                if let Some(tree) = crate::resolve_container(
+                    ty,
+                    true,
+                    |inner| resolve(inner, &TestOutput::auto(), stack),
+                    |child| TestOutput::Unary {
                         operation: TestOutputUnary::Optional,
-                        child: Box::new(resolve(inner, &TestOutput::auto(), stack)?),
-                    });
-                }
-                if let Some((element, _)) = sequence_parts(ty) {
-                    return Ok(OutputNode::Unary {
+                        child: Box::new(child),
+                    },
+                    |child| TestOutput::Unary {
                         operation: TestOutputUnary::Sequence {
                             delivery: SequenceDelivery::Auto,
                             mode: None,
                         },
-                        child: Box::new(resolve(element, &TestOutput::auto(), stack)?),
-                    });
+                        child: Box::new(child),
+                    },
+                )? {
+                    return Ok(tree);
                 }
                 if type_key(ty) == "()" {
                     return Ok(OutputNode::None);
@@ -1626,27 +1580,7 @@ impl TestDefaults {
             }
             TestOutput::Leaf(TestOutputLeafOp::Value)
             | TestOutput::Leaf(TestOutputLeafOp::Projected(_)) => {
-                let conversion_type = crate::output_referent(ty).unwrap_or(ty);
-                if flat
-                    .type_info(conversion_type)
-                    .ok()
-                    .is_some_and(|i| i.conversion.output.is_none() && i.conversion.input.is_some())
-                {
-                    return Err(format!(
-                        "`{}` has no canonical output conversion",
-                        type_key(ty)
-                    ));
-                }
-                let converted = flat
-                    .type_info(ty)
-                    .ok()
-                    .and_then(|i| i.conversion.output.clone())
-                    .or_else(|| {
-                        crate::output_referent(ty)
-                            .and_then(|t| flat.type_info(t).ok())
-                            .and_then(|i| i.conversion.output.clone())
-                    });
-                if let Some(conversion) = converted {
+                if let Some(conversion) = crate::output_value_conversion(flat, ty, None)? {
                     if let TestOutput::Leaf(TestOutputLeafOp::Projected(policy)) = tree {
                         return self.resolve_output_value(
                             flat,
@@ -1953,11 +1887,7 @@ impl TestDefaults {
                 children: vec![],
             });
         }
-        if let Some(c) = flat
-            .type_info(ty)
-            .ok()
-            .and_then(|i| i.conversion.input.clone())
-        {
+        if let Some(c) = crate::input_value_conversion(flat, ty)? {
             return self.resolve_input_conversion(
                 flat,
                 codec,
@@ -1968,17 +1898,20 @@ impl TestDefaults {
                 stack,
             );
         }
-        if let Some(inner) = prebindgen_flat::option_inner(ty) {
-            return Ok(InputNode::Unary {
+        if let Some(tree) = crate::resolve_container(
+            ty,
+            true,
+            |inner| self.resolve_input_value(flat, codec, inner, extra, stack),
+            |child| TestInput::Unary {
                 operation: TestInputUnary::Optional,
-                child: Box::new(self.resolve_input_value(flat, codec, inner, extra, stack)?),
-            });
-        }
-        if let Some((inner, _)) = prebindgen_flat::sequence_parts(ty) {
-            return Ok(InputNode::Unary {
+                child: Box::new(child),
+            },
+            |child| TestInput::Unary {
                 operation: TestInputUnary::Sequence,
-                child: Box::new(self.resolve_input_value(flat, codec, inner, extra, stack)?),
-            });
+                child: Box::new(child),
+            },
+        )? {
+            return Ok(tree);
         }
         self.input(
             flat,
@@ -2017,24 +1950,23 @@ impl TestDefaults {
                 stack,
             );
         }
-        if let Some(inner) = prebindgen_flat::option_inner(ty) {
-            return Ok(OutputNode::Unary {
+        if let Some(tree) = crate::resolve_container(
+            ty,
+            true,
+            |inner| self.resolve_output_value(flat, codec, inner, extra, stack, getter, policy),
+            |child| TestOutput::Unary {
                 operation: TestOutputUnary::Optional,
-                child: Box::new(
-                    self.resolve_output_value(flat, codec, inner, extra, stack, getter, policy)?,
-                ),
-            });
-        }
-        if let Some((inner, _)) = prebindgen_flat::sequence_parts(ty) {
-            return Ok(OutputNode::Unary {
+                child: Box::new(child),
+            },
+            |child| TestOutput::Unary {
                 operation: TestOutputUnary::Sequence {
                     delivery: crate::SequenceDelivery::Value,
                     mode: policy.map(|p| p.mode),
                 },
-                child: Box::new(
-                    self.resolve_output_value(flat, codec, inner, extra, stack, getter, policy)?,
-                ),
-            });
+                child: Box::new(child),
+            },
+        )? {
+            return Ok(tree);
         }
         self.output(
             flat,
@@ -2308,4 +2240,26 @@ pub fn source_items<'a>(
         crate::output_children(tree, names, &mut input, &mut output);
     }
     crate::collect_source_items(inputs, outputs, errors, functions, &mut input, &mut output)
+}
+
+fn owned_field_view(
+    view: TestOutput<TestInputRequest, TestOutputRequest>,
+) -> TestOutput<TestInputRequest, TestOutputRequest> {
+    let TestOutput::Unary {
+        operation: TestOutputUnary::Getter { function },
+        child: output,
+    } = view
+    else {
+        panic!("fields_into requires a test_fields! accessor")
+    };
+    let TestOutput::Request(TestOutputRequest::NamedFields { overrides, .. }) = *output else {
+        panic!("fields_into requires named fields")
+    };
+    TestOutput::Unary {
+        operation: TestOutputUnary::Into { function },
+        child: Box::new(TestOutput::Request(TestOutputRequest::NamedFields {
+            overrides,
+            mode: ProjectionMode::Owned,
+        })),
+    }
 }

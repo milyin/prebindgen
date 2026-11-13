@@ -488,54 +488,31 @@ impl COutputRequests for COutput<CInputRequest, COutputRequest> {
     }
     /// Append a consuming accessor followed by owned field decomposition.
     fn fields_into(self, view: Self) -> Self {
-        let COutput::Unary {
-            operation: COutputUnary::Getter { function },
-            child: output,
-        } = view
-        else {
-            panic!("fields_into requires a fields! accessor")
-        };
-        let COutput::Request(COutputRequest::NamedFields { overrides, .. }) = *output else {
-            panic!("fields_into requires named fields")
-        };
-        self.view(COutput::Unary {
-            operation: COutputUnary::Into { function },
-            child: Box::new(COutput::Request(COutputRequest::NamedFields {
-                overrides,
-                mode: ProjectionMode::Owned,
-            })),
-        })
+        self.view(owned_field_view(view))
     }
     /// Deprecated spelling of [`COutput::fields_into`].
     fn fields_self_into(self, view: Self) -> Self {
         self.fields_into(view)
     }
     /// Override one named source field, preserving defaults for its siblings.
-    fn field_override(mut self, name: impl Into<String>, output: Self) -> Self {
-        match &mut self {
-            COutput::Request(COutputRequest::NamedFields { overrides, .. }) => {
-                assert!(
-                    overrides.insert(name.into(), output).is_none(),
-                    "duplicate field override"
-                );
-            }
-            COutput::Unary {
-                operation: COutputUnary::Getter { .. },
-                child: inner,
-                ..
-            }
-            | COutput::Unary {
-                operation: COutputUnary::Into { .. },
-                child: inner,
-                ..
-            }
-            | COutput::Request(COutputRequest::ForType { output: inner, .. }) => {
-                let old = std::mem::replace(inner, Box::new(COutput::auto()));
-                **inner = old.field_override(name, output);
-            }
-            _ => panic!("field override requires named field decomposition"),
-        }
-        self
+    fn field_override(self, name: impl Into<String>, output: Self) -> Self {
+        prebindgen_declarations::override_output_field(
+            self,
+            name.into(),
+            output,
+            |tree| match tree {
+                COutput::Request(COutputRequest::NamedFields { overrides, .. }) => Some(overrides),
+                _ => None,
+            },
+            |tree| match tree {
+                COutput::Unary {
+                    operation: COutputUnary::Getter { .. } | COutputUnary::Into { .. },
+                    child,
+                }
+                | COutput::Request(COutputRequest::ForType { output: child, .. }) => Some(child),
+                _ => None,
+            },
+        )
     }
 }
 impl From<DeclConvert> for CInputRequest {
@@ -552,5 +529,27 @@ impl From<DeclConvert> for COutputRequest {
             ty: Box::new(decl.ty.clone()),
             output: Box::new(COutput::Request(Self::Conversion(Box::new(decl)))),
         }
+    }
+}
+
+pub(super) fn owned_field_view(
+    view: COutput<CInputRequest, COutputRequest>,
+) -> COutput<CInputRequest, COutputRequest> {
+    let COutput::Unary {
+        operation: COutputUnary::Getter { function },
+        child: output,
+    } = view
+    else {
+        panic!("fields_into requires a fields! accessor")
+    };
+    let COutput::Request(COutputRequest::NamedFields { overrides, .. }) = *output else {
+        panic!("fields_into requires named fields")
+    };
+    COutput::Unary {
+        operation: COutputUnary::Into { function },
+        child: Box::new(COutput::Request(COutputRequest::NamedFields {
+            overrides,
+            mode: ProjectionMode::Owned,
+        })),
     }
 }

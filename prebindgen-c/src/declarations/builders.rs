@@ -4,52 +4,43 @@ use super::*;
 pub struct DeclCExpandParam {
     /// Source type targeted by this default or occurrence override.
     pub ty: syn::Type,
-    input: CInput<CInputRequest, COutputRequest>,
-    reconstruct: bool,
+    input: prebindgen_declarations::DeclInputAlternatives<CInput<CInputRequest, COutputRequest>>,
 }
 impl DeclCExpandParam {
     /// Start an input declaration; add at least one alternative before use.
     pub fn new(ty: syn::Type) -> Self {
         Self {
             ty,
-            input: CInput::Branch {
-                operation: CInputBranch::Selector,
-                children: vec![],
-            },
-            reconstruct: false,
+            input: Default::default(),
         }
     }
     /// Explicitly construct an owned temporary and borrow it for the source call.
     /// With no alternatives, use the owned value's default input conversion.
     /// Alternatives describe the owned referent, not the reference itself.
     pub fn reconstruct(mut self) -> Self {
-        self.reconstruct = true;
+        self.input.reconstruct();
         self
     }
     /// Append a constructor reference; its arguments use their type defaults.
     pub fn variant(mut self, function: impl Into<DeclCFunction>) -> Self {
-        self.input = self.input.variant(function.into().reference_name(false));
+        self.input
+            .push(CInput::call(function.into().reference_name(false)));
         self
     }
     /// Append the type's direct language representation.
     pub fn variant_self(mut self) -> Self {
-        self.input = self.input.variant_self();
+        self.input.push(CInput::Leaf(CInputLeafOp::Value));
         self
     }
 }
 impl From<DeclCExpandParam> for CInput<CInputRequest, COutputRequest> {
     fn from(decl: DeclCExpandParam) -> Self {
-        let mut input = decl.input;
-        if decl.reconstruct {
-            if matches ! (& input , CInput :: Branch { operation : CInputBranch :: Selector , children : arms } if arms . is_empty ())
-            {
-                input = CInput::auto();
-            }
-            input = CInput::Unary {
+        let input = decl
+            .input
+            .build(CInput::selector, CInput::auto, |input| CInput::Unary {
                 operation: CInputUnary::Temporary,
                 child: Box::new(input),
-            };
-        }
+            });
         CInput::for_type(decl.ty, input)
     }
 }
@@ -58,33 +49,28 @@ impl From<DeclCExpandParam> for CInput<CInputRequest, COutputRequest> {
 pub struct DeclCExpandReturn {
     /// Source type targeted by this default or occurrence override.
     pub ty: syn::Type,
-    output: COutput<CInputRequest, COutputRequest>,
+    output: Vec<COutput<CInputRequest, COutputRequest>>,
 }
 impl DeclCExpandReturn {
     /// Start an output declaration; add views before registering a type default.
     pub fn new(ty: syn::Type) -> Self {
         Self {
             ty,
-            output: COutput::Branch {
-                operation: COutputBranch::Combine,
-                children: vec![],
-            },
+            output: Default::default(),
         }
     }
     /// Append a getter view. An explicit `.name()` labels the delivered view.
     /// Shared results are observed before another view moves the owner. An
     /// owning opaque copy requires an explicit projection or cloning accessor.
     pub fn field(mut self, function: impl Into<DeclCFunction>) -> Self {
-        let function = function.into();
-        let name = function.foreign.clone();
-        let getter = COutput::getter(function.reference_name(true), COutput::auto());
-        self.output = self.output.view(match name {
-            Some(name) => COutput::Unary {
+        self.output.push(prebindgen_declarations::getter_view(
+            function.into(),
+            |name| COutput::getter(name, COutput::auto()),
+            |name, output| COutput::Unary {
                 operation: COutputUnary::Named { name },
-                child: Box::new(getter),
+                child: Box::new(output),
             },
-            None => getter,
-        });
+        ));
         self
     }
     /// Append a getter's named record fields as separate output values.
@@ -93,12 +79,13 @@ impl DeclCExpandReturn {
     }
     /// Append another explicit output view.
     pub fn view(mut self, output: impl Into<COutput<CInputRequest, COutputRequest>>) -> Self {
-        self.output = self.output.view(output.into());
+        self.output.push(output.into());
         self
     }
     /// Append a consuming accessor followed by owned field decomposition.
     pub fn fields_into(mut self, fields: DeclCFields) -> Self {
-        self.output = self.output.fields_into(fields.into());
+        self.output
+            .push(super::requests::owned_field_view(fields.into()));
         self
     }
     /// Deprecated spelling of [`Self::fields_into`].
@@ -108,7 +95,7 @@ impl DeclCExpandReturn {
     }
     /// Append the language's direct representation, bypassing this type's default.
     pub fn field_self(mut self) -> Self {
-        self.output = self.output.field_self();
+        self.output.push(COutput::Leaf(COutputLeafOp::Value));
         self
     }
     /// Append an explicit shared projection. Owning opaque representations clone
@@ -122,13 +109,14 @@ impl DeclCExpandReturn {
     }
     /// Append a projection with explicit ownership and field policies.
     pub fn project_self(mut self, policy: Projection) -> Self {
-        self.output = self.output.project_self(policy);
+        self.output
+            .push(COutput::Leaf(COutputLeafOp::Projected(policy)));
         self
     }
 }
 impl From<DeclCExpandReturn> for COutput<CInputRequest, COutputRequest> {
     fn from(decl: DeclCExpandReturn) -> Self {
-        COutput::for_type(decl.ty, decl.output)
+        COutput::for_type(decl.ty, COutput::combine(decl.output))
     }
 }
 /// A source accessor followed by named field decomposition.
@@ -159,7 +147,7 @@ impl DeclCFields {
         output: impl Into<COutput<CInputRequest, COutputRequest>>,
     ) -> Self {
         let output = match output.into() {
-            COutput::Request(COutputRequest::ForType { ty, output }) if matches ! (output . as_ref () , COutput :: Branch { operation : COutputBranch :: Combine , children : parts } if parts . is_empty ()) => {
+            COutput::Request(COutputRequest::ForType { ty, output }) if matches!(output.as_ref(), COutput::Branch { operation: COutputBranch::Combine, children } if children.is_empty()) => {
                 COutput::for_type(*ty, COutput::Leaf(COutputLeafOp::Discard))
             }
             output => output,
@@ -182,20 +170,11 @@ impl From<DeclCFields> for COutput<CInputRequest, COutputRequest> {
         )
     }
 }
-/// A type-wide source-error message mapping.
-#[derive(Clone, Debug)]
-pub struct DeclCError {
-    /// Source error type.
-    pub ty: syn::Type,
-    /// Source helper taking E or &E and returning String.
-    pub mapper: DeclCFunction,
-}
-impl DeclCError {
-    /// Select the source helper for this error type.
-    pub fn new(ty: syn::Type, mapper: DeclCFunction) -> Self {
-        Self { ty, mapper }
-    }
-}
+/// A type-wide source-error mapping using this adapter's function declaration.
+pub type DeclCError = prebindgen_declarations::DeclError<
+    CInput<CInputRequest, COutputRequest>,
+    COutput<CInputRequest, COutputRequest>,
+>;
 /// A type-wide input, output, or error-mapping declaration.
 /// Generators immediately consume these builders into their conversion trees.
 #[derive(Clone, Debug)]
