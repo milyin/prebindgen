@@ -51,6 +51,8 @@ pub struct JniEnumGroup {
     pub classes: Vec<String>,
     /// Field property names in each variant.
     pub fields: Vec<Vec<String>>,
+    /// Declared Kotlin property types in each variant, retained with its representation.
+    pub property_types: Vec<Vec<String>>,
     /// Public Kotlin input binding.
     pub root: String,
 }
@@ -138,6 +140,16 @@ pub(crate) fn encoding(request: EnumVariants<'_, JniCodec>) -> Result<EnumEncodi
             ty: request.ty.clone(),
             variants: names,
             classes,
+            property_types: source
+                .variants
+                .iter()
+                .map(|v| {
+                    v.fields
+                        .iter()
+                        .map(|f| f.metadata.kotlin_type.clone())
+                        .collect()
+                })
+                .collect(),
             fields: source
                 .variants
                 .iter()
@@ -230,9 +242,13 @@ pub(crate) fn input(
         for (field_index, (_, node)) in fields.iter().enumerate() {
             let mut child = kotlin::input_kotlin_when(node, context, &selected)?;
             child.prepare_arguments(kotlin::input_handles(node, false))?;
-            if child.parameters.len() > 1 {
-                return Err("ordinary enum fields require one Kotlin property".into());
-            }
+            data::check_property_input(&meta.property_types[index][field_index], &child.parameters)
+                .map_err(|error| {
+                    format!(
+                        "{class}.{}.{}: {error}",
+                        meta.classes[index], meta.fields[index][field_index]
+                    )
+                })?;
             if let Some(parameter) = child.parameters.first() {
                 let (parameter_name, ty) = parameter
                     .split_once(": ")
@@ -319,6 +335,10 @@ pub(crate) fn output(
                 WireNode::Branch { children, .. } => children,
                 _ => return Err("enum arm must group fields".into()),
             })?;
+            for ((_, node), expected) in fields.iter().zip(&meta.property_types[index]) {
+                let field = kotlin::output_kotlin_scoped(node, &ctx, owners)?;
+                data::check_property_output(expected, &field.result_types)?;
+            }
             let mut delivered = child.delivered.into_iter();
             let args = fields
                 .iter()

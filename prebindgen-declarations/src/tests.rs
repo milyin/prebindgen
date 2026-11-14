@@ -493,7 +493,7 @@ fn declarations_reject_unknown_or_mismatched_field_overrides() {
         (
             "missing",
             test_expand_return!(Vec<u8>).field_self(),
-            "unknown output field",
+            "unknown record field",
         ),
         (
             "data",
@@ -2370,7 +2370,7 @@ fn helper_references_reject_binding_only_decorations() {
             .is_err()
     );
     assert!(std::panic::catch_unwind(|| test_expand_return!(T)
-        .field(test_fun!(get).expand_return(test_expand_return!(i64).field_self())))
+        .field(test_fun!(get).expand_param("receiver", test_expand_param!(T).variant_self())))
     .is_err());
 }
 

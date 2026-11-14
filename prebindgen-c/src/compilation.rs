@@ -231,7 +231,10 @@ impl<C: Codec<InOps = CInputOps, OutOps = COutputOps, CompileState = CCompileSta
             }
             | CInput::Branch {
                 operation:
-                    CInputBranch::ConfigEnumFields(never) | CInputBranch::ConfigVariantFields(never),
+                    CInputBranch::ConfigEnumFields(never)
+                    | CInputBranch::ConfigVariantFields(never)
+                    | CInputBranch::ConfigNamedFields(never)
+                    | CInputBranch::ConfigConstructorArguments(never),
                 ..
             }
             | CInput::Arrow {

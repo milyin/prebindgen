@@ -210,5 +210,8 @@ fn grouped_enum_fields_reject_multiple_logical_output_values() {
         )
         .build();
     let error = generated.err().unwrap();
-    assert!(error.contains("one Kotlin value"), "{error}");
+    assert!(
+        error.contains("a grouped Kotlin property requires exactly one output value"),
+        "{error}"
+    );
 }

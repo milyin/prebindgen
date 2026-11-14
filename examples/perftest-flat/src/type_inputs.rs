@@ -93,6 +93,11 @@ pub struct TypeInputRow {
 pub fn type_input_row(value: TypeInputRow) -> i64 {
     value.a.value + value.b.value
 }
+/// Covertest counterpart that receives the record through separate foreign fields.
+#[prebindgen]
+pub fn type_input_row_fields(value: TypeInputRow) -> i64 {
+    type_input_row(value)
+}
 fn sum(values: Vec<TypeInputRow>) -> i64 {
     values.iter().map(|r| r.a.value + r.b.value).sum()
 }

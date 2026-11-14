@@ -4381,10 +4381,11 @@ mod compilation;
 pub mod operations;
 
 pub use operations::{
-    CInput, CInputArrow, CInputBranch, CInputConfig, CInputConfigArrow, CInputConfigBranch,
-    CInputConfigLeafOp, CInputConfigOps, CInputConfigUnary, CInputLeafOp, CInputOps, CInputUnary,
-    CNamedFields, COutput, COutputBranch, COutputConfig, COutputConfigBranch, COutputConfigLeafOp,
-    COutputConfigOps, COutputConfigUnary, COutputLeafOp, COutputOps, COutputUnary, CVariantFields,
+    CConstructorArguments, CInput, CInputArrow, CInputBranch, CInputConfig, CInputConfigArrow,
+    CInputConfigBranch, CInputConfigLeafOp, CInputConfigOps, CInputConfigUnary, CInputFields,
+    CInputLeafOp, CInputOps, CInputUnary, CNamedFields, COutput, COutputBranch, COutputConfig,
+    COutputConfigBranch, COutputConfigLeafOp, COutputConfigOps, COutputConfigUnary, COutputLeafOp,
+    COutputOps, COutputUnary, CVariantFields,
 };
 
 mod declarations;

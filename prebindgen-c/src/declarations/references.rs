@@ -24,7 +24,9 @@ pub fn source_items<'a>(
                 }
             }
             CInputConfig::Branch {
-                operation: CInputBranch::Constructor { function },
+                operation:
+                    CInputBranch::Constructor { function }
+                    | CInputBranch::ConfigConstructorArguments(CConstructorArguments { function, .. }),
                 ..
             } => names.push(function.clone()),
             _ => {}

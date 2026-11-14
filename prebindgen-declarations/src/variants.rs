@@ -3,15 +3,19 @@ use super::*;
 use std::collections::BTreeMap;
 
 /// Collect enum variant/member overrides, rejecting duplicate keys.
-pub fn overrides<'a, T>(
-    entries: impl IntoIterator<Item = (&'a str, Vec<(&'a str, T)>)>,
-) -> BTreeMap<String, BTreeMap<String, T>> {
+pub fn overrides<'a, T, Fields, Name>(
+    entries: impl IntoIterator<Item = (&'a str, Fields)>,
+) -> BTreeMap<String, BTreeMap<String, T>>
+where
+    Fields: IntoIterator<Item = (Name, T)>,
+    Name: AsRef<str>,
+{
     let mut variants = BTreeMap::new();
     for (name, fields) in entries {
         let mut members = BTreeMap::new();
         for (field, tree) in fields {
             assert!(
-                members.insert(field.into(), tree).is_none(),
+                members.insert(field.as_ref().to_owned(), tree).is_none(),
                 "duplicate enum field override"
             );
         }

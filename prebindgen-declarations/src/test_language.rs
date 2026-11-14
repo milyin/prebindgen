@@ -759,7 +759,9 @@ pub fn expand_return(ty: Type) -> TestExpandReturn {
         |function| {
             crate::getter_view(
                 function,
-                |name| TestOutputConfig::getter(name, TestOutputConfig::auto()),
+                |name, result| {
+                    TestOutputConfig::getter(name, result.unwrap_or_else(TestOutputConfig::auto))
+                },
                 |name, child| OutputNode::Unary {
                     operation: TestOutputUnary::Named { name },
                     child: Box::new(child),
@@ -797,7 +799,7 @@ pub fn fields(function: syn::Ident) -> TestFields {
         |function, overrides, _extension| {
             let (fields, children) = overrides.into_iter().unzip();
             TestOutputConfig::getter(
-                function,
+                function.expect("accessor"),
                 OutputNode::Branch {
                     operation: TestOutputBranch::ConfigNamedFields(TestNamedFields {
                         fields,

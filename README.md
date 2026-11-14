@@ -217,9 +217,75 @@ uses data classes for `BlobValue`, `Unsigned`, `Stamp`, and additional test reco
 selector alternatives, combined outputs, and package/class renaming.
 
 Data classes currently require owned occurrences and at least one field.
-Records containing handles, including nested ones, support returns only. Declare
-member handle types with `ptr_class!`. Kotlin callers close each handle member;
+Records containing handles require explicit input ownership declarations, as shown below.
+Declare member handle types with `ptr_class!`. Kotlin callers close each handle member;
 the data class has no collective `close()`, and `copy()` shares handle objects.
+
+Named input fields configure construction of a Rust record. JNI can either expose
+those fields as separate Kotlin parameters (`variant_fields`) or receive a declared
+Kotlin data-class instance (`variant_record`). The latter explicitly consumes owned
+handle fields; it never infers a clone. Select a copying constructor for a field
+that must remain usable by the caller:
+
+```rust,ignore
+use prebindgen_jni::{expand_param, expand_return, fields, fun, param_fields, prelude::*};
+
+.expand(expand_param!(Row).variant_record(param_fields!()
+    .field("observed", expand_param!(Handle).variant(fun!(clone_handle)))))
+.package(package!().fun(fun!(accept_rows).expand_param("rows",
+    expand_param!(Vec<Row>).element(expand_param!(Row).default()).bulk())))
+```
+
+Here `clone_handle(&Handle) -> Handle` is an explicitly selected source helper.
+Unspecified grouped fields keep their canonical Kotlin property representation;
+expanded fields inherit their configured input defaults. A grouped field override
+must still accept the declared property's Kotlin type. For example, a constructor
+accepting `Long` cannot consume a `Handle` property. Configure nested handle-bearing
+records with their own record declarations.
+
+Constructor and getter helpers accept occurrence-local conversions. Other calls
+and type defaults retain their settings:
+
+```rust,ignore
+expand_param!(Envelope).variant(fun!(envelope_new)
+    .expand_param("rows", expand_param!(Vec<Row>)
+        .element(expand_param!(Row).variant_record(param_fields!())).bulk()))
+
+expand_return!(Owner).field(fun!(owner_child)
+    .expand_return(expand_return!(Child).field_self_ref()))
+
+// Decompose this record directly, without creating an accessor function.
+expand_return!(Envelope).fields_into(fields!()
+    .field("rows", expand_return!(Vec<Row>).field_self()))
+```
+
+`param_fields!()` names incoming record or enum-variant fields. `fields!()` names
+returned fields of the source record itself; `fields!(getter)` still selects an
+accessor's returned fields. `fields_into` moves the record fields, while `fields`
+observes them. A borrowed occurrence cannot satisfy `fields_into`.
+
+JNI collection and optional declarations compose at the selected level with
+`element(...)` and `optional(...)`. Output `element` preserves automatic bulk
+selection; `element_objects(...)` explicitly selects ordinary object delivery.
+`bulk()` packs the declaration on which it is selected. These choices apply to
+function parameters/results and, with their directions reversed, callback
+arguments/results. `default()` inherits an occurrence's configured conversion;
+`variant_self()`/`field_self()` select its canonical value representation.
+
+For payload enums, `enum_fields` expands tags and fields; `enum_value` selects a
+declared Kotlin sealed value. Both accept named variant-field overrides, inherit
+unspecified fields and validate variant/member names. Constructor alternatives
+remain `.variant(fun!(...))`:
+
+```rust,ignore
+expand_param!(Event).enum_value([
+    ("Packet", param_fields!().field("owner",
+        expand_param!(Handle).variant(fun!(clone_handle))))
+])
+expand_return!(Event).enum_fields([
+    ("Packet", fields!().field("timestamp", convert!(Timestamp).output(fun!(timestamp_millis))))
+])
+```
 
 Output ownership is explicit in the existing expansion hierarchy:
 
@@ -336,7 +402,7 @@ are diagnosed rather than falling back to implicit child copies.
 
 A borrowed opaque getter output without a retained owner is rejected unless its
 source reference is `'static`. Use an explicit owning conversion such as
-`.view(COutput::getter("owner_child", COutput::Leaf(COutputLeafOp::Projected(Projection::borrowed()))))`
+`.field(fun!(owner_child).expand_return(expand_return!(Child).field_self_ref()))`
 if an independent copy is intended. Direct pointer outputs of references supplied
 by a Rust function keep the existing borrow contract. Expanding those references
 with getters also requires an explicit owning conversion for opaque children;
@@ -355,7 +421,7 @@ and duplicate consuming views are rejected. Without a retained output allocation
 observing getters run before consuming views regardless of declaration order. Rust checks `Clone` requirements and rejects
 field moves from records implementing `Drop`. Native conversion or delivery failure
 drops unpublished resources; Kotlin delivery failure closes transferred handles,
-including nested members. Handle-containing records remain unsupported as inputs.
+including nested members. Inputs containing handles use explicit record-field declarations.
 
 Reference fields, data-class aliases, recursive records and invalid Kotlin field
 names are rejected with generation errors. Methods and direct
@@ -425,9 +491,9 @@ these same trees; there is no separate expansion tree to resolve later. They
 convert into preparation trees when registered. Explicit getter names stay in the
 prepared wire metadata and label Kotlin build/fold callback parameters and
 domain-error callback arguments. Duplicate names are rejected during generation.
-C rejects named getter views; its return packet fields remain positional. Direct
-`JniInput::for_type` / `JniOutput::for_type` (or C equivalents) trees remain available
-through `.input(...)` and `.output(...)` for custom preparation code.
+C rejects named getter views; its return packet fields remain positional. Direct `JniInputConfig` / `JniOutputConfig` trees (or C equivalents) remain available
+through `.input(...)` and `.output(...)` for generator-author preparation and compiler tests.
+Ordinary binding manifests use the declaration builders.
 Resolution applies project choices and language representations, resolves source
 constructor/getter references, and expands optional, sequence and record operations.
 Resolution returns `ResolvedInput<C>` or `ResolvedOutput<C>` for each occurrence,

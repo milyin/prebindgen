@@ -1295,7 +1295,16 @@ impl Codec for JniCodec {
 
         Self::source_record(flat, ty)?
             .ok_or("missing data-class representation")?
-            .mark(&mut plan.node, wire.to_string(), kotlin_condition(active))
+            .mark(
+                &mut plan.node,
+                wire.to_string(),
+                kotlin_condition(active),
+                flat.record(ty)?
+                    .fields
+                    .iter()
+                    .map(|f| f.metadata.kotlin_type.clone())
+                    .collect(),
+            )
     }
     fn output_record_metadata(
         &self,
@@ -1311,7 +1320,16 @@ impl Codec for JniCodec {
 
         Self::source_record(flat, ty)?
             .ok_or("missing data-class representation")?
-            .mark(&mut plan.outcomes.success, wire.to_string(), "true".into())
+            .mark(
+                &mut plan.outcomes.success,
+                wire.to_string(),
+                "true".into(),
+                flat.record(ty)?
+                    .fields
+                    .iter()
+                    .map(|f| f.metadata.kotlin_type.clone())
+                    .collect(),
+            )
     }
 
     fn supports_bulk(&self, _: Direction) -> bool {
@@ -2472,6 +2490,8 @@ pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
 #[cfg(test)]
 mod canonical_tests;
 #[cfg(test)]
+mod declaration_api_tests;
+#[cfg(test)]
 mod input_contract_tests;
 #[cfg(test)]
 mod output_contract_tests;
@@ -2511,11 +2531,12 @@ mod compilation;
 pub mod operations;
 
 pub use operations::{
-    JniInput, JniInputArrow, JniInputBranch, JniInputConfig, JniInputConfigArrow,
-    JniInputConfigBranch, JniInputConfigLeafOp, JniInputConfigOps, JniInputConfigUnary,
-    JniInputLeafOp, JniInputOps, JniInputUnary, JniNamedFields, JniOutput, JniOutputBranch,
-    JniOutputConfig, JniOutputConfigBranch, JniOutputConfigLeafOp, JniOutputConfigOps,
-    JniOutputConfigUnary, JniOutputLeafOp, JniOutputOps, JniOutputUnary, JniVariantFields,
+    JniConstructorArguments, JniInput, JniInputArrow, JniInputBranch, JniInputConfig,
+    JniInputConfigArrow, JniInputConfigBranch, JniInputConfigLeafOp, JniInputConfigOps,
+    JniInputConfigUnary, JniInputFields, JniInputLeafOp, JniInputOps, JniInputUnary,
+    JniNamedFields, JniOutput, JniOutputBranch, JniOutputConfig, JniOutputConfigBranch,
+    JniOutputConfigLeafOp, JniOutputConfigOps, JniOutputConfigUnary, JniOutputLeafOp, JniOutputOps,
+    JniOutputUnary, JniVariantFields,
 };
 
 mod declarations;
@@ -2534,6 +2555,7 @@ macro_rules! fun {
 /// Traits for constructing and inspecting this adapter's conversion trees.
 pub mod prelude {
     pub use crate::{
-        JniBulkExpansion, JniInputConfigExt, JniInputExt, JniOutputConfigExt, JniOutputExt,
+        JniBulkExpansion, JniInputConfigExt, JniInputExpansion, JniInputExt, JniOutputConfigExt,
+        JniOutputExpansion, JniOutputExt,
     };
 }

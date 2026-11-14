@@ -299,7 +299,10 @@ impl<C: Codec<InOps = JniInputOps, OutOps = JniOutputOps, CompileState = JniComp
             }
             | JniInput::Branch {
                 operation:
-                    JniInputBranch::ConfigEnumFields(never) | JniInputBranch::ConfigVariantFields(never),
+                    JniInputBranch::ConfigEnumFields(never)
+                    | JniInputBranch::ConfigVariantFields(never)
+                    | JniInputBranch::ConfigNamedFields(never)
+                    | JniInputBranch::ConfigConstructorArguments(never),
                 ..
             }
             | JniInput::Arrow {

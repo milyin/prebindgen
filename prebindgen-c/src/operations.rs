@@ -111,6 +111,21 @@ pub struct CNamedFields {
     pub mode: ProjectionMode,
 }
 
+/// Source field names corresponding to explicit incoming record children.
+#[derive(Clone, Debug)]
+pub struct CInputFields {
+    /// Source field names, in the same order as the structural child conversions.
+    pub fields: Vec<String>,
+}
+/// Source constructor and names corresponding to its explicit argument children.
+#[derive(Clone, Debug)]
+pub struct CConstructorArguments {
+    /// Unqualified source constructor name.
+    pub function: String,
+    /// Source parameter names, in the same order as the structural child conversions.
+    pub parameters: Vec<String>,
+}
+
 /// Incoming callback configuration and its resolved retained-callback binding.
 #[derive(Clone, Debug)]
 pub enum CInputArrow<CallbackExpansion = Infallible> {
@@ -172,11 +187,20 @@ pub enum CInputUnary<TypeScope = Infallible> {
 }
 /// Multiple-child input operations.
 #[derive(Clone, Debug)]
-pub enum CInputBranch<EnumExpansion = Infallible, VariantExpansion = Infallible> {
+pub enum CInputBranch<
+    EnumExpansion = Infallible,
+    VariantExpansion = Infallible,
+    RecordExpansion = Infallible,
+    ConstructorExpansion = Infallible,
+> {
     /// Partially specified enum fields; children are variant branches.
     ConfigEnumFields(EnumExpansion),
     /// Partially specified fields of one source variant.
     ConfigVariantFields(VariantExpansion),
+    /// Source record fields with named occurrence-local conversion overrides.
+    ConfigNamedFields(RecordExpansion),
+    /// Source constructor with named occurrence-local argument overrides.
+    ConfigConstructorArguments(ConstructorExpansion),
 
     /// Convert source record fields in declaration order.
     Fields,
@@ -432,12 +456,14 @@ impl From<CInputUnary> for CInputConfigUnary {
     }
 }
 /// Configuration specialization of [`CInputBranch`].
-pub type CInputConfigBranch = CInputBranch<(), CVariantFields>;
+pub type CInputConfigBranch = CInputBranch<(), CVariantFields, CInputFields, CConstructorArguments>;
 impl From<CInputBranch> for CInputConfigBranch {
     fn from(operation: CInputBranch) -> Self {
         match operation {
             CInputBranch::ConfigEnumFields(never) => match never {},
-            CInputBranch::ConfigVariantFields(never) => match never {},
+            CInputBranch::ConfigVariantFields(never)
+            | CInputBranch::ConfigNamedFields(never)
+            | CInputBranch::ConfigConstructorArguments(never) => match never {},
             CInputBranch::Fields => Self::Fields,
             CInputBranch::Selector => Self::Selector,
             CInputBranch::Constructor { function } => Self::Constructor { function },

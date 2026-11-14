@@ -83,7 +83,7 @@ impl<InTree, OutTree, Extension> DeclFunction<InTree, OutTree, Extension> {
                 && self.error.is_none()
                 && !self.result_value
                 && self.callback_return.is_none(),
-            "conversion helpers only support their source name and getter name override"
+            "unsupported settings on this source helper"
         );
         assert!(
             allow_name || self.foreign.is_none(),

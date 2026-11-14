@@ -23,7 +23,24 @@ pub type DeclCFields = prebindgen_declarations::DeclFields<COutputConfig>;
 pub fn expand_param(ty: Type) -> DeclCExpandParam {
     prebindgen_declarations::DeclExpandParam::new(
         ty,
-        |function: DeclCFunction| CInputConfig::call(function.reference_name(false)),
+        |function: DeclCFunction| {
+            prebindgen_declarations::constructor_input(
+                function,
+                CInputConfig::call,
+                |function, parameters| {
+                    let (parameters, children) = parameters.into_iter().unzip();
+                    CInputConfig::Branch {
+                        operation: CInputBranch::ConfigConstructorArguments(
+                            CConstructorArguments {
+                                function,
+                                parameters,
+                            },
+                        ),
+                        children,
+                    }
+                },
+            )
+        },
         || CInputConfig::Leaf(CInputLeafOp::Value),
         |ty, alternatives, extension| {
             let input = alternatives.build(CInputConfig::selector, CInputConfig::auto, |child| {
@@ -44,7 +61,9 @@ pub fn expand_return(ty: Type) -> DeclCExpandReturn {
         |function| {
             prebindgen_declarations::getter_view(
                 function,
-                |name| COutputConfig::getter(name, COutputConfig::auto()),
+                |name, result| {
+                    COutputConfig::getter(name, result.unwrap_or_else(COutputConfig::auto))
+                },
                 |name, child| COutputConfig::Unary {
                     operation: COutputUnary::Named { name },
                     child: Box::new(child),
@@ -61,8 +80,8 @@ pub fn expand_return(ty: Type) -> DeclCExpandReturn {
         },
     )
 }
-/// Decompose a source accessor's returned record into named field views.
-pub fn fields(function: syn::Ident) -> DeclCFields {
+/// Observe named source-record fields, optionally through an accessor.
+pub fn fields(function: impl Into<Option<syn::Ident>>) -> DeclCFields {
     prebindgen_declarations::DeclFields::new(
         function,
         |output| match output {
@@ -76,16 +95,17 @@ pub fn fields(function: syn::Ident) -> DeclCFields {
         },
         |function, overrides, _extension| {
             let (fields, children) = overrides.into_iter().unzip();
-            COutputConfig::getter(
-                function,
-                COutputConfig::Branch {
-                    operation: COutputBranch::ConfigNamedFields(CNamedFields {
-                        fields,
-                        mode: prebindgen_declarations::ProjectionMode::Borrowed,
-                    }),
-                    children,
-                },
-            )
+            let output = COutputConfig::Branch {
+                operation: COutputBranch::ConfigNamedFields(CNamedFields {
+                    fields,
+                    mode: prebindgen_declarations::ProjectionMode::Borrowed,
+                }),
+                children,
+            };
+            match function {
+                Some(function) => COutputConfig::getter(function, output),
+                None => output,
+            }
         },
     )
 }
@@ -113,4 +133,21 @@ impl prebindgen_declarations::CallbackInput<CInputConfig, COutputConfig> for CIn
             CInputConfig::for_type,
         )
     }
+}
+
+/// Named input field conversions; unspecified fields inherit their input defaults.
+pub type DeclCParamFields = prebindgen_declarations::DeclFields<CInputConfig>;
+/// Start source-record or enum-variant input field declarations.
+pub fn param_fields() -> DeclCParamFields {
+    prebindgen_declarations::DeclFields::new(
+        None,
+        |input| input,
+        |_function, overrides, _extension| {
+            let (fields, children) = overrides.into_iter().unzip();
+            CInputConfig::Branch {
+                operation: CInputBranch::ConfigNamedFields(CInputFields { fields }),
+                children,
+            }
+        },
+    )
 }

@@ -64,10 +64,14 @@ fn returned() -> Return {
     Return::new(
         syn::parse_quote!(Value),
         |function| {
-            getter_view(function, Output::Leaf, |name, child| Output::Unary {
-                operation: name,
-                child: Box::new(child),
-            })
+            getter_view(
+                function,
+                |name, result| result.unwrap_or(Output::Leaf(name)),
+                |name, child| Output::Unary {
+                    operation: name,
+                    child: Box::new(child),
+                },
+            )
         },
         || Output::Leaf("direct".into()),
         |policy| Output::Leaf(format!("{:?}", policy.mode)),
@@ -83,7 +87,7 @@ fn returned() -> Return {
 }
 fn fields() -> Fields {
     Fields::new(
-        syn::parse_quote!(accessor),
+        syn::parse_str::<syn::Ident>("accessor").unwrap(),
         |output| match output {
             Output::Branch { children, .. } if children.is_empty() => {
                 Output::Leaf("discard".into())
@@ -91,7 +95,7 @@ fn fields() -> Fields {
             other => other,
         },
         |function, overrides, extension| Output::Branch {
-            operation: format!("{function}:{}", extension.unwrap().0),
+            operation: format!("{}:{}", function.expect("accessor"), extension.unwrap().0),
             children: overrides.into_values().collect(),
         },
     )
@@ -313,7 +317,7 @@ fn canonical_conversion_preparation_preserves_nonclone_adapter_settings() {
         .is_some());
 }
 #[test]
-#[should_panic(expected = "conversion helpers only support")]
+#[should_panic(expected = "unsupported settings on this source helper")]
 fn decorated_helpers_cannot_silently_discard_adapter_options() {
     parameter()
         .variant(Function::new(syn::parse_quote!(make)).with_extension(Settings("binding only")));

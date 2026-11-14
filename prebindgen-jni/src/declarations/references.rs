@@ -26,7 +26,11 @@ pub fn source_items<'a>(
                 }
             }
             JniInputConfig::Branch {
-                operation: JniInputBranch::Constructor { function },
+                operation:
+                    JniInputBranch::Constructor { function }
+                    | JniInputBranch::ConfigConstructorArguments(JniConstructorArguments {
+                        function, ..
+                    }),
                 ..
             } => names.push(function.clone()),
             _ => {}
