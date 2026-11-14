@@ -291,7 +291,7 @@ fn input_enum_fields<'a>(
 /// ```
 /// use prebindgen_jni::{expand_return,fields,fun,prelude::*};
 /// let _=expand_return!(Owner).field(fun!(child)
-///     .expand_return(expand_return!(Child).field_self_ref()));
+///     .expand_return(expand_return!(Child).field_self_cloned()));
 /// let _=expand_return!(Row).fields_into(fields!()
 ///     .field("count",expand_return!(i64).field_self()));
 /// let _=expand_return!(Vec<Row>).element(expand_return!(Row).field_self());

@@ -410,7 +410,7 @@ pub(crate) fn output_leaf(
     value: TokenStream,
     borrowed: bool,
 ) -> Result<JniOutputPlan<JniWire>> {
-    if let Some(kind @ (Value::Text | Value::Bytes)) = Value::of(ty) {
+    if let Some(kind @ (Value::Text | Value::Bytes)) = super::output_value_kind(ty) {
         let owner = format_ident!("{w}_source");
         let text = kind == Value::Text;
         let bytes = if text {

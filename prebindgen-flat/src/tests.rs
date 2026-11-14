@@ -67,6 +67,65 @@ fn static_references_are_allowed_only_in_source_returns() {
         );
     }
 }
+
+#[test]
+fn placeholder_reference_lifetimes_normalize_in_signatures() {
+    let model = parse("pub type Owner=String;pub fn ordinary(value:&Owner)->Option<&Owner>{}pub fn explicit(value:&'_ Owner)->Option<&'_ Owner>{}pub fn callback(value:impl Fn(&'_ Owner,Option<&'_ str>)){}").unwrap();
+    let ordinary = model.function("ordinary").unwrap();
+    let explicit = model.function("explicit").unwrap();
+    assert!(same_type(
+        &ordinary.params[0].ty.ty,
+        &explicit.params[0].ty.ty
+    ));
+    assert!(same_type(&ordinary.ret.ty, &explicit.ret.ty));
+    let callback = callback_signature(&model.function("callback").unwrap().params[0].ty.ty)
+        .unwrap()
+        .unwrap();
+    assert!(same_type(&callback.arguments[0], &ordinary.params[0].ty.ty));
+    assert_eq!(type_key(&callback.arguments[1]), "Option < & str >");
+    for source in [
+        "pub fn read<'a>(value:&'a str)->&'a str{}",
+        "pub fn callback(value:impl for<'a> Fn(&'a str)){}",
+        "pub struct View<'a>{pub text:&'a str}",
+    ] {
+        assert!(parse(source).is_err(), "{source}");
+    }
+}
+
+#[test]
+fn byte_cow_source_forms_are_canonical_without_general_lifetime_support() {
+    for spelling in ["Cow", "std::borrow::Cow", "::alloc::borrow::Cow"] {
+        for lifetime in ["'_", "'static"] {
+            let model = parse(&format!(
+                "pub fn bytes()->{spelling}<{lifetime},[::core::primitive::u8]>{{}}"
+            ))
+            .unwrap();
+            let result = &model.function("bytes").unwrap().ret.ty;
+            assert!(is_cow_bytes(result));
+            assert_eq!(
+                type_key(result),
+                format!(":: std :: borrow :: Cow < {lifetime} , [u8] >")
+            );
+        }
+    }
+    for result in [
+        "unrelated::Cow<'_,[u8]>",
+        "Cow<'_,str>",
+        "Cow<'_,[i8]>",
+        "Cow<'a,[u8]>",
+        "Cow<'_,[u8],u8>",
+    ] {
+        assert!(
+            parse(&format!("pub fn bytes()->{result}{{}}")).is_err(),
+            "{result}"
+        );
+    }
+    let inferred = parse("pub fn bytes(value:&[u8])->Cow<[u8]>{}").unwrap();
+    assert_eq!(
+        type_key(&inferred.function("bytes").unwrap().ret.ty),
+        ":: std :: borrow :: Cow < '_ , [u8] >"
+    );
+}
 #[test]
 fn refuses_unsupported_syntax_without_dropping_it() {
     for source in [

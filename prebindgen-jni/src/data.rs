@@ -10,8 +10,9 @@ use std::rc::Rc;
 /// including through collections, require explicit input field ownership, such as
 /// `expand_param!(Row).variant_record(param_fields!())`. Select named constructor
 /// overrides for fields that must be copied rather than consumed.
-/// Output ownership is declared with `expand_return!`: `field_self_ref()` borrows
-/// and `field_self_into()` moves, recursively. `project_self(Projection)` allows
+/// Output ownership is declared with `expand_return!`: `field_self_cloned()`
+/// permits owning copies and `field_self_into()` moves, recursively.
+/// `project_self(Projection)` allows
 /// field overrides. `field_self()` and unexpanded outputs follow the source:
 /// owned records move fields, while borrowed records observe them. Copying opaque
 /// handle fields requires an explicit borrowed projection and Rust `Clone`.

@@ -53,8 +53,10 @@ fun checkBorrowedGetters() {
         check(after[0] == before[0] && after[1] == before[1] + 1 && after[2] == before[2])
         check(after[3] == before[3] + 1 && after[4] == before[4] + if (present) 2 else 1)
         val copiedName = getterOwnerRead(owner) { number, name -> check(number == 71L); name }
+        val cowBytes = getterOwnerCowBytes(owner)
         check(!owner.isClosed)
         owner.close()
+        check(cowBytes.contentEquals(getterText.encodeToByteArray()))
         check(copiedName == getterText && copiedRows[1].text == "second")
         check(getterLeafId(clone) == 19L) // Its owning clone survives the source owner.
         clone.close()

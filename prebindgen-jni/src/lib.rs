@@ -1068,7 +1068,7 @@ impl Codec for JniCodec {
         // Materialize JVM buffers while their source is still in scope. Optional
         // payloads, getter temporaries and collection rows may be dropped before
         // final delivery, so carrying a borrowed Rust view that far is unsound.
-        if let Some(value_kind @ (Value::Text | Value::Bytes)) = Value::of(ty) {
+        if let Some(value_kind @ (Value::Text | Value::Bytes)) = output_value_kind(ty) {
             let env = prebindgen_conversions::template_parameter("environment");
             let (encode, kind) = match value_kind {
                 Value::Text => (
@@ -1130,7 +1130,7 @@ impl Codec for JniCodec {
             ),
             Some(Value::Text | Value::Bytes) => unreachable!("buffers prepared above"),
             None if borrowed => Err(format!(
-                "borrowed opaque JNI output `{}` would clone and allocate; select field_self_ref() for an explicit owning copy, or expand its fields",
+                "borrowed opaque JNI output `{}` would clone and allocate; select field_self_cloned() for an explicit owning copy, or expand its fields",
                 type_key(ty)
             )),
             None => prebindgen_conversions::boxed::output(&storage(), ty, w, v, false, |b| {
@@ -1172,7 +1172,7 @@ impl Codec for JniCodec {
             if !projection.fields.is_empty() {
                 return Err("bulk leaf projection has field overrides".into());
             }
-            if Value::of(ty).is_none() {
+            if output_value_kind(ty).is_none() {
                 JniCodec::raw().output_projected(
                     OutputLeaf::new(
                         flat,
@@ -1229,7 +1229,7 @@ impl Codec for JniCodec {
                 payload = &reference.elem;
                 value = quote!(*(#value));
             }
-            if borrowed && Value::of(payload).is_none() {
+            if borrowed && output_value_kind(payload).is_none() {
                 // The explicit projection, rather than the existence of a borrow,
                 // authorizes cloning into the Kotlin handle's owned allocation.
                 return JniCodec::raw().output_leaf(OutputLeaf::new(
@@ -1431,6 +1431,9 @@ impl JniCodec {
         if prebindgen_declarations::option_inner(ty).is_some() {
             return Err("resolve Optional operations before leaf compilation".into());
         }
+        if prebindgen_flat::is_cow_bytes(ty) {
+            return Err("JNI Cow byte inputs have no implicit conversion; select an explicit source constructor instead of silently constructing an owned Cow".into());
+        }
         let env = prebindgen_conversions::template_parameter("environment");
         let (decode, kind) = match Value::of(ty) {
             Some(Value::Scalar(p)) => (scalar::decode(p, &w), JniWire::scalar(p)),
@@ -1450,6 +1453,13 @@ impl JniCodec {
         };
         prebindgen_conversions::value::input(ty, w, v, decode, kind)
     }
+}
+
+// Cow bytes can be observed directly during output encoding. Keep this separate
+// from Value::of: decoding an input into Cow::Owned is a different operation and
+// must not become an implicit consequence of supporting borrowed byte outputs.
+fn output_value_kind(ty: &syn::Type) -> Option<Value> {
+    Value::of(ty).or_else(|| prebindgen_flat::is_cow_bytes(ty).then_some(Value::Bytes))
 }
 
 pub(crate) fn encode_array(
@@ -2487,6 +2497,8 @@ pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
     })
 }
 
+#[cfg(test)]
+mod borrowing_tests;
 #[cfg(test)]
 mod canonical_tests;
 #[cfg(test)]

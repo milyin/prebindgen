@@ -630,13 +630,21 @@ impl<M: Schema> Flat<M> {
     /// Qualify the declared names in `ty` and validate the supported source-type grammar.
     ///
     /// Accepts primitives, declared types, unit, strings, byte vectors/slices and
-    /// `Option<T>`, `Result<T, E>`, vectors and slices recursively, and references
-    /// with elided or `'static` lifetimes. A successful result does not mean
-    /// a consumer can use the type in every position. Aliases remain opaque.
+    /// `Option<T>`, `Result<T, E>`, vectors and slices recursively, byte
+    /// `Cow<'_, [u8]>`/`Cow<'static, [u8]>`, and references with elided or
+    /// `'static` lifetimes. Placeholder reference lifetimes (`&'_ T`) normalize
+    /// to elided spelling. A successful result does not mean a consumer can use
+    /// the type in every position. Aliases remain opaque.
     pub fn resolve_type(&self, ty: &Type) -> Result<Type> {
         let mut ty = ty.clone();
         struct Names<'a, T>(&'a BTreeMap<String, TypeInfo<T>>);
         impl<T> VisitMut for Names<'_, T> {
+            fn visit_type_reference_mut(&mut self, reference: &mut syn::TypeReference) {
+                if reference.lifetime.as_ref().is_some_and(|l| l.ident == "_") {
+                    reference.lifetime = None;
+                }
+                syn::visit_mut::visit_type_reference_mut(self, reference);
+            }
             fn visit_type_mut(&mut self, ty: &mut Type) {
                 if let Type::Path(p) = ty {
                     if p.qself.is_none() && p.path.segments.len() == 1 {
@@ -661,6 +669,9 @@ impl<M: Schema> Flat<M> {
                 if let Some(inner) = option_inner(ty) {
                     let inner = inner.clone();
                     *ty = syn::parse_quote!(Option<#inner>);
+                }
+                if let Some(lifetime) = cow_bytes_lifetime(ty) {
+                    *ty = syn::parse_quote!(::std::borrow::Cow<#lifetime, [u8]>);
                 }
             }
         }
@@ -706,6 +717,9 @@ impl<M: Schema> Flat<M> {
         }
         if let Some(inner) = vec_inner(ty) {
             return self.validate_type(inner);
+        }
+        if is_cow_bytes(ty) {
+            return Ok(());
         }
         if let Some((ok, err)) = result_parts(ty) {
             self.validate_type(ok)?;
@@ -797,7 +811,7 @@ fn validate_input_lifetimes(ty: &Type) -> Result<()> {
     struct Check(bool);
     impl VisitMut for Check {
         fn visit_type_reference_mut(&mut self, reference: &mut syn::TypeReference) {
-            self.0 |= reference.lifetime.is_some();
+            self.0 |= reference.lifetime.as_ref().is_some_and(|l| l.ident != "_");
             syn::visit_mut::visit_type_reference_mut(self, reference);
         }
     }
@@ -926,6 +940,59 @@ pub fn vec_inner(ty: &Type) -> Option<&Type> {
         syn::GenericArgument::Type(ty) => Some(ty),
         _ => None,
     }
+}
+
+/// Whether this is a standard byte Cow with an inferred or static lifetime.
+///
+/// Flat preserves the borrow-or-owned source shape. Adapters decide which
+/// positions can convert it; accepting the source does not authorize copying
+/// a borrowed Cow into another Rust owning buffer.
+pub fn is_cow_bytes(ty: &Type) -> bool {
+    cow_bytes_lifetime(ty).is_some()
+}
+
+fn cow_bytes_lifetime(ty: &Type) -> Option<syn::Lifetime> {
+    let Type::Path(path) = ty else { return None };
+    if path.qself.is_some() {
+        return None;
+    }
+    let name = path
+        .path
+        .segments
+        .iter()
+        .map(|s| s.ident.to_string())
+        .collect::<Vec<_>>()
+        .join("::");
+    if !matches!(
+        name.as_str(),
+        "Cow" | "std::borrow::Cow" | "alloc::borrow::Cow"
+    ) || path
+        .path
+        .segments
+        .iter()
+        .take(path.path.segments.len() - 1)
+        .any(|s| !matches!(s.arguments, syn::PathArguments::None))
+    {
+        return None;
+    }
+    let syn::PathArguments::AngleBracketed(args) = &path.path.segments.last()?.arguments else {
+        return None;
+    };
+    let mut args = args.args.iter();
+    let (lifetime, bytes) = match (args.next(), args.next(), args.next()) {
+        (Some(syn::GenericArgument::Type(Type::Slice(bytes))), None, None) => {
+            (syn::parse_quote!('_), bytes)
+        }
+        (
+            Some(syn::GenericArgument::Lifetime(lifetime)),
+            Some(syn::GenericArgument::Type(Type::Slice(bytes))),
+            None,
+        ) => (lifetime.clone(), bytes),
+        _ => return None,
+    };
+    ((lifetime.ident == "_" || lifetime.ident == "static")
+        && Primitive::from_type(&bytes.elem) == Some(Primitive::U8))
+    .then_some(lifetime)
 }
 /// Which Rust collection view an occurrence uses.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

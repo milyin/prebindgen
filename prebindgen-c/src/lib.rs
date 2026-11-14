@@ -103,7 +103,7 @@ impl CCodec {
     }
 }
 fn explicit_copy_error(ty: &syn::Type) -> String {
-    format!("borrowed opaque C output `{}` requires an explicit owning copy; select field_self_ref(), or expose a source reference for a non-owning view", prebindgen_flat::type_key(ty))
+    format!("borrowed opaque C output `{}` requires an explicit owning copy; select field_self_cloned(), or expose a source reference for a non-owning view", prebindgen_flat::type_key(ty))
 }
 impl Codec for CCodec {
     type InOps = operations::CInputOps;
@@ -410,6 +410,9 @@ impl Codec for CCodec {
                 return Err(explicit_copy_error(ty));
             }
             return Ok(owned_pointer_output(ty, w, v).0);
+        }
+        if prebindgen_flat::is_cow_bytes(ty) {
+            return Err("C Cow byte outputs require an explicit native owner or source conversion; there is no implicit owning copy or escaping temporary view".into());
         }
         if let syn::Type::Reference(r) = ty {
             let payload = prebindgen_flat::type_key(&r.elem);
@@ -924,6 +927,9 @@ impl CCodec {
                 )?;
             }
             return Ok(plan);
+        }
+        if prebindgen_flat::is_cow_bytes(ty) {
+            return Err("C Cow byte inputs require an explicit native owner or source constructor; implicit owned Cow construction is unsupported".into());
         }
         if prebindgen_flat::sequence_parts(ty).is_some() {
             return Err("collections require a Sequence recipe, not an opaque leaf; use an alias for opaque storage".into());
@@ -2617,7 +2623,41 @@ where
             _ => false,
         }
     }
+    fn contains_scoped_cow(ty: &syn::Type) -> bool {
+        if prebindgen_flat::is_cow_bytes(ty) {
+            // An owned Cow<'static, _> can yield only static borrows after it
+            // is consumed; a safe source function cannot lend its owned arm.
+            if let syn::Type::Path(path) = ty {
+                if let syn::PathArguments::AngleBracketed(args) =
+                    &path.path.segments.last().unwrap().arguments
+                {
+                    return !matches!(args.args.first(),Some(syn::GenericArgument::Lifetime(l)) if l.ident == "static");
+                }
+            }
+            return true;
+        }
+        if let Some(inner) =
+            prebindgen_flat::option_inner(ty).or_else(|| prebindgen_flat::vec_inner(ty))
+        {
+            return contains_scoped_cow(inner);
+        }
+        if let Some((ok, error)) = prebindgen_flat::result_parts(ty) {
+            return contains_scoped_cow(ok) || contains_scoped_cow(error);
+        }
+        match ty {
+            syn::Type::Reference(r) => contains_scoped_cow(&r.elem),
+            syn::Type::Array(a) => contains_scoped_cow(&a.elem),
+            syn::Type::Slice(s) => contains_scoped_cow(&s.elem),
+            _ => false,
+        }
+    }
     for parameter in &function.params {
+        // Cow can carry a borrow of a constructor's decoded temporary. The
+        // source type alone cannot prove this storage survives the FFI call.
+        // Keep this scoped subset conservative instead of inventing an owner graph.
+        if contains_scoped_cow(&parameter.ty.ty) {
+            return Err(format!("C function `{}` cannot return borrowed storage with Cow input `{}`; use an explicit owning output projection or a 'static return because constructor backing storage may expire at the end of the call", function.name, parameter.name));
+        }
         if reference(&parameter.ty.ty).is_some()
             && !stable_input(
                 &parameter.ty.ty,
@@ -3190,7 +3230,7 @@ mod generation_tests {
             .opaque_ptr("owner", syn::parse_quote!(Owner))
             .opaque_ptr("child", syn::parse_quote!(Child))
             .function(fun!(make).expand_return(expand_return!(Owner).view(crate::COutputConfig::getter("child",crate::COutputConfig::Leaf(COutputLeafOp::Projected(prebindgen_declarations::Projection::borrowed()))))))
-            .function(fun!(child).expand_return(expand_return!(Child).field_self_ref()))
+            .function(fun!(child).expand_return(expand_return!(Child).field_self_cloned()))
             .panic()
             .prepare().unwrap();
         for name in ["make", "child"] {
@@ -3240,7 +3280,7 @@ mod generation_tests {
         );
         model().function(fun!(fixed)).panic().build().unwrap();
         model()
-            .function(fun!(peek).expand_return(expand_return!(Child).field_self_ref()))
+            .function(fun!(peek).expand_return(expand_return!(Child).field_self_cloned()))
             .panic()
             .build()
             .unwrap();
@@ -3273,7 +3313,7 @@ mod generation_tests {
                 fun!(copied).expand_param(
                     "cb",
                     callback!(impl Fn(&Handle))
-                        .expand_param(0, expand_return!(Handle).field_self_ref()),
+                        .expand_param(0, expand_return!(Handle).field_self_cloned()),
                 ),
                 fun!(expanded).expand_param(
                     "cb",
@@ -3287,7 +3327,7 @@ mod generation_tests {
             let mut builder=Cbindgen::new(error_model("pub type Handle=String;pub fn borrowed(cb:impl Fn(&Handle)){}pub fn copied(cb:impl Fn(&Handle)){}pub fn expanded(cb:impl Fn(&Handle)){}pub fn number(h:&Handle)->i64{}"))
                 .opaque_ptr("handle",syn::parse_quote!(Handle));
             if global_copy {
-                builder = builder.expand(expand_return!(&Handle).field_self_ref());
+                builder = builder.expand(expand_return!(&Handle).field_self_cloned());
             }
             for function in declarations {
                 builder = builder.function(function).panic();
@@ -4421,5 +4461,7 @@ pub mod prelude {
 /// ```
 const _: () = ();
 
+#[cfg(test)]
+mod borrowing_tests;
 #[cfg(test)]
 mod structural_tests;

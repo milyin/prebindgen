@@ -183,7 +183,7 @@ fn main() {
     let wide_buffer_views = (0..48).fold(expand_return!(JniBufferRow), |views, _| {
         views.field(fun!(jni_buffer_row_text))
     });
-    let wide_return = (0..130).fold(expand_return!(i64), |views, _| views.field_self_ref());
+    let wide_return = (0..130).fold(expand_return!(i64), |views, _| views.field_self_cloned());
     let type_rows = || {
         expand_param!(Vec<TypeInputRow>)
             .element(expand_param!(TypeInputRow).variant_record(param_fields!()))
@@ -207,7 +207,7 @@ fn main() {
             .class(sealed_class!(WireSelfName))
             .class(sealed_class!(WireErrorKind))
             .class(sealed_class!(Result<Result<i64,String>,String>).name("WireNestedDecision"))
-            .class(callback!(impl Fn(&WireEvent)).expand_param(0,expand_return!(WireEvent).field_self_ref()))
+            .class(callback!(impl Fn(&WireEvent)).expand_param(0,expand_return!(WireEvent).field_self_cloned()))
             .fun(fun!(wire_event_borrowed))
             .fun(fun!(wire_self_name_echo))
             .fun(fun!(wire_nested_echo).result_as_value())
@@ -414,14 +414,14 @@ fn main() {
             .fun(fun!(type_input_nested_callback).expand_param("callback",callback!(impl Fn()->Vec<Vec<TypeInputRow>>).name("TypeInputNestedCallback").expand_return(type_nested().bulk())))
             .fun(fun!(type_input_optional).expand_param("values",expand_param!(Option<Vec<TypeInputA>>).variant_self().bulk()))
             .fun(fun!(type_input_array).expand_param("values",expand_param!([TypeInputA;2]).variant_self().bulk())))
-        .expand(expand_return!(&CallbackOwned).field_self_ref())
-        .expand(expand_return!(&BorrowPacket).field_self_ref())
+        .expand(expand_return!(&CallbackOwned).field_self_cloned())
+        .expand(expand_return!(&BorrowPacket).field_self_cloned())
         .package(package!("borrowcopies")
             .class(ptr_class!(BorrowPacket)).class(ptr_class!(BorrowNoClone))
             .class(enum_class!(BorrowMode)).class(data_class!(BorrowEnumRow))
-            .fun(fun!(borrow_enum_rows).expand_return(expand_return!(BorrowEnumRow).field_self_ref().bulk()))
+            .fun(fun!(borrow_enum_rows).expand_return(expand_return!(BorrowEnumRow).field_self_cloned().bulk()))
             .class(callback!(impl Fn(&BorrowPacket)).name("BorrowPacketCopy")
-                .expand_param(0,expand_return!(BorrowPacket).field_self_ref()))
+                .expand_param(0,expand_return!(BorrowPacket).field_self_cloned()))
             .fun(fun!(borrow_packet_new)).fun(fun!(borrow_packet_len))
             .fun(fun!(borrow_packet_ref)).fun(fun!(borrow_packet_optional))
             .fun(fun!(borrow_packet_ref_expanded).expand_return(
@@ -429,7 +429,7 @@ fn main() {
             .fun(fun!(borrow_packet_emit)).fun(fun!(borrow_packet_emit_copy))
             .fun(fun!(borrow_packet_emit_optional).expand_param("callback",
                 callback!(impl Fn(Option<&BorrowPacket>)).name("OptionalBorrowCopy")
-                    .expand_param(0,expand_return!(BorrowPacket).field_self_ref())))
+                    .expand_param(0,expand_return!(BorrowPacket).field_self_cloned())))
             .fun(fun!(borrow_packet_emit_expanded).expand_param("callback",
                 callback!(impl Fn(&BorrowPacket)).name("BorrowPacketLength")
                     .expand_param(0,expand_return!(BorrowPacket).field(fun!(borrow_packet_len)))))
@@ -462,7 +462,7 @@ fn main() {
             .fun(fun!(default_bulk_numbers))
             .fun(fun!(default_bulk_units))
             .fun(fun!(default_bulk_texts))
-            .fun(fun!(default_bulk_optional_texts).expand_return(expand_return!(String).field_self_ref()))
+            .fun(fun!(default_bulk_optional_texts).expand_return(expand_return!(String).field_self_cloned()))
             .fun(fun!(default_bulk_buffers))
             .fun(fun!(default_bulk_plain).expand_return(expand_return!(Vec<DefaultBulkRow>).field_self()))
             .fun(fun!(default_bulk_callback))
@@ -754,6 +754,13 @@ fn main() {
             .fun(fun!(jni_buffer_resource)).fun(fun!(jni_buffer_domain_failure)).fun(fun!(jni_buffer_resource_rows).expand_return(expand_return!(Vec<JniBufferResourceRow>).field_self()))
             .fun(fun!(jni_buffer_text)).fun(fun!(jni_buffer_string))
             .fun(fun!(jni_buffer_bytes)).fun(fun!(jni_buffer_vec))
+            .fun(fun!(jni_buffer_cow)).fun(fun!(jni_buffer_optional_cow))
+            .fun(fun!(jni_buffer_cow_rows))
+            .fun(fun!(jni_buffer_cow_rows_plain).expand_return(expand_return!(Vec<std::borrow::Cow<'static,[u8]>>)
+                .element_objects(expand_return!(std::borrow::Cow<'static,[u8]>).field_self())))
+            .fun(fun!(jni_buffer_cow_callback))
+            .fun(fun!(jni_buffer_cow_input).expand_param("value",expand_param!(std::borrow::Cow<'_,[u8]>)
+                .variant(fun!(jni_buffer_cow_from_slice))))
             .fun(fun!(jni_buffer_optional_text)).fun(fun!(jni_buffer_optional_bytes))
             .fun(fun!(jni_buffer_owned_optional))
             .fun(fun!(jni_buffer_owned).expand_return(expand_return!(JniBufferRow)
@@ -765,7 +772,7 @@ fn main() {
                 callback!(impl Fn(Option<JniBufferRow>)).name("OwnedBufferViews")
                     .expand_param(0, expand_return!(JniBufferRow)
                         .field(fun!(jni_buffer_row_text)).field(fun!(jni_buffer_row_bytes))))))
-        .expand(expand_return!(&GetterLeaf).field_self_ref())
+        .expand(expand_return!(&GetterLeaf).field_self_cloned())
         .expand(expand_return!(GetterChild)
             .field(fun!(getter_child_number)).field(fun!(getter_child_name)))
         .package(package!("getters")
@@ -779,13 +786,14 @@ fn main() {
             .fun(fun!(getter_owner_failure).expand_return(expand_return!(GetterOwner)
                 .field_self_into().field(fun!(getter_owner_leaf)).field(fun!(getter_owner_fail))))
             .fun(fun!(getter_owner_id)).fun(fun!(getter_leaf_id))
-            .fun(fun!(getter_static_leaf).expand_return(expand_return!(GetterLeaf).field_self_ref()))
+            .fun(fun!(getter_owner_cow_bytes))
+            .fun(fun!(getter_static_leaf).expand_return(expand_return!(GetterLeaf).field_self_cloned()))
             .fun(fun!(getter_owner_read).expand_return(expand_return!(GetterChild)
                 .field(fun!(getter_child_number)).field(fun!(getter_child_name))))
             .fun(fun!(getter_counts))
             .fun(fun!(getter_two_clones_new).expand_return(expand_return!(GetterOwner)
                 .field(fun!(getter_owner_leaf).expand_return(expand_return!(GetterLeaf)
-                    .field_self_ref().field_self_ref()))))
+                    .field_self_cloned().field_self_cloned()))))
             .fun(fun!(getter_fields_new).expand_return(expand_return!(GetterOwner)
                 .field_self_into().fields(fields!(getter_owner_details))))
             .fun(fun!(getter_callback).expand_param("callback",
@@ -797,7 +805,7 @@ fn main() {
         .expand(expand_return!(CallbackBoundaryError).fields_into(fields!(callback_boundary_error_into)))
         .package(package!("nativeoutputs")
             .fun(fun!(jni_output_optional)
-                     .expand_return(expand_return!(CallbackRow).field_self_ref())
+                     .expand_return(expand_return!(CallbackRow).field_self_cloned())
                      .output(
                          expand_return!(Vec<Option<Vec<CallbackRow>>>).element_objects(
                              expand_return!(Option<Vec<CallbackRow>>).optional(
@@ -808,18 +816,18 @@ fn main() {
                      ))
             .fun(fun!(jni_output_mixed))
             .fun(fun!(jni_output_mixed_frames).callback_return_only()
-                .expand_return(expand_return!(Vec<CallbackRowResource>).field_self_ref().bulk()))
+                .expand_return(expand_return!(Vec<CallbackRowResource>).field_self_cloned().bulk()))
             .fun(fun!(jni_output_fold_drop).callback_return_only())
             .fun(fun!(c_output_rows)
                      .name("jniOutputRows")
-                     .expand_return(expand_return!(CallbackRow).field_self_ref())
+                     .expand_return(expand_return!(CallbackRow).field_self_cloned())
                      .output(
                          expand_return!(Vec<CallbackRow>)
                              .element_objects(expand_return!(CallbackRow).default()),
                      ))
             .fun(fun!(c_output_nested)
                      .name("jniOutputNested")
-                     .expand_return(expand_return!(CallbackRow).field_self_ref())
+                     .expand_return(expand_return!(CallbackRow).field_self_cloned())
                      .output(
                          expand_return!(Vec<Vec<CallbackRow>>).element_objects(
                              expand_return!(Vec<CallbackRow>)
@@ -828,7 +836,7 @@ fn main() {
                      ))
             .fun(fun!(c_output_pair)
                      .name("jniOutputPair")
-                     .expand_return(expand_return!(CallbackRow).field_self_ref())
+                     .expand_return(expand_return!(CallbackRow).field_self_cloned())
                      .output(
                          expand_return!(NativeBulkNested).fields_into(
                              fields!()
@@ -845,7 +853,7 @@ fn main() {
                          ),
                      ))
             .fun(fun!(jni_output_fold).name("jniOutput")
-                .expand_return(expand_return!(CallbackRow).field_self_ref()).callback_return_only()))
+                .expand_return(expand_return!(CallbackRow).field_self_cloned()).callback_return_only()))
         .package(package!("callbackboundaries")
             .class(ptr_class!(CallbackBoundaryHandler))
             .fun(fun!(callback_boundary_register)).fun(fun!(callback_boundary_fire))
@@ -899,10 +907,10 @@ fn main() {
         .expand(expand_param!(CallbackConstructor).variant(fun!(callback_constructor_from)))
         .expand(expand_param!(CallbackConstructorEnvelope).variant(fun!(callback_constructor_wrap)))
         // Clone-failure coverage explicitly opts these row fields into copying.
-        .expand(expand_return!(CallbackRow).field_self_ref())
+        .expand(expand_return!(CallbackRow).field_self_cloned())
         .expand(expand_return!(CallbackTransferred).field_self_into())
         .expand(expand_return!(Vec<CallbackTransferredRow>).field_self_into())
-        .expand(expand_return!(Vec<CallbackObservedRow>).field_self_ref())
+        .expand(expand_return!(Vec<CallbackObservedRow>).field_self_cloned())
         .expand(expand_return!(CallbackProjected).field(fun!(callback_projected_id).name("id")).field_self_into())
         .error_mapper(syn::parse_quote!(String),fun!(callback_return_error_message))
         .package(package!("callbackreturns")
@@ -1184,8 +1192,8 @@ fn main() {
             .fun(fun!(callback_enums)))
         .package(package!("cleanup")
             .class(data_class!(OutputCleanupRow))
-            .fun(fun!(native_bulk_rows).expand_return(expand_return!(CallbackRow).field_self_ref().bulk()))
-            .fun(fun!(native_bulk_nested).expand_return(expand_return!(CallbackRow).field_self_ref().bulk()))
+            .fun(fun!(native_bulk_rows).expand_return(expand_return!(CallbackRow).field_self_cloned().bulk()))
+            .fun(fun!(native_bulk_nested).expand_return(expand_return!(CallbackRow).field_self_cloned().bulk()))
             .fun(fun!(native_bulk_pair).output(
                      expand_return!(NativeBulkNested).fields_into(
                          fields!()
@@ -1280,7 +1288,7 @@ fn main() {
             .fun(fun!(collection_optional_items).callback_return())
             .fun(fun!(collection_enum).callback_return())
             .fun(fun!(collection_probe))
-            .fun(fun!(collection_borrow).callback_return().expand_return(expand_return!(i64).field_self_ref().bulk()))
+            .fun(fun!(collection_borrow).callback_return().expand_return(expand_return!(i64).field_self_cloned().bulk()))
             .fun(fun!(collection_slice).callback_return())
             .fun(fun!(collection_resource_new))
             .fun(fun!(collection_handles).callback_return())
@@ -1331,18 +1339,18 @@ fn main() {
             .fun(fun!(option_triple_i64)).fun(fun!(option_triple_unit))
             .fun(fun!(optional_text_input_len)).fun(fun!(optional_bytes_input_len))
             .fun(fun!(nested_niche_choice_id))
-            .fun(fun!(option_nested_projection_views).expand_return(expand_return!(ProjectionHandle).field_self_into().field_self_ref()))
+            .fun(fun!(option_nested_projection_views).expand_return(expand_return!(ProjectionHandle).field_self_into().field_self_cloned()))
             .class(ptr_class!(OptionChoice))
             .class(ptr_class!(OptionCtor)).fun(fun!(option_ctor_new)).fun(fun!(option_ctor_id)).fun(fun!(option_nested_resource))
             .fun(fun!(option_choice_id))
             .fun(fun!(option_str_echo)).fun(fun!(option_slice_echo)).fun(fun!(option_str_len)).fun(fun!(option_slice_len)).fun(fun!(option_string_len)).fun(fun!(option_i64_ref))
             .fun(fun!(option_resource_pair)).fun(fun!(resource_choice_id))
             .fun(fun!(optional_pair_new).expand_return(expand_return!(OptionalPair).fields_into(fields!(optional_pair_into).field("present",expand_return!(OwnedResource).field_self_into()))))
-            .fun(fun!(option_projection_views).expand_return(expand_return!(ProjectionHandle).field_self_into().field_self_ref()))
+            .fun(fun!(option_projection_views).expand_return(expand_return!(ProjectionHandle).field_self_into().field_self_cloned()))
             .class(data_class!(OptionalFields))
             .class(data_class!(OptionalBytes)).fun(fun!(optional_bytes_echo))
             .fun(fun!(option_resource_mut)).fun(fun!(option_projection_ref)
-                .expand_return(expand_return!(ProjectionHandle).field_self_ref()))
+                .expand_return(expand_return!(ProjectionHandle).field_self_cloned()))
             .class(data_class!(OptionalResource))
             .fun(fun!(option_i64)).fun(fun!(option_char)).fun(fun!(option_u8)).fun(fun!(option_bool))
             .fun(fun!(option_text)).fun(fun!(option_bytes)).fun(fun!(option_unit))
@@ -2248,7 +2256,7 @@ fn main() {
                 // The owned Summary expansion does not apply to &Summary.
                 .fun(fun!(archive_new))
                 .fun(fun!(archive_store))
-                .fun(fun!(archive_latest).expand_return(expand_return!(Summary).field_self_ref()))
+                .fun(fun!(archive_latest).expand_return(expand_return!(Summary).field_self_cloned()))
                 // Single split (#52) on the CLASS-DEFAULT variants, consuming arm.
                 /* Unsupported: the signature or function options need unsupported conversions.
 .fun(fun!(archive_store).split_on_param("s"))
@@ -2378,11 +2386,11 @@ fn main() {
             .fun(fun!(storage_summary_handle).expand_return(expand_return!(Summary).field_self())))
         .package(package!("resources")
             .class(data_class!(ProjectionPair)).class(ptr_class!(ProjectionHandle))
-            .fun(fun!(projection_pair_borrowed).expand_return(expand_return!(ProjectionPair).field_self_ref()))
+            .fun(fun!(projection_pair_borrowed).expand_return(expand_return!(ProjectionPair).field_self_cloned()))
             .fun(fun!(projection_pair_owned)).fun(fun!(projection_pair_callback))
             .fun(fun!(projection_pair_mixed).expand_return(expand_return!(ProjectionPair).project_self(
                 prebindgen_jni::Projection::owned().field("first", prebindgen_jni::Projection::borrowed()))))
-            .fun(fun!(projection_pair_views).expand_return(expand_return!(ProjectionPair).field_self_into().field_self_ref()))
+            .fun(fun!(projection_pair_views).expand_return(expand_return!(ProjectionPair).field_self_into().field_self_cloned()))
             .fun(fun!(projection_clones)).fun(fun!(projection_drops)))
         .package(package!("resources")
             .class(data_class!(ResourceBundle))
@@ -2394,7 +2402,7 @@ fn main() {
             .fun(fun!(resource_bundle_fields).expand_return(expand_return!(ResourceBundle).fields_into(
                 fields!(resource_bundle_into)
                     .field("pair", expand_return!(ResourcePair).field_self_into())
-                    .field("details", expand_return!(DataFloats).field_self_ref()))))
+                    .field("details", expand_return!(DataFloats).field_self_cloned()))))
             .fun(fun!(api_record_new).expand_return(
                 expand_return!(ApiRecord).fields_into(
                     fields!(api_record_into)
@@ -2425,7 +2433,7 @@ fn main() {
             .fun(fun!(blob_value_selected).expand_param("value",
                 expand_param!(BlobValue).variant_self().variant(fun!(blob_value_new))))
             .fun(fun!(blob_value_views).expand_return(
-                expand_return!(BlobValue).field_self_ref().field_self().field(fun!(blob_value_copy)))))
+                expand_return!(BlobValue).field_self_cloned().field_self().field(fun!(blob_value_copy)))))
         // The deliberately-unbound group (C-tier shapes with no JVM mapping):
         // acknowledged so the build log stays free of "skipping undeclared"
         // warnings without emitting anything.

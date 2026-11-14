@@ -28,6 +28,9 @@ fun checkBorrowedBuffers() {
     check(text.length == 65536 && bytes.size == 65536)
     check(jniBufferText() == text && jniBufferString() == text)
     check(jniBufferBytes().contentEquals(bytes) && jniBufferVec().contentEquals(bytes))
+    check(jniBufferCow(false).contentEquals(bytes) && jniBufferCow(true).contentEquals(bytes))
+    check(jniBufferCowInput(bytes) == bytes.size.toULong())
+    check(jniBufferCowInput(byteArrayOf()) == 0uL)
     jniBufferRows()
     jniBufferCallback({ _, _, _, _ -> })
     val textEncoding = largeNativeAllocations { check(BufferAllocationProbe.directText() == text) }
@@ -38,9 +41,23 @@ fun checkBorrowedBuffers() {
         check(largeNativeAllocations { check(jniBufferString() == text) } == textEncoding)
         check(largeNativeAllocations { check(jniBufferBytes().contentEquals(bytes)) } == byteEncoding)
         check(largeNativeAllocations { check(jniBufferVec().contentEquals(bytes)) } == byteEncoding)
+        check(largeNativeAllocations { check(jniBufferCow(false).contentEquals(bytes)) } == byteEncoding)
+        // The one allocation belongs to the selected source Cow::Owned branch.
+        check(largeNativeAllocations { check(jniBufferCow(true).contentEquals(bytes)) } == byteEncoding + 1)
         check(largeNativeAllocations { check(jniBufferRows().size == 3) } == textEncoding + byteEncoding)
         check(largeNativeAllocations { jniBufferCallback({ _, _, _, _ -> }) } == 2 * (textEncoding + byteEncoding))
     }
+    for (owned in listOf(false, true)) {
+        check(jniBufferOptionalCow(false, owned) == null)
+        check(requireNotNull(jniBufferOptionalCow(true, owned)).contentEquals(bytes))
+    }
+    for (rows in listOf(jniBufferCowRows(), jniBufferCowRowsPlain())) {
+        check(rows.size == 3)
+        check(rows[0].contentEquals(bytes) && rows[1].contentEquals(bytes) && rows[2].isEmpty())
+    }
+    val savedCows = mutableListOf<ByteArray>()
+    jniBufferCowCallback({ savedCows.add(it) })
+    check(savedCows.size == 2 && savedCows.all { it.contentEquals(bufferBits) })
     for (mode in 0..3) {
         jniBufferOptionalText(mode) { present, value ->
             check(present == (mode != 0))

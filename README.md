@@ -110,6 +110,27 @@ A consuming output conversion cannot convert a borrowed source; use a helper tak
 `&T`. No cloning or reconstruction is implicit. See the
 [conversion design and ownership rules](docs/investigations/canonical-values/README.md).
 
+Flat supports call-scoped shared/exclusive references, optional borrows and
+borrowed getter results. Placeholder reference lifetimes (`&'_ T`) normalize to
+elided spelling in signatures and conversion declarations. Named lifetime
+binders, lifetime-bearing records and general reference-element collections
+remain outside this stage; accepting a source shape does not promise that every
+adapter can represent it.
+
+JNI byte outputs also accept `Cow<'_, [u8]>` and `Cow<'static, [u8]>` (including
+standard qualified paths and inferred `Cow<[u8]>` spelling). Both variants are
+encoded directly from their byte view while the Cow is alive, including options,
+collection rows and callback arguments. There is no intermediate Rust owning
+buffer. A source `Cow::Owned` branch may allocate itself; the generator adds no
+extra Rust byte-buffer copy. Cow inputs require an explicitly selected source
+constructor/conversion, and C requires an explicit native owner or source
+conversion rather than inventing an escaping buffer view. Constructed Cow inputs
+with inferred lifetimes cannot back C output loans: select an owning output copy
+when the source view could refer to decoded temporary storage. Unsupported mutable
+Kotlin value inputs require a native handle representation; generated copy-back
+storage is not provided. Existing native-handle mutation and direct C loans
+retain their behavior.
+
 Public Kotlin function parameters use the Rust source names in camelCase. For
 example, `gcResourceNew(id = 1uL, value = 42uL)` uses `id` and `value` rather than
 internal wire identifiers. Constructor and record expansions add component names,
@@ -252,7 +273,7 @@ expand_param!(Envelope).variant(fun!(envelope_new)
         .element(expand_param!(Row).variant_record(param_fields!())).bulk()))
 
 expand_return!(Owner).field(fun!(owner_child)
-    .expand_return(expand_return!(Child).field_self_ref()))
+    .expand_return(expand_return!(Child).field_self_cloned()))
 
 // Decompose this record directly, without creating an accessor function.
 expand_return!(Envelope).fields_into(fields!()
@@ -289,8 +310,9 @@ expand_return!(Event).enum_fields([
 
 Output ownership is explicit in the existing expansion hierarchy:
 
-- `.field_self_ref()` borrows the value and all nested fields. Handle fields are
-  cloned into independent owning handles and require Rust `Clone`.
+- `.field_self_cloned()` explicitly permits owning copies while preserving the
+  source. Handle fields are cloned into independent owning handles and require
+  Rust `Clone`; foreign value representations copy their observed leaves.
 - `.field_self_into()` moves the value and all nested fields without cloning.
 - `.project_self(Projection::owned().field("details", Projection::borrowed()))`
   moves fields except the explicitly borrowed `details` subtree. Overrides can nest.
@@ -309,19 +331,19 @@ Modes propagate recursively unless explicitly overridden; they never depend on
 record contents. Unexpanded data-class outputs and `field_self()` follow the
 source occurrence: owned records move their fields, while borrowed records observe
 them. `field_self_into()` explicitly requires an owned occurrence;
-`field_self_ref()` explicitly requests observing/copying the fields. If a record
+`field_self_cloned()` explicitly requests observing/copying the fields. If a record
 implements `Drop`, Rust may reject moving its fields; select an explicit copy
 projection instead of relying on an implicit cloning fallback. For a nested
 `Drop`-bearing field, put the borrowed override on the containing record; a child
 type's default does not rewrite a data-class property. Multiple owning
 views are rejected: combinations that previously copied through `field_self()`
-should select `field_self_ref()` for each intended copy alongside one owning view.
+should select `field_self_cloned()` for each intended copy alongside one owning view.
 Type-wide expansions of field types do not rewrite a data class's properties.
 
 Owned `String` and `Vec<u8>` identities also transfer their storage when combined
 with getter views. Getters run before that move, regardless of output order.
 Multiple independent owning identities require explicit copies with
-`field_self_ref()`; adding a getter does not authorize a hidden buffer clone.
+`field_self_cloned()`; adding a getter does not authorize a hidden buffer clone.
 
 For separate field outputs, `.fields(fields!(borrowed_getter))` remains available.
 `.fields_into(fields!(consuming_accessor))` requires an accessor taking `T`
@@ -337,7 +359,7 @@ Getters used by output expansions may return shared values such as `&Child`,
 uses the referent's output defaults, so nested getters and record projections
 work without cloning the owner or an intermediate object. Text and fields are
 copied as required by the foreign representation. JNI opaque handle leaves require
-an explicit copy projection such as `field_self_ref()`; that projection clones
+an explicit copy projection such as `field_self_cloned()`; that projection clones
 their referents into independent owning allocations and requires `Clone`. C opaque
 reference leaves are loans: a getter expansion must retain its owner as described
 below, or explicitly request an independent owning copy. Borrowed
@@ -368,7 +390,7 @@ For direct loans, reference inputs must use persistent opaque pointers or borrow
 text/byte buffers. A reference input reconstructed from record fields, a collection
 or a constructor can own temporary storage, so generation rejects lending from
 such a call unless the return is explicitly `'static`. Select an independent copy
-with `.expand_return(expand_return!(Child).field_self_ref())` when `Child: Clone`.
+with `.expand_return(expand_return!(Child).field_self_cloned())` when `Child: Clone`.
 This check runs during generation and adds no runtime bookkeeping.
 This changes unexpanded C opaque-reference returns from owning copies to loans.
 Existing C callers must stop freeing or consuming these results and retain their
@@ -402,7 +424,7 @@ are diagnosed rather than falling back to implicit child copies.
 
 A borrowed opaque getter output without a retained owner is rejected unless its
 source reference is `'static`. Use an explicit owning conversion such as
-`.field(fun!(owner_child).expand_return(expand_return!(Child).field_self_ref()))`
+`.field(fun!(owner_child).expand_return(expand_return!(Child).field_self_cloned()))`
 if an independent copy is intended. Direct pointer outputs of references supplied
 by a Rust function keep the existing borrow contract. Expanding those references
 with getters also requires an explicit owning conversion for opaque children;
@@ -1201,7 +1223,7 @@ moving its descriptor does not move its elements. Borrowing a reconstructed
 collection input for an escaping return is rejected too.
 
 If conversion really needs an owning copy, authorize it at the collection:
-`expand_return!(&[T]).field_self_ref()`, globally or on the function's
+`expand_return!(&[T]).field_self_cloned()`, globally or on the function's
 `.expand_return(...)`. A resolved adapter sequence operation with
 `mode: Some(ProjectionMode::Borrowed)` expresses the same explicit copy choice.
 An element-only expansion does not authorize copying its enclosing collection.

@@ -183,7 +183,7 @@ fn main() {
         .panic()
         .function(fun!(numeric_loan_capacity))
         .panic()
-        .function(fun!(numeric_loan_copy).expand_return(expand_return!(&[i64]).field_self_ref()))
+        .function(fun!(numeric_loan_copy).expand_return(expand_return!(&[i64]).field_self_cloned()))
         .panic()
         .function(
             fun!(numeric_loan_owned).expand_return(
@@ -236,7 +236,7 @@ fn main() {
             fun!(borrow_packet_emit_copy).expand_param(
                 "callback",
                 prebindgen_c::callback!(impl Fn(&BorrowPacket))
-                    .expand_param(0, expand_return!(BorrowPacket).field_self_ref()),
+                    .expand_param(0, expand_return!(BorrowPacket).field_self_cloned()),
             ),
         )
         .panic()
@@ -349,7 +349,7 @@ fn main() {
         .opaque_ptr("getter_child", pq!(GetterChild))
         .opaque_ptr("getter_leaf", pq!(GetterLeaf))
         // This fixture intentionally requests independently owned leaf copies.
-        .expand(expand_return!(GetterLeaf).field_self_ref())
+        .expand(expand_return!(GetterLeaf).field_self_cloned())
         .function(fun!(owner_view_shared).expand_return(
             expand_return!(GetterOwner).field_self_into().view(
                 prebindgen_c::COutputConfig::getter(
@@ -515,7 +515,7 @@ fn main() {
             fun!(getter_fields_new).expand_return(
                 expand_return!(GetterOwner).field_self_into().fields(
                     fields!(getter_owner_details)
-                        .field("text", expand_return!(String).field_self_ref()),
+                        .field("text", expand_return!(String).field_self_cloned()),
                 ),
             ),
         )
@@ -759,7 +759,7 @@ fn main() {
         .panic()
         .function(
             fun!(collection_borrow)
-                .expand_return(expand_return!(&[i64]).field_self_ref())
+                .expand_return(expand_return!(&[i64]).field_self_cloned())
                 .callback_return(),
         )
         .panic()

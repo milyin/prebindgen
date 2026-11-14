@@ -144,7 +144,7 @@ fn adapter_methods_compose_with_common_input_and_return_builders() {
     let output: Output = returned()
         .with_extension(Settings("result"))
         .field(Function::new(syn::parse_quote!(getter)).name("renamed"))
-        .field_self_ref()
+        .field_self_cloned()
         .field_self_into()
         .into();
     let Output::Branch {
