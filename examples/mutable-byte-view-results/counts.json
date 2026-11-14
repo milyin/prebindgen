@@ -1,0 +1,24 @@
+{
+  "kind": "allocation budgets and address/capacity identity; no timing comparison",
+  "sizes": [
+    0,
+    1,
+    65536
+  ],
+  "direct_mutable_loans": {
+    "calls_per_size": 1000,
+    "allocations": 0,
+    "reallocations": 0
+  },
+  "inline_vec_accessor": {
+    "calls_per_size": 1000,
+    "allocations": 0,
+    "reallocations": 0
+  },
+  "expanded_vec_factory": {
+    "calls_per_size": 1,
+    "allocations": 1,
+    "reallocations": 0,
+    "included_cost": "source Vec allocation with size+37 reserved capacity"
+  }
+}

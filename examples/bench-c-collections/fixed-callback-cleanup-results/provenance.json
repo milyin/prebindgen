@@ -1,0 +1,770 @@
+{
+  "platform": "Linux-6.8.0-138-generic-x86_64-with-glibc2.39",
+  "cpu": "Architecture:                            x86_64\nCPU op-mode(s):                          32-bit, 64-bit\nAddress sizes:                           48 bits physical, 48 bits virtual\nByte Order:                              Little Endian\nCPU(s):                                  2\nOn-line CPU(s) list:                     0,1\nVendor ID:                               AuthenticAMD\nModel name:                              AMD EPYC 7713 64-Core Processor\nCPU family:                              25\nModel:                                   1\nThread(s) per core:                      1\nCore(s) per socket:                      2\nSocket(s):                               1\nStepping:                                1\nBogoMIPS:                                4000.00\nFlags:                                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm rep_good nopl cpuid extd_apicid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw perfctr_core ssbd ibrs ibpb stibp vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms rdseed adx smap clflushopt clwb sha_ni xsaveopt xsavec xgetbv1 xsaves clzero xsaveerptr wbnoinvd arat umip pku ospke vaes vpclmulqdq rdpid overflow_recov succor fsrm\nHypervisor vendor:                       KVM\nVirtualization type:                     full\nL1d cache:                               128 KiB (2 instances)\nL1i cache:                               128 KiB (2 instances)\nL2 cache:                                1 MiB (2 instances)\nL3 cache:                                32 MiB (2 instances)\nNUMA node(s):                            1\nNUMA node0 CPU(s):                       0,1\nVulnerability Gather data sampling:      Not affected\nVulnerability Indirect target selection: Not affected\nVulnerability Itlb multihit:             Not affected\nVulnerability L1tf:                      Not affected\nVulnerability Mds:                       Not affected\nVulnerability Meltdown:                  Not affected\nVulnerability Mmio stale data:           Not affected\nVulnerability Reg file data sampling:    Not affected\nVulnerability Retbleed:                  Not affected\nVulnerability Spec rstack overflow:      Vulnerable: Safe RET, no microcode\nVulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl\nVulnerability Spectre v1:                Mitigation; usercopy/swapgs barriers and __user pointer sanitization\nVulnerability Spectre v2:                Mitigation; Retpolines; IBPB conditional; IBRS_FW; STIBP disabled; RSB filling; PBRSB-eIBRS Not affected; BHI Not affected\nVulnerability Srbds:                     Not affected\nVulnerability Tsa:                       Vulnerable: Clear CPU buffers attempted, no microcode\nVulnerability Tsx async abort:           Not affected\nVulnerability Vmscape:                   Not affected\n",
+  "affinity": [
+    0
+  ],
+  "loader_environment": {},
+  "builds": {
+    "counts": {
+      "before": {
+        "revisions": {
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-fixed-callback-cleanup-base": "54cf11e5785fe0f700ee7dd52b3e9c23008d680e"
+        },
+        "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-fixed-callback-cleanup-base",
+        "count_allocations": true,
+        "alias_checks": true,
+        "fixture_sha256": {
+          "flat.rs": "ee591bc73bc0a3ef66505413afb4428d697194281868bf4623c0667384420fc2",
+          "bindings.rs": "ea60d202c350dde27ac959c4dc64a15addc6e956cac40624c05c78e172dccb31",
+          "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+          "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+          "input-driver.c": "d07abe8e2f1d7545c129def982c7e3344460abfbd5063f4f074299c681ad8b5c",
+          "build.py": "0ba2154e33008f3963aba8ade65d779fd740f5d8108a21722b11b7f2288786a9",
+          "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+        },
+        "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+        "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+        "compile_command": [
+          "cc",
+          "-std=gnu11",
+          "-O3",
+          "-fno-plt",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-fixed-callback-cleanup-base/examples/bench-c-collections/driver.c",
+          "-I/tmp/c-alias-bench-target/release/build/c-collection-bench-a14c3bfd8b524ab5/out",
+          "-L/tmp/c-fixed-before-count/frozen",
+          "-lc_collection_bench",
+          "-Wl,-rpath,/tmp/c-fixed-before-count/frozen",
+          "-ldl",
+          "-o",
+          "/tmp/c-fixed-before-count/driver"
+        ],
+        "cargo_command": [
+          "cargo",
+          "build",
+          "--offline",
+          "--locked",
+          "--release",
+          "--message-format=json",
+          "--features",
+          "count-allocations"
+        ],
+        "cargo_profile": {
+          "opt_level": "3",
+          "debuginfo": 0,
+          "debug_assertions": false,
+          "overflow_checks": false,
+          "test": false
+        },
+        "lock_sha256": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d",
+        "cargo_configs": {},
+        "profile_environment": {},
+        "library": "/tmp/c-fixed-before-count/frozen/libc_collection_bench.so",
+        "library_sha256": "a5e964540b4cf708cd3c185db176f7cc8854a373f1d282f0d8434870ee9548ce",
+        "driver": "/tmp/c-fixed-before-count/driver",
+        "driver_sha256": "999e21bff10c25741a2a2c2576bcf4d539657206194ab7cb3d6ab0fd994a9a8c",
+        "input_driver": "/tmp/c-fixed-before-count/input-driver",
+        "input_driver_sha256": "467bbc7e183c5ce106ab31961c38585090928f43585200dcb0e3dbcd1138369e",
+        "input_compile_command": [
+          "cc",
+          "-std=gnu11",
+          "-O3",
+          "-fno-plt",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-fixed-callback-cleanup-base/examples/bench-c-collections/input-driver.c",
+          "-I/tmp/c-alias-bench-target/release/build/c-collection-bench-a14c3bfd8b524ab5/out",
+          "-L/tmp/c-fixed-before-count/frozen",
+          "-lc_collection_bench",
+          "-Wl,-rpath,/tmp/c-fixed-before-count/frozen",
+          "-ldl",
+          "-o",
+          "/tmp/c-fixed-before-count/input-driver"
+        ],
+        "header_sha256": "e5c2edacc93b86ccb7d991b6c74ee1322d978c7339920bf1cdbc57bb4002670a",
+        "header_abi_sha256": "9e299e8c43d1ead193f6c06a6dc36c68882a8bbff11fbb6793bc67d969db4e90",
+        "bindings_sha256": "0bfbfa3122152c32d5aeb951e6b3453a53bd54e98ebf62796ee6d284c835857b"
+      },
+      "after": {
+        "revisions": {
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-fixed-callback-cleanup": "fbece75f85587767784d1596e07670dc5600ebf3"
+        },
+        "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-fixed-callback-cleanup",
+        "count_allocations": true,
+        "alias_checks": true,
+        "fixture_sha256": {
+          "flat.rs": "ee591bc73bc0a3ef66505413afb4428d697194281868bf4623c0667384420fc2",
+          "bindings.rs": "ea60d202c350dde27ac959c4dc64a15addc6e956cac40624c05c78e172dccb31",
+          "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+          "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+          "input-driver.c": "d07abe8e2f1d7545c129def982c7e3344460abfbd5063f4f074299c681ad8b5c",
+          "build.py": "0ba2154e33008f3963aba8ade65d779fd740f5d8108a21722b11b7f2288786a9",
+          "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+        },
+        "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+        "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+        "compile_command": [
+          "cc",
+          "-std=gnu11",
+          "-O3",
+          "-fno-plt",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-fixed-callback-cleanup/examples/bench-c-collections/driver.c",
+          "-I/tmp/c-alias-bench-target/release/build/c-collection-bench-b0463900490a0f80/out",
+          "-L/tmp/c-fixed-after-count/frozen",
+          "-lc_collection_bench",
+          "-Wl,-rpath,/tmp/c-fixed-after-count/frozen",
+          "-ldl",
+          "-o",
+          "/tmp/c-fixed-after-count/driver"
+        ],
+        "cargo_command": [
+          "cargo",
+          "build",
+          "--offline",
+          "--locked",
+          "--release",
+          "--message-format=json",
+          "--features",
+          "count-allocations"
+        ],
+        "cargo_profile": {
+          "opt_level": "3",
+          "debuginfo": 0,
+          "debug_assertions": false,
+          "overflow_checks": false,
+          "test": false
+        },
+        "lock_sha256": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d",
+        "cargo_configs": {},
+        "profile_environment": {},
+        "library": "/tmp/c-fixed-after-count/frozen/libc_collection_bench.so",
+        "library_sha256": "0d5c47b5a3c42464c0d10d29ef54710b7bf00e1083f07c96ab94b4d1741ca6fa",
+        "driver": "/tmp/c-fixed-after-count/driver",
+        "driver_sha256": "87e48c4f13dae1795bf21eb0206b07621dac073a80a1d9e52adce76697d9ba46",
+        "input_driver": "/tmp/c-fixed-after-count/input-driver",
+        "input_driver_sha256": "bdba5082ab0b27a7d44d65049baf2d48a0342ade63752959224d599540d498b7",
+        "input_compile_command": [
+          "cc",
+          "-std=gnu11",
+          "-O3",
+          "-fno-plt",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-fixed-callback-cleanup/examples/bench-c-collections/input-driver.c",
+          "-I/tmp/c-alias-bench-target/release/build/c-collection-bench-b0463900490a0f80/out",
+          "-L/tmp/c-fixed-after-count/frozen",
+          "-lc_collection_bench",
+          "-Wl,-rpath,/tmp/c-fixed-after-count/frozen",
+          "-ldl",
+          "-o",
+          "/tmp/c-fixed-after-count/input-driver"
+        ],
+        "header_sha256": "e5c2edacc93b86ccb7d991b6c74ee1322d978c7339920bf1cdbc57bb4002670a",
+        "header_abi_sha256": "9e299e8c43d1ead193f6c06a6dc36c68882a8bbff11fbb6793bc67d969db4e90",
+        "bindings_sha256": "0e69a8acb448327e3562189f96ff92cc58d924ae19c01be00988a2fa81bc2950"
+      }
+    },
+    "unchecked-counts": {
+      "before": {
+        "revisions": {
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-fixed-callback-cleanup-base": "54cf11e5785fe0f700ee7dd52b3e9c23008d680e"
+        },
+        "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-fixed-callback-cleanup-base",
+        "count_allocations": true,
+        "alias_checks": false,
+        "fixture_sha256": {
+          "flat.rs": "ee591bc73bc0a3ef66505413afb4428d697194281868bf4623c0667384420fc2",
+          "bindings.rs": "ea60d202c350dde27ac959c4dc64a15addc6e956cac40624c05c78e172dccb31",
+          "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+          "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+          "input-driver.c": "d07abe8e2f1d7545c129def982c7e3344460abfbd5063f4f074299c681ad8b5c",
+          "build.py": "0ba2154e33008f3963aba8ade65d779fd740f5d8108a21722b11b7f2288786a9",
+          "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+        },
+        "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+        "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+        "compile_command": [
+          "cc",
+          "-std=gnu11",
+          "-O3",
+          "-fno-plt",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-fixed-callback-cleanup-base/examples/bench-c-collections/driver.c",
+          "-I/tmp/c-alias-bench-target/release/build/c-collection-bench-a14c3bfd8b524ab5/out",
+          "-L/tmp/c-fixed-before-off-count/frozen",
+          "-lc_collection_bench",
+          "-Wl,-rpath,/tmp/c-fixed-before-off-count/frozen",
+          "-ldl",
+          "-o",
+          "/tmp/c-fixed-before-off-count/driver"
+        ],
+        "cargo_command": [
+          "cargo",
+          "build",
+          "--offline",
+          "--locked",
+          "--release",
+          "--message-format=json",
+          "--features",
+          "count-allocations"
+        ],
+        "cargo_profile": {
+          "opt_level": "3",
+          "debuginfo": 0,
+          "debug_assertions": false,
+          "overflow_checks": false,
+          "test": false
+        },
+        "lock_sha256": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d",
+        "cargo_configs": {},
+        "profile_environment": {},
+        "library": "/tmp/c-fixed-before-off-count/frozen/libc_collection_bench.so",
+        "library_sha256": "c81c1ab13b8b5ec247977747a42b9b3674776fc2b929292f7ccfec8a8ba54025",
+        "driver": "/tmp/c-fixed-before-off-count/driver",
+        "driver_sha256": "d605cde98d121d744e805a17b0a44e9f1bfe4a5b14aafc47cd582f827a35ebdc",
+        "input_driver": "/tmp/c-fixed-before-off-count/input-driver",
+        "input_driver_sha256": "7df2982542835e85e49e5b9f9e7f5cc6021bbf2652982d5370c7c446326c9f2d",
+        "input_compile_command": [
+          "cc",
+          "-std=gnu11",
+          "-O3",
+          "-fno-plt",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-fixed-callback-cleanup-base/examples/bench-c-collections/input-driver.c",
+          "-I/tmp/c-alias-bench-target/release/build/c-collection-bench-a14c3bfd8b524ab5/out",
+          "-L/tmp/c-fixed-before-off-count/frozen",
+          "-lc_collection_bench",
+          "-Wl,-rpath,/tmp/c-fixed-before-off-count/frozen",
+          "-ldl",
+          "-o",
+          "/tmp/c-fixed-before-off-count/input-driver"
+        ],
+        "header_sha256": "826830d22890777cd9c10b66484c7a15bad8f19d10fc919de6ea882f41c0e6d3",
+        "header_abi_sha256": "9e299e8c43d1ead193f6c06a6dc36c68882a8bbff11fbb6793bc67d969db4e90",
+        "bindings_sha256": "9ac00f9aca922f9a8a7ce02c5562f8fbb3286b26571b5fe8bd49ffcba3d6e466"
+      },
+      "after": {
+        "revisions": {
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-fixed-callback-cleanup": "fbece75f85587767784d1596e07670dc5600ebf3"
+        },
+        "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-fixed-callback-cleanup",
+        "count_allocations": true,
+        "alias_checks": false,
+        "fixture_sha256": {
+          "flat.rs": "ee591bc73bc0a3ef66505413afb4428d697194281868bf4623c0667384420fc2",
+          "bindings.rs": "ea60d202c350dde27ac959c4dc64a15addc6e956cac40624c05c78e172dccb31",
+          "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+          "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+          "input-driver.c": "d07abe8e2f1d7545c129def982c7e3344460abfbd5063f4f074299c681ad8b5c",
+          "build.py": "0ba2154e33008f3963aba8ade65d779fd740f5d8108a21722b11b7f2288786a9",
+          "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+        },
+        "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+        "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+        "compile_command": [
+          "cc",
+          "-std=gnu11",
+          "-O3",
+          "-fno-plt",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-fixed-callback-cleanup/examples/bench-c-collections/driver.c",
+          "-I/tmp/c-alias-bench-target/release/build/c-collection-bench-b0463900490a0f80/out",
+          "-L/tmp/c-fixed-after-off-count/frozen",
+          "-lc_collection_bench",
+          "-Wl,-rpath,/tmp/c-fixed-after-off-count/frozen",
+          "-ldl",
+          "-o",
+          "/tmp/c-fixed-after-off-count/driver"
+        ],
+        "cargo_command": [
+          "cargo",
+          "build",
+          "--offline",
+          "--locked",
+          "--release",
+          "--message-format=json",
+          "--features",
+          "count-allocations"
+        ],
+        "cargo_profile": {
+          "opt_level": "3",
+          "debuginfo": 0,
+          "debug_assertions": false,
+          "overflow_checks": false,
+          "test": false
+        },
+        "lock_sha256": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d",
+        "cargo_configs": {},
+        "profile_environment": {},
+        "library": "/tmp/c-fixed-after-off-count/frozen/libc_collection_bench.so",
+        "library_sha256": "40cd2a10da31477c9b9a880c59bf07653e394a8d766ed99a88ef0c37529777df",
+        "driver": "/tmp/c-fixed-after-off-count/driver",
+        "driver_sha256": "6cbff340fed7f42e05ecd97dad8156a1e373eb729b0b315ff0aed8026bfd02bc",
+        "input_driver": "/tmp/c-fixed-after-off-count/input-driver",
+        "input_driver_sha256": "9465a99cc93995d72119dd0deaf09317f344d62cc746af2a18ceae4305c373bd",
+        "input_compile_command": [
+          "cc",
+          "-std=gnu11",
+          "-O3",
+          "-fno-plt",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-fixed-callback-cleanup/examples/bench-c-collections/input-driver.c",
+          "-I/tmp/c-alias-bench-target/release/build/c-collection-bench-b0463900490a0f80/out",
+          "-L/tmp/c-fixed-after-off-count/frozen",
+          "-lc_collection_bench",
+          "-Wl,-rpath,/tmp/c-fixed-after-off-count/frozen",
+          "-ldl",
+          "-o",
+          "/tmp/c-fixed-after-off-count/input-driver"
+        ],
+        "header_sha256": "826830d22890777cd9c10b66484c7a15bad8f19d10fc919de6ea882f41c0e6d3",
+        "header_abi_sha256": "9e299e8c43d1ead193f6c06a6dc36c68882a8bbff11fbb6793bc67d969db4e90",
+        "bindings_sha256": "35c90f82f2e30812df7893a64beed5fdb504b1c30593d296b047896216245779"
+      }
+    },
+    "timings": {
+      "before": {
+        "revisions": {
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-fixed-callback-cleanup-base": "54cf11e5785fe0f700ee7dd52b3e9c23008d680e"
+        },
+        "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-fixed-callback-cleanup-base",
+        "count_allocations": false,
+        "alias_checks": true,
+        "fixture_sha256": {
+          "flat.rs": "ee591bc73bc0a3ef66505413afb4428d697194281868bf4623c0667384420fc2",
+          "bindings.rs": "ea60d202c350dde27ac959c4dc64a15addc6e956cac40624c05c78e172dccb31",
+          "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+          "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+          "input-driver.c": "d07abe8e2f1d7545c129def982c7e3344460abfbd5063f4f074299c681ad8b5c",
+          "build.py": "0ba2154e33008f3963aba8ade65d779fd740f5d8108a21722b11b7f2288786a9",
+          "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+        },
+        "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+        "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+        "compile_command": [
+          "cc",
+          "-std=gnu11",
+          "-O3",
+          "-fno-plt",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-fixed-callback-cleanup-base/examples/bench-c-collections/driver.c",
+          "-I/tmp/c-alias-bench-target/release/build/c-collection-bench-f569750dc859bfae/out",
+          "-L/tmp/c-fixed-before-time/frozen",
+          "-lc_collection_bench",
+          "-Wl,-rpath,/tmp/c-fixed-before-time/frozen",
+          "-ldl",
+          "-o",
+          "/tmp/c-fixed-before-time/driver"
+        ],
+        "cargo_command": [
+          "cargo",
+          "build",
+          "--offline",
+          "--locked",
+          "--release",
+          "--message-format=json"
+        ],
+        "cargo_profile": {
+          "opt_level": "3",
+          "debuginfo": 0,
+          "debug_assertions": false,
+          "overflow_checks": false,
+          "test": false
+        },
+        "lock_sha256": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d",
+        "cargo_configs": {},
+        "profile_environment": {},
+        "library": "/tmp/c-fixed-before-time/frozen/libc_collection_bench.so",
+        "library_sha256": "1cc25d04f29b41cd5bf497186c7909b90925ca07048ebeff01bfa4928c68a478",
+        "driver": "/tmp/c-fixed-before-time/driver",
+        "driver_sha256": "5f415a9a8bc4f0ff94fe15544a8d8e15ac44658afd4c4e4938efd48c3669a3b0",
+        "input_driver": "/tmp/c-fixed-before-time/input-driver",
+        "input_driver_sha256": "16cdf47d155c4138bf5222f9bc0156c2d5f0e58647aea249579d8f51f9392d16",
+        "input_compile_command": [
+          "cc",
+          "-std=gnu11",
+          "-O3",
+          "-fno-plt",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-fixed-callback-cleanup-base/examples/bench-c-collections/input-driver.c",
+          "-I/tmp/c-alias-bench-target/release/build/c-collection-bench-f569750dc859bfae/out",
+          "-L/tmp/c-fixed-before-time/frozen",
+          "-lc_collection_bench",
+          "-Wl,-rpath,/tmp/c-fixed-before-time/frozen",
+          "-ldl",
+          "-o",
+          "/tmp/c-fixed-before-time/input-driver"
+        ],
+        "header_sha256": "e5c2edacc93b86ccb7d991b6c74ee1322d978c7339920bf1cdbc57bb4002670a",
+        "header_abi_sha256": "9e299e8c43d1ead193f6c06a6dc36c68882a8bbff11fbb6793bc67d969db4e90",
+        "bindings_sha256": "0bfbfa3122152c32d5aeb951e6b3453a53bd54e98ebf62796ee6d284c835857b"
+      },
+      "after": {
+        "revisions": {
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-fixed-callback-cleanup": "fbece75f85587767784d1596e07670dc5600ebf3"
+        },
+        "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-fixed-callback-cleanup",
+        "count_allocations": false,
+        "alias_checks": true,
+        "fixture_sha256": {
+          "flat.rs": "ee591bc73bc0a3ef66505413afb4428d697194281868bf4623c0667384420fc2",
+          "bindings.rs": "ea60d202c350dde27ac959c4dc64a15addc6e956cac40624c05c78e172dccb31",
+          "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+          "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+          "input-driver.c": "d07abe8e2f1d7545c129def982c7e3344460abfbd5063f4f074299c681ad8b5c",
+          "build.py": "0ba2154e33008f3963aba8ade65d779fd740f5d8108a21722b11b7f2288786a9",
+          "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+        },
+        "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+        "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+        "compile_command": [
+          "cc",
+          "-std=gnu11",
+          "-O3",
+          "-fno-plt",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-fixed-callback-cleanup/examples/bench-c-collections/driver.c",
+          "-I/tmp/c-alias-bench-target/release/build/c-collection-bench-e575ea6db1f388ca/out",
+          "-L/tmp/c-fixed-after-time/frozen",
+          "-lc_collection_bench",
+          "-Wl,-rpath,/tmp/c-fixed-after-time/frozen",
+          "-ldl",
+          "-o",
+          "/tmp/c-fixed-after-time/driver"
+        ],
+        "cargo_command": [
+          "cargo",
+          "build",
+          "--offline",
+          "--locked",
+          "--release",
+          "--message-format=json"
+        ],
+        "cargo_profile": {
+          "opt_level": "3",
+          "debuginfo": 0,
+          "debug_assertions": false,
+          "overflow_checks": false,
+          "test": false
+        },
+        "lock_sha256": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d",
+        "cargo_configs": {},
+        "profile_environment": {},
+        "library": "/tmp/c-fixed-after-time/frozen/libc_collection_bench.so",
+        "library_sha256": "112b25ba7f2c046193ec8186c1e7359fbbbc38a2cf109f6db4222230823f50c4",
+        "driver": "/tmp/c-fixed-after-time/driver",
+        "driver_sha256": "0cfb5478c5a34f4f31cace35355795f2926512c39f0b7b06680ac0578b8a23cf",
+        "input_driver": "/tmp/c-fixed-after-time/input-driver",
+        "input_driver_sha256": "f0e5816143015958e61d39fcadd6a5d9452c64dc07775c043b4f0904d9c06f4b",
+        "input_compile_command": [
+          "cc",
+          "-std=gnu11",
+          "-O3",
+          "-fno-plt",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-fixed-callback-cleanup/examples/bench-c-collections/input-driver.c",
+          "-I/tmp/c-alias-bench-target/release/build/c-collection-bench-e575ea6db1f388ca/out",
+          "-L/tmp/c-fixed-after-time/frozen",
+          "-lc_collection_bench",
+          "-Wl,-rpath,/tmp/c-fixed-after-time/frozen",
+          "-ldl",
+          "-o",
+          "/tmp/c-fixed-after-time/input-driver"
+        ],
+        "header_sha256": "e5c2edacc93b86ccb7d991b6c74ee1322d978c7339920bf1cdbc57bb4002670a",
+        "header_abi_sha256": "9e299e8c43d1ead193f6c06a6dc36c68882a8bbff11fbb6793bc67d969db4e90",
+        "bindings_sha256": "0e69a8acb448327e3562189f96ff92cc58d924ae19c01be00988a2fa81bc2950"
+      }
+    },
+    "unchecked-timings": {
+      "before": {
+        "revisions": {
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-fixed-callback-cleanup-base": "54cf11e5785fe0f700ee7dd52b3e9c23008d680e"
+        },
+        "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-fixed-callback-cleanup-base",
+        "count_allocations": false,
+        "alias_checks": false,
+        "fixture_sha256": {
+          "flat.rs": "ee591bc73bc0a3ef66505413afb4428d697194281868bf4623c0667384420fc2",
+          "bindings.rs": "ea60d202c350dde27ac959c4dc64a15addc6e956cac40624c05c78e172dccb31",
+          "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+          "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+          "input-driver.c": "d07abe8e2f1d7545c129def982c7e3344460abfbd5063f4f074299c681ad8b5c",
+          "build.py": "0ba2154e33008f3963aba8ade65d779fd740f5d8108a21722b11b7f2288786a9",
+          "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+        },
+        "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+        "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+        "compile_command": [
+          "cc",
+          "-std=gnu11",
+          "-O3",
+          "-fno-plt",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-fixed-callback-cleanup-base/examples/bench-c-collections/driver.c",
+          "-I/tmp/c-alias-bench-target/release/build/c-collection-bench-f569750dc859bfae/out",
+          "-L/tmp/c-fixed-before-off-time/frozen",
+          "-lc_collection_bench",
+          "-Wl,-rpath,/tmp/c-fixed-before-off-time/frozen",
+          "-ldl",
+          "-o",
+          "/tmp/c-fixed-before-off-time/driver"
+        ],
+        "cargo_command": [
+          "cargo",
+          "build",
+          "--offline",
+          "--locked",
+          "--release",
+          "--message-format=json"
+        ],
+        "cargo_profile": {
+          "opt_level": "3",
+          "debuginfo": 0,
+          "debug_assertions": false,
+          "overflow_checks": false,
+          "test": false
+        },
+        "lock_sha256": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d",
+        "cargo_configs": {},
+        "profile_environment": {},
+        "library": "/tmp/c-fixed-before-off-time/frozen/libc_collection_bench.so",
+        "library_sha256": "4f85b7e24b266ee535105d217c7fecea71af4f4bff98404bd9e50ada14637ebb",
+        "driver": "/tmp/c-fixed-before-off-time/driver",
+        "driver_sha256": "1c96141bc2863f9c58f29f56aa10689630238d58c5390f3d43f919173dbfdc21",
+        "input_driver": "/tmp/c-fixed-before-off-time/input-driver",
+        "input_driver_sha256": "6d7dd807826984d0029ee8c8e2de32e9607a609137f82de3b37ecf22d750bf4c",
+        "input_compile_command": [
+          "cc",
+          "-std=gnu11",
+          "-O3",
+          "-fno-plt",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-fixed-callback-cleanup-base/examples/bench-c-collections/input-driver.c",
+          "-I/tmp/c-alias-bench-target/release/build/c-collection-bench-f569750dc859bfae/out",
+          "-L/tmp/c-fixed-before-off-time/frozen",
+          "-lc_collection_bench",
+          "-Wl,-rpath,/tmp/c-fixed-before-off-time/frozen",
+          "-ldl",
+          "-o",
+          "/tmp/c-fixed-before-off-time/input-driver"
+        ],
+        "header_sha256": "826830d22890777cd9c10b66484c7a15bad8f19d10fc919de6ea882f41c0e6d3",
+        "header_abi_sha256": "9e299e8c43d1ead193f6c06a6dc36c68882a8bbff11fbb6793bc67d969db4e90",
+        "bindings_sha256": "9ac00f9aca922f9a8a7ce02c5562f8fbb3286b26571b5fe8bd49ffcba3d6e466"
+      },
+      "after": {
+        "revisions": {
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-fixed-callback-cleanup": "fbece75f85587767784d1596e07670dc5600ebf3"
+        },
+        "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-fixed-callback-cleanup",
+        "count_allocations": false,
+        "alias_checks": false,
+        "fixture_sha256": {
+          "flat.rs": "ee591bc73bc0a3ef66505413afb4428d697194281868bf4623c0667384420fc2",
+          "bindings.rs": "ea60d202c350dde27ac959c4dc64a15addc6e956cac40624c05c78e172dccb31",
+          "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+          "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+          "input-driver.c": "d07abe8e2f1d7545c129def982c7e3344460abfbd5063f4f074299c681ad8b5c",
+          "build.py": "0ba2154e33008f3963aba8ade65d779fd740f5d8108a21722b11b7f2288786a9",
+          "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+        },
+        "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+        "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+        "compile_command": [
+          "cc",
+          "-std=gnu11",
+          "-O3",
+          "-fno-plt",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-fixed-callback-cleanup/examples/bench-c-collections/driver.c",
+          "-I/tmp/c-alias-bench-target/release/build/c-collection-bench-e575ea6db1f388ca/out",
+          "-L/tmp/c-fixed-after-off-time/frozen",
+          "-lc_collection_bench",
+          "-Wl,-rpath,/tmp/c-fixed-after-off-time/frozen",
+          "-ldl",
+          "-o",
+          "/tmp/c-fixed-after-off-time/driver"
+        ],
+        "cargo_command": [
+          "cargo",
+          "build",
+          "--offline",
+          "--locked",
+          "--release",
+          "--message-format=json"
+        ],
+        "cargo_profile": {
+          "opt_level": "3",
+          "debuginfo": 0,
+          "debug_assertions": false,
+          "overflow_checks": false,
+          "test": false
+        },
+        "lock_sha256": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d",
+        "cargo_configs": {},
+        "profile_environment": {},
+        "library": "/tmp/c-fixed-after-off-time/frozen/libc_collection_bench.so",
+        "library_sha256": "d175d70cdf868d12a8cf0bdc51e502276f69101f31560f1f4073f18a52fa60d9",
+        "driver": "/tmp/c-fixed-after-off-time/driver",
+        "driver_sha256": "ab9e6d42d9efa316aa70ae8f8f017fa99235fab668b444649533322ce465f782",
+        "input_driver": "/tmp/c-fixed-after-off-time/input-driver",
+        "input_driver_sha256": "08ad5c3277094565e7e47c38a7473375edf9a3956a01bb6ea2419877fd5399cc",
+        "input_compile_command": [
+          "cc",
+          "-std=gnu11",
+          "-O3",
+          "-fno-plt",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-fixed-callback-cleanup/examples/bench-c-collections/input-driver.c",
+          "-I/tmp/c-alias-bench-target/release/build/c-collection-bench-e575ea6db1f388ca/out",
+          "-L/tmp/c-fixed-after-off-time/frozen",
+          "-lc_collection_bench",
+          "-Wl,-rpath,/tmp/c-fixed-after-off-time/frozen",
+          "-ldl",
+          "-o",
+          "/tmp/c-fixed-after-off-time/input-driver"
+        ],
+        "header_sha256": "826830d22890777cd9c10b66484c7a15bad8f19d10fc919de6ea882f41c0e6d3",
+        "header_abi_sha256": "9e299e8c43d1ead193f6c06a6dc36c68882a8bbff11fbb6793bc67d969db4e90",
+        "bindings_sha256": "35c90f82f2e30812df7893a64beed5fdb504b1c30593d296b047896216245779"
+      }
+    }
+  },
+  "runs": {
+    "counts": {
+      "settings": {
+        "before": "/tmp/c-fixed-before-count",
+        "after": "/tmp/c-fixed-after-count",
+        "output": "/tmp/c-fixed-counts",
+        "kind": "count",
+        "forks": 2,
+        "same_build": null,
+        "smoke": false,
+        "cases": "callback_fixed,callback_many,fixed_borrow,fixed_move,handles,numbers,control",
+        "sizes": "0,1,64,512",
+        "batches": null,
+        "target_ms": 20
+      },
+      "samples_sha256": "5f4b4d12449694410e2a64fe049d21267369882b6af1fd92381ef5d1823c5f89",
+      "runner_sha256": "fee959f4aa3546faa9098d28e9b7aecf0b3a8fc3d501c759d60f280fe7950c5d"
+    },
+    "unchecked-counts": {
+      "settings": {
+        "before": "/tmp/c-fixed-before-off-count",
+        "after": "/tmp/c-fixed-after-off-count",
+        "output": "/tmp/c-fixed-off-counts",
+        "kind": "count",
+        "forks": 2,
+        "same_build": null,
+        "smoke": false,
+        "cases": "callback_fixed,callback_many,fixed_borrow,fixed_move,handles,numbers,control",
+        "sizes": "0,1,64,512",
+        "batches": null,
+        "target_ms": 20
+      },
+      "samples_sha256": "af4a0b1a44a31c013494c0a4c6383d7dbbab4b89617241333b62e0b7f90f9a7c",
+      "runner_sha256": "fee959f4aa3546faa9098d28e9b7aecf0b3a8fc3d501c759d60f280fe7950c5d"
+    },
+    "timings": {
+      "settings": {
+        "before": "/tmp/c-fixed-before-time",
+        "after": "/tmp/c-fixed-after-time",
+        "output": "/tmp/c-fixed-times",
+        "kind": "time",
+        "forks": 8,
+        "same_build": null,
+        "smoke": false,
+        "cases": "callback_fixed,callback_many,fixed_borrow,fixed_move,handles,numbers,control",
+        "sizes": "0,1,64,512",
+        "batches": 10,
+        "target_ms": 15
+      },
+      "samples_sha256": "cde15a7c843bc639b5aa34175bf7006eaf3b3622e48a585fac3ca99bb876ed13",
+      "runner_sha256": "fee959f4aa3546faa9098d28e9b7aecf0b3a8fc3d501c759d60f280fe7950c5d"
+    },
+    "unchecked-timings": {
+      "settings": {
+        "before": "/tmp/c-fixed-before-off-time",
+        "after": "/tmp/c-fixed-after-off-time",
+        "output": "/tmp/c-fixed-off-times",
+        "kind": "time",
+        "forks": 8,
+        "same_build": null,
+        "smoke": false,
+        "cases": "callback_fixed,callback_many,fixed_borrow,fixed_move,handles,numbers,control",
+        "sizes": "0,1,64,512",
+        "batches": 10,
+        "target_ms": 15
+      },
+      "samples_sha256": "d1276b2024de4267ca6bdde92715882e6f82fc6e603338e0138aa6347e7f0828",
+      "runner_sha256": "fee959f4aa3546faa9098d28e9b7aecf0b3a8fc3d501c759d60f280fe7950c5d"
+    },
+    "identical-library": {
+      "settings": {
+        "before": "/tmp/c-fixed-before-time",
+        "after": "/tmp/c-fixed-after-time",
+        "output": "/tmp/c-fixed-aa",
+        "kind": "time",
+        "forks": 4,
+        "same_build": "before",
+        "smoke": false,
+        "cases": "callback_fixed,callback_many,fixed_move,control",
+        "sizes": "1,512",
+        "batches": 10,
+        "target_ms": 15
+      },
+      "samples_sha256": "de034c406f7a06cd92ec1d665d7e8fa3fe3bcef8f02be1fce2302636656c1c7d",
+      "runner_sha256": "fee959f4aa3546faa9098d28e9b7aecf0b3a8fc3d501c759d60f280fe7950c5d"
+    },
+    "unchecked-identical-library": {
+      "settings": {
+        "before": "/tmp/c-fixed-before-off-time",
+        "after": "/tmp/c-fixed-after-off-time",
+        "output": "/tmp/c-fixed-off-aa",
+        "kind": "time",
+        "forks": 4,
+        "same_build": "before",
+        "smoke": false,
+        "cases": "callback_fixed,callback_many,fixed_move,control",
+        "sizes": "1,512",
+        "batches": 10,
+        "target_ms": 15
+      },
+      "samples_sha256": "54a842c38003ee3dac19701a9a1a114181052a6f6d6bccb7468cb85e70cf23ec",
+      "runner_sha256": "fee959f4aa3546faa9098d28e9b7aecf0b3a8fc3d501c759d60f280fe7950c5d"
+    }
+  }
+}

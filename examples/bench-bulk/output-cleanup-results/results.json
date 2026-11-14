@@ -1,0 +1,3245 @@
+{
+  "builds": {
+    "before": {
+      "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-output-cleanup-baseline",
+      "commit": "7956e5e058be6fc28273540b35366498156ace85",
+      "dirty_paths": [],
+      "profile": "release",
+      "profile_environment": {},
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8",
+      "path_dependency_repositories": [
+        {
+          "repository": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-output-cleanup-baseline",
+          "commit": "7956e5e058be6fc28273540b35366498156ace85",
+          "packages": [
+            "prebindgen",
+            "prebindgen-conversions",
+            "prebindgen-declarations",
+            "prebindgen-flat",
+            "prebindgen-jni",
+            "prebindgen-jni-runtime",
+            "prebindgen-proc-macro",
+            "prebindgen-reprc",
+            "prebindgen-runtime"
+          ],
+          "contains_fixture": true
+        }
+      ],
+      "cargo_config_sha256": {},
+      "cargo": "cargo 1.98.0 (797e8a9bc 2026-08-05)",
+      "dependency_lock_sha256": "50aec39504ae6c12f747a6737ac6ff1de1aa0ea743f3fb86370345e7d07a551f",
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "kotlin": "info: kotlinc-jvm 2.4.21 (JRE 11.0.29+7)",
+      "fixture_sha256": {
+        "flat.rs": "c6bbecbf78d9c60aa6ea0ff5d09f129e5b3bc3838add408300ee4cb4c084dc2e",
+        "bindings.rs": "43134d021f67499143b58866598e49cc00320deaee9464e8c144a7cbfef68845",
+        "Bench.kt": "b8572ad9f0b02220a1235a61cf40c201d0dfa7eca3ba2e7d5a991e104b9a5884",
+        "run.py": "15a04143ddcf1522f03425b285716689a086ecab3a3081366c9d3cdf8f87656e",
+        "Cargo.lock.snapshot": "50aec39504ae6c12f747a6737ac6ff1de1aa0ea743f3fb86370345e7d07a551f"
+      },
+      "jar": "/tmp/output-cleanup-before/bench.jar",
+      "library": "/tmp/output-cleanup-before/target/release/libbulk_bench.so",
+      "jar_sha256": "af93a675cb6ea0520daedfeb082e6126098df851c1140507d13fa5fe71799980",
+      "native_sha256": "7401f34dfe5e1dfe1e2c351017c9cfeb0f208ef83528c07290867909a0904480"
+    },
+    "after": {
+      "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-output-cleanup",
+      "commit": "86991f627d211415770a33710331b8fb77283ab1",
+      "dirty_paths": [],
+      "profile": "release",
+      "profile_environment": {},
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8",
+      "path_dependency_repositories": [
+        {
+          "repository": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-output-cleanup",
+          "commit": "86991f627d211415770a33710331b8fb77283ab1",
+          "packages": [
+            "prebindgen",
+            "prebindgen-conversions",
+            "prebindgen-declarations",
+            "prebindgen-flat",
+            "prebindgen-jni",
+            "prebindgen-jni-runtime",
+            "prebindgen-proc-macro",
+            "prebindgen-reprc",
+            "prebindgen-runtime"
+          ],
+          "contains_fixture": true
+        }
+      ],
+      "cargo_config_sha256": {},
+      "cargo": "cargo 1.98.0 (797e8a9bc 2026-08-05)",
+      "dependency_lock_sha256": "50aec39504ae6c12f747a6737ac6ff1de1aa0ea743f3fb86370345e7d07a551f",
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "kotlin": "info: kotlinc-jvm 2.4.21 (JRE 11.0.29+7)",
+      "fixture_sha256": {
+        "flat.rs": "c6bbecbf78d9c60aa6ea0ff5d09f129e5b3bc3838add408300ee4cb4c084dc2e",
+        "bindings.rs": "43134d021f67499143b58866598e49cc00320deaee9464e8c144a7cbfef68845",
+        "Bench.kt": "b8572ad9f0b02220a1235a61cf40c201d0dfa7eca3ba2e7d5a991e104b9a5884",
+        "run.py": "15a04143ddcf1522f03425b285716689a086ecab3a3081366c9d3cdf8f87656e",
+        "Cargo.lock.snapshot": "50aec39504ae6c12f747a6737ac6ff1de1aa0ea743f3fb86370345e7d07a551f"
+      },
+      "jar": "/tmp/output-cleanup-after-v2/bench.jar",
+      "library": "/tmp/output-cleanup-after-v2/target/release/libbulk_bench.so",
+      "jar_sha256": "93d8d95b910fbef43051672ec322f61d57f682885d7a20e865b39b50ca714e63",
+      "native_sha256": "58f93e4f5d639ea6ec063099af45a76761c012897ceaafac9ef485356a9b6833"
+    }
+  },
+  "affinity": [
+    0,
+    1
+  ],
+  "platform": "Linux-6.8.0-138-generic-x86_64-with-glibc2.39",
+  "cpu": "Architecture:                            x86_64\nCPU op-mode(s):                          32-bit, 64-bit\nAddress sizes:                           48 bits physical, 48 bits virtual\nByte Order:                              Little Endian\nCPU(s):                                  2\nOn-line CPU(s) list:                     0,1\nVendor ID:                               AuthenticAMD\nModel name:                              AMD EPYC 7713 64-Core Processor\nCPU family:                              25\nModel:                                   1\nThread(s) per core:                      1\nCore(s) per socket:                      2\nSocket(s):                               1\nStepping:                                1\nBogoMIPS:                                4000.00\nFlags:                                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm rep_good nopl cpuid extd_apicid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw perfctr_core ssbd ibrs ibpb stibp vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms rdseed adx smap clflushopt clwb sha_ni xsaveopt xsavec xgetbv1 xsaves clzero xsaveerptr wbnoinvd arat umip pku ospke vaes vpclmulqdq rdpid overflow_recov succor fsrm\nHypervisor vendor:                       KVM\nVirtualization type:                     full\nL1d cache:                               128 KiB (2 instances)\nL1i cache:                               128 KiB (2 instances)\nL2 cache:                                1 MiB (2 instances)\nL3 cache:                                32 MiB (2 instances)\nNUMA node(s):                            1\nNUMA node0 CPU(s):                       0,1\nVulnerability Gather data sampling:      Not affected\nVulnerability Indirect target selection: Not affected\nVulnerability Itlb multihit:             Not affected\nVulnerability L1tf:                      Not affected\nVulnerability Mds:                       Not affected\nVulnerability Meltdown:                  Not affected\nVulnerability Mmio stale data:           Not affected\nVulnerability Reg file data sampling:    Not affected\nVulnerability Retbleed:                  Not affected\nVulnerability Spec rstack overflow:      Vulnerable: Safe RET, no microcode\nVulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl\nVulnerability Spectre v1:                Mitigation; usercopy/swapgs barriers and __user pointer sanitization\nVulnerability Spectre v2:                Mitigation; Retpolines; IBPB conditional; IBRS_FW; STIBP disabled; RSB filling; PBRSB-eIBRS Not affected; BHI Not affected\nVulnerability Srbds:                     Not affected\nVulnerability Tsa:                       Vulnerable: Clear CPU buffers attempted, no microcode\nVulnerability Tsx async abort:           Not affected\nVulnerability Vmscape:                   Not affected\n",
+  "java": "openjdk version \"11.0.29\" 2025-10-21\nOpenJDK Runtime Environment Temurin-11.0.29+7 (build 11.0.29+7)\nOpenJDK 64-Bit Server VM Temurin-11.0.29+7 (build 11.0.29+7, mixed mode)\n",
+  "jvm_flags": [
+    "-Xms256m",
+    "-Xmx256m",
+    "-XX:+UseG1GC",
+    "-XX:ActiveProcessorCount=2",
+    "-XX:+PrintCommandLineFlags"
+  ],
+  "orders": [
+    {
+      "trial": 0,
+      "treatment": "before-plain",
+      "seconds": 39.784377336502075,
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:+PrintCommandLineFlags",
+        "-Djava.library.path=/tmp/output-cleanup-before/target/release",
+        "-jar",
+        "/tmp/output-cleanup-before/bench.jar",
+        "plain",
+        "0,1,8,64,512",
+        "6",
+        "9",
+        "20",
+        "0",
+        "64,4096,65536",
+        "control,record_input,handles_input,records_output,records_roundtrip,callback_records,owned_handles_roundtrip,owned_handle_records_roundtrip,nested_owned_handles_roundtrip"
+      ]
+    },
+    {
+      "trial": 0,
+      "treatment": "after-plain",
+      "seconds": 40.7218291759491,
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:+PrintCommandLineFlags",
+        "-Djava.library.path=/tmp/output-cleanup-after-v2/target/release",
+        "-jar",
+        "/tmp/output-cleanup-after-v2/bench.jar",
+        "plain",
+        "0,1,8,64,512",
+        "6",
+        "9",
+        "20",
+        "0",
+        "64,4096,65536",
+        "control,record_input,handles_input,records_output,records_roundtrip,callback_records,owned_handles_roundtrip,owned_handle_records_roundtrip,nested_owned_handles_roundtrip"
+      ]
+    },
+    {
+      "trial": 0,
+      "treatment": "after-bulk",
+      "seconds": 13.072160243988037,
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:+PrintCommandLineFlags",
+        "-Djava.library.path=/tmp/output-cleanup-after-v2/target/release",
+        "-jar",
+        "/tmp/output-cleanup-after-v2/bench.jar",
+        "bulk",
+        "0,1,8,64,512",
+        "6",
+        "9",
+        "20",
+        "0",
+        "64,4096,65536",
+        "control,record_input,handles_input,records_output,records_roundtrip,callback_records,owned_handles_roundtrip,owned_handle_records_roundtrip,nested_owned_handles_roundtrip"
+      ]
+    },
+    {
+      "trial": 0,
+      "treatment": "before-bulk",
+      "seconds": 13.097905158996582,
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:+PrintCommandLineFlags",
+        "-Djava.library.path=/tmp/output-cleanup-before/target/release",
+        "-jar",
+        "/tmp/output-cleanup-before/bench.jar",
+        "bulk",
+        "0,1,8,64,512",
+        "6",
+        "9",
+        "20",
+        "0",
+        "64,4096,65536",
+        "control,record_input,handles_input,records_output,records_roundtrip,callback_records,owned_handles_roundtrip,owned_handle_records_roundtrip,nested_owned_handles_roundtrip"
+      ]
+    },
+    {
+      "trial": 1,
+      "treatment": "after-plain",
+      "seconds": 41.15125131607056,
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:+PrintCommandLineFlags",
+        "-Djava.library.path=/tmp/output-cleanup-after-v2/target/release",
+        "-jar",
+        "/tmp/output-cleanup-after-v2/bench.jar",
+        "plain",
+        "0,1,8,64,512",
+        "6",
+        "9",
+        "20",
+        "1",
+        "64,4096,65536",
+        "control,record_input,handles_input,records_output,records_roundtrip,callback_records,owned_handles_roundtrip,owned_handle_records_roundtrip,nested_owned_handles_roundtrip"
+      ]
+    },
+    {
+      "trial": 1,
+      "treatment": "before-bulk",
+      "seconds": 13.156472206115723,
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:+PrintCommandLineFlags",
+        "-Djava.library.path=/tmp/output-cleanup-before/target/release",
+        "-jar",
+        "/tmp/output-cleanup-before/bench.jar",
+        "bulk",
+        "0,1,8,64,512",
+        "6",
+        "9",
+        "20",
+        "1",
+        "64,4096,65536",
+        "control,record_input,handles_input,records_output,records_roundtrip,callback_records,owned_handles_roundtrip,owned_handle_records_roundtrip,nested_owned_handles_roundtrip"
+      ]
+    },
+    {
+      "trial": 1,
+      "treatment": "before-plain",
+      "seconds": 41.03567576408386,
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:+PrintCommandLineFlags",
+        "-Djava.library.path=/tmp/output-cleanup-before/target/release",
+        "-jar",
+        "/tmp/output-cleanup-before/bench.jar",
+        "plain",
+        "0,1,8,64,512",
+        "6",
+        "9",
+        "20",
+        "1",
+        "64,4096,65536",
+        "control,record_input,handles_input,records_output,records_roundtrip,callback_records,owned_handles_roundtrip,owned_handle_records_roundtrip,nested_owned_handles_roundtrip"
+      ]
+    },
+    {
+      "trial": 1,
+      "treatment": "after-bulk",
+      "seconds": 12.972060203552246,
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:+PrintCommandLineFlags",
+        "-Djava.library.path=/tmp/output-cleanup-after-v2/target/release",
+        "-jar",
+        "/tmp/output-cleanup-after-v2/bench.jar",
+        "bulk",
+        "0,1,8,64,512",
+        "6",
+        "9",
+        "20",
+        "1",
+        "64,4096,65536",
+        "control,record_input,handles_input,records_output,records_roundtrip,callback_records,owned_handles_roundtrip,owned_handle_records_roundtrip,nested_owned_handles_roundtrip"
+      ]
+    },
+    {
+      "trial": 2,
+      "treatment": "before-bulk",
+      "seconds": 13.176687002182007,
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:+PrintCommandLineFlags",
+        "-Djava.library.path=/tmp/output-cleanup-before/target/release",
+        "-jar",
+        "/tmp/output-cleanup-before/bench.jar",
+        "bulk",
+        "0,1,8,64,512",
+        "6",
+        "9",
+        "20",
+        "2",
+        "64,4096,65536",
+        "control,record_input,handles_input,records_output,records_roundtrip,callback_records,owned_handles_roundtrip,owned_handle_records_roundtrip,nested_owned_handles_roundtrip"
+      ]
+    },
+    {
+      "trial": 2,
+      "treatment": "after-bulk",
+      "seconds": 13.406813383102417,
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:+PrintCommandLineFlags",
+        "-Djava.library.path=/tmp/output-cleanup-after-v2/target/release",
+        "-jar",
+        "/tmp/output-cleanup-after-v2/bench.jar",
+        "bulk",
+        "0,1,8,64,512",
+        "6",
+        "9",
+        "20",
+        "2",
+        "64,4096,65536",
+        "control,record_input,handles_input,records_output,records_roundtrip,callback_records,owned_handles_roundtrip,owned_handle_records_roundtrip,nested_owned_handles_roundtrip"
+      ]
+    },
+    {
+      "trial": 2,
+      "treatment": "after-plain",
+      "seconds": 40.69836378097534,
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:+PrintCommandLineFlags",
+        "-Djava.library.path=/tmp/output-cleanup-after-v2/target/release",
+        "-jar",
+        "/tmp/output-cleanup-after-v2/bench.jar",
+        "plain",
+        "0,1,8,64,512",
+        "6",
+        "9",
+        "20",
+        "2",
+        "64,4096,65536",
+        "control,record_input,handles_input,records_output,records_roundtrip,callback_records,owned_handles_roundtrip,owned_handle_records_roundtrip,nested_owned_handles_roundtrip"
+      ]
+    },
+    {
+      "trial": 2,
+      "treatment": "before-plain",
+      "seconds": 40.43177008628845,
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:+PrintCommandLineFlags",
+        "-Djava.library.path=/tmp/output-cleanup-before/target/release",
+        "-jar",
+        "/tmp/output-cleanup-before/bench.jar",
+        "plain",
+        "0,1,8,64,512",
+        "6",
+        "9",
+        "20",
+        "2",
+        "64,4096,65536",
+        "control,record_input,handles_input,records_output,records_roundtrip,callback_records,owned_handles_roundtrip,owned_handle_records_roundtrip,nested_owned_handles_roundtrip"
+      ]
+    },
+    {
+      "trial": 3,
+      "treatment": "after-bulk",
+      "seconds": 13.008407831192017,
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:+PrintCommandLineFlags",
+        "-Djava.library.path=/tmp/output-cleanup-after-v2/target/release",
+        "-jar",
+        "/tmp/output-cleanup-after-v2/bench.jar",
+        "bulk",
+        "0,1,8,64,512",
+        "6",
+        "9",
+        "20",
+        "3",
+        "64,4096,65536",
+        "control,record_input,handles_input,records_output,records_roundtrip,callback_records,owned_handles_roundtrip,owned_handle_records_roundtrip,nested_owned_handles_roundtrip"
+      ]
+    },
+    {
+      "trial": 3,
+      "treatment": "before-plain",
+      "seconds": 40.46639442443848,
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:+PrintCommandLineFlags",
+        "-Djava.library.path=/tmp/output-cleanup-before/target/release",
+        "-jar",
+        "/tmp/output-cleanup-before/bench.jar",
+        "plain",
+        "0,1,8,64,512",
+        "6",
+        "9",
+        "20",
+        "3",
+        "64,4096,65536",
+        "control,record_input,handles_input,records_output,records_roundtrip,callback_records,owned_handles_roundtrip,owned_handle_records_roundtrip,nested_owned_handles_roundtrip"
+      ]
+    },
+    {
+      "trial": 3,
+      "treatment": "before-bulk",
+      "seconds": 13.39689588546753,
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:+PrintCommandLineFlags",
+        "-Djava.library.path=/tmp/output-cleanup-before/target/release",
+        "-jar",
+        "/tmp/output-cleanup-before/bench.jar",
+        "bulk",
+        "0,1,8,64,512",
+        "6",
+        "9",
+        "20",
+        "3",
+        "64,4096,65536",
+        "control,record_input,handles_input,records_output,records_roundtrip,callback_records,owned_handles_roundtrip,owned_handle_records_roundtrip,nested_owned_handles_roundtrip"
+      ]
+    },
+    {
+      "trial": 3,
+      "treatment": "after-plain",
+      "seconds": 40.65136742591858,
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:+PrintCommandLineFlags",
+        "-Djava.library.path=/tmp/output-cleanup-after-v2/target/release",
+        "-jar",
+        "/tmp/output-cleanup-after-v2/bench.jar",
+        "plain",
+        "0,1,8,64,512",
+        "6",
+        "9",
+        "20",
+        "3",
+        "64,4096,65536",
+        "control,record_input,handles_input,records_output,records_roundtrip,callback_records,owned_handles_roundtrip,owned_handle_records_roundtrip,nested_owned_handles_roundtrip"
+      ]
+    }
+  ],
+  "warmup": 6,
+  "batches": 9,
+  "batch_target_ms": 20,
+  "samples_sha256": "69c0c9189d643e4b78fc9e604d18db8ba2a08da07966cdabe30b5b99b245cf6c",
+  "runner_sha256": "c305509817db182c232591ef380d7e10cd044cb2d89922be8a6f39dddfb2486c",
+  "summary": [
+    {
+      "mode": "bulk",
+      "case": "callback_records",
+      "size": 0,
+      "before": {
+        "ns": 481.43304079959853,
+        "min_ns": 476.76310416864493,
+        "max_ns": 492.4092797241163,
+        "trial_medians": [
+          478.08666857128014,
+          476.76310416864493,
+          484.779413027917,
+          492.4092797241163
+        ],
+        "jvm_bytes": 104.0
+      },
+      "after": {
+        "ns": 477.8439357392522,
+        "min_ns": 474.9267797481367,
+        "max_ns": 491.7217811622381,
+        "trial_medians": [
+          474.9267797481367,
+          477.7956183543852,
+          477.8922531241191,
+          491.7217811622381
+        ],
+        "jvm_bytes": 104.0
+      },
+      "speedup": 1.0075110403039724,
+      "latency_change_percent": -0.7455045159312945,
+      "paired_speedups": [
+        1.0066534231336022,
+        0.9978390044904629,
+        1.0144115328481986,
+        1.0013981454314536
+      ]
+    },
+    {
+      "mode": "bulk",
+      "case": "callback_records",
+      "size": 1,
+      "before": {
+        "ns": 599.3473525813301,
+        "min_ns": 586.3224495191513,
+        "max_ns": 605.6824142212531,
+        "trial_medians": [
+          599.651276867735,
+          599.0434282949253,
+          586.3224495191513,
+          605.6824142212531
+        ],
+        "jvm_bytes": 272.0
+      },
+      "after": {
+        "ns": 592.4941724310117,
+        "min_ns": 577.5748868638026,
+        "max_ns": 640.0491275082145,
+        "trial_medians": [
+          601.0170719244989,
+          577.5748868638026,
+          583.9712729375248,
+          640.0491275082145
+        ],
+        "jvm_bytes": 272.0
+      },
+      "speedup": 1.011566662541506,
+      "latency_change_percent": -1.1434404641653018,
+      "paired_speedups": [
+        0.9977275270195063,
+        1.0371701435076162,
+        1.0040261853460695,
+        0.9463061321233965
+      ]
+    },
+    {
+      "mode": "bulk",
+      "case": "callback_records",
+      "size": 8,
+      "before": {
+        "ns": 832.1292387932526,
+        "min_ns": 813.1812960047654,
+        "max_ns": 851.2295219692514,
+        "trial_medians": [
+          828.7229617304492,
+          835.5355158560561,
+          851.2295219692514,
+          813.1812960047654
+        ],
+        "jvm_bytes": 1304.0
+      },
+      "after": {
+        "ns": 819.3405860022152,
+        "min_ns": 806.4047475357071,
+        "max_ns": 882.2823582468943,
+        "trial_medians": [
+          882.2823582468943,
+          825.9754616640844,
+          806.4047475357071,
+          812.7057103403461
+        ],
+        "jvm_bytes": 1304.0
+      },
+      "speedup": 1.0156084697981784,
+      "latency_change_percent": -1.536858963108112,
+      "paired_speedups": [
+        0.9392944945392898,
+        1.0115742593281296,
+        1.0555859505670377,
+        1.000585188043308
+      ]
+    },
+    {
+      "mode": "bulk",
+      "case": "callback_records",
+      "size": 64,
+      "before": {
+        "ns": 2654.683389495931,
+        "min_ns": 2591.4257312903633,
+        "max_ns": 2741.723199166341,
+        "trial_medians": [
+          2636.5657698056802,
+          2591.4257312903633,
+          2741.723199166341,
+          2672.801009186182
+        ],
+        "jvm_bytes": 9592.0
+      },
+      "after": {
+        "ns": 2609.302332498699,
+        "min_ns": 2525.526736995271,
+        "max_ns": 2676.5569869856713,
+        "trial_medians": [
+          2634.6737851662406,
+          2583.9308798311567,
+          2676.5569869856713,
+          2525.526736995271
+        ],
+        "jvm_bytes": 9592.0
+      },
+      "speedup": 1.017392027145346,
+      "latency_change_percent": -1.7094715391219983,
+      "paired_speedups": [
+        1.0007181096385032,
+        1.0029005618988138,
+        1.0243470295971766,
+        1.0583142795653508
+      ]
+    },
+    {
+      "mode": "bulk",
+      "case": "callback_records",
+      "size": 512,
+      "before": {
+        "ns": 16865.656201967086,
+        "min_ns": 16116.737883283877,
+        "max_ns": 17531.761006289307,
+        "trial_medians": [
+          16261.94333683106,
+          16116.737883283877,
+          17531.761006289307,
+          17469.36906710311
+        ],
+        "jvm_bytes": 75896.0
+      },
+      "after": {
+        "ns": 16497.09822125825,
+        "min_ns": 16234.174698795181,
+        "max_ns": 17292.364545454544,
+        "trial_medians": [
+          17292.364545454544,
+          16560.66266986411,
+          16433.53377265239,
+          16234.174698795181
+        ],
+        "jvm_bytes": 75896.0
+      },
+      "speedup": 1.0223407762847596,
+      "latency_change_percent": -2.185257284361397,
+      "paired_speedups": [
+        0.9404117808229795,
+        0.9731940203462961,
+        1.0668284283119018,
+        1.076086058652529
+      ]
+    },
+    {
+      "mode": "bulk",
+      "case": "control",
+      "size": 1,
+      "before": {
+        "ns": 14.256277176705709,
+        "min_ns": 12.68841508321346,
+        "max_ns": 28.27984002737888,
+        "trial_medians": [
+          14.714744917688654,
+          12.68841508321346,
+          28.27984002737888,
+          13.797809435722765
+        ],
+        "jvm_bytes": 0.0
+      },
+      "after": {
+        "ns": 14.0872572935731,
+        "min_ns": 13.56522036157395,
+        "max_ns": 36.19144919288547,
+        "trial_medians": [
+          36.19144919288547,
+          14.090168585344177,
+          14.084346001802023,
+          13.56522036157395
+        ],
+        "jvm_bytes": 0.0
+      },
+      "speedup": 1.0119980688653796,
+      "latency_change_percent": -1.1855821897794105,
+      "paired_speedups": [
+        0.406580704720199,
+        0.9005154910929353,
+        2.007891599919557,
+        1.0171459856861351
+      ]
+    },
+    {
+      "mode": "bulk",
+      "case": "handles_input",
+      "size": 0,
+      "before": {
+        "ns": 160.7959994276286,
+        "min_ns": 148.84321133583273,
+        "max_ns": 191.07338444687844,
+        "trial_medians": [
+          155.08099572098078,
+          166.5110031342764,
+          148.84321133583273,
+          191.07338444687844
+        ],
+        "jvm_bytes": 136.0
+      },
+      "after": {
+        "ns": 155.81130021755877,
+        "min_ns": 144.72024071627771,
+        "max_ns": 170.65097640614178,
+        "trial_medians": [
+          157.50428888752316,
+          154.11831154759435,
+          144.72024071627771,
+          170.65097640614178
+        ],
+        "jvm_bytes": 136.0
+      },
+      "speedup": 1.0319918979118312,
+      "latency_change_percent": -3.100014445516952,
+      "paired_speedups": [
+        0.9846144306059317,
+        1.0804102475704516,
+        1.0284892465570041,
+        1.11967354931584
+      ]
+    },
+    {
+      "mode": "bulk",
+      "case": "handles_input",
+      "size": 1,
+      "before": {
+        "ns": 269.54723152665537,
+        "min_ns": 259.2152133580705,
+        "max_ns": 295.28025065148296,
+        "trial_medians": [
+          264.37297737372364,
+          274.7214856795871,
+          259.2152133580705,
+          295.28025065148296
+        ],
+        "jvm_bytes": 384.0
+      },
+      "after": {
+        "ns": 271.9928835980639,
+        "min_ns": 248.91388125272974,
+        "max_ns": 285.13390435403284,
+        "trial_medians": [
+          279.91531262008016,
+          285.13390435403284,
+          264.0704545760476,
+          248.91388125272974
+        ],
+        "jvm_bytes": 384.0
+      },
+      "speedup": 0.9910083968409167,
+      "latency_change_percent": 0.9073185643780901,
+      "paired_speedups": [
+        0.9444748659840142,
+        0.963482355077924,
+        0.9816138415568983,
+        1.1862747435595047
+      ]
+    },
+    {
+      "mode": "bulk",
+      "case": "handles_input",
+      "size": 8,
+      "before": {
+        "ns": 528.8645929865645,
+        "min_ns": 465.50413650465356,
+        "max_ns": 554.5260570905206,
+        "trial_medians": [
+          551.4959430644402,
+          465.50413650465356,
+          506.2332429086887,
+          554.5260570905206
+        ],
+        "jvm_bytes": 912.0
+      },
+      "after": {
+        "ns": 493.07308062518024,
+        "min_ns": 472.81819459408814,
+        "max_ns": 533.116503236201,
+        "trial_medians": [
+          512.5041290814382,
+          533.116503236201,
+          472.81819459408814,
+          473.64203216892224
+        ],
+        "jvm_bytes": 920.0
+      },
+      "speedup": 1.0725886562616707,
+      "latency_change_percent": -6.767613645539228,
+      "paired_speedups": [
+        1.0760809752945544,
+        0.8731752509608743,
+        1.0706720864312067,
+        1.1707703696633736
+      ]
+    },
+    {
+      "mode": "bulk",
+      "case": "handles_input",
+      "size": 64,
+      "before": {
+        "ns": 2178.9535119585325,
+        "min_ns": 1887.7132520944401,
+        "max_ns": 2193.254882489242,
+        "trial_medians": [
+          2193.254882489242,
+          2172.60828064956,
+          2185.2987432675045,
+          1887.7132520944401
+        ],
+        "jvm_bytes": 5632.0
+      },
+      "after": {
+        "ns": 2148.2536192336147,
+        "min_ns": 2059.6640599184934,
+        "max_ns": 2303.604875634204,
+        "trial_medians": [
+          2196.9599263012437,
+          2059.6640599184934,
+          2303.604875634204,
+          2099.5473121659857
+        ],
+        "jvm_bytes": 5640.0
+      },
+      "speedup": 1.0142906277220052,
+      "latency_change_percent": -1.4089283023447141,
+      "paired_speedups": [
+        0.9983135587647065,
+        1.0548362341844895,
+        0.9486430448129137,
+        0.8991048885423744
+      ]
+    },
+    {
+      "mode": "bulk",
+      "case": "handles_input",
+      "size": 512,
+      "before": {
+        "ns": 14096.483717980533,
+        "min_ns": 13336.113680154143,
+        "max_ns": 15138.96256299496,
+        "trial_medians": [
+          15138.96256299496,
+          13981.004953998585,
+          14211.962481962482,
+          13336.113680154143
+        ],
+        "jvm_bytes": 41048.0
+      },
+      "after": {
+        "ns": 15196.874177700669,
+        "min_ns": 14953.31091180867,
+        "max_ns": 15470.331717451523,
+        "trial_medians": [
+          15470.331717451523,
+          15037.843124165554,
+          14953.31091180867,
+          15355.905231235785
+        ],
+        "jvm_bytes": 41056.0
+      },
+      "speedup": 0.9275910001719427,
+      "latency_change_percent": 7.806134364675299,
+      "paired_speedups": [
+        0.9785803458834204,
+        0.9297214260422328,
+        0.9504224559886103,
+        0.8684680895937584
+      ]
+    },
+    {
+      "mode": "bulk",
+      "case": "nested_owned_handles_roundtrip",
+      "size": 0,
+      "before": {
+        "ns": 1243.351205080488,
+        "min_ns": 1035.981118559075,
+        "max_ns": 1336.1847282427475,
+        "trial_medians": [
+          1236.6732789855073,
+          1336.1847282427475,
+          1250.0291311754686,
+          1035.981118559075
+        ],
+        "jvm_bytes": 1080.0
+      },
+      "after": {
+        "ns": 1178.3494868468938,
+        "min_ns": 974.0706768369218,
+        "max_ns": 1349.9431205035971,
+        "trial_medians": [
+          1349.9431205035971,
+          1215.4179452559224,
+          1141.2810284378652,
+          974.0706768369218
+        ],
+        "jvm_bytes": 691.1492805755396
+      },
+      "speedup": 1.0551633610903757,
+      "latency_change_percent": -5.227945086471875,
+      "paired_speedups": [
+        0.9160928784348822,
+        1.0993623497647107,
+        1.0952859988275219,
+        1.0635584698260228
+      ]
+    },
+    {
+      "mode": "bulk",
+      "case": "nested_owned_handles_roundtrip",
+      "size": 1,
+      "before": {
+        "ns": 1693.5430828663596,
+        "min_ns": 1518.4409978308026,
+        "max_ns": 1748.6886102403344,
+        "trial_medians": [
+          1656.915595692949,
+          1730.1705700397702,
+          1748.6886102403344,
+          1518.4409978308026
+        ],
+        "jvm_bytes": 1672.0
+      },
+      "after": {
+        "ns": 1617.8600115192044,
+        "min_ns": 1451.5112212183037,
+        "max_ns": 1686.3701271714738,
+        "trial_medians": [
+          1634.893873613121,
+          1600.8261494252874,
+          1686.3701271714738,
+          1451.5112212183037
+        ],
+        "jvm_bytes": 1248.0
+      },
+      "speedup": 1.0467797404029333,
+      "latency_change_percent": -4.468919162012686,
+      "paired_speedups": [
+        1.0134698174818895,
+        1.0807985430903404,
+        1.036954214300147,
+        1.0461104093679154
+      ]
+    },
+    {
+      "mode": "bulk",
+      "case": "nested_owned_handles_roundtrip",
+      "size": 8,
+      "before": {
+        "ns": 2389.263190975743,
+        "min_ns": 2278.80033632287,
+        "max_ns": 2502.5571464143427,
+        "trial_medians": [
+          2439.671473582162,
+          2338.854908369324,
+          2502.5571464143427,
+          2278.80033632287
+        ],
+        "jvm_bytes": 2879.9957978288785
+      },
+      "after": {
+        "ns": 2299.255884610231,
+        "min_ns": 2058.1587732109324,
+        "max_ns": 2362.2462125730644,
+        "trial_medians": [
+          2362.2462125730644,
+          2278.047418214978,
+          2320.4643510054843,
+          2058.1587732109324
+        ],
+        "jvm_bytes": 2220.0117001828153
+      },
+      "speedup": 1.039146276396622,
+      "latency_change_percent": -3.767157452785852,
+      "paired_speedups": [
+        1.0327761181696478,
+        1.0266928114261966,
+        1.0784725674970854,
+        1.1072033732206747
+      ]
+    },
+    {
+      "mode": "bulk",
+      "case": "nested_owned_handles_roundtrip",
+      "size": 64,
+      "before": {
+        "ns": 10604.290348675026,
+        "min_ns": 9488.119891008175,
+        "max_ns": 13161.577287066246,
+        "trial_medians": [
+          9488.119891008175,
+          9730.090388287716,
+          11478.490309062336,
+          13161.577287066246
+        ],
+        "jvm_bytes": 20032.122215149586
+      },
+      "after": {
+        "ns": 9532.044569230286,
+        "min_ns": 8780.040106951872,
+        "max_ns": 14122.098227474151,
+        "trial_medians": [
+          8780.040106951872,
+          8935.632697311361,
+          10128.456441149212,
+          14122.098227474151
+        ],
+        "jvm_bytes": 15596.0
+      },
+      "speedup": 1.112488540276656,
+      "latency_change_percent": -10.11143361968313,
+      "paired_speedups": [
+        1.0806465318416552,
+        1.0889089466731772,
+        1.1332911757835376,
+        0.9319845447230187
+      ]
+    },
+    {
+      "mode": "bulk",
+      "case": "nested_owned_handles_roundtrip",
+      "size": 512,
+      "before": {
+        "ns": 77509.81446075371,
+        "min_ns": 66326.5100671141,
+        "max_ns": 107776.51479289941,
+        "trial_medians": [
+          68765.31174089068,
+          86254.31718061674,
+          107776.51479289941,
+          66326.5100671141
+        ],
+        "jvm_bytes": 124472.8072251635
+      },
+      "after": {
+        "ns": 87634.83916256158,
+        "min_ns": 67401.79310344828,
+        "max_ns": 101743.73626373627,
+        "trial_medians": [
+          100976.80476190476,
+          101743.73626373627,
+          74292.8735632184,
+          67401.79310344828
+        ],
+        "jvm_bytes": 116030.94252873564
+      },
+      "speedup": 0.8844634759581624,
+      "latency_change_percent": 13.06289374093983,
+      "paired_speedups": [
+        0.681001066562106,
+        0.8477604651458008,
+        1.4506978882865342,
+        0.984046670172649
+      ]
+    },
+    {
+      "mode": "bulk",
+      "case": "owned_handle_records_roundtrip",
+      "size": 0,
+      "before": {
+        "ns": 486.92416600971933,
+        "min_ns": 464.61377238536596,
+        "max_ns": 519.3216541596934,
+        "trial_medians": [
+          464.61377238536596,
+          487.82502443792765,
+          486.02330758151106,
+          519.3216541596934
+        ],
+        "jvm_bytes": 352.0
+      },
+      "after": {
+        "ns": 480.2863203568569,
+        "min_ns": 439.8245930062372,
+        "max_ns": 494.62613090102303,
+        "trial_medians": [
+          469.4293169956887,
+          491.1433237180251,
+          439.8245930062372,
+          494.62613090102303
+        ],
+        "jvm_bytes": 336.0
+      },
+      "speedup": 1.0138206011112922,
+      "latency_change_percent": -1.363219596854004,
+      "paired_speedups": [
+        0.989741704584746,
+        0.9932437251615731,
+        1.1050389525958562,
+        1.0499276558917021
+      ]
+    },
+    {
+      "mode": "bulk",
+      "case": "owned_handle_records_roundtrip",
+      "size": 1,
+      "before": {
+        "ns": 956.4469791582253,
+        "min_ns": 916.5057324258895,
+        "max_ns": 973.2022642272314,
+        "trial_medians": [
+          973.2022642272314,
+          916.5057324258895,
+          966.3902221782374,
+          946.5037361382133
+        ],
+        "jvm_bytes": 880.0
+      },
+      "after": {
+        "ns": 1035.804786971587,
+        "min_ns": 1015.4119195253602,
+        "max_ns": 1082.5006034722867,
+        "trial_medians": [
+          1082.5006034722867,
+          1015.4119195253602,
+          1049.401917677597,
+          1022.2076562655767
+        ],
+        "jvm_bytes": 848.0
+      },
+      "speedup": 0.9233853629452877,
+      "latency_change_percent": 8.297146579228576,
+      "paired_speedups": [
+        0.8990316135672681,
+        0.9025950107561245,
+        0.9208961846733894,
+        0.9259407619740083
+      ]
+    },
+    {
+      "mode": "bulk",
+      "case": "owned_handle_records_roundtrip",
+      "size": 8,
+      "before": {
+        "ns": 1888.9910527121651,
+        "min_ns": 1744.03056958718,
+        "max_ns": 2073.3176758909426,
+        "trial_medians": [
+          2073.3176758909426,
+          1744.03056958718,
+          1967.1699167074962,
+          1810.8121887168343
+        ],
+        "jvm_bytes": 2520.0012253650566
+      },
+      "after": {
+        "ns": 1892.4140733102029,
+        "min_ns": 1726.5210368507592,
+        "max_ns": 2049.566899240714,
+        "trial_medians": [
+          2049.566899240714,
+          1726.5210368507592,
+          1979.1490898298377,
+          1805.679056790568
+        ],
+        "jvm_bytes": 2240.0054000540003
+      },
+      "speedup": 0.9981911883628881,
+      "latency_change_percent": 0.18120893654436365,
+      "paired_speedups": [
+        1.0115881929294561,
+        1.0101415113761711,
+        0.9939473114057459,
+        1.0028427709270715
+      ]
+    },
+    {
+      "mode": "bulk",
+      "case": "owned_handle_records_roundtrip",
+      "size": 64,
+      "before": {
+        "ns": 11774.734485735444,
+        "min_ns": 11505.17330677291,
+        "max_ns": 12406.867321867321,
+        "trial_medians": [
+          12406.867321867321,
+          11505.17330677291,
+          11860.659207161125,
+          11688.809764309764
+        ],
+        "jvm_bytes": 23506.0
+      },
+      "after": {
+        "ns": 12019.060158180597,
+        "min_ns": 11678.980186480187,
+        "max_ns": 12584.858262108262,
+        "trial_medians": [
+          12130.571727019498,
+          11678.980186480187,
+          11907.548589341694,
+          12584.858262108262
+        ],
+        "jvm_bytes": 22797.008547008547
+      },
+      "speedup": 0.9796718154972495,
+      "latency_change_percent": 2.0749994213554723,
+      "paired_speedups": [
+        1.0227767990714243,
+        0.9851179746063377,
+        0.996062213659784,
+        0.9287994763916881
+      ]
+    },
+    {
+      "mode": "bulk",
+      "case": "owned_handle_records_roundtrip",
+      "size": 512,
+      "before": {
+        "ns": 81911.14009168786,
+        "min_ns": 78198.91050583658,
+        "max_ns": 112381.96835443038,
+        "trial_medians": [
+          78692.78225806452,
+          78198.91050583658,
+          112381.96835443038,
+          85129.49792531121
+        ],
+        "jvm_bytes": 134679.19302566122
+      },
+      "after": {
+        "ns": 86346.30959159785,
+        "min_ns": 75854.51612903226,
+        "max_ns": 119582.28695652174,
+        "trial_medians": [
+          75854.51612903226,
+          90283.28455284552,
+          82409.33463035019,
+          119582.28695652174
+        ],
+        "jvm_bytes": 122439.953307393
+      },
+      "speedup": 0.9486351006674457,
+      "latency_change_percent": 5.414610875816694,
+      "paired_speedups": [
+        1.0374172333286555,
+        0.8661504828179396,
+        1.3637043528930726,
+        0.7118905323851431
+      ]
+    },
+    {
+      "mode": "bulk",
+      "case": "owned_handles_roundtrip",
+      "size": 0,
+      "before": {
+        "ns": 497.69041299394337,
+        "min_ns": 465.8751798476307,
+        "max_ns": 528.7285012285013,
+        "trial_medians": [
+          478.4068725923475,
+          516.9739533955392,
+          465.8751798476307,
+          528.7285012285013
+        ],
+        "jvm_bytes": 352.0
+      },
+      "after": {
+        "ns": 477.19955817080455,
+        "min_ns": 464.0526833508716,
+        "max_ns": 500.3218100189036,
+        "trial_medians": [
+          464.0526833508716,
+          473.9243108847929,
+          500.3218100189036,
+          480.4748054568162
+        ],
+        "jvm_bytes": 336.0
+      },
+      "speedup": 1.0429398025884267,
+      "latency_change_percent": -4.117188976953068,
+      "paired_speedups": [
+        1.0309322405762766,
+        1.0908365355437766,
+        0.9311510522198275,
+        1.10042919050835
+      ]
+    },
+    {
+      "mode": "bulk",
+      "case": "owned_handles_roundtrip",
+      "size": 1,
+      "before": {
+        "ns": 936.1739029572085,
+        "min_ns": 891.1282752335384,
+        "max_ns": 965.5041975308642,
+        "trial_medians": [
+          891.1282752335384,
+          942.8710508733416,
+          929.4767550410754,
+          965.5041975308642
+        ],
+        "jvm_bytes": 848.0
+      },
+      "after": {
+        "ns": 924.2302939937213,
+        "min_ns": 891.7898106161643,
+        "max_ns": 936.7275103870035,
+        "trial_medians": [
+          891.7898106161643,
+          913.6701437292699,
+          934.7904442581727,
+          936.7275103870035
+        ],
+        "jvm_bytes": 816.0
+      },
+      "speedup": 1.012922762909964,
+      "latency_change_percent": -1.2757895649258666,
+      "paired_speedups": [
+        0.9992581936071137,
+        1.0319600102339825,
+        0.9943156359270295,
+        1.0307204462608042
+      ]
+    },
+    {
+      "mode": "bulk",
+      "case": "owned_handles_roundtrip",
+      "size": 8,
+      "before": {
+        "ns": 1641.8055727775227,
+        "min_ns": 1530.7434802501143,
+        "max_ns": 1843.3506256517205,
+        "trial_medians": [
+          1712.9313623789765,
+          1570.6797831760691,
+          1843.3506256517205,
+          1530.7434802501143
+        ],
+        "jvm_bytes": 2260.0
+      },
+      "after": {
+        "ns": 1584.6165781992045,
+        "min_ns": 1470.6384434309255,
+        "max_ns": 1639.2383017015707,
+        "trial_medians": [
+          1639.2383017015707,
+          1558.9486819528934,
+          1610.2844744455158,
+          1470.6384434309255
+        ],
+        "jvm_bytes": 1860.0
+      },
+      "speedup": 1.0360901150253705,
+      "latency_change_percent": -3.48329884649915,
+      "paired_speedups": [
+        1.044955672766376,
+        1.0075250079486133,
+        1.1447360108756301,
+        1.0408700296715805
+      ]
+    },
+    {
+      "mode": "bulk",
+      "case": "owned_handles_roundtrip",
+      "size": 64,
+      "before": {
+        "ns": 8461.5067473806,
+        "min_ns": 8111.788453774728,
+        "max_ns": 8505.40244969379,
+        "trial_medians": [
+          8111.788453774728,
+          8438.642078792958,
+          8505.40244969379,
+          8484.37141596824
+        ],
+        "jvm_bytes": 16963.244247073075
+      },
+      "after": {
+        "ns": 8194.437092690654,
+        "min_ns": 7578.687572590012,
+        "max_ns": 8480.555555555555,
+        "trial_medians": [
+          8480.555555555555,
+          8022.070702794243,
+          8366.803482587065,
+          7578.687572590012
+        ],
+        "jvm_bytes": 14444.729384436701
+      },
+      "speedup": 1.0325915803207726,
+      "latency_change_percent": -3.156289567134374,
+      "paired_speedups": [
+        0.9565161622531616,
+        1.051928160624864,
+        1.016565342713639,
+        1.1195040479902922
+      ]
+    },
+    {
+      "mode": "bulk",
+      "case": "owned_handles_roundtrip",
+      "size": 512,
+      "before": {
+        "ns": 68837.86599099099,
+        "min_ns": 67673.55785123968,
+        "max_ns": 69834.42160278745,
+        "trial_medians": [
+          67927.08333333333,
+          69834.42160278745,
+          67673.55785123968,
+          69748.64864864865
+        ],
+        "jvm_bytes": 124056.19178161085
+      },
+      "after": {
+        "ns": 69864.82285714286,
+        "min_ns": 64989.44262295082,
+        "max_ns": 74233.1007751938,
+        "trial_medians": [
+          73596.36,
+          64989.44262295082,
+          66133.28571428571,
+          74233.1007751938
+        ],
+        "jvm_bytes": 106461.70181818181
+      },
+      "speedup": 0.9853008019750976,
+      "latency_change_percent": 1.4918487831773852,
+      "paired_speedups": [
+        0.9229679746842552,
+        1.0745502466907701,
+        1.0232904220668602,
+        0.9395895890146664
+      ]
+    },
+    {
+      "mode": "bulk",
+      "case": "record_input",
+      "size": 1,
+      "before": {
+        "ns": 137.4471795989641,
+        "min_ns": 129.86462496454632,
+        "max_ns": 258.6123295426574,
+        "trial_medians": [
+          141.25094939379449,
+          129.86462496454632,
+          258.6123295426574,
+          133.64340980413374
+        ],
+        "jvm_bytes": 128.0
+      },
+      "after": {
+        "ns": 140.29910335304913,
+        "min_ns": 135.36500291885582,
+        "max_ns": 221.95613737185064,
+        "trial_medians": [
+          141.4032803400403,
+          139.19492636605798,
+          221.95613737185064,
+          135.36500291885582
+        ],
+        "jvm_bytes": 128.0
+      },
+      "speedup": 0.9796725446854181,
+      "latency_change_percent": 2.07492344506901,
+      "paired_speedups": [
+        0.9989227198557239,
+        0.9329695295288665,
+        1.1651506131114338,
+        0.9872818448077448
+      ]
+    },
+    {
+      "mode": "bulk",
+      "case": "records_output",
+      "size": 0,
+      "before": {
+        "ns": 168.2174713919792,
+        "min_ns": 165.14061218103237,
+        "max_ns": 178.17601498839116,
+        "trial_medians": [
+          165.14061218103237,
+          178.17601498839116,
+          168.31169868335851,
+          168.12324410059986
+        ],
+        "jvm_bytes": 104.0
+      },
+      "after": {
+        "ns": 187.84301415361855,
+        "min_ns": 179.96371461499675,
+        "max_ns": 239.285122422279,
+        "trial_medians": [
+          239.285122422279,
+          179.96371461499675,
+          195.5814799154334,
+          180.10454839180372
+        ],
+        "jvm_bytes": 104.0
+      },
+      "speedup": 0.8955215723615383,
+      "latency_change_percent": 11.666768379788595,
+      "paired_speedups": [
+        0.6901415788383203,
+        0.9900663329247783,
+        0.8605707388865963,
+        0.9334758372390494
+      ]
+    },
+    {
+      "mode": "bulk",
+      "case": "records_output",
+      "size": 1,
+      "before": {
+        "ns": 324.28830998007606,
+        "min_ns": 271.20684215580036,
+        "max_ns": 381.8016068087604,
+        "trial_medians": [
+          273.75350301406564,
+          381.8016068087604,
+          271.20684215580036,
+          374.82311694608654
+        ],
+        "jvm_bytes": 272.0
+      },
+      "after": {
+        "ns": 314.2671580740903,
+        "min_ns": 266.5361454103478,
+        "max_ns": 371.5925679323376,
+        "trial_medians": [
+          277.5774506886009,
+          350.9568654595796,
+          266.5361454103478,
+          371.5925679323376
+        ],
+        "jvm_bytes": 272.0
+      },
+      "speedup": 1.0318873660467673,
+      "latency_change_percent": -3.0901983196993665,
+      "paired_speedups": [
+        0.9862238533243641,
+        1.087887556520057,
+        1.017523689848001,
+        1.0086937933977655
+      ]
+    },
+    {
+      "mode": "bulk",
+      "case": "records_output",
+      "size": 8,
+      "before": {
+        "ns": 527.9849199422827,
+        "min_ns": 516.7313241423533,
+        "max_ns": 562.534169091453,
+        "trial_medians": [
+          535.7169054293871,
+          520.2529344551781,
+          516.7313241423533,
+          562.534169091453
+        ],
+        "jvm_bytes": 1304.0
+      },
+      "after": {
+        "ns": 538.21362429159,
+        "min_ns": 512.1942967109867,
+        "max_ns": 563.4881326626847,
+        "trial_medians": [
+          522.0590465455849,
+          512.1942967109867,
+          563.4881326626847,
+          554.3682020375951
+        ],
+        "jvm_bytes": 1304.0
+      },
+      "speedup": 0.9809950846882209,
+      "latency_change_percent": 1.9373099425691098,
+      "paired_speedups": [
+        1.026161521333985,
+        1.0157335561835406,
+        0.9170225497041283,
+        1.0147302226640051
+      ]
+    },
+    {
+      "mode": "bulk",
+      "case": "records_output",
+      "size": 64,
+      "before": {
+        "ns": 2391.7296925375977,
+        "min_ns": 2347.418877723834,
+        "max_ns": 2714.288086342881,
+        "trial_medians": [
+          2347.418877723834,
+          2714.288086342881,
+          2403.120509583381,
+          2380.3388754918137
+        ],
+        "jvm_bytes": 9592.0
+      },
+      "after": {
+        "ns": 2267.048730958665,
+        "min_ns": 2212.0575692963753,
+        "max_ns": 2470.776348695963,
+        "trial_medians": [
+          2258.598005461237,
+          2212.0575692963753,
+          2470.776348695963,
+          2275.499456456094
+        ],
+        "jvm_bytes": 9592.0
+      },
+      "speedup": 1.054997036400805,
+      "latency_change_percent": -5.213003876146538,
+      "paired_speedups": [
+        1.039325666651538,
+        1.2270422452008147,
+        0.9726175786212744,
+        1.0460731461562285
+      ]
+    },
+    {
+      "mode": "bulk",
+      "case": "records_output",
+      "size": 512,
+      "before": {
+        "ns": 16483.360297705163,
+        "min_ns": 16404.898305084746,
+        "max_ns": 16562.366288492707,
+        "trial_medians": [
+          16503.34456613311,
+          16463.37602927722,
+          16562.366288492707,
+          16404.898305084746
+        ],
+        "jvm_bytes": 75896.0
+      },
+      "after": {
+        "ns": 16499.3801850545,
+        "min_ns": 16137.121831561733,
+        "max_ns": 18280.336888888887,
+        "trial_medians": [
+          16575.17404817405,
+          16423.586321934945,
+          18280.336888888887,
+          16137.121831561733
+        ],
+        "jvm_bytes": 75896.0
+      },
+      "speedup": 0.9990290612635349,
+      "latency_change_percent": 0.09718823747100203,
+      "paired_speedups": [
+        0.9956664417621092,
+        1.002422717338486,
+        0.9060208457405184,
+        1.0165938186696517
+      ]
+    },
+    {
+      "mode": "bulk",
+      "case": "records_roundtrip",
+      "size": 0,
+      "before": {
+        "ns": 316.48270210280316,
+        "min_ns": 296.57460306970444,
+        "max_ns": 375.3282992832228,
+        "trial_medians": [
+          308.77371267622516,
+          324.1916915293812,
+          296.57460306970444,
+          375.3282992832228
+        ],
+        "jvm_bytes": 184.0
+      },
+      "after": {
+        "ns": 317.1921469776039,
+        "min_ns": 307.63736776602366,
+        "max_ns": 343.3085104606702,
+        "trial_medians": [
+          307.63736776602366,
+          324.5129659258321,
+          309.8713280293758,
+          343.3085104606702
+        ],
+        "jvm_bytes": 184.0
+      },
+      "speedup": 0.9977633592711523,
+      "latency_change_percent": 0.22416545046126668,
+      "paired_speedups": [
+        1.003693780500247,
+        0.9990099797845233,
+        0.9570895279526771,
+        1.0932682641032891
+      ]
+    },
+    {
+      "mode": "bulk",
+      "case": "records_roundtrip",
+      "size": 1,
+      "before": {
+        "ns": 530.9334188568203,
+        "min_ns": 500.6013327691982,
+        "max_ns": 623.0443635800558,
+        "trial_medians": [
+          548.1161457770088,
+          500.6013327691982,
+          513.7506919366318,
+          623.0443635800558
+        ],
+        "jvm_bytes": 544.0
+      },
+      "after": {
+        "ns": 559.0303606119503,
+        "min_ns": 514.6543580936024,
+        "max_ns": 680.4494465492905,
+        "trial_medians": [
+          528.0214478770089,
+          514.6543580936024,
+          590.0392733468916,
+          680.4494465492905
+        ],
+        "jvm_bytes": 544.0
+      },
+      "speedup": 0.949739864353032,
+      "latency_change_percent": 5.291989684060017,
+      "paired_speedups": [
+        1.0380565940660058,
+        0.9726942459470085,
+        0.8707059261029753,
+        0.9156365204493169
+      ]
+    },
+    {
+      "mode": "bulk",
+      "case": "records_roundtrip",
+      "size": 8,
+      "before": {
+        "ns": 1038.634426574587,
+        "min_ns": 987.7195094884031,
+        "max_ns": 1090.9644534585825,
+        "trial_medians": [
+          1027.9552759948651,
+          1090.9644534585825,
+          987.7195094884031,
+          1049.3135771543086
+        ],
+        "jvm_bytes": 2080.0
+      },
+      "after": {
+        "ns": 1037.5711453135996,
+        "min_ns": 998.8339481555334,
+        "max_ns": 1253.8819812622557,
+        "trial_medians": [
+          998.8339481555334,
+          1253.8819812622557,
+          1062.6926942813311,
+          1012.4495963458678
+        ],
+        "jvm_bytes": 2080.0
+      },
+      "speedup": 1.001024779135185,
+      "latency_change_percent": -0.10237300380020464,
+      "paired_speedups": [
+        1.0291553244591933,
+        0.8700694880074218,
+        0.9294497974848409,
+        1.036410682508532
+      ]
+    },
+    {
+      "mode": "bulk",
+      "case": "records_roundtrip",
+      "size": 64,
+      "before": {
+        "ns": 4454.417964025641,
+        "min_ns": 4241.97948392555,
+        "max_ns": 4719.811103882022,
+        "trial_medians": [
+          4241.97948392555,
+          4501.712062256809,
+          4407.123865794471,
+          4719.811103882022
+        ],
+        "jvm_bytes": 14176.0
+      },
+      "after": {
+        "ns": 4597.945728724819,
+        "min_ns": 4465.60046728972,
+        "max_ns": 4627.5268990995155,
+        "trial_medians": [
+          4627.5268990995155,
+          4602.386208704772,
+          4465.60046728972,
+          4593.505248744866
+        ],
+        "jvm_bytes": 14176.0
+      },
+      "speedup": 0.9687843717244171,
+      "latency_change_percent": 3.2221440793909206,
+      "paired_speedups": [
+        0.9166839170078103,
+        0.9781256631054666,
+        0.9869050977749608,
+        1.0274966171360462
+      ]
+    },
+    {
+      "mode": "bulk",
+      "case": "records_roundtrip",
+      "size": 512,
+      "before": {
+        "ns": 31191.487511311167,
+        "min_ns": 30725.97891566265,
+        "max_ns": 32286.352,
+        "trial_medians": [
+          30725.97891566265,
+          31652.85496183206,
+          32286.352,
+          30730.120060790272
+        ],
+        "jvm_bytes": 110944.0
+      },
+      "after": {
+        "ns": 31669.76534508801,
+        "min_ns": 31323.722719141322,
+        "max_ns": 32980.06274509804,
+        "trial_medians": [
+          31861.41903171953,
+          32980.06274509804,
+          31323.722719141322,
+          31478.111658456484
+        ],
+        "jvm_bytes": 110944.0
+      },
+      "speedup": 0.9848979672389324,
+      "latency_change_percent": 1.53336013104024,
+      "paired_speedups": [
+        0.9643631655286132,
+        0.9597572693077048,
+        1.0307316371521331,
+        0.9762377233494162
+      ]
+    },
+    {
+      "mode": "plain",
+      "case": "callback_records",
+      "size": 0,
+      "before": {
+        "ns": 811.2616228474474,
+        "min_ns": 804.6830801466737,
+        "max_ns": 848.0604668334906,
+        "trial_medians": [
+          810.3574587856856,
+          848.0604668334906,
+          804.6830801466737,
+          812.165786909209
+        ],
+        "jvm_bytes": 64.0
+      },
+      "after": {
+        "ns": 825.4017058783766,
+        "min_ns": 807.6313345447204,
+        "max_ns": 843.0698531496287,
+        "trial_medians": [
+          843.0698531496287,
+          807.6313345447204,
+          834.829364584632,
+          815.9740471721211
+        ],
+        "jvm_bytes": 40.0
+      },
+      "speedup": 0.9828688468533251,
+      "latency_change_percent": 1.7429744773700628,
+      "paired_speedups": [
+        0.9611984769212982,
+        1.0500588951412602,
+        0.9638892859824624,
+        0.9953328659457857
+      ]
+    },
+    {
+      "mode": "plain",
+      "case": "callback_records",
+      "size": 1,
+      "before": {
+        "ns": 12687.515815355331,
+        "min_ns": 12080.711097708083,
+        "max_ns": 15153.588998763906,
+        "trial_medians": [
+          12080.711097708083,
+          12740.02538071066,
+          15153.588998763906,
+          12635.00625
+        ],
+        "jvm_bytes": 504.0
+      },
+      "after": {
+        "ns": 12571.1703751054,
+        "min_ns": 12480.457724094087,
+        "max_ns": 12695.616966580978,
+        "trial_medians": [
+          12581.033396345305,
+          12695.616966580978,
+          12561.307353865493,
+          12480.457724094087
+        ],
+        "jvm_bytes": 392.0
+      },
+      "speedup": 1.009254941010133,
+      "latency_change_percent": -0.9170072529810946,
+      "paired_speedups": [
+        0.9602320188751298,
+        1.0034979327311606,
+        1.2063703698883452,
+        1.012383241810719
+      ]
+    },
+    {
+      "mode": "plain",
+      "case": "callback_records",
+      "size": 8,
+      "before": {
+        "ns": 99060.54490291263,
+        "min_ns": 92143.57798165138,
+        "max_ns": 175640.09259259258,
+        "trial_medians": [
+          175640.09259259258,
+          98895.75,
+          92143.57798165138,
+          99225.33980582525
+        ],
+        "jvm_bytes": 2768.0
+      },
+      "after": {
+        "ns": 95309.00473976848,
+        "min_ns": 94591.51904761905,
+        "max_ns": 107985.31219512195,
+        "trial_medians": [
+          94698.2075471698,
+          94591.51904761905,
+          107985.31219512195,
+          95919.80193236715
+        ],
+        "jvm_bytes": 2680.0
+      },
+      "speedup": 1.0393618648456917,
+      "latency_change_percent": -3.7871184403648894,
+      "paired_speedups": [
+        1.8547351332400361,
+        1.045503349515025,
+        0.8532973245023763,
+        1.0344614751789087
+      ]
+    },
+    {
+      "mode": "plain",
+      "case": "callback_records",
+      "size": 64,
+      "before": {
+        "ns": 746562.376602564,
+        "min_ns": 729723.0769230769,
+        "max_ns": 757272.8,
+        "trial_medians": [
+          729723.0769230769,
+          736766.2916666666,
+          756358.4615384615,
+          757272.8
+        ],
+        "jvm_bytes": 22640.0
+      },
+      "after": {
+        "ns": 776016.1346153846,
+        "min_ns": 744958.0769230769,
+        "max_ns": 787819.5769230769,
+        "trial_medians": [
+          766742.2692307692,
+          787819.5769230769,
+          785290.0,
+          744958.0769230769
+        ],
+        "jvm_bytes": 21048.0
+      },
+      "speedup": 0.9620449154354004,
+      "latency_change_percent": 3.945250783579257,
+      "paired_speedups": [
+        0.9517188580918701,
+        0.9351967293630796,
+        0.9631581473576151,
+        1.0165307598620676
+      ]
+    },
+    {
+      "mode": "plain",
+      "case": "callback_records",
+      "size": 512,
+      "before": {
+        "ns": 5962521.0,
+        "min_ns": 5863568.25,
+        "max_ns": 6042685.625,
+        "trial_medians": [
+          5963486.9375,
+          5863568.25,
+          5961555.0625,
+          6042685.625
+        ],
+        "jvm_bytes": 179424.0
+      },
+      "after": {
+        "ns": 6105393.125,
+        "min_ns": 5985468.1875,
+        "max_ns": 6787615.9375,
+        "trial_medians": [
+          6787615.9375,
+          5985468.1875,
+          6135612.5,
+          6075173.75
+        ],
+        "jvm_bytes": 167992.0
+      },
+      "speedup": 0.9765990294032049,
+      "latency_change_percent": 2.396169757724964,
+      "paired_speedups": [
+        0.878583436719382,
+        0.9796340179779796,
+        0.9716316117584023,
+        0.9946523134420641
+      ]
+    },
+    {
+      "mode": "plain",
+      "case": "control",
+      "size": 1,
+      "before": {
+        "ns": 13.599084592926342,
+        "min_ns": 13.414707173528322,
+        "max_ns": 13.781446964019802,
+        "trial_medians": [
+          13.414707173528322,
+          13.625041692314785,
+          13.781446964019802,
+          13.573127493537898
+        ],
+        "jvm_bytes": 0.0
+      },
+      "after": {
+        "ns": 13.678638563171397,
+        "min_ns": 13.329421218972456,
+        "max_ns": 14.517445536986207,
+        "trial_medians": [
+          13.329421218972456,
+          14.517445536986207,
+          13.741234843619571,
+          13.616042282723225
+        ],
+        "jvm_bytes": 0.0
+      },
+      "speedup": 0.9941840724953982,
+      "latency_change_percent": 0.5849950391987102,
+      "paired_speedups": [
+        1.0063983239148053,
+        0.9385288656742098,
+        1.0029263833169186,
+        0.9968482185723102
+      ]
+    },
+    {
+      "mode": "plain",
+      "case": "handles_input",
+      "size": 0,
+      "before": {
+        "ns": 68.19119401901253,
+        "min_ns": 65.41200736118512,
+        "max_ns": 72.62689037620699,
+        "trial_medians": [
+          67.69919671347044,
+          65.41200736118512,
+          72.62689037620699,
+          68.68319132455461
+        ],
+        "jvm_bytes": 96.0
+      },
+      "after": {
+        "ns": 67.23232864486224,
+        "min_ns": 66.19100084225379,
+        "max_ns": 68.90239519184246,
+        "trial_medians": [
+          67.46200258389193,
+          67.00265470583254,
+          66.19100084225379,
+          68.90239519184246
+        ],
+        "jvm_bytes": 96.0
+      },
+      "speedup": 1.0142619688099048,
+      "latency_change_percent": -1.4061425202247513,
+      "paired_speedups": [
+        1.0035159663290985,
+        0.9762599354961236,
+        1.0972320927627488,
+        0.9968186321146381
+      ]
+    },
+    {
+      "mode": "plain",
+      "case": "handles_input",
+      "size": 1,
+      "before": {
+        "ns": 1980.1176304726964,
+        "min_ns": 1973.3279676081374,
+        "max_ns": 2044.6902564102563,
+        "trial_medians": [
+          1978.9075298529556,
+          1981.327731092437,
+          1973.3279676081374,
+          2044.6902564102563
+        ],
+        "jvm_bytes": 280.0
+      },
+      "after": {
+        "ns": 1986.3215701627455,
+        "min_ns": 1947.967107824056,
+        "max_ns": 2100.7770553691275,
+        "trial_medians": [
+          1958.896032388664,
+          2100.7770553691275,
+          1947.967107824056,
+          2013.7471079368272
+        ],
+        "jvm_bytes": 280.0
+      },
+      "speedup": 0.9968766690231629,
+      "latency_change_percent": 0.31331167373971347,
+      "paired_speedups": [
+        1.0102157016673772,
+        0.9431404089399187,
+        1.0130191416899283,
+        1.015365955512225
+      ]
+    },
+    {
+      "mode": "plain",
+      "case": "handles_input",
+      "size": 8,
+      "before": {
+        "ns": 14416.916648588998,
+        "min_ns": 14265.914285714285,
+        "max_ns": 14536.50363372093,
+        "trial_medians": [
+          14265.914285714285,
+          14480.378555798687,
+          14536.50363372093,
+          14353.45474137931
+        ],
+        "jvm_bytes": 1112.0
+      },
+      "after": {
+        "ns": 14689.478227935766,
+        "min_ns": 14425.652272727273,
+        "max_ns": 14809.27773641102,
+        "trial_medians": [
+          14425.652272727273,
+          14809.27773641102,
+          14754.843137254902,
+          14624.11331861663
+        ],
+        "jvm_bytes": 1112.0
+      },
+      "speedup": 0.9814451149920068,
+      "latency_change_percent": 1.8905677683406896,
+      "paired_speedups": [
+        0.9889268101023768,
+        0.9777910046346364,
+        0.9852021806329692,
+        0.9814923085358775
+      ]
+    },
+    {
+      "mode": "plain",
+      "case": "handles_input",
+      "size": 64,
+      "before": {
+        "ns": 115313.75539831241,
+        "min_ns": 112841.02272727272,
+        "max_ns": 125267.31976744186,
+        "trial_medians": [
+          112841.02272727272,
+          115766.87861271677,
+          114860.63218390805,
+          125267.31976744186
+        ],
+        "jvm_bytes": 8296.0
+      },
+      "after": {
+        "ns": 115707.86031409327,
+        "min_ns": 113446.30681818182,
+        "max_ns": 123131.54320987655,
+        "trial_medians": [
+          113681.5786163522,
+          117734.14201183432,
+          113446.30681818182,
+          123131.54320987655
+        ],
+        "jvm_bytes": 8296.0
+      },
+      "speedup": 0.9965939659180366,
+      "latency_change_percent": 0.3417674798809278,
+      "paired_speedups": [
+        0.992606050168285,
+        0.9832906295021897,
+        1.012466914132277,
+        1.017345486801257
+      ]
+    },
+    {
+      "mode": "plain",
+      "case": "handles_input",
+      "size": 512,
+      "before": {
+        "ns": 934765.0,
+        "min_ns": 902694.5454545454,
+        "max_ns": 978932.4117647059,
+        "trial_medians": [
+          930491.9047619047,
+          978932.4117647059,
+          939038.0952380953,
+          902694.5454545454
+        ],
+        "jvm_bytes": 63424.0
+      },
+      "after": {
+        "ns": 932935.9956709957,
+        "min_ns": 925297.6875,
+        "max_ns": 973771.6315789474,
+        "trial_medians": [
+          925297.6875,
+          934338.1818181818,
+          931533.8095238095,
+          973771.6315789474
+        ],
+        "jvm_bytes": 63424.0
+      },
+      "speedup": 1.001960482109696,
+      "latency_change_percent": -0.19566461399435076,
+      "paired_speedups": [
+        1.0056135634316115,
+        1.0477281468469433,
+        1.0080558382718519,
+        0.9270084650041076
+      ]
+    },
+    {
+      "mode": "plain",
+      "case": "nested_owned_handles_roundtrip",
+      "size": 0,
+      "before": {
+        "ns": 7612.658843905532,
+        "min_ns": 7598.665568369028,
+        "max_ns": 7624.084668192219,
+        "trial_medians": [
+          7624.084668192219,
+          7598.665568369028,
+          7609.5658796648895,
+          7615.751808146174
+        ],
+        "jvm_bytes": 1032.0
+      },
+      "after": {
+        "ns": 7851.944413388632,
+        "min_ns": 7603.888671109369,
+        "max_ns": 8546.447697111631,
+        "trial_medians": [
+          8546.447697111631,
+          7603.888671109369,
+          7827.818107667211,
+          7876.070719110052
+        ],
+        "jvm_bytes": 760.0
+      },
+      "speedup": 0.9695253103072042,
+      "latency_change_percent": 3.1432588060170907,
+      "paired_speedups": [
+        0.8920764437333262,
+        0.9993131011030992,
+        0.9721183827983245,
+        0.966948124229985
+      ]
+    },
+    {
+      "mode": "plain",
+      "case": "nested_owned_handles_roundtrip",
+      "size": 1,
+      "before": {
+        "ns": 12521.303580828459,
+        "min_ns": 12093.278787878788,
+        "max_ns": 24679.336700336702,
+        "trial_medians": [
+          12493.635753508237,
+          12548.971408148678,
+          12093.278787878788,
+          24679.336700336702
+        ],
+        "jvm_bytes": 1752.0
+      },
+      "after": {
+        "ns": 12385.234450724503,
+        "min_ns": 12259.56356736243,
+        "max_ns": 13938.144257703081,
+        "trial_medians": [
+          12354.141358024692,
+          13938.144257703081,
+          12416.327543424317,
+          12259.56356736243
+        ],
+        "jvm_bytes": 1432.0
+      },
+      "speedup": 1.0109863992195962,
+      "latency_change_percent": -1.086700991039724,
+      "paired_speedups": [
+        1.0112913064081896,
+        0.900333012496505,
+        0.9739819399564232,
+        2.0130681296060455
+      ]
+    },
+    {
+      "mode": "plain",
+      "case": "nested_owned_handles_roundtrip",
+      "size": 8,
+      "before": {
+        "ns": 40504.47455193015,
+        "min_ns": 39655.70297029703,
+        "max_ns": 41424.014861995754,
+        "trial_medians": [
+          40776.470588235294,
+          41424.014861995754,
+          39655.70297029703,
+          40232.478515625
+        ],
+        "jvm_bytes": 3771.9513184584175
+      },
+      "after": {
+        "ns": 40079.22635682819,
+        "min_ns": 39631.70913461538,
+        "max_ns": 40285.61558441559,
+        "trial_medians": [
+          40285.61558441559,
+          40207.094713656385,
+          39951.358,
+          39631.70913461538
+        ],
+        "jvm_bytes": 3184.0
+      },
+      "speedup": 1.010610189710648,
+      "latency_change_percent": -1.049879549867394,
+      "paired_speedups": [
+        1.0121843739185554,
+        1.0302663039198912,
+        0.9925996250314453,
+        1.015158805767599
+      ]
+    },
+    {
+      "mode": "plain",
+      "case": "nested_owned_handles_roundtrip",
+      "size": 64,
+      "before": {
+        "ns": 264174.4210526316,
+        "min_ns": 260425.51315789475,
+        "max_ns": 280262.11267605633,
+        "trial_medians": [
+          266522.0,
+          280262.11267605633,
+          260425.51315789475,
+          261826.84210526315
+        ],
+        "jvm_bytes": 30512.972631578945
+      },
+      "after": {
+        "ns": 264703.06,
+        "min_ns": 263516.6666666667,
+        "max_ns": 271687.28571428574,
+        "trial_medians": [
+          265517.05333333334,
+          271687.28571428574,
+          263889.06666666665,
+          263516.6666666667
+        ],
+        "jvm_bytes": 27265.28
+      },
+      "speedup": 0.998002898238621,
+      "latency_change_percent": 0.2001098158035175,
+      "paired_speedups": [
+        1.0037848667498017,
+        1.0315613847708285,
+        0.9868749639667834,
+        0.9935874091655043
+      ]
+    },
+    {
+      "mode": "plain",
+      "case": "nested_owned_handles_roundtrip",
+      "size": 512,
+      "before": {
+        "ns": 2072488.90625,
+        "min_ns": 2043916.4375,
+        "max_ns": 2107975.1875,
+        "trial_medians": [
+          2047036.4375,
+          2107975.1875,
+          2097941.375,
+          2043916.4375
+        ],
+        "jvm_bytes": 171016.0
+      },
+      "after": {
+        "ns": 2042053.03125,
+        "min_ns": 2023620.1875,
+        "max_ns": 2130778.875,
+        "trial_medians": [
+          2040850.1875,
+          2043255.875,
+          2130778.875,
+          2023620.1875
+        ],
+        "jvm_bytes": 142252.5
+      },
+      "speedup": 1.0149045468135416,
+      "latency_change_percent": -1.4685663652150183,
+      "paired_speedups": [
+        1.003031212206506,
+        1.0316745999812675,
+        0.9845889686699658,
+        1.0100296736143328
+      ]
+    },
+    {
+      "mode": "plain",
+      "case": "owned_handle_records_roundtrip",
+      "size": 0,
+      "before": {
+        "ns": 688.4462768141461,
+        "min_ns": 683.0927933000211,
+        "max_ns": 747.8654631259598,
+        "trial_medians": [
+          747.8654631259598,
+          683.0927933000211,
+          691.8523557309517,
+          685.0401978973407
+        ],
+        "jvm_bytes": 184.0
+      },
+      "after": {
+        "ns": 712.0134193225085,
+        "min_ns": 696.6867932430546,
+        "max_ns": 733.7595453738235,
+        "trial_medians": [
+          703.8133379766673,
+          696.6867932430546,
+          720.2135006683499,
+          733.7595453738235
+        ],
+        "jvm_bytes": 184.0
+      },
+      "speedup": 0.9669007045811203,
+      "latency_change_percent": 3.423236249809025,
+      "paired_speedups": [
+        1.0625906369946527,
+        0.980487645129953,
+        0.9606211978655227,
+        0.9336031159204041
+      ]
+    },
+    {
+      "mode": "plain",
+      "case": "owned_handle_records_roundtrip",
+      "size": 1,
+      "before": {
+        "ns": 7582.119951486115,
+        "min_ns": 7490.2556580050295,
+        "max_ns": 8463.48510638298,
+        "trial_medians": [
+          7490.2556580050295,
+          7552.595391008689,
+          7611.64451196354,
+          8463.48510638298
+        ],
+        "jvm_bytes": 720.0
+      },
+      "after": {
+        "ns": 7680.535187945243,
+        "min_ns": 7612.365742499051,
+        "max_ns": 7918.702229299363,
+        "trial_medians": [
+          7660.034443168772,
+          7918.702229299363,
+          7701.035932721713,
+          7612.365742499051
+        ],
+        "jvm_bytes": 672.0
+      },
+      "speedup": 0.9871864090130603,
+      "latency_change_percent": 1.297991024790357,
+      "paired_speedups": [
+        0.9778357673946034,
+        0.9537668133376614,
+        0.988392286240563,
+        1.111807471248027
+      ]
+    },
+    {
+      "mode": "plain",
+      "case": "owned_handle_records_roundtrip",
+      "size": 8,
+      "before": {
+        "ns": 55682.149968674945,
+        "min_ns": 52768.15789473684,
+        "max_ns": 77095.59333333334,
+        "trial_medians": [
+          56187.13114754098,
+          55177.168789808915,
+          52768.15789473684,
+          77095.59333333334
+        ],
+        "jvm_bytes": 2876.0
+      },
+      "after": {
+        "ns": 54004.85953147941,
+        "min_ns": 53370.077540106955,
+        "max_ns": 57360.8077994429,
+        "trial_medians": [
+          54151.832884097035,
+          53857.88617886179,
+          57360.8077994429,
+          53370.077540106955
+        ],
+        "jvm_bytes": 2520.0323450134774
+      },
+      "speedup": 1.0310581390590943,
+      "latency_change_percent": -3.0122587546262625,
+      "paired_speedups": [
+        1.0375850299988951,
+        1.0244956255164896,
+        0.9199340092844602,
+        1.4445471486414265
+      ]
+    },
+    {
+      "mode": "plain",
+      "case": "owned_handle_records_roundtrip",
+      "size": 64,
+      "before": {
+        "ns": 431902.085812357,
+        "min_ns": 416331.06382978725,
+        "max_ns": 447419.54545454547,
+        "trial_medians": [
+          426150.4347826087,
+          447419.54545454547,
+          437653.7368421053,
+          416331.06382978725
+        ],
+        "jvm_bytes": 30016.979405034326
+      },
+      "after": {
+        "ns": 423783.3699763593,
+        "min_ns": 419988.08510638296,
+        "max_ns": 435653.77777777775,
+        "trial_medians": [
+          424277.8510638298,
+          435653.77777777775,
+          419988.08510638296,
+          423288.8888888889
+        ],
+        "jvm_bytes": 26848.510638297874
+      },
+      "speedup": 1.0191577027584886,
+      "latency_change_percent": -1.8797584227284725,
+      "paired_speedups": [
+        1.0044135787764636,
+        1.0270071517267303,
+        1.0420622688170966,
+        0.9835624670485315
+      ]
+    },
+    {
+      "mode": "plain",
+      "case": "owned_handle_records_roundtrip",
+      "size": 512,
+      "before": {
+        "ns": 3317646.125,
+        "min_ns": 3302842.6875,
+        "max_ns": 3527197.5625,
+        "trial_medians": [
+          3302842.6875,
+          3527197.5625,
+          3317091.4375,
+          3318200.8125
+        ],
+        "jvm_bytes": 200560.5
+      },
+      "after": {
+        "ns": 3392386.6875,
+        "min_ns": 3338755.75,
+        "max_ns": 3464131.375,
+        "trial_medians": [
+          3382706.375,
+          3402067.0,
+          3338755.75,
+          3464131.375
+        ],
+        "jvm_bytes": 169404.0
+      },
+      "speedup": 0.9779681476833411,
+      "latency_change_percent": 2.2528190073315857,
+      "paired_speedups": [
+        0.9763905942028445,
+        1.036780746087599,
+        0.9935112616429039,
+        0.9578738371318265
+      ]
+    },
+    {
+      "mode": "plain",
+      "case": "owned_handles_roundtrip",
+      "size": 0,
+      "before": {
+        "ns": 689.9323805524987,
+        "min_ns": 675.8138827900692,
+        "max_ns": 711.3783802475966,
+        "trial_medians": [
+          694.7338099534949,
+          685.1309511515026,
+          675.8138827900692,
+          711.3783802475966
+        ],
+        "jvm_bytes": 184.0
+      },
+      "after": {
+        "ns": 707.3661580655826,
+        "min_ns": 678.6125940178415,
+        "max_ns": 739.0056085918854,
+        "trial_medians": [
+          702.4313711617376,
+          678.6125940178415,
+          739.0056085918854,
+          712.3009449694274
+        ],
+        "jvm_bytes": 184.0
+      },
+      "speedup": 0.9753539559190114,
+      "latency_change_percent": 2.526882054604096,
+      "paired_speedups": [
+        0.9890415469407183,
+        1.009605417275073,
+        0.9144908711556021,
+        0.9987048104760406
+      ]
+    },
+    {
+      "mode": "plain",
+      "case": "owned_handles_roundtrip",
+      "size": 1,
+      "before": {
+        "ns": 4959.990837438181,
+        "min_ns": 4896.891251221897,
+        "max_ns": 5045.410494602059,
+        "trial_medians": [
+          4896.891251221897,
+          4963.502487562189,
+          4956.479187314172,
+          5045.410494602059
+        ],
+        "jvm_bytes": 696.0
+      },
+      "after": {
+        "ns": 5087.4746868813845,
+        "min_ns": 4929.733975171016,
+        "max_ns": 5222.403678846632,
+        "trial_medians": [
+          4929.733975171016,
+          5107.233171231123,
+          5067.716202531646,
+          5222.403678846632
+        ],
+        "jvm_bytes": 648.0
+      },
+      "speedup": 0.9749416248159555,
+      "latency_change_percent": 2.57024364805174,
+      "paired_speedups": [
+        0.993337830374918,
+        0.971857426741633,
+        0.9780498728082082,
+        0.9661088657390686
+      ]
+    },
+    {
+      "mode": "plain",
+      "case": "owned_handles_roundtrip",
+      "size": 8,
+      "before": {
+        "ns": 32323.074717150805,
+        "min_ns": 31929.967793880838,
+        "max_ns": 32978.491987179485,
+        "trial_medians": [
+          31929.967793880838,
+          32427.75974025974,
+          32218.389694041867,
+          32978.491987179485
+        ],
+        "jvm_bytes": 2711.9613526570047
+      },
+      "after": {
+        "ns": 32907.49376022396,
+        "min_ns": 32533.268292682926,
+        "max_ns": 33327.728758169935,
+        "trial_medians": [
+          32533.268292682926,
+          33327.728758169935,
+          33114.77157360406,
+          32700.215946843855
+        ],
+        "jvm_bytes": 2379.980487804878
+      },
+      "speedup": 0.9822405483890252,
+      "latency_change_percent": 1.808055230473049,
+      "paired_speedups": [
+        0.9814558902175292,
+        0.9729963891496933,
+        0.9729310565356064,
+        1.0085099144540202
+      ]
+    },
+    {
+      "mode": "plain",
+      "case": "owned_handles_roundtrip",
+      "size": 64,
+      "before": {
+        "ns": 252770.57221681272,
+        "min_ns": 251014.68354430379,
+        "max_ns": 261090.3625,
+        "trial_medians": [
+          261090.3625,
+          254101.41025641025,
+          251014.68354430379,
+          251439.7341772152
+        ],
+        "jvm_bytes": 28678.94683544304
+      },
+      "after": {
+        "ns": 261993.21794871794,
+        "min_ns": 259620.42253521126,
+        "max_ns": 262634.0789473684,
+        "trial_medians": [
+          262285.76923076925,
+          262634.0789473684,
+          259620.42253521126,
+          261700.66666666666
+        ],
+        "jvm_bytes": 25727.98534798535
+      },
+      "speedup": 0.9647981508677433,
+      "latency_change_percent": 3.6486231965303872,
+      "paired_speedups": [
+        0.9954423500204561,
+        0.9675111899980501,
+        0.9668526115670261,
+        0.9607913398916901
+      ]
+    },
+    {
+      "mode": "plain",
+      "case": "owned_handles_roundtrip",
+      "size": 512,
+      "before": {
+        "ns": 1987437.125,
+        "min_ns": 1970978.375,
+        "max_ns": 2023743.375,
+        "trial_medians": [
+          1970978.375,
+          2023743.375,
+          1996881.5,
+          1977992.75
+        ],
+        "jvm_bytes": 166785.0
+      },
+      "after": {
+        "ns": 2085863.0,
+        "min_ns": 2017682.6875,
+        "max_ns": 2254314.5,
+        "trial_medians": [
+          2084978.9375,
+          2086747.0625,
+          2254314.5,
+          2017682.6875
+        ],
+        "jvm_bytes": 142911.0
+      },
+      "speedup": 0.9528128764928473,
+      "latency_change_percent": 4.952401953344809,
+      "paired_speedups": [
+        0.9453229188796062,
+        0.969807702796275,
+        0.8858043099132796,
+        0.9803289497670332
+      ]
+    },
+    {
+      "mode": "plain",
+      "case": "record_input",
+      "size": 1,
+      "before": {
+        "ns": 30.55600716465829,
+        "min_ns": 29.52506604557517,
+        "max_ns": 31.432418123634214,
+        "trial_medians": [
+          31.432418123634214,
+          30.585254106977548,
+          29.52506604557517,
+          30.526760222339036
+        ],
+        "jvm_bytes": 0.0
+      },
+      "after": {
+        "ns": 30.27642643061486,
+        "min_ns": 28.997809027442003,
+        "max_ns": 31.615574512309344,
+        "trial_medians": [
+          31.615574512309344,
+          30.101037627083116,
+          28.997809027442003,
+          30.4518152341466
+        ],
+        "jvm_bytes": 0.0
+      },
+      "speedup": 1.0092342712467786,
+      "latency_change_percent": -0.9149779699187954,
+      "paired_speedups": [
+        0.9942067670285789,
+        1.0160863717023085,
+        1.0181826502007167,
+        1.0024611008446025
+      ]
+    },
+    {
+      "mode": "plain",
+      "case": "records_output",
+      "size": 0,
+      "before": {
+        "ns": 530.00576098769,
+        "min_ns": 515.4033872209392,
+        "max_ns": 546.4974809227778,
+        "trial_medians": [
+          533.7072745146228,
+          526.3042474607572,
+          546.4974809227778,
+          515.4033872209392
+        ],
+        "jvm_bytes": 64.0
+      },
+      "after": {
+        "ns": 508.70085609228954,
+        "min_ns": 500.79185925583545,
+        "max_ns": 619.1120322305726,
+        "trial_medians": [
+          513.6451904454486,
+          500.79185925583545,
+          619.1120322305726,
+          503.75652173913045
+        ],
+        "jvm_bytes": 40.0
+      },
+      "speedup": 1.0418810085342873,
+      "latency_change_percent": -4.019749682663409,
+      "paired_speedups": [
+        1.0390582535227784,
+        1.0509440953030518,
+        0.8827117750463112,
+        1.0231200291791755
+      ]
+    },
+    {
+      "mode": "plain",
+      "case": "records_output",
+      "size": 1,
+      "before": {
+        "ns": 12163.917504858073,
+        "min_ns": 11878.594306049821,
+        "max_ns": 12278.387077652638,
+        "trial_medians": [
+          11878.594306049821,
+          12171.986634264884,
+          12278.387077652638,
+          12155.848375451264
+        ],
+        "jvm_bytes": 504.0
+      },
+      "after": {
+        "ns": 12189.399810706189,
+        "min_ns": 12105.164772727272,
+        "max_ns": 12564.805535841022,
+        "trial_medians": [
+          12564.805535841022,
+          12171.22201946472,
+          12207.577601947656,
+          12105.164772727272
+        ],
+        "jvm_bytes": 392.0
+      },
+      "speedup": 0.9979094700113345,
+      "latency_change_percent": 0.2094909459714689,
+      "paired_speedups": [
+        0.9453862435169579,
+        1.0000628215308982,
+        1.0058004526380144,
+        1.0041869403412154
+      ]
+    },
+    {
+      "mode": "plain",
+      "case": "records_output",
+      "size": 8,
+      "before": {
+        "ns": 93122.84591194968,
+        "min_ns": 90273.11764705883,
+        "max_ns": 94915.82464454976,
+        "trial_medians": [
+          90273.11764705883,
+          94915.82464454976,
+          91593.33333333333,
+          94652.35849056604
+        ],
+        "jvm_bytes": 2768.0
+      },
+      "after": {
+        "ns": 96091.74323215752,
+        "min_ns": 94557.57819905214,
+        "max_ns": 96971.3,
+        "trial_medians": [
+          94557.57819905214,
+          96971.3,
+          96525.6603773585,
+          95657.82608695653
+        ],
+        "jvm_bytes": 2680.0
+      },
+      "speedup": 0.9691035127437018,
+      "latency_change_percent": 3.1881514048819115,
+      "paired_speedups": [
+        0.9546894005367381,
+        0.9788032608055143,
+        0.9489013903169098,
+        0.9894889144200655
+      ]
+    },
+    {
+      "mode": "plain",
+      "case": "records_output",
+      "size": 64,
+      "before": {
+        "ns": 760595.2492877493,
+        "min_ns": 747077.7407407408,
+        "max_ns": 782483.0384615385,
+        "trial_medians": [
+          747077.7407407408,
+          782483.0384615385,
+          759963.4615384615,
+          761227.0370370371
+        ],
+        "jvm_bytes": 22640.0
+      },
+      "after": {
+        "ns": 770845.276923077,
+        "min_ns": 765999.1923076923,
+        "max_ns": 790972.5416666666,
+        "trial_medians": [
+          770736.1538461539,
+          790972.5416666666,
+          765999.1923076923,
+          770954.4
+        ],
+        "jvm_bytes": 21048.0
+      },
+      "speedup": 0.9867028728822963,
+      "latency_change_percent": 1.3476323504421295,
+      "paired_speedups": [
+        0.9693041347712157,
+        0.9892670064282638,
+        0.9921204476064169,
+        0.9873826999846386
+      ]
+    },
+    {
+      "mode": "plain",
+      "case": "records_output",
+      "size": 512,
+      "before": {
+        "ns": 5866215.75,
+        "min_ns": 5848953.25,
+        "max_ns": 6119016.25,
+        "trial_medians": [
+          5849904.5,
+          5848953.25,
+          6119016.25,
+          5882527.0
+        ],
+        "jvm_bytes": 179424.0
+      },
+      "after": {
+        "ns": 6073915.03125,
+        "min_ns": 5991637.5625,
+        "max_ns": 6293014.875,
+        "trial_medians": [
+          6134514.375,
+          6293014.875,
+          6013315.6875,
+          5991637.5625
+        ],
+        "jvm_bytes": 167992.0
+      },
+      "speedup": 0.9658047107703356,
+      "latency_change_percent": 3.5406007910636417,
+      "paired_speedups": [
+        0.9536051498778989,
+        0.9294357897096183,
+        1.0175777504446877,
+        0.9817895255909849
+      ]
+    },
+    {
+      "mode": "plain",
+      "case": "records_roundtrip",
+      "size": 0,
+      "before": {
+        "ns": 551.8521123450764,
+        "min_ns": 527.1825269312824,
+        "max_ns": 769.0452281818924,
+        "trial_medians": [
+          559.7287402229988,
+          769.0452281818924,
+          527.1825269312824,
+          543.975484467154
+        ],
+        "jvm_bytes": 80.0
+      },
+      "after": {
+        "ns": 570.4892624396473,
+        "min_ns": 544.4331013566574,
+        "max_ns": 596.8835308883001,
+        "trial_medians": [
+          572.3311449371278,
+          568.6473799421668,
+          596.8835308883001,
+          544.4331013566574
+        ],
+        "jvm_bytes": 56.0
+      },
+      "speedup": 0.9673312868065724,
+      "latency_change_percent": 3.3772001008337105,
+      "paired_speedups": [
+        0.9779805715177122,
+        1.3524114509418943,
+        0.8832251178830708,
+        0.9991594616705651
+      ]
+    },
+    {
+      "mode": "plain",
+      "case": "records_roundtrip",
+      "size": 1,
+      "before": {
+        "ns": 22333.175355404528,
+        "min_ns": 21685.83514099783,
+        "max_ns": 24132.772151898735,
+        "trial_medians": [
+          21685.83514099783,
+          24132.772151898735,
+          22160.16573971079,
+          22506.184971098264
+        ],
+        "jvm_bytes": 792.0
+      },
+      "after": {
+        "ns": 22416.250575641134,
+        "min_ns": 22382.915083798882,
+        "max_ns": 22489.57422324511,
+        "trial_medians": [
+          22439.295302013423,
+          22393.20584926884,
+          22382.915083798882,
+          22489.57422324511
+        ],
+        "jvm_bytes": 680.0
+      },
+      "speedup": 0.9962939734298438,
+      "latency_change_percent": 0.37198122933512767,
+      "paired_speedups": [
+        0.9664222895204742,
+        1.0776827719237303,
+        0.9900482424539365,
+        1.000738597702574
+      ]
+    },
+    {
+      "mode": "plain",
+      "case": "records_roundtrip",
+      "size": 8,
+      "before": {
+        "ns": 180520.49119103677,
+        "min_ns": 170877.76923076922,
+        "max_ns": 298969.84210526315,
+        "trial_medians": [
+          298969.84210526315,
+          177532.75229357797,
+          170877.76923076922,
+          183508.23008849556
+        ],
+        "jvm_bytes": 4808.0
+      },
+      "after": {
+        "ns": 177774.86801242235,
+        "min_ns": 173383.55652173914,
+        "max_ns": 178451.79279279278,
+        "trial_medians": [
+          173383.55652173914,
+          178066.52173913043,
+          177483.2142857143,
+          178451.79279279278
+        ],
+        "jvm_bytes": 4720.0
+      },
+      "speedup": 1.0154443831645683,
+      "latency_change_percent": -1.520948209535311,
+      "paired_speedups": [
+        1.7243263900159862,
+        0.9970024154998971,
+        0.9627827054996223,
+        1.028335032204322
+      ]
+    },
+    {
+      "mode": "plain",
+      "case": "records_roundtrip",
+      "size": 64,
+      "before": {
+        "ns": 1374887.75,
+        "min_ns": 1347594.9375,
+        "max_ns": 1435460.5,
+        "trial_medians": [
+          1347594.9375,
+          1377389.9375,
+          1435460.5,
+          1372385.5625
+        ],
+        "jvm_bytes": 38568.0
+      },
+      "after": {
+        "ns": 1452045.1875,
+        "min_ns": 1370753.0625,
+        "max_ns": 1467509.875,
+        "trial_medians": [
+          1447598.0,
+          1456492.375,
+          1370753.0625,
+          1467509.875
+        ],
+        "jvm_bytes": 36976.0
+      },
+      "speedup": 0.946862922611353,
+      "latency_change_percent": 5.611908135773258,
+      "paired_speedups": [
+        0.9309179326719158,
+        0.9456897688873929,
+        1.0472057581122494,
+        0.9351797803064187
+      ]
+    },
+    {
+      "mode": "plain",
+      "case": "records_roundtrip",
+      "size": 512,
+      "before": {
+        "ns": 11080527.4375,
+        "min_ns": 10736635.75,
+        "max_ns": 11708120.25,
+        "trial_medians": [
+          10736635.75,
+          11133071.125,
+          11708120.25,
+          11027983.75
+        ],
+        "jvm_bytes": 306456.0
+      },
+      "after": {
+        "ns": 11130993.6875,
+        "min_ns": 10950470.625,
+        "max_ns": 11443861.625,
+        "trial_medians": [
+          10950470.625,
+          11150671.1875,
+          11443861.625,
+          11111316.1875
+        ],
+        "jvm_bytes": 295024.0
+      },
+      "speedup": 0.9954661505147853,
+      "latency_change_percent": 0.45544988976975453,
+      "paired_speedups": [
+        0.9804725401927645,
+        0.9984216140711126,
+        1.0230917354350657,
+        0.9925002190475196
+      ]
+    }
+  ]
+}

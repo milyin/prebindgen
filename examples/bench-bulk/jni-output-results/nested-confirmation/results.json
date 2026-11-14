@@ -1,0 +1,559 @@
+{
+  "builds": {
+    "before": {
+      "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-jni-output-baseline",
+      "commit": "de3617bea9f94d60aad3d5b531cc329b86a4dfb9",
+      "dirty_paths": [],
+      "profile": "release",
+      "profile_environment": {
+        "CARGO_BUILD_JOBS": "1"
+      },
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8",
+      "path_dependency_repositories": [
+        {
+          "repository": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-jni-output-baseline",
+          "commit": "de3617bea9f94d60aad3d5b531cc329b86a4dfb9",
+          "packages": [
+            "prebindgen",
+            "prebindgen-conversions",
+            "prebindgen-declarations",
+            "prebindgen-flat",
+            "prebindgen-jni",
+            "prebindgen-jni-runtime",
+            "prebindgen-proc-macro",
+            "prebindgen-reprc",
+            "prebindgen-runtime"
+          ],
+          "contains_fixture": false
+        },
+        {
+          "repository": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-jni-output-owners",
+          "commit": "accd902c7e877650c1fa488307eaebb617ce51b3",
+          "packages": [],
+          "contains_fixture": true
+        }
+      ],
+      "cargo_config_sha256": {},
+      "cargo": "cargo 1.98.0 (797e8a9bc 2026-08-05)",
+      "dependency_lock_sha256": "50aec39504ae6c12f747a6737ac6ff1de1aa0ea743f3fb86370345e7d07a551f",
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "native_allocations": false,
+      "kotlin": "info: kotlinc-jvm 2.4.21 (JRE 11.0.29+7)",
+      "fixture_sha256": {
+        "flat.rs": "c6bbecbf78d9c60aa6ea0ff5d09f129e5b3bc3838add408300ee4cb4c084dc2e",
+        "bindings.rs": "d83672456f19ae19b7f119dadb41ee683552c80e7a49ca47ac6272486e80eebe",
+        "Bench.kt": "b8572ad9f0b02220a1235a61cf40c201d0dfa7eca3ba2e7d5a991e104b9a5884",
+        "AllocationBench.kt": "b639a9d46117d1d013140ef413b94a033cab778cbf547c76eb6918f7780fe792",
+        "native_allocations.rs": "280a2ccd7efb4e33dbadbaf4b0e3cc2041c9644f8775736b828aed3ba8cb78d3",
+        "run.py": "9698faa5c84be9ca04f4f79236543db1d216748ca24116bfba97948b0d31188e",
+        "Cargo.lock.snapshot": "50aec39504ae6c12f747a6737ac6ff1de1aa0ea743f3fb86370345e7d07a551f"
+      },
+      "jar": "/tmp/jni-output-before-normal-v2/bench.jar",
+      "library": "/tmp/jni-output-before-normal-v2/native/libbulk_bench.so",
+      "jar_sha256": "8f318cbd6ab7be8d1ee066caa59e591316b1e55ff771c4a3be13a60882491e66",
+      "native_sha256": "0b4cffee0c96ff083838e1709119cbae875f444294061741785449f3fce0ed2f"
+    },
+    "after": {
+      "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-jni-output-owners",
+      "commit": "aa3c80058a621b223b15d174dd0c3e31f230a501",
+      "dirty_paths": [],
+      "profile": "release",
+      "profile_environment": {
+        "CARGO_BUILD_JOBS": "1"
+      },
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8",
+      "path_dependency_repositories": [
+        {
+          "repository": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-jni-output-owners",
+          "commit": "aa3c80058a621b223b15d174dd0c3e31f230a501",
+          "packages": [
+            "prebindgen",
+            "prebindgen-conversions",
+            "prebindgen-declarations",
+            "prebindgen-flat",
+            "prebindgen-jni",
+            "prebindgen-jni-runtime",
+            "prebindgen-proc-macro",
+            "prebindgen-reprc",
+            "prebindgen-runtime"
+          ],
+          "contains_fixture": true
+        }
+      ],
+      "cargo_config_sha256": {},
+      "cargo": "cargo 1.98.0 (797e8a9bc 2026-08-05)",
+      "dependency_lock_sha256": "50aec39504ae6c12f747a6737ac6ff1de1aa0ea743f3fb86370345e7d07a551f",
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "native_allocations": false,
+      "kotlin": "info: kotlinc-jvm 2.4.21 (JRE 11.0.29+7)",
+      "fixture_sha256": {
+        "flat.rs": "c6bbecbf78d9c60aa6ea0ff5d09f129e5b3bc3838add408300ee4cb4c084dc2e",
+        "bindings.rs": "d83672456f19ae19b7f119dadb41ee683552c80e7a49ca47ac6272486e80eebe",
+        "Bench.kt": "b8572ad9f0b02220a1235a61cf40c201d0dfa7eca3ba2e7d5a991e104b9a5884",
+        "AllocationBench.kt": "b639a9d46117d1d013140ef413b94a033cab778cbf547c76eb6918f7780fe792",
+        "native_allocations.rs": "280a2ccd7efb4e33dbadbaf4b0e3cc2041c9644f8775736b828aed3ba8cb78d3",
+        "run.py": "9698faa5c84be9ca04f4f79236543db1d216748ca24116bfba97948b0d31188e",
+        "Cargo.lock.snapshot": "50aec39504ae6c12f747a6737ac6ff1de1aa0ea743f3fb86370345e7d07a551f"
+      },
+      "jar": "/tmp/jni-output-after-normal-final/bench.jar",
+      "library": "/tmp/jni-output-after-normal-final/native/libbulk_bench.so",
+      "jar_sha256": "8f318cbd6ab7be8d1ee066caa59e591316b1e55ff771c4a3be13a60882491e66",
+      "native_sha256": "eff9e2d2f07bdab172829c2e7ea65e8e8ea010f6d0b981e11d7d0ac2154336bc"
+    }
+  },
+  "driver_sha256": "202280afc47f957a1d398cb0ed528fdefc3002e268bbf8224e96eb76e922d0ba",
+  "runner_sha256": "7f9f27784379c3a39eeb0e23afe4d443685461f9d1233b4ffd5cd8956f556844",
+  "samples_sha256": "1f40cd668ef402a930363ec549637c4b92f811946fbe4f50491f954df2ccc020",
+  "settings": {
+    "before": "/tmp/jni-output-before-normal-v2",
+    "after": "/tmp/jni-output-after-normal-final",
+    "driver": "/tmp/jni-output-driver.jar",
+    "output": "/tmp/jni-output-confirmation",
+    "forks": 8,
+    "counts": false,
+    "check_jni": false,
+    "cases": "nested"
+  },
+  "runs": [
+    {
+      "id": "0-nested-64-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/jni-output-before-normal-v2/native",
+        "-cp",
+        "/tmp/jni-output-driver.jar:/tmp/jni-output-before-normal-v2/bench.jar",
+        "bench.outputowners.DriverKt",
+        "nested",
+        "64",
+        "time"
+      ],
+      "output_sha256": "4444d37224adfc72e423b642e292d16e427996f761c509c4bedf69db600f8d38"
+    },
+    {
+      "id": "0-nested-64-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/jni-output-after-normal-final/native",
+        "-cp",
+        "/tmp/jni-output-driver.jar:/tmp/jni-output-after-normal-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "nested",
+        "64",
+        "time"
+      ],
+      "output_sha256": "7ea3accf2c01ab114f9044a037bc285b6655952e1a6764cbc1b33c1768cad911"
+    },
+    {
+      "id": "1-nested-64-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/jni-output-after-normal-final/native",
+        "-cp",
+        "/tmp/jni-output-driver.jar:/tmp/jni-output-after-normal-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "nested",
+        "64",
+        "time"
+      ],
+      "output_sha256": "170dcbd386cc0bc8f6fae56ade45aece61b5fcb44d9eba8c683e26f0f719bc24"
+    },
+    {
+      "id": "1-nested-64-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/jni-output-before-normal-v2/native",
+        "-cp",
+        "/tmp/jni-output-driver.jar:/tmp/jni-output-before-normal-v2/bench.jar",
+        "bench.outputowners.DriverKt",
+        "nested",
+        "64",
+        "time"
+      ],
+      "output_sha256": "cf2411736c0f1ebeadaa0276b4fc3865f9407613feab0ede53da16defc3f8a50"
+    },
+    {
+      "id": "2-nested-64-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/jni-output-before-normal-v2/native",
+        "-cp",
+        "/tmp/jni-output-driver.jar:/tmp/jni-output-before-normal-v2/bench.jar",
+        "bench.outputowners.DriverKt",
+        "nested",
+        "64",
+        "time"
+      ],
+      "output_sha256": "a7a7f0d7adf46cd8153233c5900b745b20fe83fc7f5c7c1459099be865edb2b8"
+    },
+    {
+      "id": "2-nested-64-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/jni-output-after-normal-final/native",
+        "-cp",
+        "/tmp/jni-output-driver.jar:/tmp/jni-output-after-normal-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "nested",
+        "64",
+        "time"
+      ],
+      "output_sha256": "d154720519b8d7589ade7110f1f7f78584909411fe61d41703acb1831f1509ff"
+    },
+    {
+      "id": "3-nested-64-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/jni-output-after-normal-final/native",
+        "-cp",
+        "/tmp/jni-output-driver.jar:/tmp/jni-output-after-normal-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "nested",
+        "64",
+        "time"
+      ],
+      "output_sha256": "f017a0a019bbd06afcd68066f0a778aeb67b4555f50285cbcd287b861ba1747e"
+    },
+    {
+      "id": "3-nested-64-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/jni-output-before-normal-v2/native",
+        "-cp",
+        "/tmp/jni-output-driver.jar:/tmp/jni-output-before-normal-v2/bench.jar",
+        "bench.outputowners.DriverKt",
+        "nested",
+        "64",
+        "time"
+      ],
+      "output_sha256": "10f80de53a5f9d802aa0c8edc0489f08730a0ea78e3cf921e011e52bba91a6a8"
+    },
+    {
+      "id": "4-nested-64-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/jni-output-before-normal-v2/native",
+        "-cp",
+        "/tmp/jni-output-driver.jar:/tmp/jni-output-before-normal-v2/bench.jar",
+        "bench.outputowners.DriverKt",
+        "nested",
+        "64",
+        "time"
+      ],
+      "output_sha256": "08fb25095347f05cd1f9d15143f527579db1f368d74a9f725178c3a5560772b5"
+    },
+    {
+      "id": "4-nested-64-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/jni-output-after-normal-final/native",
+        "-cp",
+        "/tmp/jni-output-driver.jar:/tmp/jni-output-after-normal-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "nested",
+        "64",
+        "time"
+      ],
+      "output_sha256": "7c706b52558734762b35fbcdf2ed314136a8d2d17b7b2197c81f1a7660ea9298"
+    },
+    {
+      "id": "5-nested-64-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/jni-output-after-normal-final/native",
+        "-cp",
+        "/tmp/jni-output-driver.jar:/tmp/jni-output-after-normal-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "nested",
+        "64",
+        "time"
+      ],
+      "output_sha256": "30c29b37f4837a81a60fe8f99eb2aedd69154da18956cfc8c8bd49e6729cb102"
+    },
+    {
+      "id": "5-nested-64-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/jni-output-before-normal-v2/native",
+        "-cp",
+        "/tmp/jni-output-driver.jar:/tmp/jni-output-before-normal-v2/bench.jar",
+        "bench.outputowners.DriverKt",
+        "nested",
+        "64",
+        "time"
+      ],
+      "output_sha256": "cb2a900fce8ed5ff86d9403650c40e05b792ae0fdee09e90a4238124da046add"
+    },
+    {
+      "id": "6-nested-64-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/jni-output-before-normal-v2/native",
+        "-cp",
+        "/tmp/jni-output-driver.jar:/tmp/jni-output-before-normal-v2/bench.jar",
+        "bench.outputowners.DriverKt",
+        "nested",
+        "64",
+        "time"
+      ],
+      "output_sha256": "b93dfbeb5e5eee0a7b9b55fd1f159307e30b6b44abb068a26a72db23934b4842"
+    },
+    {
+      "id": "6-nested-64-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/jni-output-after-normal-final/native",
+        "-cp",
+        "/tmp/jni-output-driver.jar:/tmp/jni-output-after-normal-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "nested",
+        "64",
+        "time"
+      ],
+      "output_sha256": "076aa1edb679e0bb85e0f79556f32a95481ac1f4aa26726d902435ccd5a009cc"
+    },
+    {
+      "id": "7-nested-64-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/jni-output-after-normal-final/native",
+        "-cp",
+        "/tmp/jni-output-driver.jar:/tmp/jni-output-after-normal-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "nested",
+        "64",
+        "time"
+      ],
+      "output_sha256": "9909a71e10e2586b3afec3d52cab73ddb04a2541b19a9eb8d587b4bbd857ed93"
+    },
+    {
+      "id": "7-nested-64-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/jni-output-before-normal-v2/native",
+        "-cp",
+        "/tmp/jni-output-driver.jar:/tmp/jni-output-before-normal-v2/bench.jar",
+        "bench.outputowners.DriverKt",
+        "nested",
+        "64",
+        "time"
+      ],
+      "output_sha256": "2ad30561bf6346c059e0e0ef105ec11425ea05a04f4380a7265ac3766c5cad35"
+    }
+  ],
+  "summary": [
+    {
+      "case": "nested",
+      "size": 64,
+      "before": {
+        "nanos": {
+          "median": 439162.7981770834,
+          "min": 402387.8125,
+          "max": 782722.5598958334
+        },
+        "cpu_nanos": {
+          "median": 435874.375,
+          "min": 402452.9947916667,
+          "max": 774830.6770833334
+        },
+        "jvm_bytes": {
+          "median": 54981.625,
+          "min": 54959.5,
+          "max": 55022.625
+        },
+        "forks": [
+          {
+            "nanos": 463005.2760416667,
+            "cpu_nanos": 458001.5104166667,
+            "jvm_bytes": 54997.125
+          },
+          {
+            "nanos": 484755.1901041667,
+            "cpu_nanos": 478870.390625,
+            "jvm_bytes": 54962.0
+          },
+          {
+            "nanos": 428905.2473958333,
+            "cpu_nanos": 428905.4427083333,
+            "jvm_bytes": 54974.375
+          },
+          {
+            "nanos": 433677.8541666667,
+            "cpu_nanos": 433389.453125,
+            "jvm_bytes": 54990.5
+          },
+          {
+            "nanos": 782722.5598958334,
+            "cpu_nanos": 774830.6770833334,
+            "jvm_bytes": 55022.625
+          },
+          {
+            "nanos": 402387.8125,
+            "cpu_nanos": 402452.9947916667,
+            "jvm_bytes": 54959.5
+          },
+          {
+            "nanos": 438393.0572916667,
+            "cpu_nanos": 438359.296875,
+            "jvm_bytes": 54961.375
+          },
+          {
+            "nanos": 439932.5390625,
+            "cpu_nanos": 431157.265625,
+            "jvm_bytes": 54988.875
+          }
+        ]
+      },
+      "after": {
+        "nanos": {
+          "median": 450883.40625,
+          "min": 431009.7760416667,
+          "max": 482833.59765625
+        },
+        "cpu_nanos": {
+          "median": 442449.3359375,
+          "min": 430608.4895833333,
+          "max": 482655.9635416667
+        },
+        "jvm_bytes": {
+          "median": 55153.15625,
+          "min": 55093.875,
+          "max": 55238.375
+        },
+        "forks": [
+          {
+            "nanos": 431009.7760416667,
+            "cpu_nanos": 431064.8177083333,
+            "jvm_bytes": 55127.5
+          },
+          {
+            "nanos": 431260.2135416667,
+            "cpu_nanos": 430608.4895833333,
+            "jvm_bytes": 55196.75
+          },
+          {
+            "nanos": 441524.9270833333,
+            "cpu_nanos": 441504.765625,
+            "jvm_bytes": 55238.375
+          },
+          {
+            "nanos": 470387.28125,
+            "cpu_nanos": 443393.90625,
+            "jvm_bytes": 55201.375
+          },
+          {
+            "nanos": 470696.6848958333,
+            "cpu_nanos": 470535.1822916667,
+            "jvm_bytes": 55093.875
+          },
+          {
+            "nanos": 482833.59765625,
+            "cpu_nanos": 482655.9635416667,
+            "jvm_bytes": 55178.8125
+          },
+          {
+            "nanos": 459074.1432291667,
+            "cpu_nanos": 458295.2864583333,
+            "jvm_bytes": 55106.25
+          },
+          {
+            "nanos": 442692.6692708333,
+            "cpu_nanos": 440216.4973958333,
+            "jvm_bytes": 55095.75
+          }
+        ]
+      }
+    }
+  ]
+}

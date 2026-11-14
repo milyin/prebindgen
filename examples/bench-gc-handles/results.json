@@ -1,0 +1,2940 @@
+{
+  "revision": "7f6b6d995bf0f800b06ee9fdfee77fad1be6a377",
+  "dirty": false,
+  "java": "openjdk version \"11.0.29\" 2025-10-21\nOpenJDK Runtime Environment Temurin-11.0.29+7 (build 11.0.29+7)\nOpenJDK 64-Bit Server VM Temurin-11.0.29+7 (build 11.0.29+7, mixed mode)\n",
+  "platform": "Linux-6.8.0-138-generic-x86_64-with-glibc2.39",
+  "processes": 6,
+  "reused_artifacts": true,
+  "summary": [
+    {
+      "case": "plain-read",
+      "median_ns": 21.8640682,
+      "min_ns": 21.3898264,
+      "max_ns": 27.1648728,
+      "median_bytes": 0.0
+    },
+    {
+      "case": "gc-read",
+      "median_ns": 21.4264892,
+      "min_ns": 20.9341366,
+      "max_ns": 24.8342962,
+      "median_bytes": 0.0
+    },
+    {
+      "case": "plain-read-aa",
+      "median_ns": 21.4402862,
+      "min_ns": 20.7192228,
+      "max_ns": 25.3753238,
+      "median_bytes": 0.0
+    },
+    {
+      "case": "plain-close",
+      "median_ns": 67.73061,
+      "min_ns": 64.409855,
+      "max_ns": 72.21905,
+      "median_bytes": 32.0
+    },
+    {
+      "case": "gc-close",
+      "median_ns": 197.26337,
+      "min_ns": 188.00513,
+      "max_ns": 222.60526,
+      "median_bytes": 136.0
+    },
+    {
+      "case": "plain-close-aa",
+      "median_ns": 69.5703825,
+      "min_ns": 61.23731,
+      "max_ns": 79.10305,
+      "median_bytes": 32.0
+    }
+  ],
+  "samples": [
+    {
+      "case": "plain-close-aa",
+      "process": 0,
+      "batch": 0,
+      "count": 20000,
+      "elapsed_ns": 1073580,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 0,
+      "batch": 1,
+      "count": 20000,
+      "elapsed_ns": 1032209,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 0,
+      "batch": 2,
+      "count": 20000,
+      "elapsed_ns": 1055419,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 0,
+      "batch": 3,
+      "count": 20000,
+      "elapsed_ns": 1038000,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 0,
+      "batch": 4,
+      "count": 20000,
+      "elapsed_ns": 1028469,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 0,
+      "batch": 5,
+      "count": 20000,
+      "elapsed_ns": 1180739,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 0,
+      "batch": 6,
+      "count": 20000,
+      "elapsed_ns": 1764249,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 0,
+      "batch": 7,
+      "count": 20000,
+      "elapsed_ns": 1460019,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 0,
+      "batch": 8,
+      "count": 20000,
+      "elapsed_ns": 1244379,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 0,
+      "batch": 9,
+      "count": 20000,
+      "elapsed_ns": 1370399,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 0,
+      "batch": 0,
+      "count": 20000,
+      "elapsed_ns": 1091079,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 0,
+      "batch": 1,
+      "count": 20000,
+      "elapsed_ns": 1061310,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 0,
+      "batch": 2,
+      "count": 20000,
+      "elapsed_ns": 1038439,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 0,
+      "batch": 3,
+      "count": 20000,
+      "elapsed_ns": 1387169,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 0,
+      "batch": 4,
+      "count": 20000,
+      "elapsed_ns": 1170949,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 0,
+      "batch": 5,
+      "count": 20000,
+      "elapsed_ns": 1767719,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 0,
+      "batch": 6,
+      "count": 20000,
+      "elapsed_ns": 1466359,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 0,
+      "batch": 7,
+      "count": 20000,
+      "elapsed_ns": 1039419,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 0,
+      "batch": 8,
+      "count": 20000,
+      "elapsed_ns": 1261439,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 0,
+      "batch": 9,
+      "count": 20000,
+      "elapsed_ns": 1598089,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "gc-read",
+      "process": 0,
+      "batch": 0,
+      "count": 500000,
+      "elapsed_ns": 13077352,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 0,
+      "batch": 1,
+      "count": 500000,
+      "elapsed_ns": 14476060,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 0,
+      "batch": 2,
+      "count": 500000,
+      "elapsed_ns": 9922384,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 0,
+      "batch": 3,
+      "count": 500000,
+      "elapsed_ns": 9552454,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 0,
+      "batch": 4,
+      "count": 500000,
+      "elapsed_ns": 9661914,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 0,
+      "batch": 5,
+      "count": 500000,
+      "elapsed_ns": 9561754,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 0,
+      "batch": 6,
+      "count": 500000,
+      "elapsed_ns": 9589913,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 0,
+      "batch": 7,
+      "count": 500000,
+      "elapsed_ns": 9632694,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 0,
+      "batch": 8,
+      "count": 500000,
+      "elapsed_ns": 9636884,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 0,
+      "batch": 9,
+      "count": 500000,
+      "elapsed_ns": 9559274,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 0,
+      "batch": 0,
+      "count": 500000,
+      "elapsed_ns": 19468488,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 0,
+      "batch": 1,
+      "count": 500000,
+      "elapsed_ns": 24803394,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 0,
+      "batch": 2,
+      "count": 500000,
+      "elapsed_ns": 11365843,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 0,
+      "batch": 3,
+      "count": 500000,
+      "elapsed_ns": 9604644,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 0,
+      "batch": 4,
+      "count": 500000,
+      "elapsed_ns": 9821144,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 0,
+      "batch": 5,
+      "count": 500000,
+      "elapsed_ns": 9590533,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 0,
+      "batch": 6,
+      "count": 500000,
+      "elapsed_ns": 9636804,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 0,
+      "batch": 7,
+      "count": 500000,
+      "elapsed_ns": 9664964,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 0,
+      "batch": 8,
+      "count": 500000,
+      "elapsed_ns": 9604424,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 0,
+      "batch": 9,
+      "count": 500000,
+      "elapsed_ns": 9542714,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-close",
+      "process": 0,
+      "batch": 0,
+      "count": 20000,
+      "elapsed_ns": 4743277,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 0,
+      "batch": 1,
+      "count": 20000,
+      "elapsed_ns": 4066597,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 0,
+      "batch": 2,
+      "count": 20000,
+      "elapsed_ns": 3898637,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 0,
+      "batch": 3,
+      "count": 20000,
+      "elapsed_ns": 3417418,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 0,
+      "batch": 4,
+      "count": 20000,
+      "elapsed_ns": 3487668,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 0,
+      "batch": 5,
+      "count": 20000,
+      "elapsed_ns": 4496797,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 0,
+      "batch": 6,
+      "count": 20000,
+      "elapsed_ns": 4045867,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 0,
+      "batch": 7,
+      "count": 20000,
+      "elapsed_ns": 3776798,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 0,
+      "batch": 8,
+      "count": 20000,
+      "elapsed_ns": 3981637,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 0,
+      "batch": 9,
+      "count": 20000,
+      "elapsed_ns": 4614677,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 0,
+      "batch": 0,
+      "count": 500000,
+      "elapsed_ns": 12251742,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 0,
+      "batch": 1,
+      "count": 500000,
+      "elapsed_ns": 13968571,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 0,
+      "batch": 2,
+      "count": 500000,
+      "elapsed_ns": 10039203,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 0,
+      "batch": 3,
+      "count": 500000,
+      "elapsed_ns": 9830704,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 0,
+      "batch": 4,
+      "count": 500000,
+      "elapsed_ns": 9933114,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 0,
+      "batch": 5,
+      "count": 500000,
+      "elapsed_ns": 9742114,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 0,
+      "batch": 6,
+      "count": 500000,
+      "elapsed_ns": 9855973,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 0,
+      "batch": 7,
+      "count": 500000,
+      "elapsed_ns": 9744714,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 0,
+      "batch": 8,
+      "count": 500000,
+      "elapsed_ns": 9851634,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 0,
+      "batch": 9,
+      "count": 500000,
+      "elapsed_ns": 10165793,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-close",
+      "process": 1,
+      "batch": 0,
+      "count": 20000,
+      "elapsed_ns": 2629748,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 1,
+      "batch": 1,
+      "count": 20000,
+      "elapsed_ns": 1036519,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 1,
+      "batch": 2,
+      "count": 20000,
+      "elapsed_ns": 1093839,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 1,
+      "batch": 3,
+      "count": 20000,
+      "elapsed_ns": 1033240,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 1,
+      "batch": 4,
+      "count": 20000,
+      "elapsed_ns": 1030529,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 1,
+      "batch": 5,
+      "count": 20000,
+      "elapsed_ns": 1070169,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 1,
+      "batch": 6,
+      "count": 20000,
+      "elapsed_ns": 1706939,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 1,
+      "batch": 7,
+      "count": 20000,
+      "elapsed_ns": 1510269,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 1,
+      "batch": 8,
+      "count": 20000,
+      "elapsed_ns": 1216799,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 1,
+      "batch": 9,
+      "count": 20000,
+      "elapsed_ns": 1381769,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-read",
+      "process": 1,
+      "batch": 0,
+      "count": 500000,
+      "elapsed_ns": 16343140,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 1,
+      "batch": 1,
+      "count": 500000,
+      "elapsed_ns": 17228909,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 1,
+      "batch": 2,
+      "count": 500000,
+      "elapsed_ns": 12868022,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 1,
+      "batch": 3,
+      "count": 500000,
+      "elapsed_ns": 12762212,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 1,
+      "batch": 4,
+      "count": 500000,
+      "elapsed_ns": 12972682,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 1,
+      "batch": 5,
+      "count": 500000,
+      "elapsed_ns": 13910851,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 1,
+      "batch": 6,
+      "count": 500000,
+      "elapsed_ns": 12251492,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 1,
+      "batch": 7,
+      "count": 500000,
+      "elapsed_ns": 12391542,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 1,
+      "batch": 8,
+      "count": 500000,
+      "elapsed_ns": 12569862,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 1,
+      "batch": 9,
+      "count": 500000,
+      "elapsed_ns": 12525652,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 1,
+      "batch": 0,
+      "count": 500000,
+      "elapsed_ns": 11947293,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 1,
+      "batch": 1,
+      "count": 500000,
+      "elapsed_ns": 14190661,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 1,
+      "batch": 2,
+      "count": 500000,
+      "elapsed_ns": 10182184,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 1,
+      "batch": 3,
+      "count": 500000,
+      "elapsed_ns": 9875293,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 1,
+      "batch": 4,
+      "count": 500000,
+      "elapsed_ns": 9909794,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 1,
+      "batch": 5,
+      "count": 500000,
+      "elapsed_ns": 10061973,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 1,
+      "batch": 6,
+      "count": 500000,
+      "elapsed_ns": 9907634,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 1,
+      "batch": 7,
+      "count": 500000,
+      "elapsed_ns": 9864734,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 1,
+      "batch": 8,
+      "count": 500000,
+      "elapsed_ns": 9881443,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 1,
+      "batch": 9,
+      "count": 500000,
+      "elapsed_ns": 9894334,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-close",
+      "process": 1,
+      "batch": 0,
+      "count": 20000,
+      "elapsed_ns": 4183578,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 1,
+      "batch": 1,
+      "count": 20000,
+      "elapsed_ns": 3596118,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 1,
+      "batch": 2,
+      "count": 20000,
+      "elapsed_ns": 4840177,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 1,
+      "batch": 3,
+      "count": 20000,
+      "elapsed_ns": 7324965,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 1,
+      "batch": 4,
+      "count": 20000,
+      "elapsed_ns": 5812477,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 1,
+      "batch": 5,
+      "count": 20000,
+      "elapsed_ns": 3389227,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 1,
+      "batch": 6,
+      "count": 20000,
+      "elapsed_ns": 3454788,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 1,
+      "batch": 7,
+      "count": 20000,
+      "elapsed_ns": 3459368,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 1,
+      "batch": 8,
+      "count": 20000,
+      "elapsed_ns": 3620387,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 1,
+      "batch": 9,
+      "count": 20000,
+      "elapsed_ns": 4839967,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 1,
+      "batch": 0,
+      "count": 20000,
+      "elapsed_ns": 1133179,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 1,
+      "batch": 1,
+      "count": 20000,
+      "elapsed_ns": 1163969,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 1,
+      "batch": 2,
+      "count": 20000,
+      "elapsed_ns": 1080800,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 1,
+      "batch": 3,
+      "count": 20000,
+      "elapsed_ns": 1061700,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 1,
+      "batch": 4,
+      "count": 20000,
+      "elapsed_ns": 1056259,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 1,
+      "batch": 5,
+      "count": 20000,
+      "elapsed_ns": 1139129,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 1,
+      "batch": 6,
+      "count": 20000,
+      "elapsed_ns": 1766019,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 1,
+      "batch": 7,
+      "count": 20000,
+      "elapsed_ns": 1739739,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 1,
+      "batch": 8,
+      "count": 20000,
+      "elapsed_ns": 3517678,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 1,
+      "batch": 9,
+      "count": 20000,
+      "elapsed_ns": 2162138,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 1,
+      "batch": 0,
+      "count": 500000,
+      "elapsed_ns": 13379231,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 1,
+      "batch": 1,
+      "count": 500000,
+      "elapsed_ns": 13871861,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 1,
+      "batch": 2,
+      "count": 500000,
+      "elapsed_ns": 10005884,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 1,
+      "batch": 3,
+      "count": 500000,
+      "elapsed_ns": 10611193,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 1,
+      "batch": 4,
+      "count": 500000,
+      "elapsed_ns": 10008394,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 1,
+      "batch": 5,
+      "count": 500000,
+      "elapsed_ns": 9973544,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 1,
+      "batch": 6,
+      "count": 500000,
+      "elapsed_ns": 10131874,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 1,
+      "batch": 7,
+      "count": 500000,
+      "elapsed_ns": 10153543,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 1,
+      "batch": 8,
+      "count": 500000,
+      "elapsed_ns": 10188224,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 1,
+      "batch": 9,
+      "count": 500000,
+      "elapsed_ns": 10000503,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 2,
+      "batch": 0,
+      "count": 500000,
+      "elapsed_ns": 13469842,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 2,
+      "batch": 1,
+      "count": 500000,
+      "elapsed_ns": 15148521,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 2,
+      "batch": 2,
+      "count": 500000,
+      "elapsed_ns": 10280373,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 2,
+      "batch": 3,
+      "count": 500000,
+      "elapsed_ns": 9937254,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 2,
+      "batch": 4,
+      "count": 500000,
+      "elapsed_ns": 9974953,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 2,
+      "batch": 5,
+      "count": 500000,
+      "elapsed_ns": 10178844,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 2,
+      "batch": 6,
+      "count": 500000,
+      "elapsed_ns": 11046043,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 2,
+      "batch": 7,
+      "count": 500000,
+      "elapsed_ns": 9801584,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 2,
+      "batch": 8,
+      "count": 500000,
+      "elapsed_ns": 9964543,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 2,
+      "batch": 9,
+      "count": 500000,
+      "elapsed_ns": 10329324,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 2,
+      "batch": 0,
+      "count": 500000,
+      "elapsed_ns": 12721741,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 2,
+      "batch": 1,
+      "count": 500000,
+      "elapsed_ns": 14655211,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 2,
+      "batch": 2,
+      "count": 500000,
+      "elapsed_ns": 9800614,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 2,
+      "batch": 3,
+      "count": 500000,
+      "elapsed_ns": 13784151,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 2,
+      "batch": 4,
+      "count": 500000,
+      "elapsed_ns": 9588814,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 2,
+      "batch": 5,
+      "count": 500000,
+      "elapsed_ns": 9591353,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 2,
+      "batch": 6,
+      "count": 500000,
+      "elapsed_ns": 9815334,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 2,
+      "batch": 7,
+      "count": 500000,
+      "elapsed_ns": 9560714,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 2,
+      "batch": 8,
+      "count": 500000,
+      "elapsed_ns": 9637544,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 2,
+      "batch": 9,
+      "count": 500000,
+      "elapsed_ns": 9578364,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-close",
+      "process": 2,
+      "batch": 0,
+      "count": 20000,
+      "elapsed_ns": 4370937,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 2,
+      "batch": 1,
+      "count": 20000,
+      "elapsed_ns": 4026487,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 2,
+      "batch": 2,
+      "count": 20000,
+      "elapsed_ns": 4434697,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 2,
+      "batch": 3,
+      "count": 20000,
+      "elapsed_ns": 4021147,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 2,
+      "batch": 4,
+      "count": 20000,
+      "elapsed_ns": 3725478,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 2,
+      "batch": 5,
+      "count": 20000,
+      "elapsed_ns": 3921037,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 2,
+      "batch": 6,
+      "count": 20000,
+      "elapsed_ns": 3927028,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 2,
+      "batch": 7,
+      "count": 20000,
+      "elapsed_ns": 3962197,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 2,
+      "batch": 8,
+      "count": 20000,
+      "elapsed_ns": 3501258,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 2,
+      "batch": 9,
+      "count": 20000,
+      "elapsed_ns": 6714316,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 2,
+      "batch": 0,
+      "count": 20000,
+      "elapsed_ns": 1197809,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 2,
+      "batch": 1,
+      "count": 20000,
+      "elapsed_ns": 1042009,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 2,
+      "batch": 2,
+      "count": 20000,
+      "elapsed_ns": 1065639,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 2,
+      "batch": 3,
+      "count": 20000,
+      "elapsed_ns": 1055150,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 2,
+      "batch": 4,
+      "count": 20000,
+      "elapsed_ns": 1116009,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 2,
+      "batch": 5,
+      "count": 20000,
+      "elapsed_ns": 1764459,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 2,
+      "batch": 6,
+      "count": 20000,
+      "elapsed_ns": 2141698,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 2,
+      "batch": 7,
+      "count": 20000,
+      "elapsed_ns": 2684338,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 2,
+      "batch": 8,
+      "count": 20000,
+      "elapsed_ns": 1225060,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 2,
+      "batch": 9,
+      "count": 20000,
+      "elapsed_ns": 1408669,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 2,
+      "batch": 0,
+      "count": 500000,
+      "elapsed_ns": 12016923,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 2,
+      "batch": 1,
+      "count": 500000,
+      "elapsed_ns": 13798261,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 2,
+      "batch": 2,
+      "count": 500000,
+      "elapsed_ns": 9686474,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 2,
+      "batch": 3,
+      "count": 500000,
+      "elapsed_ns": 9627283,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 2,
+      "batch": 4,
+      "count": 500000,
+      "elapsed_ns": 9673694,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 2,
+      "batch": 5,
+      "count": 500000,
+      "elapsed_ns": 9919544,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 2,
+      "batch": 6,
+      "count": 500000,
+      "elapsed_ns": 9614204,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 2,
+      "batch": 7,
+      "count": 500000,
+      "elapsed_ns": 9771793,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 2,
+      "batch": 8,
+      "count": 500000,
+      "elapsed_ns": 9801504,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 2,
+      "batch": 9,
+      "count": 500000,
+      "elapsed_ns": 9686434,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-close",
+      "process": 2,
+      "batch": 0,
+      "count": 20000,
+      "elapsed_ns": 1088660,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 2,
+      "batch": 1,
+      "count": 20000,
+      "elapsed_ns": 1034710,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 2,
+      "batch": 2,
+      "count": 20000,
+      "elapsed_ns": 1027979,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 2,
+      "batch": 3,
+      "count": 20000,
+      "elapsed_ns": 1137699,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 2,
+      "batch": 4,
+      "count": 20000,
+      "elapsed_ns": 1027830,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 2,
+      "batch": 5,
+      "count": 20000,
+      "elapsed_ns": 1338870,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 2,
+      "batch": 6,
+      "count": 20000,
+      "elapsed_ns": 1725719,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 2,
+      "batch": 7,
+      "count": 20000,
+      "elapsed_ns": 1756229,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 2,
+      "batch": 8,
+      "count": 20000,
+      "elapsed_ns": 1666399,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 2,
+      "batch": 9,
+      "count": 20000,
+      "elapsed_ns": 1578329,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 3,
+      "batch": 0,
+      "count": 20000,
+      "elapsed_ns": 2929918,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 3,
+      "batch": 1,
+      "count": 20000,
+      "elapsed_ns": 1060849,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 3,
+      "batch": 2,
+      "count": 20000,
+      "elapsed_ns": 1238929,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 3,
+      "batch": 3,
+      "count": 20000,
+      "elapsed_ns": 1103130,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 3,
+      "batch": 4,
+      "count": 20000,
+      "elapsed_ns": 1733339,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 3,
+      "batch": 5,
+      "count": 20000,
+      "elapsed_ns": 1547729,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 3,
+      "batch": 6,
+      "count": 20000,
+      "elapsed_ns": 1065499,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 3,
+      "batch": 7,
+      "count": 20000,
+      "elapsed_ns": 1008959,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 3,
+      "batch": 8,
+      "count": 20000,
+      "elapsed_ns": 1250489,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 3,
+      "batch": 9,
+      "count": 20000,
+      "elapsed_ns": 1504969,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "gc-read",
+      "process": 3,
+      "batch": 0,
+      "count": 500000,
+      "elapsed_ns": 12227652,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 3,
+      "batch": 1,
+      "count": 500000,
+      "elapsed_ns": 14218541,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 3,
+      "batch": 2,
+      "count": 500000,
+      "elapsed_ns": 9690704,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 3,
+      "batch": 3,
+      "count": 500000,
+      "elapsed_ns": 9991883,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 3,
+      "batch": 4,
+      "count": 500000,
+      "elapsed_ns": 9669554,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 3,
+      "batch": 5,
+      "count": 500000,
+      "elapsed_ns": 9694504,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 3,
+      "batch": 6,
+      "count": 500000,
+      "elapsed_ns": 10306113,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 3,
+      "batch": 7,
+      "count": 500000,
+      "elapsed_ns": 10674003,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 3,
+      "batch": 8,
+      "count": 500000,
+      "elapsed_ns": 9585234,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 3,
+      "batch": 9,
+      "count": 500000,
+      "elapsed_ns": 9847634,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 3,
+      "batch": 0,
+      "count": 20000,
+      "elapsed_ns": 1078689,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 3,
+      "batch": 1,
+      "count": 20000,
+      "elapsed_ns": 1101820,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 3,
+      "batch": 2,
+      "count": 20000,
+      "elapsed_ns": 1092069,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 3,
+      "batch": 3,
+      "count": 20000,
+      "elapsed_ns": 1054779,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 3,
+      "batch": 4,
+      "count": 20000,
+      "elapsed_ns": 1133089,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 3,
+      "batch": 5,
+      "count": 20000,
+      "elapsed_ns": 1795279,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 3,
+      "batch": 6,
+      "count": 20000,
+      "elapsed_ns": 1444539,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 3,
+      "batch": 7,
+      "count": 20000,
+      "elapsed_ns": 1053539,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 3,
+      "batch": 8,
+      "count": 20000,
+      "elapsed_ns": 1259250,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 3,
+      "batch": 9,
+      "count": 20000,
+      "elapsed_ns": 1411989,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 3,
+      "batch": 0,
+      "count": 500000,
+      "elapsed_ns": 13389071,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 3,
+      "batch": 1,
+      "count": 500000,
+      "elapsed_ns": 14308331,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 3,
+      "batch": 2,
+      "count": 500000,
+      "elapsed_ns": 9734244,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 3,
+      "batch": 3,
+      "count": 500000,
+      "elapsed_ns": 9864223,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 3,
+      "batch": 4,
+      "count": 500000,
+      "elapsed_ns": 10017194,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 3,
+      "batch": 5,
+      "count": 500000,
+      "elapsed_ns": 9572734,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 3,
+      "batch": 6,
+      "count": 500000,
+      "elapsed_ns": 10243203,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 3,
+      "batch": 7,
+      "count": 500000,
+      "elapsed_ns": 9646914,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 3,
+      "batch": 8,
+      "count": 500000,
+      "elapsed_ns": 9576184,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 3,
+      "batch": 9,
+      "count": 500000,
+      "elapsed_ns": 9726513,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 3,
+      "batch": 0,
+      "count": 500000,
+      "elapsed_ns": 13224351,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 3,
+      "batch": 1,
+      "count": 500000,
+      "elapsed_ns": 14069361,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 3,
+      "batch": 2,
+      "count": 500000,
+      "elapsed_ns": 11313043,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 3,
+      "batch": 3,
+      "count": 500000,
+      "elapsed_ns": 10194804,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 3,
+      "batch": 4,
+      "count": 500000,
+      "elapsed_ns": 9695974,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 3,
+      "batch": 5,
+      "count": 500000,
+      "elapsed_ns": 9833794,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 3,
+      "batch": 6,
+      "count": 500000,
+      "elapsed_ns": 9688214,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 3,
+      "batch": 7,
+      "count": 500000,
+      "elapsed_ns": 10560643,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 3,
+      "batch": 8,
+      "count": 500000,
+      "elapsed_ns": 9829964,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 3,
+      "batch": 9,
+      "count": 500000,
+      "elapsed_ns": 10099253,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-close",
+      "process": 3,
+      "batch": 0,
+      "count": 20000,
+      "elapsed_ns": 4894977,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 3,
+      "batch": 1,
+      "count": 20000,
+      "elapsed_ns": 3610108,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 3,
+      "batch": 2,
+      "count": 20000,
+      "elapsed_ns": 3604178,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 3,
+      "batch": 3,
+      "count": 20000,
+      "elapsed_ns": 3485658,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 3,
+      "batch": 4,
+      "count": 20000,
+      "elapsed_ns": 3495618,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 3,
+      "batch": 5,
+      "count": 20000,
+      "elapsed_ns": 3593158,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 3,
+      "batch": 6,
+      "count": 20000,
+      "elapsed_ns": 3580068,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 3,
+      "batch": 7,
+      "count": 20000,
+      "elapsed_ns": 3311897,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 3,
+      "batch": 8,
+      "count": 20000,
+      "elapsed_ns": 3418118,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 3,
+      "batch": 9,
+      "count": 20000,
+      "elapsed_ns": 5234657,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "plain-close",
+      "process": 4,
+      "batch": 0,
+      "count": 20000,
+      "elapsed_ns": 1737649,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 4,
+      "batch": 1,
+      "count": 20000,
+      "elapsed_ns": 1028170,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 4,
+      "batch": 2,
+      "count": 20000,
+      "elapsed_ns": 1018839,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 4,
+      "batch": 3,
+      "count": 20000,
+      "elapsed_ns": 1139339,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 4,
+      "batch": 4,
+      "count": 20000,
+      "elapsed_ns": 1084490,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 4,
+      "batch": 5,
+      "count": 20000,
+      "elapsed_ns": 1765209,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 4,
+      "batch": 6,
+      "count": 20000,
+      "elapsed_ns": 1508660,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 4,
+      "batch": 7,
+      "count": 20000,
+      "elapsed_ns": 1026940,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 4,
+      "batch": 8,
+      "count": 20000,
+      "elapsed_ns": 1243339,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 4,
+      "batch": 9,
+      "count": 20000,
+      "elapsed_ns": 1372619,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "gc-close",
+      "process": 4,
+      "batch": 0,
+      "count": 20000,
+      "elapsed_ns": 4179127,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 4,
+      "batch": 1,
+      "count": 20000,
+      "elapsed_ns": 3805828,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 4,
+      "batch": 2,
+      "count": 20000,
+      "elapsed_ns": 3352957,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 4,
+      "batch": 3,
+      "count": 20000,
+      "elapsed_ns": 3623898,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 4,
+      "batch": 4,
+      "count": 20000,
+      "elapsed_ns": 3889397,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 4,
+      "batch": 5,
+      "count": 20000,
+      "elapsed_ns": 3638398,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 4,
+      "batch": 6,
+      "count": 20000,
+      "elapsed_ns": 3639358,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 4,
+      "batch": 7,
+      "count": 20000,
+      "elapsed_ns": 3498447,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 4,
+      "batch": 8,
+      "count": 20000,
+      "elapsed_ns": 3442768,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 4,
+      "batch": 9,
+      "count": 20000,
+      "elapsed_ns": 5305797,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "plain-read",
+      "process": 4,
+      "batch": 0,
+      "count": 500000,
+      "elapsed_ns": 13162172,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 4,
+      "batch": 1,
+      "count": 500000,
+      "elapsed_ns": 13788252,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 4,
+      "batch": 2,
+      "count": 500000,
+      "elapsed_ns": 9740353,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 4,
+      "batch": 3,
+      "count": 500000,
+      "elapsed_ns": 11029403,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 4,
+      "batch": 4,
+      "count": 500000,
+      "elapsed_ns": 9991634,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 4,
+      "batch": 5,
+      "count": 500000,
+      "elapsed_ns": 10072413,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 4,
+      "batch": 6,
+      "count": 500000,
+      "elapsed_ns": 10104054,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 4,
+      "batch": 7,
+      "count": 500000,
+      "elapsed_ns": 9953233,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 4,
+      "batch": 8,
+      "count": 500000,
+      "elapsed_ns": 10093894,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 4,
+      "batch": 9,
+      "count": 500000,
+      "elapsed_ns": 9926684,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 4,
+      "batch": 0,
+      "count": 500000,
+      "elapsed_ns": 13627211,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 4,
+      "batch": 1,
+      "count": 500000,
+      "elapsed_ns": 16047330,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 4,
+      "batch": 2,
+      "count": 500000,
+      "elapsed_ns": 12257792,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 4,
+      "batch": 3,
+      "count": 500000,
+      "elapsed_ns": 9832414,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 4,
+      "batch": 4,
+      "count": 500000,
+      "elapsed_ns": 9923353,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 4,
+      "batch": 5,
+      "count": 500000,
+      "elapsed_ns": 9987224,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 4,
+      "batch": 6,
+      "count": 500000,
+      "elapsed_ns": 12752072,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 4,
+      "batch": 7,
+      "count": 500000,
+      "elapsed_ns": 16666899,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 4,
+      "batch": 8,
+      "count": 500000,
+      "elapsed_ns": 13227782,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 4,
+      "batch": 9,
+      "count": 500000,
+      "elapsed_ns": 9849404,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 4,
+      "batch": 0,
+      "count": 500000,
+      "elapsed_ns": 13782261,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 4,
+      "batch": 1,
+      "count": 500000,
+      "elapsed_ns": 15407510,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 4,
+      "batch": 2,
+      "count": 500000,
+      "elapsed_ns": 12596102,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 4,
+      "batch": 3,
+      "count": 500000,
+      "elapsed_ns": 12028193,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 4,
+      "batch": 4,
+      "count": 500000,
+      "elapsed_ns": 11962992,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 4,
+      "batch": 5,
+      "count": 500000,
+      "elapsed_ns": 12558322,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 4,
+      "batch": 6,
+      "count": 500000,
+      "elapsed_ns": 12450232,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 4,
+      "batch": 7,
+      "count": 500000,
+      "elapsed_ns": 11287903,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 4,
+      "batch": 8,
+      "count": 500000,
+      "elapsed_ns": 12371122,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 4,
+      "batch": 9,
+      "count": 500000,
+      "elapsed_ns": 12431982,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 4,
+      "batch": 0,
+      "count": 20000,
+      "elapsed_ns": 1099909,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 4,
+      "batch": 1,
+      "count": 20000,
+      "elapsed_ns": 1030659,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 4,
+      "batch": 2,
+      "count": 20000,
+      "elapsed_ns": 1088280,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 4,
+      "batch": 3,
+      "count": 20000,
+      "elapsed_ns": 1042179,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 4,
+      "batch": 4,
+      "count": 20000,
+      "elapsed_ns": 1132499,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 4,
+      "batch": 5,
+      "count": 20000,
+      "elapsed_ns": 1127769,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 4,
+      "batch": 6,
+      "count": 20000,
+      "elapsed_ns": 2161959,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 4,
+      "batch": 7,
+      "count": 20000,
+      "elapsed_ns": 1927099,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 4,
+      "batch": 8,
+      "count": 20000,
+      "elapsed_ns": 1833539,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 4,
+      "batch": 9,
+      "count": 20000,
+      "elapsed_ns": 1425420,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "gc-read",
+      "process": 5,
+      "batch": 0,
+      "count": 500000,
+      "elapsed_ns": 12110962,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 5,
+      "batch": 1,
+      "count": 500000,
+      "elapsed_ns": 13974431,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 5,
+      "batch": 2,
+      "count": 500000,
+      "elapsed_ns": 12261712,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 5,
+      "batch": 3,
+      "count": 500000,
+      "elapsed_ns": 10197654,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 5,
+      "batch": 4,
+      "count": 500000,
+      "elapsed_ns": 9863763,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 5,
+      "batch": 5,
+      "count": 500000,
+      "elapsed_ns": 10029154,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 5,
+      "batch": 6,
+      "count": 500000,
+      "elapsed_ns": 9894444,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 5,
+      "batch": 7,
+      "count": 500000,
+      "elapsed_ns": 9936273,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 5,
+      "batch": 8,
+      "count": 500000,
+      "elapsed_ns": 10143024,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "gc-read",
+      "process": 5,
+      "batch": 9,
+      "count": 500000,
+      "elapsed_ns": 9947653,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 5,
+      "batch": 0,
+      "count": 500000,
+      "elapsed_ns": 12652102,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 5,
+      "batch": 1,
+      "count": 500000,
+      "elapsed_ns": 13663291,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 5,
+      "batch": 2,
+      "count": 500000,
+      "elapsed_ns": 9668814,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 5,
+      "batch": 3,
+      "count": 500000,
+      "elapsed_ns": 9819924,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 5,
+      "batch": 4,
+      "count": 500000,
+      "elapsed_ns": 12673781,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 5,
+      "batch": 5,
+      "count": 500000,
+      "elapsed_ns": 9767244,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 5,
+      "batch": 6,
+      "count": 500000,
+      "elapsed_ns": 9857724,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 5,
+      "batch": 7,
+      "count": 500000,
+      "elapsed_ns": 9668154,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 5,
+      "batch": 8,
+      "count": 500000,
+      "elapsed_ns": 9628524,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read",
+      "process": 5,
+      "batch": 9,
+      "count": 500000,
+      "elapsed_ns": 9549574,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-close",
+      "process": 5,
+      "batch": 0,
+      "count": 20000,
+      "elapsed_ns": 1720469,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 5,
+      "batch": 1,
+      "count": 20000,
+      "elapsed_ns": 1552189,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 5,
+      "batch": 2,
+      "count": 20000,
+      "elapsed_ns": 1046279,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 5,
+      "batch": 3,
+      "count": 20000,
+      "elapsed_ns": 1052550,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 5,
+      "batch": 4,
+      "count": 20000,
+      "elapsed_ns": 1076629,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 5,
+      "batch": 5,
+      "count": 20000,
+      "elapsed_ns": 1044329,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 5,
+      "batch": 6,
+      "count": 20000,
+      "elapsed_ns": 1467399,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 5,
+      "batch": 7,
+      "count": 20000,
+      "elapsed_ns": 1171380,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 5,
+      "batch": 8,
+      "count": 20000,
+      "elapsed_ns": 1969138,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close",
+      "process": 5,
+      "batch": 9,
+      "count": 20000,
+      "elapsed_ns": 2106059,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 5,
+      "batch": 0,
+      "count": 20000,
+      "elapsed_ns": 1151809,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 5,
+      "batch": 1,
+      "count": 20000,
+      "elapsed_ns": 2198619,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 5,
+      "batch": 2,
+      "count": 20000,
+      "elapsed_ns": 1354179,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 5,
+      "batch": 3,
+      "count": 20000,
+      "elapsed_ns": 1152879,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 5,
+      "batch": 4,
+      "count": 20000,
+      "elapsed_ns": 1822889,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 5,
+      "batch": 5,
+      "count": 20000,
+      "elapsed_ns": 1470109,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 5,
+      "batch": 6,
+      "count": 20000,
+      "elapsed_ns": 1111739,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 5,
+      "batch": 7,
+      "count": 20000,
+      "elapsed_ns": 1061489,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 5,
+      "batch": 8,
+      "count": 20000,
+      "elapsed_ns": 1236110,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "plain-close-aa",
+      "process": 5,
+      "batch": 9,
+      "count": 20000,
+      "elapsed_ns": 1399019,
+      "allocated_bytes": 640000
+    },
+    {
+      "case": "gc-close",
+      "process": 5,
+      "batch": 0,
+      "count": 20000,
+      "elapsed_ns": 5601256,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 5,
+      "batch": 1,
+      "count": 20000,
+      "elapsed_ns": 3526847,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 5,
+      "batch": 2,
+      "count": 20000,
+      "elapsed_ns": 3429528,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 5,
+      "batch": 3,
+      "count": 20000,
+      "elapsed_ns": 3537098,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 5,
+      "batch": 4,
+      "count": 20000,
+      "elapsed_ns": 3473088,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 5,
+      "batch": 5,
+      "count": 20000,
+      "elapsed_ns": 3611767,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 5,
+      "batch": 6,
+      "count": 20000,
+      "elapsed_ns": 3440348,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 5,
+      "batch": 7,
+      "count": 20000,
+      "elapsed_ns": 3480928,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 5,
+      "batch": 8,
+      "count": 20000,
+      "elapsed_ns": 3412138,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "gc-close",
+      "process": 5,
+      "batch": 9,
+      "count": 20000,
+      "elapsed_ns": 4088028,
+      "allocated_bytes": 2720000
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 5,
+      "batch": 0,
+      "count": 500000,
+      "elapsed_ns": 14465891,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 5,
+      "batch": 1,
+      "count": 500000,
+      "elapsed_ns": 14567171,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 5,
+      "batch": 2,
+      "count": 500000,
+      "elapsed_ns": 10979583,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 5,
+      "batch": 3,
+      "count": 500000,
+      "elapsed_ns": 10956823,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 5,
+      "batch": 4,
+      "count": 500000,
+      "elapsed_ns": 9825453,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 5,
+      "batch": 5,
+      "count": 500000,
+      "elapsed_ns": 9727474,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 5,
+      "batch": 6,
+      "count": 500000,
+      "elapsed_ns": 9971004,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 5,
+      "batch": 7,
+      "count": 500000,
+      "elapsed_ns": 9790983,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 5,
+      "batch": 8,
+      "count": 500000,
+      "elapsed_ns": 9754524,
+      "allocated_bytes": 0
+    },
+    {
+      "case": "plain-read-aa",
+      "process": 5,
+      "batch": 9,
+      "count": 500000,
+      "elapsed_ns": 9853484,
+      "allocated_bytes": 0
+    }
+  ],
+  "artifact_sha256": {
+    "benchmark_jar": "b94177309087693254cde2f6f4f332bde1e8125b1d02e98a136bd57b2263c122",
+    "jni_library": "d66af0c0a9d0f0171c5732758d045a93071848ac6d76b8024fe8130039a3c718",
+    "generated_rust": "78f7a6a87e40a6ac4beaa64f197329f475d9d030e3fa2897b66027aa3922627a"
+  },
+  "prepared_generated_sources_match": true
+}

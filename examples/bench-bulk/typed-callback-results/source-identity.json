@@ -1,0 +1,14 @@
+{
+  "before_commit": "7c3f8988d9e22957dd252ea403048e39bce0ce48",
+  "equivalent_umbrella_commit": "5e5d0909fb2adf982213c8a119c7cb1f0e708afe",
+  "after_commit": "7eacf4d1985df260a64bc3332c6f4473a4f3a255",
+  "generated_native_rust_identical": true,
+  "rust_sha256": {
+    "plain.rs": "02d87f0a72552a12df8f891f3c10957c010b0799fbd3eb20bf286de7867ec830",
+    "bulk.rs": "c8a741766cdbae29fb5768b99b23e07049f07db6ccb6fc26e0f10e4984b2ee9a"
+  },
+  "driver_sha256": "9dda45e208f54446407f15c0d15fcc3cd1ac1bbab8addbfa8069b6172ea62932",
+  "driver_source_sha256": "14e192bf5dd1ca576e0cfa33fb675371b5eb56e63859f8c8fb779f6e37f7d82a",
+  "column_prototype_commit": "883bc6b440b37ef91853f32b7e2d1b72c9472c00",
+  "implementation": "Immutable typed row holders; column-array prototype retained separately"
+}

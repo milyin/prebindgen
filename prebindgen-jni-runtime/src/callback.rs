@@ -1,0 +1,168 @@
+//! Retained JVM callbacks and argument ownership transfer.
+use crate::LocalFrame;
+use jni::{
+    objects::{GlobalRef, JMethodID, JObject},
+    JNIEnv, JavaVM,
+};
+use prebindgen_runtime::{boundary, Result};
+
+/// A JVM callback retained until its owning Rust closure is dropped.
+///
+/// The object pins its class, so the method resolved at registration remains valid
+/// when a native worker thread invokes it later.
+pub struct Callback {
+    object: GlobalRef,
+    vm: JavaVM,
+    method: JMethodID,
+    name: &'static str,
+    signature: Option<&'static str>,
+}
+impl Callback {
+    /// Retain `object` and resolve its generated void `run` method once.
+    pub fn new(env: &mut JNIEnv<'_>, object: &JObject<'_>, descriptor: &str) -> Result<Self> {
+        if object.is_null() {
+            return Err("null callback".into());
+        }
+        let class = env.get_object_class(object).map_err(|e| e.to_string())?;
+        let method = env
+            .get_method_id(&class, "run", descriptor)
+            .map_err(|e| e.to_string())?;
+        env.delete_local_ref(class).map_err(|e| e.to_string())?;
+        let object = env.new_global_ref(object).map_err(|e| e.to_string())?;
+        let vm = env.get_java_vm().map_err(|e| e.to_string())?;
+        Ok(Self {
+            object,
+            vm,
+            method,
+            name: "<unnamed callback>",
+            signature: None,
+        })
+    }
+
+    /// Retain a generated callback with static diagnostic name and JVM signature.
+    ///
+    /// The context is recorded at registration; successful invocations perform
+    /// no logging, string formatting or diagnostic allocations.
+    pub fn new_named(
+        env: &mut JNIEnv<'_>,
+        object: &JObject<'_>,
+        descriptor: &'static str,
+        name: &'static str,
+    ) -> Result<Self> {
+        let mut callback = Self::new(env, object, descriptor)?;
+        callback.name = name;
+        callback.signature = Some(descriptor);
+        Ok(callback)
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn report(&self, error: &str) {
+        prebindgen_runtime::report_callback_error(
+            self.name,
+            self.signature.unwrap_or("<dynamic signature>"),
+            error,
+        );
+    }
+
+    /// Run an upcall on the current native thread with a bounded local frame.
+    ///
+    /// Callback failures have no live declaring-call error handler. Report them
+    /// and clear JVM exceptions so subsequent invocations remain usable.
+    #[inline]
+    pub fn with_env(&self, capacity: i32, call: impl FnOnce(&mut JNIEnv<'_>) -> Result<()>) {
+        let result = boundary(|| {
+            let mut env = self
+                .vm
+                .attach_current_thread_as_daemon()
+                .map_err(|e| e.to_string())?;
+            let result = boundary(|| {
+                let frame = unsafe { LocalFrame::new(&env, capacity) }?;
+                let result = call(&mut env);
+                drop(frame);
+                result
+            });
+            if result.is_err() {
+                let _ = env.exception_describe();
+                let _ = env.exception_clear();
+            }
+            result
+        });
+        if let Err(error) = result {
+            self.report(&error);
+        }
+    }
+
+    /// Run a callback returning an owned Rust value inside its JNI local frame.
+    ///
+    /// Failures are returned after any pending callback exception is reported and
+    /// cleared. The source trampoline decides how to propagate the missing result.
+    #[inline]
+    pub fn with_env_result<R>(
+        &self,
+        capacity: i32,
+        call: impl FnOnce(&mut JNIEnv<'_>) -> Result<R>,
+    ) -> Result<R> {
+        let result = boundary(|| {
+            let mut env = self
+                .vm
+                .attach_current_thread_as_daemon()
+                .map_err(|e| e.to_string())?;
+            let result = boundary(|| {
+                let frame = unsafe { LocalFrame::new(&env, capacity) }?;
+                let result = call(&mut env);
+                drop(frame);
+                result
+            });
+            if result.is_err() {
+                let _ = env.exception_describe();
+                let _ = env.exception_clear();
+            }
+            result
+        });
+        if let Err(error) = &result {
+            self.report(error);
+        }
+        result
+    }
+
+    /// Invoke a cached non-unit method and keep its result in the caller's frame.
+    ///
+    /// # Safety
+    /// Arguments and `return_type` must match the descriptor passed to [`Self::new`].
+    /// References must be live in `env`, which must have no pending JVM exception.
+    #[inline]
+    pub unsafe fn invoke_return<'local>(
+        &self,
+        env: &mut JNIEnv<'local>,
+        return_type: jni::signature::ReturnType,
+        arguments: &[jni::sys::jvalue],
+    ) -> Result<jni::objects::JValueOwned<'local>> {
+        env.call_method_unchecked(&self.object, self.method, return_type, arguments)
+            .map_err(|e| e.to_string())
+    }
+
+    /// Invoke the cached method. Committed argument handles are Kotlin-owned.
+    ///
+    /// Argument ownership transfers without a per-invocation acceptance handshake.
+    /// Kotlin cleans up handles after entry; failure to enter the bridge can leak them.
+    ///
+    /// # Safety
+    /// `arguments` must match the descriptor passed to [`Self::new`], with live
+    /// references in `env`. The environment must have no pending JVM exception.
+    #[inline]
+    pub unsafe fn invoke(
+        &self,
+        env: &mut JNIEnv<'_>,
+        arguments: &[jni::sys::jvalue],
+    ) -> Result<()> {
+        env.call_method_unchecked(
+            &self.object,
+            self.method,
+            jni::signature::ReturnType::Primitive(jni::signature::Primitive::Void),
+            arguments,
+        )
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+    }
+}

@@ -1,0 +1,407 @@
+{
+  "builds": {
+    "before": {
+      "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-native-output-baseline",
+      "commit": "dea0fbcea7f8d067dad3f150ec3837316de6145e",
+      "dirty_paths": [],
+      "profile": "release",
+      "profile_environment": {},
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8",
+      "path_dependency_repositories": [
+        {
+          "repository": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-native-output-baseline",
+          "commit": "dea0fbcea7f8d067dad3f150ec3837316de6145e",
+          "packages": [
+            "prebindgen",
+            "prebindgen-conversions",
+            "prebindgen-declarations",
+            "prebindgen-flat",
+            "prebindgen-jni",
+            "prebindgen-jni-runtime",
+            "prebindgen-proc-macro",
+            "prebindgen-reprc",
+            "prebindgen-runtime"
+          ],
+          "contains_fixture": true
+        }
+      ],
+      "cargo_config_sha256": {},
+      "cargo": "cargo 1.98.0 (797e8a9bc 2026-08-05)",
+      "dependency_lock_sha256": "50aec39504ae6c12f747a6737ac6ff1de1aa0ea743f3fb86370345e7d07a551f",
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "native_allocations": true,
+      "kotlin": "info: kotlinc-jvm 2.4.21 (JRE 11.0.29+7)",
+      "fixture_sha256": {
+        "flat.rs": "c6bbecbf78d9c60aa6ea0ff5d09f129e5b3bc3838add408300ee4cb4c084dc2e",
+        "bindings.rs": "43134d021f67499143b58866598e49cc00320deaee9464e8c144a7cbfef68845",
+        "Bench.kt": "b8572ad9f0b02220a1235a61cf40c201d0dfa7eca3ba2e7d5a991e104b9a5884",
+        "AllocationBench.kt": "b639a9d46117d1d013140ef413b94a033cab778cbf547c76eb6918f7780fe792",
+        "native_allocations.rs": "280a2ccd7efb4e33dbadbaf4b0e3cc2041c9644f8775736b828aed3ba8cb78d3",
+        "run.py": "4442840bdcd52c838a6f9f555baf7b7742aa68b21d75189e1e81e02ca3ff99c1",
+        "Cargo.lock.snapshot": "50aec39504ae6c12f747a6737ac6ff1de1aa0ea743f3fb86370345e7d07a551f"
+      },
+      "jar": "/tmp/native-output-before-counts/bench.jar",
+      "library": "/tmp/native-output-before-counts/target/release/libbulk_bench.so",
+      "jar_sha256": "45b7a920d22faad7cfa84226d45651d62ffe0a8222e34c70ba5bb15915adc05c",
+      "native_sha256": "a0016567268a1ab021df7034c224535d73c5e3a1078820eb5892ada7e5edb94c"
+    },
+    "after": {
+      "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-native-output-owners",
+      "commit": "7b358a8fc5a326bc28c2e79c58ac11ed894a4264",
+      "dirty_paths": [],
+      "profile": "release",
+      "profile_environment": {},
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8",
+      "path_dependency_repositories": [
+        {
+          "repository": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-native-output-owners",
+          "commit": "7b358a8fc5a326bc28c2e79c58ac11ed894a4264",
+          "packages": [
+            "prebindgen",
+            "prebindgen-conversions",
+            "prebindgen-declarations",
+            "prebindgen-flat",
+            "prebindgen-jni",
+            "prebindgen-jni-runtime",
+            "prebindgen-proc-macro",
+            "prebindgen-reprc",
+            "prebindgen-runtime"
+          ],
+          "contains_fixture": true
+        }
+      ],
+      "cargo_config_sha256": {},
+      "cargo": "cargo 1.98.0 (797e8a9bc 2026-08-05)",
+      "dependency_lock_sha256": "50aec39504ae6c12f747a6737ac6ff1de1aa0ea743f3fb86370345e7d07a551f",
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "native_allocations": true,
+      "kotlin": "info: kotlinc-jvm 2.4.21 (JRE 11.0.29+7)",
+      "fixture_sha256": {
+        "flat.rs": "c6bbecbf78d9c60aa6ea0ff5d09f129e5b3bc3838add408300ee4cb4c084dc2e",
+        "bindings.rs": "43134d021f67499143b58866598e49cc00320deaee9464e8c144a7cbfef68845",
+        "Bench.kt": "b8572ad9f0b02220a1235a61cf40c201d0dfa7eca3ba2e7d5a991e104b9a5884",
+        "AllocationBench.kt": "b639a9d46117d1d013140ef413b94a033cab778cbf547c76eb6918f7780fe792",
+        "native_allocations.rs": "280a2ccd7efb4e33dbadbaf4b0e3cc2041c9644f8775736b828aed3ba8cb78d3",
+        "run.py": "4442840bdcd52c838a6f9f555baf7b7742aa68b21d75189e1e81e02ca3ff99c1",
+        "Cargo.lock.snapshot": "50aec39504ae6c12f747a6737ac6ff1de1aa0ea743f3fb86370345e7d07a551f"
+      },
+      "jar": "/tmp/native-output-after-counts-v3/bench.jar",
+      "library": "/tmp/native-output-after-counts-v3/target/release/libbulk_bench.so",
+      "jar_sha256": "45b7a920d22faad7cfa84226d45651d62ffe0a8222e34c70ba5bb15915adc05c",
+      "native_sha256": "4c3a72973c4e6173e14c341c5f417fccdb1b33dce96b2bd415d4f59faa5d4eed",
+      "jar_reuse": {
+        "from": "/tmp/native-output-after-normal-v3/build.json",
+        "reason": "identical generated Rust/Kotlin; feature only enables benchmark Rust allocator",
+        "generated_file_sha256": {
+          "bulk.rs": "506175aad311593a21ce6b31dfd89baef3536aedec585757904cdebcaa063828",
+          "plain.rs": "0a2d3594875a16d16bd597991ecc903fc5923c24d7bbd7643ab3a1012526dd45",
+          "kotlin/bench/plain/InputHandle.kt": "7f0d7971941d7d35a6bad8d182c4957d1847eb2b2128767b95319ac8a458b517",
+          "kotlin/bench/plain/Handler.kt": "d9cf7f52a6b31dfedcf8981bbcdba8cfb7f32b9a7d260e512d9c6462c1faf92f",
+          "kotlin/bench/plain/JniErrorHandler.kt": "87cf684cdaa5337029502148811187f5db65c440875b8a45d746f40f0327a083",
+          "kotlin/bench/plain/HandleRecord.kt": "55b9ef30fc68a1d53a97bd4cf1ea3ba712c595656471f64edd1859de9ff43964",
+          "kotlin/bench/plain/WideRow.kt": "f56092eedc31e855b22ca7d261576e8f04e5b9e44002fae6bcde19f5ceffd678",
+          "kotlin/bench/plain/WideRowReturnCallback.kt": "adfe53e05507044c5765a33f0a060f5b5e2442e0fc6e79fc0d32931e6b578b58",
+          "kotlin/bench/plain/RowReturnHandler.kt": "298678970fc974ee68c908d9abe64e59b9809940fe2d214c745de412e3b856ed",
+          "kotlin/bench/plain/Return_Long_Long_Long8_ErrorEmpty_f77363a35e75c509.kt": "de90da808476ed71e3e5becef963973d8a22af9e04305d296b39e6dd09a377d8",
+          "kotlin/bench/plain/Functions.kt": "b4fa05cf97e814887a6552717341e039cd565eb577abebc5f38e408b87898a40",
+          "kotlin/bench/plain/JNINative.kt": "f73e9cfdd001893e0eb1535d033e47eaf934966d1beecabd31f6f683a2b4ed68",
+          "kotlin/bench/plain/RowReturnCallback.kt": "a6e9e03b23eeebcb0d378724ea4b86aee023396ee09a7f62def3b9210cefc567",
+          "kotlin/bench/plain/Return_Long_Long_Long32_ErrorEmpty_6fba61a9625e2221.kt": "89bcdf04ab77573d42f4f8c5e698f2222ddfe96cd4a409bf6a45424d09cd88a3",
+          "kotlin/bench/plain/RowsCallback.kt": "13d57d999f579dc82095e31f374ec9fbbed44d25fa97d56dd13f8b35ad9043b3",
+          "kotlin/bench/plain/Row.kt": "709f4fde05c849039c91a19c1a1192ff1ef4909b294192258a896eab02efd3b9",
+          "kotlin/bench/plain/NativeHandle.kt": "412264cd700cd2417b39ac8991f086f47da46dc8bab8e37ef0a6fc2180176f27",
+          "kotlin/bench/plain/WideRowReturnHandler.kt": "86c15bac85855a10bed00cc4dcc98c79e60a33dc1f05f57fcae466d807c8be5e",
+          "kotlin/bench/plain/Return_Empty_ErrorEmpty_a7ee757e32992e01.kt": "3ce669199b3e84432564b88fb5e21b3c5500e03be4f9b8dd9828e12a505b673e",
+          "kotlin/bench/plain/Packet.kt": "edba5d8e15a8309d16b57963bc5dc5d8c9186efc83ae2e4840791db65858efbe",
+          "kotlin/bench/bulk/InputHandle.kt": "d97ff84c5c5357123bc17fc7031d654843869b220660e5c181592ee02a69cf40",
+          "kotlin/bench/bulk/Handler.kt": "fbb9fb4b48c8b065ab43dd160a1528ace789244e2e494b58ab7568f995c649f7",
+          "kotlin/bench/bulk/JniErrorHandler.kt": "914bd702585497d5eeadf41629d1ebf15110588c158d7b4a04caa875ded13261",
+          "kotlin/bench/bulk/HandleRecord.kt": "40ba0c594ef8e6cecf262e726903c18e8046aa65c3fe64ab39bc7655f8fc7147",
+          "kotlin/bench/bulk/WideRow.kt": "c5f7e0f570ed998b74cffadb63b626111fd455d24e994eda15546f69bdc025fb",
+          "kotlin/bench/bulk/WideRowReturnCallback.kt": "40fd83f48339bc40933dc2e13ed8c8f2fd0fa2d12e2833b7052613c7fecafb69",
+          "kotlin/bench/bulk/RowReturnHandler.kt": "c9a3f40f91b63a09d89701378bbd013ca10fb355140e98167b9b6867d8ef734b",
+          "kotlin/bench/bulk/Functions.kt": "10b151e839c9531b4ea2f47dcf6466b07a1894d4ea87fb9bc8cc44794b29503e",
+          "kotlin/bench/bulk/BulkInputs.kt": "f393e520366087c64d97f7b0168cf7c12a5c1fb6c71dbcb417b2960376f89a6e",
+          "kotlin/bench/bulk/JNINative.kt": "bf65355ac4fcca853681459a852890adefa04b45a1234c2c848a15c2dff4b927",
+          "kotlin/bench/bulk/RowReturnCallback.kt": "b9bc024c87f451640ba34e38e49b4c2eb454463230baaf972e492bfd47eed261",
+          "kotlin/bench/bulk/BulkRuntime.kt": "64d3b4bc6fce75134e4c9123670c22405589f4b7d41d879d46182451c01747c6",
+          "kotlin/bench/bulk/RowsCallback.kt": "b6987f51da420995425b52864c916116da6918260cf86ddafea7779414008bec",
+          "kotlin/bench/bulk/Row.kt": "51923b47aaee8b6976a475bc910dcd48aa275dbdf41f31cf5b01d89b40438a07",
+          "kotlin/bench/bulk/NativeHandle.kt": "2745c3c16687aab3f4f5e9abf8eefac0dab50be512dcb1edcf742a24c299660c",
+          "kotlin/bench/bulk/WideRowReturnHandler.kt": "690af7af1da86d5da28ad13a270b3c6d928466d0b570c126857d0d0c49278bd3",
+          "kotlin/bench/bulk/BulkLayouts.kt": "9063efe73a3b6d2d4978f97ebf9134376e9dea6dc8ba01317eaeaa7304c39918",
+          "kotlin/bench/bulk/Return_Empty_ErrorEmpty_a7ee757e32992e01.kt": "dcfee6f698d8b85134b9ff651c50275d1f9ec7cb2436c0887e20c27ba700441d",
+          "kotlin/bench/bulk/Packet.kt": "a03dfd86bd400706321d045cdc8959bc27d4fe15f6f620fdf712992ec91eeca8"
+        }
+      }
+    }
+  },
+  "settings": {
+    "before": "/tmp/native-output-before-counts",
+    "after": "/tmp/native-output-after-counts-v3",
+    "output": "/tmp/native-output-final-count-smoke",
+    "forks": 1,
+    "smoke": true
+  },
+  "affinity": [
+    0,
+    1
+  ],
+  "platform": "Linux-6.8.0-138-generic-x86_64-with-glibc2.39",
+  "java": "openjdk version \"11.0.29\" 2025-10-21\nOpenJDK Runtime Environment Temurin-11.0.29+7 (build 11.0.29+7)\nOpenJDK 64-Bit Server VM Temurin-11.0.29+7 (build 11.0.29+7, mixed mode)\n",
+  "flags": [
+    "-Xms256m",
+    "-Xmx256m",
+    "-XX:+UseG1GC",
+    "-XX:ActiveProcessorCount=2"
+  ],
+  "runs": [
+    {
+      "id": "0-bulk-nested_many-8-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-Xcheck:jni",
+        "-Djava.library.path=/tmp/native-output-before-counts/target/release",
+        "-cp",
+        "/tmp/native-output-before-counts/bench.jar",
+        "bench.allocations.AllocationBenchKt",
+        "bulk",
+        "nested_many",
+        "8"
+      ],
+      "stdout_sha256": "3eb8f12ffc91c1804a4894db8dd740ef02bd75c2cbb15fe9729a2d5e8853ec4c"
+    },
+    {
+      "id": "0-bulk-nested_many-8-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-Xcheck:jni",
+        "-Djava.library.path=/tmp/native-output-after-counts-v3/target/release",
+        "-cp",
+        "/tmp/native-output-after-counts-v3/bench.jar",
+        "bench.allocations.AllocationBenchKt",
+        "bulk",
+        "nested_many",
+        "8"
+      ],
+      "stdout_sha256": "fe5230997afe04eb66a3238aa032af299205184ff92b23ff5fd4855aa2df7eea"
+    },
+    {
+      "id": "0-plain-control-1-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-Xcheck:jni",
+        "-Djava.library.path=/tmp/native-output-before-counts/target/release",
+        "-cp",
+        "/tmp/native-output-before-counts/bench.jar",
+        "bench.allocations.AllocationBenchKt",
+        "plain",
+        "control",
+        "1"
+      ],
+      "stdout_sha256": "8d7f2722e2e37518575df0c5d78c94fe4907b75beac0aa3af8228cd04c8854e2"
+    },
+    {
+      "id": "0-plain-control-1-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-Xcheck:jni",
+        "-Djava.library.path=/tmp/native-output-after-counts-v3/target/release",
+        "-cp",
+        "/tmp/native-output-after-counts-v3/bench.jar",
+        "bench.allocations.AllocationBenchKt",
+        "plain",
+        "control",
+        "1"
+      ],
+      "stdout_sha256": "8d7f2722e2e37518575df0c5d78c94fe4907b75beac0aa3af8228cd04c8854e2"
+    },
+    {
+      "id": "0-bulk-flat-8-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-Xcheck:jni",
+        "-Djava.library.path=/tmp/native-output-before-counts/target/release",
+        "-cp",
+        "/tmp/native-output-before-counts/bench.jar",
+        "bench.allocations.AllocationBenchKt",
+        "bulk",
+        "flat",
+        "8"
+      ],
+      "stdout_sha256": "bc93e44349decc3eeb1813cdc1fd4e811b59c8b05075f956f7b64b2be5dc3435"
+    },
+    {
+      "id": "0-bulk-flat-8-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-Xcheck:jni",
+        "-Djava.library.path=/tmp/native-output-after-counts-v3/target/release",
+        "-cp",
+        "/tmp/native-output-after-counts-v3/bench.jar",
+        "bench.allocations.AllocationBenchKt",
+        "bulk",
+        "flat",
+        "8"
+      ],
+      "stdout_sha256": "e3672d05946989026011a4572468a178526945ceaea6b3e32e73abdbeeab7738"
+    }
+  ],
+  "summary": [
+    {
+      "mode": "bulk",
+      "case": "flat",
+      "size": 8,
+      "before": {
+        "allocations": {
+          "median": 14.0,
+          "min": 14,
+          "max": 14
+        },
+        "reallocations": {
+          "median": 1.0,
+          "min": 1,
+          "max": 1
+        },
+        "requested_native_bytes": {
+          "median": 624.0,
+          "min": 624,
+          "max": 624
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 13.0,
+          "min": 13,
+          "max": 13
+        },
+        "reallocations": {
+          "median": 1.0,
+          "min": 1,
+          "max": 1
+        },
+        "requested_native_bytes": {
+          "median": 560.0,
+          "min": 560,
+          "max": 560
+        }
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "nested_many",
+      "size": 8,
+      "before": {
+        "allocations": {
+          "median": 44.0,
+          "min": 44,
+          "max": 44
+        },
+        "reallocations": {
+          "median": 4.0,
+          "min": 4,
+          "max": 4
+        },
+        "requested_native_bytes": {
+          "median": 1680.0,
+          "min": 1680,
+          "max": 1680
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 35.0,
+          "min": 35,
+          "max": 35
+        },
+        "reallocations": {
+          "median": 4.0,
+          "min": 4,
+          "max": 4
+        },
+        "requested_native_bytes": {
+          "median": 1424.0,
+          "min": 1424,
+          "max": 1424
+        }
+      }
+    },
+    {
+      "mode": "plain",
+      "case": "control",
+      "size": 1,
+      "before": {
+        "allocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        }
+      },
+      "after": {
+        "allocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "reallocations": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "requested_native_bytes": {
+          "median": 0.0,
+          "min": 0,
+          "max": 0
+        }
+      }
+    }
+  ],
+  "runner_sha256": "766621dc5801726b386b480f53ed20f67ee44473c81ef0f66ec3d021ace0d14f",
+  "samples_sha256": "af188bb08b570956ca547a5391d5aa8b4c0beba6ca6df712fd6fb195c2368ff8"
+}

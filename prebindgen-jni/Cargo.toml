@@ -6,12 +6,15 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+prebindgen-reprc.workspace = true
 prebindgen.workspace = true
 prebindgen-flat.workspace = true
-prebindgen-tools.workspace = true
+prebindgen-declarations.workspace = true
+prebindgen-conversions.workspace = true
 syn.workspace = true
 quote.workspace = true
 proc-macro2.workspace = true
+regex.workspace = true
 
 [dev-dependencies]
 prebindgen-c.workspace = true

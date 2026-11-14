@@ -1,0 +1,103 @@
+package io.prebindgen.covertest
+
+import io.prebindgen.covertest.callbacks.*
+import io.prebindgen.covertest.nativeoutputs.*
+import io.prebindgen.covertest.typedrows.*
+
+private fun unexpectedOutputError(code: Long): Nothing = error("unexpected source error: $code")
+
+fun checkJniOutputOwnership() {
+    fun close(rows: List<CallbackRow>) {
+        rows.forEach { it.first.close(); it.second.close() }
+    }
+    for (fail in listOf(-1L, 0L, 1L, 2L)) {
+        val operations: List<() -> Unit> = listOf(
+            { close(jniOutputRows(fail, onError = ResultFailureHandler(::unexpectedOutputError))) },
+            { jniOutputNested(fail, onError = ResultFailureHandler(::unexpectedOutputError)).forEach(::close) },
+            { jniOutputPair(fail, onError = ResultFailureHandler(::unexpectedOutputError)) { first, second -> close(first); close(second) } },
+            { jniOutputFold(fail, Unit, onError = ResultFailureHandler(::unexpectedOutputError)) { _, row -> close(listOf(row)) } },
+            { jniOutputOptional(fail).filterNotNull().forEach(::close) },
+            { jniOutputMixed(fail).flatten().forEach { it.close() } },
+            { jniOutputMixedFramesFold(fail, Unit) { _, row -> row.forEach { it.close() } } },
+        )
+        for (operation in operations) {
+            var failed = false
+            try { operation() } catch (failure: IllegalArgumentException) {
+                check(failure.message == "Rust operation panicked")
+                failed = true
+            }
+            check(failed == (fail >= 0))
+            check(callbackRowResourceLive() == 0L) { "JNI output leaked after fail=$fail" }
+        }
+    }
+    // A later fold failure closes its own bulk-frame wrappers and unread frames,
+    // while the previously delivered frame remains owned by the user.
+    var accepted: List<CallbackRowResource> = emptyList()
+    var failedRow: List<CallbackRowResource> = emptyList()
+    val foldFailure = IllegalStateException("mixed bulk fold failure")
+    try {
+        jniOutputMixedFramesFold(-1, 0) { index, row ->
+            if (index == 1) { failedRow = row; throw foldFailure }
+            accepted = row
+            index + 1
+        }
+        error("mixed fold should throw")
+    } catch (caught: IllegalStateException) { check(caught === foldFailure) }
+    check(accepted.isNotEmpty() && accepted.none { it.isClosed })
+    check(failedRow.isNotEmpty() && failedRow.all { it.isClosed })
+    check(callbackRowResourceLive() == accepted.size.toLong())
+    accepted.forEach { it.close() }
+    check(callbackRowResourceLive() == 0L)
+    val cleanupDrops = callbackRowResourceDrops()
+    val original = IllegalStateException("fold failure before destructor panic")
+    try {
+        jniOutputFoldDropFold(0) { index, row ->
+            if (index == 1) { failedRow = row; throw original }
+            accepted = row
+            index + 1
+        }
+        error("destructor fold should throw")
+    } catch (caught: IllegalStateException) {
+        check(caught === original)
+        check(caught.suppressed.size == 1 && caught.suppressed[0].message == "Rust operation panicked")
+    }
+    check(accepted.none { it.isClosed } && failedRow.all { it.isClosed })
+    check(callbackRowResourceLive() == 2L && callbackRowResourceDrops() == cleanupDrops + 4L)
+    accepted.forEach { it.close() }
+    check(callbackRowResourceLive() == 0L && callbackRowResourceDrops() == cleanupDrops + 6L)
+    for (mode in 13..22) check(CallbackFailureProbe.exercise(mode) == 1)
+    val drops = callbackRowResourceDrops()
+    try { JniOutputRuntimeProbe.rollback(); error("rollback did not preserve exception") }
+    catch (failure: java.io.IOException) { check(failure.message == "original output rollback") }
+    check(callbackRowResourceLive() == 0L && callbackRowResourceDrops() == drops + 2L)
+}
+
+object JniOutputRuntimeProbe {
+    @JvmStatic external fun rollback()
+}
+
+object JniOutputFailureEntryPoint {
+    @JvmStatic fun run(mode: Int) {
+        var failed = false
+        val drops = callbackRowResourceDrops()
+        try {
+            when (mode) {
+                13, 19, 20 -> jniOutputRows(-1, onError = ResultFailureHandler(::unexpectedOutputError)).forEach { it.first.close(); it.second.close() }
+                14 -> jniOutputNested(-1, onError = ResultFailureHandler(::unexpectedOutputError)).flatten().forEach { it.first.close(); it.second.close() }
+                15 -> jniOutputPair(-1, onError = ResultFailureHandler(::unexpectedOutputError)) { first, second -> (first + second).forEach { it.first.close(); it.second.close() } }
+                16 -> jniOutputFold(-1, Unit, onError = ResultFailureHandler(::unexpectedOutputError)) { _, row -> row.first.close(); row.second.close() }
+                17 -> jniOutputOptional(-1).filterNotNull().flatten().forEach { it.first.close(); it.second.close() }
+                18 -> jniOutputMixed(-1).flatten().forEach { it.close() }
+                21, 22 -> typedRowsMixed().flatten().forEach { it.owner.close() }
+            }
+        } catch (failure: OutOfMemoryError) {
+            check(failure.message == "injected callback allocation failure")
+            if (mode == 21) check(CallbackFailureProbe.progress() == 2)
+            check(mode == 19 || mode == 22 || CallbackFailureProbe.progress() > 0) { "fault occurred before any accepted row: mode=$mode" }
+            failed = true
+        }
+        check(failed && callbackRowResourceLive() == 0L) { "mode=$mode failed=$failed live=${callbackRowResourceLive()}" }
+        val expected = when (mode) { 13 -> 12L; 14 -> 26L; 15 -> 20L; 16 -> 9L; 17 -> 18L; 18 -> 24L; 19 -> 8L; 20 -> 12L; else -> 3L }
+        check(callbackRowResourceDrops() == drops + expected) { "mode=$mode drops=${callbackRowResourceDrops()-drops} expected=$expected" }
+    }
+}

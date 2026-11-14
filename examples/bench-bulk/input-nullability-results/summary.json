@@ -1,0 +1,1494 @@
+{
+  "comparison": "Same fixture and native functions, base vs required-input nullability generator; plain and bulk are separate controls, not the speedup denominator.",
+  "builds": {
+    "base": {
+      "commit": "cd2956dd3a2170919158bbe9a73d3be52456e17d",
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8",
+      "cargo": "cargo 1.98.0 (797e8a9bc 2026-08-05)",
+      "kotlin": "info: kotlinc-jvm 2.4.21 (JRE 11.0.29+7)",
+      "fixture_sha256": {
+        "flat.rs": "5ef9df1f3bd4610928516f604c70d97a4b82c749714a2056b04b78344f069c50",
+        "bindings.rs": "133551a0ea7c3f2b2ba22301239b093f505ea988cbf7d86ce577fb45b7dba5d1",
+        "Bench.kt": "3a7b495b1837a688383a85ce2f249bac11ed7a1d7f9e8b8e780a1875406833d4",
+        "AllocationBench.kt": "b639a9d46117d1d013140ef413b94a033cab778cbf547c76eb6918f7780fe792",
+        "native_allocations.rs": "280a2ccd7efb4e33dbadbaf4b0e3cc2041c9644f8775736b828aed3ba8cb78d3",
+        "run.py": "54b8c1c26cc2e6a6fbc4d15e97dad97aeee55882e818c23358e7306a6e0b5c01",
+        "Cargo.lock.snapshot": "4d243392ec8bc6988f9433c5f2fd7f262dc60bd4b38a1b96813f230a4f1ea442"
+      },
+      "jar_sha256": "2cb3eb4a04edbef4b2aeacbda34b9b57a57b2918f0ba41294d488ee0b0a09e42",
+      "native_sha256": "d9a2f4e6713b332f5cc172953dbb029186a0f55d609222f539f5c7ac2b3be3e5",
+      "dependency_lock_sha256": "4d243392ec8bc6988f9433c5f2fd7f262dc60bd4b38a1b96813f230a4f1ea442",
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      }
+    },
+    "candidate": {
+      "commit": "5f1e32e2aa64e429f0209907abf97076bcc1c1da",
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8",
+      "cargo": "cargo 1.98.0 (797e8a9bc 2026-08-05)",
+      "kotlin": "info: kotlinc-jvm 2.4.21 (JRE 11.0.29+7)",
+      "fixture_sha256": {
+        "flat.rs": "5ef9df1f3bd4610928516f604c70d97a4b82c749714a2056b04b78344f069c50",
+        "bindings.rs": "133551a0ea7c3f2b2ba22301239b093f505ea988cbf7d86ce577fb45b7dba5d1",
+        "Bench.kt": "3a7b495b1837a688383a85ce2f249bac11ed7a1d7f9e8b8e780a1875406833d4",
+        "AllocationBench.kt": "b639a9d46117d1d013140ef413b94a033cab778cbf547c76eb6918f7780fe792",
+        "native_allocations.rs": "280a2ccd7efb4e33dbadbaf4b0e3cc2041c9644f8775736b828aed3ba8cb78d3",
+        "run.py": "54b8c1c26cc2e6a6fbc4d15e97dad97aeee55882e818c23358e7306a6e0b5c01",
+        "Cargo.lock.snapshot": "4d243392ec8bc6988f9433c5f2fd7f262dc60bd4b38a1b96813f230a4f1ea442"
+      },
+      "jar_sha256": "689c136e7a1d96becd3aeed5ad3bf363b73d6fd8d8737cc5e8dea266faa768a8",
+      "native_sha256": "3a3746c393beeb2a4bad3c7c902832fc33587e823faf824d0d56470eeba6a55e",
+      "dependency_lock_sha256": "4d243392ec8bc6988f9433c5f2fd7f262dc60bd4b38a1b96813f230a4f1ea442",
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      }
+    }
+  },
+  "host": {
+    "platform": "Linux-6.8.0-138-generic-x86_64-with-glibc2.39",
+    "cpu_model": "AMD EPYC 7713 64-Core Processor",
+    "affinity_cpus": [
+      0,
+      1
+    ],
+    "cpu_quota": null
+  },
+  "java": "openjdk version \"11.0.29\" 2025-10-21\nOpenJDK Runtime Environment Temurin-11.0.29+7 (build 11.0.29+7)\nOpenJDK 64-Bit Server VM Temurin-11.0.29+7 (build 11.0.29+7, mixed mode)",
+  "jvm_args": [
+    "-Xms256m",
+    "-Xmx256m",
+    "-XX:+UseG1GC",
+    "-XX:ActiveProcessorCount=2",
+    "-XX:+PrintCommandLineFlags"
+  ],
+  "run_order": [
+    "base",
+    "candidate",
+    "candidate",
+    "base"
+  ],
+  "jvms_per_side_and_mode": 8,
+  "warmup_batches": 8,
+  "measurement_batches": 11,
+  "target_ms": 30,
+  "summary": {
+    "control/1": {
+      "plain": {
+        "base": {
+          "median_ns_per_call": 13.761807108664616,
+          "min_jvm_median_ns": 13.440867857368097,
+          "max_jvm_median_ns": 14.986155291712691,
+          "median_jvm_bytes_per_call": 0.0,
+          "jvm_medians": [
+            {
+              "ns_per_call": 13.440867857368097,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.049923
+            },
+            {
+              "ns_per_call": 13.66564021343556,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.044033
+            },
+            {
+              "ns_per_call": 13.814035951984053,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.172493
+            },
+            {
+              "ns_per_call": 13.709578265345181,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.512993
+            },
+            {
+              "ns_per_call": 13.59298914370665,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 25.382243
+            },
+            {
+              "ns_per_call": 13.831295114212233,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.047147
+            },
+            {
+              "ns_per_call": 14.986155291712691,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.793256
+            },
+            {
+              "ns_per_call": 14.047774314616339,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.291876
+            }
+          ]
+        },
+        "candidate": {
+          "median_ns_per_call": 13.924224577521521,
+          "min_jvm_median_ns": 13.278788355180765,
+          "max_jvm_median_ns": 14.634526819662714,
+          "median_jvm_bytes_per_call": 0.0,
+          "jvm_medians": [
+            {
+              "ns_per_call": 14.015860082668866,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.395523
+            },
+            {
+              "ns_per_call": 14.217555609061812,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.587052
+            },
+            {
+              "ns_per_call": 13.733788345133982,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.54348
+            },
+            {
+              "ns_per_call": 14.062793525710726,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.58749
+            },
+            {
+              "ns_per_call": 13.278788355180765,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.06971
+            },
+            {
+              "ns_per_call": 13.740022052326147,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.118939
+            },
+            {
+              "ns_per_call": 13.832589072374176,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.248179
+            },
+            {
+              "ns_per_call": 14.634526819662714,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.976259
+            }
+          ]
+        },
+        "candidate_time_change_percent": 1.180204515107941
+      },
+      "bulk": {
+        "base": {
+          "median_ns_per_call": 13.679493687543777,
+          "min_jvm_median_ns": 13.407552053114646,
+          "max_jvm_median_ns": 13.777880322792367,
+          "median_jvm_bytes_per_call": 0.0,
+          "jvm_medians": [
+            {
+              "ns_per_call": 13.548490333643773,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.138833
+            },
+            {
+              "ns_per_call": 13.679390632681063,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.830483
+            },
+            {
+              "ns_per_call": 13.679596742406492,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.951053
+            },
+            {
+              "ns_per_call": 13.777880322792367,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.081563
+            },
+            {
+              "ns_per_call": 13.407552053114646,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 28.885686
+            },
+            {
+              "ns_per_call": 13.671973284322997,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.001327
+            },
+            {
+              "ns_per_call": 13.700781920158363,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 24.916242
+            },
+            {
+              "ns_per_call": 13.77520743624256,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.597576
+            }
+          ]
+        },
+        "candidate": {
+          "median_ns_per_call": 13.979492981450758,
+          "min_jvm_median_ns": 13.684854300389206,
+          "max_jvm_median_ns": 17.224866842172382,
+          "median_jvm_bytes_per_call": 0.0,
+          "jvm_medians": [
+            {
+              "ns_per_call": 14.013044421494195,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.746273
+            },
+            {
+              "ns_per_call": 13.945941541407318,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.036741
+            },
+            {
+              "ns_per_call": 13.684854300389206,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.00626
+            },
+            {
+              "ns_per_call": 15.911399388198904,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.794159
+            },
+            {
+              "ns_per_call": 17.224866842172382,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 19.72044
+            },
+            {
+              "ns_per_call": 13.752830941136411,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.726359
+            },
+            {
+              "ns_per_call": 13.871255638989444,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.853758
+            },
+            {
+              "ns_per_call": 16.01103221274546,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.178298
+            }
+          ]
+        },
+        "candidate_time_change_percent": 2.193058462245223
+      }
+    },
+    "handle_input/1": {
+      "plain": {
+        "base": {
+          "median_ns_per_call": 21.32490174318803,
+          "min_jvm_median_ns": 20.9074303487729,
+          "max_jvm_median_ns": 22.377952842081648,
+          "median_jvm_bytes_per_call": 0.0,
+          "jvm_medians": [
+            {
+              "ns_per_call": 22.377952842081648,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 32.715202
+            },
+            {
+              "ns_per_call": 20.9074303487729,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.939273
+            },
+            {
+              "ns_per_call": 22.290039681015546,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.597584
+            },
+            {
+              "ns_per_call": 21.118782279148295,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.645913
+            },
+            {
+              "ns_per_call": 21.477992084910458,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.892468
+            },
+            {
+              "ns_per_call": 20.919762841161766,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.984317
+            },
+            {
+              "ns_per_call": 21.25486868584911,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.322557
+            },
+            {
+              "ns_per_call": 21.39493480052695,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.369896
+            }
+          ]
+        },
+        "candidate": {
+          "median_ns_per_call": 19.23392330303522,
+          "min_jvm_median_ns": 18.51404200000616,
+          "max_jvm_median_ns": 20.216621007529195,
+          "median_jvm_bytes_per_call": 0.0,
+          "jvm_medians": [
+            {
+              "ns_per_call": 18.647109602570353,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.831273
+            },
+            {
+              "ns_per_call": 19.48837840923973,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.208721
+            },
+            {
+              "ns_per_call": 18.814134361544024,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.09128
+            },
+            {
+              "ns_per_call": 19.921669670229175,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.366621
+            },
+            {
+              "ns_per_call": 18.51404200000616,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.050049
+            },
+            {
+              "ns_per_call": 19.59572925357343,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.782138
+            },
+            {
+              "ns_per_call": 18.97946819683071,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.692448
+            },
+            {
+              "ns_per_call": 20.216621007529195,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.909298
+            }
+          ]
+        },
+        "candidate_time_change_percent": -9.805336809210608
+      },
+      "bulk": {
+        "base": {
+          "median_ns_per_call": 20.586843985333456,
+          "min_jvm_median_ns": 20.012651047983343,
+          "max_jvm_median_ns": 21.580024431760176,
+          "median_jvm_bytes_per_call": 0.0,
+          "jvm_medians": [
+            {
+              "ns_per_call": 20.48244833967657,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.126773
+            },
+            {
+              "ns_per_call": 20.746538509897768,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.030573
+            },
+            {
+              "ns_per_call": 20.012651047983343,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 28.084994
+            },
+            {
+              "ns_per_call": 21.580024431760176,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 31.073703
+            },
+            {
+              "ns_per_call": 20.251686895020708,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.031267
+            },
+            {
+              "ns_per_call": 20.88580000994198,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.410757
+            },
+            {
+              "ns_per_call": 20.375829934827454,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.007607
+            },
+            {
+              "ns_per_call": 20.691239630990342,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 28.655215
+            }
+          ]
+        },
+        "candidate": {
+          "median_ns_per_call": 19.484118135559477,
+          "min_jvm_median_ns": 18.40825747240954,
+          "max_jvm_median_ns": 20.95858887229406,
+          "median_jvm_bytes_per_call": 0.0,
+          "jvm_medians": [
+            {
+              "ns_per_call": 18.40825747240954,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 28.971339
+            },
+            {
+              "ns_per_call": 20.88901988332244,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.855381
+            },
+            {
+              "ns_per_call": 18.494611568076635,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.28422
+            },
+            {
+              "ns_per_call": 19.331837279029116,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 26.222806
+            },
+            {
+              "ns_per_call": 19.777571359723893,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.245029
+            },
+            {
+              "ns_per_call": 19.636398992089838,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 28.880548
+            },
+            {
+              "ns_per_call": 18.686190392973714,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.832858
+            },
+            {
+              "ns_per_call": 20.95858887229406,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.960198
+            }
+          ]
+        },
+        "candidate_time_change_percent": -5.356458962624799
+      }
+    },
+    "buffer_input/1": {
+      "plain": {
+        "base": {
+          "median_ns_per_call": 714.1026778908108,
+          "min_jvm_median_ns": 696.4718907729165,
+          "max_jvm_median_ns": 1599.061578546009,
+          "median_jvm_bytes_per_call": 0.0,
+          "jvm_medians": [
+            {
+              "ns_per_call": 736.5497038310882,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.837863
+            },
+            {
+              "ns_per_call": 712.7712810064204,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.085363
+            },
+            {
+              "ns_per_call": 708.0246108788588,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.977054
+            },
+            {
+              "ns_per_call": 715.4340747752011,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.234244
+            },
+            {
+              "ns_per_call": 746.1056550040684,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 18.339277
+            },
+            {
+              "ns_per_call": 696.4718907729165,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.943416
+            },
+            {
+              "ns_per_call": 1599.061578546009,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 25.162833
+            },
+            {
+              "ns_per_call": 706.7924666603612,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.891667
+            }
+          ]
+        },
+        "candidate": {
+          "median_ns_per_call": 709.045687156273,
+          "min_jvm_median_ns": 697.8523499638467,
+          "max_jvm_median_ns": 723.1785559043709,
+          "median_jvm_bytes_per_call": 0.0,
+          "jvm_medians": [
+            {
+              "ns_per_call": 723.1785559043709,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.946824
+            },
+            {
+              "ns_per_call": 697.8523499638467,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 24.128245
+            },
+            {
+              "ns_per_call": 698.7774082515466,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.046031
+            },
+            {
+              "ns_per_call": 707.9086120126052,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.10169
+            },
+            {
+              "ns_per_call": 719.9857624668755,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.886609
+            },
+            {
+              "ns_per_call": 703.1792743090552,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 26.511265
+            },
+            {
+              "ns_per_call": 721.7203657765456,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.675698
+            },
+            {
+              "ns_per_call": 710.1827622999407,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.951958
+            }
+          ]
+        },
+        "candidate_time_change_percent": -0.7081601695535289
+      },
+      "bulk": {
+        "base": {
+          "median_ns_per_call": 734.8816840091034,
+          "min_jvm_median_ns": 706.787715669221,
+          "max_jvm_median_ns": 749.0923073063027,
+          "median_jvm_bytes_per_call": 0.0,
+          "jvm_medians": [
+            {
+              "ns_per_call": 749.0923073063027,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.855823
+            },
+            {
+              "ns_per_call": 746.5332191695828,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.080063
+            },
+            {
+              "ns_per_call": 706.787715669221,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.068163
+            },
+            {
+              "ns_per_call": 735.6342809487601,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.991074
+            },
+            {
+              "ns_per_call": 728.4729521996926,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.855007
+            },
+            {
+              "ns_per_call": 747.6523427585157,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.456007
+            },
+            {
+              "ns_per_call": 734.1290870694468,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.243916
+            },
+            {
+              "ns_per_call": 712.1791673941782,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 28.551975
+            }
+          ]
+        },
+        "candidate": {
+          "median_ns_per_call": 716.7101485400487,
+          "min_jvm_median_ns": 689.1573376102647,
+          "max_jvm_median_ns": 742.7600933025633,
+          "median_jvm_bytes_per_call": 0.0,
+          "jvm_medians": [
+            {
+              "ns_per_call": 689.1573376102647,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.078272
+            },
+            {
+              "ns_per_call": 722.9405783514819,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.075051
+            },
+            {
+              "ns_per_call": 710.4797187286156,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.10942
+            },
+            {
+              "ns_per_call": 723.4994345660596,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.06936
+            },
+            {
+              "ns_per_call": 742.7600933025633,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.932489
+            },
+            {
+              "ns_per_call": 725.1383850992486,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.626979
+            },
+            {
+              "ns_per_call": 699.8470238936802,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.700108
+            },
+            {
+              "ns_per_call": 710.2912653682433,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.868458
+            }
+          ]
+        },
+        "candidate_time_change_percent": -2.4727157941834887
+      }
+    },
+    "selected_handle_input/1": {
+      "plain": {
+        "base": {
+          "median_ns_per_call": 22.633701669206577,
+          "min_jvm_median_ns": 22.07564107470742,
+          "max_jvm_median_ns": 25.756306343379002,
+          "median_jvm_bytes_per_call": 0.0,
+          "jvm_medians": [
+            {
+              "ns_per_call": 23.034688543762893,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.882653
+            },
+            {
+              "ns_per_call": 22.268219528801325,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.024374
+            },
+            {
+              "ns_per_call": 22.54713684199503,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.142433
+            },
+            {
+              "ns_per_call": 22.20841244866093,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.626533
+            },
+            {
+              "ns_per_call": 22.720266496418123,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.003897
+            },
+            {
+              "ns_per_call": 24.35855616532821,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 32.99174
+            },
+            {
+              "ns_per_call": 22.07564107470742,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 24.802932
+            },
+            {
+              "ns_per_call": 25.756306343379002,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 35.050521
+            }
+          ]
+        },
+        "candidate": {
+          "median_ns_per_call": 22.22683475885401,
+          "min_jvm_median_ns": 21.793923219860318,
+          "max_jvm_median_ns": 24.171825488254076,
+          "median_jvm_bytes_per_call": 0.0,
+          "jvm_medians": [
+            {
+              "ns_per_call": 22.901169743797798,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.255743
+            },
+            {
+              "ns_per_call": 24.171825488254076,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 32.312993
+            },
+            {
+              "ns_per_call": 22.094631413188022,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.591141
+            },
+            {
+              "ns_per_call": 22.35903810452,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 27.736588
+            },
+            {
+              "ns_per_call": 21.829900232062283,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.12094
+            },
+            {
+              "ns_per_call": 21.793923219860318,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.872778
+            },
+            {
+              "ns_per_call": 21.85757995572593,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 28.446307
+            },
+            {
+              "ns_per_call": 23.119428070453683,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 31.486719
+            }
+          ]
+        },
+        "candidate_time_change_percent": -1.7976154157148483
+      },
+      "bulk": {
+        "base": {
+          "median_ns_per_call": 22.089887536890938,
+          "min_jvm_median_ns": 20.990512235847532,
+          "max_jvm_median_ns": 22.98566126480851,
+          "median_jvm_bytes_per_call": 0.0,
+          "jvm_medians": [
+            {
+              "ns_per_call": 22.69719878136744,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.239773
+            },
+            {
+              "ns_per_call": 21.895328714069198,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.149583
+            },
+            {
+              "ns_per_call": 20.990512235847532,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.227714
+            },
+            {
+              "ns_per_call": 21.870578707550475,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.138073
+            },
+            {
+              "ns_per_call": 22.28444635971268,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.941137
+            },
+            {
+              "ns_per_call": 22.98566126480851,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.005827
+            },
+            {
+              "ns_per_call": 20.995622295785584,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.663476
+            },
+            {
+              "ns_per_call": 22.685358250831936,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.594926
+            }
+          ]
+        },
+        "candidate": {
+          "median_ns_per_call": 22.277685437789668,
+          "min_jvm_median_ns": 21.932018941676052,
+          "max_jvm_median_ns": 23.322636856422374,
+          "median_jvm_bytes_per_call": 0.0,
+          "jvm_medians": [
+            {
+              "ns_per_call": 21.932018941676052,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.1417
+            },
+            {
+              "ns_per_call": 22.026199779961303,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.02943
+            },
+            {
+              "ns_per_call": 22.442074031331146,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 28.780389
+            },
+            {
+              "ns_per_call": 21.99175886452217,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.07439
+            },
+            {
+              "ns_per_call": 23.322636856422374,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.364949
+            },
+            {
+              "ns_per_call": 22.11329684424819,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.066919
+            },
+            {
+              "ns_per_call": 22.834620726846744,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.232878
+            },
+            {
+              "ns_per_call": 23.249469476893918,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.339947
+            }
+          ]
+        },
+        "candidate_time_change_percent": 0.8501532684813462
+      }
+    },
+    "inactive_handle_input/1": {
+      "plain": {
+        "base": {
+          "median_ns_per_call": 21.340995363749947,
+          "min_jvm_median_ns": 20.695629419811787,
+          "max_jvm_median_ns": 30.366444103124888,
+          "median_jvm_bytes_per_call": 0.0,
+          "jvm_medians": [
+            {
+              "ns_per_call": 21.638794759291162,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.718764
+            },
+            {
+              "ns_per_call": 20.695629419811787,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.014623
+            },
+            {
+              "ns_per_call": 22.229864426673807,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 28.560174
+            },
+            {
+              "ns_per_call": 21.043195968208728,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.138423
+            },
+            {
+              "ns_per_call": 24.686805892965626,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 34.906082
+            },
+            {
+              "ns_per_call": 21.00737905783911,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 25.331643
+            },
+            {
+              "ns_per_call": 30.366444103124888,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 40.154126
+            },
+            {
+              "ns_per_call": 20.921282093389273,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 28.792245
+            }
+          ]
+        },
+        "candidate": {
+          "median_ns_per_call": 20.64137134644612,
+          "min_jvm_median_ns": 20.436775175488776,
+          "max_jvm_median_ns": 21.781700758944705,
+          "median_jvm_bytes_per_call": 0.0,
+          "jvm_medians": [
+            {
+              "ns_per_call": 21.781700758944705,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.134983
+            },
+            {
+              "ns_per_call": 21.481600055939026,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.107021
+            },
+            {
+              "ns_per_call": 20.633876523946356,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.04474
+            },
+            {
+              "ns_per_call": 21.10049171419121,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.557711
+            },
+            {
+              "ns_per_call": 20.648866168945883,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.02818
+            },
+            {
+              "ns_per_call": 20.490440527637624,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.885328
+            },
+            {
+              "ns_per_call": 20.436775175488776,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.903069
+            },
+            {
+              "ns_per_call": 20.589112739811654,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.974248
+            }
+          ]
+        },
+        "candidate_time_change_percent": -3.278310150857422
+      },
+      "bulk": {
+        "base": {
+          "median_ns_per_call": 21.08198193949599,
+          "min_jvm_median_ns": 20.521243397552723,
+          "max_jvm_median_ns": 21.371419470092544,
+          "median_jvm_bytes_per_call": 0.0,
+          "jvm_medians": [
+            {
+              "ns_per_call": 21.370901494738387,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.678583
+            },
+            {
+              "ns_per_call": 20.587280177670408,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.099283
+            },
+            {
+              "ns_per_call": 21.088767878969453,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.986583
+            },
+            {
+              "ns_per_call": 20.521243397552723,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.098323
+            },
+            {
+              "ns_per_call": 21.07519600002253,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.935377
+            },
+            {
+              "ns_per_call": 21.13524308208408,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.014518
+            },
+            {
+              "ns_per_call": 21.371419470092544,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 28.245045
+            },
+            {
+              "ns_per_call": 20.81358715244919,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.559956
+            }
+          ]
+        },
+        "candidate": {
+          "median_ns_per_call": 20.781483427395898,
+          "min_jvm_median_ns": 20.62417288213549,
+          "max_jvm_median_ns": 21.69754636764205,
+          "median_jvm_bytes_per_call": 0.0,
+          "jvm_medians": [
+            {
+              "ns_per_call": 20.62417288213549,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.043542
+            },
+            {
+              "ns_per_call": 20.823717689512563,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.868791
+            },
+            {
+              "ns_per_call": 20.87161029939818,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.81856
+            },
+            {
+              "ns_per_call": 20.722755360552846,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.89703
+            },
+            {
+              "ns_per_call": 21.69754636764205,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.003519
+            },
+            {
+              "ns_per_call": 21.02434005891113,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 28.814678
+            },
+            {
+              "ns_per_call": 20.72806426399388,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 30.019958
+            },
+            {
+              "ns_per_call": 20.739249165279233,
+              "jvm_bytes_per_call": 0.0,
+              "batch_ms": 29.808668
+            }
+          ]
+        },
+        "candidate_time_change_percent": -1.4253807491274029
+      }
+    },
+    "handles_input/64": {
+      "plain": {
+        "base": {
+          "median_ns_per_call": 118868.69778590681,
+          "min_jvm_median_ns": 114091.42561983471,
+          "max_jvm_median_ns": 132897.34080717489,
+          "median_jvm_bytes_per_call": 8288.0,
+          "jvm_medians": [
+            {
+              "ns_per_call": 115624.62403100776,
+              "jvm_bytes_per_call": 8288.0,
+              "batch_ms": 29.831153
+            },
+            {
+              "ns_per_call": 118880.21632653062,
+              "jvm_bytes_per_call": 8224.0,
+              "batch_ms": 29.125653
+            },
+            {
+              "ns_per_call": 118895.38431372549,
+              "jvm_bytes_per_call": 8288.0,
+              "batch_ms": 30.318323
+            },
+            {
+              "ns_per_call": 117732.38152610442,
+              "jvm_bytes_per_call": 8288.0,
+              "batch_ms": 29.315363
+            },
+            {
+              "ns_per_call": 132897.34080717489,
+              "jvm_bytes_per_call": 8288.0,
+              "batch_ms": 29.636107
+            },
+            {
+              "ns_per_call": 114091.42561983471,
+              "jvm_bytes_per_call": 8224.0,
+              "batch_ms": 27.610125
+            },
+            {
+              "ns_per_call": 118857.17924528301,
+              "jvm_bytes_per_call": 8288.0,
+              "batch_ms": 25.197722
+            },
+            {
+              "ns_per_call": 119816.08547008547,
+              "jvm_bytes_per_call": 8288.0,
+              "batch_ms": 28.036964
+            }
+          ]
+        },
+        "candidate": {
+          "median_ns_per_call": 115713.13760318396,
+          "min_jvm_median_ns": 112671.29924242424,
+          "max_jvm_median_ns": 118266.38846153846,
+          "median_jvm_bytes_per_call": 8269.932213380489,
+          "jvm_medians": [
+            {
+              "ns_per_call": 112671.29924242424,
+              "jvm_bytes_per_call": 8254.787878787878,
+              "batch_ms": 29.745223
+            },
+            {
+              "ns_per_call": 116144.1673151751,
+              "jvm_bytes_per_call": 8224.0,
+              "batch_ms": 29.849051
+            },
+            {
+              "ns_per_call": 118266.38846153846,
+              "jvm_bytes_per_call": 8264.615384615385,
+              "batch_ms": 30.749261
+            },
+            {
+              "ns_per_call": 115286.9921875,
+              "jvm_bytes_per_call": 8288.0,
+              "batch_ms": 29.51347
+            },
+            {
+              "ns_per_call": 114824.97701149425,
+              "jvm_bytes_per_call": 8275.249042145593,
+              "batch_ms": 29.969319
+            },
+            {
+              "ns_per_call": 116139.28301886792,
+              "jvm_bytes_per_call": 8224.0,
+              "batch_ms": 30.77691
+            },
+            {
+              "ns_per_call": 118130.75925925926,
+              "jvm_bytes_per_call": 8288.0,
+              "batch_ms": 25.516244
+            },
+            {
+              "ns_per_call": 114574.06538461539,
+              "jvm_bytes_per_call": 8283.569230769232,
+              "batch_ms": 29.789257
+            }
+          ]
+        },
+        "candidate_time_change_percent": -2.6546603449852713
+      },
+      "bulk": {
+        "base": {
+          "median_ns_per_call": 1780.6969415459098,
+          "min_jvm_median_ns": 1719.939423574757,
+          "max_jvm_median_ns": 1942.27074317968,
+          "median_jvm_bytes_per_call": 2504.0,
+          "jvm_medians": [
+            {
+              "ns_per_call": 1849.5514585764295,
+              "jvm_bytes_per_call": 2528.0,
+              "batch_ms": 15.850656
+            },
+            {
+              "ns_per_call": 1753.33973710819,
+              "jvm_bytes_per_call": 2504.0,
+              "batch_ms": 26.010795
+            },
+            {
+              "ns_per_call": 1785.957130044843,
+              "jvm_bytes_per_call": 2504.0,
+              "batch_ms": 29.870133
+            },
+            {
+              "ns_per_call": 1775.4367530469767,
+              "jvm_bytes_per_call": 2488.0,
+              "batch_ms": 15.004216
+            },
+            {
+              "ns_per_call": 1742.0597649692222,
+              "jvm_bytes_per_call": 2488.0,
+              "batch_ms": 15.565304
+            },
+            {
+              "ns_per_call": 1719.939423574757,
+              "jvm_bytes_per_call": 2488.0,
+              "batch_ms": 29.897707
+            },
+            {
+              "ns_per_call": 1942.27074317968,
+              "jvm_bytes_per_call": 2504.0,
+              "batch_ms": 30.969507
+            },
+            {
+              "ns_per_call": 1798.8485060690944,
+              "jvm_bytes_per_call": 2504.0,
+              "batch_ms": 15.412534
+            }
+          ]
+        },
+        "candidate": {
+          "median_ns_per_call": 1780.296888693024,
+          "min_jvm_median_ns": 1718.1373905025357,
+          "max_jvm_median_ns": 2035.7399188435202,
+          "median_jvm_bytes_per_call": 2516.0,
+          "jvm_medians": [
+            {
+              "ns_per_call": 1780.1295124238163,
+              "jvm_bytes_per_call": 2544.0,
+              "batch_ms": 15.188065
+            },
+            {
+              "ns_per_call": 1718.1373905025357,
+              "jvm_bytes_per_call": 2504.0,
+              "batch_ms": 29.81312
+            },
+            {
+              "ns_per_call": 1774.2686319777422,
+              "jvm_bytes_per_call": 2488.0,
+              "batch_ms": 29.97272
+            },
+            {
+              "ns_per_call": 1825.1399515738499,
+              "jvm_bytes_per_call": 2528.0,
+              "batch_ms": 15.075656
+            },
+            {
+              "ns_per_call": 1876.0141783730808,
+              "jvm_bytes_per_call": 2528.0,
+              "batch_ms": 28.712397
+            },
+            {
+              "ns_per_call": 1780.1104532242437,
+              "jvm_bytes_per_call": 2504.0,
+              "batch_ms": 16.535446
+            },
+            {
+              "ns_per_call": 1780.4642649622313,
+              "jvm_bytes_per_call": 2504.0,
+              "batch_ms": 15.320895
+            },
+            {
+              "ns_per_call": 2035.7399188435202,
+              "jvm_bytes_per_call": 2544.0,
+              "batch_ms": 16.053845
+            }
+          ]
+        },
+        "candidate_time_change_percent": -0.022466083001104753
+      }
+    },
+    "handle_records_input/64": {
+      "plain": {
+        "base": {
+          "median_ns_per_call": 187712.6006289308,
+          "min_jvm_median_ns": 184111.87037037036,
+          "max_jvm_median_ns": 190835.67763157896,
+          "median_jvm_bytes_per_call": 8224.0,
+          "jvm_medians": [
+            {
+              "ns_per_call": 184111.87037037036,
+              "jvm_bytes_per_call": 8224.0,
+              "batch_ms": 29.826123
+            },
+            {
+              "ns_per_call": 187460.3962264151,
+              "jvm_bytes_per_call": 8288.0,
+              "batch_ms": 29.806203
+            },
+            {
+              "ns_per_call": 187964.80503144654,
+              "jvm_bytes_per_call": 8224.0,
+              "batch_ms": 29.886404
+            },
+            {
+              "ns_per_call": 190835.67763157896,
+              "jvm_bytes_per_call": 8224.0,
+              "batch_ms": 29.007023
+            },
+            {
+              "ns_per_call": 187980.2356687898,
+              "jvm_bytes_per_call": 8224.0,
+              "batch_ms": 29.512897
+            },
+            {
+              "ns_per_call": 186046.06832298136,
+              "jvm_bytes_per_call": 8288.0,
+              "batch_ms": 29.953417
+            },
+            {
+              "ns_per_call": 185899.42236024846,
+              "jvm_bytes_per_call": 8224.0,
+              "batch_ms": 29.929807
+            },
+            {
+              "ns_per_call": 190460.92413793103,
+              "jvm_bytes_per_call": 8224.0,
+              "batch_ms": 27.616834
+            }
+          ]
+        },
+        "candidate": {
+          "median_ns_per_call": 189495.61800176057,
+          "min_jvm_median_ns": 183527.85802469135,
+          "max_jvm_median_ns": 293384.06722689077,
+          "median_jvm_bytes_per_call": 8224.0,
+          "jvm_medians": [
+            {
+              "ns_per_call": 183527.85802469135,
+              "jvm_bytes_per_call": 8224.0,
+              "batch_ms": 29.731513
+            },
+            {
+              "ns_per_call": 190117.7770700637,
+              "jvm_bytes_per_call": 8288.0,
+              "batch_ms": 29.848491
+            },
+            {
+              "ns_per_call": 189081.69375,
+              "jvm_bytes_per_call": 8224.0,
+              "batch_ms": 30.253071
+            },
+            {
+              "ns_per_call": 185731.50993377483,
+              "jvm_bytes_per_call": 8224.0,
+              "batch_ms": 28.045458
+            },
+            {
+              "ns_per_call": 293384.06722689077,
+              "jvm_bytes_per_call": 8224.0,
+              "batch_ms": 34.912704
+            },
+            {
+              "ns_per_call": 190403.1554054054,
+              "jvm_bytes_per_call": 8288.0,
+              "batch_ms": 28.179667
+            },
+            {
+              "ns_per_call": 186808.20382165606,
+              "jvm_bytes_per_call": 8224.0,
+              "batch_ms": 29.328888
+            },
+            {
+              "ns_per_call": 189909.54225352113,
+              "jvm_bytes_per_call": 8224.0,
+              "batch_ms": 26.967155
+            }
+          ]
+        },
+        "candidate_time_change_percent": 0.9498655747433915
+      },
+      "bulk": {
+        "base": {
+          "median_ns_per_call": 2079.242865271888,
+          "min_jvm_median_ns": 2008.532258064516,
+          "max_jvm_median_ns": 2354.1502533899466,
+          "median_jvm_bytes_per_call": 3016.0,
+          "jvm_medians": [
+            {
+              "ns_per_call": 2076.4458710446925,
+              "jvm_bytes_per_call": 3016.0,
+              "batch_ms": 29.595583
+            },
+            {
+              "ns_per_call": 2082.039859499084,
+              "jvm_bytes_per_call": 3016.0,
+              "batch_ms": 13.633197
+            },
+            {
+              "ns_per_call": 2354.1502533899466,
+              "jvm_bytes_per_call": 3016.0,
+              "batch_ms": 34.375302
+            },
+            {
+              "ns_per_call": 2008.532258064516,
+              "jvm_bytes_per_call": 3000.0,
+              "batch_ms": 20.547285
+            },
+            {
+              "ns_per_call": 2140.118560195228,
+              "jvm_bytes_per_call": 3000.0,
+              "batch_ms": 31.571029
+            },
+            {
+              "ns_per_call": 2040.617456021651,
+              "jvm_bytes_per_call": 3000.0,
+              "batch_ms": 15.080163
+            },
+            {
+              "ns_per_call": 2099.3227108266074,
+              "jvm_bytes_per_call": 3016.0,
+              "batch_ms": 30.171466
+            },
+            {
+              "ns_per_call": 2033.5586019681032,
+              "jvm_bytes_per_call": 3016.0,
+              "batch_ms": 29.964486
+            }
+          ]
+        },
+        "candidate": {
+          "median_ns_per_call": 2094.8077053974257,
+          "min_jvm_median_ns": 2055.797720406482,
+          "max_jvm_median_ns": 2702.9949153828643,
+          "median_jvm_bytes_per_call": 3016.0,
+          "jvm_medians": [
+            {
+              "ns_per_call": 2295.2715370939068,
+              "jvm_bytes_per_call": 3032.0,
+              "batch_ms": 28.40169
+            },
+            {
+              "ns_per_call": 2087.667397299017,
+              "jvm_bytes_per_call": 3016.0,
+              "batch_ms": 29.52588
+            },
+            {
+              "ns_per_call": 2065.2447784363535,
+              "jvm_bytes_per_call": 3000.0,
+              "batch_ms": 29.268649
+            },
+            {
+              "ns_per_call": 2101.9480134958344,
+              "jvm_bytes_per_call": 3016.0,
+              "batch_ms": 30.526591
+            },
+            {
+              "ns_per_call": 2702.9949153828643,
+              "jvm_bytes_per_call": 3016.0,
+              "batch_ms": 35.617364
+            },
+            {
+              "ns_per_call": 2357.1231690029927,
+              "jvm_bytes_per_call": 3040.0,
+              "batch_ms": 14.965375
+            },
+            {
+              "ns_per_call": 2055.797720406482,
+              "jvm_bytes_per_call": 3016.0,
+              "batch_ms": 29.940638
+            },
+            {
+              "ns_per_call": 2077.8116721854303,
+              "jvm_bytes_per_call": 3032.0,
+              "batch_ms": 30.119958
+            }
+          ]
+        },
+        "candidate_time_change_percent": 0.7485821106089086
+      }
+    }
+  },
+  "samples_sha256": {
+    "base": [
+      "2e06f2334cc4804959cd169b8d7337f4beb19d8c352224acfe02143ce14fd305",
+      "1e26a88aeef9835c4147aed3655c3ab401fd061fdc66d26b2c051fc52c8472c6"
+    ],
+    "candidate": [
+      "886f6d6b3edceec02785d25f47b54bbfac2e916d1412806c45d013bb4edec4da",
+      "4eab7e80ea40e8c54c932d7d9d070e3721bb16275629ef948f4f0cd0b148b271"
+    ]
+  }
+}

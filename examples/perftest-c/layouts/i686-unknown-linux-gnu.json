@@ -1,0 +1,23 @@
+{
+  "format_version": 1,
+  "target": "i686-unknown-linux-gnu",
+  "sources": {
+    "perftest-flat": {
+      "features": []
+    }
+  },
+  "layouts": {
+    "packet": {
+      "size": 32,
+      "alignment": 4
+    },
+    "std.vec": {
+      "size": 12,
+      "alignment": 4
+    },
+    "std.string": {
+      "size": 12,
+      "alignment": 4
+    }
+  }
+}
