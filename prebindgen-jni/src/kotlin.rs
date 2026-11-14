@@ -515,12 +515,15 @@ pub(crate) fn input_leaves(
                     });
                     handle_inputs.last_mut().unwrap().consumed = consumed.last().cloned();
                 }
+                let class_name = context.class_name(&handle.ty).map_err(|error| {
+                    if handle.access == Access::Exclusive {
+                        format!("mutable JNI input `&mut {}` requires a native handle class; a value representation cannot preserve mutation and implicit copy-back is unsupported", type_key(&handle.ty))
+                    } else {
+                        error
+                    }
+                })?;
                 (
-                    format!(
-                        "{}{}",
-                        context.class_name(&handle.ty)?,
-                        if conditional { "?" } else { "" }
-                    ),
+                    format!("{}{}", class_name, if conditional { "?" } else { "" }),
                     if conditional {
                         format!("if ({active}) {value}.raw else 0L")
                     } else {

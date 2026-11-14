@@ -233,9 +233,10 @@ impl<Out, F, E> DeclExpandReturn<Out, F, E> {
         self.views.push((self.direct)());
         self
     }
-    /// Append an explicit shared projection. Owning opaque representations clone
-    /// the value; record/collection projections permit copying borrowed leaves.
-    pub fn field_self_ref(self) -> Self {
+    /// Produce an owning copy while preserving the source value.
+    /// Opaque representations clone the value; record/collection projections
+    /// permit copies of borrowed leaves required by their foreign representation.
+    pub fn field_self_cloned(self) -> Self {
         self.project_self(Projection::borrowed())
     }
     /// Append an explicit owned projection.

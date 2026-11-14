@@ -174,7 +174,7 @@ fn getter_result_overrides_accept_borrowed_logical_types_without_changing_other_
         JniGen::builder()
             .items(items(source))
             .set_package_prefix("test")
-            .expand(expand_return!(Leaf).field_self_ref())
+            .expand(expand_return!(Leaf).field_self_cloned())
             .expand(expand_return!(Owner).field(fun!(leaf)))
             .package(
                 package!()

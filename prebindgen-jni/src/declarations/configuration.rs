@@ -403,8 +403,8 @@ pub trait JniOutputConfigExt: Sized {
     fn field(self, name: impl Into<String>) -> Self;
     /// Append the direct value representation.
     fn field_self(self) -> Self;
-    /// Append an explicitly borrowed projection.
-    fn field_self_ref(self) -> Self;
+    /// Append an explicit owning copy of a shared observation.
+    fn field_self_cloned(self) -> Self;
     /// Append an explicitly owned projection.
     fn field_self_into(self) -> Self;
     /// Append a projection with explicit ownership and field policies.
@@ -486,8 +486,8 @@ impl JniOutputConfigExt for JniOutputConfig {
     fn field_self(self) -> Self {
         self.view(JniOutputConfig::Leaf(JniOutputLeafOp::Value))
     }
-    /// Append an explicit borrowed projection.
-    fn field_self_ref(self) -> Self {
+    /// Append an explicit owning copy of a shared observation.
+    fn field_self_cloned(self) -> Self {
         self.project_self(Projection::borrowed())
     }
     /// Append an explicit owned projection.

@@ -1406,7 +1406,7 @@ fn consuming_field_accessors_validate_signatures_and_order_observers() {
                 test_expand_return!(Pair)
                     .fields_into(
                         test_fields!(into_pair)
-                            .field("first", test_expand_return!(i64).field_self_ref()),
+                            .field("first", test_expand_return!(i64).field_self_cloned()),
                     )
                     .field(test_fun!(count)),
             ),

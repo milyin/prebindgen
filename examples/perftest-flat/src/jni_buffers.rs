@@ -43,6 +43,55 @@ pub fn jni_buffer_bytes() -> &'static [u8] {
 pub fn jni_buffer_vec() -> &'static Vec<u8> {
     &rows()[0].bytes
 }
+
+#[prebindgen]
+pub fn jni_buffer_cow(owned: bool) -> std::borrow::Cow<'static, [u8]> {
+    if owned {
+        std::borrow::Cow::Owned(rows()[0].bytes.clone())
+    } else {
+        std::borrow::Cow::Borrowed(&rows()[0].bytes)
+    }
+}
+
+#[prebindgen]
+pub fn jni_buffer_optional_cow(
+    present: bool,
+    owned: bool,
+) -> Option<std::borrow::Cow<'static, [u8]>> {
+    present.then(|| jni_buffer_cow(owned))
+}
+
+#[prebindgen]
+pub fn jni_buffer_cow_rows() -> Vec<std::borrow::Cow<'static, [u8]>> {
+    vec![
+        jni_buffer_cow(false),
+        jni_buffer_cow(true),
+        std::borrow::Cow::Borrowed(&[]),
+    ]
+}
+
+#[prebindgen]
+pub fn jni_buffer_cow_rows_plain() -> Vec<std::borrow::Cow<'static, [u8]>> {
+    jni_buffer_cow_rows()
+}
+
+#[prebindgen]
+pub fn jni_buffer_cow_callback(callback: impl Fn(std::borrow::Cow<'_, [u8]>) + Send + Sync) {
+    // The callback's byte array must survive this temporary owner's destruction.
+    let owned = rows()[1].bytes.clone();
+    callback(std::borrow::Cow::Borrowed(&owned));
+    callback(std::borrow::Cow::Owned(owned.clone()));
+}
+
+#[prebindgen]
+pub fn jni_buffer_cow_from_slice(value: &[u8]) -> std::borrow::Cow<'_, [u8]> {
+    std::borrow::Cow::Borrowed(value)
+}
+
+#[prebindgen]
+pub fn jni_buffer_cow_input(value: std::borrow::Cow<'_, [u8]>) -> usize {
+    value.len()
+}
 #[prebindgen]
 pub fn jni_buffer_optional_text(mode: i32) -> Option<Option<&'static str>> {
     match mode {

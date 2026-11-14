@@ -534,7 +534,7 @@ impl<C: Codec<InOps = CInputOps, OutOps = COutputOps, CompileState = CCompileSta
                     .count()
                     > 1
                 {
-                    return Err ("a combination cannot consume the same value twice; use field_self_ref() for an explicit copy view" . into ()) ;
+                    return Err ("a combination cannot consume the same value twice; use field_self_cloned() for an explicit copy view" . into ()) ;
                 }
                 if !borrowed {
                     if let Some(plan) = self.output_owner_views(ty, parts, extra, value.clone())? {

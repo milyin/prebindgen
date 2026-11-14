@@ -651,7 +651,7 @@ impl TestOutputConfig {
         self.view(OutputNode::Leaf(TestOutputLeafOp::Value))
     }
     /// Append an explicit borrowed projection.
-    pub fn field_self_ref(self) -> Self {
+    pub fn field_self_cloned(self) -> Self {
         self.project_self(Projection::borrowed())
     }
     /// Append an explicit owned projection.

@@ -6,16 +6,16 @@ an explicit copy projection or an expansion into fields.
 
 ```rust,ignore
 // Ordinary JNI reference returns: authorize an independent owning copy.
-jni.expand(expand_return!(&Packet).field_self_ref());
+jni.expand(expand_return!(&Packet).field_self_cloned());
 // A local override can expose data instead of copying the object.
 fun!(packet_ref).expand_return(
     expand_return!(Packet).field(fun!(packet_len)));
 // Explicit callback-argument copies belong to the callback author.
 callback!(impl Fn(&Packet)).expand_param(
-    0, expand_return!(Packet).field_self_ref());
+    0, expand_return!(Packet).field_self_cloned());
 ```
 
-`field_self_ref()` and `Projection::borrowed()` authorize owning copies of opaque
+`field_self_cloned()` and `Projection::borrowed()` authorize owning copies of opaque
 leaves recursively through borrowed records and collections. Owned getter results
 still move. Generator-wide defaults and local replacements use the same API.
 Exact reference-type defaults preserve existing automatic callback cleanup;

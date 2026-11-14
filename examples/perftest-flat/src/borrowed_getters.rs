@@ -79,9 +79,14 @@ pub fn getter_owner_id(value: &GetterOwner) -> i64 {
     value.child.number
 }
 #[prebindgen]
-pub fn getter_owner_child(value: &GetterOwner) -> &GetterChild {
+pub fn getter_owner_child(value: &'_ GetterOwner) -> &'_ GetterChild {
     CHILD_CALLS.fetch_add(1, Ordering::SeqCst);
     &value.child
+}
+
+#[prebindgen]
+pub fn getter_owner_cow_bytes(value: &'_ GetterOwner) -> std::borrow::Cow<'_, [u8]> {
+    std::borrow::Cow::Borrowed(value.child.name.as_bytes())
 }
 #[prebindgen]
 pub fn getter_owner_optional(value: &GetterOwner) -> Option<&GetterChild> {
@@ -209,7 +214,7 @@ pub fn getter_counts() -> Vec<usize> {
     .into()
 }
 #[prebindgen]
-pub fn getter_callback(callback: impl Fn(&GetterOwner) + Send + Sync + 'static, present: bool) {
+pub fn getter_callback(callback: impl Fn(&'_ GetterOwner) + Send + Sync + 'static, present: bool) {
     let owner = getter_owner_new(present);
     callback(&owner);
     assert_eq!(owner.child.number, 71);

@@ -70,7 +70,7 @@ pub(crate) fn sequence(
     let primitive = primitive(element_type, &flat.types);
     let Some(element) = primitive.filter(|_| matches!(recipe, COutput::Leaf(COutputLeafOp::Value)))
     else {
-        return Err(format!("borrowed C collection `{}` cannot allocate converted rows implicitly; use an address-preserving numeric element representation or explicitly permit a collection-level copy with expand_return!(&[T]).field_self_ref() (not an element-only expansion)", prebindgen_flat::type_key(ty)));
+        return Err(format!("borrowed C collection `{}` cannot allocate converted rows implicitly; use an address-preserving numeric element representation or explicitly permit a collection-level copy with expand_return!(&[T]).field_self_cloned() (not an element-only expansion)", prebindgen_flat::type_key(ty)));
     };
     let element_type = native_element_type(element);
     let carrier = ident(element);
@@ -274,9 +274,10 @@ mod tests {
         assert!(g.header.contains("rows_free"));
         // Copying a leaf never implicitly authorizes an owning outer container.
         let error = Cbindgen::new(model("pub fn values()->&'static [i64]{}"))
-            .function(
-                fun!(values).output(sequence(false, expand_return!(i64).field_self_ref().into())),
-            )
+            .function(fun!(values).output(sequence(
+                false,
+                expand_return!(i64).field_self_cloned().into(),
+            )))
             .build()
             .err()
             .unwrap();

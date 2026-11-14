@@ -270,7 +270,7 @@ fn static_reference_outputs_keep_independent_jni_handles() {
         .package(
             package!()
                 .class(ptr_class!(Child))
-                .fun(fun!(fixed).expand_return(expand_return!(Child).field_self_ref())),
+                .fun(fun!(fixed).expand_return(expand_return!(Child).field_self_cloned())),
         )
         .build()
         .unwrap();
@@ -305,7 +305,7 @@ fn borrowed_opaque_defaults_are_diagnosed_in_results_callbacks_and_rows() {
             error.contains("would clone and allocate"),
             "{signature}: {error}"
         );
-        assert!(error.contains("field_self_ref()"));
+        assert!(error.contains("field_self_cloned()"));
     }
 }
 
@@ -324,7 +324,7 @@ fn reference_copy_defaults_and_callback_local_views_are_independent() {
         let generated=JniGen::builder()
             .flat(flat("pub type Handle=String;pub fn read(v:&Handle)->&Handle{}pub fn call(cb:impl Fn(&Handle)){}pub fn length(v:&Handle)->i64{}"))
             .set_package_prefix("test")
-            .expand(expand_return!(&Handle).field_self_ref())
+            .expand(expand_return!(&Handle).field_self_cloned())
             .package(package!().class(ptr_class!(Handle)).fun(fun!(read)).fun(callback))
             .build().unwrap();
         assert_eq!(
@@ -340,9 +340,9 @@ fn explicit_borrowed_record_and_collection_copies_work_in_bulk_and_ordinary_outp
     for bulk in [false, true] {
         for container in [false, true] {
             let mut expansion = if container {
-                expand_return!(&'static [Row]).field_self_ref()
+                expand_return!(&'static [Row]).field_self_cloned()
             } else {
-                expand_return!(Row).field_self_ref()
+                expand_return!(Row).field_self_cloned()
             };
             if bulk {
                 expansion = expansion.bulk();
@@ -657,7 +657,7 @@ fn explicit_shared_data_outputs_resolve_ordinary_record_defaults() {
         .package(
             package!()
                 .class(data_class!(Value))
-                .fun(fun!(read).expand_return(expand_return!(Value).field_self_ref())),
+                .fun(fun!(read).expand_return(expand_return!(Value).field_self_cloned())),
         )
         .build()
         .unwrap();
@@ -672,7 +672,7 @@ fn borrowed_handles_require_explicit_copies_while_views_can_expand() {
         .set_package_prefix("test")
         .expand(expand_return!(Handle).field(fun!(label)))
         .package(package!().class(ptr_class!(Handle)).fun(fun!(plain)
-            .expand_return(expand_return!(Handle).field_self_ref()))
+            .expand_return(expand_return!(Handle).field_self_cloned()))
             .fun(fun!(projected).expand_return(expand_return!(Handle).field(fun!(label)))))
         .build().unwrap();
     let kotlin = &generated.kotlin["test/Functions.kt"];
@@ -1977,7 +1977,7 @@ fn retained_callback_names_follow_source_types_and_prepared_placement() {
                         "cb",
                         callback!(impl Fn(&Original))
                             .name("OriginalBorrowedCopy")
-                            .expand_param(0, expand_return!(Original).field_self_ref()),
+                            .expand_param(0, expand_return!(Original).field_self_cloned()),
                     ),
                 )
                 .fun(fun!(empty)),
@@ -2208,7 +2208,7 @@ fn callbacks_accept_handle_containing_sequence_arguments() {
         .set_package_prefix("test")
         .package(package!("rows").class(ptr_class!(Handle)).class(data_class!(Row)))
         .package(package!().fun(fun!(owned)).fun(fun!(borrowed).expand_param("cb",callback!(impl Fn(&[Row]))
-            .expand_param(0,expand_return!(Row).field_self_ref())))
+            .expand_param(0,expand_return!(Row).field_self_cloned())))
             .fun(fun!(nested)).fun(fun!(handles)))
         .build().unwrap();
     assert!(generated.kotlin["test/RowVecCallback.kt"]
@@ -2357,7 +2357,7 @@ fn default_record_outputs_follow_source_ownership_and_allow_copy_overrides() {
         let generated = JniGen::builder()
             .flat(flat(&source))
             .set_package_prefix("test")
-            .expand(expand_return!(Bundle).field_self_ref())
+            .expand(expand_return!(Bundle).field_self_cloned())
             .package(classes().fun(function))
             .build()
             .unwrap();
@@ -2371,7 +2371,7 @@ fn default_record_outputs_follow_source_ownership_and_allow_copy_overrides() {
                 fun!(make).expand_return(expand_return!(Bundle).field_self().field_self_into()),
             )),
     );
-    assert!(error.contains("field_self_ref()"));
+    assert!(error.contains("field_self_cloned()"));
     // Two views of optional references are observations, never two moves.
     let source =
         format!("{records}pub type Owner=String;pub fn maybe(owner:&Owner)->Option<&Bundle>{{}}");
@@ -2405,8 +2405,8 @@ fn owned_buffer_identity_views_move_and_independent_copies_are_explicit() {
             let expansion = match (bytes, copy) {
                 (false, false) => expand_return!(String).field_self().field(fun!(observe)),
                 (true, false) => expand_return!(Vec<u8>).field_self().field(fun!(observe)),
-                (false, true) => expand_return!(String).field_self_ref().field_self(),
-                (true, true) => expand_return!(Vec<u8>).field_self_ref().field_self(),
+                (false, true) => expand_return!(String).field_self_cloned().field_self(),
+                (true, true) => expand_return!(Vec<u8>).field_self_cloned().field_self(),
             };
             let c_expansion = match (bytes, copy) {
                 (false, false) => prebindgen_c::expand_return!(String)
@@ -2416,10 +2416,10 @@ fn owned_buffer_identity_views_move_and_independent_copies_are_explicit() {
                     .field_self()
                     .field(prebindgen_c::fun!(observe)),
                 (false, true) => prebindgen_c::expand_return!(String)
-                    .field_self_ref()
+                    .field_self_cloned()
                     .field_self(),
                 (true, true) => prebindgen_c::expand_return!(Vec<u8>)
-                    .field_self_ref()
+                    .field_self_cloned()
                     .field_self(),
             };
             let jni = JniGen::builder()
@@ -2480,7 +2480,7 @@ fn owned_buffer_identity_views_move_and_independent_copies_are_explicit() {
                     .set_package_prefix("test")
                     .package(package!().fun(fun!(make).expand_return(expansion.clone()))),
             );
-            assert!(error.contains("field_self_ref()"), "{error}");
+            assert!(error.contains("field_self_cloned()"), "{error}");
             let c = prebindgen_c::Cbindgen::new(
                 prebindgen_flat::Flat::parse(
                     syn::parse_file(&source)
@@ -2496,7 +2496,7 @@ fn owned_buffer_identity_views_move_and_independent_copies_are_explicit() {
             .build()
             .err()
             .unwrap();
-            assert!(c.contains("field_self_ref()"), "{c}");
+            assert!(c.contains("field_self_cloned()"), "{c}");
         }
         let source = format!(
             "pub fn make()->Option<{ty}>{{}}pub fn observe(value:&Option<{ty}>)->usize{{}}"
@@ -3348,7 +3348,7 @@ fn cleanup_helpers_share_resolved_shapes_across_functions_callbacks_and_nested_r
         ",
             ))
             .set_package_prefix("test")
-            .expand(expand_return!(&Owner).field_self_ref())
+            .expand(expand_return!(&Owner).field_self_cloned())
             .set_bulk_collection_outputs(false)
             .package(package)
             .build()
@@ -3469,7 +3469,7 @@ fn bulk_callback_batches_and_optional_elements_keep_their_scopes() {
         ),
         (
             "pub struct Row {pub n:i64}pub fn batches()->&'static [Row]{}",
-            expand_return!(Row).field_self_ref().bulk(),
+            expand_return!(Row).field_self_cloned().bulk(),
             "fold: (A, test.Row) -> A",
         ),
     ] {
