@@ -247,8 +247,8 @@ fn source_selection_includes_local_trait_representations() {
 #[test]
 fn local_conversion_views_and_selectors_keep_container_scope() {
     let source = format!("{VALUE} pub fn option(v:Option<Value>)->Option<Value>{{}}");
-    let input: JniInput<JniInputRequest, JniOutputRequest> = conversion().into();
-    let output: JniOutput<JniInputRequest, JniOutputRequest> = conversion().into();
+    let input: JniInputConfig = conversion().into();
+    let output: JniOutputConfig = conversion().into();
     let generated = builder(&source)
         .input(input.variant("make"))
         .output(output.field("read"))

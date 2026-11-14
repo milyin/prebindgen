@@ -110,7 +110,11 @@ impl Consumes for JniOutput {
             } => mode.map_or(!borrowed && output_referent(ty).is_none(), |m| {
                 m == ProjectionMode::Owned
             }),
-            JniOutput::Request(never) => match *never {},
+            JniOutput::Leaf(
+                JniOutputLeafOp::ConfigDefault(never)
+                | JniOutputLeafOp::ConfigValue(never)
+                | JniOutputLeafOp::ConfigConversion(never),
+            ) => match *never {},
             JniOutput::Branch {
                 operation: JniOutputBranch::Combine,
                 children: p,
@@ -283,19 +287,25 @@ impl<C: Codec<InOps = JniInputOps, OutOps = JniOutputOps, CompileState = JniComp
                     role: self.input_role.get(),
                 })
             }
-            JniInput::Request(never) => match *never {},
+            JniInput::Leaf(
+                JniInputLeafOp::ConfigDefault(never)
+                | JniInputLeafOp::ConfigValue(never)
+                | JniInputLeafOp::ConfigConversion(never)
+                | JniInputLeafOp::ConfigConstructor(never),
+            ) => match *never {},
             JniInput::Unary {
-                operation: JniInputUnary::ForType { .. },
+                operation: JniInputUnary::ConfigForType { ty: never },
                 ..
             }
             | JniInput::Branch {
-                operation: JniInputBranch::EnumFields | JniInputBranch::VariantFields { .. },
+                operation:
+                    JniInputBranch::ConfigEnumFields(never) | JniInputBranch::ConfigVariantFields(never),
                 ..
             }
             | JniInput::Arrow {
-                operation: JniInputArrow::Callback(_),
+                operation: JniInputArrow::ConfigCallback(never),
                 ..
-            } => Err("resolve source-dependent input operations before compilation".into()),
+            } => match *never {},
             JniInput::Branch {
                 operation: JniInputBranch::Fields,
                 children,
@@ -582,20 +592,24 @@ impl<C: Codec<InOps = JniInputOps, OutOps = JniOutputOps, CompileState = JniComp
                     .cx
                     .output_optional(ty, extra, value, borrowed, wire_name, inner);
             }
-            JniOutput::Request(never) => match *never {},
+            JniOutput::Leaf(
+                JniOutputLeafOp::ConfigDefault(never)
+                | JniOutputLeafOp::ConfigValue(never)
+                | JniOutputLeafOp::ConfigConversion(never),
+            ) => match *never {},
             JniOutput::Unary {
-                operation: JniOutputUnary::ForType { .. } | JniOutputUnary::SequenceCallback { .. },
+                operation:
+                    JniOutputUnary::ConfigForType { ty: never }
+                    | JniOutputUnary::ConfigSequenceCallback { structural: never },
                 ..
             }
             | JniOutput::Branch {
                 operation:
-                    JniOutputBranch::EnumFields
-                    | JniOutputBranch::VariantFields { .. }
-                    | JniOutputBranch::NamedFields { .. },
+                    JniOutputBranch::ConfigEnumFields(never)
+                    | JniOutputBranch::ConfigVariantFields(never)
+                    | JniOutputBranch::ConfigNamedFields(never),
                 ..
-            } => {
-                return Err("resolve source-dependent output operations before compilation".into())
-            }
+            } => match *never {},
             JniOutput::Leaf(JniOutputLeafOp::Value) => {
                 let representation = if self.state.bulk.get() {
                     Representation::Bulk

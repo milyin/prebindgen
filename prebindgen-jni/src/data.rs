@@ -869,12 +869,12 @@ mod group_tests {
         prepare(&mut flat).unwrap();
         let codec = JniCodec::declared();
         let defaults = crate::DeclJniDefaults::new(&flat, vec![], vec![], vec![]).unwrap();
-        let request = JniOutput::Unary {
+        let request = JniOutputConfig::Unary {
             operation: JniOutputUnary::Sequence {
                 delivery: prebindgen_declarations::SequenceDelivery::Callback,
                 mode: Some(ProjectionMode::Owned),
             },
-            child: Box::new(JniOutput::Leaf(JniOutputLeafOp::Projected(
+            child: Box::new(JniOutputConfig::Leaf(JniOutputLeafOp::Projected(
                 Projection::owned(),
             ))),
         };

@@ -1,5 +1,5 @@
 use super::*;
-use crate::{fields, JniOutput};
+use crate::fields;
 use prebindgen_declarations::convert;
 
 use crate::{JniInputUnary, JniOutputBranch, JniOutputLeafOp};
@@ -53,11 +53,11 @@ fn recovery_config_nests_optional_enum_with_canonical_duration() {
 fn fields_only_callback_inherits_owned_payload_expansion_without_classes() {
     let source="pub struct Sample{pub n:i64}pub enum ReplyResult{Sample(Sample),Error(String)}pub struct ReplyStruct{pub result:ReplyResult,pub replier_id:Option<i64>}pub type Reply=String;pub fn reply_into_struct(value:Reply)->ReplyStruct{}pub fn receive(cb:impl Fn(Reply)){}";
     let generated = build(source)
-        .expand(expand_return!(Sample).view(JniOutput::Branch {
+        .expand(expand_return!(Sample).view(JniOutputConfig::Branch {
             operation: JniOutputBranch::OwnedFields,
-            children: vec![JniOutput::auto()],
+            children: vec![JniOutputConfig::auto()],
         }))
-        .expand(expand_return!(ReplyResult).view(JniOutput::enum_fields([])))
+        .expand(expand_return!(ReplyResult).view(JniOutputConfig::enum_fields([])))
         .expand(expand_return!(Reply).fields_into(fields!(reply_into_struct)))
         .package(package!().fun(fun!(receive)))
         .build()
@@ -95,8 +95,8 @@ fn local_field_expansion_needs_no_value_class_and_publishes_source_tags() {
         .package(
             package!().fun(
                 fun!(echo)
-                    .expand_param("value", JniInput::enum_fields([]))
-                    .expand_return(JniOutput::enum_fields([])),
+                    .expand_param("value", JniInputConfig::enum_fields([]))
+                    .expand_return(JniOutputConfig::enum_fields([])),
             ),
         )
         .build()
@@ -137,7 +137,7 @@ fn enum_override_keys_are_checked_against_source_members() {
     let error = build("pub enum Event{Idle,Count(i64)}pub fn echo(value:Event)->Event{value}")
         .package(package!().fun(fun!(echo).expand_param(
             "value",
-            JniInput::enum_fields([("Count", vec![("missing", JniInput::auto())])]),
+            JniInputConfig::enum_fields([("Count", vec![("missing", JniInputConfig::auto())])]),
         )))
         .build()
         .err()
@@ -166,7 +166,7 @@ fn canonical_output_helper_can_return_result_as_data() {
 #[test]
 fn bulk_enums_use_target_union_offsets() {
     let generated=build("pub enum Event{Idle,Count(u64),Packet{id:u64,bytes:Vec<u8>}}pub fn echo(values:Vec<Event>)->Vec<Event>{values}")
-        .package(package!().class(sealed_class!(Event)).fun(fun!(echo).expand_param("values",JniInput::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInput::value()) }.bulk()))).build().unwrap();
+        .package(package!().class(sealed_class!(Event)).fun(fun!(echo).expand_param("values",JniInputConfig::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInputConfig::value()) }.bulk()))).build().unwrap();
     syn::parse_file(&generated.rust).unwrap();
     assert!(generated.rust.contains("pub union __PbBulk_"));
     assert!(generated.rust.contains("offset_of!"));
@@ -193,13 +193,13 @@ fn grouped_enum_fields_reject_multiple_logical_output_values() {
         .package(
             package!()
                 .class(sealed_class!(Event))
-                .fun(fun!(echo).expand_return(JniOutput::enum_variants(
+                .fun(fun!(echo).expand_return(JniOutputConfig::enum_variants(
                     vec![
-                        vec![JniOutput::Branch {
+                        vec![JniOutputConfig::Branch {
                             operation: JniOutputBranch::Combine,
                             children: vec![
-                                JniOutput::Leaf(JniOutputLeafOp::Value),
-                                JniOutput::Leaf(JniOutputLeafOp::Value),
+                                JniOutputConfig::Leaf(JniOutputLeafOp::Value),
+                                JniOutputConfig::Leaf(JniOutputLeafOp::Value),
                             ],
                         }],
                         vec![],

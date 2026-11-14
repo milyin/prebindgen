@@ -7,13 +7,13 @@ use std::collections::BTreeMap;
 /// Existing custom converters remain authoritative unless a declaration overrides them.
 #[derive(Clone, Debug)]
 pub enum ResolvedSlot<T, P> {
-    /// Request-free conversion composition.
+    /// Resolved conversion composition.
     Tree(T),
     /// An explicitly supplied converter requiring no declaration compilation.
     Prepared(P),
 }
 
-/// Schema with request-free input/output trees and the adapter's source metadata.
+/// Schema with resolved input/output trees and the adapter's source metadata.
 pub struct ResolvedSchema<C: Codec>(std::marker::PhantomData<C>);
 impl<C: Codec> Schema for ResolvedSchema<C> {
     type Input = ResolvedSlot<ResolvedInput<C>, <C::Schema as Schema>::Input>;

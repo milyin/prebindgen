@@ -103,7 +103,7 @@ pub(crate) fn input(
         active,
         ..
     } = request;
-    let configuration = configuration.bound_callback()?;
+    let configuration = configuration.bound_callback();
     let ty = &configuration.ty;
     let argument_recipes = domain.argument_nodes()?;
     let signature = callback_signature(ty)?.ok_or("expected source callback")?;

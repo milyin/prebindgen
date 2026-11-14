@@ -1,6 +1,6 @@
 //! Generic source-aware helpers and compilation of adapter-owned conversion trees.
 //!
-//! Language adapters own their operations, requests and source-representation policies.
+//! Language adapters own their operations, configuration and source-representation policies.
 //! Shared [`DeclFunction`] and [`DeclCallback`] containers hold the caller's tree types.
 //! [`DeclDefaults`] stores typed defaults; source helpers resolve constructors, getters,
 //! fields, callbacks and local overrides without a shared operation vocabulary.
@@ -30,7 +30,7 @@ use syn::Type;
 
 pub mod callback;
 pub use callback::{
-    callback_input, CallbackArgumentOwnership, CallbackInput, CallbackOperation, CallbackRequest,
+    callback_input, CallbackArgumentOwnership, CallbackConfig, CallbackInput, CallbackOperation,
     DeclCallback,
 };
 
@@ -163,7 +163,7 @@ pub use operations::*;
 pub type PlanBindings<WireType, Context = (), Chain = (), Branch = ()> =
     Flat<prebindgen_conversions::PlanSchema<WireType, Context, Chain, Branch>>;
 
-/// Compile a request-free description for one named source parameter.
+/// Compile a resolved description for one named source parameter.
 /// The model keeps its fixed schema; this returns a converter without modifying its slot.
 /// ```
 /// use prebindgen_declarations::{compile_input,Codec,ResolvedInput};
@@ -197,7 +197,7 @@ pub fn compile_input<C: Codec>(
     Ok(plan.into())
 }
 
-/// Compile a request-free description for one source result without modifying its slot.
+/// Compile a resolved description for one source result without modifying its slot.
 /// ```
 /// use prebindgen_declarations::{compile_output,Codec,ResolvedOutput};
 /// use prebindgen_flat::Flat;
@@ -216,7 +216,7 @@ pub fn compile_output<C: Codec>(
 }
 
 /// Compile the output conversion of a source value, such as a function result or an error.
-/// The description must be request-free. Reads binding declarations from Flat without
+/// The description must be resolved. Reads binding declarations from Flat without
 /// introducing a synthetic source function or modifying an occurrence slot.
 pub fn compile_output_value<C: Codec>(
     flat: &Flat<C::Schema>,
@@ -251,7 +251,7 @@ pub fn compile_input_value<C: Codec>(
 /// Compile the foreign-to-Rust value returned by a source callback.
 ///
 /// Uses the adapter's ordinary input conversions with an independent local namespace.
-/// The request-free recipe comes from the binding's type-wide input declarations.
+/// The resolved recipe comes from the binding's type-wide input declarations.
 pub fn compile_callback_return<C: Codec>(
     flat: &Flat<C::Schema>,
     codec: &C,
@@ -321,7 +321,7 @@ fn compile_output_at<C: Codec>(
     Ok(plan.into())
 }
 
-/// Compile and install a request-free adapter input tree.
+/// Compile and install a resolved adapter input tree.
 pub fn bind_input<C: Codec>(
     flat: &mut Flat<C::Schema>,
     codec: &C,
@@ -341,6 +341,14 @@ pub fn bind_input<C: Codec>(
     Ok(())
 }
 /// Compile and install a resolved adapter output conversion.
+/// Input and output trees cannot be interchanged:
+/// ```compile_fail
+/// use prebindgen_declarations::{bind_output,Codec,ResolvedInput};
+/// use prebindgen_flat::Flat;
+/// fn wrong<C:Codec>(flat:&mut Flat<C::Schema>,codec:&C,input:&ResolvedInput<C>,extra:&C::Extra) {
+///     bind_output(flat,codec,"function",input,extra).unwrap();
+/// }
+/// ```
 pub fn bind_output<C: Codec>(
     flat: &mut Flat<C::Schema>,
     codec: &C,

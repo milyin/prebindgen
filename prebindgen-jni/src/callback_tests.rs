@@ -88,9 +88,9 @@ fn local_result_and_nested_constructor_overrides_inherit_arguments() {
                 .fun(
                     fun!(nested).expand_param(
                         "handlers",
-                        JniInput::for_type(
+                        JniInputConfig::for_type(
                             syn::parse_quote!(Handler),
-                            JniInput::constructor(
+                            JniInputConfig::constructor(
                                 "make",
                                 [callback!(impl Fn(Value, i64) -> Value)
                                     .name("Nested")
@@ -323,7 +323,7 @@ fn callback_overrides_validate_positions_types_and_foreign_names() {
     for (local, expected) in [
         (
             callback!(impl Fn(Value, i64) -> Value)
-                .expand_param(2, JniOutput::Leaf(JniOutputLeafOp::Value)),
+                .expand_param(2, JniOutputConfig::Leaf(JniOutputLeafOp::Value)),
             "out of range",
         ),
         (

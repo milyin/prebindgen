@@ -18,11 +18,11 @@ fn flat(source: &str) -> JniBindings {
 #[test]
 fn kotlin_preflight_removes_native_row_staging_for_both_transports() {
     let source = "pub type Handle=String;pub enum Kind{A,B}pub struct Row{pub h:Handle,pub text:Option<String>,pub bytes:Option<Vec<u8>>,pub kind:Option<Kind>}pub fn rows(values:Vec<Row>)->usize{}";
-    let recipe = JniInput::Unary {
+    let recipe = JniInputConfig::Unary {
         operation: JniInputUnary::Sequence,
-        child: Box::new(JniInput::Branch {
+        child: Box::new(JniInputConfig::Branch {
             operation: JniInputBranch::Record,
-            children: vec![JniInput::Leaf(JniInputLeafOp::Value); 4],
+            children: vec![JniInputConfig::Leaf(JniInputLeafOp::Value); 4],
         }),
     };
     for bulk in [false, true] {
@@ -57,25 +57,25 @@ fn nested_bulk_modifiers_do_not_force_prepared_handle_rows() {
     let source = "pub type Handle=String;pub struct Row{pub h:Handle,pub tag:i64}pub fn make(h:Handle)->Handle{}pub fn nested(values:Vec<Vec<Row>>){}";
     for bulk in [false, true] {
         let handle = if bulk {
-            JniInput::Leaf(JniInputLeafOp::Value).bulk()
+            JniInputConfig::Leaf(JniInputLeafOp::Value).bulk()
         } else {
-            JniInput::Leaf(JniInputLeafOp::Value)
+            JniInputConfig::Leaf(JniInputLeafOp::Value)
         };
-        let row = JniInput::Branch {
+        let row = JniInputConfig::Branch {
             operation: JniInputBranch::Record,
             children: vec![
-                JniInput::Branch {
+                JniInputConfig::Branch {
                     operation: JniInputBranch::Constructor {
                         function: "make".into(),
                     },
                     children: vec![handle],
                 },
-                JniInput::Leaf(JniInputLeafOp::Value),
+                JniInputConfig::Leaf(JniInputLeafOp::Value),
             ],
         };
-        let input = JniInput::Unary {
+        let input = JniInputConfig::Unary {
             operation: JniInputUnary::Sequence,
-            child: Box::new(JniInput::Unary {
+            child: Box::new(JniInputConfig::Unary {
                 operation: JniInputUnary::Sequence,
                 child: Box::new(row),
             }),
@@ -729,7 +729,7 @@ fn explicit_data_expansion_replaces_a_configured_handle_slot() {
                     &JniCodec::raw(),
                     "echo",
                     "value",
-                    &crate::JniInput::Leaf(JniInputLeafOp::Value),
+                    &crate::JniInputConfig::Leaf(JniInputLeafOp::Value),
                     &(),
                 )
             })
@@ -1273,12 +1273,12 @@ fn callback_returns_do_not_guess_prebound_or_extra_output_projections() {
         &mut model,
         &JniCodec::raw(),
         "values",
-        &crate::JniOutput::Unary {
+        &crate::JniOutputConfig::Unary {
             operation: JniOutputUnary::Sequence {
                 delivery: prebindgen_declarations::SequenceDelivery::Value,
                 mode: None,
             },
-            child: Box::new(crate::JniOutput::Leaf(JniOutputLeafOp::Value)),
+            child: Box::new(crate::JniOutputConfig::Leaf(JniOutputLeafOp::Value)),
         },
         &(),
     )
@@ -2158,11 +2158,11 @@ fn c_supports_callbacks_in_direct_and_constructor_parameters() {
 
 #[test]
 fn callback_constructor_rejects_a_selector_for_the_callable_itself() {
-    let recipe: JniInput<JniInputRequest, JniOutputRequest> = JniInput::constructor(
+    let recipe: JniInputConfig = JniInputConfig::constructor(
         "make",
-        [JniInput::selector([
-            JniInput::Leaf(JniInputLeafOp::Value),
-            JniInput::Leaf(JniInputLeafOp::Value),
+        [JniInputConfig::selector([
+            JniInputConfig::Leaf(JniInputLeafOp::Value),
+            JniInputConfig::Leaf(JniInputLeafOp::Value),
         ])],
     );
     let error = fail(JniGen::builder()
@@ -2375,13 +2375,13 @@ fn default_record_outputs_follow_source_ownership_and_allow_copy_overrides() {
     // Two views of optional references are observations, never two moves.
     let source =
         format!("{records}pub type Owner=String;pub fn maybe(owner:&Owner)->Option<&Bundle>{{}}");
-    let view = crate::JniOutput::Unary {
+    let view = crate::JniOutputConfig::Unary {
         operation: JniOutputUnary::Optional,
-        child: Box::new(crate::JniOutput::Branch {
+        child: Box::new(crate::JniOutputConfig::Branch {
             operation: JniOutputBranch::Record {
                 mode: Some(prebindgen_declarations::ProjectionMode::Borrowed),
             },
-            children: vec![crate::JniOutput::Leaf(JniOutputLeafOp::Value); 4],
+            children: vec![crate::JniOutputConfig::Leaf(JniOutputLeafOp::Value); 4],
         }),
     };
     JniGen::builder()
@@ -2390,7 +2390,7 @@ fn default_record_outputs_follow_source_ownership_and_allow_copy_overrides() {
         .package(
             classes()
                 .class(ptr_class!(Owner))
-                .fun(fun!(maybe).output(crate::JniOutput::combine([view.clone(), view]))),
+                .fun(fun!(maybe).output(crate::JniOutputConfig::combine([view.clone(), view]))),
         )
         .build()
         .unwrap();
@@ -2699,7 +2699,7 @@ fn bulk_selector_and_empty_expansion_generate_valid_boundaries() {
             .flat(flat(source))
             .set_package_prefix("test");
         let call = if is_unit {
-            fun!(call).output(JniOutput::auto().bulk())
+            fun!(call).output(JniOutputConfig::auto().bulk())
         } else {
             fun!(call)
                 .expand_param(
@@ -2723,7 +2723,7 @@ fn bulk_rejects_callback_objects_and_conflicting_collection_delivery() {
     let callback = JniGen::builder()
         .set_package_prefix("test")
         .flat(flat("pub fn call(callback:impl Fn(i64)){}"))
-        .package(package!().fun(fun!(call).expand_param("callback", JniInput::auto().bulk())))
+        .package(package!().fun(fun!(call).expand_param("callback", JniInputConfig::auto().bulk())))
         .build()
         .err()
         .unwrap();
@@ -3585,7 +3585,7 @@ fn resolved_callback_elements_can_keep_optional_presence_outside_a_bulk_frame() 
         )
         .prepare()
         .unwrap();
-    // Preserve support for direct request-free trees as well as the public
+    // Preserve support for direct resolved trees as well as the public
     // declaration spelling, which normalizes this to Bulk(Optional(...)).
     let recipe = JniOutput::Unary {
         operation: JniOutputUnary::Sequence {
@@ -4161,11 +4161,11 @@ fn raw_borrowed_leaf_composes_with_declared_inputs_using_wire_access() {
 #[test]
 fn callback_results_and_arguments_omit_all_native_alias_history() {
     for bulk in [false, true] {
-        let rows = JniInput::Unary {
+        let rows = JniInputConfig::Unary {
             operation: JniInputUnary::Sequence,
-            child: Box::new(JniInput::Branch {
+            child: Box::new(JniInputConfig::Branch {
                 operation: JniInputBranch::Record,
-                children: vec![JniInput::Leaf(JniInputLeafOp::Value); 2],
+                children: vec![JniInputConfig::Leaf(JniInputLeafOp::Value); 2],
             }),
         };
         let rows = if bulk { rows.bulk() } else { rows };
@@ -4197,32 +4197,32 @@ fn callback_results_defer_ownership_tracking_through_ordinary_result_trees() {
     for (function, returned, deferred) in [
         (
             "fixed",
-            JniInput::Branch {
+            JniInputConfig::Branch {
                 operation: JniInputBranch::Record,
-                children: vec![JniInput::Leaf(JniInputLeafOp::Value); 4],
+                children: vec![JniInputConfig::Leaf(JniInputLeafOp::Value); 4],
             },
             true,
         ),
         (
             "rows",
-            JniInput::Unary {
+            JniInputConfig::Unary {
                 operation: JniInputUnary::Sequence,
-                child: Box::new(JniInput::Branch {
+                child: Box::new(JniInputConfig::Branch {
                     operation: JniInputBranch::Record,
-                    children: vec![JniInput::Leaf(JniInputLeafOp::Value); 4],
+                    children: vec![JniInputConfig::Leaf(JniInputLeafOp::Value); 4],
                 }),
             },
             true,
         ),
         (
             "nested",
-            JniInput::Unary {
+            JniInputConfig::Unary {
                 operation: JniInputUnary::Sequence,
-                child: Box::new(JniInput::Unary {
+                child: Box::new(JniInputConfig::Unary {
                     operation: JniInputUnary::Sequence,
-                    child: Box::new(JniInput::Branch {
+                    child: Box::new(JniInputConfig::Branch {
                         operation: JniInputBranch::Record,
-                        children: vec![JniInput::Leaf(JniInputLeafOp::Value); 4],
+                        children: vec![JniInputConfig::Leaf(JniInputLeafOp::Value); 4],
                     }),
                 }),
             },
@@ -4271,17 +4271,17 @@ fn callback_results_defer_ownership_tracking_through_ordinary_result_trees() {
 
 #[test]
 fn ordinary_callback_with_a_packed_child_uses_failure_only_cleanup() {
-    let returned = JniInput::Unary {
+    let returned = JniInputConfig::Unary {
         operation: JniInputUnary::Sequence,
-        child: Box::new(JniInput::Branch {
+        child: Box::new(JniInputConfig::Branch {
             operation: JniInputBranch::Record,
             children: vec![
-                JniInput::Leaf(JniInputLeafOp::Value),
-                JniInput::Unary {
+                JniInputConfig::Leaf(JniInputLeafOp::Value),
+                JniInputConfig::Unary {
                     operation: JniInputUnary::Sequence,
-                    child: Box::new(JniInput::Branch {
+                    child: Box::new(JniInputConfig::Branch {
                         operation: JniInputBranch::Record,
-                        children: vec![JniInput::Leaf(JniInputLeafOp::Value); 4],
+                        children: vec![JniInputConfig::Leaf(JniInputLeafOp::Value); 4],
                     }),
                 }
                 .bulk(),
@@ -4341,23 +4341,23 @@ fn data_class_collection_fields_reuse_logical_types_and_check_recursion() {
 
 #[test]
 fn mixed_callback_rows_reject_multi_argument_constructor_alternatives() {
-    let returned = JniInput::Unary {
+    let returned = JniInputConfig::Unary {
         operation: JniInputUnary::Sequence,
-        child: Box::new(JniInput::Branch {
+        child: Box::new(JniInputConfig::Branch {
             operation: JniInputBranch::Record,
             children: vec![
-                JniInput::Branch {
+                JniInputConfig::Branch {
                     operation: JniInputBranch::Selector,
                     children: vec![
-                        JniInput::Leaf(JniInputLeafOp::Value),
-                        JniInput::Leaf(JniInputLeafOp::Value),
+                        JniInputConfig::Leaf(JniInputLeafOp::Value),
+                        JniInputConfig::Leaf(JniInputLeafOp::Value),
                     ],
                 },
-                JniInput::Unary {
+                JniInputConfig::Unary {
                     operation: JniInputUnary::Sequence,
-                    child: Box::new(JniInput::Branch {
+                    child: Box::new(JniInputConfig::Branch {
                         operation: JniInputBranch::Record,
-                        children: vec![JniInput::Leaf(JniInputLeafOp::Value); 2],
+                        children: vec![JniInputConfig::Leaf(JniInputLeafOp::Value); 2],
                     }),
                 }
                 .bulk(),
@@ -4412,7 +4412,7 @@ fn resolved_callback_owns_its_conversions_and_cleanup_policy() {
         fun!(owned).expand_param(
             "cb",
             DeclJniCallback::new(syn::parse_quote!(impl Fn(i64) -> i64))
-                .expand_param(0, crate::JniOutput::value()),
+                .expand_param(0, crate::JniOutputConfig::value()),
         ),
     ];
     let resolved = defaults
@@ -4501,7 +4501,13 @@ fn callback_delivery_is_selected_before_bulk_promotion() {
     .unwrap();
     let ty = flat.function("values").unwrap().ret.ty.clone();
     let ordinary = defaults
-        .resolve_output(&flat, &JniCodec::raw(), &ty, &crate::JniOutput::auto(), &())
+        .resolve_output(
+            &flat,
+            &JniCodec::raw(),
+            &ty,
+            &crate::JniOutputConfig::auto(),
+            &(),
+        )
         .unwrap();
     assert!(matches!(
         ordinary,
@@ -4541,13 +4547,13 @@ fn callback_delivery_is_selected_before_bulk_promotion() {
 }
 #[test]
 fn callback_return_preserves_defaults_for_the_full_reference_type() {
-    use crate::{DeclJniDefaults, JniOutput, JniOutputLeafOp};
+    use crate::{DeclJniDefaults, JniOutputLeafOp};
     let mut model = flat("pub fn values()->&Vec<i64>{}");
     let defaults = DeclJniDefaults::new(
         &model,
         vec![],
         vec![expand_return!(&Vec<i64>)
-            .view(JniOutput::Leaf(JniOutputLeafOp::Discard))
+            .view(JniOutputConfig::Leaf(JniOutputLeafOp::Discard))
             .into()],
         vec![],
     )

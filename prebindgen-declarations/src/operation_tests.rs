@@ -478,9 +478,9 @@ fn malformed_optional_encodings_are_rejected_before_installing_a_slot() {
                 &MalformedOptional(mode),
                 "f",
                 "value",
-                &TestInput::Unary {
+                &TestInputConfig::Unary {
                     operation: TestInputUnary::Optional,
-                    child: Box::new(TestInput::Leaf(TestInputLeafOp::Value)),
+                    child: Box::new(TestInputConfig::Leaf(TestInputLeafOp::Value)),
                 },
                 &(),
             )
@@ -489,9 +489,9 @@ fn malformed_optional_encodings_are_rejected_before_installing_a_slot() {
                 &mut flat,
                 &MalformedOptional(mode),
                 "f",
-                &TestOutput::Unary {
+                &TestOutputConfig::Unary {
                     operation: TestOutputUnary::Optional,
-                    child: Box::new(TestOutput::Leaf(TestOutputLeafOp::Value)),
+                    child: Box::new(TestOutputConfig::Leaf(TestOutputLeafOp::Value)),
                 },
                 &(),
             )
@@ -554,7 +554,7 @@ fn none_is_unit_and_cannot_silently_discard_non_unit_values() {
             &source,
             &Scalars,
             &syn::parse_quote!(i64),
-            &TestInput::None,
+            &TestInputConfig::None,
             &()
         )
         .is_err());
@@ -563,11 +563,15 @@ fn none_is_unit_and_cannot_silently_discard_non_unit_values() {
             &source,
             &Scalars,
             &syn::parse_quote!(i64),
-            &TestOutput::None,
+            &TestOutputConfig::None,
             &()
         )
         .is_err());
-    for tree in [TestInput::auto(), TestInput::fields([]), TestInput::None] {
+    for tree in [
+        TestInputConfig::auto(),
+        TestInputConfig::fields([]),
+        TestInputConfig::None,
+    ] {
         assert!(matches!(
             defaults
                 .resolve_input(&source, &Scalars, &syn::parse_quote!(()), &tree, &())
@@ -575,7 +579,11 @@ fn none_is_unit_and_cannot_silently_discard_non_unit_values() {
             TestInput::None
         ));
     }
-    for tree in [TestOutput::auto(), TestOutput::fields([]), TestOutput::None] {
+    for tree in [
+        TestOutputConfig::auto(),
+        TestOutputConfig::fields([]),
+        TestOutputConfig::None,
+    ] {
         assert!(matches!(
             defaults
                 .resolve_output(&source, &Scalars, &syn::parse_quote!(()), &tree, &())

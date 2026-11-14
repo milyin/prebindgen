@@ -18,13 +18,10 @@ use syn::Type;
 /// use prebindgen_jni::package;
 /// let _ = package!().fun(prebindgen_c::fun!(send));
 /// ```
-pub type DeclJniFunction = prebindgen_declarations::DeclFunction<
-    JniInput<JniInputRequest, JniOutputRequest>,
-    JniOutput<JniInputRequest, JniOutputRequest>,
->;
+pub type DeclJniFunction = prebindgen_declarations::DeclFunction<JniInputConfig, JniOutputConfig>;
 
-mod requests;
-pub use requests::*;
+mod configuration;
+pub use configuration::*;
 mod builders;
 pub use builders::*;
 mod resolution;
@@ -62,7 +59,7 @@ pub fn bind_input(
     codec: &JniCodec,
     function: &str,
     parameter: &str,
-    tree: &JniInput<JniInputRequest, JniOutputRequest>,
+    tree: &JniInputConfig,
     extra: &(),
 ) -> Result<()> {
     let defaults = DeclJniDefaults::new(flat, vec![], vec![], vec![])?;
@@ -82,7 +79,7 @@ pub fn bind_output(
     flat: &mut JniBindings,
     codec: &JniCodec,
     function: &str,
-    tree: &JniOutput<JniInputRequest, JniOutputRequest>,
+    tree: &JniOutputConfig,
     extra: &(),
 ) -> Result<()> {
     let defaults = DeclJniDefaults::new(flat, vec![], vec![], vec![])?;

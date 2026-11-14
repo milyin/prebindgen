@@ -104,7 +104,11 @@ impl Consumes for TestOutput {
             } => mode.map_or(!borrowed && output_referent(ty).is_none(), |m| {
                 m == ProjectionMode::Owned
             }),
-            TestOutput::Request(never) => match *never {},
+            TestOutput::Leaf(
+                TestOutputLeafOp::ConfigDefault(never)
+                | TestOutputLeafOp::ConfigValue(never)
+                | TestOutputLeafOp::ConfigConversion(never),
+            ) => match *never {},
             TestOutput::Branch {
                 operation: TestOutputBranch::Combine,
                 children: p,
@@ -277,19 +281,26 @@ impl<C: Codec<InOps = TestInputOps, OutOps = TestOutputOps, CompileState = TestC
                     role: self.input_role.get(),
                 })
             }
-            TestInput::Request(never) => match *never {},
+            TestInput::Leaf(
+                TestInputLeafOp::ConfigDefault(never)
+                | TestInputLeafOp::ConfigValue(never)
+                | TestInputLeafOp::ConfigConversion(never)
+                | TestInputLeafOp::ConfigConstructor(never),
+            ) => match *never {},
             TestInput::Unary {
-                operation: TestInputUnary::ForType { .. },
+                operation: TestInputUnary::ConfigForType { ty: never },
                 ..
             }
             | TestInput::Branch {
-                operation: TestInputBranch::EnumFields | TestInputBranch::VariantFields { .. },
+                operation:
+                    TestInputBranch::ConfigEnumFields(never)
+                    | TestInputBranch::ConfigVariantFields(never),
                 ..
             }
             | TestInput::Arrow {
-                operation: TestInputArrow::Callback(_),
+                operation: TestInputArrow::ConfigCallback(never),
                 ..
-            } => Err("resolve source-dependent input operations before compilation".into()),
+            } => match *never {},
             TestInput::Branch {
                 operation: TestInputBranch::Fields,
                 children,
@@ -576,21 +587,24 @@ impl<C: Codec<InOps = TestInputOps, OutOps = TestOutputOps, CompileState = TestC
                     .cx
                     .output_optional(ty, extra, value, borrowed, wire_name, inner);
             }
-            TestOutput::Request(never) => match *never {},
+            TestOutput::Leaf(
+                TestOutputLeafOp::ConfigDefault(never)
+                | TestOutputLeafOp::ConfigValue(never)
+                | TestOutputLeafOp::ConfigConversion(never),
+            ) => match *never {},
             TestOutput::Unary {
                 operation:
-                    TestOutputUnary::ForType { .. } | TestOutputUnary::SequenceCallback { .. },
+                    TestOutputUnary::ConfigForType { ty: never }
+                    | TestOutputUnary::ConfigSequenceCallback { structural: never },
                 ..
             }
             | TestOutput::Branch {
                 operation:
-                    TestOutputBranch::EnumFields
-                    | TestOutputBranch::VariantFields { .. }
-                    | TestOutputBranch::NamedFields { .. },
+                    TestOutputBranch::ConfigEnumFields(never)
+                    | TestOutputBranch::ConfigVariantFields(never)
+                    | TestOutputBranch::ConfigNamedFields(never),
                 ..
-            } => {
-                return Err("resolve source-dependent output operations before compilation".into())
-            }
+            } => match *never {},
             TestOutput::Leaf(TestOutputLeafOp::Value) => {
                 let representation = if self.state.bulk.get() {
                     Representation::Bulk

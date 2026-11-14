@@ -14,13 +14,10 @@ use prebindgen_flat::{same_type, type_key, Flat, Result, Schema};
 use std::collections::BTreeMap;
 use syn::Type;
 /// Function binding choices containing this adapter's conversion trees.
-pub type DeclCFunction = prebindgen_declarations::DeclFunction<
-    CInput<CInputRequest, COutputRequest>,
-    COutput<CInputRequest, COutputRequest>,
->;
+pub type DeclCFunction = prebindgen_declarations::DeclFunction<CInputConfig, COutputConfig>;
 
-mod requests;
-pub use requests::*;
+mod configuration;
+pub use configuration::*;
 mod builders;
 pub use builders::*;
 mod resolution;
@@ -53,7 +50,7 @@ pub fn bind_input(
     codec: &CCodec,
     function: &str,
     parameter: &str,
-    tree: &CInput<CInputRequest, COutputRequest>,
+    tree: &CInputConfig,
     extra: &(),
 ) -> Result<()> {
     let defaults = DeclCDefaults::new(flat, vec![], vec![], vec![])?;
@@ -73,7 +70,7 @@ pub fn bind_output(
     flat: &mut CBindings,
     codec: &CCodec,
     function: &str,
-    tree: &COutput<CInputRequest, COutputRequest>,
+    tree: &COutputConfig,
     extra: &(),
 ) -> Result<()> {
     let defaults = DeclCDefaults::new(flat, vec![], vec![], vec![])?;

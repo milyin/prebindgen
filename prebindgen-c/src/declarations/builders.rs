@@ -1,40 +1,39 @@
 use super::*;
 /// Input expansion declaration specialized for this adapter.
-pub type DeclCExpandParam = prebindgen_declarations::DeclExpandParam<
-    CInput<CInputRequest, COutputRequest>,
-    DeclCFunction,
-    std::convert::Infallible,
->;
+pub type DeclCExpandParam =
+    prebindgen_declarations::DeclExpandParam<CInputConfig, DeclCFunction, std::convert::Infallible>;
 /// Return expansion declaration specialized for this adapter.
 /// Field-decomposition methods require a fields declaration:
 /// ```compile_fail
-/// use prebindgen_c::{expand_return, COutput};
-/// let _ = expand_return!(Row).fields(COutput::None);
+/// use prebindgen_c::{expand_return, COutputConfig};
+/// let _ = expand_return!(Row).fields(COutputConfig::None);
 /// ```
 /// ```compile_fail
-/// use prebindgen_c::{expand_return, COutput};
-/// let _ = expand_return!(Row).fields_into(COutput::None);
+/// use prebindgen_c::{expand_return, COutputConfig};
+/// let _ = expand_return!(Row).fields_into(COutputConfig::None);
 /// ```
 pub type DeclCExpandReturn = prebindgen_declarations::DeclExpandReturn<
-    COutput<CInputRequest, COutputRequest>,
+    COutputConfig,
     DeclCFunction,
     std::convert::Infallible,
 >;
 /// Named-field declaration specialized for this adapter.
-pub type DeclCFields = prebindgen_declarations::DeclFields<COutput<CInputRequest, COutputRequest>>;
+pub type DeclCFields = prebindgen_declarations::DeclFields<COutputConfig>;
 /// Start input expansion using this adapter's node constructors.
 pub fn expand_param(ty: Type) -> DeclCExpandParam {
     prebindgen_declarations::DeclExpandParam::new(
         ty,
-        |function: DeclCFunction| CInput::call(function.reference_name(false)),
-        || CInput::Leaf(CInputLeafOp::Value),
+        |function: DeclCFunction| CInputConfig::call(function.reference_name(false)),
+        || CInputConfig::Leaf(CInputLeafOp::Value),
         |ty, alternatives, extension| {
-            let input = alternatives.build(CInput::selector, CInput::auto, |child| CInput::Unary {
-                operation: CInputUnary::Temporary,
-                child: Box::new(child),
+            let input = alternatives.build(CInputConfig::selector, CInputConfig::auto, |child| {
+                CInputConfig::Unary {
+                    operation: CInputUnary::Temporary,
+                    child: Box::new(child),
+                }
             });
             let _ = extension;
-            CInput::for_type(ty, input)
+            CInputConfig::for_type(ty, input)
         },
     )
 }
@@ -45,20 +44,20 @@ pub fn expand_return(ty: Type) -> DeclCExpandReturn {
         |function| {
             prebindgen_declarations::getter_view(
                 function,
-                |name| COutput::getter(name, COutput::auto()),
-                |name, child| COutput::Unary {
+                |name| COutputConfig::getter(name, COutputConfig::auto()),
+                |name, child| COutputConfig::Unary {
                     operation: COutputUnary::Named { name },
                     child: Box::new(child),
                 },
             )
         },
-        || COutput::Leaf(COutputLeafOp::Value),
-        |policy| COutput::Leaf(COutputLeafOp::Projected(policy)),
-        super::requests::owned_field_view,
+        || COutputConfig::Leaf(COutputLeafOp::Value),
+        |policy| COutputConfig::Leaf(COutputLeafOp::Projected(policy)),
+        super::configuration::owned_field_view,
         |ty, views, extension| {
-            let output = COutput::combine(views);
+            let output = COutputConfig::combine(views);
             let _ = extension;
-            COutput::for_type(ty, output)
+            COutputConfig::for_type(ty, output)
         },
     )
 }
@@ -67,23 +66,23 @@ pub fn fields(function: syn::Ident) -> DeclCFields {
     prebindgen_declarations::DeclFields::new(
         function,
         |output| match output {
-            COutput::Unary {
-                operation: COutputUnary::ForType { ty },
+            COutputConfig::Unary {
+                operation: COutputUnary::ConfigForType { ty },
                 child: output,
-            } if matches!(output.as_ref(),COutput::Branch {operation:COutputBranch::Combine,children} if children.is_empty()) => {
-                COutput::for_type(*ty, COutput::Leaf(COutputLeafOp::Discard))
+            } if matches!(output.as_ref(),COutputConfig::Branch {operation:COutputBranch::Combine,children} if children.is_empty()) => {
+                COutputConfig::for_type(*ty, COutputConfig::Leaf(COutputLeafOp::Discard))
             }
             output => output,
         },
         |function, overrides, _extension| {
             let (fields, children) = overrides.into_iter().unzip();
-            COutput::getter(
+            COutputConfig::getter(
                 function,
-                COutput::Branch {
-                    operation: COutputBranch::NamedFields {
+                COutputConfig::Branch {
+                    operation: COutputBranch::ConfigNamedFields(CNamedFields {
                         fields,
                         mode: prebindgen_declarations::ProjectionMode::Borrowed,
-                    },
+                    }),
                     children,
                 },
             )
@@ -96,30 +95,22 @@ pub type DeclCError = prebindgen_declarations::DeclError<DeclCFunction>;
 pub type DeclCExpand =
     prebindgen_declarations::DeclExpand<DeclCExpandParam, DeclCExpandReturn, DeclCError>;
 /// Callback declaration containing this language's argument and result trees.
-pub type DeclCCallback = prebindgen_declarations::DeclCallback<
-    CInput<CInputRequest, COutputRequest>,
-    COutput<CInputRequest, COutputRequest>,
->;
-impl
-    prebindgen_declarations::CallbackInput<
-        CInput<CInputRequest, COutputRequest>,
-        COutput<CInputRequest, COutputRequest>,
-    > for CInputRequest
-{
-    fn callback_input(declaration: DeclCCallback) -> CInput<CInputRequest, COutputRequest> {
+pub type DeclCCallback = prebindgen_declarations::DeclCallback<CInputConfig, COutputConfig>;
+impl prebindgen_declarations::CallbackInput<CInputConfig, COutputConfig> for CInputConfigOps {
+    fn callback_input(declaration: DeclCCallback) -> CInputConfig {
         prebindgen_declarations::callback_input(
             declaration,
-            CInput::auto,
-            |children| COutput::Branch {
+            CInputConfig::auto,
+            |children| COutputConfig::Branch {
                 operation: COutputBranch::Arguments,
                 children,
             },
-            |metadata, domain, codomain| CInput::Arrow {
-                operation: CInputArrow::Callback(Box::new(metadata)),
+            |metadata, domain, codomain| CInputConfig::Arrow {
+                operation: CInputArrow::ConfigCallback(Box::new(metadata)),
                 domain: Box::new(domain),
                 codomain: Box::new(codomain),
             },
-            CInput::for_type,
+            CInputConfig::for_type,
         )
     }
 }

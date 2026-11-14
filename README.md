@@ -390,20 +390,22 @@ The language adapters own both configuration and resolved operations. C uses
 with `JniBindings`/`JniSchema`. Prepared values use `CInputConverter`/`COutputConverter`
 or `JniInputConverter`/`JniOutputConverter`. Input operation sets implement
 `InputOps`; output sets implement `OutputOps`, so swapping them is a type error.
-Both directions always put input requests before output requests.
+Both directions always put input operation sets before output operation sets.
 
-Preparation uses `JniInput<JniInputRequest, JniOutputRequest>` and the corresponding
-`JniOutput` type, or C's equivalent types. These are aliases for generic
-`InputNode<InOps, OutOps, InRequest, OutRequest>` and `OutputNode` trees.
-Each adapter defines `Leaf`, `Unary`, `Branch` and `Arrow` metadata types,
-and the node fields hold those types directly.
-`None` represents unit. An arrow's domain uses the opposite node direction and
-its codomain uses the enclosing direction. `Request` carries deferred choices
-without explicit children, such as default lookup and constructor discovery.
-Type scoping belongs to unary metadata; named field overrides belong to branch
-metadata; callback configuration belongs to arrow metadata.
-Resolved trees keep the same operations and use `Infallible` for both request types.
-There is no shared declaration dictionary to translate.
+Configuration uses `JniInputConfig` / `JniOutputConfig`, or `CInputConfig` /
+`COutputConfig`. Final trees use `JniInput` / `JniOutput` or `CInput` / `COutput`.
+All are aliases for `InputNode<InOps, OutOps>` and `OutputNode<InOps, OutOps>`.
+Each adapter defines metadata for leaves, unary nodes, branches and arrows; node
+fields hold those metadata types directly. An arrow's domain reverses direction,
+and its codomain keeps the enclosing direction.
+
+Configuration-only metadata variants have a `Config` prefix. Their payloads are
+parameters of the adapter's enums: configuration operation sets select concrete
+payloads, while final operation sets use `Infallible`. For example,
+`CInputBranch<(), CVariantFields>` admits `ConfigEnumFields` and
+`ConfigVariantFields`; plain `CInputBranch` cannot construct either variant.
+Defaults and constructor discovery are configured leaf operations. There is no
+shared `Request` variant, phase marker, or declaration dictionary to translate.
 
 The
 `expand_param!`, `expand_return!`, and `fields!` builders write those trees;
@@ -430,14 +432,13 @@ Resolution applies project choices and language representations, resolves source
 constructor/getter references, and expands optional, sequence and record operations.
 Resolution returns `ResolvedInput<C>` or `ResolvedOutput<C>` for each occurrence,
 using the codec's operation types. The C and JNI adapters name their resolved
-trees `CInput`/`COutput` or `JniInput`/`JniOutput`. Both request types are
-`Infallible`, so leaf requests cannot appear in these trees or nested children.
-The adapter resolves source-dependent metadata before compilation; its compiler
-rejects unresolved metadata if callers bypass resolution. `compile_input` and
-`compile_output` return the final converter. The adapter's defaults `fill` method resolves,
-compiles and installs the converters atomically for one function; the Flat schema
+trees `CInput`/`COutput` or `JniInput`/`JniOutput`. All configuration-only variant
+payloads are uninhabited in these types, including nested callback domains.
+`compile_input` and `compile_output` accept only these final trees and return the
+converter. The adapter's defaults `fill` method resolves, compiles and installs
+the converters atomically for one function; the Flat schema
 and its source declarations stay in place throughout. An explicit subtree can be
-embedded in a preparation tree with `.into_preparation()`; source-dependent
+embedded in a configuration tree with `.map_into()`; source-dependent
 normalization still applies. Sequence returns carry an explicit
 `SequenceDelivery::Value` or `Callback` choice; codecs receive that choice rather
 than inferring it from generated wire names. Both stages
@@ -565,7 +566,7 @@ stored plans nor template support.
 input/output plans and unit declaration metadata for simple codecs. `Codec::Context` selects the context
 type for the prepared slots; it defaults to `()` in the alias for
 conversions that need no generator-specific settings. `bind_input` and `bind_output`
-resolve and compile one preparation tree using the adapter's input/output request types; the adapter's defaults `fill` method compiles defaults and explicit overrides for a
+resolve and compile one configuration tree using the adapter's configuration operation sets; the adapter's defaults `fill` method compiles defaults and explicit overrides for a
 function using the same resolver and compiler. The high-level builders instead
 resolve the whole model with the adapter's defaults `resolve` method and compile it with
 `compile_resolved(flat)`. `Codec::finish_input` and `finish_output` attach glue after recursive
@@ -597,9 +598,9 @@ adapter-supplied codecs.
 ### Preparation declarations and resolved field mapping
 
 Conversion choices are adapter-owned trees, such as
-`JniInput<JniInputRequest, JniOutputRequest>` and the corresponding output type. Resolution
+`JniInputConfig` and the corresponding output type. Resolution
 checks source fields, constructor/getter signatures and type defaults against
-`Flat`, producing request-free descriptions stored in the resolved model. Compilation then installs
+`Flat`, producing fully resolved descriptions stored in the resolved model. Compilation then installs
 the resulting converters in occurrence slots. Language declaration
 metadata belongs to the corresponding Flat type, function, field or variant.
 Compilation does not consult a separate representation registry. Custom `Codec`

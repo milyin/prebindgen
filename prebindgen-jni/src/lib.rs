@@ -264,8 +264,8 @@ pub struct JniGenBuilder {
     source: Option<std::path::PathBuf>,
     items: Option<Vec<(syn::Item, prebindgen::SourceLocation)>>,
     conversions: Vec<prebindgen_declarations::DeclConvert>,
-    inputs: Vec<crate::JniInput<JniInputRequest, JniOutputRequest>>,
-    outputs: Vec<crate::JniOutput<JniInputRequest, JniOutputRequest>>,
+    inputs: Vec<crate::JniInputConfig>,
+    outputs: Vec<crate::JniOutputConfig>,
     error_mappers: Vec<(syn::Type, String)>,
     prefix: String,
     init: String,
@@ -372,18 +372,12 @@ impl JniGenBuilder {
     ///
     /// Per-function overrides replace defaults. Duplicate declarations for the same
     /// type and direction are rejected during build.
-    pub fn input(
-        mut self,
-        tree: impl Into<crate::JniInput<JniInputRequest, JniOutputRequest>>,
-    ) -> Self {
+    pub fn input(mut self, tree: impl Into<crate::JniInputConfig>) -> Self {
         self.inputs.push(tree.into());
         self
     }
     /// Register a type-wide direct output conversion tree.
-    pub fn output(
-        mut self,
-        tree: impl Into<crate::JniOutput<JniInputRequest, JniOutputRequest>>,
-    ) -> Self {
+    pub fn output(mut self, tree: impl Into<crate::JniOutputConfig>) -> Self {
         self.outputs.push(tree.into());
         self
     }
@@ -620,7 +614,8 @@ impl JniGenBuilder {
             crate::DeclJniDefaults::new(&flat, self.inputs, self.outputs, self.error_mappers)?;
         errors::resolve(&mut flat, &codec, &defaults, &declarations)?;
         for ty in callback_types {
-            let recipe = defaults.resolve_input(&flat, &codec, &ty, &JniInput::auto(), &())?;
+            let recipe =
+                defaults.resolve_input(&flat, &codec, &ty, &JniInputConfig::auto(), &())?;
             let operations::JniInput::Arrow {
                 operation: configuration,
                 ..
@@ -630,7 +625,7 @@ impl JniGenBuilder {
             };
             callback::validate_source_occurrence(
                 &flat,
-                configuration.bound_callback()?,
+                configuration.bound_callback(),
                 &callback_sources,
             )?;
             flat.metadata.callback_recipes.push(recipe);
@@ -854,7 +849,7 @@ impl Codec for JniCodec {
             let plan = prebindgen_declarations::compile_input_value(
                 flat,
                 self,
-                &operation.bound_callback()?.ty,
+                &operation.bound_callback().ty,
                 &recipe,
                 &(),
             )?;
@@ -2516,8 +2511,11 @@ mod compilation;
 pub mod operations;
 
 pub use operations::{
-    JniInput, JniInputArrow, JniInputBranch, JniInputLeafOp, JniInputOps, JniInputUnary, JniOutput,
-    JniOutputBranch, JniOutputLeafOp, JniOutputOps, JniOutputUnary,
+    JniInput, JniInputArrow, JniInputBranch, JniInputConfig, JniInputConfigArrow,
+    JniInputConfigBranch, JniInputConfigLeafOp, JniInputConfigOps, JniInputConfigUnary,
+    JniInputLeafOp, JniInputOps, JniInputUnary, JniNamedFields, JniOutput, JniOutputBranch,
+    JniOutputConfig, JniOutputConfigBranch, JniOutputConfigLeafOp, JniOutputConfigOps,
+    JniOutputConfigUnary, JniOutputLeafOp, JniOutputOps, JniOutputUnary, JniVariantFields,
 };
 
 mod declarations;
@@ -2536,6 +2534,6 @@ macro_rules! fun {
 /// Traits for constructing and inspecting this adapter's conversion trees.
 pub mod prelude {
     pub use crate::{
-        JniBulkExpansion, JniInputExt, JniInputRequests, JniOutputExt, JniOutputRequests,
+        JniBulkExpansion, JniInputConfigExt, JniInputExt, JniOutputConfigExt, JniOutputExt,
     };
 }

@@ -123,8 +123,8 @@ impl<In, F, E> DeclExpandParam<In, F, E> {
         (self.finish)(self.ty, self.input, self.extension)
     }
 }
-impl<I: InputOps, O: OutputOps, IR, OR, F, E> From<DeclExpandParam<InputNode<I, O, IR, OR>, F, E>>
-    for InputNode<I, O, IR, OR>
+impl<I: InputOps, O: OutputOps, F, E> From<DeclExpandParam<InputNode<I, O>, F, E>>
+    for InputNode<I, O>
 {
     fn from(declaration: DeclExpandParam<Self, F, E>) -> Self {
         declaration.into_input()
@@ -243,8 +243,8 @@ impl<Out, F, E> DeclExpandReturn<Out, F, E> {
         (self.finish)(self.ty, self.views, self.extension)
     }
 }
-impl<I: InputOps, O: OutputOps, IR, OR, F, E> From<DeclExpandReturn<OutputNode<I, O, IR, OR>, F, E>>
-    for OutputNode<I, O, IR, OR>
+impl<I: InputOps, O: OutputOps, F, E> From<DeclExpandReturn<OutputNode<I, O>, F, E>>
+    for OutputNode<I, O>
 {
     fn from(declaration: DeclExpandReturn<Self, F, E>) -> Self {
         declaration.into_output()
@@ -300,9 +300,7 @@ impl<Out, E> DeclFields<Out, E> {
         (self.finish)(self.function, self.overrides, self.extension)
     }
 }
-impl<I: InputOps, O: OutputOps, IR, OR, E> From<DeclFields<OutputNode<I, O, IR, OR>, E>>
-    for OutputNode<I, O, IR, OR>
-{
+impl<I: InputOps, O: OutputOps, E> From<DeclFields<OutputNode<I, O>, E>> for OutputNode<I, O> {
     fn from(declaration: DeclFields<Self, E>) -> Self {
         declaration.into_output()
     }
