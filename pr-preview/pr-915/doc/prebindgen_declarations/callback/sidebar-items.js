@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["CallbackArgumentOwnership"],"fn":["callback_input","input_key","input_type"],"struct":["CallbackConfig","CallbackOperation","DeclCallback"],"trait":["CallbackInput"]};
