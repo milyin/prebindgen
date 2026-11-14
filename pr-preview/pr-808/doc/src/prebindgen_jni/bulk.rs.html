@@ -410,7 +410,7 @@
 <a href=#410 id=410 data-nosnippet>410</a>    value: TokenStream,
 <a href=#411 id=411 data-nosnippet>411</a>    borrowed: bool,
 <a href=#412 id=412 data-nosnippet>412</a>) -&gt; <span class="prelude-ty">Result</span>&lt;JniOutputPlan&lt;JniWire&gt;&gt; {
-<a href=#413 id=413 data-nosnippet>413</a>    <span class="kw">if let </span><span class="prelude-val">Some</span>(kind @ (Value::Text | Value::Bytes)) = Value::of(ty) {
+<a href=#413 id=413 data-nosnippet>413</a>    <span class="kw">if let </span><span class="prelude-val">Some</span>(kind @ (Value::Text | Value::Bytes)) = <span class="kw">super</span>::output_value_kind(ty) {
 <a href=#414 id=414 data-nosnippet>414</a>        <span class="kw">let </span>owner = <span class="macro">format_ident!</span>(<span class="string">"{w}_source"</span>);
 <a href=#415 id=415 data-nosnippet>415</a>        <span class="kw">let </span>text = kind == Value::Text;
 <a href=#416 id=416 data-nosnippet>416</a>        <span class="kw">let </span>bytes = <span class="kw">if </span>text {

@@ -403,8 +403,8 @@
 <a href=#403 id=403 data-nosnippet>403</a>    </span><span class="kw">fn </span>field(<span class="self">self</span>, name: <span class="kw">impl </span>Into&lt;String&gt;) -&gt; <span class="self">Self</span>;
 <a href=#404 id=404 data-nosnippet>404</a>    <span class="doccomment">/// Append the direct value representation.
 <a href=#405 id=405 data-nosnippet>405</a>    </span><span class="kw">fn </span>field_self(<span class="self">self</span>) -&gt; <span class="self">Self</span>;
-<a href=#406 id=406 data-nosnippet>406</a>    <span class="doccomment">/// Append an explicitly borrowed projection.
-<a href=#407 id=407 data-nosnippet>407</a>    </span><span class="kw">fn </span>field_self_ref(<span class="self">self</span>) -&gt; <span class="self">Self</span>;
+<a href=#406 id=406 data-nosnippet>406</a>    <span class="doccomment">/// Append an explicit owning copy of a shared observation.
+<a href=#407 id=407 data-nosnippet>407</a>    </span><span class="kw">fn </span>field_self_cloned(<span class="self">self</span>) -&gt; <span class="self">Self</span>;
 <a href=#408 id=408 data-nosnippet>408</a>    <span class="doccomment">/// Append an explicitly owned projection.
 <a href=#409 id=409 data-nosnippet>409</a>    </span><span class="kw">fn </span>field_self_into(<span class="self">self</span>) -&gt; <span class="self">Self</span>;
 <a href=#410 id=410 data-nosnippet>410</a>    <span class="doccomment">/// Append a projection with explicit ownership and field policies.
@@ -486,8 +486,8 @@
 <a href=#486 id=486 data-nosnippet>486</a>    </span><span class="kw">fn </span>field_self(<span class="self">self</span>) -&gt; <span class="self">Self </span>{
 <a href=#487 id=487 data-nosnippet>487</a>        <span class="self">self</span>.view(JniOutputConfig::Leaf(JniOutputLeafOp::Value))
 <a href=#488 id=488 data-nosnippet>488</a>    }
-<a href=#489 id=489 data-nosnippet>489</a>    <span class="doccomment">/// Append an explicit borrowed projection.
-<a href=#490 id=490 data-nosnippet>490</a>    </span><span class="kw">fn </span>field_self_ref(<span class="self">self</span>) -&gt; <span class="self">Self </span>{
+<a href=#489 id=489 data-nosnippet>489</a>    <span class="doccomment">/// Append an explicit owning copy of a shared observation.
+<a href=#490 id=490 data-nosnippet>490</a>    </span><span class="kw">fn </span>field_self_cloned(<span class="self">self</span>) -&gt; <span class="self">Self </span>{
 <a href=#491 id=491 data-nosnippet>491</a>        <span class="self">self</span>.project_self(Projection::borrowed())
 <a href=#492 id=492 data-nosnippet>492</a>    }
 <a href=#493 id=493 data-nosnippet>493</a>    <span class="doccomment">/// Append an explicit owned projection.

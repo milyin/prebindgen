@@ -534,7 +534,7 @@
 <a href=#534 id=534 data-nosnippet>534</a>                    .count()
 <a href=#535 id=535 data-nosnippet>535</a>                    &gt; <span class="number">1
 <a href=#536 id=536 data-nosnippet>536</a>                </span>{
-<a href=#537 id=537 data-nosnippet>537</a>                    <span class="kw">return </span><span class="prelude-val">Err </span>(<span class="string">"a combination cannot consume the same value twice; use field_self_ref() for an explicit copy view" </span>. into ()) ;
+<a href=#537 id=537 data-nosnippet>537</a>                    <span class="kw">return </span><span class="prelude-val">Err </span>(<span class="string">"a combination cannot consume the same value twice; use field_self_cloned() for an explicit copy view" </span>. into ()) ;
 <a href=#538 id=538 data-nosnippet>538</a>                }
 <a href=#539 id=539 data-nosnippet>539</a>                <span class="kw">if </span>!borrowed {
 <a href=#540 id=540 data-nosnippet>540</a>                    <span class="kw">if let </span><span class="prelude-val">Some</span>(plan) = <span class="self">self</span>.output_owner_views(ty, parts, extra, value.clone())<span class="question-mark">? </span>{

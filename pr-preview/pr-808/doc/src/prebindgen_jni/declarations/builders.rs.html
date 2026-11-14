@@ -291,7 +291,7 @@
 <a href=#291 id=291 data-nosnippet>291</a>/// ```
 <a href=#292 id=292 data-nosnippet>292</a>/// use prebindgen_jni::{expand_return,fields,fun,prelude::*};
 <a href=#293 id=293 data-nosnippet>293</a>/// let _=expand_return!(Owner).field(fun!(child)
-<a href=#294 id=294 data-nosnippet>294</a>///     .expand_return(expand_return!(Child).field_self_ref()));
+<a href=#294 id=294 data-nosnippet>294</a>///     .expand_return(expand_return!(Child).field_self_cloned()));
 <a href=#295 id=295 data-nosnippet>295</a>/// let _=expand_return!(Row).fields_into(fields!()
 <a href=#296 id=296 data-nosnippet>296</a>///     .field("count",expand_return!(i64).field_self()));
 <a href=#297 id=297 data-nosnippet>297</a>/// let _=expand_return!(Vec&lt;Row&gt;).element(expand_return!(Row).field_self());

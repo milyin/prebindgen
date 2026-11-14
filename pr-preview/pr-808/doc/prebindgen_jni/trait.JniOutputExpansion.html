@@ -16,7 +16,7 @@
 
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>prebindgen_jni::{expand_return,fields,fun,prelude::<span class="kw-2">*</span>};
 <span class="kw">let _</span>=<span class="macro">expand_return!</span>(Owner).field(<span class="macro">fun!</span>(child)
-    .expand_return(<span class="macro">expand_return!</span>(Child).field_self_ref()));
+    .expand_return(<span class="macro">expand_return!</span>(Child).field_self_cloned()));
 <span class="kw">let _</span>=<span class="macro">expand_return!</span>(Row).fields_into(<span class="macro">fields!</span>()
     .field(<span class="string">"count"</span>,<span class="macro">expand_return!</span>(i64).field_self()));
 <span class="kw">let _</span>=<span class="macro">expand_return!</span>(Vec&lt;Row&gt;).element(<span class="macro">expand_return!</span>(Row).field_self());
