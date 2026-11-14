@@ -236,3 +236,48 @@ fn implicit_callback_result_cannot_hide_an_explicit_child() {
         .unwrap_err();
     assert!(error.contains("Auto codomain"), "{error}");
 }
+
+#[test]
+fn c_source_field_declarations_and_local_helper_overrides_share_the_resolver() {
+    let items = syn::parse_file(
+        "pub struct Pair{pub first:i64,pub second:i64}
+        pub fn number(value:bool)->i64{0}
+        pub fn pair_new(first:i64,second:i64)->Pair{Pair{first,second}}
+        pub fn echo(value:Pair)->Pair{value}
+        pub fn direct(value:Pair)->Pair{value}",
+    )
+    .unwrap()
+    .items
+    .into_iter()
+    .map(|item| (item, Default::default()));
+    let generated = Cbindgen::new(Flat::parse(items).unwrap())
+        .function(
+            fun!(echo)
+                .expand_param(
+                    "value",
+                    expand_param!(Pair).variant(
+                        fun!(pair_new)
+                            .expand_param("first", expand_param!(i64).variant(fun!(number))),
+                    ),
+                )
+                .expand_return(expand_return!(Pair).fields_into(fields!())),
+        )
+        .function(
+            fun!(direct)
+                .expand_param(
+                    "value",
+                    expand_param!(Pair).variant_fields(
+                        param_fields!().field("first", expand_param!(i64).variant(fun!(number))),
+                    ),
+                )
+                .expand_return(expand_return!(Pair).fields_into(fields!())),
+        )
+        .panic()
+        .build()
+        .unwrap();
+    syn::parse_file(&generated.rust).unwrap();
+    assert!(generated.rust.contains("pair_new"));
+    assert!(generated.rust.contains("number"));
+    assert!(generated.header.contains("pb_echo"));
+    assert!(generated.header.contains("pb_direct"));
+}

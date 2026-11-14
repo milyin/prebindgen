@@ -108,10 +108,19 @@ impl<In, F, E> DeclExpandParam<In, F, E> {
         self.input.reconstruct();
         self
     }
-    /// Append a source constructor whose arguments use their type defaults.
+    /// Append a source constructor; local parameter overrides replace the corresponding defaults.
     pub fn variant(mut self, function: impl Into<F>) -> Self {
         self.input.push((self.constructor)(function.into()));
         self
+    }
+    /// Append an explicit construction alternative, preserving its local conversion policy.
+    pub fn variant_with(mut self, input: impl Into<In>) -> Self {
+        self.input.push(input.into());
+        self
+    }
+    /// Construct a record from named field conversions. Unspecified fields use their defaults.
+    pub fn variant_fields(self, fields: DeclFields<In>) -> Self {
+        self.variant_with(fields.into_recipe())
     }
     /// Append the adapter's direct value representation.
     pub fn variant_self(mut self) -> Self {
@@ -200,7 +209,7 @@ impl<Out, F, E> DeclExpandReturn<Out, F, E> {
         self.views.push((self.getter)(function.into()));
         self
     }
-    /// Append a getter's named fields as separate output values.
+    /// Append named fields of the source record or an accessor result as separate outputs.
     pub fn fields<FE>(self, fields: DeclFields<Out, FE>) -> Self {
         self.view(fields.into_output())
     }
@@ -209,7 +218,7 @@ impl<Out, F, E> DeclExpandReturn<Out, F, E> {
         self.views.push(output.into());
         self
     }
-    /// Append a consuming accessor followed by owned field decomposition.
+    /// Move fields of the source record, or call a consuming accessor and move its fields.
     pub fn fields_into<FE>(mut self, fields: DeclFields<Out, FE>) -> Self {
         self.views.push((self.owned_fields)(fields.into_output()));
         self
@@ -251,26 +260,26 @@ impl<I: InputOps, O: OutputOps, F, E> From<DeclExpandReturn<OutputNode<I, O>, F,
     }
 }
 
-/// A source accessor and named field overrides, specialized by the adapter's output tree.
+/// Named record or enum-variant field overrides, optionally through a source accessor.
 #[derive(Clone, Debug)]
 pub struct DeclFields<Out, Extension = Infallible> {
     /// Adapter-defined field-decomposition options.
     pub extension: Option<Extension>,
-    function: String,
+    function: Option<String>,
     overrides: BTreeMap<String, Out>,
     normalize: fn(Out) -> Out,
-    finish: fn(String, BTreeMap<String, Out>, Option<Extension>) -> Out,
+    finish: fn(Option<String>, BTreeMap<String, Out>, Option<Extension>) -> Out,
 }
 impl<Out, E> DeclFields<Out, E> {
-    /// Select an accessor and the adapter's omission normalization and output constructor.
+    /// Select optional source access and the adapter's field normalization and lowering.
     pub fn new(
-        function: syn::Ident,
+        function: impl Into<Option<syn::Ident>>,
         normalize: fn(Out) -> Out,
-        finish: fn(String, BTreeMap<String, Out>, Option<E>) -> Out,
+        finish: fn(Option<String>, BTreeMap<String, Out>, Option<E>) -> Out,
     ) -> Self {
         Self {
             extension: None,
-            function: function.to_string(),
+            function: function.into().map(|name| name.to_string()),
             overrides: BTreeMap::new(),
             normalize,
             finish,
@@ -295,9 +304,26 @@ impl<Out, E> DeclFields<Out, E> {
         );
         self
     }
-    /// Produce the accessor's output tree with all field and extension settings.
-    pub fn into_output(self) -> Out {
+    /// Produce the adapter's field conversion with all field and extension settings.
+    pub fn into_recipe(self) -> Out {
         (self.finish)(self.function, self.overrides, self.extension)
+    }
+    /// Produce a returned-field conversion, including its selected accessor.
+    pub fn into_output(self) -> Out {
+        self.into_recipe()
+    }
+    /// Extract named source-field overrides for an enum variant declaration.
+    /// Accessor-based fields and adapter extensions belong to record projections instead.
+    pub fn into_overrides(self) -> BTreeMap<String, Out> {
+        assert!(
+            self.function.is_none(),
+            "enum fields cannot select an accessor"
+        );
+        assert!(
+            self.extension.is_none(),
+            "enum fields cannot carry record extensions"
+        );
+        self.overrides
     }
 }
 impl<I: InputOps, O: OutputOps, E> From<DeclFields<OutputNode<I, O>, E>> for OutputNode<I, O> {
@@ -306,14 +332,31 @@ impl<I: InputOps, O: OutputOps, E> From<DeclFields<OutputNode<I, O>, E>> for Out
     }
 }
 
-/// Build a getter observation, preserving its foreign name and checking helper settings.
+/// Build a constructor reference with occurrence-local parameter overrides.
+/// All explicit recipes are handed to the adapter for placement on structural edges.
+pub fn constructor_input<I, O, E>(
+    mut function: DeclFunction<I, O, E>,
+    automatic: impl FnOnce(String) -> I,
+    explicit: impl FnOnce(String, BTreeMap<String, I>) -> I,
+) -> I {
+    let parameters = std::mem::take(&mut function.params);
+    let name = function.reference_name(false);
+    if parameters.is_empty() {
+        automatic(name)
+    } else {
+        explicit(name, parameters)
+    }
+}
+
+/// Build a getter observation with an occurrence-local result override and optional label.
 pub fn getter_view<I, O, E>(
-    function: DeclFunction<I, O, E>,
-    getter: impl FnOnce(String) -> O,
+    mut function: DeclFunction<I, O, E>,
+    getter: impl FnOnce(String, Option<O>) -> O,
     named: impl FnOnce(String, O) -> O,
 ) -> O {
     let name = function.foreign.clone();
-    let output = getter(function.reference_name(true));
+    let result = function.ret.take();
+    let output = getter(function.reference_name(true), result);
     match name {
         Some(name) => named(name, output),
         None => output,
@@ -374,5 +417,11 @@ impl<O, F, E, P, X> From<DeclExpandReturn<O, F, E>>
 impl<F, E, P, R> From<DeclError<F, E>> for DeclExpand<P, R, DeclError<F, E>> {
     fn from(value: DeclError<F, E>) -> Self {
         Self::Error(Box::new(value))
+    }
+}
+
+impl<I: InputOps, O: OutputOps, E> From<DeclFields<InputNode<I, O>, E>> for InputNode<I, O> {
+    fn from(declaration: DeclFields<Self, E>) -> Self {
+        declaration.into_recipe()
     }
 }

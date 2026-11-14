@@ -43,7 +43,24 @@ impl JniBulkExpansion for DeclJniExpandReturn {
 pub fn expand_param(ty: Type) -> DeclJniExpandParam {
     prebindgen_declarations::DeclExpandParam::new(
         ty,
-        |function: DeclJniFunction| JniInputConfig::call(function.reference_name(false)),
+        |function: DeclJniFunction| {
+            prebindgen_declarations::constructor_input(
+                function,
+                JniInputConfig::call,
+                |function, parameters| {
+                    let (parameters, children) = parameters.into_iter().unzip();
+                    JniInputConfig::Branch {
+                        operation: JniInputBranch::ConfigConstructorArguments(
+                            JniConstructorArguments {
+                                function,
+                                parameters,
+                            },
+                        ),
+                        children,
+                    }
+                },
+            )
+        },
         || JniInputConfig::Leaf(JniInputLeafOp::Value),
         |ty, alternatives, extension| {
             let mut input =
@@ -70,7 +87,9 @@ pub fn expand_return(ty: Type) -> DeclJniExpandReturn {
         |function| {
             prebindgen_declarations::getter_view(
                 function,
-                |name| JniOutputConfig::getter(name, JniOutputConfig::auto()),
+                |name, result| {
+                    JniOutputConfig::getter(name, result.unwrap_or_else(JniOutputConfig::auto))
+                },
                 |name, child| JniOutputConfig::Unary {
                     operation: JniOutputUnary::Named { name },
                     child: Box::new(child),
@@ -92,8 +111,8 @@ pub fn expand_return(ty: Type) -> DeclJniExpandReturn {
         },
     )
 }
-/// Decompose a source accessor's returned record into named field views.
-pub fn fields(function: syn::Ident) -> DeclJniFields {
+/// Observe named source-record fields, optionally through an accessor.
+pub fn fields(function: impl Into<Option<syn::Ident>>) -> DeclJniFields {
     prebindgen_declarations::DeclFields::new(
         function,
         |output| match output {
@@ -107,16 +126,17 @@ pub fn fields(function: syn::Ident) -> DeclJniFields {
         },
         |function, overrides, _extension| {
             let (fields, children) = overrides.into_iter().unzip();
-            JniOutputConfig::getter(
-                function,
-                JniOutputConfig::Branch {
-                    operation: JniOutputBranch::ConfigNamedFields(JniNamedFields {
-                        fields,
-                        mode: prebindgen_declarations::ProjectionMode::Borrowed,
-                    }),
-                    children,
-                },
-            )
+            let output = JniOutputConfig::Branch {
+                operation: JniOutputBranch::ConfigNamedFields(JniNamedFields {
+                    fields,
+                    mode: prebindgen_declarations::ProjectionMode::Borrowed,
+                }),
+                children,
+            };
+            match function {
+                Some(function) => JniOutputConfig::getter(function, output),
+                None => output,
+            }
         },
     )
 }
@@ -151,5 +171,206 @@ impl prebindgen_declarations::CallbackInput<JniInputConfig, JniOutputConfig> for
             },
             JniInputConfig::for_type,
         )
+    }
+}
+
+/// Named input field conversions; unspecified fields inherit their input defaults.
+pub type DeclJniParamFields = prebindgen_declarations::DeclFields<JniInputConfig>;
+/// Start source-record or enum-variant input field declarations.
+pub fn param_fields() -> DeclJniParamFields {
+    prebindgen_declarations::DeclFields::new(
+        None,
+        |input| input,
+        |_function, overrides, _extension| {
+            let (fields, children) = overrides.into_iter().unzip();
+            JniInputConfig::Branch {
+                operation: JniInputBranch::ConfigNamedFields(JniInputFields {
+                    fields,
+                    record: false,
+                }),
+                children,
+            }
+        },
+    )
+}
+
+/// Input representations supported by the JNI declaration frontend.
+/// All choices lower into the same source resolver and converter compiler.
+/// ```
+/// use prebindgen_jni::{callback,expand_param,fun,param_fields,prelude::*};
+/// let rows=expand_param!(Vec<Row>).element(expand_param!(Row).variant_record(
+///     param_fields!().field("observed",expand_param!(Handle).variant(fun!(copy_handle))))).bulk();
+/// let _=fun!(accept).expand_param("rows",rows.clone());
+/// let _=callback!(impl Fn()->Vec<Row>).expand_return(rows);
+/// ```
+pub trait JniInputExpansion: Sized {
+    /// Resolve this occurrence using its configured type default.
+    fn default(self) -> Self;
+    /// Receive a declared Kotlin data class, explicitly constructing its owned fields.
+    /// Owned handle fields are consumed. Copying requires an explicit constructor helper.
+    fn variant_record(self, fields: DeclJniParamFields) -> Self;
+    /// Convert a collection using this occurrence-local element declaration.
+    fn element(self, input: impl Into<JniInputConfig>) -> Self;
+    /// Convert an Option payload with an occurrence-local declaration.
+    fn optional(self, input: impl Into<JniInputConfig>) -> Self;
+    /// Expand an enum into tag and field arguments, inheriting unspecified field defaults.
+    fn enum_fields<'a>(
+        self,
+        variants: impl IntoIterator<Item = (&'a str, DeclJniParamFields)>,
+    ) -> Self;
+    /// Receive a declared Kotlin sealed value with named variant-field overrides.
+    fn enum_value<'a>(
+        self,
+        variants: impl IntoIterator<Item = (&'a str, DeclJniParamFields)>,
+    ) -> Self;
+}
+impl JniInputExpansion for DeclJniExpandParam {
+    fn default(self) -> Self {
+        self.variant_with(JniInputConfig::auto())
+    }
+    fn variant_record(self, fields: DeclJniParamFields) -> Self {
+        let (fields, children) = fields.into_overrides().into_iter().unzip();
+        self.variant_with(JniInputConfig::Branch {
+            operation: JniInputBranch::ConfigNamedFields(JniInputFields {
+                fields,
+                record: true,
+            }),
+            children,
+        })
+    }
+    fn element(self, input: impl Into<JniInputConfig>) -> Self {
+        self.variant_with(JniInputConfig::sequence(input.into()))
+    }
+    fn optional(self, input: impl Into<JniInputConfig>) -> Self {
+        self.variant_with(JniInputConfig::Unary {
+            operation: JniInputUnary::Optional,
+            child: Box::new(input.into()),
+        })
+    }
+    fn enum_fields<'a>(
+        self,
+        variants: impl IntoIterator<Item = (&'a str, DeclJniParamFields)>,
+    ) -> Self {
+        self.variant_with(input_enum_fields(variants, false))
+    }
+    fn enum_value<'a>(
+        self,
+        variants: impl IntoIterator<Item = (&'a str, DeclJniParamFields)>,
+    ) -> Self {
+        self.variant_with(input_enum_fields(variants, true))
+    }
+}
+fn input_enum_fields<'a>(
+    variants: impl IntoIterator<Item = (&'a str, DeclJniParamFields)>,
+    value: bool,
+) -> JniInputConfig {
+    let overrides = prebindgen_declarations::enum_overrides(
+        variants
+            .into_iter()
+            .map(|(name, fields)| (name, fields.into_overrides())),
+    );
+    JniInputConfig::Branch {
+        operation: JniInputBranch::ConfigEnumFields(value),
+        children: overrides
+            .into_iter()
+            .map(|(variant, fields)| {
+                let (fields, children) = fields.into_iter().unzip();
+                JniInputConfig::Branch {
+                    operation: JniInputBranch::ConfigVariantFields(JniVariantFields {
+                        variant,
+                        fields,
+                    }),
+                    children,
+                }
+            })
+            .collect(),
+    }
+}
+
+/// Output representations supported by the JNI declaration frontend.
+/// ```
+/// use prebindgen_jni::{expand_return,fields,fun,prelude::*};
+/// let _=expand_return!(Owner).field(fun!(child)
+///     .expand_return(expand_return!(Child).field_self_ref()));
+/// let _=expand_return!(Row).fields_into(fields!()
+///     .field("count",expand_return!(i64).field_self()));
+/// let _=expand_return!(Vec<Row>).element(expand_return!(Row).field_self());
+/// let _=expand_return!(Vec<Row>).element_objects(expand_return!(Row).field_self());
+/// ```
+pub trait JniOutputExpansion: Sized {
+    /// Resolve this occurrence using its configured type default.
+    fn default(self) -> Self;
+    /// Convert each returned element, retaining the configured default collection transport.
+    /// Apply bulk to this declaration or its element to select a packed level.
+    fn element(self, output: impl Into<JniOutputConfig>) -> Self;
+    /// Return an ordinary Kotlin object collection with the selected element conversion.
+    /// This explicitly opts out of automatic bulk packing at this collection level.
+    fn element_objects(self, output: impl Into<JniOutputConfig>) -> Self;
+    /// Return an Option payload with an occurrence-local declaration.
+    fn optional(self, output: impl Into<JniOutputConfig>) -> Self;
+    /// Expand an enum into tag and field results, inheriting unspecified field defaults.
+    fn enum_fields<'a>(self, variants: impl IntoIterator<Item = (&'a str, DeclJniFields)>) -> Self;
+    /// Return a declared Kotlin sealed value with named variant-field overrides.
+    fn enum_value<'a>(self, variants: impl IntoIterator<Item = (&'a str, DeclJniFields)>) -> Self;
+}
+impl JniOutputExpansion for DeclJniExpandReturn {
+    fn default(self) -> Self {
+        self.view(JniOutputConfig::auto())
+    }
+    fn element(self, output: impl Into<JniOutputConfig>) -> Self {
+        self.view(JniOutputConfig::Unary {
+            operation: JniOutputUnary::Sequence {
+                delivery: SequenceDelivery::Auto,
+                mode: None,
+            },
+            child: Box::new(output.into()),
+        })
+    }
+    fn element_objects(self, output: impl Into<JniOutputConfig>) -> Self {
+        self.view(JniOutputConfig::Unary {
+            operation: JniOutputUnary::Sequence {
+                delivery: SequenceDelivery::Value,
+                mode: None,
+            },
+            child: Box::new(output.into()),
+        })
+    }
+    fn optional(self, output: impl Into<JniOutputConfig>) -> Self {
+        self.view(JniOutputConfig::Unary {
+            operation: JniOutputUnary::Optional,
+            child: Box::new(output.into()),
+        })
+    }
+    fn enum_fields<'a>(self, variants: impl IntoIterator<Item = (&'a str, DeclJniFields)>) -> Self {
+        self.view(output_enum_fields(variants, false))
+    }
+    fn enum_value<'a>(self, variants: impl IntoIterator<Item = (&'a str, DeclJniFields)>) -> Self {
+        self.view(output_enum_fields(variants, true))
+    }
+}
+fn output_enum_fields<'a>(
+    variants: impl IntoIterator<Item = (&'a str, DeclJniFields)>,
+    value: bool,
+) -> JniOutputConfig {
+    let overrides = prebindgen_declarations::enum_overrides(
+        variants
+            .into_iter()
+            .map(|(name, fields)| (name, fields.into_overrides())),
+    );
+    JniOutputConfig::Branch {
+        operation: JniOutputBranch::ConfigEnumFields(value),
+        children: overrides
+            .into_iter()
+            .map(|(variant, fields)| {
+                let (fields, children) = fields.into_iter().unzip();
+                JniOutputConfig::Branch {
+                    operation: JniOutputBranch::ConfigVariantFields(JniVariantFields {
+                        variant,
+                        fields,
+                    }),
+                    children,
+                }
+            })
+            .collect(),
     }
 }

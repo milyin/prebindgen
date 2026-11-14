@@ -7,8 +7,9 @@ use std::rc::Rc;
 /// Supports owned public named-field records containing scalars, `String`,
 /// `Vec<T>` collections (`Vec<u8>` is a byte array), other declared data classes,
 /// declared opaque handles, and optional fields. Records containing handles,
-/// including through collections, support outputs; inputs require an explicit
-/// field or constructor expansion describing their ownership.
+/// including through collections, require explicit input field ownership, such as
+/// `expand_param!(Row).variant_record(param_fields!())`. Select named constructor
+/// overrides for fields that must be copied rather than consumed.
 /// Output ownership is declared with `expand_return!`: `field_self_ref()` borrows
 /// and `field_self_into()` moves, recursively. `project_self(Projection)` allows
 /// field overrides. `field_self()` and unexpanded outputs follow the source:
@@ -133,6 +134,7 @@ pub struct JniField {
 pub struct JniDataGroup {
     pub(crate) root: String,
     pub(crate) class_name: String,
+    pub(crate) property_types: Vec<String>,
     pub(crate) condition: String,
 }
 
@@ -629,6 +631,7 @@ impl Class {
         layout: &mut prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
         root: String,
         condition: String,
+        property_types: Vec<String>,
     ) -> Result<()> {
         group::retire_niches(layout, None)?;
         let mut nodes = std::mem::take(layout);
@@ -645,6 +648,7 @@ impl Class {
         *metadata = JniGroup::Fields(Some(JniDataGroup {
             root,
             class_name: self.fqn(),
+            property_types,
             condition,
         }));
         *layout = nodes;
@@ -668,6 +672,70 @@ pub(crate) fn fields(nodes: &[kotlin::JniNode]) -> Result<Vec<FieldNode<'_>>> {
         })
         .collect()
 }
+// A grouped Kotlin value has a fixed property contract. An occurrence override
+// may change native conversion/ownership but must still accept that property.
+fn property_assignable(value: &str, destination: &str) -> bool {
+    let value = value.trim();
+    let destination = destination.trim();
+    if value.ends_with('?') && !destination.ends_with('?') {
+        return false;
+    }
+    let value = value.trim_end_matches('?');
+    let destination = destination.trim_end_matches('?');
+    // Short built-in names and fully qualified built-ins denote the same type.
+    // Preserve namespace segments inside generated class names.
+    fn builtin(name: &str) -> &str {
+        name.strip_prefix("kotlin.")
+            .filter(|name| !name.contains(['.', '<']))
+            .unwrap_or(name)
+    }
+    if builtin(value) == builtin(destination) {
+        return true;
+    }
+    fn list_element(name: &str) -> Option<&str> {
+        name.strip_prefix("kotlin.collections.List<")
+            .or_else(|| name.strip_prefix("List<"))?
+            .strip_suffix('>')
+    }
+    match (list_element(value), list_element(destination)) {
+        (Some(value), Some(destination)) => property_assignable(value, destination),
+        _ => false,
+    }
+}
+pub(crate) fn check_property_input(expected: &str, parameters: &[String]) -> Result<()> {
+    let actual = match parameters {
+        [] if expected == "kotlin.Unit" || expected == "Unit" => return Ok(()),
+        [parameter] => {
+            parameter
+                .split_once(": ")
+                .ok_or("invalid Kotlin property parameter")?
+                .1
+        }
+        _ => return Err("a grouped Kotlin property requires exactly one input value".into()),
+    };
+    if property_assignable(expected, actual) {
+        Ok(())
+    } else {
+        Err(format!(
+            "Kotlin property `{expected}` cannot use input conversion accepting `{actual}`"
+        ))
+    }
+}
+pub(crate) fn check_property_output(expected: &str, results: &[String]) -> Result<()> {
+    let actual = match results {
+        [] if expected == "kotlin.Unit" || expected == "Unit" => return Ok(()),
+        [actual] => actual,
+        _ => return Err("a grouped Kotlin property requires exactly one output value".into()),
+    };
+    if property_assignable(actual, expected) {
+        Ok(())
+    } else {
+        Err(format!(
+            "output conversion returning `{actual}` cannot initialize Kotlin property `{expected}`"
+        ))
+    }
+}
+
 pub(crate) fn input_kotlin(
     nodes: &[kotlin::JniNode],
     d: &JniDataGroup,
@@ -688,6 +756,14 @@ pub(crate) fn input_kotlin(
         if active == "true" { "" } else { "?" }
     ));
     let fields = fields(nodes)?;
+    if fields.len() != d.property_types.len() {
+        return Err("incomplete Kotlin record property layout".into());
+    }
+    for ((name, node), expected) in fields.iter().zip(&d.property_types) {
+        let child = kotlin::input_kotlin_when(node, context, active)?;
+        check_property_input(expected, &child.parameters)
+            .map_err(|error| format!("{}.{name}: {error}", d.class_name))?;
+    }
     if c.parameters.len() != fields.len() {
         return Err("incomplete data-class input occurrence".into());
     }
@@ -798,6 +874,15 @@ pub(crate) fn output_kotlin(
     if c.delivered.len() != fields(nodes)?.len() {
         return Err("incomplete data-class output occurrence".into());
     }
+    let fields = fields(nodes)?;
+    if fields.len() != d.property_types.len() {
+        return Err("incomplete Kotlin record property layout".into());
+    }
+    for ((name, node), expected) in fields.iter().zip(&d.property_types) {
+        let child = kotlin::output_kotlin_scoped(node, context, owners)?;
+        check_property_output(expected, &child.result_types)
+            .map_err(|error| format!("{}.{name}: {error}", d.class_name))?;
+    }
     c.delivered = vec![format!("{}({})", d.class_name, c.delivered.join(", "))];
     c.result_types = vec![d.class_name.clone()];
     c.result_names = vec![None];
@@ -902,6 +987,7 @@ mod group_tests {
             meta: JniBranch::Group(JniGroup::Fields(Some(JniDataGroup {
                 root: root.into(),
                 class_name: "example.Empty".into(),
+                property_types: vec![],
                 condition: "true".into(),
             }))),
             children: Vec::new(),
@@ -960,6 +1046,7 @@ mod group_tests {
             meta: JniBranch::Group(JniGroup::Fields(Some(JniDataGroup {
                 root: "point".into(),
                 class_name: "example.Point".into(),
+                property_types: vec!["kotlin.Int".into()],
                 condition: "true".into(),
             }))),
             children: vec![std::mem::take(&mut field)],

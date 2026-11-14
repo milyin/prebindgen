@@ -492,6 +492,40 @@ impl DeclCDefaults {
                 )
             }
             InputNode::Branch {
+                operation:
+                    CInputBranch::ConfigConstructorArguments(CConstructorArguments {
+                        function,
+                        parameters,
+                    }),
+                children,
+            } => prebindgen_declarations::resolve_constructor_arguments(
+                flat,
+                ty,
+                function,
+                parameters,
+                children,
+                &CInputConfig::auto(),
+                |ty, child| resolve(ty, child, stack),
+                |function| CInputBranch::Constructor { function },
+            ),
+            InputNode::Branch {
+                operation: CInputBranch::ConfigNamedFields(fields),
+                children,
+            } => {
+                let overrides = prebindgen_declarations::named_children(&fields.fields, children)?;
+                let children = prebindgen_declarations::resolve_named_fields(
+                    flat,
+                    ty,
+                    &overrides,
+                    &CInputConfig::auto(),
+                    |ty, child| resolve(ty, child, stack),
+                )?;
+                Ok(InputNode::Branch {
+                    operation: CInputBranch::Fields,
+                    children,
+                })
+            }
+            InputNode::Branch {
                 operation: CInputBranch::Constructor { function },
                 children: args,
             } => prebindgen_declarations::resolve_constructor(
@@ -774,7 +808,19 @@ impl DeclCDefaults {
                 child: output,
             } => {
                 let target = flat.resolve_type(target)?;
-                let matched = same_type(ty, &target);
+                // Getter results describe a borrowed observation of the logical value.
+                // Match local typed overrides at that same logical type, before composition.
+                let ty = if getter_result {
+                    prebindgen_declarations::output_referent(ty).unwrap_or(ty)
+                } else {
+                    ty
+                };
+                let target = if getter_result {
+                    prebindgen_declarations::output_referent(&target).unwrap_or(&target)
+                } else {
+                    &target
+                };
+                let matched = same_type(ty, target);
                 prebindgen_declarations::resolve_typed_expansion(
                     ty,
                     matched,

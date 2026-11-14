@@ -104,6 +104,43 @@ pub fn resolve_constructor<I: InputOps, O: OutputOps, Recipe>(
     })
 }
 
+/// Resolve occurrence-local constructor arguments by source parameter name.
+#[allow(clippy::too_many_arguments)] // Explicit source identity, structural children and lowering hooks.
+pub fn resolve_constructor_arguments<I: InputOps, O: OutputOps, Recipe>(
+    flat: &Flat<impl Schema>,
+    expected: &Type,
+    function: &str,
+    names: &[String],
+    children: &[Recipe],
+    default: &Recipe,
+    resolve: impl FnMut(&Type, &Recipe) -> Result<InputNode<I, O>>,
+    operation: impl FnOnce(String) -> I::Branch,
+) -> Result<InputNode<I, O>> {
+    let overrides = named_children(names, children)?;
+    let source = flat.function(function)?;
+    for name in overrides.keys() {
+        if !source.params.iter().any(|p| p.name == name.as_str()) {
+            return Err(format!(
+                "constructor `{function}`: unknown parameter `{name}`"
+            ));
+        }
+    }
+    let arguments: Vec<_> = source
+        .params
+        .iter()
+        .map(|p| *overrides.get(&p.name.to_string()).unwrap_or(&default))
+        .collect();
+    let mut resolve = resolve;
+    resolve_constructor(
+        flat,
+        expected,
+        function,
+        &arguments,
+        |ty, recipe| resolve(ty, recipe),
+        operation,
+    )
+}
+
 /// Resolve one recipe per source record field, checking the declared field count.
 pub fn resolve_record_fields<M: Schema, T, R>(
     flat: &Flat<M>,
@@ -293,7 +330,7 @@ pub fn resolve_named_fields<M: Schema, T, R, B: std::borrow::Borrow<T>>(
             .iter()
             .any(|f| f.name.to_string().trim_start_matches("r#") == name)
         {
-            return Err(format!("unknown output field `{name}`"));
+            return Err(format!("unknown record field `{name}`"));
         }
     }
     fields

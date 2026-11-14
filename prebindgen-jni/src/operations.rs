@@ -37,7 +37,7 @@ impl OutputOps for JniOutputOps {
 /// ```compile_fail
 /// use prebindgen_jni::{JniInput,JniInputBranch};
 /// let _:JniInput=JniInput::Branch {
-///     operation:JniInputBranch::ConfigEnumFields(()),children:vec![],
+///     operation:JniInputBranch::ConfigEnumFields(false),children:vec![],
 /// };
 /// ```
 pub type JniInput = InputNode<JniInputOps, JniOutputOps>;
@@ -97,6 +97,23 @@ pub struct JniNamedFields {
     pub fields: Vec<String>,
     /// Observe or move the selected fields.
     pub mode: ProjectionMode,
+}
+
+/// Source field names corresponding to explicit incoming record children.
+#[derive(Clone, Debug)]
+pub struct JniInputFields {
+    /// Source field names, in the same order as the structural child conversions.
+    pub fields: Vec<String>,
+    /// Group the input as a Kotlin data-class value.
+    pub record: bool,
+}
+/// Source constructor and names corresponding to its explicit argument children.
+#[derive(Clone, Debug)]
+pub struct JniConstructorArguments {
+    /// Unqualified source constructor name.
+    pub function: String,
+    /// Source parameter names, in the same order as the structural child conversions.
+    pub parameters: Vec<String>,
 }
 
 /// Incoming callback configuration and its resolved retained-callback binding.
@@ -162,11 +179,20 @@ pub enum JniInputUnary<TypeScope = Infallible> {
 }
 /// Multiple-child input operations.
 #[derive(Clone, Debug)]
-pub enum JniInputBranch<EnumExpansion = Infallible, VariantExpansion = Infallible> {
+pub enum JniInputBranch<
+    EnumExpansion = Infallible,
+    VariantExpansion = Infallible,
+    RecordExpansion = Infallible,
+    ConstructorExpansion = Infallible,
+> {
     /// Partially specified enum fields; children are variant branches.
     ConfigEnumFields(EnumExpansion),
     /// Partially specified fields of one source variant.
     ConfigVariantFields(VariantExpansion),
+    /// Source record fields with named occurrence-local conversion overrides.
+    ConfigNamedFields(RecordExpansion),
+    /// Source constructor with named occurrence-local argument overrides.
+    ConfigConstructorArguments(ConstructorExpansion),
 
     /// Convert source record fields in declaration order.
     Fields,
@@ -794,12 +820,15 @@ impl From<JniInputUnary> for JniInputConfigUnary {
     }
 }
 /// Configuration specialization of [`JniInputBranch`].
-pub type JniInputConfigBranch = JniInputBranch<(), JniVariantFields>;
+pub type JniInputConfigBranch =
+    JniInputBranch<bool, JniVariantFields, JniInputFields, JniConstructorArguments>;
 impl From<JniInputBranch> for JniInputConfigBranch {
     fn from(operation: JniInputBranch) -> Self {
         match operation {
             JniInputBranch::ConfigEnumFields(never) => match never {},
-            JniInputBranch::ConfigVariantFields(never) => match never {},
+            JniInputBranch::ConfigVariantFields(never)
+            | JniInputBranch::ConfigNamedFields(never)
+            | JniInputBranch::ConfigConstructorArguments(never) => match never {},
             JniInputBranch::Fields => Self::Fields,
             JniInputBranch::Record => Self::Record,
             JniInputBranch::Selector => Self::Selector,
@@ -844,7 +873,7 @@ impl From<JniOutputUnary> for JniOutputConfigUnary {
     }
 }
 /// Configuration specialization of [`JniOutputBranch`].
-pub type JniOutputConfigBranch = JniOutputBranch<(), JniVariantFields, JniNamedFields>;
+pub type JniOutputConfigBranch = JniOutputBranch<bool, JniVariantFields, JniNamedFields>;
 impl From<JniOutputBranch> for JniOutputConfigBranch {
     fn from(operation: JniOutputBranch) -> Self {
         match operation {

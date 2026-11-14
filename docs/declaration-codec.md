@@ -143,7 +143,7 @@ callbacks instead of a trait describing every supported operation.
 
 The declaration family is generic over the adapter's tree types and extension
 settings. `DeclExpandParam<In, FunctionDecl, Extension>`,
-`DeclExpandReturn<Out, FunctionDecl, Extension>` and `DeclFields<Out, Extension>` own
+`DeclExpandReturn<Out, FunctionDecl, Extension>` and `DeclFields<Recipe, Extension>` own
 the complete fluent API. `DeclExpand<ParamDecl, ReturnDecl, ErrorDecl>` is their common
 registration enum. C and JNI provide aliases and small factory functions that
 supply node constructors. An adapter should also expose its own `fun!` macro
@@ -152,7 +152,13 @@ and JNI already do. The shared `fun!` starts with no extension type;
 `with_extension(options)` can attach settings explicitly. Expansion factories
 are also available as `expand_param`, `expand_return` and `fields`, alongside the familiar macros of the same names.
 An adapter's aliases cannot add inherent methods to shared Rust types; JNI adds
-`bulk()` with `JniBulkExpansion`, exported by its `prelude`.
+`bulk()` with `JniBulkExpansion` and record/enum/container policies with
+`JniInputExpansion` and `JniOutputExpansion`, all exported by its `prelude`.
+`DeclFields` stores named field recipes and an optional accessor. `param_fields!()`
+selects incoming source fields; `fields!()` selects outgoing source fields and
+`fields!(getter)` selects accessor-result fields. `variant_fields` shares the
+named-field builder with C; JNI's `variant_record` selects its grouped Kotlin
+representation and explicit owned-field consumption.
 
 Each declaration carries an optional adapter-defined `extension`. The default
 extension type is `Infallible`, so adapters without additional settings have no
@@ -176,10 +182,12 @@ constructors. It does not return metadata containing the declaration's trees.
 objects and structural arrows use one default/ownership resolution algorithm.
 `callback_variant` preserves a function's extension settings. The compiler's
 `InputArrow::operation` uses the adapter's `InputOps::Arrow` type, so callback
-settings can reach its compilation hook. Undecorated source helper references
-reject configured function extensions, just as they reject
-parameter overrides; binding options must not silently disappear from a getter,
-constructor or error mapper.
+settings can reach its compilation hook. Constructor helpers accept named parameter overrides, placed on structural branch
+children; missing parameters inherit their defaults during source resolution.
+Getter helpers accept a result override, placed on their structural unary child.
+`constructor_input` and `getter_view` share this lowering between C and JNI.
+Export-only settings and overrides in unsupported positions remain rejected;
+binding options must not silently disappear from a getter, constructor or error mapper.
 
 `LocalConversion` is the corresponding construction bridge for `DeclConvert`: it
 keeps a local conversion inside a structural type-scope node, so appended

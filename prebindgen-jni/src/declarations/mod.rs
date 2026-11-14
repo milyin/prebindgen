@@ -35,8 +35,11 @@ macro_rules! expand_param {($($ty:tt)+)=>{$crate::expand_param($crate::__declara
 /// Start a typed output declaration using the production builder API.
 macro_rules! expand_return {($($ty:tt)+)=>{$crate::expand_return($crate::__declaration_type(stringify!($($ty)+)))};}
 #[macro_export]
-/// Decompose a source getter's returned record into named field views.
+/// Declare named output fields of the source record, or of a selected accessor result.
 macro_rules! fields {
+    () => {
+        $crate::fields(None)
+    };
     ($name:ident) => {
         $crate::fields($crate::__declaration_ident(stringify!($name)).expect("function identifier"))
     };
@@ -91,4 +94,12 @@ pub fn bind_output(
 #[doc(hidden)]
 pub fn __declaration_type(text: &str) -> syn::Type {
     prebindgen_declarations::declarations::parse_type(text)
+}
+
+/// Configure source-record or enum-variant input fields by name.
+#[macro_export]
+macro_rules! param_fields {
+    () => {
+        $crate::param_fields()
+    };
 }

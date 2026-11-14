@@ -12,8 +12,8 @@ mod builders;
 #[cfg(test)]
 mod extension_tests;
 pub use builders::{
-    getter_view, DeclError, DeclExpand, DeclExpandParam, DeclExpandReturn, DeclFields,
-    DeclInputAlternatives,
+    constructor_input, getter_view, DeclError, DeclExpand, DeclExpandParam, DeclExpandReturn,
+    DeclFields, DeclInputAlternatives,
 };
 mod convert;
 pub use convert::{

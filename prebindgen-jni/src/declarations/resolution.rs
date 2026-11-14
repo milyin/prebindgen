@@ -245,7 +245,7 @@ impl DeclJniDefaults {
                 ..
             } => Err("variant branch requires an enum parent".into()),
             InputNode::Branch {
-                operation: JniInputBranch::ConfigEnumFields(_),
+                operation: JniInputBranch::ConfigEnumFields(value),
                 children,
             } => {
                 let entries =
@@ -260,7 +260,7 @@ impl DeclJniDefaults {
                         } => Ok((variant.as_str(), fields.as_slice(), children.as_slice())),
                         _ => Err("named enum fields require variant branches".into()),
                     })?;
-                self.enum_input_recipe(flat, codec, ty, extra, &entries, false, stack)
+                self.enum_input_recipe(flat, codec, ty, extra, &entries, *value, stack)
             }
             InputNode::Branch {
                 operation: JniInputBranch::Enum { value },
@@ -500,6 +500,49 @@ impl DeclJniDefaults {
                 )
             }
             InputNode::Branch {
+                operation:
+                    JniInputBranch::ConfigConstructorArguments(JniConstructorArguments {
+                        function,
+                        parameters,
+                    }),
+                children,
+            } => prebindgen_declarations::resolve_constructor_arguments(
+                flat,
+                ty,
+                function,
+                parameters,
+                children,
+                &JniInputConfig::auto(),
+                |ty, child| resolve(ty, child, stack),
+                |function| JniInputBranch::Constructor { function },
+            ),
+            InputNode::Branch {
+                operation: JniInputBranch::ConfigNamedFields(fields),
+                children,
+            } => {
+                let overrides = prebindgen_declarations::named_children(&fields.fields, children)?;
+                let default = if fields.record {
+                    JniInputConfig::value()
+                } else {
+                    JniInputConfig::auto()
+                };
+                let children = prebindgen_declarations::resolve_named_fields(
+                    flat,
+                    ty,
+                    &overrides,
+                    &default,
+                    |ty, child| resolve(ty, child, stack),
+                )?;
+                Ok(InputNode::Branch {
+                    operation: if fields.record {
+                        JniInputBranch::Record
+                    } else {
+                        JniInputBranch::Fields
+                    },
+                    children,
+                })
+            }
+            InputNode::Branch {
                 operation: JniInputBranch::Constructor { function },
                 children: args,
             } => prebindgen_declarations::resolve_constructor(
@@ -669,7 +712,7 @@ impl DeclJniDefaults {
                 ..
             } => Err("variant/argument branch requires its parent operation".into()),
             OutputNode::Branch {
-                operation: JniOutputBranch::ConfigEnumFields(_),
+                operation: JniOutputBranch::ConfigEnumFields(value),
                 children,
             } => {
                 let entries =
@@ -690,7 +733,7 @@ impl DeclJniDefaults {
                     prebindgen_declarations::output_referent(ty).unwrap_or(ty),
                     extra,
                     &entries,
-                    false,
+                    *value,
                     stack,
                     getter_result,
                 )
@@ -809,7 +852,19 @@ impl DeclJniDefaults {
                 child: output,
             } => {
                 let target = flat.resolve_type(target)?;
-                let matched = same_type(ty, &target);
+                // Getter results describe a borrowed observation of the logical value.
+                // Match local typed overrides at that same logical type, before composition.
+                let ty = if getter_result {
+                    prebindgen_declarations::output_referent(ty).unwrap_or(ty)
+                } else {
+                    ty
+                };
+                let target = if getter_result {
+                    prebindgen_declarations::output_referent(&target).unwrap_or(&target)
+                } else {
+                    &target
+                };
+                let matched = same_type(ty, target);
                 prebindgen_declarations::resolve_typed_expansion(
                     ty,
                     matched,

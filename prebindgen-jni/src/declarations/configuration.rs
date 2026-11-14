@@ -147,7 +147,7 @@ impl JniInputConfigExt for JniInputConfig {
     ) -> Self {
         let overrides = prebindgen_declarations::enum_overrides(overrides);
         JniInputConfig::Branch {
-            operation: JniInputBranch::ConfigEnumFields(()),
+            operation: JniInputBranch::ConfigEnumFields(false),
             children: overrides
                 .into_iter()
                 .map(|(variant, fields)| {
@@ -423,7 +423,7 @@ impl JniOutputConfigExt for JniOutputConfig {
     ) -> Self {
         let overrides = prebindgen_declarations::enum_overrides(overrides);
         JniOutputConfig::Branch {
-            operation: JniOutputBranch::ConfigEnumFields(()),
+            operation: JniOutputBranch::ConfigEnumFields(false),
             children: overrides
                 .into_iter()
                 .map(|(variant, fields)| {
@@ -551,28 +551,24 @@ impl prebindgen_declarations::LocalConversion<JniOutputConfig> for JniOutputConf
 }
 
 pub(super) fn owned_field_view(view: JniOutputConfig) -> JniOutputConfig {
-    let JniOutputConfig::Unary {
-        operation: JniOutputUnary::Getter { function },
-        child,
-    } = view
-    else {
-        panic!("fields_into requires a fields! accessor")
-    };
-    let JniOutputConfig::Branch {
-        operation: JniOutputBranch::ConfigNamedFields(JniNamedFields { fields, .. }),
-        children,
-    } = *child
-    else {
-        panic!("fields_into requires named fields")
-    };
-    JniOutputConfig::Unary {
-        operation: JniOutputUnary::Into { function },
-        child: Box::new(JniOutputConfig::Branch {
+    match view {
+        JniOutputConfig::Branch {
+            operation: JniOutputBranch::ConfigNamedFields(JniNamedFields { fields, .. }),
+            children,
+        } => JniOutputConfig::Branch {
             operation: JniOutputBranch::ConfigNamedFields(JniNamedFields {
                 fields,
                 mode: ProjectionMode::Owned,
             }),
             children,
-        }),
+        },
+        JniOutputConfig::Unary {
+            operation: JniOutputUnary::Getter { function },
+            child,
+        } => JniOutputConfig::Unary {
+            operation: JniOutputUnary::Into { function },
+            child: Box::new(owned_field_view(*child)),
+        },
+        _ => panic!("fields_into requires a fields! declaration"),
     }
 }

@@ -517,28 +517,24 @@ impl prebindgen_declarations::LocalConversion<COutputConfig> for COutputConfigOp
 }
 
 pub(super) fn owned_field_view(view: COutputConfig) -> COutputConfig {
-    let COutputConfig::Unary {
-        operation: COutputUnary::Getter { function },
-        child,
-    } = view
-    else {
-        panic!("fields_into requires a fields! accessor")
-    };
-    let COutputConfig::Branch {
-        operation: COutputBranch::ConfigNamedFields(CNamedFields { fields, .. }),
-        children,
-    } = *child
-    else {
-        panic!("fields_into requires named fields")
-    };
-    COutputConfig::Unary {
-        operation: COutputUnary::Into { function },
-        child: Box::new(COutputConfig::Branch {
+    match view {
+        COutputConfig::Branch {
+            operation: COutputBranch::ConfigNamedFields(CNamedFields { fields, .. }),
+            children,
+        } => COutputConfig::Branch {
             operation: COutputBranch::ConfigNamedFields(CNamedFields {
                 fields,
                 mode: ProjectionMode::Owned,
             }),
             children,
-        }),
+        },
+        COutputConfig::Unary {
+            operation: COutputUnary::Getter { function },
+            child,
+        } => COutputConfig::Unary {
+            operation: COutputUnary::Into { function },
+            child: Box::new(owned_field_view(*child)),
+        },
+        _ => panic!("fields_into requires a fields! declaration"),
     }
 }

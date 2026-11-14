@@ -104,9 +104,6 @@
 //! "skipping undeclared" build warning while emitting nothing.
 
 use prebindgen_jni::prelude::*;
-use prebindgen_jni::{
-    JniInputBranch, JniInputLeafOp, JniInputUnary, JniOutputBranch, JniOutputLeafOp, JniOutputUnary,
-};
 /* Unsupported: imports and helpers for the disabled declarations.
 use prebindgen_jni::{
     constant, data_class, enum_class, matching, package, ptr_class, sealed_class, variant, JniGen,
@@ -131,55 +128,42 @@ fn strip_flat_class_prefix(class: &str, name: &str) -> String {
 
 */
 use prebindgen_declarations::{convert, from, into, try_from, try_into};
-use prebindgen_jni::{
-    callback, data_class, enum_class, package, ptr_class, sealed_class, JniGen, JniInputConfig,
-};
-use prebindgen_jni::{expand_param, expand_return, fields, fun};
+use prebindgen_jni::{callback, data_class, enum_class, package, ptr_class, sealed_class, JniGen};
+use prebindgen_jni::{expand_param, expand_return, fields, fun, param_fields};
 
-fn bulk_replay_input_with(redundant_bulk: bool, bulk_rows: bool) -> prebindgen_jni::JniInputConfig {
-    let borrowed = |function: &str| JniInputConfig::Unary {
-        operation: JniInputUnary::Optional,
-        child: Box::new(JniInputConfig::Branch {
-            operation: JniInputBranch::Constructor {
-                function: function.into(),
-            },
-            children: vec![JniInputConfig::Leaf(JniInputLeafOp::Value)],
-        }),
-    };
-    let buffer = |function: &str| {
-        let input = borrowed(function);
-        if bulk_rows {
-            input
-        } else {
-            input.bulk()
-        }
-    };
-    let input = JniInputConfig::Unary {
-        operation: JniInputUnary::Sequence,
-        child: Box::new(JniInputConfig::Branch {
-            operation: JniInputBranch::Record,
-            children: vec![
-                JniInputConfig::Leaf(JniInputLeafOp::Value),
-                if redundant_bulk || !bulk_rows {
-                    borrowed("bulk_replay_text").bulk()
-                } else {
-                    borrowed("bulk_replay_text")
-                },
-                buffer("bulk_replay_bytes"),
-                borrowed("bulk_replay_kind"),
-                JniInputConfig::Leaf(JniInputLeafOp::Value),
-            ],
-        }),
-    };
+#[path = "build_support/bulk_normalization.rs"]
+mod bulk_normalization;
+use bulk_normalization::redundant_bulk_replay_input_with;
+
+fn bulk_replay_input_with(bulk_rows: bool) -> prebindgen_jni::DeclJniExpandParam {
+    let mut text = expand_param!(Option<String>)
+        .optional(expand_param!(String).variant(fun!(bulk_replay_text)));
+    let mut bytes = expand_param!(Option<Vec<u8>>)
+        .optional(expand_param!(Vec<u8>).variant(fun!(bulk_replay_bytes)));
+    if !bulk_rows {
+        text = text.bulk();
+        bytes = bytes.bulk();
+    }
+    let input = expand_param!(Vec<BulkReplayRow>).element(
+        expand_param!(BulkReplayRow).variant_record(
+            param_fields!()
+                .field("text", text)
+                .field("bytes", bytes)
+                .field(
+                    "kind",
+                    expand_param!(Option<BulkKind>)
+                        .optional(expand_param!(BulkKind).variant(fun!(bulk_replay_kind))),
+                ),
+        ),
+    );
     if bulk_rows {
         input.bulk()
     } else {
         input
     }
 }
-
-fn bulk_replay_input() -> prebindgen_jni::JniInputConfig {
-    bulk_replay_input_with(false, true)
+fn bulk_replay_input() -> prebindgen_jni::DeclJniExpandParam {
+    bulk_replay_input_with(true)
 }
 
 #[path = "build_support/input_contracts.rs"]
@@ -188,16 +172,6 @@ mod input_contracts;
 mod output_contracts;
 
 fn main() {
-    use prebindgen_declarations::SequenceDelivery;
-    use prebindgen_jni::JniOutputConfig;
-    let ordinary_rows = |element| JniOutputConfig::Unary {
-        operation: JniOutputUnary::Sequence {
-            delivery: SequenceDelivery::Value,
-            mode: None,
-        },
-        child: Box::new(element),
-    };
-    let row = || JniOutputConfig::Leaf(JniOutputLeafOp::ConfigDefault(()));
     let getter_views = || {
         expand_return!(GetterOwner)
             .field(fun!(getter_owner_child))
@@ -210,22 +184,22 @@ fn main() {
         views.field(fun!(jni_buffer_row_text))
     });
     let wide_return = (0..130).fold(expand_return!(i64), |views, _| views.field_self_ref());
-    let type_rows = || JniInputConfig::Unary {
-        operation: JniInputUnary::Sequence,
-        child: Box::new(JniInputConfig::Branch {
-            operation: JniInputBranch::Record,
-            children: vec![JniInputConfig::Leaf(JniInputLeafOp::Value); 2],
-        }),
+    let type_rows = || {
+        expand_param!(Vec<TypeInputRow>)
+            .element(expand_param!(TypeInputRow).variant_record(param_fields!()))
     };
-    let type_nested = || JniInputConfig::Unary {
-        operation: JniInputUnary::Sequence,
-        child: Box::new(type_rows()),
-    };
+    let type_nested = || expand_param!(Vec<Vec<TypeInputRow>>).element(type_rows());
     let binding = JniGen::builder()
         .convert(convert!(WireMarker).input(fun!(wire_marker_new)).output(fun!(wire_marker_value)))
         .expand(expand_return!(WireReply).fields_into(fields!(wire_reply_into_struct)))
-        .expand(expand_return!(WireReplyResult).view(prebindgen_jni::JniOutputConfig::enum_fields([])))
-        .expand(expand_return!(WireReplySample).view(prebindgen_jni::JniOutputConfig::Branch { operation: JniOutputBranch::OwnedFields, children: vec![prebindgen_jni::JniOutputConfig::auto();2] }))
+        .expand(expand_return!(WireReplyResult).view(expand_return!(WireReplyResult).enum_fields([])))
+        .expand(expand_return!(WireReplySample).view(
+                    expand_return!(WireReplySample).fields_into(
+                        fields!()
+                            .field("resource", expand_return!(CallbackReturnResource).default())
+                            .field("payload", expand_return!(Vec<u8>).default()),
+                    ),
+                ))
         .expand(expand_return!(WireReplyError).fields(fields!(wire_reply_error_view)))
         .convert(convert!(WireDuration).input(fun!(wire_duration_new)).output(fun!(wire_duration_millis)))
         .package(package!("payloadenums")
@@ -245,9 +219,9 @@ fn main() {
             .fun(fun!(wire_owned_bench))
             .fun(fun!(wire_manual_owned_bench))
             .fun(fun!(wire_bench_total))
-            .fun(fun!(wire_bench_scalar_bulk).expand_param("value",JniInputConfig::value().bulk()))
+            .fun(fun!(wire_bench_scalar_bulk).expand_param("value",expand_param!(WireBench).variant_self().bulk()))
             .fun(fun!(wire_manual_total))
-            .fun(fun!(wire_bench_bulk).expand_param("values",JniInputConfig::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInputConfig::value()) }.bulk()))
+            .fun(fun!(wire_bench_bulk).expand_param("values",expand_param!(Vec<WireBench>).variant_self().bulk()))
             .fun(fun!(wire_bench_objects))
             .class(sealed_class!(WireCheckedEvent))
             .fun(fun!(wire_checked_new))
@@ -258,11 +232,36 @@ fn main() {
             .fun(fun!(wire_composite_owned_new))
             .class(data_class!(WireOptionalOwner))
             .class(sealed_class!(WireNicheEvent))
-            .fun(fun!(wire_niche_rows).expand_param("values",JniInputConfig::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInputConfig::enum_variants(vec![vec![],vec![JniInputConfig::Unary { operation: JniInputUnary::Optional, child: Box::new(JniInputConfig::Branch { operation: JniInputBranch::Record, children: vec![JniInputConfig::value();2] }) },JniInputConfig::value()]], true)) }.bulk()))
+            .fun(fun!(wire_niche_rows).expand_param(
+                     "values",
+                     expand_param!(Vec<WireNicheEvent>)
+                         .element(
+                             expand_param!(WireNicheEvent).enum_value([
+                                 ("Empty", param_fields!()),
+                                 (
+                                     "Data",
+                                     param_fields!()
+                                         .field(
+                                             "small",
+                                             expand_param!(Option<WireOptionalOwner>).optional(
+                                                 expand_param!(WireOptionalOwner)
+                                                     .variant_record(param_fields!()),
+                                             ),
+                                         )
+                                         .field(
+                                             "wide",
+                                             expand_param!(Option<CallbackReturnResource>)
+                                                 .variant_self(),
+                                         ),
+                                 ),
+                             ]),
+                         )
+                         .bulk(),
+                 ))
             .fun(fun!(wire_owned_new))
             .fun(fun!(wire_owned_echo))
             .fun(fun!(wire_owned_callback))
-            .fun(fun!(wire_owned_rows).expand_param("values",JniInputConfig::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInputConfig::value()) }.bulk()))
+            .fun(fun!(wire_owned_rows).expand_param("values",expand_param!(Vec<WireOwnedEvent>).variant_self().bulk()))
             .fun(fun!(wire_owned_rows_new))
             .class(sealed_class!(WireRecoveryMode))
             .class(data_class!(WireRecoveryConfig))
@@ -271,12 +270,12 @@ fn main() {
             .class(enum_class!(WireInterceptionPoint))
             .class(data_class!(WireTimestampStackRecord))
             .fun(fun!(wire_recovery_echo))
-            .fun(fun!(wire_timestamps).expand_param("values",JniInputConfig::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInputConfig::value()) }.bulk()))
+            .fun(fun!(wire_timestamps).expand_param("values",expand_param!(Vec<WireTimestampStackRecord>).variant_self().bulk()))
             .class(sealed_class!(Result<i64,String>).name("WireDecision"))
             .class(sealed_class!(Result<(),String>).name("WireNotice"))
-            .fun(fun!(wire_event_rows).expand_param("values",JniInputConfig::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInputConfig::value()) }.bulk()))
+            .fun(fun!(wire_event_rows).expand_param("values",expand_param!(Vec<WireEvent>).variant_self().bulk()))
             .fun(fun!(wire_event_rows_callback))
-            .fun(fun!(wire_bare_echo).expand_param("value",JniInputConfig::enum_fields([])).expand_return(prebindgen_jni::JniOutputConfig::enum_fields([])))
+            .fun(fun!(wire_bare_echo).expand_param("value",expand_param!(WireBare).enum_fields([])).expand_return(expand_return!(WireBare).enum_fields([])))
             .fun(fun!(wire_event_echo))
             .fun(fun!(wire_event_callback))
             .fun(fun!(wire_result_echo).result_as_value())
@@ -319,19 +318,16 @@ fn main() {
                 ))
                 .fun(fun!(canonical_millis_echo))
                 .fun(fun!(canonical_millis_optional))
-                .fun(fun!(canonical_millis_rows))
+                .fun(fun!(canonical_millis_rows).expand_return(expand_return!(Vec<CanonMillis>).element(expand_return!(CanonMillis).default())))
                 .fun(fun!(canonical_millis_callback))
                 .fun(fun!(canonical_millis_notify))
                 .fun(fun!(canonical_millis_static))
                 .fun(
-                    fun!(canonical_millis_views).expand_return(JniOutputConfig::combine([
-                        convert!(CanonMillis)
-                            .output(fun!(canonical_millis_value))
-                            .into(),
-                        convert!(CanonMillis)
-                            .output(fun!(canonical_millis_value))
-                            .into(),
-                    ])),
+                    fun!(canonical_millis_views).expand_return(
+                        expand_return!(CanonMillis)
+                            .view(convert!(CanonMillis).output(fun!(canonical_millis_value)))
+                            .view(convert!(CanonMillis).output(fun!(canonical_millis_value))),
+                    ),
                 )
                 .fun(fun!(canonical_celsius))
                 .fun(fun!(canonical_percent))
@@ -342,7 +338,7 @@ fn main() {
                 .fun(fun!(canonical_settings))
                 .fun(
                     fun!(canonical_settings_rows)
-                        .expand_param("value", JniInputConfig::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInputConfig::value()) }.bulk()),
+                        .expand_param("value", expand_param!(Vec<CanonSettings>).variant_self().bulk()),
                 )
                 .fun(fun!(canonical_settings_callback))
                 .fun(fun!(canonical_view_echo))
@@ -352,7 +348,7 @@ fn main() {
                 .fun(fun!(canonical_live))
                 .fun(fun!(canonical_output_rows))
                 .fun(
-                    fun!(canonical_output_rows_plain).expand_return(JniOutputConfig::Unary { operation: JniOutputUnary::Sequence { delivery: SequenceDelivery::Value, mode: None }, child: Box::new(JniOutputConfig::value()),  }),
+                    fun!(canonical_output_rows_plain).expand_return(expand_return!(Vec<CanonOutput>).field_self()),
                 )
                 .fun(fun!(canonical_output_notify))
                 .fun(fun!(canonical_consume_rows))
@@ -394,8 +390,19 @@ fn main() {
             .fun(fun!(type_input_mixed)
                 .expand_param("reads",expand_param!(i64).variant(fun!(type_input_a_read)).bulk())
                 .expand_param("writes",expand_param!(i64).variant(fun!(type_input_a_mut)).bulk()))
-            .fun(fun!(type_input_row).expand_param("value",JniInputConfig::Branch { operation: JniInputBranch::Record, children: vec![JniInputConfig::Leaf(JniInputLeafOp::Value);2] }))
-            .fun(fun!(type_input_holder).expand_param("value",JniInputConfig::Branch { operation: JniInputBranch::Record, children: vec![JniInputConfig::Unary { operation: JniInputUnary::Optional, child: Box::new(JniInputConfig::Branch { operation: JniInputBranch::Record, children: vec![JniInputConfig::Leaf(JniInputLeafOp::Value);2] }) }] }))
+            .fun(fun!(type_input_row).expand_param(
+                     "value",
+                     expand_param!(TypeInputRow).variant_record(param_fields!()),
+                 ))
+            .fun(fun!(type_input_holder).expand_param(
+                     "value",
+                     expand_param!(TypeInputHolder).variant_record(param_fields!().field(
+                         "row",
+                         expand_param!(Option<TypeInputRow>).optional(
+                             expand_param!(TypeInputRow).variant_record(param_fields!()),
+                         ),
+                     )),
+                 ))
             .fun(fun!(type_input_rows).expand_param("values",type_rows().bulk()))
             .fun(fun!(type_input_rows_plain).expand_param("values",type_rows()))
             .fun(fun!(type_input_nested).expand_param("values",type_nested().bulk()))
@@ -474,32 +481,187 @@ fn main() {
             .class(data_class!(BulkHandleText)).class(data_class!(BulkPairText))
             .class(data_class!(BulkReplayRow))
             .fun(fun!(bulk_replay_rows).expand_param("rows",bulk_replay_input()))
-            .fun(fun!(bulk_replay_redundant_rows).expand_param("rows",bulk_replay_input_with(true, true)))
-            .fun(fun!(bulk_replay_nested_rows).expand_param("rows",JniInputConfig::Unary { operation: JniInputUnary::Sequence, child: Box::new(bulk_replay_input_with(true,true)) }.bulk()))
-            .fun(fun!(bulk_replay_nested_callback).expand_param("callback",callback!(impl Fn()->Vec<Vec<BulkReplayRow>>).name("BulkReplayNestedCallback").expand_return(JniInputConfig::Unary { operation: JniInputUnary::Sequence, child: Box::new(bulk_replay_input_with(true,true)) }.bulk())))
-            .fun(fun!(bulk_replay_object_rows).expand_param("rows",bulk_replay_input_with(false, false)))
+            .fun(fun!(bulk_replay_redundant_rows).expand_param("rows",redundant_bulk_replay_input_with(true, true)))
+            .fun(fun!(bulk_replay_nested_rows).expand_param(
+                     "rows",
+                     expand_param!(Vec<Vec<BulkReplayRow>>)
+                         .element(redundant_bulk_replay_input_with(true, true))
+                         .bulk(),
+                 ))
+            .fun(fun!(bulk_replay_nested_callback).expand_param(
+                     "callback",
+                     callback!(impl Fn() -> Vec<Vec<BulkReplayRow>>)
+                         .name("BulkReplayNestedCallback")
+                         .expand_return(
+                             expand_param!(Vec<Vec<BulkReplayRow>>)
+                                 .element(redundant_bulk_replay_input_with(true, true))
+                                 .bulk(),
+                         ),
+                 ))
+            .fun(fun!(bulk_replay_object_rows).expand_param("rows",bulk_replay_input_with(false)))
             .fun(fun!(bulk_replay_callback).expand_param("callback",callback!(impl Fn()->Vec<BulkReplayRow>).name("BulkReplayCallback").expand_return(bulk_replay_input())))
-            .fun(fun!(bulk_nested_handles_input).expand_param("values",JniInputConfig::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInputConfig::Unary { operation: JniInputUnary::Optional, child: Box::new(JniInputConfig::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInputConfig::Unary { operation: JniInputUnary::Optional, child: Box::new(JniInputConfig::Leaf(JniInputLeafOp::Value).bulk()) }) }) }) }.bulk()))
-            .fun(fun!(bulk_cleanup_nested_callback).expand_param("callback",
-                callback!(impl Fn()->Vec<Option<Vec<Option<BulkHandle>>>> + Send + 'static).name("BulkCleanupNestedCallback")
-                    .expand_return(JniInputConfig::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInputConfig::Unary { operation: JniInputUnary::Optional, child: Box::new(JniInputConfig::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInputConfig::Unary { operation: JniInputUnary::Optional, child: Box::new(JniInputConfig::Leaf(JniInputLeafOp::Value).bulk()) }) }) }) }.bulk())))
-            .fun(fun!(bulk_cleanup_pair_callback).expand_param("callback",
-                callback!(impl Fn()->BulkPairText).name("BulkCleanupPairCallback")
-                    .expand_return(JniInputConfig::Branch { operation: JniInputBranch::Record, children: vec![JniInputConfig::Branch { operation: JniInputBranch::Constructor { function: "bulk_handle_copy".into() }, children: vec![JniInputConfig::Leaf(JniInputLeafOp::Value)],  },JniInputConfig::Leaf(JniInputLeafOp::Value),JniInputConfig::Leaf(JniInputLeafOp::Value)] }.bulk())))
+            .fun(fun!(bulk_nested_handles_input).expand_param(
+                     "values",
+                     expand_param!(Vec<Option<Vec<Option<BulkHandle>>>>)
+                         .element(
+                             expand_param!(Option<Vec<Option<BulkHandle>>>).optional(
+                                 expand_param!(Vec<Option<BulkHandle>>).element(
+                                     expand_param!(Option<BulkHandle>)
+                                         .optional(expand_param!(BulkHandle).variant_self().bulk()),
+                                 ),
+                             ),
+                         )
+                         .bulk(),
+                 ))
+            .fun(fun!(bulk_cleanup_nested_callback).expand_param(
+                     "callback",
+                     callback!(impl Fn() -> Vec<Option<Vec<Option<BulkHandle>>>> + Send + 'static)
+                         .name("BulkCleanupNestedCallback")
+                         .expand_return(
+                             expand_param!(Vec<Option<Vec<Option<BulkHandle>>>>)
+                                 .element(expand_param!(Option<Vec<Option<BulkHandle>>>).optional(
+                                     expand_param!(Vec<Option<BulkHandle>>).element(
+                                         expand_param!(Option<BulkHandle>).optional(
+                                             expand_param!(BulkHandle).variant_self().bulk(),
+                                         ),
+                                     ),
+                                 ))
+                                 .bulk(),
+                         ),
+                 ))
+            .fun(fun!(bulk_cleanup_pair_callback).expand_param(
+                     "callback",
+                     callback!(impl Fn() -> BulkPairText)
+                         .name("BulkCleanupPairCallback")
+                         .expand_return(
+                             expand_param!(BulkPairText)
+                                 .variant_record(param_fields!().field(
+                                     "borrowed_handle",
+                                     expand_param!(BulkHandle).variant(
+                                         fun!(bulk_handle_copy).expand_param(
+                                             "value",
+                                             expand_param!(&BulkHandle).variant_self(),
+                                         ),
+                                     ),
+                                 ))
+                                 .bulk(),
+                         ),
+                 ))
             .fun(fun!(bulk_replay_reset)).fun(fun!(bulk_replay_count))
-            .fun(fun!(bulk_patch_rows).expand_param("row",JniInputConfig::Branch { operation: JniInputBranch::Constructor { function: "bulk_patch_row_new".into() }, children: vec![
-                JniInputConfig::Unary { operation: JniInputUnary::Optional, child: Box::new(JniInputConfig::Leaf(JniInputLeafOp::Value)) },
-                JniInputConfig::Unary { operation: JniInputUnary::Optional, child: Box::new(JniInputConfig::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInputConfig::Unary { operation: JniInputUnary::Optional, child: Box::new(JniInputConfig::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInputConfig::Unary { operation: JniInputUnary::Optional, child: Box::new(JniInputConfig::Leaf(JniInputLeafOp::Value)) }) }) }) }) },
-                JniInputConfig::Leaf(JniInputLeafOp::Value),
-            ],  }.bulk()))
-            .fun(fun!(bulk_patch_callback).expand_param("callback",callback!(impl Fn()->Vec<Option<Vec<Option<BulkHandle>>>>).name("BulkPatchCallback").expand_return(JniInputConfig::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInputConfig::Unary { operation: JniInputUnary::Optional, child: Box::new(JniInputConfig::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInputConfig::Unary { operation: JniInputUnary::Optional, child: Box::new(JniInputConfig::Leaf(JniInputLeafOp::Value).bulk()) }) }) }) }.bulk())))
-            .fun(fun!(bulk_nested_envelope).expand_param("values",JniInputConfig::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInputConfig::Branch { operation: JniInputBranch::Constructor { function: "bulk_input_envelope_new".into() }, children: vec![JniInputConfig::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInputConfig::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInputConfig::Leaf(JniInputLeafOp::Value)) }) }.bulk()],  }) }))
-            .fun(fun!(bulk_pair_text_callback).expand_param("callback",callback!(impl Fn()->Vec<BulkPairText>).name("BulkPairTextCallback").expand_return(JniInputConfig::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInputConfig::Branch { operation: JniInputBranch::Record, children: vec![JniInputConfig::Branch { operation: JniInputBranch::Constructor { function: "bulk_handle_copy".into() }, children: vec![JniInputConfig::Leaf(JniInputLeafOp::Value)],  },JniInputConfig::Leaf(JniInputLeafOp::Value),JniInputConfig::Leaf(JniInputLeafOp::Value)] }) }.bulk())))
-            .fun(fun!(bulk_handle_texts).expand_param("values",JniInputConfig::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInputConfig::Branch { operation: JniInputBranch::Record, children: vec![JniInputConfig::Leaf(JniInputLeafOp::Value);2] }) }.bulk()))
+            .fun(fun!(bulk_patch_rows).expand_param(
+                     "row",
+                     expand_param!(BulkPatchRow)
+                         .variant(
+                             fun!(bulk_patch_row_new)
+                                 .expand_param(
+                                     "first",
+                                     expand_param!(Option<BulkHandle>)
+                                         .optional(expand_param!(BulkHandle).variant_self()),
+                                 )
+                                 .expand_param(
+                                     "children",
+                                     expand_param!(Option<Vec<Option<Vec<Option<BulkHandle>>>>>)
+                                         .optional(
+                                             expand_param!(Vec<Option<Vec<Option<BulkHandle>>>>)
+                                                 .element(
+                                                     expand_param!(Option<Vec<Option<BulkHandle>>>)
+                                                         .optional(
+                                                             expand_param!(Vec<Option<BulkHandle>>)
+                                                                 .element(
+                                                                     expand_param!(Option<BulkHandle>)
+                                                                         .optional(
+                                                                             expand_param!(BulkHandle)
+                                                                                 .variant_self(),
+                                                                         ),
+                                                                 ),
+                                                         ),
+                                                 ),
+                                         ),
+                                 )
+                                 .expand_param("last", expand_param!(BulkHandle).variant_self()),
+                         )
+                         .bulk(),
+                 ))
+            .fun(fun!(bulk_patch_callback).expand_param(
+                     "callback",
+                     callback!(impl Fn() -> Vec<Option<Vec<Option<BulkHandle>>>>)
+                         .name("BulkPatchCallback")
+                         .expand_return(
+                             expand_param!(Vec<Option<Vec<Option<BulkHandle>>>>)
+                                 .element(expand_param!(Option<Vec<Option<BulkHandle>>>).optional(
+                                     expand_param!(Vec<Option<BulkHandle>>).element(
+                                         expand_param!(Option<BulkHandle>).optional(
+                                             expand_param!(BulkHandle).variant_self().bulk(),
+                                         ),
+                                     ),
+                                 ))
+                                 .bulk(),
+                         ),
+                 ))
+            .fun(fun!(bulk_nested_envelope).expand_param(
+                     "values",
+                     expand_param!(Vec<BulkInputEnvelope>).element(
+                         expand_param!(BulkInputEnvelope).variant(
+                             fun!(bulk_input_envelope_new).expand_param(
+                                 "values",
+                                 expand_param!(Vec<Vec<i64>>)
+                                     .element(
+                                         expand_param!(Vec<i64>)
+                                             .element(expand_param!(i64).variant_self()),
+                                     )
+                                     .bulk(),
+                             ),
+                         ),
+                     ),
+                 ))
+            .fun(fun!(bulk_pair_text_callback).expand_param(
+                     "callback",
+                     callback!(impl Fn() -> Vec<BulkPairText>)
+                         .name("BulkPairTextCallback")
+                         .expand_return(
+                             expand_param!(Vec<BulkPairText>)
+                                 .element(expand_param!(BulkPairText).variant_record(
+                                     param_fields!().field(
+                                         "borrowed_handle",
+                                         expand_param!(BulkHandle).variant(
+                                             fun!(bulk_handle_copy).expand_param(
+                                                 "value",
+                                                 expand_param!(&BulkHandle).variant_self(),
+                                             ),
+                                         ),
+                                     ),
+                                 ))
+                                 .bulk(),
+                         ),
+                 ))
+            .fun(fun!(bulk_handle_texts).expand_param(
+                     "values",
+                     expand_param!(Vec<BulkHandleText>)
+                         .element(expand_param!(BulkHandleText).variant_record(param_fields!()))
+                         .bulk(),
+                 ))
             .fun(fun!(bulk_collection_lock_groups).expand_param("probe",callback!(impl Fn()->bool).name("CollectionLocksProbe")))
-            .fun(fun!(bulk_handle_nested).expand_param("values",JniInputConfig::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInputConfig::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInputConfig::Leaf(JniInputLeafOp::Value)) }.bulk()) }))
-            .fun(fun!(bulk_handle_text_callback).expand_param("callback",callback!(impl Fn()->Vec<BulkHandleText>).name("BulkHandleTextCallback").expand_return(JniInputConfig::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInputConfig::Branch { operation: JniInputBranch::Record, children: vec![JniInputConfig::Leaf(JniInputLeafOp::Value);2] }) }.bulk())))
-            .fun(fun!(bulk_optional_borrow_pair).expand_param("value",JniInputConfig::Unary { operation: JniInputUnary::Optional, child: Box::new(JniInputConfig::Branch { operation: JniInputBranch::Constructor { function: "bulk_borrow_pair_new".into() }, children: vec![JniInputConfig::Leaf(JniInputLeafOp::Value);2],  }) }.bulk()))
+            .fun(fun!(bulk_handle_nested).expand_param(
+                     "values",
+                     expand_param!(Vec<Vec<BulkHandle>>).element(
+                         expand_param!(Vec<BulkHandle>)
+                             .element(expand_param!(BulkHandle).variant_self())
+                             .bulk(),
+                     ),
+                 ))
+            .fun(fun!(bulk_handle_text_callback).expand_param(
+                     "callback",
+                     callback!(impl Fn() -> Vec<BulkHandleText>)
+                         .name("BulkHandleTextCallback")
+                         .expand_return(
+                             expand_param!(Vec<BulkHandleText>)
+                                 .element(
+                                     expand_param!(BulkHandleText).variant_record(param_fields!()),
+                                 )
+                                 .bulk(),
+                         ),
+                 ))
+            .fun(fun!(bulk_optional_borrow_pair).expand_param("value",expand_param!(Option < BulkBorrowPair >).optional(expand_param!(BulkBorrowPair).variant(fun!(bulk_borrow_pair_new).expand_param("handle", expand_param!(& BulkHandle).variant_self()).expand_param("number", expand_param!(i64).variant_self()))).bulk()))
             .fun(fun!(bulk_select).expand_param("value",expand_param!(i64).variant(fun!(bulk_scalar)).variant_self().bulk()).expand_return(expand_return!(i64).field_self().bulk()))
             .fun(fun!(bulk_kinds).expand_param("value",expand_param!(BulkKind).variant_self().bulk()).expand_return(expand_return!(BulkKind).field_self().bulk()))
             .fun(fun!(bulk_units).expand_param("value",expand_param!(Vec<()>).variant_self().bulk()).expand_return(expand_return!(Vec<()>).field_self_into().bulk()))
@@ -618,10 +780,8 @@ fn main() {
                 .field(fun!(getter_child_number)).field(fun!(getter_child_name))))
             .fun(fun!(getter_counts))
             .fun(fun!(getter_two_clones_new).expand_return(expand_return!(GetterOwner)
-                .view(prebindgen_jni::JniOutputConfig::getter("getter_owner_leaf",
-                    prebindgen_jni::JniOutputConfig::combine([
-                        prebindgen_jni::JniOutputConfig::Leaf(JniOutputLeafOp::Projected(prebindgen_declarations::Projection::borrowed())),
-                        prebindgen_jni::JniOutputConfig::Leaf(JniOutputLeafOp::Projected(prebindgen_declarations::Projection::borrowed()))])))))
+                .field(fun!(getter_owner_leaf).expand_return(expand_return!(GetterLeaf)
+                    .field_self_ref().field_self_ref()))))
             .fun(fun!(getter_fields_new).expand_return(expand_return!(GetterOwner)
                 .field_self_into().fields(fields!(getter_owner_details))))
             .fun(fun!(getter_callback).expand_param("callback",
@@ -633,21 +793,53 @@ fn main() {
         .expand(expand_return!(CallbackBoundaryError).fields_into(fields!(callback_boundary_error_into)))
         .package(package!("nativeoutputs")
             .fun(fun!(jni_output_optional)
-                .expand_return(expand_return!(CallbackRow).field_self_ref())
-                .output(ordinary_rows(JniOutputConfig::Unary { operation: JniOutputUnary::Optional, child: Box::new(ordinary_rows(row())) })))
+                     .expand_return(expand_return!(CallbackRow).field_self_ref())
+                     .output(
+                         expand_return!(Vec<Option<Vec<CallbackRow>>>).element_objects(
+                             expand_return!(Option<Vec<CallbackRow>>).optional(
+                                 expand_return!(Vec<CallbackRow>)
+                                     .element_objects(expand_return!(CallbackRow).default()),
+                             ),
+                         ),
+                     ))
             .fun(fun!(jni_output_mixed))
             .fun(fun!(jni_output_mixed_frames).callback_return_only()
                 .expand_return(expand_return!(Vec<CallbackRowResource>).field_self_ref().bulk()))
             .fun(fun!(jni_output_fold_drop).callback_return_only())
-            .fun(fun!(c_output_rows).name("jniOutputRows")
-                .expand_return(expand_return!(CallbackRow).field_self_ref())
-                .output(ordinary_rows(row())))
-            .fun(fun!(c_output_nested).name("jniOutputNested")
-                .expand_return(expand_return!(CallbackRow).field_self_ref())
-                .output(ordinary_rows(ordinary_rows(row()))))
-            .fun(fun!(c_output_pair).name("jniOutputPair")
-                .expand_return(expand_return!(CallbackRow).field_self_ref())
-                .output(JniOutputConfig::Branch { operation: JniOutputBranch::OwnedFields, children: vec![ordinary_rows(row()); 2] }))
+            .fun(fun!(c_output_rows)
+                     .name("jniOutputRows")
+                     .expand_return(expand_return!(CallbackRow).field_self_ref())
+                     .output(
+                         expand_return!(Vec<CallbackRow>)
+                             .element_objects(expand_return!(CallbackRow).default()),
+                     ))
+            .fun(fun!(c_output_nested)
+                     .name("jniOutputNested")
+                     .expand_return(expand_return!(CallbackRow).field_self_ref())
+                     .output(
+                         expand_return!(Vec<Vec<CallbackRow>>).element_objects(
+                             expand_return!(Vec<CallbackRow>)
+                                 .element_objects(expand_return!(CallbackRow).default()),
+                         ),
+                     ))
+            .fun(fun!(c_output_pair)
+                     .name("jniOutputPair")
+                     .expand_return(expand_return!(CallbackRow).field_self_ref())
+                     .output(
+                         expand_return!(NativeBulkNested).fields_into(
+                             fields!()
+                                 .field(
+                                     "first",
+                                     expand_return!(Vec<CallbackRow>)
+                                         .element_objects(expand_return!(CallbackRow).default()),
+                                 )
+                                 .field(
+                                     "second",
+                                     expand_return!(Vec<CallbackRow>)
+                                         .element_objects(expand_return!(CallbackRow).default()),
+                                 ),
+                         ),
+                     ))
             .fun(fun!(jni_output_fold).name("jniOutput")
                 .expand_return(expand_return!(CallbackRow).field_self_ref()).callback_return_only()))
         .package(package!("callbackboundaries")
@@ -679,14 +871,25 @@ fn main() {
                 .expand_param("second", callback!(impl Fn(CallbackConfigValue, i64) -> CallbackConfigValue)
                     .name("FlagArgumentHandler")
                     .expand_param(0, expand_return!(CallbackConfigValue).field(fun!(callback_config_positive)))))
-            .fun(fun!(callback_config_nested).expand_param("handlers",
-                JniInputConfig::for_type(syn::parse_quote!(CallbackConfigHandler), JniInputConfig::constructor("callback_config_handler", [
-                    callback!(impl Fn(CallbackConfigValue, i64) -> CallbackConfigValue)
-                        .name("NestedHandler")
-                        .expand_param(0, expand_return!(CallbackConfigValue).field(fun!(callback_config_positive)))
-                        .expand_return(expand_param!(CallbackConfigValue).variant(fun!(callback_config_from_number)))
-                        .into()
-                ]))))
+            .fun(fun!(callback_config_nested).expand_param(
+                     "handlers",
+                     expand_param!(CallbackConfigHandler).variant(
+                         fun!(callback_config_handler).expand_param(
+                             "callback",
+                             callback!(impl Fn(CallbackConfigValue, i64) -> CallbackConfigValue)
+                                 .name("NestedHandler")
+                                 .expand_param(
+                                     0,
+                                     expand_return!(CallbackConfigValue)
+                                         .field(fun!(callback_config_positive)),
+                                 )
+                                 .expand_return(
+                                     expand_param!(CallbackConfigValue)
+                                         .variant(fun!(callback_config_from_number)),
+                                 ),
+                         ),
+                     ),
+                 ))
             .fun(fun!(callback_config_optional).expand_param("handler", expand_param!(CallbackConfigHandler).variant(fun!(callback_config_handler))))
             .fun(fun!(callback_config_ordinary)))
         .expand(expand_param!(CallbackConstructor).variant(fun!(callback_constructor_from)))
@@ -703,54 +906,199 @@ fn main() {
             .class(data_class!(CallbackFixedResult))
             .class(data_class!(CallbackNestedBatch))
             .class(data_class!(CallbackOptionalBatch))
-            .fun(fun!(callback_mixed_optional_batches).expand_param("callback",
-                callback!(impl Fn() -> Vec<CallbackOptionalBatch>).name("MixedOptionalBatchesCallback")
-                    .expand_return(JniInputConfig::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInputConfig::Branch { operation: JniInputBranch::Record, children: vec![JniInputConfig::Leaf(JniInputLeafOp::Value),
-                        JniInputConfig::Unary { operation: JniInputUnary::Sequence, child: Box::new(callback_result_row_input()) }.bulk(), JniInputConfig::Leaf(JniInputLeafOp::Value)] }) })))
+            .fun(fun!(callback_mixed_optional_batches).expand_param(
+                     "callback",
+                     callback!(impl Fn() -> Vec<CallbackOptionalBatch>)
+                         .name("MixedOptionalBatchesCallback")
+                         .expand_return(
+                             expand_param!(Vec<CallbackOptionalBatch>).element(
+                                 expand_param!(CallbackOptionalBatch).variant_record(
+                                     param_fields!().field(
+                                         "rows",
+                                         expand_param!(Vec<CallbackFixedResult>)
+                                             .element(callback_result_row_input())
+                                             .bulk(),
+                                     ),
+                                 ),
+                             ),
+                         ),
+                 ))
             .class(data_class!(CallbackScalarBatch))
-            .fun(fun!(callback_mixed_scalars).expand_param("callback",
-                callback!(impl Fn() -> Vec<CallbackScalarBatch>).name("MixedScalarBatchesCallback")
-                    .expand_return(JniInputConfig::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInputConfig::Branch { operation: JniInputBranch::Record, children: vec![JniInputConfig::Leaf(JniInputLeafOp::Value),
-                        JniInputConfig::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInputConfig::Branch { operation: JniInputBranch::Record, children: vec![JniInputConfig::Leaf(JniInputLeafOp::Value);2] }) }.bulk()] }) })))
+            .fun(fun!(callback_mixed_scalars).expand_param(
+                     "callback",
+                     callback!(impl Fn() -> Vec<CallbackScalarBatch>)
+                         .name("MixedScalarBatchesCallback")
+                         .expand_return(
+                             expand_param!(Vec<CallbackScalarBatch>).element(
+                                 expand_param!(CallbackScalarBatch).variant_record(
+                                     param_fields!().field(
+                                         "rows",
+                                         expand_param!(Vec<CallbackReturnRecord>)
+                                             .element(
+                                                 expand_param!(CallbackReturnRecord)
+                                                     .variant_record(param_fields!()),
+                                             )
+                                             .bulk(),
+                                     ),
+                                 ),
+                             ),
+                         ),
+                 ))
             .fun(fun!(callback_return_resource_audit_start)).fun(fun!(callback_return_resource_audit_finish))
             .fun(fun!(callback_mixed_batch).expand_param("callback",
                 callback!(impl Fn() -> CallbackNestedBatch).name("MixedBatchCallback")
                     .expand_return(callback_mixed_batch_input(true, false))))
-            .fun(fun!(callback_mixed_batches_echo).expand_param("batches", JniInputConfig::Unary { operation: JniInputUnary::Sequence, child: Box::new(callback_mixed_batch_input(false, true)) }))
-            .fun(fun!(callback_mixed_batches).expand_param("callback",
-                callback!(impl Fn() -> Vec<CallbackNestedBatch>).name("MixedBatchesCallback")
-                    .expand_return(JniInputConfig::Unary { operation: JniInputUnary::Sequence, child: Box::new(callback_mixed_batch_input(true, true)) })))
-            .fun(fun!(callback_nested_batch_echo).expand_param("batch",JniInputConfig::Branch { operation: JniInputBranch::Record, children: vec![
-                JniInputConfig::Leaf(JniInputLeafOp::Value), JniInputConfig::Leaf(JniInputLeafOp::Value), callback_nested_rows_input(), JniInputConfig::Leaf(JniInputLeafOp::Value),
-                JniInputConfig::Unary { operation: JniInputUnary::Sequence, child: Box::new(callback_result_row_input()) }, JniInputConfig::Leaf(JniInputLeafOp::Value)] }))
+            .fun(fun!(callback_mixed_batches_echo).expand_param(
+                     "batches",
+                     expand_param!(Vec<CallbackNestedBatch>)
+                         .element(callback_mixed_batch_input(false, true)),
+                 ))
+            .fun(fun!(callback_mixed_batches).expand_param(
+                     "callback",
+                     callback!(impl Fn() -> Vec<CallbackNestedBatch>)
+                         .name("MixedBatchesCallback")
+                         .expand_return(
+                             expand_param!(Vec<CallbackNestedBatch>)
+                                 .element(callback_mixed_batch_input(true, true)),
+                         ),
+                 ))
+            .fun(fun!(callback_nested_batch_echo).expand_param(
+                     "batch",
+                     expand_param!(CallbackNestedBatch).variant_record(
+                         param_fields!()
+                             .field("groups", callback_nested_rows_input())
+                             .field(
+                                 "tail",
+                                 expand_param!(Vec<CallbackFixedResult>)
+                                     .element(callback_result_row_input()),
+                             ),
+                     ),
+                 ))
             .fun(fun!(callback_nested_results).expand_param("callback",
                 callback!(impl Fn() -> Vec<Option<Vec<CallbackFixedResult>>>).name("NestedResultsCallback")
                     .expand_return(callback_nested_rows_input())))
-            .fun(fun!(callback_nested_batch).expand_param("callback",
-                callback!(impl Fn() -> CallbackNestedBatch).name("NestedBatchCallback")
-                    .expand_return(JniInputConfig::Branch { operation: JniInputBranch::Record, children: vec![JniInputConfig::Leaf(JniInputLeafOp::Value),
-                        JniInputConfig::constructor("callback_return_resource_copy",[JniInputConfig::Leaf(JniInputLeafOp::Value)]),
-                        callback_nested_rows_input(),
-                        JniInputConfig::constructor("callback_fixed_marker",[JniInputConfig::Leaf(JniInputLeafOp::Value)]),
-                        JniInputConfig::Unary { operation: JniInputUnary::Sequence, child: Box::new(callback_result_row_input()) },JniInputConfig::Leaf(JniInputLeafOp::Value)] })))
-            .fun(fun!(callback_fixed_result).expand_param("callback",
-                callback!(impl Fn() -> CallbackFixedResult).name("FixedResultCallback")
-                    .expand_return(JniInputConfig::Branch { operation: JniInputBranch::Record, children: vec![JniInputConfig::Leaf(JniInputLeafOp::Value),JniInputConfig::Leaf(JniInputLeafOp::Value),
-                        JniInputConfig::constructor("callback_fixed_marker",[JniInputConfig::Leaf(JniInputLeafOp::Value)]),JniInputConfig::Leaf(JniInputLeafOp::Value)] })))
-            .fun(fun!(callback_fixed_results).expand_param("callback",
-                callback!(impl Fn() -> Vec<CallbackFixedResult>).name("FixedResultsCallback")
-                    .expand_return(JniInputConfig::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInputConfig::Branch { operation: JniInputBranch::Record, children: vec![JniInputConfig::Leaf(JniInputLeafOp::Value),JniInputConfig::Leaf(JniInputLeafOp::Value),
-                        JniInputConfig::constructor("callback_fixed_marker",[JniInputConfig::Leaf(JniInputLeafOp::Value)]),JniInputConfig::Leaf(JniInputLeafOp::Value)] }) })))
-            .fun(fun!(callback_fixed_optional_results).expand_param("callback",
-                callback!(impl Fn() -> Option<Vec<CallbackFixedResult>>).name("OptionalFixedResultsCallback")
-                    .expand_return(JniInputConfig::Unary { operation: JniInputUnary::Optional, child: Box::new(JniInputConfig::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInputConfig::Branch { operation: JniInputBranch::Record, children: vec![JniInputConfig::Leaf(JniInputLeafOp::Value);4] }) }) })))
-            .fun(fun!(callback_fixed_borrowed_results).expand_param("callback",
-                callback!(impl Fn() -> Vec<CallbackFixedResult>).name("BorrowedFixedResultsCallback")
-                    .expand_return(JniInputConfig::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInputConfig::Branch { operation: JniInputBranch::Record, children: vec![
-                        JniInputConfig::constructor("callback_return_resource_copy",[JniInputConfig::Leaf(JniInputLeafOp::Value)]),JniInputConfig::Leaf(JniInputLeafOp::Value),
-                        JniInputConfig::constructor("callback_fixed_marker",[JniInputConfig::Leaf(JniInputLeafOp::Value)]),JniInputConfig::Leaf(JniInputLeafOp::Value)] }) })))
-            .fun(fun!(callback_return_wire_rows_catch).expand_param("callback", callback!(impl Fn() -> Vec<CallbackWireRow>).expand_return(JniInputConfig::Unary { operation: JniInputUnary::Sequence, child: Box::new(JniInputConfig::Branch { operation: JniInputBranch::Record, children: vec![JniInputConfig::Leaf(JniInputLeafOp::Value); 2] }) })))
-            .fun(fun!(callback_return_wire_row_catch).expand_param("callback", callback!(impl Fn() -> CallbackWireRow).expand_return(prebindgen_jni::JniInputConfig::Branch { operation: JniInputBranch::Record, children: vec![prebindgen_jni::JniInputConfig::Leaf(JniInputLeafOp::Value); 2] })))
+            .fun(fun!(callback_nested_batch).expand_param(
+                     "callback",
+                     callback!(impl Fn() -> CallbackNestedBatch)
+                         .name("NestedBatchCallback")
+                         .expand_return(
+                             expand_param!(CallbackNestedBatch).variant_record(
+                                 param_fields!()
+                                     .field(
+                                         "observed",
+                                         expand_param!(CallbackReturnResource).variant(
+                                             fun!(callback_return_resource_copy).expand_param(
+                                                 "value",
+                                                 expand_param!(&CallbackReturnResource).variant_self(),
+                                             ),
+                                         ),
+                                     )
+                                     .field("groups", callback_nested_rows_input())
+                                     .field(
+                                         "marker",
+                                         expand_param!(char).variant(
+                                             fun!(callback_fixed_marker).expand_param(
+                                                 "value",
+                                                 expand_param!(char).variant_self(),
+                                             ),
+                                         ),
+                                     )
+                                     .field(
+                                         "tail",
+                                         expand_param!(Vec<CallbackFixedResult>)
+                                             .element(callback_result_row_input()),
+                                     ),
+                             ),
+                         ),
+                 ))
+            .fun(fun!(callback_fixed_result).expand_param(
+                     "callback",
+                     callback!(impl Fn() -> CallbackFixedResult)
+                         .name("FixedResultCallback")
+                         .expand_return(expand_param!(CallbackFixedResult).variant_record(
+                             param_fields!().field(
+                                 "character",
+                                 expand_param!(char).variant(
+                                     fun!(callback_fixed_marker).expand_param(
+                                         "value",
+                                         expand_param!(char).variant_self(),
+                                     ),
+                                 ),
+                             ),
+                         )),
+                 ))
+            .fun(fun!(callback_fixed_results).expand_param(
+                     "callback",
+                     callback!(impl Fn() -> Vec<CallbackFixedResult>)
+                         .name("FixedResultsCallback")
+                         .expand_return(expand_param!(Vec<CallbackFixedResult>).element(
+                             expand_param!(CallbackFixedResult).variant_record(
+                                 param_fields!().field(
+                                     "character",
+                                     expand_param!(char).variant(
+                                         fun!(callback_fixed_marker).expand_param(
+                                             "value",
+                                             expand_param!(char).variant_self(),
+                                         ),
+                                     ),
+                                 ),
+                             ),
+                         )),
+                 ))
+            .fun(fun!(callback_fixed_optional_results).expand_param(
+                     "callback",
+                     callback!(impl Fn() -> Option<Vec<CallbackFixedResult>>)
+                         .name("OptionalFixedResultsCallback")
+                         .expand_return(expand_param!(Option<Vec<CallbackFixedResult>>).optional(
+                             expand_param!(Vec<CallbackFixedResult>).element(
+                                 expand_param!(CallbackFixedResult).variant_record(param_fields!()),
+                             ),
+                         )),
+                 ))
+            .fun(fun!(callback_fixed_borrowed_results).expand_param(
+                     "callback",
+                     callback!(impl Fn() -> Vec<CallbackFixedResult>)
+                         .name("BorrowedFixedResultsCallback")
+                         .expand_return(
+                             expand_param!(Vec<CallbackFixedResult>).element(
+                                 expand_param!(CallbackFixedResult).variant_record(
+                                     param_fields!()
+                                         .field(
+                                             "first",
+                                             expand_param!(CallbackReturnResource).variant(
+                                                 fun!(callback_return_resource_copy).expand_param(
+                                                     "value",
+                                                     expand_param!(&CallbackReturnResource)
+                                                         .variant_self(),
+                                                 ),
+                                             ),
+                                         )
+                                         .field(
+                                             "character",
+                                             expand_param!(char).variant(
+                                                 fun!(callback_fixed_marker).expand_param(
+                                                     "value",
+                                                     expand_param!(char).variant_self(),
+                                                 ),
+                                             ),
+                                         ),
+                                 ),
+                             ),
+                         ),
+                 ))
+            .fun(fun!(callback_return_wire_rows_catch).expand_param(
+                     "callback",
+                     callback!(impl Fn() -> Vec<CallbackWireRow>).expand_return(
+                         expand_param!(Vec<CallbackWireRow>)
+                             .element(expand_param!(CallbackWireRow).variant_record(param_fields!())),
+                     ),
+                 ))
+            .fun(fun!(callback_return_wire_row_catch).expand_param(
+                     "callback",
+                     callback!(impl Fn() -> CallbackWireRow).expand_return(
+                         expand_param!(CallbackWireRow).variant_record(param_fields!()),
+                     ),
+                 ))
             .class(data_class!(CallbackReturnRecord)).class(enum_class!(CallbackReturnChoice))
             .class(ptr_class!(CallbackReturnResource)).class(ptr_class!(CallbackReturnJob)).class(ptr_class!(CallbackReturnHandler))
             .fun(fun!(callback_return_i64)).fun(fun!(callback_return_i8)).fun(fun!(callback_return_i16)).fun(fun!(callback_return_f32)).fun(fun!(callback_return_u128)).fun(fun!(callback_return_zero)).fun(fun!(callback_return_bool))
@@ -834,23 +1182,41 @@ fn main() {
             .class(data_class!(OutputCleanupRow))
             .fun(fun!(native_bulk_rows).expand_return(expand_return!(CallbackRow).field_self_ref().bulk()))
             .fun(fun!(native_bulk_nested).expand_return(expand_return!(CallbackRow).field_self_ref().bulk()))
-            .fun(fun!(native_bulk_pair).output(prebindgen_jni::JniOutputConfig::Branch { operation: JniOutputBranch::OwnedFields, children: vec![prebindgen_jni::JniOutputConfig::auto(); 2] }))
+            .fun(fun!(native_bulk_pair).output(
+                     expand_return!(NativeBulkNested).fields_into(
+                         fields!()
+                             .field("first", expand_return!(Vec<CallbackRow>).default())
+                             .field("second", expand_return!(Vec<CallbackRow>).default()),
+                     ),
+                 ))
             .fun(fun!(native_bulk_callback).expand_param("callback", callback!(impl Fn(Vec<Vec<CallbackRow>>)).name("NativeBulkCallback")))
-            .fun(fun!(output_cleanup_surround).output(prebindgen_jni::JniOutputConfig::Branch { operation: JniOutputBranch::OwnedFields, children: vec![
-                JniOutputConfig::Leaf(JniOutputLeafOp::ConfigDefault(())),
-                prebindgen_jni::JniOutputConfig::Unary { operation: JniOutputUnary::Sequence { delivery: prebindgen_declarations::SequenceDelivery::Value, mode: None }, child: Box::new(JniOutputConfig::Leaf(JniOutputLeafOp::ConfigDefault(()))),  },
-                JniOutputConfig::Leaf(JniOutputLeafOp::ConfigDefault(())),
-            ] }))
-            .fun(fun!(output_cleanup_surround_bulk).output(prebindgen_jni::JniOutputConfig::Branch { operation: JniOutputBranch::OwnedFields, children: vec![
-                JniOutputConfig::Leaf(JniOutputLeafOp::ConfigDefault(())),
-                JniOutputConfig::Leaf(JniOutputLeafOp::ConfigDefault(())),
-                JniOutputConfig::Leaf(JniOutputLeafOp::ConfigDefault(())),
-            ] }))
-            .fun(fun!(output_cleanup_rows).callback_return().output(prebindgen_jni::JniOutputConfig::Unary { operation: JniOutputUnary::Sequence { delivery: prebindgen_declarations::SequenceDelivery::Value, mode: None }, child: Box::new(JniOutputConfig::Leaf(JniOutputLeafOp::ConfigDefault(()))),  }))
+            .fun(fun!(output_cleanup_surround).output(
+                     expand_return!(OutputCleanupSurround).fields_into(
+                         fields!()
+                             .field("before", expand_return!(OwnedResource).default())
+                             .field(
+                                 "values",
+                                 expand_return!(Vec<Option<Vec<OutputCleanupRow>>>).field_self(),
+                             )
+                             .field("after", expand_return!(OwnedResource).default()),
+                     ),
+                 ))
+            .fun(fun!(output_cleanup_surround_bulk).output(
+                     expand_return!(OutputCleanupSurround).fields_into(
+                         fields!()
+                             .field("before", expand_return!(OwnedResource).default())
+                             .field(
+                                 "values",
+                                 expand_return!(Vec<Option<Vec<OutputCleanupRow>>>).default(),
+                             )
+                             .field("after", expand_return!(OwnedResource).default()),
+                     ),
+                 ))
+            .fun(fun!(output_cleanup_rows).callback_return().output(expand_return!(Vec<OutputCleanupRow>).field_self()))
             .fun(fun!(output_cleanup_rows_bulk).callback_return().expand_return(expand_return!(OutputCleanupRow).field_self_into().bulk()))
-            .fun(fun!(output_cleanup_nested).callback_return().output(prebindgen_jni::JniOutputConfig::Unary { operation: JniOutputUnary::Sequence { delivery: prebindgen_declarations::SequenceDelivery::Value, mode: None }, child: Box::new(JniOutputConfig::Leaf(JniOutputLeafOp::ConfigDefault(()))),  }))
+            .fun(fun!(output_cleanup_nested).callback_return().output(expand_return!(Vec<Option<Vec<OutputCleanupRow>>>).field_self()))
             .fun(fun!(output_cleanup_nested_bulk).callback_return().expand_return(expand_return!(OutputCleanupRow).field_self_into().bulk()))
-            .fun(fun!(output_cleanup_callback).expand_param("callback",callback!(impl Fn(Vec<Option<Vec<OutputCleanupRow>>>)).name("OutputCleanupCallback").expand_param(0, prebindgen_jni::JniOutputConfig::Unary { operation: JniOutputUnary::Sequence { delivery: prebindgen_declarations::SequenceDelivery::Value, mode: None }, child: Box::new(JniOutputConfig::Leaf(JniOutputLeafOp::ConfigDefault(()))),  })))
+            .fun(fun!(output_cleanup_callback).expand_param("callback",callback!(impl Fn(Vec<Option<Vec<OutputCleanupRow>>>)).name("OutputCleanupCallback").expand_param(0, expand_return!(Vec<Option<Vec<OutputCleanupRow>>>).field_self())))
             .fun(fun!(output_cleanup_callback_bulk).expand_param("callback",callback!(impl Fn(Vec<Option<Vec<OutputCleanupRow>>>)).name("OutputCleanupBulkCallback").expand_param(0,expand_return!(OutputCleanupRow).field_self_into().bulk()))))
         .configure(|flat| {
             use prebindgen_flat::{OutputConversion, Outcomes, WireNode};
@@ -2117,19 +2483,24 @@ fn main() {
                 .fun(fun!(scoped_input_id))
                 .fun(fun!(scoped_input_drops))
                 .fun(fun!(scoped_input_pair))
-                .fun(fun!(scoped_input_failure).expand_param(
-                    "second",
-                    JniInputConfig::constructor(
-                        "scoped_input_checked",
-                        [
-                            JniInputConfig::constructor(
-                                "scoped_input_mode",
-                                [JniInputConfig::Leaf(JniInputLeafOp::Value)],
-                            ),
-                            JniInputConfig::Leaf(JniInputLeafOp::Value),
-                        ],
+                .fun(
+                    fun!(scoped_input_failure).expand_param(
+                        "second",
+                        expand_param!(OwnedResource).variant(
+                            fun!(scoped_input_checked)
+                                .expand_param(
+                                    "mode",
+                                    expand_param!(i64).variant(
+                                        fun!(scoped_input_mode).expand_param(
+                                            "mode",
+                                            expand_param!(i64).variant_self(),
+                                        ),
+                                    ),
+                                )
+                                .expand_param("value", expand_param!(OwnedResource).variant_self()),
+                        ),
                     ),
-                )),
+                ),
         )
         .prepare()
         .expect("prepare supported declarations");
@@ -2220,64 +2591,37 @@ fn main() {
     jni.write_kotlin(&kotlin).unwrap();
 }
 
-fn callback_result_row_input() -> JniInputConfig {
-    JniInputConfig::Branch {
-        operation: JniInputBranch::Record,
-        children: vec![
-            JniInputConfig::Leaf(JniInputLeafOp::Value),
-            JniInputConfig::Leaf(JniInputLeafOp::Value),
-            JniInputConfig::constructor(
-                "callback_fixed_marker",
-                [JniInputConfig::Leaf(JniInputLeafOp::Value)],
-            ),
-            JniInputConfig::Leaf(JniInputLeafOp::Value),
-        ],
-    }
+fn callback_result_row_input() -> prebindgen_jni::DeclJniExpandParam {
+    expand_param!(CallbackFixedResult).variant_record(param_fields!().field(
+        "character",
+        expand_param!(char).variant(fun!(callback_fixed_marker)),
+    ))
 }
-fn callback_nested_rows_input() -> JniInputConfig {
-    JniInputConfig::Unary {
-        operation: JniInputUnary::Sequence,
-        child: Box::new(JniInputConfig::Unary {
-            operation: JniInputUnary::Optional,
-            child: Box::new(JniInputConfig::Unary {
-                operation: JniInputUnary::Sequence,
-                child: Box::new(callback_result_row_input()),
-            }),
-        }),
-    }
+fn callback_nested_rows_input() -> prebindgen_jni::DeclJniExpandParam {
+    expand_param!(Vec<Option<Vec<CallbackFixedResult>>>).element(
+        expand_param!(Option<Vec<CallbackFixedResult>>)
+            .optional(expand_param!(Vec<CallbackFixedResult>).element(callback_result_row_input())),
+    )
 }
-
-fn callback_mixed_batch_input(borrowed: bool, bulk_tail: bool) -> JniInputConfig {
-    JniInputConfig::Branch {
-        operation: JniInputBranch::Record,
-        children: vec![
-            JniInputConfig::Leaf(JniInputLeafOp::Value),
-            if borrowed {
-                JniInputConfig::constructor(
-                    "callback_return_resource_copy",
-                    [JniInputConfig::Leaf(JniInputLeafOp::Value)],
-                )
-            } else {
-                JniInputConfig::Leaf(JniInputLeafOp::Value)
-            },
-            callback_nested_rows_input().bulk(),
-            JniInputConfig::constructor(
-                "callback_fixed_marker",
-                [JniInputConfig::Leaf(JniInputLeafOp::Value)],
-            ),
-            if bulk_tail {
-                JniInputConfig::Unary {
-                    operation: JniInputUnary::Sequence,
-                    child: Box::new(callback_result_row_input()),
-                }
-                .bulk()
-            } else {
-                JniInputConfig::Unary {
-                    operation: JniInputUnary::Sequence,
-                    child: Box::new(callback_result_row_input()),
-                }
-            },
-            JniInputConfig::Leaf(JniInputLeafOp::Value),
-        ],
-    }
+fn callback_mixed_batch_input(
+    borrowed: bool,
+    bulk_tail: bool,
+) -> prebindgen_jni::DeclJniExpandParam {
+    let observed = if borrowed {
+        expand_param!(CallbackReturnResource).variant(fun!(callback_return_resource_copy))
+    } else {
+        expand_param!(CallbackReturnResource).variant_self()
+    };
+    let tail = expand_param!(Vec<CallbackFixedResult>).element(callback_result_row_input());
+    let tail = if bulk_tail { tail.bulk() } else { tail };
+    expand_param!(CallbackNestedBatch).variant_record(
+        param_fields!()
+            .field("observed", observed)
+            .field("groups", callback_nested_rows_input().bulk())
+            .field(
+                "marker",
+                expand_param!(char).variant(fun!(callback_fixed_marker)),
+            )
+            .field("tail", tail),
+    )
 }
