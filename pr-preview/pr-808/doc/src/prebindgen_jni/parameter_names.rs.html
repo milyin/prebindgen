@@ -629,7 +629,7 @@
 <a href=#629 id=629 data-nosnippet>629</a>    <span class="attr">#[test]
 <a href=#630 id=630 data-nosnippet>630</a>    </span><span class="kw">fn </span>nested_optional_and_source_presence_field_have_distinct_paths() {
 <a href=#631 id=631 data-nosnippet>631</a>        <span class="kw">let </span>output=builder(<span class="string">"pub struct Row{pub present:bool,pub number:i64}pub fn call(row:Option&lt;Row&gt;,nested:Option&lt;Option&lt;i64&gt;&gt;)-&gt;i64{}"</span>)
-<a href=#632 id=632 data-nosnippet>632</a>            .package(<span class="macro">package!</span>().fun(<span class="macro">fun!</span>(call).input(<span class="string">"row"</span>, JniInput::Unary { operation: JniInputUnary::Optional, child: Box::new(JniInput::Branch { operation: JniInputBranch::Fields, children: <span class="macro">vec!</span>[JniInput::Leaf(JniInputLeafOp::Value),JniInput::Leaf(JniInputLeafOp::Value)] }) })))
+<a href=#632 id=632 data-nosnippet>632</a>            .package(<span class="macro">package!</span>().fun(<span class="macro">fun!</span>(call).input(<span class="string">"row"</span>, JniInputConfig::Unary { operation: JniInputUnary::Optional, child: Box::new(JniInputConfig::Branch { operation: JniInputBranch::Fields, children: <span class="macro">vec!</span>[JniInputConfig::Leaf(JniInputLeafOp::Value),JniInputConfig::Leaf(JniInputLeafOp::Value)] }) })))
 <a href=#633 id=633 data-nosnippet>633</a>            .build().unwrap();
 <a href=#634 id=634 data-nosnippet>634</a>        <span class="kw">let </span>functions = <span class="kw-2">&amp;</span>output.kotlin[<span class="string">"test/Functions.kt"</span>];
 <a href=#635 id=635 data-nosnippet>635</a>        <span class="kw">let </span>signature = functions

@@ -74,12 +74,12 @@
 <a href=#74 id=74 data-nosnippet>74</a>}
 <a href=#75 id=75 data-nosnippet>75</a>
 <a href=#76 id=76 data-nosnippet>76</a><span class="doccomment">/// Check a source constructor and resolve its arguments into the caller's input vocabulary.
-<a href=#77 id=77 data-nosnippet>77</a></span><span class="kw">pub fn </span>resolve_constructor&lt;I: InputOps, O: OutputOps, IR, OR&gt;(
+<a href=#77 id=77 data-nosnippet>77</a></span><span class="kw">pub fn </span>resolve_constructor&lt;I: InputOps, O: OutputOps, Recipe&gt;(
 <a href=#78 id=78 data-nosnippet>78</a>    flat: <span class="kw-2">&amp;</span>Flat&lt;<span class="kw">impl </span>Schema&gt;,
 <a href=#79 id=79 data-nosnippet>79</a>    expected: <span class="kw-2">&amp;</span>Type,
 <a href=#80 id=80 data-nosnippet>80</a>    function: <span class="kw-2">&amp;</span>str,
-<a href=#81 id=81 data-nosnippet>81</a>    arguments: <span class="kw-2">&amp;</span>[InputNode&lt;I, O, IR, OR&gt;],
-<a href=#82 id=82 data-nosnippet>82</a>    <span class="kw-2">mut </span>resolve: <span class="kw">impl </span>FnMut(<span class="kw-2">&amp;</span>Type, <span class="kw-2">&amp;</span>InputNode&lt;I, O, IR, OR&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;InputNode&lt;I, O&gt;&gt;,
+<a href=#81 id=81 data-nosnippet>81</a>    arguments: <span class="kw-2">&amp;</span>[Recipe],
+<a href=#82 id=82 data-nosnippet>82</a>    <span class="kw-2">mut </span>resolve: <span class="kw">impl </span>FnMut(<span class="kw-2">&amp;</span>Type, <span class="kw-2">&amp;</span>Recipe) -&gt; <span class="prelude-ty">Result</span>&lt;InputNode&lt;I, O&gt;&gt;,
 <a href=#83 id=83 data-nosnippet>83</a>    operation: <span class="kw">impl </span>FnOnce(String) -&gt; I::Branch,
 <a href=#84 id=84 data-nosnippet>84</a>) -&gt; <span class="prelude-ty">Result</span>&lt;InputNode&lt;I, O&gt;&gt; {
 <a href=#85 id=85 data-nosnippet>85</a>    <span class="kw">let </span>f = flat.function(function)<span class="question-mark">?</span>;
@@ -473,10 +473,10 @@
 <a href=#473 id=473 data-nosnippet>473</a>
 <a href=#474 id=474 data-nosnippet>474</a><span class="doccomment">/// A pending callback's explicit structural domain and codomain.
 <a href=#475 id=475 data-nosnippet>475</a>/// Argument indices and source/adapter settings are metadata; recipes are borrowed
-<a href=#476 id=476 data-nosnippet>476</a>/// from ordinary tree children and are never embedded in request payloads.
+<a href=#476 id=476 data-nosnippet>476</a>/// from ordinary tree children and are never embedded in metadata payloads.
 <a href=#477 id=477 data-nosnippet>477</a></span><span class="kw">pub struct </span>CallbackTree&lt;<span class="lifetime">'a</span>, I, O, E = std::convert::Infallible&gt; {
 <a href=#478 id=478 data-nosnippet>478</a>    <span class="doccomment">/// Metadata attached to the arrow operation.
-<a href=#479 id=479 data-nosnippet>479</a>    </span><span class="kw">pub </span>request: <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw">crate</span>::CallbackRequest&lt;E&gt;,
+<a href=#479 id=479 data-nosnippet>479</a>    </span><span class="kw">pub </span>config: <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw">crate</span>::CallbackConfig&lt;E&gt;,
 <a href=#480 id=480 data-nosnippet>480</a>    <span class="doccomment">/// Explicit argument recipes from its domain, in the metadata's index order.
 <a href=#481 id=481 data-nosnippet>481</a>    </span><span class="kw">pub </span>arguments: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>[O],
 <a href=#482 id=482 data-nosnippet>482</a>    <span class="doccomment">/// Codomain recipe; used only when an explicit result override was declared.
@@ -506,19 +506,19 @@
 <a href=#506 id=506 data-nosnippet>506</a>        }
 <a href=#507 id=507 data-nosnippet>507</a>    }
 <a href=#508 id=508 data-nosnippet>508</a>    <span class="kw">fn </span>tree(tree: CallbackTree&lt;<span class="lifetime">'a</span>, I, O, E&gt;, is_auto: <span class="kw-2">&amp;</span><span class="kw">impl </span>Fn(<span class="kw-2">&amp;</span>I) -&gt; bool) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
-<a href=#509 id=509 data-nosnippet>509</a>        <span class="kw">if </span>!tree.request.operation.explicit_return &amp;&amp; !is_auto(tree.result) {
+<a href=#509 id=509 data-nosnippet>509</a>        <span class="kw">if </span>!tree.config.operation.explicit_return &amp;&amp; !is_auto(tree.result) {
 <a href=#510 id=510 data-nosnippet>510</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"callback without an explicit return must have an Auto codomain"</span>.into());
 <a href=#511 id=511 data-nosnippet>511</a>        }
-<a href=#512 id=512 data-nosnippet>512</a>        <span class="kw">if </span>tree.request.arguments.len() != tree.arguments.len() {
+<a href=#512 id=512 data-nosnippet>512</a>        <span class="kw">if </span>tree.config.arguments.len() != tree.arguments.len() {
 <a href=#513 id=513 data-nosnippet>513</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"callback argument index and child counts do not match"</span>.into());
 <a href=#514 id=514 data-nosnippet>514</a>        }
 <a href=#515 id=515 data-nosnippet>515</a>        <span class="kw">let </span><span class="kw-2">mut </span>params = BTreeMap::new();
-<a href=#516 id=516 data-nosnippet>516</a>        <span class="kw">for </span>(index, recipe) <span class="kw">in </span>tree.request.arguments.iter().zip(tree.arguments) {
+<a href=#516 id=516 data-nosnippet>516</a>        <span class="kw">for </span>(index, recipe) <span class="kw">in </span>tree.config.arguments.iter().zip(tree.arguments) {
 <a href=#517 id=517 data-nosnippet>517</a>            <span class="kw">if </span>params.insert(<span class="kw-2">*</span>index, recipe).is_some() {
 <a href=#518 id=518 data-nosnippet>518</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"duplicate callback parameter override"</span>.into());
 <a href=#519 id=519 data-nosnippet>519</a>            }
 <a href=#520 id=520 data-nosnippet>520</a>        }
-<a href=#521 id=521 data-nosnippet>521</a>        <span class="kw">let </span>operation = <span class="kw-2">&amp;</span>tree.request.operation;
+<a href=#521 id=521 data-nosnippet>521</a>        <span class="kw">let </span>operation = <span class="kw-2">&amp;</span>tree.config.operation;
 <a href=#522 id=522 data-nosnippet>522</a>        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
 <a href=#523 id=523 data-nosnippet>523</a>            ty: <span class="kw-2">&amp;</span>operation.ty,
 <a href=#524 id=524 data-nosnippet>524</a>            foreign: operation.foreign.as_deref(),
@@ -711,14 +711,14 @@
 <a href=#711 id=711 data-nosnippet>711</a>}
 <a href=#712 id=712 data-nosnippet>712</a>
 <a href=#713 id=713 data-nosnippet>713</a><span class="doccomment">/// Walk the input-direction children of one node, including an arrow's opposite domain.
-<a href=#714 id=714 data-nosnippet>714</a></span><span class="kw">pub fn </span>input_children&lt;I: InputOps, O: OutputOps, IR, OR, S&gt;(
-<a href=#715 id=715 data-nosnippet>715</a>    tree: <span class="kw-2">&amp;</span>InputNode&lt;I, O, IR, OR&gt;,
+<a href=#714 id=714 data-nosnippet>714</a></span><span class="kw">pub fn </span>input_children&lt;I: InputOps, O: OutputOps, S&gt;(
+<a href=#715 id=715 data-nosnippet>715</a>    tree: <span class="kw-2">&amp;</span>InputNode&lt;I, O&gt;,
 <a href=#716 id=716 data-nosnippet>716</a>    state: <span class="kw-2">&amp;mut </span>S,
-<a href=#717 id=717 data-nosnippet>717</a>    input: <span class="kw-2">&amp;mut </span><span class="kw">impl </span>FnMut(<span class="kw-2">&amp;</span>InputNode&lt;I, O, IR, OR&gt;, <span class="kw-2">&amp;mut </span>S),
-<a href=#718 id=718 data-nosnippet>718</a>    output: <span class="kw-2">&amp;mut </span><span class="kw">impl </span>FnMut(<span class="kw-2">&amp;</span><span class="kw">crate</span>::OutputNode&lt;I, O, IR, OR&gt;, <span class="kw-2">&amp;mut </span>S),
+<a href=#717 id=717 data-nosnippet>717</a>    input: <span class="kw-2">&amp;mut </span><span class="kw">impl </span>FnMut(<span class="kw-2">&amp;</span>InputNode&lt;I, O&gt;, <span class="kw-2">&amp;mut </span>S),
+<a href=#718 id=718 data-nosnippet>718</a>    output: <span class="kw-2">&amp;mut </span><span class="kw">impl </span>FnMut(<span class="kw-2">&amp;</span><span class="kw">crate</span>::OutputNode&lt;I, O&gt;, <span class="kw-2">&amp;mut </span>S),
 <a href=#719 id=719 data-nosnippet>719</a>) {
 <a href=#720 id=720 data-nosnippet>720</a>    <span class="kw">match </span>tree {
-<a href=#721 id=721 data-nosnippet>721</a>        InputNode::None | InputNode::Request(<span class="kw">_</span>) | InputNode::Leaf(<span class="kw">_</span>) =&gt; {}
+<a href=#721 id=721 data-nosnippet>721</a>        InputNode::None | InputNode::Leaf(<span class="kw">_</span>) =&gt; {}
 <a href=#722 id=722 data-nosnippet>722</a>        InputNode::Unary { child, .. } =&gt; input(child, state),
 <a href=#723 id=723 data-nosnippet>723</a>        InputNode::Branch { children, .. } =&gt; {
 <a href=#724 id=724 data-nosnippet>724</a>            <span class="kw">for </span>child <span class="kw">in </span>children {
@@ -734,14 +734,14 @@
 <a href=#734 id=734 data-nosnippet>734</a>    }
 <a href=#735 id=735 data-nosnippet>735</a>}
 <a href=#736 id=736 data-nosnippet>736</a><span class="doccomment">/// Walk the output-direction children of one node, including an arrow's opposite domain.
-<a href=#737 id=737 data-nosnippet>737</a></span><span class="kw">pub fn </span>output_children&lt;I: InputOps, O: OutputOps, IR, OR, S&gt;(
-<a href=#738 id=738 data-nosnippet>738</a>    tree: <span class="kw-2">&amp;</span><span class="kw">crate</span>::OutputNode&lt;I, O, IR, OR&gt;,
+<a href=#737 id=737 data-nosnippet>737</a></span><span class="kw">pub fn </span>output_children&lt;I: InputOps, O: OutputOps, S&gt;(
+<a href=#738 id=738 data-nosnippet>738</a>    tree: <span class="kw-2">&amp;</span><span class="kw">crate</span>::OutputNode&lt;I, O&gt;,
 <a href=#739 id=739 data-nosnippet>739</a>    state: <span class="kw-2">&amp;mut </span>S,
-<a href=#740 id=740 data-nosnippet>740</a>    input: <span class="kw-2">&amp;mut </span><span class="kw">impl </span>FnMut(<span class="kw-2">&amp;</span>InputNode&lt;I, O, IR, OR&gt;, <span class="kw-2">&amp;mut </span>S),
-<a href=#741 id=741 data-nosnippet>741</a>    output: <span class="kw-2">&amp;mut </span><span class="kw">impl </span>FnMut(<span class="kw-2">&amp;</span><span class="kw">crate</span>::OutputNode&lt;I, O, IR, OR&gt;, <span class="kw-2">&amp;mut </span>S),
+<a href=#740 id=740 data-nosnippet>740</a>    input: <span class="kw-2">&amp;mut </span><span class="kw">impl </span>FnMut(<span class="kw-2">&amp;</span>InputNode&lt;I, O&gt;, <span class="kw-2">&amp;mut </span>S),
+<a href=#741 id=741 data-nosnippet>741</a>    output: <span class="kw-2">&amp;mut </span><span class="kw">impl </span>FnMut(<span class="kw-2">&amp;</span><span class="kw">crate</span>::OutputNode&lt;I, O&gt;, <span class="kw-2">&amp;mut </span>S),
 <a href=#742 id=742 data-nosnippet>742</a>) {
 <a href=#743 id=743 data-nosnippet>743</a>    <span class="kw">match </span>tree {
-<a href=#744 id=744 data-nosnippet>744</a>        <span class="kw">crate</span>::OutputNode::None | <span class="kw">crate</span>::OutputNode::Request(<span class="kw">_</span>) | <span class="kw">crate</span>::OutputNode::Leaf(<span class="kw">_</span>) =&gt; {}
+<a href=#744 id=744 data-nosnippet>744</a>        <span class="kw">crate</span>::OutputNode::None | <span class="kw">crate</span>::OutputNode::Leaf(<span class="kw">_</span>) =&gt; {}
 <a href=#745 id=745 data-nosnippet>745</a>        <span class="kw">crate</span>::OutputNode::Unary { child, .. } =&gt; output(child, state),
 <a href=#746 id=746 data-nosnippet>746</a>        <span class="kw">crate</span>::OutputNode::Branch { children, .. } =&gt; {
 <a href=#747 id=747 data-nosnippet>747</a>            <span class="kw">for </span>child <span class="kw">in </span>children {
@@ -1046,7 +1046,7 @@
 <a href=#1046 id=1046 data-nosnippet>1046</a>        .unwrap_err()
 <a href=#1047 id=1047 data-nosnippet>1047</a>        .contains(<span class="string">"expected `i64`"</span>));
 <a href=#1048 id=1048 data-nosnippet>1048</a>        <span class="macro">assert!</span>(
-<a href=#1049 id=1049 data-nosnippet>1049</a>            resolve_constructor::&lt;ConstructorInputs, NoOutputs, Infallible, Infallible&gt;(
+<a href=#1049 id=1049 data-nosnippet>1049</a>            resolve_constructor::&lt;ConstructorInputs, NoOutputs, ConstructorInput&gt;(
 <a href=#1050 id=1050 data-nosnippet>1050</a>                <span class="kw-2">&amp;</span>flat,
 <a href=#1051 id=1051 data-nosnippet>1051</a>                <span class="kw-2">&amp;</span>flat.resolve_type(<span class="kw-2">&amp;</span><span class="macro">syn::parse_quote!</span>(Packet)).unwrap(),
 <a href=#1052 id=1052 data-nosnippet>1052</a>                <span class="string">"make"</span>,

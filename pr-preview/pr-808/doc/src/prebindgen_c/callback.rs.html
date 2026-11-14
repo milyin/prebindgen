@@ -127,7 +127,7 @@
 <a href=#127 id=127 data-nosnippet>127</a>        active,
 <a href=#128 id=128 data-nosnippet>128</a>        ..
 <a href=#129 id=129 data-nosnippet>129</a>    } = request;
-<a href=#130 id=130 data-nosnippet>130</a>    <span class="kw">let </span>configuration = configuration.bound_callback()<span class="question-mark">?</span>;
+<a href=#130 id=130 data-nosnippet>130</a>    <span class="kw">let </span>configuration = configuration.bound_callback();
 <a href=#131 id=131 data-nosnippet>131</a>    <span class="kw">let </span>argument_recipes = domain.argument_nodes()<span class="question-mark">?</span>;
 <a href=#132 id=132 data-nosnippet>132</a>    <span class="kw">let </span>signature = callback_signature(<span class="kw-2">&amp;</span>configuration.ty)<span class="question-mark">?</span>.ok_or(<span class="string">"expected source callback"</span>)<span class="question-mark">?</span>;
 <a href=#133 id=133 data-nosnippet>133</a>    <span class="kw">let </span>unit = <span class="macro">matches!</span>(<span class="kw-2">&amp;</span>signature.return_type, syn::Type::Tuple(t) <span class="kw">if </span>t.elems.is_empty());
