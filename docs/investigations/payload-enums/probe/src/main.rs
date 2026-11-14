@@ -4,7 +4,7 @@ mod zenoh;
 
 use prebindgen_flat::{Flat, Result};
 use prebindgen_jni::{callback, enum_class, package, sealed_class, JniGen};
-use prebindgen_jni::{fun, JniInput, JniOutput};
+use prebindgen_jni::{fun, JniInputConfig, JniOutputConfig};
 fn items(source: &str) -> Vec<(syn::Item, prebindgen::SourceLocation)> {
     syn::parse_file(source)
         .unwrap()
@@ -72,8 +72,8 @@ fn main() -> Result<()> {
             package!().fun(
                 fun!(echo)
                     .result_as_value()
-                    .expand_param("value", JniInput::enum_fields([]))
-                    .expand_return(JniOutput::enum_fields([])),
+                    .expand_param("value", JniInputConfig::enum_fields([]))
+                    .expand_return(JniOutputConfig::enum_fields([])),
             ),
         )
         .build()?;

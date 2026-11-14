@@ -1,19 +1,15 @@
 use super::*;
 /// Input expansion declaration specialized for this adapter.
-pub type DeclJniExpandParam = prebindgen_declarations::DeclExpandParam<
-    JniInput<JniInputRequest, JniOutputRequest>,
-    DeclJniFunction,
-    JniExpansionOptions,
->;
+pub type DeclJniExpandParam =
+    prebindgen_declarations::DeclExpandParam<JniInputConfig, DeclJniFunction, JniExpansionOptions>;
 /// Return expansion declaration specialized for this adapter.
 pub type DeclJniExpandReturn = prebindgen_declarations::DeclExpandReturn<
-    JniOutput<JniInputRequest, JniOutputRequest>,
+    JniOutputConfig,
     DeclJniFunction,
     JniExpansionOptions,
 >;
 /// Named-field declaration specialized for this adapter.
-pub type DeclJniFields =
-    prebindgen_declarations::DeclFields<JniOutput<JniInputRequest, JniOutputRequest>>;
+pub type DeclJniFields = prebindgen_declarations::DeclFields<JniOutputConfig>;
 /// Adapter-specific options applied after the common expansion is built.
 #[derive(Clone, Debug, Default)]
 #[non_exhaustive]
@@ -47,22 +43,23 @@ impl JniBulkExpansion for DeclJniExpandReturn {
 pub fn expand_param(ty: Type) -> DeclJniExpandParam {
     prebindgen_declarations::DeclExpandParam::new(
         ty,
-        |function: DeclJniFunction| JniInput::call(function.reference_name(false)),
-        || JniInput::Leaf(JniInputLeafOp::Value),
+        |function: DeclJniFunction| JniInputConfig::call(function.reference_name(false)),
+        || JniInputConfig::Leaf(JniInputLeafOp::Value),
         |ty, alternatives, extension| {
-            let mut input = alternatives.build(JniInput::selector, JniInput::auto, |child| {
-                JniInput::Unary {
-                    operation: JniInputUnary::Temporary,
-                    child: Box::new(child),
-                }
-            });
+            let mut input =
+                alternatives.build(JniInputConfig::selector, JniInputConfig::auto, |child| {
+                    JniInputConfig::Unary {
+                        operation: JniInputUnary::Temporary,
+                        child: Box::new(child),
+                    }
+                });
             if extension.is_some_and(|options| options.bulk) {
-                input = JniInput::Unary {
+                input = JniInputConfig::Unary {
                     operation: JniInputUnary::Bulk,
                     child: Box::new(input),
                 };
             }
-            JniInput::for_type(ty, input)
+            JniInputConfig::for_type(ty, input)
         },
     )
 }
@@ -73,25 +70,25 @@ pub fn expand_return(ty: Type) -> DeclJniExpandReturn {
         |function| {
             prebindgen_declarations::getter_view(
                 function,
-                |name| JniOutput::getter(name, JniOutput::auto()),
-                |name, child| JniOutput::Unary {
+                |name| JniOutputConfig::getter(name, JniOutputConfig::auto()),
+                |name, child| JniOutputConfig::Unary {
                     operation: JniOutputUnary::Named { name },
                     child: Box::new(child),
                 },
             )
         },
-        || JniOutput::Leaf(JniOutputLeafOp::Value),
-        |policy| JniOutput::Leaf(JniOutputLeafOp::Projected(policy)),
-        super::requests::owned_field_view,
+        || JniOutputConfig::Leaf(JniOutputLeafOp::Value),
+        |policy| JniOutputConfig::Leaf(JniOutputLeafOp::Projected(policy)),
+        super::configuration::owned_field_view,
         |ty, views, extension| {
-            let mut output = JniOutput::combine(views);
+            let mut output = JniOutputConfig::combine(views);
             if extension.is_some_and(|options| options.bulk) {
-                output = JniOutput::Unary {
+                output = JniOutputConfig::Unary {
                     operation: JniOutputUnary::Bulk,
                     child: Box::new(output),
                 };
             }
-            JniOutput::for_type(ty, output)
+            JniOutputConfig::for_type(ty, output)
         },
     )
 }
@@ -100,23 +97,23 @@ pub fn fields(function: syn::Ident) -> DeclJniFields {
     prebindgen_declarations::DeclFields::new(
         function,
         |output| match output {
-            JniOutput::Unary {
-                operation: JniOutputUnary::ForType { ty },
+            JniOutputConfig::Unary {
+                operation: JniOutputUnary::ConfigForType { ty },
                 child: output,
-            } if matches!(output.as_ref(),JniOutput::Branch {operation:JniOutputBranch::Combine,children} if children.is_empty()) => {
-                JniOutput::for_type(*ty, JniOutput::Leaf(JniOutputLeafOp::Discard))
+            } if matches!(output.as_ref(),JniOutputConfig::Branch {operation:JniOutputBranch::Combine,children} if children.is_empty()) => {
+                JniOutputConfig::for_type(*ty, JniOutputConfig::Leaf(JniOutputLeafOp::Discard))
             }
             output => output,
         },
         |function, overrides, _extension| {
             let (fields, children) = overrides.into_iter().unzip();
-            JniOutput::getter(
+            JniOutputConfig::getter(
                 function,
-                JniOutput::Branch {
-                    operation: JniOutputBranch::NamedFields {
+                JniOutputConfig::Branch {
+                    operation: JniOutputBranch::ConfigNamedFields(JniNamedFields {
                         fields,
                         mode: prebindgen_declarations::ProjectionMode::Borrowed,
-                    },
+                    }),
                     children,
                 },
             )
@@ -137,30 +134,22 @@ pub type DeclJniExpand =
 ///     .expand_return(expand_param!(Decision).variant(fun!(decision_new)));
 /// let _ = fun!(register).expand_param("callback", handler);
 /// ```
-pub type DeclJniCallback = prebindgen_declarations::DeclCallback<
-    JniInput<JniInputRequest, JniOutputRequest>,
-    JniOutput<JniInputRequest, JniOutputRequest>,
->;
-impl
-    prebindgen_declarations::CallbackInput<
-        JniInput<JniInputRequest, JniOutputRequest>,
-        JniOutput<JniInputRequest, JniOutputRequest>,
-    > for JniInputRequest
-{
-    fn callback_input(declaration: DeclJniCallback) -> JniInput<JniInputRequest, JniOutputRequest> {
+pub type DeclJniCallback = prebindgen_declarations::DeclCallback<JniInputConfig, JniOutputConfig>;
+impl prebindgen_declarations::CallbackInput<JniInputConfig, JniOutputConfig> for JniInputConfigOps {
+    fn callback_input(declaration: DeclJniCallback) -> JniInputConfig {
         prebindgen_declarations::callback_input(
             declaration,
-            JniInput::auto,
-            |children| JniOutput::Branch {
+            JniInputConfig::auto,
+            |children| JniOutputConfig::Branch {
                 operation: JniOutputBranch::Arguments,
                 children,
             },
-            |metadata, domain, codomain| JniInput::Arrow {
-                operation: JniInputArrow::Callback(Box::new(metadata)),
+            |metadata, domain, codomain| JniInputConfig::Arrow {
+                operation: JniInputArrow::ConfigCallback(Box::new(metadata)),
                 domain: Box::new(domain),
                 codomain: Box::new(codomain),
             },
-            JniInput::for_type,
+            JniInputConfig::for_type,
         )
     }
 }

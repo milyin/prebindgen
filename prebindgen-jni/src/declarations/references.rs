@@ -1,21 +1,23 @@
 use super::*;
 /// Collect source names; all recursive traversal follows structural edges.
 pub fn source_items<'a>(
-    inputs: &[JniInput<JniInputRequest, JniOutputRequest>],
-    outputs: &[JniOutput<JniInputRequest, JniOutputRequest>],
+    inputs: &[JniInputConfig],
+    outputs: &[JniOutputConfig],
     errors: &[(syn::Type, String)],
     functions: impl IntoIterator<Item = &'a DeclJniFunction>,
 ) -> Vec<String> {
-    fn input(tree: &JniInput<JniInputRequest, JniOutputRequest>, names: &mut Vec<String>) {
+    fn input(tree: &JniInputConfig, names: &mut Vec<String>) {
         match tree {
-            JniInput::Request(JniInputRequest::Conversion(declaration)) => {
+            JniInputConfig::Leaf(JniInputLeafOp::ConfigConversion(declaration)) => {
                 prebindgen_declarations::conversion_source_items(declaration, names)
             }
-            JniInput::Request(JniInputRequest::Call(name)) => names.push(name.clone()),
+            JniInputConfig::Leaf(JniInputLeafOp::ConfigConstructor(name)) => {
+                names.push(name.clone())
+            }
             _ => {}
         }
         match tree {
-            JniInput::Unary {
+            JniInputConfig::Unary {
                 operation: JniInputUnary::Convert { conversion },
                 ..
             } => {
@@ -23,7 +25,7 @@ pub fn source_items<'a>(
                     names.push(name.clone())
                 }
             }
-            JniInput::Branch {
+            JniInputConfig::Branch {
                 operation: JniInputBranch::Constructor { function },
                 ..
             } => names.push(function.clone()),
@@ -31,12 +33,12 @@ pub fn source_items<'a>(
         }
         prebindgen_declarations::input_children(tree, names, &mut input, &mut output);
     }
-    fn output(tree: &JniOutput<JniInputRequest, JniOutputRequest>, names: &mut Vec<String>) {
-        if let JniOutput::Request(JniOutputRequest::Conversion(declaration)) = tree {
+    fn output(tree: &JniOutputConfig, names: &mut Vec<String>) {
+        if let JniOutputConfig::Leaf(JniOutputLeafOp::ConfigConversion(declaration)) = tree {
             prebindgen_declarations::conversion_source_items(declaration, names)
         }
         match tree {
-            JniOutput::Unary {
+            JniOutputConfig::Unary {
                 operation: JniOutputUnary::Convert { conversion },
                 ..
             } => {
@@ -44,11 +46,11 @@ pub fn source_items<'a>(
                     names.push(name.clone())
                 }
             }
-            JniOutput::Unary {
+            JniOutputConfig::Unary {
                 operation: JniOutputUnary::Getter { function } | JniOutputUnary::Into { function },
                 ..
             } => names.push(function.clone()),
-            JniOutput::Unary {
+            JniOutputConfig::Unary {
                 operation: JniOutputUnary::Result { error: Some(name) },
                 ..
             } => names.push(name.clone()),

@@ -2,49 +2,42 @@ use super::*;
 #[derive(Clone)]
 /// This environment is discarded after prepared conversions have been installed.
 pub struct DeclJniDefaults {
-    values: prebindgen_declarations::DeclDefaults<
-        JniInput<JniInputRequest, JniOutputRequest>,
-        JniOutput<JniInputRequest, JniOutputRequest>,
-    >,
+    values: prebindgen_declarations::DeclDefaults<JniInputConfig, JniOutputConfig>,
 }
 
-fn input_body(
-    input: JniInput<JniInputRequest, JniOutputRequest>,
-) -> JniInput<JniInputRequest, JniOutputRequest> {
+fn input_body(input: JniInputConfig) -> JniInputConfig {
     match input {
-        JniInput::Branch {
+        InputNode::Branch {
             operation: JniInputBranch::Selector,
             children: mut arms,
         } if arms.len() == 1 => arms.remove(0),
-        JniInput::Unary {
+        InputNode::Unary {
             operation: JniInputUnary::Bulk,
             child,
-        } => JniInput::Unary {
+        } => InputNode::Unary {
             operation: JniInputUnary::Bulk,
             child: Box::new(input_body(*child)),
         },
-        JniInput::Unary {
+        InputNode::Unary {
             operation: JniInputUnary::Temporary,
             child,
-        } => JniInput::Unary {
+        } => InputNode::Unary {
             operation: JniInputUnary::Temporary,
             child: Box::new(input_body(*child)),
         },
         other => other,
     }
 }
-fn output_body(
-    output: JniOutput<JniInputRequest, JniOutputRequest>,
-) -> JniOutput<JniInputRequest, JniOutputRequest> {
+fn output_body(output: JniOutputConfig) -> JniOutputConfig {
     match output {
-        JniOutput::Branch {
+        OutputNode::Branch {
             operation: JniOutputBranch::Combine,
             children: mut parts,
         } if parts.len() == 1 => parts.remove(0),
-        JniOutput::Unary {
+        OutputNode::Unary {
             operation: JniOutputUnary::Bulk,
             child,
-        } => JniOutput::Unary {
+        } => OutputNode::Unary {
             operation: JniOutputUnary::Bulk,
             child: Box::new(output_body(*child)),
         },
@@ -57,15 +50,15 @@ impl DeclJniDefaults {
     /// builders also convert directly into these trees with `.into()`.
     pub fn new<M: prebindgen_flat::Schema>(
         flat: &Flat<M>,
-        inputs: Vec<JniInput<JniInputRequest, JniOutputRequest>>,
-        outputs: Vec<JniOutput<JniInputRequest, JniOutputRequest>>,
+        inputs: Vec<JniInputConfig>,
+        outputs: Vec<JniOutputConfig>,
         errors: Vec<(syn::Type, String)>,
     ) -> Result<Self> {
         let inputs = inputs
             .into_iter()
             .map(|tree| match tree {
-                JniInput::Unary {
-                    operation: JniInputUnary::ForType { ty },
+                InputNode::Unary {
+                    operation: JniInputUnary::ConfigForType { ty },
                     child: input,
                 } => Ok((*ty, input_body(*input))),
 
@@ -75,8 +68,8 @@ impl DeclJniDefaults {
         let outputs = outputs
             .into_iter()
             .map(|tree| match tree {
-                JniOutput::Unary {
-                    operation: JniOutputUnary::ForType { ty },
+                OutputNode::Unary {
+                    operation: JniOutputUnary::ConfigForType { ty },
                     child: output,
                 } => Ok((*ty, output_body(*output))),
 
@@ -104,9 +97,9 @@ impl DeclJniDefaults {
         <JniSchema as prebindgen_flat::Schema>::Function: Clone,
     {
         prebindgen_declarations::callback_variant(flat, decl, name, |output, structural| {
-            JniOutput::Unary {
-                operation: JniOutputUnary::SequenceCallback { structural },
-                child: Box::new(output.cloned().unwrap_or_else(JniOutput::auto)),
+            OutputNode::Unary {
+                operation: JniOutputUnary::ConfigSequenceCallback { structural },
+                child: Box::new(output.cloned().unwrap_or_else(JniOutputConfig::auto)),
             }
         })
     }
@@ -142,7 +135,7 @@ impl DeclJniDefaults {
                     flat,
                     codec,
                     ty,
-                    explicit.unwrap_or(&JniInput::auto()),
+                    explicit.unwrap_or(&JniInputConfig::auto()),
                     extra,
                 )
             },
@@ -162,8 +155,8 @@ impl DeclJniDefaults {
             ty,
             decl,
             &self.values.errors,
-            JniOutput::auto(),
-            |error, child| JniOutput::Unary {
+            JniOutputConfig::auto(),
+            |error, child| OutputNode::Unary {
                 operation: JniOutputUnary::Result { error },
                 child: Box::new(child),
             },
@@ -193,11 +186,11 @@ impl DeclJniDefaults {
             flat,
             codec,
             ty,
-            &JniOutput::Branch {
-                operation: JniOutputBranch::NamedFields {
+            &OutputNode::Branch {
+                operation: JniOutputBranch::ConfigNamedFields(JniNamedFields {
                     fields: vec![],
                     mode: ProjectionMode::Owned,
-                },
+                }),
                 children: vec![],
             },
             extra,
@@ -211,7 +204,7 @@ impl DeclJniDefaults {
         ty: &syn::Type,
         extra: &(),
     ) -> Result<JniOutput> {
-        self.resolve_output(flat, codec, ty, &JniOutput::auto(), extra)
+        self.resolve_output(flat, codec, ty, &JniOutputConfig::auto(), extra)
     }
     /// Resolve every input operation against canonical source declarations before compilation.
     pub fn resolve_input(
@@ -219,7 +212,7 @@ impl DeclJniDefaults {
         flat: &Flat<JniSchema>,
         codec: &JniCodec,
         ty: &syn::Type,
-        tree: &JniInput<JniInputRequest, JniOutputRequest>,
+        tree: &JniInputConfig,
         extra: &(),
     ) -> Result<JniInput> {
         self.input(flat, codec, ty, tree, extra, &mut vec![])
@@ -230,42 +223,46 @@ impl DeclJniDefaults {
         flat: &Flat<JniSchema>,
         codec: &JniCodec,
         ty: &syn::Type,
-        tree: &JniInput<JniInputRequest, JniOutputRequest>,
+        tree: &JniInputConfig,
         extra: &(),
         stack: &mut Vec<String>,
     ) -> Result<JniInput> {
-        let resolve = |ty: &syn::Type,
-                       tree: &JniInput<JniInputRequest, JniOutputRequest>,
-                       stack: &mut Vec<String>| {
+        let resolve = |ty: &syn::Type, tree: &JniInputConfig, stack: &mut Vec<String>| {
             self.input(flat, codec, ty, tree, extra, stack)
         };
         match tree {
-            JniInput::None => {
+            InputNode::None => {
                 if type_key(ty) == "()" {
                     Ok(InputNode::None)
                 } else {
                     Err("None input requires unit".into())
                 }
             }
-            JniInput::Branch {
-                operation: JniInputBranch::Variant | JniInputBranch::VariantFields { .. },
+            InputNode::Branch {
+                operation:
+                    JniInputBranch::Variant
+                    | JniInputBranch::ConfigVariantFields(JniVariantFields { .. }),
                 ..
             } => Err("variant branch requires an enum parent".into()),
-            JniInput::Branch {
-                operation: JniInputBranch::EnumFields,
+            InputNode::Branch {
+                operation: JniInputBranch::ConfigEnumFields(_),
                 children,
             } => {
                 let entries =
                     prebindgen_declarations::enum_children(children, |tree| match tree {
-                        JniInput::Branch {
-                            operation: JniInputBranch::VariantFields { variant, fields },
+                        InputNode::Branch {
+                            operation:
+                                JniInputBranch::ConfigVariantFields(JniVariantFields {
+                                    variant,
+                                    fields,
+                                }),
                             children,
                         } => Ok((variant.as_str(), fields.as_slice(), children.as_slice())),
                         _ => Err("named enum fields require variant branches".into()),
                     })?;
                 self.enum_input_recipe(flat, codec, ty, extra, &entries, false, stack)
             }
-            JniInput::Branch {
+            InputNode::Branch {
                 operation: JniInputBranch::Enum { value },
                 children: variants,
             } => {
@@ -278,10 +275,10 @@ impl DeclJniDefaults {
                 )?;
                 Ok(JniInput::enum_variants(variants, *value))
             }
-            JniInput::Request(JniInputRequest::Value) => {
+            JniInputConfig::Leaf(JniInputLeafOp::ConfigValue(_)) => {
                 self.resolve_input_value(flat, codec, ty, extra, stack)
             }
-            JniInput::Request(JniInputRequest::Conversion(decl)) => {
+            JniInputConfig::Leaf(JniInputLeafOp::ConfigConversion(decl)) => {
                 decl.validate()?;
                 let source = decl
                     .input
@@ -293,12 +290,12 @@ impl DeclJniDefaults {
                     codec,
                     ty,
                     conversion,
-                    &JniInput::value(),
+                    &JniInputConfig::value(),
                     extra,
                     stack,
                 )
             }
-            JniInput::Unary {
+            InputNode::Unary {
                 operation: JniInputUnary::Convert { conversion },
                 child: input,
             } => self.resolve_input_conversion(
@@ -310,7 +307,7 @@ impl DeclJniDefaults {
                 extra,
                 stack,
             ),
-            JniInput::Unary {
+            InputNode::Unary {
                 operation: JniInputUnary::Temporary,
                 child,
             } => Ok(InputNode::Unary {
@@ -321,14 +318,14 @@ impl DeclJniDefaults {
                     stack,
                 )?),
             }),
-            JniInput::Unary {
+            InputNode::Unary {
                 operation: JniInputUnary::Bulk,
                 child,
             } => Ok(InputNode::Unary {
                 operation: JniInputUnary::Bulk,
                 child: Box::new(resolve(ty, &input_body((**child).clone()), stack)?),
             }),
-            JniInput::Request(JniInputRequest::Auto) => {
+            JniInputConfig::Leaf(JniInputLeafOp::ConfigDefault(_)) => {
                 let key = prebindgen_declarations::callback::input_key(flat, ty)?;
                 if let Some(tree) = prebindgen_declarations::resolve_type_default(
                     &key,
@@ -342,12 +339,12 @@ impl DeclJniDefaults {
                 if let Some(tree) = prebindgen_declarations::resolve_container(
                     ty,
                     true,
-                    |inner| resolve(inner, &JniInput::auto(), stack),
-                    |child| JniInput::Unary {
+                    |inner| resolve(inner, &JniInputConfig::auto(), stack),
+                    |child| InputNode::Unary {
                         operation: JniInputUnary::Optional,
                         child: Box::new(child),
                     },
-                    |child| JniInput::Unary {
+                    |child| InputNode::Unary {
                         operation: JniInputUnary::Sequence,
                         child: Box::new(child),
                     },
@@ -357,10 +354,10 @@ impl DeclJniDefaults {
                 if type_key(ty) == "()" {
                     return Ok(InputNode::None);
                 }
-                resolve(ty, &JniInput::Leaf(JniInputLeafOp::Value), stack)
+                resolve(ty, &InputNode::Leaf(JniInputLeafOp::Value), stack)
             }
-            JniInput::Unary {
-                operation: JniInputUnary::ForType { ty: target },
+            InputNode::Unary {
+                operation: JniInputUnary::ConfigForType { ty: target },
                 child: input,
             } => {
                 let target = prebindgen_declarations::callback::input_type(flat, target)?;
@@ -373,18 +370,18 @@ impl DeclJniDefaults {
                     tree,
                     stack,
                     resolve,
-                    |child| JniInput::Unary {
+                    |child| InputNode::Unary {
                         operation: JniInputUnary::Optional,
                         child: Box::new(child),
                     },
-                    |child| JniInput::Unary {
+                    |child| InputNode::Unary {
                         operation: JniInputUnary::Sequence,
                         child: Box::new(child),
                     },
                     prebindgen_declarations::Direction::Input,
                 )
             }
-            JniInput::Leaf(JniInputLeafOp::Value) => {
+            InputNode::Leaf(JniInputLeafOp::Value) => {
                 if let Some(conversion) = prebindgen_declarations::input_value_conversion(flat, ty)?
                 {
                     return self.resolve_input_conversion(
@@ -392,21 +389,25 @@ impl DeclJniDefaults {
                         codec,
                         ty,
                         conversion,
-                        &JniInput::value(),
+                        &JniInputConfig::value(),
                         extra,
                         stack,
                     );
                 }
 
                 if prebindgen_flat::callback_signature(ty)?.is_some() {
-                    return resolve(ty, &JniInput::from(DeclJniCallback::new(ty.clone())), stack);
+                    return resolve(
+                        ty,
+                        &JniInputConfig::from(DeclJniCallback::new(ty.clone())),
+                        stack,
+                    );
                 }
                 if let Some(inner) = option_inner(ty) {
                     return Ok(InputNode::Unary {
                         operation: JniInputUnary::Optional,
                         child: Box::new(resolve(
                             inner,
-                            &JniInput::Leaf(JniInputLeafOp::Value),
+                            &InputNode::Leaf(JniInputLeafOp::Value),
                             stack,
                         )?),
                     });
@@ -414,12 +415,12 @@ impl DeclJniDefaults {
                 if let Some((element, _)) = sequence_parts(ty) {
                     return Ok(InputNode::Unary {
                         operation: JniInputUnary::Sequence,
-                        child: Box::new(resolve(element, &JniInput::auto(), stack)?),
+                        child: Box::new(resolve(element, &JniInputConfig::auto(), stack)?),
                     });
                 }
                 self.resolve_input_representation(flat, codec, ty, tree, stack)
             }
-            JniInput::Arrow {
+            InputNode::Arrow {
                 operation: JniInputArrow::BoundCallback(callback),
                 domain,
                 codomain,
@@ -439,19 +440,19 @@ impl DeclJniDefaults {
                     codomain: Box::new(result),
                 })
             }
-            JniInput::Arrow {
-                operation: JniInputArrow::Callback(declaration),
+            InputNode::Arrow {
+                operation: JniInputArrow::ConfigCallback(declaration),
                 domain,
                 codomain,
             } => {
                 let canonical = prebindgen_declarations::callback::input_key(flat, ty)?;
                 let default = match self.values.inputs.get(&canonical) {
-                    Some(JniInput::Arrow {
-                        operation: JniInputArrow::Callback(request),
+                    Some(InputNode::Arrow {
+                        operation: JniInputArrow::ConfigCallback(config),
                         domain,
                         codomain,
                     }) => Some(prebindgen_declarations::CallbackTree {
-                        request,
+                        config,
                         arguments: domain.argument_nodes()?,
                         result: codomain.as_ref(),
                     }),
@@ -461,15 +462,15 @@ impl DeclJniDefaults {
                     flat,
                     ty,
                     prebindgen_declarations::CallbackTree {
-                        request: declaration,
+                        config: declaration,
                         arguments: domain.argument_nodes()?,
                         result: codomain.as_ref(),
                     },
                     default,
                     &self.values.outputs,
-                    &JniInput::auto(),
-                    &JniOutput::auto(),
-                    |tree| matches!(tree, JniInput::Request(JniInputRequest::Auto)),
+                    &JniInputConfig::auto(),
+                    &JniOutputConfig::auto(),
+                    |tree| matches!(tree, JniInputConfig::Leaf(JniInputLeafOp::ConfigDefault(_))),
                     stack,
                     resolve,
                     |ty, tree, ownership| {
@@ -485,20 +486,20 @@ impl DeclJniDefaults {
                 })
             }
 
-            JniInput::Request(JniInputRequest::Call(function)) => {
+            JniInputConfig::Leaf(JniInputLeafOp::ConfigConstructor(function)) => {
                 let f = flat.function(function)?;
                 resolve(
                     ty,
-                    &JniInput::Branch {
+                    &InputNode::Branch {
                         operation: JniInputBranch::Constructor {
                             function: function.clone(),
                         },
-                        children: vec![JniInput::auto(); f.params.len()],
+                        children: vec![JniInputConfig::auto(); f.params.len()],
                     },
                     stack,
                 )
             }
-            JniInput::Branch {
+            InputNode::Branch {
                 operation: JniInputBranch::Constructor { function },
                 children: args,
             } => prebindgen_declarations::resolve_constructor(
@@ -509,7 +510,7 @@ impl DeclJniDefaults {
                 |ty, child| resolve(ty, child, stack),
                 |function| JniInputBranch::Constructor { function },
             ),
-            JniInput::Unary {
+            InputNode::Unary {
                 operation: JniInputUnary::Optional,
                 child,
             } => {
@@ -519,7 +520,7 @@ impl DeclJniDefaults {
                     child: Box::new(resolve(inner, child, stack)?),
                 })
             }
-            JniInput::Unary {
+            InputNode::Unary {
                 operation: JniInputUnary::Sequence,
                 child,
             } => {
@@ -530,11 +531,11 @@ impl DeclJniDefaults {
                     child: Box::new(resolve(element, child, stack)?),
                 })
             }
-            JniInput::Branch {
+            InputNode::Branch {
                 operation: JniInputBranch::Fields,
                 children,
             }
-            | JniInput::Branch {
+            | InputNode::Branch {
                 operation: JniInputBranch::Record,
                 children,
             } => {
@@ -550,7 +551,7 @@ impl DeclJniDefaults {
                 Ok(
                     if matches!(
                         tree,
-                        JniInput::Branch {
+                        InputNode::Branch {
                             operation: JniInputBranch::Record,
                             children: _
                         }
@@ -567,7 +568,7 @@ impl DeclJniDefaults {
                     },
                 )
             }
-            JniInput::Branch {
+            InputNode::Branch {
                 operation: JniInputBranch::Selector,
                 children: arms,
             } => {
@@ -590,7 +591,7 @@ impl DeclJniDefaults {
         flat: &Flat<JniSchema>,
         codec: &JniCodec,
         ty: &syn::Type,
-        tree: &JniOutput<JniInputRequest, JniOutputRequest>,
+        tree: &JniOutputConfig,
         extra: &(),
     ) -> Result<JniOutput> {
         self.output(flat, codec, ty, tree, extra, &mut vec![], false)
@@ -602,24 +603,22 @@ impl DeclJniDefaults {
         flat: &Flat<JniSchema>,
         codec: &JniCodec,
         ty: &syn::Type,
-        tree: &JniOutput<JniInputRequest, JniOutputRequest>,
+        tree: &JniOutputConfig,
         extra: &(),
         stack: &mut Vec<String>,
         getter_result: bool,
     ) -> Result<JniOutput> {
-        let resolve = |ty: &syn::Type,
-                       tree: &JniOutput<JniInputRequest, JniOutputRequest>,
-                       stack: &mut Vec<String>| {
+        let resolve = |ty: &syn::Type, tree: &JniOutputConfig, stack: &mut Vec<String>| {
             self.output(flat, codec, ty, tree, extra, stack, getter_result)
         };
         if let Some(referent) = prebindgen_declarations::output_referent(ty) {
-            if (getter_result || !matches!(tree, JniOutput::Leaf(JniOutputLeafOp::Value)))
+            if (getter_result || !matches!(tree, OutputNode::Leaf(JniOutputLeafOp::Value)))
                 && !matches!(
                     tree,
-                    JniOutput::Request(JniOutputRequest::Auto)
-                        | JniOutput::Unary {
-                            operation: JniOutputUnary::ForType { .. }
-                                | JniOutputUnary::SequenceCallback { .. },
+                    JniOutputConfig::Leaf(JniOutputLeafOp::ConfigDefault(_))
+                        | OutputNode::Unary {
+                            operation: JniOutputUnary::ConfigForType { .. }
+                                | JniOutputUnary::ConfigSequenceCallback { .. },
                             ..
                         }
                 )
@@ -628,8 +627,8 @@ impl DeclJniDefaults {
             }
         }
         match tree {
-            JniOutput::Unary {
-                operation: JniOutputUnary::SequenceCallback { structural },
+            OutputNode::Unary {
+                operation: JniOutputUnary::ConfigSequenceCallback { structural },
                 child: output,
             } => {
                 let output = resolve(ty, output, stack)?;
@@ -648,35 +647,39 @@ impl DeclJniDefaults {
                 )
             }
 
-            JniOutput::Unary {
+            OutputNode::Unary {
                 operation: JniOutputUnary::CallbackArgument { ownership },
                 child,
             } => Ok((resolve(ty, child, stack)?).callback_argument(*ownership)),
-            JniOutput::None => {
+            OutputNode::None => {
                 if type_key(ty) == "()" {
                     Ok(OutputNode::None)
                 } else {
                     Err("None output requires unit".into())
                 }
             }
-            JniOutput::Arrow {
+            OutputNode::Arrow {
                 operation: never, ..
             } => match *never {},
-            JniOutput::Branch {
+            OutputNode::Branch {
                 operation:
                     JniOutputBranch::Variant
-                    | JniOutputBranch::VariantFields { .. }
+                    | JniOutputBranch::ConfigVariantFields(JniVariantFields { .. })
                     | JniOutputBranch::Arguments,
                 ..
             } => Err("variant/argument branch requires its parent operation".into()),
-            JniOutput::Branch {
-                operation: JniOutputBranch::EnumFields,
+            OutputNode::Branch {
+                operation: JniOutputBranch::ConfigEnumFields(_),
                 children,
             } => {
                 let entries =
                     prebindgen_declarations::enum_children(children, |tree| match tree {
-                        JniOutput::Branch {
-                            operation: JniOutputBranch::VariantFields { variant, fields },
+                        OutputNode::Branch {
+                            operation:
+                                JniOutputBranch::ConfigVariantFields(JniVariantFields {
+                                    variant,
+                                    fields,
+                                }),
                             children,
                         } => Ok((variant.as_str(), fields.as_slice(), children.as_slice())),
                         _ => Err("named enum fields require variant branches".into()),
@@ -693,7 +696,7 @@ impl DeclJniDefaults {
                 )
             }
 
-            JniOutput::Branch {
+            OutputNode::Branch {
                 operation: JniOutputBranch::Enum { value, mode },
                 children: variants,
             } => {
@@ -706,7 +709,7 @@ impl DeclJniDefaults {
                 )?;
                 Ok(JniOutput::enum_variants(variants, *value, *mode))
             }
-            JniOutput::Request(JniOutputRequest::Value { projection }) => self
+            JniOutputConfig::Leaf(JniOutputLeafOp::ConfigValue(projection)) => self
                 .resolve_output_value(
                     flat,
                     codec,
@@ -716,7 +719,7 @@ impl DeclJniDefaults {
                     getter_result,
                     projection.as_ref(),
                 ),
-            JniOutput::Request(JniOutputRequest::Conversion(decl)) => {
+            JniOutputConfig::Leaf(JniOutputLeafOp::ConfigConversion(decl)) => {
                 decl.validate()?;
                 let source = decl
                     .output
@@ -728,12 +731,12 @@ impl DeclJniDefaults {
                     codec,
                     ty,
                     conversion,
-                    &JniOutput::value(),
+                    &JniOutputConfig::value(),
                     extra,
                     stack,
                 )
             }
-            JniOutput::Unary {
+            OutputNode::Unary {
                 operation: JniOutputUnary::Convert { conversion },
                 child: output,
             } => self.resolve_output_conversion(
@@ -745,24 +748,24 @@ impl DeclJniDefaults {
                 extra,
                 stack,
             ),
-            JniOutput::Unary {
+            OutputNode::Unary {
                 operation: JniOutputUnary::Bulk,
                 child,
             } => Ok(OutputNode::Unary {
                 operation: JniOutputUnary::Bulk,
                 child: Box::new(resolve(ty, &output_body((**child).clone()), stack)?),
             }),
-            JniOutput::Leaf(JniOutputLeafOp::Discard) => {
+            OutputNode::Leaf(JniOutputLeafOp::Discard) => {
                 Ok(OutputNode::Leaf(JniOutputLeafOp::Discard))
             }
-            JniOutput::Unary {
+            OutputNode::Unary {
                 operation: JniOutputUnary::Named { name },
                 child: output,
             } => Ok(OutputNode::Unary {
                 operation: JniOutputUnary::Named { name: name.clone() },
                 child: Box::new(resolve(ty, output, stack)?),
             }),
-            JniOutput::Request(JniOutputRequest::Auto) => {
+            JniOutputConfig::Leaf(JniOutputLeafOp::ConfigDefault(_)) => {
                 let key = type_key(ty);
                 if let Some(tree) = prebindgen_declarations::resolve_type_default(
                     &key,
@@ -781,12 +784,12 @@ impl DeclJniDefaults {
                 if let Some(tree) = prebindgen_declarations::resolve_container(
                     ty,
                     true,
-                    |inner| resolve(inner, &JniOutput::auto(), stack),
-                    |child| JniOutput::Unary {
+                    |inner| resolve(inner, &JniOutputConfig::auto(), stack),
+                    |child| OutputNode::Unary {
                         operation: JniOutputUnary::Optional,
                         child: Box::new(child),
                     },
-                    |child| JniOutput::Unary {
+                    |child| OutputNode::Unary {
                         operation: JniOutputUnary::Sequence {
                             delivery: SequenceDelivery::Auto,
                             mode: None,
@@ -799,10 +802,10 @@ impl DeclJniDefaults {
                 if type_key(ty) == "()" {
                     return Ok(OutputNode::None);
                 }
-                resolve(ty, &JniOutput::Leaf(JniOutputLeafOp::Value), stack)
+                resolve(ty, &OutputNode::Leaf(JniOutputLeafOp::Value), stack)
             }
-            JniOutput::Unary {
-                operation: JniOutputUnary::ForType { ty: target },
+            OutputNode::Unary {
+                operation: JniOutputUnary::ConfigForType { ty: target },
                 child: output,
             } => {
                 let target = flat.resolve_type(target)?;
@@ -815,20 +818,20 @@ impl DeclJniDefaults {
                     stack,
                     resolve,
                     |child| {
-                        if matches!(&child, JniOutput::Leaf(JniOutputLeafOp::Discard)) {
+                        if matches!(&child, OutputNode::Leaf(JniOutputLeafOp::Discard)) {
                             child
                         } else {
-                            JniOutput::Unary {
+                            OutputNode::Unary {
                                 operation: JniOutputUnary::Optional,
                                 child: Box::new(child),
                             }
                         }
                     },
                     |child| {
-                        if matches!(&child, JniOutput::Leaf(JniOutputLeafOp::Discard)) {
+                        if matches!(&child, OutputNode::Leaf(JniOutputLeafOp::Discard)) {
                             child
                         } else {
-                            JniOutput::Unary {
+                            OutputNode::Unary {
                                 operation: JniOutputUnary::Sequence {
                                     delivery: SequenceDelivery::Auto,
                                     mode: None,
@@ -840,12 +843,12 @@ impl DeclJniDefaults {
                     prebindgen_declarations::Direction::Output,
                 )
             }
-            JniOutput::Leaf(JniOutputLeafOp::Value)
-            | JniOutput::Leaf(JniOutputLeafOp::Projected(_)) => {
+            OutputNode::Leaf(JniOutputLeafOp::Value)
+            | OutputNode::Leaf(JniOutputLeafOp::Projected(_)) => {
                 if let Some(conversion) =
                     prebindgen_declarations::output_value_conversion(flat, ty, None)?
                 {
-                    if let JniOutput::Leaf(JniOutputLeafOp::Projected(policy)) = tree {
+                    if let OutputNode::Leaf(JniOutputLeafOp::Projected(policy)) = tree {
                         return self.resolve_output_value(
                             flat,
                             codec,
@@ -861,7 +864,7 @@ impl DeclJniDefaults {
                         codec,
                         ty,
                         conversion,
-                        &JniOutput::value(),
+                        &JniOutputConfig::value(),
                         extra,
                         stack,
                     );
@@ -874,7 +877,7 @@ impl DeclJniDefaults {
                     });
                 }
                 if let Some((element, _)) = sequence_parts(ty) {
-                    let mode = if let JniOutput::Leaf(JniOutputLeafOp::Projected(p)) = tree {
+                    let mode = if let OutputNode::Leaf(JniOutputLeafOp::Projected(p)) = tree {
                         if !p.fields.is_empty() {
                             return Err(
                                 "collection field projections belong on the element type".into()
@@ -889,12 +892,12 @@ impl DeclJniDefaults {
                             delivery: SequenceDelivery::Value,
                             mode,
                         },
-                        child: Box::new(resolve(element, &JniOutput::auto(), stack)?),
+                        child: Box::new(resolve(element, &JniOutputConfig::auto(), stack)?),
                     });
                 }
                 self.resolve_output_representation(flat, codec, ty, tree, stack, getter_result)
             }
-            JniOutput::Unary {
+            OutputNode::Unary {
                 operation: JniOutputUnary::Optional,
                 child,
             } => {
@@ -904,7 +907,7 @@ impl DeclJniDefaults {
                     child: Box::new(resolve(inner, child, stack)?),
                 })
             }
-            JniOutput::Unary {
+            OutputNode::Unary {
                 operation: JniOutputUnary::Sequence { delivery, mode },
                 child: element,
             } => {
@@ -918,8 +921,8 @@ impl DeclJniDefaults {
                     child: Box::new(resolve(ty, element, stack)?),
                 })
             }
-            JniOutput::Branch {
-                operation: JniOutputBranch::NamedFields { fields, mode },
+            OutputNode::Branch {
+                operation: JniOutputBranch::ConfigNamedFields(JniNamedFields { fields, mode }),
                 children: recipes,
             } => {
                 let overrides = prebindgen_declarations::named_children(fields, recipes)?;
@@ -927,7 +930,7 @@ impl DeclJniDefaults {
                     flat,
                     ty,
                     &overrides,
-                    &JniOutput::auto(),
+                    &JniOutputConfig::auto(),
                     |ty, tree| resolve(ty, tree, stack),
                 )?;
                 Ok(if *mode == ProjectionMode::Owned {
@@ -942,15 +945,15 @@ impl DeclJniDefaults {
                     }
                 })
             }
-            JniOutput::Branch {
+            OutputNode::Branch {
                 operation: JniOutputBranch::Fields,
                 children,
             }
-            | JniOutput::Branch {
+            | OutputNode::Branch {
                 operation: JniOutputBranch::OwnedFields,
                 children,
             }
-            | JniOutput::Branch {
+            | OutputNode::Branch {
                 operation: JniOutputBranch::Record { .. },
                 children,
                 ..
@@ -965,21 +968,21 @@ impl DeclJniDefaults {
                     |ty, child| resolve(ty, child, stack),
                 )?;
                 Ok(match tree {
-                    JniOutput::Branch {
+                    OutputNode::Branch {
                         operation: JniOutputBranch::Fields,
                         children: _,
                     } => OutputNode::Branch {
                         operation: JniOutputBranch::Fields,
                         children,
                     },
-                    JniOutput::Branch {
+                    OutputNode::Branch {
                         operation: JniOutputBranch::OwnedFields,
                         children: _,
                     } => OutputNode::Branch {
                         operation: JniOutputBranch::OwnedFields,
                         children,
                     },
-                    JniOutput::Branch {
+                    OutputNode::Branch {
                         operation: JniOutputBranch::Record { mode, .. },
                         ..
                     } => OutputNode::Branch {
@@ -989,11 +992,11 @@ impl DeclJniDefaults {
                     _ => unreachable!(),
                 })
             }
-            JniOutput::Unary {
+            OutputNode::Unary {
                 operation: JniOutputUnary::Getter { function },
                 child: output,
             }
-            | JniOutput::Unary {
+            | OutputNode::Unary {
                 operation: JniOutputUnary::Into { function },
                 child: output,
             } => {
@@ -1003,7 +1006,7 @@ impl DeclJniDefaults {
                     function,
                     matches!(
                         tree,
-                        JniOutput::Unary {
+                        OutputNode::Unary {
                             operation: JniOutputUnary::Into { .. },
                             ..
                         }
@@ -1014,7 +1017,7 @@ impl DeclJniDefaults {
                 Ok(
                     if matches!(
                         tree,
-                        JniOutput::Unary {
+                        OutputNode::Unary {
                             operation: JniOutputUnary::Into { .. },
                             ..
                         }
@@ -1035,7 +1038,7 @@ impl DeclJniDefaults {
                     },
                 )
             }
-            JniOutput::Branch {
+            OutputNode::Branch {
                 operation: JniOutputBranch::Combine,
                 children: parts,
             } => {
@@ -1050,7 +1053,7 @@ impl DeclJniDefaults {
                         .collect::<Result<_>>()?,
                 })
             }
-            JniOutput::Unary {
+            OutputNode::Unary {
                 operation: JniOutputUnary::Result { error },
                 child: ok,
             } => {
@@ -1078,7 +1081,7 @@ impl DeclJniDefaults {
         codec: &JniCodec,
         ty: &Type,
         conversion: ValueConversion,
-        child: &JniInput<JniInputRequest, JniOutputRequest>,
+        child: &JniInputConfig,
         extra: &(),
         stack: &mut Vec<String>,
     ) -> Result<JniInput> {
@@ -1090,7 +1093,7 @@ impl DeclJniDefaults {
             prebindgen_declarations::Direction::Input,
             |ty, child, stack| self.input(flat, codec, ty, child, extra, stack),
         )?;
-        Ok(JniInput::Unary {
+        Ok(InputNode::Unary {
             operation: JniInputUnary::Convert {
                 conversion: Box::new(conversion),
             },
@@ -1104,7 +1107,7 @@ impl DeclJniDefaults {
         codec: &JniCodec,
         ty: &Type,
         conversion: ValueConversion,
-        child: &JniOutput<JniInputRequest, JniOutputRequest>,
+        child: &JniOutputConfig,
         extra: &(),
         stack: &mut Vec<String>,
     ) -> Result<JniOutput> {
@@ -1116,7 +1119,7 @@ impl DeclJniDefaults {
             prebindgen_declarations::Direction::Output,
             |ty, child, stack| self.output(flat, codec, ty, child, extra, stack, true),
         )?;
-        Ok(JniOutput::Unary {
+        Ok(OutputNode::Unary {
             operation: JniOutputUnary::Convert {
                 conversion: Box::new(conversion),
             },
@@ -1143,7 +1146,7 @@ impl DeclJniDefaults {
                 codec,
                 ty,
                 c,
-                &JniInput::value(),
+                &JniInputConfig::value(),
                 extra,
                 stack,
             );
@@ -1152,11 +1155,11 @@ impl DeclJniDefaults {
             ty,
             true,
             |inner| self.resolve_input_value(flat, codec, inner, extra, stack),
-            |child| JniInput::Unary {
+            |child| InputNode::Unary {
                 operation: JniInputUnary::Optional,
                 child: Box::new(child),
             },
-            |child| JniInput::Unary {
+            |child| InputNode::Unary {
                 operation: JniInputUnary::Sequence,
                 child: Box::new(child),
             },
@@ -1167,7 +1170,7 @@ impl DeclJniDefaults {
             flat,
             codec,
             ty,
-            &JniInput::Leaf(JniInputLeafOp::Value),
+            &InputNode::Leaf(JniInputLeafOp::Value),
             extra,
             stack,
         )
@@ -1195,7 +1198,7 @@ impl DeclJniDefaults {
                 codec,
                 ty,
                 c,
-                &JniOutput::value(),
+                &JniOutputConfig::value(),
                 extra,
                 stack,
             );
@@ -1204,11 +1207,11 @@ impl DeclJniDefaults {
             ty,
             true,
             |inner| self.resolve_output_value(flat, codec, inner, extra, stack, getter, policy),
-            |child| JniOutput::Unary {
+            |child| OutputNode::Unary {
                 operation: JniOutputUnary::Optional,
                 child: Box::new(child),
             },
-            |child| JniOutput::Unary {
+            |child| OutputNode::Unary {
                 operation: JniOutputUnary::Sequence {
                     delivery: prebindgen_declarations::SequenceDelivery::Value,
                     mode: policy.map(|p| p.mode),
@@ -1222,8 +1225,8 @@ impl DeclJniDefaults {
             flat,
             codec,
             ty,
-            &policy.map_or(JniOutput::Leaf(JniOutputLeafOp::Value), |p| {
-                JniOutput::Leaf(JniOutputLeafOp::Projected(p.clone()))
+            &policy.map_or(OutputNode::Leaf(JniOutputLeafOp::Value), |p| {
+                OutputNode::Leaf(JniOutputLeafOp::Projected(p.clone()))
             }),
             extra,
             stack,
@@ -1240,14 +1243,14 @@ impl DeclJniDefaults {
         codec: &JniCodec,
         ty: &Type,
         extra: &(),
-        entries: &BTreeMap<String, BTreeMap<String, &JniInput<JniInputRequest, JniOutputRequest>>>,
+        entries: &BTreeMap<String, BTreeMap<String, &JniInputConfig>>,
         value: bool,
         stack: &mut Vec<String>,
     ) -> Result<JniInput> {
         let default = if value {
-            JniInput::value()
+            JniInputConfig::value()
         } else {
-            JniInput::auto()
+            JniInputConfig::auto()
         };
         let variants = prebindgen_declarations::resolve_enum_fields(
             flat,
@@ -1265,15 +1268,15 @@ impl DeclJniDefaults {
         codec: &JniCodec,
         ty: &Type,
         extra: &(),
-        entries: &BTreeMap<String, BTreeMap<String, &JniOutput<JniInputRequest, JniOutputRequest>>>,
+        entries: &BTreeMap<String, BTreeMap<String, &JniOutputConfig>>,
         value: bool,
         stack: &mut Vec<String>,
         getter: bool,
     ) -> Result<JniOutput> {
         let default = if value {
-            JniOutput::value()
+            JniOutputConfig::value()
         } else {
-            JniOutput::auto()
+            JniOutputConfig::auto()
         };
         let variants = prebindgen_declarations::resolve_enum_fields(
             flat,
@@ -1300,11 +1303,7 @@ pub struct JniResolve<'a> {
 }
 impl JniResolve<'_> {
     /// Resolve a nested parameter or callback result.
-    pub fn input(
-        &mut self,
-        ty: &Type,
-        tree: &JniInput<JniInputRequest, JniOutputRequest>,
-    ) -> Result<ResolvedInput<JniCodec>> {
+    pub fn input(&mut self, ty: &Type, tree: &JniInputConfig) -> Result<ResolvedInput<JniCodec>> {
         self.declarations
             .input(self.flat, self.codec, ty, tree, self.extra, self.stack)
     }
@@ -1312,7 +1311,7 @@ impl JniResolve<'_> {
     pub fn output(
         &mut self,
         ty: &Type,
-        tree: &JniOutput<JniInputRequest, JniOutputRequest>,
+        tree: &JniOutputConfig,
     ) -> Result<ResolvedOutput<JniCodec>> {
         self.declarations.output(
             self.flat,
@@ -1355,7 +1354,7 @@ impl DeclJniDefaults {
         flat: &Flat<JniSchema>,
         codec: &JniCodec,
         ty: &Type,
-        tree: &JniInput<JniInputRequest, JniOutputRequest>,
+        tree: &JniInputConfig,
         stack: &mut Vec<String>,
     ) -> Result<JniInput> {
         let replacement = (|| {
@@ -1363,7 +1362,7 @@ impl DeclJniDefaults {
                 return Ok(None);
             }
 
-            if !matches!(tree, JniInput::Leaf(JniInputLeafOp::Value)) {
+            if !matches!(tree, InputNode::Leaf(JniInputLeafOp::Value)) {
                 return Ok(None);
             }
             if flat.payload_enums.contains_key(&type_key(ty))
@@ -1384,11 +1383,11 @@ impl DeclJniDefaults {
                 .and_then(|t| t.metadata.class.as_ref())
                 .is_some_and(|c| c.kind == ClassKind::Sealed)
             {
-                return Ok(Some(JniInput::enum_variants(
+                return Ok(Some(JniInputConfig::enum_variants(
                     flat.payload_enum(ty)?
                         .variants
                         .iter()
-                        .map(|v| vec![JniInput::value(); v.fields.len()])
+                        .map(|v| vec![JniInputConfig::value(); v.fields.len()])
                         .collect(),
                     true,
                 )));
@@ -1402,15 +1401,15 @@ impl DeclJniDefaults {
                     record.fqn()
                 ));
             }
-            Ok(Some(JniInput::Branch {
+            Ok(Some(InputNode::Branch {
                 operation: JniInputBranch::Record,
-                children: vec![JniInput::value(); flat.record(ty)?.fields.len()],
+                children: vec![JniInputConfig::value(); flat.record(ty)?.fields.len()],
             }))
         })();
 
         match replacement? {
             Some(tree) => self.input(flat, codec, ty, &tree, &(), stack),
-            None => Ok(JniInput::Leaf(JniInputLeafOp::Value)),
+            None => Ok(InputNode::Leaf(JniInputLeafOp::Value)),
         }
     }
 }
@@ -1421,7 +1420,7 @@ impl DeclJniDefaults {
         flat: &Flat<JniSchema>,
         codec: &JniCodec,
         ty: &Type,
-        tree: &JniOutput<JniInputRequest, JniOutputRequest>,
+        tree: &JniOutputConfig,
         stack: &mut Vec<String>,
         getter: bool,
     ) -> Result<JniOutput> {
@@ -1431,8 +1430,8 @@ impl DeclJniDefaults {
             }
 
             let policy = match tree {
-                JniOutput::Leaf(JniOutputLeafOp::Value) => None,
-                JniOutput::Leaf(JniOutputLeafOp::Projected(p)) => Some(p.clone()),
+                OutputNode::Leaf(JniOutputLeafOp::Value) => None,
+                OutputNode::Leaf(JniOutputLeafOp::Projected(p)) => Some(p.clone()),
                 _ => return Ok(None),
             };
             if flat.payload_enums.contains_key(&type_key(ty))
@@ -1453,11 +1452,11 @@ impl DeclJniDefaults {
                 .and_then(|t| t.metadata.class.as_ref())
                 .is_some_and(|c| c.kind == ClassKind::Sealed)
             {
-                return Ok(Some(JniOutput::enum_variants(
+                return Ok(Some(JniOutputConfig::enum_variants(
                     flat.payload_enum(ty)?
                         .variants
                         .iter()
-                        .map(|v| vec![JniOutput::value(); v.fields.len()])
+                        .map(|v| vec![JniOutputConfig::value(); v.fields.len()])
                         .collect(),
                     true,
                     policy.as_ref().map(|p| p.mode),
@@ -1481,14 +1480,14 @@ impl DeclJniDefaults {
             let inherited = policy.as_ref().map(Projection::inherited);
             let children = fields.iter().map(|field| {
             let name = field.name.to_string();
-            let Some(policy) = &policy else { return Ok(JniOutput::value()); };
+            let Some(policy) = &policy else { return Ok(JniOutputConfig::value()); };
             let child = policy.fields.get(name.trim_start_matches("r#")).unwrap_or(inherited.as_ref().unwrap());
             if policy.mode == ProjectionMode::Borrowed && child.mode == ProjectionMode::Owned {
                 return Err(format!("data class `{}` field `{name}`: owned projection cannot consume a shared-reference occurrence", record.fqn()));
             }
-            Ok(JniOutput::Request(JniOutputRequest::Value {projection:Some(child.clone())}))
+            Ok(JniOutputConfig::Leaf(JniOutputLeafOp::ConfigValue(Some(child.clone()))))
         }).collect::<Result<Vec<_>>>()?;
-            Ok(Some(JniOutput::Branch {
+            Ok(Some(OutputNode::Branch {
                 operation: JniOutputBranch::Record {
                     mode: policy.map(|p| p.mode),
                 },
@@ -1499,9 +1498,11 @@ impl DeclJniDefaults {
         match replacement? {
             Some(tree) => self.output(flat, codec, ty, &tree, &(), stack, getter),
             None => Ok(match tree {
-                JniOutput::Leaf(JniOutputLeafOp::Value) => JniOutput::Leaf(JniOutputLeafOp::Value),
-                JniOutput::Leaf(JniOutputLeafOp::Projected(p)) => {
-                    JniOutput::Leaf(JniOutputLeafOp::Projected(p.clone()))
+                OutputNode::Leaf(JniOutputLeafOp::Value) => {
+                    OutputNode::Leaf(JniOutputLeafOp::Value)
+                }
+                OutputNode::Leaf(JniOutputLeafOp::Projected(p)) => {
+                    OutputNode::Leaf(JniOutputLeafOp::Projected(p.clone()))
                 }
                 _ => unreachable!(),
             }),

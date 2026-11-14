@@ -476,17 +476,17 @@ fn malformed_nested_sequence_bindings_are_rejected_before_installation() {
         bad_sequence: true,
         ..Default::default()
     };
-    let recipe = TestOutput::Unary {
+    let recipe = TestOutputConfig::Unary {
         operation: TestOutputUnary::Sequence {
             delivery: SequenceDelivery::Value,
             mode: None,
         },
-        child: Box::new(TestOutput::Unary {
+        child: Box::new(TestOutputConfig::Unary {
             operation: TestOutputUnary::Sequence {
                 delivery: SequenceDelivery::Value,
                 mode: None,
             },
-            child: Box::new(TestOutput::Leaf(TestOutputLeafOp::Value)),
+            child: Box::new(TestOutputConfig::Leaf(TestOutputLeafOp::Value)),
         }),
     };
     let error = test_bind_output(&mut flat, &bad, "output", &recipe, &()).unwrap_err();
@@ -501,9 +501,9 @@ fn malformed_nested_sequence_bindings_are_rejected_before_installation() {
         &bad,
         "input",
         "values",
-        &TestInput::Unary {
+        &TestInputConfig::Unary {
             operation: TestInputUnary::Sequence,
-            child: Box::new(TestInput::Leaf(TestInputLeafOp::Value)),
+            child: Box::new(TestInputConfig::Leaf(TestInputLeafOp::Value)),
         },
         &(),
     )

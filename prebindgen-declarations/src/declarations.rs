@@ -178,9 +178,9 @@ impl<InTree, OutTree, Extension> DeclFunction<InTree, OutTree, Extension> {
     }
     /// Replace the result expansion, including any previously assigned override.
     ///
-    /// Raw declaration syntax infers the request types automatically. Syntax with
-    /// uninhabited request types uses [`crate::OutputNode::into_preparation`] before
-    /// registration. Adapter-resolved trees instead go directly to [`crate::compile_output`].
+    /// Configuration syntax uses the adapter's configuration operation sets.
+    /// Resolved trees can be embedded with [`crate::OutputNode::map_into`] before
+    /// registration, or passed directly to [`crate::compile_output`].
     pub fn output(mut self, decl: impl Into<OutTree>) -> Self {
         self.ret = Some(decl.into());
         self

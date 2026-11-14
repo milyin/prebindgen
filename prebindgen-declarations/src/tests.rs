@@ -335,9 +335,9 @@ fn different_occurrences_have_different_converters() {
         &TEST_CODEC,
         "foo",
         "x",
-        &TestInput::selector([
-            TestInput::Leaf(TestInputLeafOp::Value),
-            TestInput::constructor("make", [TestInput::Leaf(TestInputLeafOp::Value)]),
+        &TestInputConfig::selector([
+            TestInputConfig::Leaf(TestInputLeafOp::Value),
+            TestInputConfig::constructor("make", [TestInputConfig::Leaf(TestInputLeafOp::Value)]),
         ]),
         &extra("x"),
     )
@@ -347,7 +347,7 @@ fn different_occurrences_have_different_converters() {
         &TEST_CODEC,
         "foo",
         "y",
-        &TestInput::Leaf(TestInputLeafOp::Value),
+        &TestInputConfig::Leaf(TestInputLeafOp::Value),
         &extra("y"),
     )
     .unwrap();
@@ -355,7 +355,7 @@ fn different_occurrences_have_different_converters() {
         &mut flat,
         &TEST_CODEC,
         "foo",
-        &TestOutput::Leaf(TestOutputLeafOp::Value),
+        &TestOutputConfig::Leaf(TestOutputLeafOp::Value),
         &extra("result"),
     )
     .unwrap();
@@ -375,7 +375,7 @@ fn rejects_incomplete_slots() {
         &mut flat,
         &TEST_CODEC,
         "foo",
-        &TestOutput::Leaf(TestOutputLeafOp::Value),
+        &TestOutputConfig::Leaf(TestOutputLeafOp::Value),
         &Extra::default(),
     )
     .unwrap();
@@ -389,7 +389,7 @@ fn rejects_inputs_without_a_result_converter() {
         &TEST_CODEC,
         "foo",
         "x",
-        &TestInput::Leaf(TestInputLeafOp::Value),
+        &TestInputConfig::Leaf(TestInputLeafOp::Value),
         &Extra::default(),
     )
     .unwrap();
@@ -428,20 +428,20 @@ fn failed_rebinding_preserves_existing_converter() {
         &TEST_CODEC,
         "foo",
         "x",
-        &TestInput::constructor("foo", []),
+        &TestInputConfig::constructor("foo", []),
         &Extra::default(),
     )
     .unwrap_err();
     assert!(error.contains("argument count"));
     assert_eq!(format!("{flat:?}"), before);
     for output in [
-        TestOutput::combine([
-            TestOutput::Leaf(TestOutputLeafOp::Value),
-            TestOutput::Leaf(TestOutputLeafOp::Value),
+        TestOutputConfig::combine([
+            TestOutputConfig::Leaf(TestOutputLeafOp::Value),
+            TestOutputConfig::Leaf(TestOutputLeafOp::Value),
         ]),
-        TestOutput::fields([
-            TestOutput::Leaf(TestOutputLeafOp::Value),
-            TestOutput::Leaf(TestOutputLeafOp::Value),
+        TestOutputConfig::fields([
+            TestOutputConfig::Leaf(TestOutputLeafOp::Value),
+            TestOutputConfig::Leaf(TestOutputLeafOp::Value),
         ]),
     ] {
         assert!(
@@ -454,7 +454,7 @@ fn failed_rebinding_preserves_existing_converter() {
         &TEST_CODEC,
         "foo",
         "missing",
-        &TestInput::Leaf(TestInputLeafOp::Value),
+        &TestInputConfig::Leaf(TestInputLeafOp::Value),
         &Extra::default()
     )
     .unwrap_err()
@@ -467,9 +467,9 @@ fn observations_precede_move_but_wires_keep_order() {
         &mut flat,
         &TEST_CODEC,
         "foo",
-        &TestOutput::combine([
-            TestOutput::Leaf(TestOutputLeafOp::Value),
-            TestOutput::fields([TestOutput::Leaf(TestOutputLeafOp::Value)]),
+        &TestOutputConfig::combine([
+            TestOutputConfig::Leaf(TestOutputLeafOp::Value),
+            TestOutputConfig::fields([TestOutputConfig::Leaf(TestOutputLeafOp::Value)]),
         ]),
         &Extra::default(),
     )
@@ -519,9 +519,9 @@ fn declarations_preserve_converters_and_replace_explicit_overrides() {
         &TEST_CODEC,
         "foo",
         "x",
-        &TestInput::selector([
-            TestInput::constructor("make", [TestInput::Leaf(TestInputLeafOp::Value)]),
-            TestInput::Leaf(TestInputLeafOp::Value),
+        &TestInputConfig::selector([
+            TestInputConfig::constructor("make", [TestInputConfig::Leaf(TestInputLeafOp::Value)]),
+            TestInputConfig::Leaf(TestInputLeafOp::Value),
         ]),
         &extra("x"),
     )
@@ -530,7 +530,7 @@ fn declarations_preserve_converters_and_replace_explicit_overrides() {
         &mut flat,
         &TEST_CODEC,
         "foo",
-        &TestOutput::Leaf(TestOutputLeafOp::Value),
+        &TestOutputConfig::Leaf(TestOutputLeafOp::Value),
         &extra("result"),
     )
     .unwrap();
@@ -614,7 +614,7 @@ fn independent_binding_and_rebinding_keeps_names_unique_and_stable() {
                 &TEST_CODEC,
                 "foo",
                 parameter,
-                &TestInput::Leaf(TestInputLeafOp::Value),
+                &TestInputConfig::Leaf(TestInputLeafOp::Value),
                 &Extra::default(),
             )
             .unwrap();
@@ -623,7 +623,7 @@ fn independent_binding_and_rebinding_keeps_names_unique_and_stable() {
             model,
             &TEST_CODEC,
             "foo",
-            &TestOutput::Leaf(TestOutputLeafOp::Value),
+            &TestOutputConfig::Leaf(TestOutputLeafOp::Value),
             &Extra::default(),
         )
         .unwrap();
@@ -635,9 +635,9 @@ fn independent_binding_and_rebinding_keeps_names_unique_and_stable() {
         &TEST_CODEC,
         "foo",
         "x",
-        &TestInput::selector([
-            TestInput::Leaf(TestInputLeafOp::Value),
-            TestInput::constructor("make", [TestInput::Leaf(TestInputLeafOp::Value)]),
+        &TestInputConfig::selector([
+            TestInputConfig::Leaf(TestInputLeafOp::Value),
+            TestInputConfig::constructor("make", [TestInputConfig::Leaf(TestInputLeafOp::Value)]),
         ]),
         &Extra::default(),
     )
@@ -773,7 +773,7 @@ fn nested_recipes_use_only_the_callers_extra() {
         &TEST_CODEC,
         "make",
         "k",
-        &TestInput::Leaf(TestInputLeafOp::Value),
+        &TestInputConfig::Leaf(TestInputLeafOp::Value),
         &extra("constructor declaration"),
     )
     .unwrap();
@@ -781,7 +781,7 @@ fn nested_recipes_use_only_the_callers_extra() {
         &mut flat,
         &TEST_CODEC,
         "parts",
-        &TestOutput::Leaf(TestOutputLeafOp::Value),
+        &TestOutputConfig::Leaf(TestOutputLeafOp::Value),
         &extra("getter declaration"),
     )
     .unwrap();
@@ -790,9 +790,9 @@ fn nested_recipes_use_only_the_callers_extra() {
         &TEST_CODEC,
         "foo",
         "x",
-        &TestInput::selector([
-            TestInput::Leaf(TestInputLeafOp::Value),
-            TestInput::constructor("make", [TestInput::Leaf(TestInputLeafOp::Value)]),
+        &TestInputConfig::selector([
+            TestInputConfig::Leaf(TestInputLeafOp::Value),
+            TestInputConfig::constructor("make", [TestInputConfig::Leaf(TestInputLeafOp::Value)]),
         ]),
         &extra("x"),
     )
@@ -802,7 +802,7 @@ fn nested_recipes_use_only_the_callers_extra() {
         &TEST_CODEC,
         "foo",
         "y",
-        &TestInput::fields([TestInput::Leaf(TestInputLeafOp::Value)]),
+        &TestInputConfig::fields([TestInputConfig::Leaf(TestInputLeafOp::Value)]),
         &extra("y"),
     )
     .unwrap();
@@ -810,11 +810,11 @@ fn nested_recipes_use_only_the_callers_extra() {
         &mut flat,
         &TEST_CODEC,
         "foo",
-        &TestOutput::combine([
-            TestOutput::Leaf(TestOutputLeafOp::Value),
-            TestOutput::getter(
+        &TestOutputConfig::combine([
+            TestOutputConfig::Leaf(TestOutputLeafOp::Value),
+            TestOutputConfig::getter(
                 "parts",
-                TestOutput::fields([TestOutput::Leaf(TestOutputLeafOp::Value)]),
+                TestOutputConfig::fields([TestOutputConfig::Leaf(TestOutputLeafOp::Value)]),
             ),
         ]),
         &Extra {
@@ -853,9 +853,9 @@ fn nested_recipes_use_only_the_callers_extra() {
 }
 #[test]
 fn extra_controls_consumption_without_changing_the_recipe() {
-    let recipe = TestOutput::combine([
-        TestOutput::Leaf(TestOutputLeafOp::Value),
-        TestOutput::Leaf(TestOutputLeafOp::Value),
+    let recipe = TestOutputConfig::combine([
+        TestOutputConfig::Leaf(TestOutputLeafOp::Value),
+        TestOutputConfig::Leaf(TestOutputLeafOp::Value),
     ]);
     for copy in [false, true] {
         let mut flat = model();
@@ -884,9 +884,9 @@ fn record_projection_retains_field_mappings_in_prepared_flat() {
         &mut flat,
         &TEST_CODEC,
         "point",
-        &TestOutput::fields([
-            TestOutput::Leaf(TestOutputLeafOp::Value),
-            TestOutput::Leaf(TestOutputLeafOp::Value),
+        &TestOutputConfig::fields([
+            TestOutputConfig::Leaf(TestOutputLeafOp::Value),
+            TestOutputConfig::Leaf(TestOutputLeafOp::Value),
         ]),
         &Extra::default(),
     )
@@ -1058,11 +1058,11 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
         &FinalizingCodec,
         "take",
         "p",
-        &TestInput::constructor(
+        &TestInputConfig::constructor(
             "pair",
             [
-                TestInput::Leaf(TestInputLeafOp::Value),
-                TestInput::Leaf(TestInputLeafOp::Value)
+                TestInputConfig::Leaf(TestInputLeafOp::Value),
+                TestInputConfig::Leaf(TestInputLeafOp::Value)
             ]
         ),
         &Extra {
@@ -1082,11 +1082,11 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
         &FinalizingCodec,
         "take",
         "p",
-        &TestInput::constructor(
+        &TestInputConfig::constructor(
             "pair",
             [
-                TestInput::Leaf(TestInputLeafOp::Value),
-                TestInput::Leaf(TestInputLeafOp::Value),
+                TestInputConfig::Leaf(TestInputLeafOp::Value),
+                TestInputConfig::Leaf(TestInputLeafOp::Value),
             ],
         ),
         &Extra::default(),
@@ -1108,16 +1108,16 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
         &mut direct,
         &FinalizingCodec,
         "take",
-        &TestOutput::fields([]),
+        &TestOutputConfig::fields([]),
         &Extra::default(),
     )
     .unwrap();
     let declarations = TestDefaults::new(&direct, vec![], vec![], vec![]).unwrap();
     let decl = TestFunction::new(syn::parse_quote!(take)).input(
         "p",
-        TestInput::for_type(
+        TestInputConfig::for_type(
             syn::parse_quote!(Pair),
-            TestInput::Branch {
+            TestInputConfig::Branch {
                 operation: TestInputBranch::Selector,
                 children: vec![],
             },
@@ -1173,9 +1173,9 @@ fn generation_needs_no_preparation_registry_or_record_lookup() {
         &mut flat,
         &TEST_CODEC,
         "point",
-        &TestOutput::fields([
-            TestOutput::Leaf(TestOutputLeafOp::Value),
-            TestOutput::Leaf(TestOutputLeafOp::Value),
+        &TestOutputConfig::fields([
+            TestOutputConfig::Leaf(TestOutputLeafOp::Value),
+            TestOutputConfig::Leaf(TestOutputLeafOp::Value),
         ]),
         &Extra::default(),
     )
@@ -1523,22 +1523,22 @@ fn optional_output_drops_prepared_owners_on_failure_and_skips_absent_payloads() 
 fn field_groups_preserve_empty_and_multiwire_fields_in_both_directions() {
     use prebindgen_flat::WireNode;
     let mut flat = parse("pub struct Empty {} pub struct Pair { pub x: i32, pub y: i32 } pub struct Record { pub maybe: Option<i32>, pub empty: Empty, pub pair: Pair } pub fn echo(value: Record) -> Record { value }");
-    let input = TestInput::Branch {
+    let input = TestInputConfig::Branch {
         operation: TestInputBranch::Fields,
         children: vec![
-            TestInput::Unary {
+            TestInputConfig::Unary {
                 operation: TestInputUnary::Optional,
-                child: Box::new(TestInput::Leaf(TestInputLeafOp::Value)),
+                child: Box::new(TestInputConfig::Leaf(TestInputLeafOp::Value)),
             },
-            TestInput::Branch {
+            TestInputConfig::Branch {
                 operation: TestInputBranch::Fields,
                 children: vec![],
             },
-            TestInput::Branch {
+            TestInputConfig::Branch {
                 operation: TestInputBranch::Fields,
                 children: vec![
-                    TestInput::Leaf(TestInputLeafOp::Value),
-                    TestInput::Leaf(TestInputLeafOp::Value),
+                    TestInputConfig::Leaf(TestInputLeafOp::Value),
+                    TestInputConfig::Leaf(TestInputLeafOp::Value),
                 ],
             },
         ],
@@ -1598,29 +1598,29 @@ fn field_groups_preserve_empty_and_multiwire_fields_in_both_directions() {
     );
     for owned in [false, true] {
         let fields = vec![
-            TestOutput::Unary {
+            TestOutputConfig::Unary {
                 operation: TestOutputUnary::Optional,
-                child: Box::new(TestOutput::Leaf(TestOutputLeafOp::Value)),
+                child: Box::new(TestOutputConfig::Leaf(TestOutputLeafOp::Value)),
             },
-            TestOutput::Branch {
+            TestOutputConfig::Branch {
                 operation: TestOutputBranch::Fields,
                 children: vec![],
             },
-            TestOutput::Branch {
+            TestOutputConfig::Branch {
                 operation: TestOutputBranch::Fields,
                 children: vec![
-                    TestOutput::Leaf(TestOutputLeafOp::Value),
-                    TestOutput::Leaf(TestOutputLeafOp::Value),
+                    TestOutputConfig::Leaf(TestOutputLeafOp::Value),
+                    TestOutputConfig::Leaf(TestOutputLeafOp::Value),
                 ],
             },
         ];
         let output = if owned {
-            TestOutput::Branch {
+            TestOutputConfig::Branch {
                 operation: TestOutputBranch::OwnedFields,
                 children: fields,
             }
         } else {
-            TestOutput::Branch {
+            TestOutputConfig::Branch {
                 operation: TestOutputBranch::Fields,
                 children: fields,
             }
@@ -1779,16 +1779,16 @@ fn result_data_occurrences_are_not_implicitly_error_channels() {
     for (source, recipe) in [
         (
             "pub fn f()->Option<Result<i64,String>>{}",
-            TestOutput::Unary {
+            TestOutputConfig::Unary {
                 operation: TestOutputUnary::Optional,
-                child: Box::new(TestOutput::Leaf(TestOutputLeafOp::Value)),
+                child: Box::new(TestOutputConfig::Leaf(TestOutputLeafOp::Value)),
             },
         ),
         (
             "pub struct R{pub value:Result<i64,String>}pub fn f()->R{}",
-            TestOutput::Branch {
+            TestOutputConfig::Branch {
                 operation: TestOutputBranch::OwnedFields,
-                children: vec![TestOutput::Leaf(TestOutputLeafOp::Value)],
+                children: vec![TestOutputConfig::Leaf(TestOutputLeafOp::Value)],
             },
         ),
     ] {
@@ -1866,9 +1866,12 @@ fn selector_schema_separates_control_from_mutually_exclusive_payloads() {
         &TEST_CODEC,
         "take",
         "v",
-        &TestInput::selector([
-            TestInput::constructor("empty", []),
-            TestInput::constructor("numbered", [TestInput::Leaf(TestInputLeafOp::Value)]),
+        &TestInputConfig::selector([
+            TestInputConfig::constructor("empty", []),
+            TestInputConfig::constructor(
+                "numbered",
+                [TestInputConfig::Leaf(TestInputLeafOp::Value)],
+            ),
         ]),
         &Extra::default(),
     )
@@ -2018,7 +2021,10 @@ fn constructor_and_output_components_keep_groups_at_every_arity() {
             &TEST_CODEC,
             "f",
             "value",
-            &TestInput::constructor(name, vec![TestInput::Leaf(TestInputLeafOp::Value); count]),
+            &TestInputConfig::constructor(
+                name,
+                vec![TestInputConfig::Leaf(TestInputLeafOp::Value); count],
+            ),
             &Extra::default(),
         )
         .unwrap();
@@ -2037,10 +2043,10 @@ fn constructor_and_output_components_keep_groups_at_every_arity() {
             &mut flat,
             &TEST_CODEC,
             "f",
-            &TestOutput::combine(vec![
-                TestOutput::getter(
+            &TestOutputConfig::combine(vec![
+                TestOutputConfig::getter(
                     "observe",
-                    TestOutput::Leaf(TestOutputLeafOp::Value)
+                    TestOutputConfig::Leaf(TestOutputLeafOp::Value)
                 );
                 count
             ]),
@@ -2061,7 +2067,7 @@ fn malformed_error_channel_is_rejected_before_replacing_output() {
         &mut flat,
         &TEST_CODEC,
         "f",
-        &TestOutput::Leaf(TestOutputLeafOp::Value),
+        &TestOutputConfig::Leaf(TestOutputLeafOp::Value),
         &Extra::default(),
     )
     .unwrap();
@@ -2078,7 +2084,7 @@ fn malformed_error_channel_is_rejected_before_replacing_output() {
         &mut flat,
         &TEST_CODEC,
         "f",
-        &TestOutput::Leaf(TestOutputLeafOp::Value),
+        &TestOutputConfig::Leaf(TestOutputLeafOp::Value),
         &Extra {
             name: "malformed_binding_failure",
             ..Extra::default()
@@ -2094,9 +2100,9 @@ fn malformed_error_channel_is_rejected_before_replacing_output() {
 #[test]
 fn failed_metadata_construction_preserves_installed_conversions() {
     let mut flat=parse("pub fn empty()->Option<i64>{} pub fn some(v:i64)->Option<i64>{} pub fn f(v:Option<i64>)->Option<i64>{}");
-    let optional = TestInput::Unary {
+    let optional = TestInputConfig::Unary {
         operation: TestInputUnary::Optional,
-        child: Box::new(TestInput::Leaf(TestInputLeafOp::Value)),
+        child: Box::new(TestInputConfig::Leaf(TestInputLeafOp::Value)),
     };
     test_bind_input(
         &mut flat,
@@ -2111,9 +2117,9 @@ fn failed_metadata_construction_preserves_installed_conversions() {
         &mut flat,
         &TEST_CODEC,
         "f",
-        &TestOutput::Unary {
+        &TestOutputConfig::Unary {
             operation: TestOutputUnary::Optional,
-            child: Box::new(TestOutput::Leaf(TestOutputLeafOp::Value)),
+            child: Box::new(TestOutputConfig::Leaf(TestOutputLeafOp::Value)),
         },
         &Extra::default(),
     )
@@ -2141,9 +2147,12 @@ fn failed_metadata_construction_preserves_installed_conversions() {
             "optional metadata rejected",
         ),
         (
-            TestInput::selector([
-                TestInput::constructor("empty", []),
-                TestInput::constructor("some", [TestInput::Leaf(TestInputLeafOp::Value)]),
+            TestInputConfig::selector([
+                TestInputConfig::constructor("empty", []),
+                TestInputConfig::constructor(
+                    "some",
+                    [TestInputConfig::Leaf(TestInputLeafOp::Value)],
+                ),
             ]),
             "reject_alternative_metadata",
             "alternative metadata rejected",
@@ -2177,9 +2186,9 @@ fn failed_metadata_construction_preserves_installed_conversions() {
         &mut flat,
         &TEST_CODEC,
         "f",
-        &TestOutput::Unary {
+        &TestOutputConfig::Unary {
             operation: TestOutputUnary::Optional,
-            child: Box::new(TestOutput::Leaf(TestOutputLeafOp::Value)),
+            child: Box::new(TestOutputConfig::Leaf(TestOutputLeafOp::Value)),
         },
         &Extra {
             name: "reject_optional_metadata",
@@ -2217,7 +2226,7 @@ fn preparation_fills_one_fixed_schema_and_emission_needs_no_defaults() {
             &source,
             &TEST_CODEC,
             &source.function("echo").unwrap().params[0].ty.ty,
-            &TestInput::auto(),
+            &TestInputConfig::auto(),
             &Extra::default(),
         )
         .unwrap();
@@ -2226,7 +2235,7 @@ fn preparation_fills_one_fixed_schema_and_emission_needs_no_defaults() {
             &source,
             &TEST_CODEC,
             &source.function("echo").unwrap().ret.ty,
-            &TestOutput::auto(),
+            &TestOutputConfig::auto(),
             &Extra::default(),
         )
         .unwrap();
@@ -2272,7 +2281,7 @@ fn sequence_identity_uses_element_defaults_and_staged_errors_name_the_function()
             &source
                 .resolve_type(&syn::parse_quote!(Vec<Payload>))
                 .unwrap(),
-            &TestInput::auto(),
+            &TestInputConfig::auto(),
             &Extra::default(),
         )
         .unwrap();
@@ -2284,7 +2293,7 @@ fn sequence_identity_uses_element_defaults_and_staged_errors_name_the_function()
         .fill(
             &mut source,
             &TEST_CODEC,
-            &test_fun!(foo).input("x", TestInput::call("missing")),
+            &test_fun!(foo).input("x", TestInputConfig::call("missing")),
             &Extra::default(),
         )
         .unwrap_err();
@@ -2294,9 +2303,9 @@ fn sequence_identity_uses_element_defaults_and_staged_errors_name_the_function()
         .fill(
             &mut invalid,
             &TEST_CODEC,
-            &test_fun!(broken).output(TestOutput::Unary {
+            &test_fun!(broken).output(TestOutputConfig::Unary {
                 operation: TestOutputUnary::Optional,
-                child: Box::new(TestOutput::Leaf(TestOutputLeafOp::Value)),
+                child: Box::new(TestOutputConfig::Leaf(TestOutputLeafOp::Value)),
             }),
             &Extra::default(),
         )
@@ -2307,7 +2316,7 @@ fn sequence_identity_uses_element_defaults_and_staged_errors_name_the_function()
 #[test]
 fn omitted_typed_fields_drop_all_enclosing_option_and_sequence_wires() {
     let mut model = parse("pub type Hidden=String;pub type Other=u32;pub struct Record{pub optional:Option<Hidden>,pub nested:Option<Vec<Option<Hidden>>>,pub visible:i64}pub fn parts(value:Record)->Record{}pub fn read()->Record{}");
-    let output: TestOutput<TestInputRequest, TestOutputRequest> = test_expand_return!(Record)
+    let output: TestOutputConfig = test_expand_return!(Record)
         .fields_into(
             test_fields!(parts)
                 .field("optional", test_expand_return!(Hidden))
@@ -2321,7 +2330,7 @@ fn omitted_typed_fields_drop_all_enclosing_option_and_sequence_wires() {
         1
     );
     assert_eq!(plan.values.len(), 1);
-    let invalid: TestOutput<TestInputRequest, TestOutputRequest> = test_expand_return!(Record)
+    let invalid: TestOutputConfig = test_expand_return!(Record)
         .fields_into(test_fields!(parts).field("optional", test_expand_return!(Other)))
         .into();
     assert!(
@@ -2333,7 +2342,7 @@ fn omitted_typed_fields_drop_all_enclosing_option_and_sequence_wires() {
 fn named_getter_resolution_preserves_the_selected_name_in_the_tree() {
     let model = parse("pub type T=String;pub fn length(value:&T)->i64{}");
     let defaults = TestDefaults::new(&model, vec![], vec![], vec![]).unwrap();
-    let tree: TestOutput<TestInputRequest, TestOutputRequest> = test_expand_return!(T)
+    let tree: TestOutputConfig = test_expand_return!(T)
         .field(test_fun!(length).name("size"))
         .into();
     let tree = defaults
@@ -2375,13 +2384,13 @@ fn nested_requests_resolve_into_strict_schemas_before_compilation() {
         vec![],
     )
     .unwrap();
-    let requested: TestInput<TestInputRequest, TestOutputRequest> = TestInput::constructor(
+    let requested: TestInputConfig = TestInputConfig::constructor(
         "make",
         [
-            TestInput::Leaf(TestInputLeafOp::Value),
-            TestInput::Unary {
+            TestInputConfig::Leaf(TestInputLeafOp::Value),
+            TestInputConfig::Unary {
                 operation: TestInputUnary::Optional,
-                child: Box::new(TestInput::auto()),
+                child: Box::new(TestInputConfig::auto()),
             },
         ],
     );
@@ -2433,8 +2442,8 @@ fn completed_subtrees_keep_explicit_choices_when_used_in_preparation() {
     let output: TestOutput =
         TestOutput::getter("observe", TestOutput::Leaf(TestOutputLeafOp::Value));
     let decl = test_fun!(run)
-        .input("value", input.into_preparation())
-        .output(output.into_preparation());
+        .input("value", input.map_into())
+        .output(output.map_into());
     let run = source.function("run").unwrap();
     let input = defaults
         .resolve_input(
@@ -2450,7 +2459,7 @@ fn completed_subtrees_keep_explicit_choices_when_used_in_preparation() {
             &source,
             &TEST_CODEC,
             &run.params[1].ty.ty,
-            &TestInput::auto(),
+            &TestInputConfig::auto(),
             &Extra::default(),
         )
         .unwrap();
@@ -2488,13 +2497,13 @@ fn result_resolution_consumes_nested_requests_and_preserves_error_mapper() {
         vec![],
     )
     .unwrap();
-    let request = TestOutput::Unary {
+    let request = TestOutputConfig::Unary {
         operation: TestOutputUnary::Result {
             error: Some("message".into()),
         },
-        child: Box::new(TestOutput::Unary {
+        child: Box::new(TestOutputConfig::Unary {
             operation: TestOutputUnary::Optional,
-            child: Box::new(TestOutput::auto()),
+            child: Box::new(TestOutputConfig::auto()),
         }),
     };
     let resolved: TestOutput = defaults
@@ -2524,9 +2533,9 @@ fn result_resolution_consumes_nested_requests_and_preserves_error_mapper() {
             &mut source,
             &TEST_CODEC,
             &test_fun!(run)
-                .output(TestOutput::Unary {
+                .output(TestOutputConfig::Unary {
                     operation: TestOutputUnary::Optional,
-                    child: Box::new(TestOutput::auto()),
+                    child: Box::new(TestOutputConfig::auto()),
                 })
                 .on_error(test_fun!(message)),
             &Extra::default(),
@@ -2548,19 +2557,19 @@ fn result_resolution_consumes_nested_requests_and_preserves_error_mapper() {
 fn resolved_omissions_and_sequence_policies_survive_preparation_round_trip() {
     let source = parse("pub type Hidden=String;pub struct R{pub hidden:Option<Vec<Option<Hidden>>>,pub rows:Vec<i64>}pub fn read()->R{}");
     let defaults = TestDefaults::new(&source, vec![], vec![], vec![]).unwrap();
-    let tree = TestOutput::Branch {
+    let tree = TestOutputConfig::Branch {
         operation: TestOutputBranch::OwnedFields,
         children: vec![
-            TestOutput::for_type(
+            TestOutputConfig::for_type(
                 syn::parse_quote!(Hidden),
-                TestOutput::Leaf(TestOutputLeafOp::Discard),
+                TestOutputConfig::Leaf(TestOutputLeafOp::Discard),
             ),
-            TestOutput::Unary {
+            TestOutputConfig::Unary {
                 operation: TestOutputUnary::Sequence {
                     delivery: SequenceDelivery::Callback,
                     mode: Some(ProjectionMode::Owned),
                 },
-                child: Box::new(TestOutput::auto()),
+                child: Box::new(TestOutputConfig::auto()),
             },
         ],
     };
@@ -2581,7 +2590,7 @@ fn resolved_omissions_and_sequence_policies_survive_preparation_round_trip() {
             &source,
             &TEST_CODEC,
             &source.function("read").unwrap().ret.ty,
-            &resolved.clone().into_preparation(),
+            &resolved.clone().map_into(),
             &Extra::default(),
         )
         .unwrap();
@@ -2592,14 +2601,14 @@ fn resolved_omissions_and_sequence_policies_survive_preparation_round_trip() {
 fn bulk_normalization_preserves_callback_boundaries_inside_structural_nodes() {
     let flat = parse("pub fn values()->Vec<Vec<i64>>{}");
     let defaults = TestDefaults::new(&flat, vec![], vec![], vec![]).unwrap();
-    let callback = TestOutput::Unary {
+    let callback = TestOutputConfig::Unary {
         operation: TestOutputUnary::Sequence {
             delivery: SequenceDelivery::Callback,
             mode: None,
         },
-        child: Box::new(TestOutput::Leaf(TestOutputLeafOp::Value).bulk()),
+        child: Box::new(TestOutputConfig::Leaf(TestOutputLeafOp::Value).bulk()),
     };
-    let recipe = TestOutput::Unary {
+    let recipe = TestOutputConfig::Unary {
         operation: TestOutputUnary::Sequence {
             delivery: SequenceDelivery::Value,
             mode: None,

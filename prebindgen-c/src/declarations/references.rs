@@ -1,21 +1,21 @@
 use super::*;
 /// Collect source names; all recursive traversal follows structural edges.
 pub fn source_items<'a>(
-    inputs: &[CInput<CInputRequest, COutputRequest>],
-    outputs: &[COutput<CInputRequest, COutputRequest>],
+    inputs: &[CInputConfig],
+    outputs: &[COutputConfig],
     errors: &[(syn::Type, String)],
     functions: impl IntoIterator<Item = &'a DeclCFunction>,
 ) -> Vec<String> {
-    fn input(tree: &CInput<CInputRequest, COutputRequest>, names: &mut Vec<String>) {
+    fn input(tree: &CInputConfig, names: &mut Vec<String>) {
         match tree {
-            CInput::Request(CInputRequest::Conversion(declaration)) => {
+            CInputConfig::Leaf(CInputLeafOp::ConfigConversion(declaration)) => {
                 prebindgen_declarations::conversion_source_items(declaration, names)
             }
-            CInput::Request(CInputRequest::Call(name)) => names.push(name.clone()),
+            CInputConfig::Leaf(CInputLeafOp::ConfigConstructor(name)) => names.push(name.clone()),
             _ => {}
         }
         match tree {
-            CInput::Unary {
+            CInputConfig::Unary {
                 operation: CInputUnary::Convert { conversion },
                 ..
             } => {
@@ -23,7 +23,7 @@ pub fn source_items<'a>(
                     names.push(name.clone())
                 }
             }
-            CInput::Branch {
+            CInputConfig::Branch {
                 operation: CInputBranch::Constructor { function },
                 ..
             } => names.push(function.clone()),
@@ -31,12 +31,12 @@ pub fn source_items<'a>(
         }
         prebindgen_declarations::input_children(tree, names, &mut input, &mut output);
     }
-    fn output(tree: &COutput<CInputRequest, COutputRequest>, names: &mut Vec<String>) {
-        if let COutput::Request(COutputRequest::Conversion(declaration)) = tree {
+    fn output(tree: &COutputConfig, names: &mut Vec<String>) {
+        if let COutputConfig::Leaf(COutputLeafOp::ConfigConversion(declaration)) = tree {
             prebindgen_declarations::conversion_source_items(declaration, names)
         }
         match tree {
-            COutput::Unary {
+            COutputConfig::Unary {
                 operation: COutputUnary::Convert { conversion },
                 ..
             } => {
@@ -44,11 +44,11 @@ pub fn source_items<'a>(
                     names.push(name.clone())
                 }
             }
-            COutput::Unary {
+            COutputConfig::Unary {
                 operation: COutputUnary::Getter { function } | COutputUnary::Into { function },
                 ..
             } => names.push(function.clone()),
-            COutput::Unary {
+            COutputConfig::Unary {
                 operation: COutputUnary::Result { error: Some(name) },
                 ..
             } => names.push(name.clone()),

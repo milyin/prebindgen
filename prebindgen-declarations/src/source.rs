@@ -74,12 +74,12 @@ pub fn resolve_function<M: Schema, I, O, RI, RO, E>(
 }
 
 /// Check a source constructor and resolve its arguments into the caller's input vocabulary.
-pub fn resolve_constructor<I: InputOps, O: OutputOps, IR, OR>(
+pub fn resolve_constructor<I: InputOps, O: OutputOps, Recipe>(
     flat: &Flat<impl Schema>,
     expected: &Type,
     function: &str,
-    arguments: &[InputNode<I, O, IR, OR>],
-    mut resolve: impl FnMut(&Type, &InputNode<I, O, IR, OR>) -> Result<InputNode<I, O>>,
+    arguments: &[Recipe],
+    mut resolve: impl FnMut(&Type, &Recipe) -> Result<InputNode<I, O>>,
     operation: impl FnOnce(String) -> I::Branch,
 ) -> Result<InputNode<I, O>> {
     let f = flat.function(function)?;
@@ -473,10 +473,10 @@ pub fn output_value_conversion<M: Schema>(
 
 /// A pending callback's explicit structural domain and codomain.
 /// Argument indices and source/adapter settings are metadata; recipes are borrowed
-/// from ordinary tree children and are never embedded in request payloads.
+/// from ordinary tree children and are never embedded in metadata payloads.
 pub struct CallbackTree<'a, I, O, E = std::convert::Infallible> {
     /// Metadata attached to the arrow operation.
-    pub request: &'a crate::CallbackRequest<E>,
+    pub config: &'a crate::CallbackConfig<E>,
     /// Explicit argument recipes from its domain, in the metadata's index order.
     pub arguments: &'a [O],
     /// Codomain recipe; used only when an explicit result override was declared.
@@ -506,19 +506,19 @@ impl<'a, I, O, E> CallbackChoices<'a, I, O, E> {
         }
     }
     fn tree(tree: CallbackTree<'a, I, O, E>, is_auto: &impl Fn(&I) -> bool) -> Result<Self> {
-        if !tree.request.operation.explicit_return && !is_auto(tree.result) {
+        if !tree.config.operation.explicit_return && !is_auto(tree.result) {
             return Err("callback without an explicit return must have an Auto codomain".into());
         }
-        if tree.request.arguments.len() != tree.arguments.len() {
+        if tree.config.arguments.len() != tree.arguments.len() {
             return Err("callback argument index and child counts do not match".into());
         }
         let mut params = BTreeMap::new();
-        for (index, recipe) in tree.request.arguments.iter().zip(tree.arguments) {
+        for (index, recipe) in tree.config.arguments.iter().zip(tree.arguments) {
             if params.insert(*index, recipe).is_some() {
                 return Err("duplicate callback parameter override".into());
             }
         }
-        let operation = &tree.request.operation;
+        let operation = &tree.config.operation;
         Ok(Self {
             ty: &operation.ty,
             foreign: operation.foreign.as_deref(),
@@ -711,14 +711,14 @@ pub fn resolve_callback_arrow<M: Schema, I, O, RI, RO, E>(
 }
 
 /// Walk the input-direction children of one node, including an arrow's opposite domain.
-pub fn input_children<I: InputOps, O: OutputOps, IR, OR, S>(
-    tree: &InputNode<I, O, IR, OR>,
+pub fn input_children<I: InputOps, O: OutputOps, S>(
+    tree: &InputNode<I, O>,
     state: &mut S,
-    input: &mut impl FnMut(&InputNode<I, O, IR, OR>, &mut S),
-    output: &mut impl FnMut(&crate::OutputNode<I, O, IR, OR>, &mut S),
+    input: &mut impl FnMut(&InputNode<I, O>, &mut S),
+    output: &mut impl FnMut(&crate::OutputNode<I, O>, &mut S),
 ) {
     match tree {
-        InputNode::None | InputNode::Request(_) | InputNode::Leaf(_) => {}
+        InputNode::None | InputNode::Leaf(_) => {}
         InputNode::Unary { child, .. } => input(child, state),
         InputNode::Branch { children, .. } => {
             for child in children {
@@ -734,14 +734,14 @@ pub fn input_children<I: InputOps, O: OutputOps, IR, OR, S>(
     }
 }
 /// Walk the output-direction children of one node, including an arrow's opposite domain.
-pub fn output_children<I: InputOps, O: OutputOps, IR, OR, S>(
-    tree: &crate::OutputNode<I, O, IR, OR>,
+pub fn output_children<I: InputOps, O: OutputOps, S>(
+    tree: &crate::OutputNode<I, O>,
     state: &mut S,
-    input: &mut impl FnMut(&InputNode<I, O, IR, OR>, &mut S),
-    output: &mut impl FnMut(&crate::OutputNode<I, O, IR, OR>, &mut S),
+    input: &mut impl FnMut(&InputNode<I, O>, &mut S),
+    output: &mut impl FnMut(&crate::OutputNode<I, O>, &mut S),
 ) {
     match tree {
-        crate::OutputNode::None | crate::OutputNode::Request(_) | crate::OutputNode::Leaf(_) => {}
+        crate::OutputNode::None | crate::OutputNode::Leaf(_) => {}
         crate::OutputNode::Unary { child, .. } => output(child, state),
         crate::OutputNode::Branch { children, .. } => {
             for child in children {
@@ -1046,7 +1046,7 @@ mod tests {
         .unwrap_err()
         .contains("expected `i64`"));
         assert!(
-            resolve_constructor::<ConstructorInputs, NoOutputs, Infallible, Infallible>(
+            resolve_constructor::<ConstructorInputs, NoOutputs, ConstructorInput>(
                 &flat,
                 &flat.resolve_type(&syn::parse_quote!(Packet)).unwrap(),
                 "make",

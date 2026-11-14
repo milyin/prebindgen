@@ -213,11 +213,8 @@ mod tests {
         )
         .unwrap()
     }
-    fn sequence(
-        copy: bool,
-        element: crate::COutput<CInputRequest, COutputRequest>,
-    ) -> crate::COutput<CInputRequest, COutputRequest> {
-        crate::COutput::Unary {
+    fn sequence(copy: bool, element: crate::COutputConfig) -> crate::COutputConfig {
+        crate::COutputConfig::Unary {
             operation: COutputUnary::Sequence {
                 delivery: SequenceDelivery::Value,
                 mode: copy.then_some(ProjectionMode::Borrowed),
@@ -270,7 +267,7 @@ mod tests {
             );
         }
         let g = Cbindgen::new(model("pub fn values()->&'static [bool]{}"))
-            .function(fun!(values).output(sequence(true, crate::COutput::auto())))
+            .function(fun!(values).output(sequence(true, crate::COutputConfig::auto())))
             .build()
             .unwrap();
         assert!(g.rust.contains("OutputRows"));
@@ -305,9 +302,9 @@ mod tests {
             .unwrap();
         assert!(g.header.contains("pb_i64_slice_view *out1"));
         let error = Cbindgen::new(model(source))
-            .function(fun!(make).output(crate::COutput::Branch {
+            .function(fun!(make).output(crate::COutputConfig::Branch {
                 operation: COutputBranch::Fields,
-                children: vec![sequence(false, crate::COutput::auto())],
+                children: vec![sequence(false, crate::COutputConfig::auto())],
             }))
             .build()
             .err()
@@ -324,7 +321,7 @@ mod tests {
             .unwrap();
         assert!(error.contains("reconstructed reference input"), "{error}");
         let g = Cbindgen::new(model("pub fn echo(v:&[i64])->&[i64]{}"))
-            .function(fun!(echo).output(sequence(true, crate::COutput::auto())))
+            .function(fun!(echo).output(sequence(true, crate::COutputConfig::auto())))
             .panic()
             .build()
             .unwrap();
@@ -333,7 +330,10 @@ mod tests {
     #[test]
     fn explicit_outer_copy_copies_nested_sequences_and_never_emits_views() {
         let g = Cbindgen::new(model("pub fn values()->&'static [Vec<i64>]{}"))
-            .function(fun!(values).output(sequence(true, sequence(false, crate::COutput::auto()))))
+            .function(fun!(values).output(sequence(
+                true,
+                sequence(false, crate::COutputConfig::auto()),
+            )))
             .build()
             .unwrap();
         assert!(g.rust.matches("OutputRows").count() >= 2);
@@ -611,7 +611,7 @@ mod tests {
     }
     #[test]
     fn reconstruction_is_explicit_and_can_be_global_local_optional_or_nested() {
-        use crate::{expand_param, CInput};
+        use crate::expand_param;
         for ty in [
             "&[i64]",
             "&Vec<i64>",
@@ -638,7 +638,7 @@ mod tests {
         assert!(!g.rust.contains("_prepared"));
         assert!(
             Cbindgen::new(model("pub fn inspect(values:&String)->usize{}"))
-                .function(fun!(inspect).input("values", CInput::auto().reconstruct()))
+                .function(fun!(inspect).input("values", CInputConfig::auto().reconstruct()))
                 .panic()
                 .build()
                 .is_ok()

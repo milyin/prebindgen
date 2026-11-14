@@ -818,7 +818,7 @@ impl Codec for CCodec {
         if !self.declared {
             return Err("configured callbacks are unsupported by this codec".into());
         }
-        let configuration = request.operation.bound_callback()?;
+        let configuration = request.operation.bound_callback();
         if configuration.foreign.is_some()
             || configuration.namespace.is_some()
             || configuration.explicit_return
@@ -1059,8 +1059,8 @@ pub struct Cbindgen {
     flat: Option<CBindings>,
     source: Option<std::path::PathBuf>,
     conversions: Vec<prebindgen_declarations::DeclConvert>,
-    inputs: Vec<crate::CInput<CInputRequest, COutputRequest>>,
-    outputs: Vec<crate::COutput<CInputRequest, COutputRequest>>,
+    inputs: Vec<crate::CInputConfig>,
+    outputs: Vec<crate::COutputConfig>,
     error_mappers: Vec<(syn::Type, String)>,
     functions: Vec<crate::DeclCFunction>,
     prefix: String,
@@ -1130,15 +1130,12 @@ impl Cbindgen {
     ///
     /// Per-function overrides replace this default; duplicate defaults are rejected
     /// by [`Self::build`]. Registration order does not affect type lookup.
-    pub fn input(mut self, tree: impl Into<crate::CInput<CInputRequest, COutputRequest>>) -> Self {
+    pub fn input(mut self, tree: impl Into<crate::CInputConfig>) -> Self {
         self.inputs.push(tree.into());
         self
     }
     /// Register a type-wide direct output conversion tree.
-    pub fn output(
-        mut self,
-        tree: impl Into<crate::COutput<CInputRequest, COutputRequest>>,
-    ) -> Self {
+    pub fn output(mut self, tree: impl Into<crate::COutputConfig>) -> Self {
         self.outputs.push(tree.into());
         self
     }
@@ -3086,7 +3083,7 @@ mod generation_tests {
         use crate::fun;
         let error = Cbindgen::new(error_model("pub type Owner=String;pub type Child=String;pub fn make()->Owner{}pub fn child(owner:&Owner)->&mut Child{}"))
             .opaque_ptr("child_t",syn::parse_quote!(Child))
-            .function(fun!(make).expand_return(expand_return!(Owner).view(crate::COutput::getter("child",crate::COutput::Leaf(COutputLeafOp::Projected(prebindgen_declarations::Projection::borrowed()))))))
+            .function(fun!(make).expand_return(expand_return!(Owner).view(crate::COutputConfig::getter("child",crate::COutputConfig::Leaf(COutputLeafOp::Projected(prebindgen_declarations::Projection::borrowed()))))))
             .build().err().unwrap();
         assert!(
             error.contains("mutable-reference getter results are unsupported"),
@@ -3101,7 +3098,8 @@ mod generation_tests {
             let qualifier = if mutable { "mut " } else { "" };
             let source=format!("pub type Owner=String;pub type Child=String;pub fn make()->Owner{{}}pub fn child(o:&{qualifier}Owner)->&{qualifier}Child{{}}");
             for reversed in [false, true] {
-                let getter = COutput::getter("child", COutput::Leaf(COutputLeafOp::Value));
+                let getter =
+                    COutputConfig::getter("child", COutputConfig::Leaf(COutputLeafOp::Value));
                 let expansion = if reversed {
                     expand_return!(Owner).view(getter).field_self_into()
                 } else {
@@ -3161,15 +3159,15 @@ mod generation_tests {
                 expand_return!(Owner)
                     .field_self_into()
                     .field(fun!(child))
-                    .view(COutput::Leaf(COutputLeafOp::Discard)),
+                    .view(COutputConfig::Leaf(COutputLeafOp::Discard)),
                 "supports only",
             ),
             (
                 expand_return!(Owner)
                     .field_self_into()
-                    .view(COutput::getter(
+                    .view(COutputConfig::getter(
                         "mutate",
-                        COutput::Leaf(COutputLeafOp::Value),
+                        COutputConfig::Leaf(COutputLeafOp::Value),
                     ))
                     .field(fun!(child)),
                 "only getter view",
@@ -3191,7 +3189,7 @@ mod generation_tests {
         let flat = Cbindgen::new(error_model("pub type Owner=String;pub type Child=String;pub fn make()->Owner{}pub fn child(owner:&Owner)->&Child{}"))
             .opaque_ptr("owner", syn::parse_quote!(Owner))
             .opaque_ptr("child", syn::parse_quote!(Child))
-            .function(fun!(make).expand_return(expand_return!(Owner).view(crate::COutput::getter("child",crate::COutput::Leaf(COutputLeafOp::Projected(prebindgen_declarations::Projection::borrowed()))))))
+            .function(fun!(make).expand_return(expand_return!(Owner).view(crate::COutputConfig::getter("child",crate::COutputConfig::Leaf(COutputLeafOp::Projected(prebindgen_declarations::Projection::borrowed()))))))
             .function(fun!(child).expand_return(expand_return!(Child).field_self_ref()))
             .panic()
             .prepare().unwrap();
@@ -3225,9 +3223,9 @@ mod generation_tests {
             .function(
                 fun!(first).input(
                     "values",
-                    crate::CInput::Unary {
+                    crate::CInputConfig::Unary {
                         operation: CInputUnary::Sequence,
-                        child: Box::new(crate::CInput::call("copy_child")),
+                        child: Box::new(crate::CInputConfig::call("copy_child")),
                     }
                     .reconstruct(),
                 ),
@@ -4312,7 +4310,7 @@ mod abort_policy_tests {
             &mut flat,
             &CCodec::raw(),
             "f",
-            &crate::COutput::Leaf(COutputLeafOp::Value),
+            &crate::COutputConfig::Leaf(COutputLeafOp::Value),
             &(),
         )
         .unwrap();
@@ -4366,7 +4364,7 @@ mod resolved_arrow_tests {
         let defaults = DeclCDefaults::new(&flat, vec![], vec![], vec![]).unwrap();
         let ty = &flat.function("take").unwrap().params[0].ty.ty;
         let mut recipe = defaults
-            .resolve_input(&flat, &CCodec::declared(), ty, &CInput::auto(), &())
+            .resolve_input(&flat, &CCodec::declared(), ty, &CInputConfig::auto(), &())
             .unwrap();
         let operations::CInput::Arrow { domain, .. } = &mut recipe else {
             panic!("expected arrow")
@@ -4383,8 +4381,10 @@ mod compilation;
 pub mod operations;
 
 pub use operations::{
-    CInput, CInputArrow, CInputBranch, CInputLeafOp, CInputOps, CInputUnary, COutput,
-    COutputBranch, COutputLeafOp, COutputOps, COutputUnary,
+    CInput, CInputArrow, CInputBranch, CInputConfig, CInputConfigArrow, CInputConfigBranch,
+    CInputConfigLeafOp, CInputConfigOps, CInputConfigUnary, CInputLeafOp, CInputOps, CInputUnary,
+    CNamedFields, COutput, COutputBranch, COutputConfig, COutputConfigBranch, COutputConfigLeafOp,
+    COutputConfigOps, COutputConfigUnary, COutputLeafOp, COutputOps, COutputUnary, CVariantFields,
 };
 
 mod declarations;
@@ -4402,7 +4402,7 @@ macro_rules! fun {
 
 /// Traits for constructing and inspecting this adapter's conversion trees.
 pub mod prelude {
-    pub use crate::{CInputExt, CInputRequests, COutputExt, COutputRequests};
+    pub use crate::{CInputConfigExt, CInputExt, COutputConfigExt, COutputExt};
 }
 
 /// The C adapter has no bulk transport, including in callback-delivery variants.
@@ -4411,12 +4411,12 @@ pub mod prelude {
 /// let _ = fun!(rows).callback_return_only().expand_return(expand_return!(i64).field_self().bulk());
 /// ```
 /// ```compile_fail
-/// use prebindgen_c::{CInput, prelude::*};
-/// let _ = CInput::auto().bulk();
+/// use prebindgen_c::{CInputConfig, prelude::*};
+/// let _ = CInputConfig::auto().bulk();
 /// ```
 /// ```compile_fail
-/// use prebindgen_c::{COutput, prelude::*};
-/// let _ = COutput::auto().bulk();
+/// use prebindgen_c::{COutputConfig, prelude::*};
+/// let _ = COutputConfig::auto().bulk();
 /// ```
 const _: () = ();
 

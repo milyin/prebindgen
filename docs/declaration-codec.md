@@ -7,12 +7,12 @@ resolution helpers and compilation helpers.
 
 ## Trees and names
 
-`InputNode<InOps, OutOps, InRequest, OutRequest>` describes foreign-to-Rust
+`InputNode<InOps, OutOps>` describes foreign-to-Rust
 conversion; `OutputNode` describes Rust-to-foreign conversion. `InputOps` and
 `OutputOps` are separate traits. Both node directions keep the same parameter
 order, including inside callable domains.
 
-The structural variants are `None`, `Request`, `Leaf`, `Unary`, `Branch` and
+The structural variants are `None`, `Leaf`, `Unary`, `Branch` and
 `Arrow`. Each adapter selects the operation types carried by the four latter
 variants. An arrow's domain uses the opposite conversion direction; its
 codomain uses the enclosing direction. Its argument and result conversions are
@@ -20,9 +20,10 @@ ordinary visible subtrees.
 
 | Role | C | JNI |
 | --- | --- | --- |
-| Conversion trees | `CInput` / `COutput` | `JniInput` / `JniOutput` |
+| Final trees | `CInput` / `COutput` | `JniInput` / `JniOutput` |
+| Configuration trees | `CInputConfig` / `COutputConfig` | `JniInputConfig` / `JniOutputConfig` |
 | Operation sets | `CInputOps` / `COutputOps` | `JniInputOps` / `JniOutputOps` |
-| Deferred choices | `CInputRequest` / `COutputRequest` | `JniInputRequest` / `JniOutputRequest` |
+| Configuration operation sets | `CInputConfigOps` / `COutputConfigOps` | `JniInputConfigOps` / `JniOutputConfigOps` |
 | Function declaration | `DeclCFunction` | `DeclJniFunction` |
 | Callback declaration | `DeclCCallback` | `DeclJniCallback` |
 | Prepared converters | `CInputConverter` / `COutputConverter` | `JniInputConverter` / `JniOutputConverter` |
@@ -30,18 +31,40 @@ ordinary visible subtrees.
 
 Unary, branch and arrow fields hold `InOps::Unary`, `InOps::Branch` and
 `InOps::Arrow` directly (and the corresponding output associated types).
-Each adapter defines the complete metadata for each shape, including any
-source-dependent operations. There is no common operation wrapper or structural
-request vocabulary. A leaf `Request(r)` describes a choice without explicitly
-supplied children, such as a configured default or an inferred constructor.
+Each adapter defines its complete metadata enums. Configuration-only variants
+have a `Config` prefix and a generic payload, whose default is `Infallible`.
+The configuration operation sets select concrete payloads; final operation sets
+use the uninhabited defaults. This applies to leaf choices as well as structural
+operations. The shared tree has no `Request` variant or request parameters.
+
+For example, the same branch enum serves both phases:
+
+```rust,ignore
+pub enum CInputBranch<EnumExpansion = Infallible, VariantExpansion = Infallible> {
+    ConfigEnumFields(EnumExpansion),
+    ConfigVariantFields(VariantExpansion),
+    Fields,
+    Selector,
+    Constructor { function: String },
+    Enum { value: bool },
+    Variant,
+}
+// Only configuration can construct the first two variants.
+pub type CInputConfigBranch = CInputBranch<(), CVariantFields>;
+```
+
+`ConfigDefault(())`, `ConfigValue(...)` and `ConfigConstructor(name)` are leaf
+operations. Type scoping, partial fields and callback configuration use their
+corresponding unary, branch and arrow types. Their final payloads are directly
+`Infallible`, not an optional wrapper that could still contain `None`.
 
 Explicit recipes always use `child`, `children`, `domain` and `codomain`.
-Request metadata contains names, indices, types and settings, never nested
+Configuration metadata contains names, indices, types and settings, never nested
 conversion trees. For example, a type-specific override is a unary node:
 
 ```rust,ignore
-CInput::Unary {
-    operation: CInputUnary::ForType { ty },
+CInputConfig::Unary {
+    operation: CInputUnary::ConfigForType { ty },
     child: Box::new(recipe),
 }
 ```
@@ -54,28 +77,31 @@ explicit-result flag describe which source defaults these children override.
 Callback declarations and field builders can keep maps while being configured;
 they place their recipes on structural edges when converted into a tree.
 
-`map_requests` transforms leaf requests in both directions while preserving
-adapter metadata. The shared child walkers traverse every supplied conversion,
-including the children of source-dependent operations. Adapters inspect their
-own metadata during source resolution and source-reference discovery.
+The shared child walkers traverse every supplied conversion, including the
+children of configuration-only operations. Adapters inspect their own metadata
+during source resolution and source-reference discovery.
 
-Resolution replaces source-dependent operations and fills missing defaults.
-`Infallible` on both request parameters excludes leaf requests. The adapter's
-compiler also rejects source-dependent metadata that has not gone through
-resolution; the shared tree does not impose a metadata-phase protocol on adapters.
-Metadata from the wrong node shape is rejected by Rust's type checker.
-
-Both phases use the same adapter operations:
+Resolution interprets configuration payloads, fills missing source defaults and
+returns the final operation sets. Compilation takes only these final types, so
+configuration-only operations cannot reach it, including inside nested fields
+or opposite-direction callback domains. C and JNI share their complete-operation
+helper implementations between phases; metadata definitions are not duplicated.
 
 ```rust,ignore
-// Configuration and source-dependent requests:
-JniInput<JniInputRequest, JniOutputRequest>
-JniOutput<JniInputRequest, JniOutputRequest>
+// Configuration:
+JniInputConfig   // InputNode<JniInputConfigOps, JniOutputConfigOps>
+JniOutputConfig  // OutputNode<JniInputConfigOps, JniOutputConfigOps>
 
-// Trees after adapter resolution, with no leaf requests:
-JniInput   // both request types default to Infallible
-JniOutput
+// After resolution:
+JniInput         // InputNode<JniInputOps, JniOutputOps>
+JniOutput        // OutputNode<JniInputOps, JniOutputOps>
 ```
+
+`map_into()` converts each metadata value with `From`, preserving every child
+and both arrow directions. C and JNI provide widening conversions from final
+metadata to configuration metadata, allowing explicit resolved trees to be
+embedded in configuration. The opposite direction requires source resolution;
+there is no infallible conversion that could discard incomplete configuration.
 
 C follows the same scheme. C has no bulk or JVM-record operation variants and
 its builders do not expose `.bulk()`. Import a language adapter's macros for
@@ -88,7 +114,7 @@ Direct tree construction uses its `prelude` extension traits, for example
 `DeclFunction<InTree, OutTree>`, `DeclCallback<InTree, OutTree>` and
 `DeclDefaults<InTree, OutTree>` are generic data containers. They do not select
 an operation vocabulary. `DeclJniFunction`, for example, fixes its tree types to
-JNI input/output nodes carrying JNI requests. Callbacks store output trees for
+JNI configuration input/output nodes. Callbacks store output trees for
 their arguments and input trees for their results.
 
 Defaults and function-local overrides remain order-independent. Resolution
@@ -98,7 +124,7 @@ the existing scoped-versus-transferred ownership rules.
 
 ## Shared helpers require only their operation's dependencies
 
-Each adapter matches its own request and operation enums and calls shared
+Each adapter matches its own operation enums and calls shared
 source-aware helpers. Helpers take concrete trees, source metadata and small
 callbacks instead of a trait describing every supported operation.
 
@@ -145,7 +171,7 @@ arity validation and resolves arguments outward and the result inward.
 `CallbackInput` is the purpose-specific construction bridge for converting a
 shared `DeclCallback` into an adapter's complete input tree. The adapter delegates
 to `callback_input`, supplying its typed-scope, argument-group and arrow
-constructors. It does not return a request containing the declaration's trees.
+constructors. It does not return metadata containing the declaration's trees.
 `resolve_callback_tree` borrows the arrow's structural children; declaration
 objects and structural arrows use one default/ownership resolution algorithm.
 `callback_variant` preserves a function's extension settings. The compiler's
@@ -179,7 +205,7 @@ lookup and direction checks. `override_output_field` edits named fields through
 adapter-identified wrappers in place, without cloning the tree or substituting a
 placeholder node.
 
-Small enum constructors, request dispatch and source-reference matching stay in
+Small enum constructors, configuration dispatch and source-reference matching stay in
 each adapter.
 C ownership decisions and JNI record/bulk policies stay there as well. Sharing
 those matches would require another common operation dictionary or a set of
@@ -208,7 +234,7 @@ uses the same source helpers as C and JNI.
 
 ## Resolved Flat and compilation
 
-`resolve_bindings` installs request-free adapter trees in
+`resolve_bindings` installs resolved adapter trees in
 `Flat<ResolvedSchema<C>>`, where `C` is the compilation codec. The model owns
 source declarations, adapter metadata, compiler settings and resolved standalone
 callback/error recipes. `compile_resolved(flat)` needs no external defaults table.
@@ -216,9 +242,9 @@ Explicitly supplied converters remain authoritative unless explicitly overridden
 
 The adapter implements `Codec::compile_input_tree` and `compile_output_tree` to
 interpret its operations. Compilation produces `Flat<C::Schema>` for wrapper
-emission. Shared `bind_input` and `bind_output` accept request-free adapter trees;
+emission. Shared `bind_input` and `bind_output` accept resolved adapter trees;
 the adapters also expose convenience functions of those names that first resolve
-their own requests with an empty defaults table.
+their own configuration with an empty defaults table.
 
 `Codec` still selects compiled converter types, physical representations and
 compilation hooks. Narrowing that compilation interface is separate from removing
@@ -337,11 +363,10 @@ The adapter factories replace direct expansion-builder constructors:
 
 Literal unary, branch and arrow constructors take their metadata directly:
 `operation: CInputUnary::Optional`. Patterns use the same adapter variant without
-an extra wrapper. A type-scoping operation is `CInputUnary::ForType`; named output fields
+an extra wrapper. A type-scoping operation is `CInputUnary::ConfigForType`; named output fields
 belong to `COutputBranch`; enum field groups belong to `CInputBranch` or
 `COutputBranch` according to direction; callbacks use `CInputArrow` (JNI
-uses the corresponding `Jni*` names). Leaf request enums contain only childless
-choices.
+uses the corresponding `Jni*` names). Leaf metadata includes childless `Config*` choices with uninhabited final payloads.
 
 The declaration macros retain their spelling. JNI expansion `.bulk()` now
 requires `use prebindgen_jni::prelude::*` (or `JniBulkExpansion` directly).

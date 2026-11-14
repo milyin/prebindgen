@@ -321,15 +321,13 @@ fn decorated_helpers_cannot_silently_discard_adapter_options() {
 
 #[test]
 fn independent_transport_extension_uses_the_shared_fluent_api() {
-    let input: TestInput<TestInputRequest, TestOutputRequest> =
-        test_expand_param!(i64).variant_self().bulk().into();
-    let output: TestOutput<TestInputRequest, TestOutputRequest> =
-        test_expand_return!(i64).field_self().bulk().into();
+    let input: TestInputConfig = test_expand_param!(i64).variant_self().bulk().into();
+    let output: TestOutputConfig = test_expand_return!(i64).field_self().bulk().into();
     assert!(
-        matches!(input,TestInput::Unary {operation:TestInputUnary::ForType {..},child:input} if matches!(*input,TestInput::Unary {operation:TestInputUnary::Bulk,..}))
+        matches!(input,TestInputConfig::Unary {operation:TestInputUnary::ConfigForType {..},child:input} if matches!(*input,TestInputConfig::Unary {operation:TestInputUnary::Bulk,..}))
     );
     assert!(
-        matches!(output,TestOutput::Unary {operation:TestOutputUnary::ForType {..},child:output} if matches!(*output,TestOutput::Unary {operation:TestOutputUnary::Bulk,..}))
+        matches!(output,TestOutputConfig::Unary {operation:TestOutputUnary::ConfigForType {..},child:output} if matches!(*output,TestOutputConfig::Unary {operation:TestOutputUnary::Bulk,..}))
     );
 }
 #[test]

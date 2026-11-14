@@ -93,7 +93,11 @@ impl Consumes for COutput {
             } => mode.map_or(!borrowed && output_referent(ty).is_none(), |m| {
                 m == ProjectionMode::Owned
             }),
-            COutput::Request(never) => match *never {},
+            COutput::Leaf(
+                COutputLeafOp::ConfigDefault(never)
+                | COutputLeafOp::ConfigValue(never)
+                | COutputLeafOp::ConfigConversion(never),
+            ) => match *never {},
             COutput::Branch {
                 operation: COutputBranch::Combine,
                 children: p,
@@ -215,19 +219,25 @@ impl<C: Codec<InOps = CInputOps, OutOps = COutputOps, CompileState = CCompileSta
                     role: self.input_role.get(),
                 })
             }
-            CInput::Request(never) => match *never {},
+            CInput::Leaf(
+                CInputLeafOp::ConfigDefault(never)
+                | CInputLeafOp::ConfigValue(never)
+                | CInputLeafOp::ConfigConversion(never)
+                | CInputLeafOp::ConfigConstructor(never),
+            ) => match *never {},
             CInput::Unary {
-                operation: CInputUnary::ForType { .. },
+                operation: CInputUnary::ConfigForType { ty: never },
                 ..
             }
             | CInput::Branch {
-                operation: CInputBranch::EnumFields | CInputBranch::VariantFields { .. },
+                operation:
+                    CInputBranch::ConfigEnumFields(never) | CInputBranch::ConfigVariantFields(never),
                 ..
             }
             | CInput::Arrow {
-                operation: CInputArrow::Callback(_),
+                operation: CInputArrow::ConfigCallback(never),
                 ..
-            } => Err("resolve source-dependent input operations before compilation".into()),
+            } => match *never {},
             CInput::Branch {
                 operation: CInputBranch::Fields,
                 children,
@@ -426,20 +436,24 @@ impl<C: Codec<InOps = CInputOps, OutOps = COutputOps, CompileState = CCompileSta
                     .cx
                     .output_optional(ty, extra, value, borrowed, wire_name, inner);
             }
-            COutput::Request(never) => match *never {},
+            COutput::Leaf(
+                COutputLeafOp::ConfigDefault(never)
+                | COutputLeafOp::ConfigValue(never)
+                | COutputLeafOp::ConfigConversion(never),
+            ) => match *never {},
             COutput::Unary {
-                operation: COutputUnary::ForType { .. } | COutputUnary::SequenceCallback { .. },
+                operation:
+                    COutputUnary::ConfigForType { ty: never }
+                    | COutputUnary::ConfigSequenceCallback { structural: never },
                 ..
             }
             | COutput::Branch {
                 operation:
-                    COutputBranch::EnumFields
-                    | COutputBranch::VariantFields { .. }
-                    | COutputBranch::NamedFields { .. },
+                    COutputBranch::ConfigEnumFields(never)
+                    | COutputBranch::ConfigVariantFields(never)
+                    | COutputBranch::ConfigNamedFields(never),
                 ..
-            } => {
-                return Err("resolve source-dependent output operations before compilation".into())
-            }
+            } => match *never {},
             COutput::Leaf(COutputLeafOp::Value) => {
                 let representation = Representation::Ordinary;
                 return self

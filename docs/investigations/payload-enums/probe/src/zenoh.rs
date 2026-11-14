@@ -4,7 +4,7 @@ use prebindgen_jni::prelude::*;
 
 use prebindgen_flat::{Flat, Result};
 use prebindgen_jni::{callback, data_class, package, JniGen};
-use prebindgen_jni::{expand_return, fun, JniOutput};
+use prebindgen_jni::{expand_return, fun, JniOutputConfig};
 use quote::ToTokens;
 use std::{collections::BTreeMap, path::Path, process::Command};
 
@@ -156,9 +156,9 @@ pub fn run() -> Result<()> {
             .items(items(source))
             .set_package_prefix("example")
             .expand(expand_return!(NativePayload).field(fun!(payload_size)))
-            .expand(expand_return!(Envelope).view(JniOutput::Branch {
+            .expand(expand_return!(Envelope).view(JniOutputConfig::Branch {
                 operation: prebindgen_jni::JniOutputBranch::OwnedFields,
-                children: vec![JniOutput::auto()],
+                children: vec![JniOutputConfig::auto()],
             }))
     };
     let expanded = builder()

@@ -1,5 +1,5 @@
 //! Adapter-owned conversion metadata for source resolution and compilation.
-use crate::JniOutputRequests;
+use crate::JniOutputConfigExt;
 use prebindgen_declarations::{
     CallbackArgumentOwnership, InputNode, InputOps, OutputNode, OutputOps, Projection,
     ProjectionMode, SequenceDelivery,
@@ -24,49 +24,126 @@ impl OutputOps for JniOutputOps {
     type Branch = JniOutputBranch;
     type Arrow = Infallible;
 }
-/// Input conversion, optionally carrying this adapter's unresolved requests.
+/// Resolved incoming conversion. Configuration cannot enter callback domains:
+/// ```compile_fail
+/// use prebindgen_jni::{JniInputArrow,JniInputConfigArrow};
+/// fn final_arrow(config:JniInputConfigArrow)->JniInputArrow { config }
 /// ```
-/// use prebindgen_jni::{JniInput,JniOutput,JniInputRequest,JniOutputRequest,prelude::*};
-/// let _: JniInput<JniInputRequest,JniOutputRequest> = JniInput::auto();
-/// let _: JniOutput<JniInputRequest,JniOutputRequest> = JniOutput::auto();
+/// Final leaves and enum branches cannot contain configuration payloads:
+/// ```compile_fail
+/// use prebindgen_jni::{JniInput,JniInputLeafOp};
+/// let _:JniInput=JniInput::Leaf(JniInputLeafOp::ConfigDefault(()));
 /// ```
-pub type JniInput<InRequest = Infallible, OutRequest = Infallible> =
-    InputNode<JniInputOps, JniOutputOps, InRequest, OutRequest>;
-/// Output conversion for this adapter. Leaf requests default to Infallible.
-pub type JniOutput<InRequest = Infallible, OutRequest = Infallible> =
-    OutputNode<JniInputOps, JniOutputOps, InRequest, OutRequest>;
+/// ```compile_fail
+/// use prebindgen_jni::{JniInput,JniInputBranch};
+/// let _:JniInput=JniInput::Branch {
+///     operation:JniInputBranch::ConfigEnumFields(()),children:vec![],
+/// };
+/// ```
+pub type JniInput = InputNode<JniInputOps, JniOutputOps>;
+/// Resolved outgoing conversion. Partial named fields have no final payload:
+/// ```compile_fail
+/// use prebindgen_jni::{JniOutput,JniOutputBranch,JniNamedFields,ProjectionMode};
+/// let _:JniOutput=JniOutput::Branch {
+///     operation:JniOutputBranch::ConfigNamedFields(JniNamedFields {fields:vec![],mode:ProjectionMode::Owned}),
+///     children:vec![],
+/// };
+/// ```
+/// None is a configuration payload, not an inhabitant of the final payload type:
+/// ```compile_fail
+/// use prebindgen_jni::{JniOutput,JniOutputLeafOp};
+/// let _:JniOutput=JniOutput::Leaf(JniOutputLeafOp::ConfigValue(None));
+/// ```
+pub type JniOutput = OutputNode<JniInputOps, JniOutputOps>;
+/// Incoming conversion configuration.
+/// ```
+/// use prebindgen_jni::{JniInputConfig,JniOutputConfig,prelude::*};
+/// let _:JniInputConfig=JniInputConfig::auto();
+/// let _:JniOutputConfig=JniOutputConfig::auto();
+/// ```
+pub type JniInputConfig = InputNode<JniInputConfigOps, JniOutputConfigOps>;
+/// Outgoing conversion configuration.
+pub type JniOutputConfig = OutputNode<JniInputConfigOps, JniOutputConfigOps>;
+/// Incoming operation set with concrete configuration payloads.
+#[derive(Clone, Debug)]
+pub struct JniInputConfigOps;
+/// Outgoing operation set with concrete configuration payloads.
+#[derive(Clone, Debug)]
+pub struct JniOutputConfigOps;
+impl InputOps for JniInputConfigOps {
+    type Leaf = JniInputConfigLeafOp;
+    type Unary = JniInputConfigUnary;
+    type Branch = JniInputConfigBranch;
+    type Arrow = JniInputConfigArrow;
+}
+impl OutputOps for JniOutputConfigOps {
+    type Leaf = JniOutputConfigLeafOp;
+    type Unary = JniOutputConfigUnary;
+    type Branch = JniOutputConfigBranch;
+    type Arrow = Infallible;
+}
+/// Source variant and field names corresponding to explicit branch children.
+#[derive(Clone, Debug)]
+pub struct JniVariantFields {
+    /// Source variant name.
+    pub variant: String,
+    /// Source field names corresponding to the structural children.
+    pub fields: Vec<String>,
+}
+/// Source record field names and projection mode for explicit branch children.
+#[derive(Clone, Debug)]
+pub struct JniNamedFields {
+    /// Source field names corresponding to the structural children.
+    pub fields: Vec<String>,
+    /// Observe or move the selected fields.
+    pub mode: ProjectionMode,
+}
 
 /// Incoming callback configuration and its resolved retained-callback binding.
 #[derive(Clone, Debug)]
-pub enum JniInputArrow {
+pub enum JniInputArrow<CallbackExpansion = Infallible> {
     /// Resolve explicit argument/result conversions against callback defaults.
-    Callback(Box<prebindgen_declarations::CallbackRequest>),
+    ConfigCallback(CallbackExpansion),
     /// Canonical callback signature and settings with resolved argument/result children.
     BoundCallback(Box<prebindgen_declarations::CallbackOperation>),
 }
 
 impl JniInputArrow {
-    pub(crate) fn bound_callback(&self) -> Result<&prebindgen_declarations::CallbackOperation> {
+    pub(crate) fn bound_callback(&self) -> &prebindgen_declarations::CallbackOperation {
         match self {
-            Self::BoundCallback(callback) => Ok(callback),
-            Self::Callback(_) => Err("resolve callback defaults before compilation".into()),
+            Self::BoundCallback(callback) => callback,
+            Self::ConfigCallback(never) => match *never {},
         }
     }
 }
 
 /// Terminal input operations.
 #[derive(Clone, Debug)]
-pub enum JniInputLeafOp {
+pub enum JniInputLeafOp<
+    DefaultChoice = Infallible,
+    ValueChoice = Infallible,
+    ConversionChoice = Infallible,
+    ConstructorChoice = Infallible,
+> {
+    /// Resolve this occurrence's configured default.
+    ConfigDefault(DefaultChoice),
+    /// Select the canonical value representation.
+    ConfigValue(ValueChoice),
+    /// Select a local Rust value conversion.
+    ConfigConversion(ConversionChoice),
+    /// Infer the source constructor's argument conversions.
+    ConfigConstructor(ConstructorChoice),
+
     /// Convert the occurrence using its declared value representation.
     Value,
 }
 /// Single-child input operations.
 #[derive(Clone, Debug)]
-pub enum JniInputUnary {
+pub enum JniInputUnary<TypeScope = Infallible> {
     /// Apply the child conversion at this source type, including nested occurrences.
-    ForType {
+    ConfigForType {
         /// Source type at which the child applies.
-        ty: Box<syn::Type>,
+        ty: TypeScope,
     },
 
     /// Apply an explicitly selected Rust value conversion.
@@ -85,16 +162,11 @@ pub enum JniInputUnary {
 }
 /// Multiple-child input operations.
 #[derive(Clone, Debug)]
-pub enum JniInputBranch {
+pub enum JniInputBranch<EnumExpansion = Infallible, VariantExpansion = Infallible> {
     /// Partially specified enum fields; children are variant branches.
-    EnumFields,
+    ConfigEnumFields(EnumExpansion),
     /// Partially specified fields of one source variant.
-    VariantFields {
-        /// Source variant name.
-        variant: String,
-        /// Source field names corresponding to the child conversions.
-        fields: Vec<String>,
-    },
+    ConfigVariantFields(VariantExpansion),
 
     /// Convert source record fields in declaration order.
     Fields,
@@ -117,7 +189,18 @@ pub enum JniInputBranch {
 }
 /// Terminal output operations.
 #[derive(Clone, Debug)]
-pub enum JniOutputLeafOp {
+pub enum JniOutputLeafOp<
+    DefaultChoice = Infallible,
+    ValueChoice = Infallible,
+    ConversionChoice = Infallible,
+> {
+    /// Resolve this occurrence's configured default.
+    ConfigDefault(DefaultChoice),
+    /// Select the canonical value representation.
+    ConfigValue(ValueChoice),
+    /// Select a local Rust value conversion.
+    ConfigConversion(ConversionChoice),
+
     /// Convert the occurrence using its declared value representation.
     Value,
     /// Omit a value while preserving its ordinary Rust destruction.
@@ -127,16 +210,16 @@ pub enum JniOutputLeafOp {
 }
 /// Single-child output operations.
 #[derive(Clone, Debug)]
-pub enum JniOutputUnary {
+pub enum JniOutputUnary<TypeScope = Infallible, SequenceSelection = Infallible> {
     /// Apply the child conversion at this source type, including nested occurrences.
-    ForType {
+    ConfigForType {
         /// Source type at which the child applies.
-        ty: Box<syn::Type>,
+        ty: TypeScope,
     },
     /// Select per-element callback delivery of the child's sequence.
-    SequenceCallback {
+    ConfigSequenceCallback {
         /// Permit decomposition of an ordinary collection identity.
-        structural: bool,
+        structural: SequenceSelection,
     },
 
     /// Ownership contract of one callable argument; interpreted by its arrow.
@@ -183,23 +266,17 @@ pub enum JniOutputUnary {
 }
 /// Multiple-child output operations.
 #[derive(Clone, Debug)]
-pub enum JniOutputBranch {
+pub enum JniOutputBranch<
+    EnumExpansion = Infallible,
+    VariantExpansion = Infallible,
+    RecordExpansion = Infallible,
+> {
     /// Partially specified enum fields; children are variant branches.
-    EnumFields,
+    ConfigEnumFields(EnumExpansion),
     /// Partially specified fields of one source variant.
-    VariantFields {
-        /// Source variant name.
-        variant: String,
-        /// Source field names corresponding to the child conversions.
-        fields: Vec<String>,
-    },
+    ConfigVariantFields(VariantExpansion),
     /// Partially specified record fields, in the same order as the child conversions.
-    NamedFields {
-        /// Source field names corresponding to the child conversions.
-        fields: Vec<String>,
-        /// Observe or move the selected fields.
-        mode: ProjectionMode,
-    },
+    ConfigNamedFields(RecordExpansion),
 
     /// Convert source record fields in declaration order.
     Fields,
@@ -642,26 +719,23 @@ pub(crate) fn sequence_callback(
         }
     }
     if select(&mut output) != 1 {
-        fn structural(
-            ty: &syn::Type,
-            output: &JniOutput,
-        ) -> Option<crate::JniOutput<crate::JniInputRequest, crate::JniOutputRequest>> {
+        fn structural(ty: &syn::Type, output: &JniOutput) -> Option<crate::JniOutputConfig> {
             match output {
                 JniOutput::Leaf(JniOutputLeafOp::Value)
                     if prebindgen_flat::sequence_parts(ty).is_some() =>
                 {
-                    Some(crate::JniOutput::Unary {
+                    Some(crate::JniOutputConfig::Unary {
                         operation: crate::JniOutputUnary::Sequence {
                             delivery: SequenceDelivery::Callback,
                             mode: None,
                         },
-                        child: Box::new(crate::JniOutput::auto()),
+                        child: Box::new(crate::JniOutputConfig::auto()),
                     })
                 }
                 JniOutput::Unary {
                     operation: JniOutputUnary::Optional,
                     child,
-                } => Some(crate::JniOutput::Unary {
+                } => Some(crate::JniOutputConfig::Unary {
                     operation: crate::JniOutputUnary::Optional,
                     child: Box::new(structural(prebindgen_flat::option_inner(ty)?, child)?),
                 }),
@@ -679,4 +753,111 @@ pub(crate) fn sequence_callback(
         }
     }
     Ok(output)
+}
+
+/// Configuration specialization of [`JniInputArrow`].
+pub type JniInputConfigArrow = JniInputArrow<Box<prebindgen_declarations::CallbackConfig>>;
+impl From<JniInputArrow> for JniInputConfigArrow {
+    fn from(operation: JniInputArrow) -> Self {
+        match operation {
+            JniInputArrow::ConfigCallback(never) => match never {},
+            JniInputArrow::BoundCallback(field0) => Self::BoundCallback(field0),
+        }
+    }
+}
+/// Configuration specialization of [`JniInputLeafOp`].
+pub type JniInputConfigLeafOp =
+    JniInputLeafOp<(), (), Box<prebindgen_declarations::DeclConvert>, String>;
+impl From<JniInputLeafOp> for JniInputConfigLeafOp {
+    fn from(operation: JniInputLeafOp) -> Self {
+        match operation {
+            JniInputLeafOp::Value => Self::Value,
+            JniInputLeafOp::ConfigDefault(never)
+            | JniInputLeafOp::ConfigValue(never)
+            | JniInputLeafOp::ConfigConversion(never) => match never {},
+            JniInputLeafOp::ConfigConstructor(never) => match never {},
+        }
+    }
+}
+/// Configuration specialization of [`JniInputUnary`].
+pub type JniInputConfigUnary = JniInputUnary<Box<syn::Type>>;
+impl From<JniInputUnary> for JniInputConfigUnary {
+    fn from(operation: JniInputUnary) -> Self {
+        match operation {
+            JniInputUnary::ConfigForType { ty: never } => match never {},
+            JniInputUnary::Convert { conversion } => Self::Convert { conversion },
+            JniInputUnary::Sequence => Self::Sequence,
+            JniInputUnary::Temporary => Self::Temporary,
+            JniInputUnary::Bulk => Self::Bulk,
+            JniInputUnary::Optional => Self::Optional,
+        }
+    }
+}
+/// Configuration specialization of [`JniInputBranch`].
+pub type JniInputConfigBranch = JniInputBranch<(), JniVariantFields>;
+impl From<JniInputBranch> for JniInputConfigBranch {
+    fn from(operation: JniInputBranch) -> Self {
+        match operation {
+            JniInputBranch::ConfigEnumFields(never) => match never {},
+            JniInputBranch::ConfigVariantFields(never) => match never {},
+            JniInputBranch::Fields => Self::Fields,
+            JniInputBranch::Record => Self::Record,
+            JniInputBranch::Selector => Self::Selector,
+            JniInputBranch::Constructor { function } => Self::Constructor { function },
+            JniInputBranch::Enum { value } => Self::Enum { value },
+            JniInputBranch::Variant => Self::Variant,
+        }
+    }
+}
+/// Configuration specialization of [`JniOutputLeafOp`].
+pub type JniOutputConfigLeafOp =
+    JniOutputLeafOp<(), Option<Projection>, Box<prebindgen_declarations::DeclConvert>>;
+impl From<JniOutputLeafOp> for JniOutputConfigLeafOp {
+    fn from(operation: JniOutputLeafOp) -> Self {
+        match operation {
+            JniOutputLeafOp::Value => Self::Value,
+            JniOutputLeafOp::Discard => Self::Discard,
+            JniOutputLeafOp::Projected(field0) => Self::Projected(field0),
+            JniOutputLeafOp::ConfigDefault(never)
+            | JniOutputLeafOp::ConfigValue(never)
+            | JniOutputLeafOp::ConfigConversion(never) => match never {},
+        }
+    }
+}
+/// Configuration specialization of [`JniOutputUnary`].
+pub type JniOutputConfigUnary = JniOutputUnary<Box<syn::Type>, bool>;
+impl From<JniOutputUnary> for JniOutputConfigUnary {
+    fn from(operation: JniOutputUnary) -> Self {
+        match operation {
+            JniOutputUnary::ConfigForType { ty: never } => match never {},
+            JniOutputUnary::ConfigSequenceCallback { structural: never } => match never {},
+            JniOutputUnary::CallbackArgument { ownership } => Self::CallbackArgument { ownership },
+            JniOutputUnary::Bulk => Self::Bulk,
+            JniOutputUnary::Named { name } => Self::Named { name },
+            JniOutputUnary::Convert { conversion } => Self::Convert { conversion },
+            JniOutputUnary::Sequence { delivery, mode } => Self::Sequence { delivery, mode },
+            JniOutputUnary::Result { error } => Self::Result { error },
+            JniOutputUnary::Optional => Self::Optional,
+            JniOutputUnary::Into { function } => Self::Into { function },
+            JniOutputUnary::Getter { function } => Self::Getter { function },
+        }
+    }
+}
+/// Configuration specialization of [`JniOutputBranch`].
+pub type JniOutputConfigBranch = JniOutputBranch<(), JniVariantFields, JniNamedFields>;
+impl From<JniOutputBranch> for JniOutputConfigBranch {
+    fn from(operation: JniOutputBranch) -> Self {
+        match operation {
+            JniOutputBranch::ConfigEnumFields(never) => match never {},
+            JniOutputBranch::ConfigVariantFields(never) => match never {},
+            JniOutputBranch::ConfigNamedFields(never) => match never {},
+            JniOutputBranch::Fields => Self::Fields,
+            JniOutputBranch::OwnedFields => Self::OwnedFields,
+            JniOutputBranch::Record { mode } => Self::Record { mode },
+            JniOutputBranch::Combine => Self::Combine,
+            JniOutputBranch::Enum { value, mode } => Self::Enum { value, mode },
+            JniOutputBranch::Variant => Self::Variant,
+            JniOutputBranch::Arguments => Self::Arguments,
+        }
+    }
 }

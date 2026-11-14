@@ -664,7 +664,6 @@ fn tag_stem(ty: &syn::Type) -> String {
 mod tests {
     use super::*;
     use crate::fun;
-    use crate::COutput;
     use prebindgen_declarations::{convert, from, into, ProjectionMode};
     fn flat(source: &str) -> CBindings {
         CBindings::parse(
@@ -692,7 +691,7 @@ mod tests {
         let generated=Cbindgen::new(flat("pub struct Child{pub n:i64}pub struct Holder{pub child:Child}pub enum Event{One(Holder),Empty}pub fn child(value:&Holder)->&Child{}pub fn make()->Event{}"))
             .opaque_ptr("child",syn::parse_quote!(Child))
             .tagged_union("event",syn::parse_quote!(Event))
-            .function(fun!(make).expand_return(COutput::enum_variants(vec![vec![COutput::Unary { operation: COutputUnary::Getter { function: "child".into() }, child: Box::new(COutput::Leaf(COutputLeafOp::Value)),  }],vec![]], true, Some(ProjectionMode::Borrowed)))).panic().build();
+            .function(fun!(make).expand_return(COutputConfig::enum_variants(vec![vec![COutputConfig::Unary { operation: COutputUnary::Getter { function: "child".into() }, child: Box::new(COutputConfig::Leaf(COutputLeafOp::Value)),  }],vec![]], true, Some(ProjectionMode::Borrowed)))).panic().build();
         let error = generated.err().unwrap();
         assert!(error.contains("temporary"), "{error}");
     }

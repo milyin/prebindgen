@@ -172,11 +172,18 @@ mod tests {
                 &codec,
                 "echo",
                 "value",
-                &crate::CInput::auto(),
+                &crate::CInputConfig::auto(),
                 &(),
             )
             .unwrap();
-            crate::bind_output(&mut model, &codec, "echo", &crate::COutput::auto(), &()).unwrap();
+            crate::bind_output(
+                &mut model,
+                &codec,
+                "echo",
+                &crate::COutputConfig::auto(),
+                &(),
+            )
+            .unwrap();
             let function = model.function("echo").unwrap();
             let input = function.params[0].ty.slot.as_ref().unwrap();
             let output = function.ret.slot.as_ref().unwrap();

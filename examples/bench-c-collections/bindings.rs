@@ -1,11 +1,11 @@
 use prebindgen_c::prelude::*;
 use prebindgen_c::COutputUnary;
 use prebindgen_c::{
-    expand_param, expand_return, fields, fun, CInputRequest, COutput, COutputRequest,
+    expand_param, expand_return, fields, fun, COutputConfig,
 };
 use prebindgen_declarations::SequenceDelivery;
-fn rows(element: COutput<CInputRequest, COutputRequest>) -> COutput<CInputRequest, COutputRequest> {
-    COutput::Unary {
+fn rows(element: COutputConfig) -> COutputConfig {
+    COutputConfig::Unary {
         operation: COutputUnary::Sequence {
             delivery: SequenceDelivery::Value,
             mode: None,
@@ -92,15 +92,15 @@ fn main() {
         .panic()
         .function(fun!(resource_value))
         .panic()
-        .function(fun!(make_handles).output(rows(COutput::auto())))
+        .function(fun!(make_handles).output(rows(COutputConfig::auto())))
         .panic()
-        .function(fun!(make_records).output(rows(COutput::auto())))
+        .function(fun!(make_records).output(rows(COutputConfig::auto())))
         .panic()
-        .function(fun!(make_nested).output(rows(rows(COutput::auto()))))
+        .function(fun!(make_nested).output(rows(rows(COutputConfig::auto()))))
         .panic()
-        .function(fun!(make_many).output(rows(rows(COutput::auto()))))
+        .function(fun!(make_many).output(rows(rows(COutputConfig::auto()))))
         .panic()
-        .function(fun!(make_numbers).output(rows(COutput::auto())))
+        .function(fun!(make_numbers).output(rows(COutputConfig::auto())))
         .panic();
     let generation = builder.build().expect("C collection benchmark bindings");
     let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
