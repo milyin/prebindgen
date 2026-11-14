@@ -136,6 +136,7 @@ internal object JNINative {
     @JvmStatic external fun call_type_input_mut_lists_30242e7654d4250f(p0_w1: ByteArray?, p0_w1_length: Int, p1_w1: ByteArray?, p1_w1_length: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_type_input_mixed_7b268c9e6948a110(p0_w1: ByteArray?, p0_w1_length: Int, p1_w1: ByteArray?, p1_w1_length: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_type_input_row_d1ca0f73c8d133b6(p0_w1_f0: Long, p0_w1_f1: Long, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_type_input_row_fields_8983ada2ac2a38c0(p0_w2: Long, p0_w4: Long, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_type_input_holder_4673e9a6dda65297(p0_w1_f0_present: Int, p0_w1_f0_some_f0: Long, p0_w1_f0_some_f1: Long, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_type_input_rows_1943c070e2ef84cb(p0_w1: ByteArray?, p0_w1_length: Int, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_type_input_rows_plain_8d430d0aa0f4b840(p0_w1: Array<Any?>?, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long

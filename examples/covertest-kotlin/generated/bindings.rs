@@ -23664,6 +23664,132 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
 /**# Safety
 The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_1input_1row_1fields_18983ada2ac2a38c0<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+    p0_w2: i64,
+    p0_w4: i64,
+    ownership_accepted: ::prebindgen_jni_runtime::jni::objects::JLongArray<'local>,
+    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+) -> i64 {
+    #[allow(unused_mut)]
+    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
+    let mut success_transferred = false;
+    let mut direct_output: i64 = Default::default();
+    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
+    let __pb_receipt_valid = ::core::cell::Cell::new(false);
+    let outcome = ::prebindgen_runtime::boundary(|| {
+        if jni_environment
+            .get_array_length(&ownership_accepted)
+            .map_err(|e| e.to_string())? != 1
+        {
+            return Err("invalid ownership acknowledgement".into());
+        }
+        __pb_receipt_valid.set(true);
+        {
+            let p0_w2_pointer = p0_w2
+                as *mut ::prebindgen_jni_runtime::Allocation<perftest_flat::TypeInputA>;
+            ::prebindgen_runtime::validate_pointer(p0_w2_pointer)?;
+            let p0_w1: perftest_flat::TypeInputA = {
+                let p0_w1 = unsafe { Box::from_raw(p0_w2_pointer) };
+                {
+                    __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
+                }
+                p0_w1.value
+            };
+            let p0_w0_field_0 = p0_w1;
+            let p0_w4_pointer = p0_w4
+                as *mut ::prebindgen_jni_runtime::Allocation<perftest_flat::TypeInputB>;
+            ::prebindgen_runtime::validate_pointer(p0_w4_pointer)?;
+            let p0_w3: perftest_flat::TypeInputB = {
+                let p0_w3 = unsafe { Box::from_raw(p0_w4_pointer) };
+                {
+                    __pb_input_consumed.set(__pb_input_consumed.get() + (1usize));
+                }
+                p0_w3.value
+            };
+            let p0_w0_field_1 = p0_w3;
+            let p0_w0: perftest_flat::TypeInputRow = perftest_flat::TypeInputRow {
+                a: p0_w0_field_0,
+                b: p0_w0_field_1,
+            };
+            let __prebindgen_argument_0 = p0_w0;
+            let source_value = perftest_flat::type_input_row_fields(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = source_value;
+            let __pb_direct_result = unsafe {
+                (::prebindgen_jni_runtime::jni::sys::jvalue {
+                    j: ret_w0,
+                })
+                    .j
+            };
+            let _: () = {
+                direct_output = __pb_direct_result;
+                success_transferred = true;
+            };
+            Ok(__pb_direct_result)
+        }
+    });
+    if __pb_receipt_valid.get() {
+        let count = __pb_input_consumed.get() as i64;
+        let value = if outcome.is_ok() { count } else { -1 - count };
+        ::prebindgen_jni_runtime::write_input_receipt(
+            &mut jni_environment,
+            &ownership_accepted,
+            value,
+            outcome.is_err(),
+        );
+    }
+    match outcome {
+        Ok(result) => result,
+        Err(e) => {
+            if domain_output.is_none()
+                && matches!(jni_environment.exception_check(), Ok(false))
+            {
+                let reported = ::prebindgen_runtime::boundary(|| {
+                    let message = ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        &e,
+                    )?;
+                    unsafe {
+                        ::prebindgen_jni_runtime::invoke_error_callback(
+                            &mut jni_environment,
+                            &__pb_return,
+                            "bindingError",
+                            "(Ljava/lang/String;Z)V",
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    l: message.as_raw(),
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    z: u8::from(success_transferred),
+                                },
+                            ],
+                        )
+                    }
+                });
+                if let Err(message) = reported {
+                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                }
+            }
+            direct_output
+        }
+    }
+}
+#[allow(
+    clippy::let_and_return,
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
+#[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_1input_1holder_14673e9a6dda65297<
     'local,
 >(

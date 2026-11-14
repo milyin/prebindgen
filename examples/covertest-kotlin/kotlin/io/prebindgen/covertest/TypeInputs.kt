@@ -35,6 +35,11 @@ fun checkTypeInputs() {
     check(reads==1 && captured.isClosed && capturedB.isClosed && !spare.isClosed)
     spare.close();check(typeInputLive()==0L)
 
+    // The declaration can expand this same Rust record into separate parameters.
+    val expandedA=typeInputANew(107);val expandedB=typeInputBNew(109)
+    check(typeInputRowFields(expandedA,expandedB)==216L)
+    check(expandedA.isClosed && expandedB.isClosed && typeInputLive()==0L)
+
     val optionalA=typeInputANew(61);val optionalB=typeInputBNew(67)
     var optionReads=0
     TypeInputHolder.readRow={ original -> if(optionReads++==0)original else null }

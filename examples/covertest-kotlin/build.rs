@@ -273,7 +273,9 @@ fn main() {
             .fun(fun!(wire_timestamps).expand_param("values",expand_param!(Vec<WireTimestampStackRecord>).variant_self().bulk()))
             .class(sealed_class!(Result<i64,String>).name("WireDecision"))
             .class(sealed_class!(Result<(),String>).name("WireNotice"))
-            .fun(fun!(wire_event_rows).expand_param("values",expand_param!(Vec<WireEvent>).variant_self().bulk()))
+            .fun(fun!(wire_event_rows).expand_param("values",expand_param!(Vec<WireEvent>).variant_self().bulk())
+                .expand_return(expand_return!(WireEvent).enum_value([
+                    ("Packet",fields!().field("id",expand_return!(u64).default()))])))
             .fun(fun!(wire_event_rows_callback))
             .fun(fun!(wire_bare_echo).expand_param("value",expand_param!(WireBare).enum_fields([])).expand_return(expand_return!(WireBare).enum_fields([])))
             .fun(fun!(wire_event_echo))
@@ -394,6 +396,8 @@ fn main() {
                      "value",
                      expand_param!(TypeInputRow).variant_record(param_fields!()),
                  ))
+            .fun(fun!(type_input_row_fields).expand_param("value",
+                expand_param!(TypeInputRow).variant_fields(param_fields!())))
             .fun(fun!(type_input_holder).expand_param(
                      "value",
                      expand_param!(TypeInputHolder).variant_record(param_fields!().field(
