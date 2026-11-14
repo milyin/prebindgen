@@ -4381,45 +4381,46 @@
 <a href=#4381 id=4381 data-nosnippet>4381</a></span><span class="kw">pub mod </span>operations;
 <a href=#4382 id=4382 data-nosnippet>4382</a>
 <a href=#4383 id=4383 data-nosnippet>4383</a><span class="kw">pub use </span>operations::{
-<a href=#4384 id=4384 data-nosnippet>4384</a>    CInput, CInputArrow, CInputBranch, CInputConfig, CInputConfigArrow, CInputConfigBranch,
-<a href=#4385 id=4385 data-nosnippet>4385</a>    CInputConfigLeafOp, CInputConfigOps, CInputConfigUnary, CInputLeafOp, CInputOps, CInputUnary,
-<a href=#4386 id=4386 data-nosnippet>4386</a>    CNamedFields, COutput, COutputBranch, COutputConfig, COutputConfigBranch, COutputConfigLeafOp,
-<a href=#4387 id=4387 data-nosnippet>4387</a>    COutputConfigOps, COutputConfigUnary, COutputLeafOp, COutputOps, COutputUnary, CVariantFields,
-<a href=#4388 id=4388 data-nosnippet>4388</a>};
-<a href=#4389 id=4389 data-nosnippet>4389</a>
-<a href=#4390 id=4390 data-nosnippet>4390</a><span class="kw">mod </span>declarations;
-<a href=#4391 id=4391 data-nosnippet>4391</a><span class="kw">pub use </span>declarations::<span class="kw-2">*</span>;
-<a href=#4392 id=4392 data-nosnippet>4392</a>
-<a href=#4393 id=4393 data-nosnippet>4393</a><span class="attr">#[macro_export]
-<a href=#4394 id=4394 data-nosnippet>4394</a></span><span class="doccomment">/// Select a source function and configure its binding in this adapter.
-<a href=#4395 id=4395 data-nosnippet>4395</a></span><span class="macro">macro_rules!</span> fun {
-<a href=#4396 id=4396 data-nosnippet>4396</a>    (<span class="macro-nonterminal">$name</span>:ident) =&gt; {
-<a href=#4397 id=4397 data-nosnippet>4397</a>        <span class="macro-nonterminal">$crate::DeclCFunction::new</span>(
-<a href=#4398 id=4398 data-nosnippet>4398</a>            <span class="macro-nonterminal">$crate::__declaration_ident</span>(<span class="macro">stringify!</span>(<span class="macro-nonterminal">$name</span>)).expect(<span class="string">"source identifier"</span>),
-<a href=#4399 id=4399 data-nosnippet>4399</a>        )
-<a href=#4400 id=4400 data-nosnippet>4400</a>    };
-<a href=#4401 id=4401 data-nosnippet>4401</a>}
-<a href=#4402 id=4402 data-nosnippet>4402</a>
-<a href=#4403 id=4403 data-nosnippet>4403</a><span class="doccomment">/// Traits for constructing and inspecting this adapter's conversion trees.
-<a href=#4404 id=4404 data-nosnippet>4404</a></span><span class="kw">pub mod </span>prelude {
-<a href=#4405 id=4405 data-nosnippet>4405</a>    <span class="kw">pub use crate</span>::{CInputConfigExt, CInputExt, COutputConfigExt, COutputExt};
-<a href=#4406 id=4406 data-nosnippet>4406</a>}
-<a href=#4407 id=4407 data-nosnippet>4407</a>
-<a href=#4408 id=4408 data-nosnippet>4408</a><span class="doccomment">/// The C adapter has no bulk transport, including in callback-delivery variants.
-<a href=#4409 id=4409 data-nosnippet>4409</a>/// ```compile_fail
-<a href=#4410 id=4410 data-nosnippet>4410</a>/// use prebindgen_c::{CInput, COutput, expand_return, fun};
-<a href=#4411 id=4411 data-nosnippet>4411</a>/// let _ = fun!(rows).callback_return_only().expand_return(expand_return!(i64).field_self().bulk());
-<a href=#4412 id=4412 data-nosnippet>4412</a>/// ```
-<a href=#4413 id=4413 data-nosnippet>4413</a>/// ```compile_fail
-<a href=#4414 id=4414 data-nosnippet>4414</a>/// use prebindgen_c::{CInputConfig, prelude::*};
-<a href=#4415 id=4415 data-nosnippet>4415</a>/// let _ = CInputConfig::auto().bulk();
-<a href=#4416 id=4416 data-nosnippet>4416</a>/// ```
-<a href=#4417 id=4417 data-nosnippet>4417</a>/// ```compile_fail
-<a href=#4418 id=4418 data-nosnippet>4418</a>/// use prebindgen_c::{COutputConfig, prelude::*};
-<a href=#4419 id=4419 data-nosnippet>4419</a>/// let _ = COutputConfig::auto().bulk();
-<a href=#4420 id=4420 data-nosnippet>4420</a>/// ```
-<a href=#4421 id=4421 data-nosnippet>4421</a></span><span class="kw">const _</span>: () = ();
-<a href=#4422 id=4422 data-nosnippet>4422</a>
-<a href=#4423 id=4423 data-nosnippet>4423</a><span class="attr">#[cfg(test)]
-<a href=#4424 id=4424 data-nosnippet>4424</a></span><span class="kw">mod </span>structural_tests;
+<a href=#4384 id=4384 data-nosnippet>4384</a>    CConstructorArguments, CInput, CInputArrow, CInputBranch, CInputConfig, CInputConfigArrow,
+<a href=#4385 id=4385 data-nosnippet>4385</a>    CInputConfigBranch, CInputConfigLeafOp, CInputConfigOps, CInputConfigUnary, CInputFields,
+<a href=#4386 id=4386 data-nosnippet>4386</a>    CInputLeafOp, CInputOps, CInputUnary, CNamedFields, COutput, COutputBranch, COutputConfig,
+<a href=#4387 id=4387 data-nosnippet>4387</a>    COutputConfigBranch, COutputConfigLeafOp, COutputConfigOps, COutputConfigUnary, COutputLeafOp,
+<a href=#4388 id=4388 data-nosnippet>4388</a>    COutputOps, COutputUnary, CVariantFields,
+<a href=#4389 id=4389 data-nosnippet>4389</a>};
+<a href=#4390 id=4390 data-nosnippet>4390</a>
+<a href=#4391 id=4391 data-nosnippet>4391</a><span class="kw">mod </span>declarations;
+<a href=#4392 id=4392 data-nosnippet>4392</a><span class="kw">pub use </span>declarations::<span class="kw-2">*</span>;
+<a href=#4393 id=4393 data-nosnippet>4393</a>
+<a href=#4394 id=4394 data-nosnippet>4394</a><span class="attr">#[macro_export]
+<a href=#4395 id=4395 data-nosnippet>4395</a></span><span class="doccomment">/// Select a source function and configure its binding in this adapter.
+<a href=#4396 id=4396 data-nosnippet>4396</a></span><span class="macro">macro_rules!</span> fun {
+<a href=#4397 id=4397 data-nosnippet>4397</a>    (<span class="macro-nonterminal">$name</span>:ident) =&gt; {
+<a href=#4398 id=4398 data-nosnippet>4398</a>        <span class="macro-nonterminal">$crate::DeclCFunction::new</span>(
+<a href=#4399 id=4399 data-nosnippet>4399</a>            <span class="macro-nonterminal">$crate::__declaration_ident</span>(<span class="macro">stringify!</span>(<span class="macro-nonterminal">$name</span>)).expect(<span class="string">"source identifier"</span>),
+<a href=#4400 id=4400 data-nosnippet>4400</a>        )
+<a href=#4401 id=4401 data-nosnippet>4401</a>    };
+<a href=#4402 id=4402 data-nosnippet>4402</a>}
+<a href=#4403 id=4403 data-nosnippet>4403</a>
+<a href=#4404 id=4404 data-nosnippet>4404</a><span class="doccomment">/// Traits for constructing and inspecting this adapter's conversion trees.
+<a href=#4405 id=4405 data-nosnippet>4405</a></span><span class="kw">pub mod </span>prelude {
+<a href=#4406 id=4406 data-nosnippet>4406</a>    <span class="kw">pub use crate</span>::{CInputConfigExt, CInputExt, COutputConfigExt, COutputExt};
+<a href=#4407 id=4407 data-nosnippet>4407</a>}
+<a href=#4408 id=4408 data-nosnippet>4408</a>
+<a href=#4409 id=4409 data-nosnippet>4409</a><span class="doccomment">/// The C adapter has no bulk transport, including in callback-delivery variants.
+<a href=#4410 id=4410 data-nosnippet>4410</a>/// ```compile_fail
+<a href=#4411 id=4411 data-nosnippet>4411</a>/// use prebindgen_c::{CInput, COutput, expand_return, fun};
+<a href=#4412 id=4412 data-nosnippet>4412</a>/// let _ = fun!(rows).callback_return_only().expand_return(expand_return!(i64).field_self().bulk());
+<a href=#4413 id=4413 data-nosnippet>4413</a>/// ```
+<a href=#4414 id=4414 data-nosnippet>4414</a>/// ```compile_fail
+<a href=#4415 id=4415 data-nosnippet>4415</a>/// use prebindgen_c::{CInputConfig, prelude::*};
+<a href=#4416 id=4416 data-nosnippet>4416</a>/// let _ = CInputConfig::auto().bulk();
+<a href=#4417 id=4417 data-nosnippet>4417</a>/// ```
+<a href=#4418 id=4418 data-nosnippet>4418</a>/// ```compile_fail
+<a href=#4419 id=4419 data-nosnippet>4419</a>/// use prebindgen_c::{COutputConfig, prelude::*};
+<a href=#4420 id=4420 data-nosnippet>4420</a>/// let _ = COutputConfig::auto().bulk();
+<a href=#4421 id=4421 data-nosnippet>4421</a>/// ```
+<a href=#4422 id=4422 data-nosnippet>4422</a></span><span class="kw">const _</span>: () = ();
+<a href=#4423 id=4423 data-nosnippet>4423</a>
+<a href=#4424 id=4424 data-nosnippet>4424</a><span class="attr">#[cfg(test)]
+<a href=#4425 id=4425 data-nosnippet>4425</a></span><span class="kw">mod </span>structural_tests;
 </code></pre></div></section></main></body></html>

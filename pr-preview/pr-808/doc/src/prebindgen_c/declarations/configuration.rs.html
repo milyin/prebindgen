@@ -517,29 +517,25 @@
 <a href=#517 id=517 data-nosnippet>517</a>}
 <a href=#518 id=518 data-nosnippet>518</a>
 <a href=#519 id=519 data-nosnippet>519</a><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>owned_field_view(view: COutputConfig) -&gt; COutputConfig {
-<a href=#520 id=520 data-nosnippet>520</a>    <span class="kw">let </span>COutputConfig::Unary {
-<a href=#521 id=521 data-nosnippet>521</a>        operation: COutputUnary::Getter { function },
-<a href=#522 id=522 data-nosnippet>522</a>        child,
-<a href=#523 id=523 data-nosnippet>523</a>    } = view
-<a href=#524 id=524 data-nosnippet>524</a>    <span class="kw">else </span>{
-<a href=#525 id=525 data-nosnippet>525</a>        <span class="macro">panic!</span>(<span class="string">"fields_into requires a fields! accessor"</span>)
-<a href=#526 id=526 data-nosnippet>526</a>    };
-<a href=#527 id=527 data-nosnippet>527</a>    <span class="kw">let </span>COutputConfig::Branch {
-<a href=#528 id=528 data-nosnippet>528</a>        operation: COutputBranch::ConfigNamedFields(CNamedFields { fields, .. }),
-<a href=#529 id=529 data-nosnippet>529</a>        children,
-<a href=#530 id=530 data-nosnippet>530</a>    } = <span class="kw-2">*</span>child
-<a href=#531 id=531 data-nosnippet>531</a>    <span class="kw">else </span>{
-<a href=#532 id=532 data-nosnippet>532</a>        <span class="macro">panic!</span>(<span class="string">"fields_into requires named fields"</span>)
-<a href=#533 id=533 data-nosnippet>533</a>    };
-<a href=#534 id=534 data-nosnippet>534</a>    COutputConfig::Unary {
-<a href=#535 id=535 data-nosnippet>535</a>        operation: COutputUnary::Into { function },
-<a href=#536 id=536 data-nosnippet>536</a>        child: Box::new(COutputConfig::Branch {
-<a href=#537 id=537 data-nosnippet>537</a>            operation: COutputBranch::ConfigNamedFields(CNamedFields {
-<a href=#538 id=538 data-nosnippet>538</a>                fields,
-<a href=#539 id=539 data-nosnippet>539</a>                mode: ProjectionMode::Owned,
-<a href=#540 id=540 data-nosnippet>540</a>            }),
-<a href=#541 id=541 data-nosnippet>541</a>            children,
-<a href=#542 id=542 data-nosnippet>542</a>        }),
-<a href=#543 id=543 data-nosnippet>543</a>    }
-<a href=#544 id=544 data-nosnippet>544</a>}
+<a href=#520 id=520 data-nosnippet>520</a>    <span class="kw">match </span>view {
+<a href=#521 id=521 data-nosnippet>521</a>        COutputConfig::Branch {
+<a href=#522 id=522 data-nosnippet>522</a>            operation: COutputBranch::ConfigNamedFields(CNamedFields { fields, .. }),
+<a href=#523 id=523 data-nosnippet>523</a>            children,
+<a href=#524 id=524 data-nosnippet>524</a>        } =&gt; COutputConfig::Branch {
+<a href=#525 id=525 data-nosnippet>525</a>            operation: COutputBranch::ConfigNamedFields(CNamedFields {
+<a href=#526 id=526 data-nosnippet>526</a>                fields,
+<a href=#527 id=527 data-nosnippet>527</a>                mode: ProjectionMode::Owned,
+<a href=#528 id=528 data-nosnippet>528</a>            }),
+<a href=#529 id=529 data-nosnippet>529</a>            children,
+<a href=#530 id=530 data-nosnippet>530</a>        },
+<a href=#531 id=531 data-nosnippet>531</a>        COutputConfig::Unary {
+<a href=#532 id=532 data-nosnippet>532</a>            operation: COutputUnary::Getter { function },
+<a href=#533 id=533 data-nosnippet>533</a>            child,
+<a href=#534 id=534 data-nosnippet>534</a>        } =&gt; COutputConfig::Unary {
+<a href=#535 id=535 data-nosnippet>535</a>            operation: COutputUnary::Into { function },
+<a href=#536 id=536 data-nosnippet>536</a>            child: Box::new(owned_field_view(<span class="kw-2">*</span>child)),
+<a href=#537 id=537 data-nosnippet>537</a>        },
+<a href=#538 id=538 data-nosnippet>538</a>        <span class="kw">_ </span>=&gt; <span class="macro">panic!</span>(<span class="string">"fields_into requires a fields! declaration"</span>),
+<a href=#539 id=539 data-nosnippet>539</a>    }
+<a href=#540 id=540 data-nosnippet>540</a>}
 </code></pre></div></section></main></body></html>

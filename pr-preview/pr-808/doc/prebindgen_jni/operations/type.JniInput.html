@@ -8,7 +8,7 @@
 <span class="kw">let _</span>:JniInput=JniInput::Leaf(JniInputLeafOp::ConfigDefault(()));</code></pre></div>
 <div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>prebindgen_jni::{JniInput,JniInputBranch};
 <span class="kw">let _</span>:JniInput=JniInput::Branch {
-    operation:JniInputBranch::ConfigEnumFields(()),children:<span class="macro">vec!</span>[],
+    operation:JniInputBranch::ConfigEnumFields(<span class="bool-val">false</span>),children:<span class="macro">vec!</span>[],
 };</code></pre></div></div></details><h2 id="aliased-type" class="section-header">Aliased Type<a href="#aliased-type" class="anchor">§</a></h2><pre class="rust item-decl"><code>pub enum JniInput {
     None,
     Leaf(<a class="enum" href="enum.JniInputLeafOp.html" title="enum prebindgen_jni::operations::JniInputLeafOp">JniInputLeafOp</a>),

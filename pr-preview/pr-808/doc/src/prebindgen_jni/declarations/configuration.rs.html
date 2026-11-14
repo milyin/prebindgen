@@ -147,7 +147,7 @@
 <a href=#147 id=147 data-nosnippet>147</a>    ) -&gt; <span class="self">Self </span>{
 <a href=#148 id=148 data-nosnippet>148</a>        <span class="kw">let </span>overrides = prebindgen_declarations::enum_overrides(overrides);
 <a href=#149 id=149 data-nosnippet>149</a>        JniInputConfig::Branch {
-<a href=#150 id=150 data-nosnippet>150</a>            operation: JniInputBranch::ConfigEnumFields(()),
+<a href=#150 id=150 data-nosnippet>150</a>            operation: JniInputBranch::ConfigEnumFields(<span class="bool-val">false</span>),
 <a href=#151 id=151 data-nosnippet>151</a>            children: overrides
 <a href=#152 id=152 data-nosnippet>152</a>                .into_iter()
 <a href=#153 id=153 data-nosnippet>153</a>                .map(|(variant, fields)| {
@@ -423,7 +423,7 @@
 <a href=#423 id=423 data-nosnippet>423</a>    ) -&gt; <span class="self">Self </span>{
 <a href=#424 id=424 data-nosnippet>424</a>        <span class="kw">let </span>overrides = prebindgen_declarations::enum_overrides(overrides);
 <a href=#425 id=425 data-nosnippet>425</a>        JniOutputConfig::Branch {
-<a href=#426 id=426 data-nosnippet>426</a>            operation: JniOutputBranch::ConfigEnumFields(()),
+<a href=#426 id=426 data-nosnippet>426</a>            operation: JniOutputBranch::ConfigEnumFields(<span class="bool-val">false</span>),
 <a href=#427 id=427 data-nosnippet>427</a>            children: overrides
 <a href=#428 id=428 data-nosnippet>428</a>                .into_iter()
 <a href=#429 id=429 data-nosnippet>429</a>                .map(|(variant, fields)| {
@@ -551,29 +551,25 @@
 <a href=#551 id=551 data-nosnippet>551</a>}
 <a href=#552 id=552 data-nosnippet>552</a>
 <a href=#553 id=553 data-nosnippet>553</a><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>owned_field_view(view: JniOutputConfig) -&gt; JniOutputConfig {
-<a href=#554 id=554 data-nosnippet>554</a>    <span class="kw">let </span>JniOutputConfig::Unary {
-<a href=#555 id=555 data-nosnippet>555</a>        operation: JniOutputUnary::Getter { function },
-<a href=#556 id=556 data-nosnippet>556</a>        child,
-<a href=#557 id=557 data-nosnippet>557</a>    } = view
-<a href=#558 id=558 data-nosnippet>558</a>    <span class="kw">else </span>{
-<a href=#559 id=559 data-nosnippet>559</a>        <span class="macro">panic!</span>(<span class="string">"fields_into requires a fields! accessor"</span>)
-<a href=#560 id=560 data-nosnippet>560</a>    };
-<a href=#561 id=561 data-nosnippet>561</a>    <span class="kw">let </span>JniOutputConfig::Branch {
-<a href=#562 id=562 data-nosnippet>562</a>        operation: JniOutputBranch::ConfigNamedFields(JniNamedFields { fields, .. }),
-<a href=#563 id=563 data-nosnippet>563</a>        children,
-<a href=#564 id=564 data-nosnippet>564</a>    } = <span class="kw-2">*</span>child
-<a href=#565 id=565 data-nosnippet>565</a>    <span class="kw">else </span>{
-<a href=#566 id=566 data-nosnippet>566</a>        <span class="macro">panic!</span>(<span class="string">"fields_into requires named fields"</span>)
-<a href=#567 id=567 data-nosnippet>567</a>    };
-<a href=#568 id=568 data-nosnippet>568</a>    JniOutputConfig::Unary {
-<a href=#569 id=569 data-nosnippet>569</a>        operation: JniOutputUnary::Into { function },
-<a href=#570 id=570 data-nosnippet>570</a>        child: Box::new(JniOutputConfig::Branch {
-<a href=#571 id=571 data-nosnippet>571</a>            operation: JniOutputBranch::ConfigNamedFields(JniNamedFields {
-<a href=#572 id=572 data-nosnippet>572</a>                fields,
-<a href=#573 id=573 data-nosnippet>573</a>                mode: ProjectionMode::Owned,
-<a href=#574 id=574 data-nosnippet>574</a>            }),
-<a href=#575 id=575 data-nosnippet>575</a>            children,
-<a href=#576 id=576 data-nosnippet>576</a>        }),
-<a href=#577 id=577 data-nosnippet>577</a>    }
-<a href=#578 id=578 data-nosnippet>578</a>}
+<a href=#554 id=554 data-nosnippet>554</a>    <span class="kw">match </span>view {
+<a href=#555 id=555 data-nosnippet>555</a>        JniOutputConfig::Branch {
+<a href=#556 id=556 data-nosnippet>556</a>            operation: JniOutputBranch::ConfigNamedFields(JniNamedFields { fields, .. }),
+<a href=#557 id=557 data-nosnippet>557</a>            children,
+<a href=#558 id=558 data-nosnippet>558</a>        } =&gt; JniOutputConfig::Branch {
+<a href=#559 id=559 data-nosnippet>559</a>            operation: JniOutputBranch::ConfigNamedFields(JniNamedFields {
+<a href=#560 id=560 data-nosnippet>560</a>                fields,
+<a href=#561 id=561 data-nosnippet>561</a>                mode: ProjectionMode::Owned,
+<a href=#562 id=562 data-nosnippet>562</a>            }),
+<a href=#563 id=563 data-nosnippet>563</a>            children,
+<a href=#564 id=564 data-nosnippet>564</a>        },
+<a href=#565 id=565 data-nosnippet>565</a>        JniOutputConfig::Unary {
+<a href=#566 id=566 data-nosnippet>566</a>            operation: JniOutputUnary::Getter { function },
+<a href=#567 id=567 data-nosnippet>567</a>            child,
+<a href=#568 id=568 data-nosnippet>568</a>        } =&gt; JniOutputConfig::Unary {
+<a href=#569 id=569 data-nosnippet>569</a>            operation: JniOutputUnary::Into { function },
+<a href=#570 id=570 data-nosnippet>570</a>            child: Box::new(owned_field_view(<span class="kw-2">*</span>child)),
+<a href=#571 id=571 data-nosnippet>571</a>        },
+<a href=#572 id=572 data-nosnippet>572</a>        <span class="kw">_ </span>=&gt; <span class="macro">panic!</span>(<span class="string">"fields_into requires a fields! declaration"</span>),
+<a href=#573 id=573 data-nosnippet>573</a>    }
+<a href=#574 id=574 data-nosnippet>574</a>}
 </code></pre></div></section></main></body></html>
