@@ -109,16 +109,18 @@ pub enum BindingState<C, R, P> {
     Prepared(P),
 }
 /// One exported use of a source callable, without a duplicate Rust signature.
+/// The consumer chooses `S`: a declaration pipeline can track [`BindingState`],
+/// while an already prepared export can hold [`PreparedCall`] directly.
 #[derive(Clone, Debug)]
-pub struct FunctionBinding<M, C, R, P> {
+pub struct FunctionBinding<M, S> {
     /// Generated wrapper identity.
     pub name: syn::Ident,
     /// Adapter placement, names and error associations.
     pub metadata: M,
-    /// Current preparation data for this export.
-    pub state: BindingState<C, R, P>,
+    /// Consumer-selected call data or preparation state for this export.
+    pub state: S,
 }
-impl<M, C, R, I, O> FunctionBinding<M, C, R, PreparedCall<I, O>> {
+impl<M, C, R, I, O> FunctionBinding<M, BindingState<C, R, PreparedCall<I, O>>> {
     /// Mutably access the compiled conversions of an already prepared export.
     pub fn call_mut(&mut self) -> Result<&mut PreparedCall<I, O>> {
         match &mut self.state {
@@ -141,8 +143,18 @@ impl<M, C, R, I, O> FunctionBinding<M, C, R, PreparedCall<I, O>> {
         self.call()?.view(source, &self.name, &self.metadata)
     }
 }
+impl<M, I, O> FunctionBinding<M, PreparedCall<I, O>> {
+    /// Borrow this prepared export alongside its authoritative source declaration.
+    /// Only the argument count needs checking; no preparation state is involved.
+    pub fn prepared<'a, SP, SR, SF>(
+        &'a self,
+        source: &'a Function<SP, SR, SF>,
+    ) -> Result<BoundFunction<'a, I, O, M>> {
+        self.state.view(source, &self.name, &self.metadata)
+    }
+}
 impl<C, R, I: Conversion, O: Conversion, M> FunctionConversions<I, O>
-    for Function<(), (), Vec<FunctionBinding<M, C, R, PreparedCall<I, O>>>>
+    for Function<(), (), Vec<FunctionBinding<M, BindingState<C, R, PreparedCall<I, O>>>>>
 {
     fn source_path(&self) -> &syn::Path {
         &self.path
@@ -180,5 +192,48 @@ impl<C, R, I: Conversion, O: Conversion, M> FunctionConversions<I, O>
             .input_conversions()?
             .into_iter()
             .flat_map(|i| crate::wire_definitions(std::iter::once(i.input_node()))))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use prebindgen_flat::Flat;
+
+    #[test]
+    fn directly_prepared_export_borrows_source_and_converters_without_a_lifecycle() {
+        struct Converter(u8); // deliberately not Clone
+        struct Metadata(&'static str);
+        let items = syn::parse_file("pub fn send(value:i64)->i64{}pub fn pair(a:i64,b:i64){}")
+            .unwrap()
+            .items;
+        let flat = Flat::<()>::parse(items.into_iter().map(|i| (i, Default::default()))).unwrap();
+        let binding = FunctionBinding {
+            name: syn::parse_quote!(send_native),
+            metadata: Metadata("native export"),
+            state: PreparedCall {
+                inputs: vec![Converter(1)],
+                output: Converter(2),
+            },
+        };
+        let source = flat.function("send").unwrap();
+        let view = binding.prepared(source).unwrap();
+        assert_eq!(view.metadata.0, "native export");
+        assert_eq!(view.params[0].ty.slot.0, 1);
+        assert_eq!(view.ret.slot.0, 2);
+        assert!(std::ptr::eq(view.path, &source.path));
+        assert!(std::ptr::eq(view.metadata, &binding.metadata));
+        assert!(std::ptr::eq(view.params[0].name, &source.params[0].name));
+        assert!(std::ptr::eq(
+            view.params[0].ty.slot,
+            &binding.state.inputs[0]
+        ));
+        assert!(std::ptr::eq(view.ret.slot, &binding.state.output));
+        let error = binding
+            .prepared(flat.function("pair").unwrap())
+            .err()
+            .unwrap();
+        assert!(error.contains("send_native"));
+        assert!(error.contains("input count does not match source `pair`"));
     }
 }

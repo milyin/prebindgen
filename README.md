@@ -585,10 +585,12 @@ similarly keeps cleaner settings on handles, field-resource analysis on data/sea
 classes, and a checked mapping on enum classes. These choices stay in adapter
 metadata, separate from Flat's source-definition variants.
 
-An export is a `FunctionBinding` with a generated identity, adapter metadata and
-`BindingState::Configured`, `Resolved` or `Prepared`. These types belong to the
-conversion/declaration libraries. `PreparedCall::view` borrows the original
-signature and pairs its positions with that export's converters for emission.
+An export is a `FunctionBinding<M, S>` with a generated identity, adapter metadata
+`M` and consumer-selected call data `S`. The declaration library's `DeclBinding`
+selects `BindingState::Configured`, `Resolved` or `Prepared` for its lifecycle;
+consumers with completed converters can store a `PreparedCall` directly.
+`binding.prepared(source)` borrows the original signature and pairs its positions
+with that export's converters for emission.
 A callback-return export is another binding on the same source function. Requesting
 callback-only delivery does not compile an unused ordinary export.
 

@@ -36,9 +36,7 @@ pub struct ResolvedCall<IR, OR, I, O> {
 /// One exported call with declaration-specific configuration and resolved operations.
 pub type DeclBinding<IC, OC, IR, OR, I, O, M> = prebindgen_conversions::FunctionBinding<
     M,
-    ConfiguredCall<IC, OC, I, O>,
-    ResolvedCall<IR, OR, I, O>,
-    PreparedCall<I, O>,
+    BindingState<ConfiguredCall<IC, OC, I, O>, ResolvedCall<IR, OR, I, O>, PreparedCall<I, O>>,
 >;
 pub use prebindgen_conversions::BindingState;
 impl<IC, OC, I, O> ConfiguredCall<IC, OC, I, O> {
