@@ -604,6 +604,7 @@ impl<M: Schema> Flat<M> {
             .ok_or_else(|| format!("unknown function `{name}`"))
     }
     /// Look up the canonical type entry by its qualified Rust type.
+    #[allow(clippy::type_complexity)] // Keep the independently typed attachment roles explicit.
     pub fn type_info(
         &self,
         ty: &Type,
@@ -694,6 +695,7 @@ impl<M: Schema> Flat<M> {
             })
     }
     /// Configure the single metadata owner for a registered source type.
+    #[allow(clippy::type_complexity)] // Keep the independently typed attachment roles explicit.
     pub fn type_info_mut(
         &mut self,
         ty: &Type,
