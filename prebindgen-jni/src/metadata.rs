@@ -54,6 +54,9 @@ impl<InConverter, OutConverter> prebindgen_flat::Schema for JniSchema<InConverte
     type Type = JniType;
     type Field = data::JniField;
     type Variant = ();
+    type Record = ();
+    type Enum = ();
+    type PayloadEnum = ();
 }
 /// Settings shared by the generated Kotlin/JNI module.
 #[derive(Clone, Debug, Default)]

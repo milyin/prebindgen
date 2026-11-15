@@ -4,7 +4,9 @@ use quote::quote;
 
 /// A Rust enum represented by a selected variant and recursively converted fields.
 #[derive(Clone, Debug, PartialEq)]
-pub struct PayloadEnum<V = (), F = ()> {
+pub struct PayloadEnum<V = (), F = (), M = ()> {
+    /// Consumer data specific to this payload enum definition.
+    pub metadata: M,
     /// Qualified source type, including the arguments of a standard Result.
     pub ty: Type,
     /// Source variants in wire-tag order, starting at zero.
@@ -61,7 +63,7 @@ impl<F> PayloadField<F> {
         }
     }
 }
-impl<V, F> PayloadEnum<V, F> {
+impl<V, F, M> PayloadEnum<V, F, M> {
     /// Spell a source constructor or pattern with the supplied field expressions.
     /// A standard Result uses its generic constructor path with inferred arguments.
     pub fn spell(
@@ -100,7 +102,7 @@ impl<M: Schema> Flat<M> {
         &self,
         ty: Type,
         source: syn::ItemEnum,
-    ) -> Result<PayloadEnum<M::Variant, M::Field>> {
+    ) -> Result<PayloadEnum<M::Variant, M::Field, M::PayloadEnum>> {
         if source.variants.is_empty() || i32::try_from(source.variants.len()).is_err() {
             return Err("payload enum needs 1..=i32::MAX variants".into());
         }
@@ -157,11 +159,18 @@ impl<M: Schema> Flat<M> {
                 })
             })
             .collect::<Result<Vec<_>>>()?;
-        Ok(PayloadEnum { ty, variants })
+        Ok(PayloadEnum {
+            metadata: Default::default(),
+            ty,
+            variants,
+        })
     }
 
     /// Look up a payload enum, including a concrete standard `Result<T, E>`.
-    pub fn payload_enum(&self, ty: &Type) -> Result<&PayloadEnum<M::Variant, M::Field>> {
+    pub fn payload_enum(
+        &self,
+        ty: &Type,
+    ) -> Result<&PayloadEnum<M::Variant, M::Field, M::PayloadEnum>> {
         self.payload_enum_by_key(&type_key(ty))
             .ok_or_else(|| format!("`{}` is not a payload enum", type_key(ty)))
     }
@@ -194,6 +203,7 @@ impl<M: Schema> Flat<M> {
             .collect();
         self.types.get_mut(&key).unwrap().definition =
             crate::TypeDefinition::PayloadEnum(PayloadEnum {
+                metadata: Default::default(),
                 ty: ty.clone(),
                 variants,
             });

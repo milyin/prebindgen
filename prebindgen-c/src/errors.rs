@@ -126,10 +126,13 @@ fn field_names(
     names
 }
 
-pub(crate) fn emit(
+pub(crate) fn emit<R, E, P>(
     errors: &[&ErrorBinding],
     prefix: &str,
-    pointers: &std::collections::BTreeMap<String, prebindgen_flat::TypeInfo<CType>>,
+    pointers: &std::collections::BTreeMap<
+        String,
+        prebindgen_flat::TypeInfo<CType, (), (), R, E, P>,
+    >,
     symbols: &mut std::collections::BTreeSet<String>,
     tokens: &mut TokenStream,
     header: &mut String,
@@ -306,7 +309,7 @@ pub(crate) fn emit(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn result_function(
+pub(crate) fn result_function<R, E, P>(
     source_name: &syn::Ident,
     error_ty: &syn::Type,
     outputs: &[&Wire],
@@ -316,7 +319,10 @@ pub(crate) fn result_function(
     body: &TokenStream,
     context: &CContext,
     prefix: &str,
-    pointers: &std::collections::BTreeMap<String, prebindgen_flat::TypeInfo<CType>>,
+    pointers: &std::collections::BTreeMap<
+        String,
+        prebindgen_flat::TypeInfo<CType, (), (), R, E, P>,
+    >,
     errors: &[&ErrorBinding],
     consumes: bool,
     comments: &str,

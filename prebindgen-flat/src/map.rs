@@ -28,6 +28,12 @@ pub trait MapAttachments<A: Schema, B: Schema> {
     fn returned(&mut self, function: &syn::Ident, ty: &Type, data: A::Return) -> Result<B::Return>;
     /// Transform shared data of a source type.
     fn ty(&mut self, ty: &Type, data: A::Type) -> Result<B::Type>;
+    /// Transform data specific to a source record definition.
+    fn record(&mut self, ty: &Type, data: A::Record) -> Result<B::Record>;
+    /// Transform data specific to a source fieldless enum definition.
+    fn enumeration(&mut self, ty: &Type, data: A::Enum) -> Result<B::Enum>;
+    /// Transform data specific to a source payload enum definition.
+    fn payload_enum(&mut self, ty: &Type, data: A::PayloadEnum) -> Result<B::PayloadEnum>;
     /// Transform source field data, including positional enum members.
     fn field(
         &mut self,
@@ -96,6 +102,7 @@ impl<A: Schema> Flat<A> {
                     TypeDefinition::External => TypeDefinition::External,
                     TypeDefinition::Opaque => TypeDefinition::Opaque,
                     TypeDefinition::Record(r) => TypeDefinition::Record(Record {
+                        metadata: map.record(&t.ty, r.metadata)?,
                         ty: r.ty,
                         fields: r
                             .fields
@@ -116,6 +123,7 @@ impl<A: Schema> Flat<A> {
                             .collect::<Result<_>>()?,
                     }),
                     TypeDefinition::Enum(e) => TypeDefinition::Enum(FieldlessEnum {
+                        metadata: map.enumeration(&t.ty, e.metadata)?,
                         ty: e.ty,
                         variants: e
                             .variants
@@ -130,6 +138,7 @@ impl<A: Schema> Flat<A> {
                             .collect::<Result<_>>()?,
                     }),
                     TypeDefinition::PayloadEnum(e) => TypeDefinition::PayloadEnum(PayloadEnum {
+                        metadata: map.payload_enum(&t.ty, e.metadata)?,
                         ty: e.ty,
                         variants: e
                             .variants
@@ -190,6 +199,9 @@ impl<A: Schema> Flat<A> {
         B: Schema<
             Module = A::Module,
             Type = A::Type,
+            Record = A::Record,
+            Enum = A::Enum,
+            PayloadEnum = A::PayloadEnum,
             Field = A::Field,
             Variant = A::Variant,
             Parameter = A::Parameter,
@@ -204,6 +216,9 @@ impl<A: Schema> Flat<A> {
             B: Schema<
                 Module = A::Module,
                 Type = A::Type,
+                Record = A::Record,
+                Enum = A::Enum,
+                PayloadEnum = A::PayloadEnum,
                 Field = A::Field,
                 Variant = A::Variant,
                 Parameter = A::Parameter,
@@ -237,6 +252,15 @@ impl<A: Schema> Flat<A> {
             fn ty(&mut self, _: &Type, d: A::Type) -> Result<B::Type> {
                 Ok(d)
             }
+            fn record(&mut self, _: &Type, d: A::Record) -> Result<B::Record> {
+                Ok(d)
+            }
+            fn enumeration(&mut self, _: &Type, d: A::Enum) -> Result<B::Enum> {
+                Ok(d)
+            }
+            fn payload_enum(&mut self, _: &Type, d: A::PayloadEnum) -> Result<B::PayloadEnum> {
+                Ok(d)
+            }
             fn field(
                 &mut self,
                 _: &Type,
@@ -262,6 +286,12 @@ mod tests {
     struct Owned(String); // deliberately not Clone
     struct Before;
     struct After;
+    #[derive(Default)]
+    struct RecordData<T>(T);
+    #[derive(Default)]
+    struct EnumData<T>(T);
+    #[derive(Default)]
+    struct PayloadData<T>(T);
     macro_rules! schema {
         ($name:ident, $data:ty) => {
             impl Schema for $name {
@@ -272,6 +302,9 @@ mod tests {
                 type Type = $data;
                 type Field = $data;
                 type Variant = $data;
+                type Record = RecordData<$data>;
+                type Enum = EnumData<$data>;
+                type PayloadEnum = PayloadData<$data>;
             }
         };
     }
@@ -300,6 +333,15 @@ mod tests {
         fn ty(&mut self, t: &Type, d: Owned) -> Result<String> {
             Ok(format!("type:{}:{}", type_key(t), d.0))
         }
+        fn record(&mut self, _: &Type, d: RecordData<Owned>) -> Result<RecordData<String>> {
+            Ok(RecordData(format!("record:{}", d.0 .0)))
+        }
+        fn enumeration(&mut self, _: &Type, d: EnumData<Owned>) -> Result<EnumData<String>> {
+            Ok(EnumData(format!("enumeration:{}", d.0 .0)))
+        }
+        fn payload_enum(&mut self, _: &Type, d: PayloadData<Owned>) -> Result<PayloadData<String>> {
+            Ok(PayloadData(format!("payload_enum:{}", d.0 .0)))
+        }
         fn field(
             &mut self,
             _: &Type,
@@ -321,14 +363,45 @@ mod tests {
     }
     #[test]
     fn transforms_every_source_position_without_clone_or_optional_data() {
-        let items=syn::parse_file("pub struct R{pub x:i64}pub enum E{A,B}pub enum P{A(i64),B{r:R}}pub type H=hidden::Handle;pub fn f(r:R)->P{}").unwrap().items;
+        let items=syn::parse_file("pub struct R{pub x:i64}pub enum E{A,B}pub enum P{A(i64),B{r:R}}pub type H=hidden::Handle;pub fn f(r:R)->P{}pub fn g()->Result<R,E>{}").unwrap().items;
         let mut flat =
             Flat::<Before>::parse(items.into_iter().map(|i| (i, Default::default()))).unwrap();
         flat.metadata = Owned("module".into());
         flat.function_mut("f").unwrap().params[0].ty.slot = Owned("argument".into());
+        flat.record_by_key_mut("crate :: R").unwrap().metadata = RecordData(Owned("r".into()));
+        flat.enum_by_key_mut("crate :: E").unwrap().metadata = EnumData(Owned("e".into()));
+        flat.payload_enum_by_key_mut("crate :: P").unwrap().metadata =
+            PayloadData(Owned("p".into()));
+        let result = flat.resolve_type(&syn::parse_quote!(Result<R,E>)).unwrap();
+        flat.payload_enum_by_key_mut(&type_key(&result))
+            .unwrap()
+            .metadata = PayloadData(Owned("result".into()));
+        let flat = flat
+            .try_map_function_data::<Before, _>(|_, _, _| Ok(Owned("export".into())))
+            .unwrap();
+        assert_eq!(flat.record_by_key("crate :: R").unwrap().metadata.0 .0, "r");
+        assert_eq!(flat.enum_by_key("crate :: E").unwrap().metadata.0 .0, "e");
+        assert_eq!(flat.payload_enum(&result).unwrap().metadata.0 .0, "result");
         let guard_count = flat.guards.len();
         let mapped = flat.try_map_attachments::<After>(&mut Label).unwrap();
         assert_eq!(mapped.metadata, "module");
+        assert_eq!(mapped.function("f").unwrap().metadata, "function:f:export");
+        assert_eq!(
+            mapped.payload_enum(&result).unwrap().metadata.0,
+            "payload_enum:result"
+        );
+        assert_eq!(
+            mapped.record_by_key("crate :: R").unwrap().metadata.0,
+            "record:r"
+        );
+        assert_eq!(
+            mapped.enum_by_key("crate :: E").unwrap().metadata.0,
+            "enumeration:e"
+        );
+        assert_eq!(
+            mapped.payload_enum_by_key("crate :: P").unwrap().metadata.0,
+            "payload_enum:p"
+        );
         assert_eq!(
             mapped.function("f").unwrap().params[0].ty.slot,
             "parameter:f.r:argument"

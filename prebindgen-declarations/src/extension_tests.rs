@@ -314,6 +314,9 @@ fn canonical_conversion_preparation_preserves_nonclone_adapter_settings() {
         type Type = prebindgen_conversions::ValueConversions;
         type Field = ();
         type Variant = ();
+        type Record = ();
+        type Enum = ();
+        type PayloadEnum = ();
     }
     let mut flat = prebindgen_flat::Flat::<CanonicalSchema>::parse(
         syn::parse_file("pub type Value=String;")

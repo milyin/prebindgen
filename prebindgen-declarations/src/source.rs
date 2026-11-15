@@ -1020,6 +1020,9 @@ mod tests {
         type Type = DeclTypeDefaults<i32, i32>;
         type Field = ();
         type Variant = ();
+        type Record = ();
+        type Enum = ();
+        type PayloadEnum = ();
     }
     fn defaults_model(source: &str) -> Flat<DefaultsSchema> {
         Flat::parse(

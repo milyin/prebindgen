@@ -11,9 +11,9 @@ pub(crate) fn compatible(element: Primitive) -> bool {
     )
 }
 /// A primitive whose configured C representation is still the native scalar.
-pub(crate) fn primitive(
+pub(crate) fn primitive<R, E, P>(
     ty: &syn::Type,
-    types: &BTreeMap<String, prebindgen_flat::TypeInfo<CType>>,
+    types: &BTreeMap<String, prebindgen_flat::TypeInfo<CType, (), (), R, E, P>>,
 ) -> Option<Primitive> {
     let primitive = Primitive::from_type(ty).filter(|p| compatible(*p))?;
     if types.values().any(|info| {

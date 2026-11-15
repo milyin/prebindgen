@@ -12,6 +12,9 @@ impl<C: Codec> Schema for ResolvedSchema<C> {
     type Type = <C::Schema as Schema>::Type;
     type Field = <C::Schema as Schema>::Field;
     type Variant = <C::Schema as Schema>::Variant;
+    type Record = <C::Schema as Schema>::Record;
+    type Enum = <C::Schema as Schema>::Enum;
+    type PayloadEnum = <C::Schema as Schema>::PayloadEnum;
 }
 /// Adapter settings and compilation policy owned by the resolved model.
 /// No declarations or default-expansion registries are retained.
@@ -127,6 +130,27 @@ where
         _: &Type,
         data: <C::Schema as Schema>::Type,
     ) -> Result<<C::Schema as Schema>::Type> {
+        Ok(data)
+    }
+    fn record(
+        &mut self,
+        _: &Type,
+        data: <C::Schema as Schema>::Record,
+    ) -> Result<<C::Schema as Schema>::Record> {
+        Ok(data)
+    }
+    fn enumeration(
+        &mut self,
+        _: &Type,
+        data: <C::Schema as Schema>::Enum,
+    ) -> Result<<C::Schema as Schema>::Enum> {
+        Ok(data)
+    }
+    fn payload_enum(
+        &mut self,
+        _: &Type,
+        data: <C::Schema as Schema>::PayloadEnum,
+    ) -> Result<<C::Schema as Schema>::PayloadEnum> {
         Ok(data)
     }
     fn field(

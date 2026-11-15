@@ -39,6 +39,9 @@ impl<WireType: crate::WireKind, Context, Chain, Branch> prebindgen_flat::Schema
     type Type = ();
     type Field = ();
     type Variant = ();
+    type Record = ();
+    type Enum = ();
+    type PayloadEnum = ();
 }
 
 /// Check one adapter-selected namespace. The caller decides which values share

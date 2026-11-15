@@ -268,6 +268,9 @@ mod tests {
         type Type = ();
         type Field = ();
         type Variant = ();
+        type Record = ();
+        type Enum = ();
+        type PayloadEnum = ();
         type Parameter = ();
         type Return = ();
         type Function = Vec<Export>;

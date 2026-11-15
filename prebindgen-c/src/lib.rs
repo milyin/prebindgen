@@ -1659,10 +1659,10 @@ fn c_scalar(p: Primitive, prefix: &str) -> String {
         Primitive::I128 | Primitive::U128 => format!("{prefix}_int128"),
     }
 }
-fn c_ty<F, V>(
+fn c_ty<F, V, R, E, P>(
     wire: &Wire,
     prefix: &str,
-    pointers: &std::collections::BTreeMap<String, prebindgen_flat::TypeInfo<CType, F, V>>,
+    pointers: &std::collections::BTreeMap<String, prebindgen_flat::TypeInfo<CType, F, V, R, E, P>>,
     context: &CContext,
 ) -> String {
     match &wire.kind {
@@ -1718,9 +1718,9 @@ fn c_ty<F, V>(
         ),
     }
 }
-fn validate_wire_declaration<F, V>(
+fn validate_wire_declaration<F, V, R, E, P>(
     wire: &Wire,
-    pointers: &std::collections::BTreeMap<String, prebindgen_flat::TypeInfo<CType, F, V>>,
+    pointers: &std::collections::BTreeMap<String, prebindgen_flat::TypeInfo<CType, F, V, R, E, P>>,
     enums: &[(&String, &prebindgen_declarations::EnumMapping)],
 ) -> Result<()> {
     if let CWire::Enum { name, mapping, .. } = &wire.kind {
@@ -4212,6 +4212,9 @@ mod generation_tests {
             type Type = CType;
             type Field = ();
             type Variant = ();
+            type Record = ();
+            type Enum = ();
+            type PayloadEnum = ();
         }
         let count = std::rc::Rc::new(std::cell::Cell::new(0));
         let source = syn::parse_file("pub fn noop() {}").unwrap();

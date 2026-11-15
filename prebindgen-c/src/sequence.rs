@@ -156,7 +156,7 @@ pub(crate) fn schemas<'a>(
     }
 }
 #[allow(clippy::type_complexity, clippy::too_many_arguments)]
-pub(crate) fn emit_schemas(
+pub(crate) fn emit_schemas<R, E, P>(
     schemas: Vec<(
         &prebindgen_conversions::Wire<CWire>,
         &prebindgen_conversions::WireNode<CWire, crate::CChain, crate::CBranch>,
@@ -165,7 +165,10 @@ pub(crate) fn emit_schemas(
     output_carriers: &std::collections::BTreeSet<String>,
     context: &CContext,
     prefix: &str,
-    pointers: &std::collections::BTreeMap<String, prebindgen_flat::TypeInfo<CType>>,
+    pointers: &std::collections::BTreeMap<
+        String,
+        prebindgen_flat::TypeInfo<CType, (), (), R, E, P>,
+    >,
     symbols: &mut std::collections::BTreeSet<String>,
     tokens: &mut TokenStream,
     header: &mut String,

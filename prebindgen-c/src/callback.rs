@@ -613,10 +613,10 @@ fn render(context: &CContext, code: &TokenStream, source: &syn::Ident) -> Result
     context.render(&code)
 }
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn emit(
+pub(crate) fn emit<R, E, P>(
     callbacks: &BTreeMap<String, Rc<CCallback>>,
     prefix: &str,
-    pointers: &BTreeMap<String, prebindgen_flat::TypeInfo<CType>>,
+    pointers: &BTreeMap<String, prebindgen_flat::TypeInfo<CType, (), (), R, E, P>>,
     enums: &[(&String, &prebindgen_declarations::EnumMapping)],
     symbols: &mut BTreeSet<String>,
     tokens: &mut TokenStream,

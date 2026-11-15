@@ -12,6 +12,9 @@ impl Schema for TestSchema {
     type Type = ();
     type Field = ();
     type Variant = ();
+    type Record = ();
+    type Enum = ();
+    type PayloadEnum = ();
 }
 fn parse(text: &str) -> Result<Flat<TestSchema>> {
     let items = syn::parse_file(text).unwrap().items;
@@ -378,6 +381,9 @@ fn filling_fixed_schema_slots_preserves_metadata_on_each_source_owner() {
         type Type = String;
         type Field = String;
         type Variant = String;
+        type Record = String;
+        type Enum = String;
+        type PayloadEnum = String;
     }
     let items =
         syn::parse_file("pub struct R { pub x:i32 } pub enum E { A } pub fn echo(x:R)->R{}")
@@ -390,6 +396,8 @@ fn filling_fixed_schema_slots_preserves_metadata_on_each_source_owner() {
     flat.type_metadata_mut(&syn::parse_quote!(R))
         .unwrap()
         .clone_from(&"record".into());
+    flat.record_by_key_mut("crate :: R").unwrap().metadata = "record definition".into();
+    flat.enum_by_key_mut("crate :: E").unwrap().metadata = "enum definition".into();
     flat.record_by_key_mut("crate :: R").unwrap().fields[0].metadata = "property".into();
     flat.enum_by_key_mut("crate :: E").unwrap().variants[0].metadata = "constant".into();
     let mut prepared = flat
@@ -398,6 +406,14 @@ fn filling_fixed_schema_slots_preserves_metadata_on_each_source_owner() {
     prepared.function_mut("echo").unwrap().params[0].ty.slot = Some(3);
     let copied = prepared.clone();
     assert_eq!(copied.metadata, "module");
+    assert_eq!(
+        copied.record_by_key("crate :: R").unwrap().metadata,
+        "record definition"
+    );
+    assert_eq!(
+        copied.enum_by_key("crate :: E").unwrap().metadata,
+        "enum definition"
+    );
     assert_eq!(copied.function("echo").unwrap().metadata, "export");
     assert_eq!(
         copied

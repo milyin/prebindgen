@@ -16,7 +16,7 @@ pub struct EnumMapping {
 }
 impl EnumMapping {
     /// Preserve the source discriminants in a checked `i32` mapping.
-    pub fn new<M>(source: &prebindgen_flat::FieldlessEnum<M>) -> Result<Self> {
+    pub fn new<V, M>(source: &prebindgen_flat::FieldlessEnum<V, M>) -> Result<Self> {
         fn integer(e: &syn::Expr) -> Result<i128> {
             match e {
                 syn::Expr::Lit(syn::ExprLit {

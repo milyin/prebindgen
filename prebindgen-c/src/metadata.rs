@@ -12,6 +12,9 @@ impl prebindgen_flat::Schema for CSchema {
     type Type = CType;
     type Field = ();
     type Variant = ();
+    type Record = ();
+    type Enum = ();
+    type PayloadEnum = ();
 }
 /// Settings applying to the whole generated C module.
 #[derive(Clone, Debug)]

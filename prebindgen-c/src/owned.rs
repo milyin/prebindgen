@@ -379,10 +379,10 @@ pub(crate) fn accessors(flat: &mut CBindings) -> Result<()> {
     }
     Ok(())
 }
-pub(crate) fn emit_accessors(
+pub(crate) fn emit_accessors<R, E, P>(
     owner: &COwned,
     prefix: &str,
-    types: &std::collections::BTreeMap<String, prebindgen_flat::TypeInfo<CType>>,
+    types: &std::collections::BTreeMap<String, prebindgen_flat::TypeInfo<CType, (), (), R, E, P>>,
     symbols: &mut std::collections::BTreeSet<String>,
     tokens: &mut TokenStream,
     header: &mut String,
