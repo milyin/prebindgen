@@ -2173,16 +2173,12 @@ The pointer must be null or a live allocation of the declared type returned by t
     for info in flat.types.values() {
         if let Some(owner) = &info.metadata.owned {
             prebindgen_declarations::ident(&owner.name)?;
-            let layout = *flat
-                .metadata
-                .opaque_layouts
-                .get(&owner.name)
-                .ok_or_else(|| {
-                    format!(
-                        "opaque owner `{}` has no prepared target layout",
-                        owner.name
-                    )
-                })?;
+            let layout = info.metadata.target_layout.ok_or_else(|| {
+                format!(
+                    "opaque owner `{}` has no prepared target layout",
+                    owner.name
+                )
+            })?;
             layout.validate()?;
             if !symbols.insert(format!("{prefix}_{}", owner.name))
                 || !symbols.insert(format!("{prefix}_drop_{}", owner.name))
@@ -2442,7 +2438,7 @@ The pointer must be null or a live allocation of the declared type returned by t
         } else {
             body
         };
-        if let Some((_, error_ty)) = prebindgen_declarations::result_parts(&f.ret.ty)
+        if let Some((_, error_ty)) = prebindgen_declarations::result_parts(f.ret.ty)
             .filter(|_| f.ret.slot.output_outcomes().source_error.is_some())
         {
             let fields = outputs
@@ -2469,7 +2465,7 @@ The pointer must be null or a live allocation of the declared type returned by t
                 .iter()
                 .any(|i| takes_input_owners(i.input_node()));
             errors::result_function(
-                &f.name,
+                f.name,
                 error_ty,
                 &outputs,
                 &f.output_conversion()?.output_outcomes().success,
@@ -2582,7 +2578,7 @@ where
     // Getters take only the owner, and other non-static getter loans are rejected
     // by validate_getter_output; both restrictions are required for this bypass.
     if crate::group::result_packet_fields(output).any(|w| matches!(&w.kind,
-        CWire::Pointer {pointer,..} if pointer.access == Access::Move && pointer_owns_value(&pointer.ty, &function.ret.ty))) {
+        CWire::Pointer {pointer,..} if pointer.access == Access::Move && pointer_owns_value(&pointer.ty, function.ret.ty))) {
         return Ok(());
     }
     fn reference(ty: &syn::Type) -> Option<&syn::TypeReference> {
@@ -2591,7 +2587,7 @@ where
         }
         prebindgen_flat::option_inner(ty).and_then(reference)
     }
-    let returned = prebindgen_flat::result_parts(&function.ret.ty)
+    let returned = prebindgen_flat::result_parts(function.ret.ty)
         .map_or(function.ret.ty, |(success, _)| success);
     if reference(returned).is_some_and(|r| r.lifetime.as_ref().is_some_and(|l| l.ident == "static"))
     {
@@ -2662,11 +2658,11 @@ where
         // Cow can carry a borrow of a constructor's decoded temporary. The
         // source type alone cannot prove this storage survives the FFI call.
         // Keep this scoped subset conservative instead of inventing an owner graph.
-        if contains_scoped_cow(&parameter.ty.ty) {
+        if contains_scoped_cow(parameter.ty.ty) {
             return Err(format!("C function `{}` cannot return borrowed storage with Cow input `{}`; use an explicit owning output projection or a 'static return because constructor backing storage may expire at the end of the call", function.name, parameter.name));
         }
-        if reference(&parameter.ty.ty).is_some()
-            && !stable_input(&parameter.ty.ty, parameter.ty.slot.input_node())
+        if reference(parameter.ty.ty).is_some()
+            && !stable_input(parameter.ty.ty, parameter.ty.slot.input_node())
         {
             return Err(format!("C function `{}` cannot return a borrowed pointer with reconstructed reference input `{}`; use a direct opaque pointer input, an explicit owning output projection, or a 'static return", function.name,parameter.name));
         }

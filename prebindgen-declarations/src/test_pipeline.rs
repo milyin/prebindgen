@@ -74,6 +74,8 @@ where
 struct CompileAttachments<C: Codec> {
     compilation: Option<(C, C::Extra)>,
     inputs: Vec<Option<ResolvedInput<C>>>,
+    #[allow(clippy::type_complexity)]
+    // Preserve the separate resolved input/output types in this fixture.
     recipes: Vec<(String, FunctionRecipe<ResolvedInput<C>, ResolvedOutput<C>>)>,
 }
 impl<C: Codec> prebindgen_flat::MapAttachments<ResolvedSchema<C>, C::Schema>

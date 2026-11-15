@@ -20,13 +20,11 @@ pub struct CModule {
     pub prefix: String,
     pub(crate) target: Option<(String, u32, TokenStream)>,
     pub(crate) layout_artifact: Option<crate::OpaqueLayouts>,
-    pub(crate) opaque_layouts: std::collections::BTreeMap<String, crate::layouts::StorageLayout>,
 }
 impl Default for CModule {
     fn default() -> Self {
         Self {
             prefix: "pb".into(),
-            opaque_layouts: Default::default(),
             layout_artifact: None,
             target: None,
         }
@@ -46,6 +44,7 @@ pub struct CFunction {
 /// C representation information belonging to one named Rust type.
 #[derive(Clone, Debug, Default)]
 pub struct CType {
+    pub(crate) target_layout: Option<crate::layouts::StorageLayout>,
     /// Input/output defaults stored on this type, including callback signatures.
     pub defaults:
         prebindgen_declarations::DeclTypeDefaults<crate::CInputConfig, crate::COutputConfig>,

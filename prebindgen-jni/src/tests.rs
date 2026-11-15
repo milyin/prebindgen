@@ -1254,7 +1254,8 @@ fn sequence_callback_variants_are_explicit_and_support_decomposed_elements() {
         .unwrap();
     assert!(both.kotlin["test/Functions.kt"].contains("values("));
     assert!(both.kotlin["test/Functions.kt"].contains("valuesFold("));
-    for source in ["pub fn f()->i64{}"] {
+    {
+        let source = "pub fn f()->i64{}";
         assert!(JniGen::builder()
             .flat(flat(source))
             .set_package_prefix("test")
@@ -4748,5 +4749,77 @@ fn prebound_converters_are_adopted_by_nested_or_renamed_exports() {
         } else {
             assert!(output.kotlin["test/Functions.kt"].contains("renamed("));
         }
+    }
+}
+
+#[test]
+fn standalone_callback_preparation_is_owned_by_its_source_type() {
+    use prebindgen_conversions::BindingState;
+    let source = flat("pub fn accept(cb:impl Fn(i64)->i64){}pub fn echo(value:i64)->i64{}");
+    let configured = JniGen::builder()
+        .flat(source)
+        .set_package_prefix("test")
+        .package(package!("callbacks").class(callback!(impl Fn(i64) -> i64).name("NumberCallback")))
+        .configured()
+        .unwrap();
+    let ty = configured
+        .resolve_parameter_type(&syn::parse_quote!(impl Fn(i64) -> i64))
+        .unwrap();
+    assert!(matches!(
+        configured.type_info(&ty).unwrap().metadata.callback,
+        Some(BindingState::Configured(()))
+    ));
+    assert!(generate(&configured).is_err());
+    let resolved = crate::resolve(configured).unwrap();
+    assert!(matches!(
+        resolved.type_info(&ty).unwrap().metadata.callback,
+        Some(BindingState::Resolved(_))
+    ));
+    let prepared = crate::compile(resolved).unwrap();
+    assert!(matches!(
+        prepared.type_info(&ty).unwrap().metadata.callback,
+        Some(BindingState::Prepared(_))
+    ));
+    assert!(generate(&prepared)
+        .unwrap()
+        .kotlin
+        .contains_key("test/callbacks/NumberCallback.kt"));
+    let extended = JniGen::builder()
+        .flat(prepared)
+        .set_package_prefix("test")
+        .package(package!().fun(fun!(echo)))
+        .prepare()
+        .unwrap();
+    assert!(generate(&extended)
+        .unwrap()
+        .kotlin
+        .contains_key("test/callbacks/NumberCallback.kt"));
+    assert_eq!(extended.function("accept").unwrap().metadata.len(), 0);
+}
+
+#[test]
+fn standalone_callback_and_defaults_use_one_normalized_type_owner() {
+    for declaration in [
+        syn::parse_quote!(impl Fn(i64)),
+        syn::parse_quote!(impl Fn(i64) + Send + Sync + 'static),
+    ] {
+        let configured = JniGen::builder()
+            .flat(flat("pub fn accept(cb:impl Fn(i64)+Send+Sync+'static){}"))
+            .set_package_prefix("test")
+            .package(package!().class(DeclJniCallback::new(declaration).name("Notice")))
+            .configured()
+            .unwrap();
+        let owners = configured
+            .types
+            .values()
+            .filter(|t| matches!(t.ty, syn::Type::ImplTrait(_)))
+            .collect::<Vec<_>>();
+        assert_eq!(owners.len(), 1);
+        assert!(owners[0].metadata.defaults.input.is_some());
+        assert!(owners[0].metadata.callback.is_some());
+        assert!(generate(&crate::prepare(configured).unwrap())
+            .unwrap()
+            .kotlin
+            .contains_key("test/Notice.kt"));
     }
 }

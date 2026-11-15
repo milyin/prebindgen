@@ -498,8 +498,6 @@ impl JniGenBuilder {
         flat.metadata = JniModule {
             package: self.prefix,
             native_init: self.init,
-            callbacks: Vec::new(),
-            callback_recipes: Vec::new(),
             bulk_collection_outputs: self.bulk_collection_outputs.unwrap_or(true),
         };
         let callback_order_start = self
@@ -636,7 +634,8 @@ impl JniGenBuilder {
                 configuration.bound_callback(),
                 &callback_sources,
             )?;
-            flat.metadata.callback_recipes.push(recipe);
+            flat.type_metadata_mut(&configuration.bound_callback().ty)?
+                .callback = Some(prebindgen_conversions::BindingState::Configured(()));
         }
 
         for source in flat.functions.values_mut() {
@@ -805,19 +804,7 @@ impl Codec for JniCodec {
 
     fn compile_declarations(&self, flat: &mut JniBindings, _: &()) -> Result<()> {
         errors::compile(flat, self)?;
-        for recipe in std::mem::take(&mut flat.metadata.callback_recipes) {
-            let operations::JniInput::Arrow { operation, .. } = &recipe else {
-                return Err("callback declaration requires an arrow".into());
-            };
-            let plan = prebindgen_declarations::compile_input_value(
-                flat,
-                self,
-                &operation.bound_callback().ty,
-                &recipe,
-                &(),
-            )?;
-            flat.metadata.callbacks.push(plan);
-        }
+        callback::compile_declarations(flat, self)?;
         Ok(())
     }
 
@@ -1700,6 +1687,7 @@ pub fn resolve(mut flat: JniBindings) -> Result<JniBindings> {
     let resolver = JniSourceResolver::default();
     let codec = JniCodec::declared();
     errors::resolve(&mut flat, &codec, &resolver)?;
+    callback::resolve_declarations(&mut flat, &resolver, &codec)?;
     bindings::resolve_with(&mut flat, &resolver, &codec, &())?;
     Ok(flat)
 }
@@ -1948,7 +1936,7 @@ pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
             return Err("JNI native delivery requires a declared binding-failure schema".into());
         }
 
-        let exception = if let Some((_, ty)) = prebindgen_flat::result_parts(&f.ret.ty) {
+        let exception = if let Some((_, ty)) = prebindgen_flat::result_parts(f.ret.ty) {
             flat.type_info(ty)
                 .ok()
                 .and_then(|t| t.metadata.error_class.as_deref())
@@ -2090,7 +2078,7 @@ pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
                 matches!(&wire.kind,JniWire::Callback{callback} if callback.requires_preflight())
             })
         });
-        let path_identity = names::path_identity(&f.path);
+        let path_identity = names::path_identity(f.path);
         let function_identity = f.name.to_string();
         let mut identity = vec![path_identity.as_str(), function_identity.as_str()];
         if delegated_handles || delegated_callbacks {
@@ -2130,7 +2118,7 @@ pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
             let sink = names.name(
                 "SequenceSink",
                 &f.name.to_string(),
-                &[&names::path_identity(&f.path), &f.name.to_string()],
+                &[&names::path_identity(f.path), &f.name.to_string()],
             )?;
             let (_, element, _) =
                 sequence::return_sequence(&f.output_conversion()?.output_outcomes().success)
@@ -2154,7 +2142,7 @@ pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
             let collector = names.name(
                 "SequenceCollector",
                 &f.name.to_string(),
-                &[&names::path_identity(&f.path), &f.name.to_string()],
+                &[&names::path_identity(f.path), &f.name.to_string()],
             )?;
             native.push_str(&format!(
                 "    internal interface {sink} : SequenceCapacity {{ fun run({}) }}\n    internal class {collector} : {sink} {{\n        @JvmField val rows = kotlin.collections.ArrayList<{storage}>()\n        override fun reserve(capacity: Int) {{ rows.ensureCapacity(capacity) }}\n        override fun run({}) {{ rows.add({storage}({arguments})) }}\n    }}\n",

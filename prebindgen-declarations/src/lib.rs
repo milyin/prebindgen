@@ -346,6 +346,9 @@ fn finalize_output_schema<C: Codec>(
 
 /// Generation context shared by nested adapter conversion operations.
 /// It holds source metadata and a deterministic name scope, not an operation vocabulary.
+/// Conversion hooks read source signatures and type/module data from Flat. Binding-local
+/// policy comes through the resolved operation or Extra: an adapter can temporarily
+/// move the current function's binding states out while compiling them.
 pub struct Compiler<'a, C: Codec> {
     /// Whether the input supplies a function parameter or callback result.
     pub input_role: std::cell::Cell<InputRole>,

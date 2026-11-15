@@ -1,6 +1,7 @@
 //! Preparation and emission of retained source callbacks.
 use super::*;
 use crate::operations::{JniInput, JniInputBranch};
+use prebindgen_conversions::FunctionConversions as _;
 use prebindgen_conversions::{InputConversion, Wire, WireNode};
 use prebindgen_conversions::{InputFragment, OutputFragment, TemplateContext};
 use prebindgen_flat::callback_signature;
@@ -945,7 +946,7 @@ pub(crate) fn files<I: KotlinInputConversion, O: KotlinOutputConversion>(
 ) -> Result<()> {
     let mut ownership_by_name = BTreeMap::new();
     let mut wires = Vec::new();
-    for input in &flat.metadata.callbacks {
+    for input in declarations(flat)? {
         wires.extend(prebindgen_conversions::wire_definitions(std::iter::once(
             input.input_node(),
         )));
@@ -1079,6 +1080,61 @@ fn argument_local(name: &str, ty: &str) -> String {
     }
 }
 
+/// Borrow prepared standalone interfaces from their canonical source type owners.
+pub(crate) fn declarations<I, O>(flat: &Flat<JniSchema<I, O>>) -> Result<Vec<&JniInputConverter>> {
+    flat.types
+        .values()
+        .filter_map(|ty| ty.metadata.callback.as_ref())
+        .map(|state| match state {
+            prebindgen_conversions::BindingState::Prepared(plan) => Ok(plan),
+            _ => Err("standalone callback declaration is not prepared".into()),
+        })
+        .collect()
+}
+pub(crate) fn resolve_declarations(
+    flat: &mut JniBindings,
+    resolver: &JniSourceResolver,
+    codec: &JniCodec,
+) -> Result<()> {
+    let pending = flat
+        .types
+        .iter()
+        .filter(|(_, t)| {
+            matches!(
+                t.metadata.callback,
+                Some(prebindgen_conversions::BindingState::Configured(()))
+            )
+        })
+        .map(|(key, t)| (key.clone(), t.ty.clone()))
+        .collect::<Vec<_>>();
+    for (key, ty) in pending {
+        let recipe = resolver.resolve_input(flat, codec, &ty, &JniInputConfig::auto(), &())?;
+        flat.types.get_mut(&key).unwrap().metadata.callback =
+            Some(prebindgen_conversions::BindingState::Resolved(recipe));
+    }
+    Ok(())
+}
+pub(crate) fn compile_declarations(flat: &mut JniBindings, codec: &JniCodec) -> Result<()> {
+    let keys = flat.types.keys().cloned().collect::<Vec<_>>();
+    for key in keys {
+        let state = flat.types.get_mut(&key).unwrap().metadata.callback.take();
+        let state = match state {
+            Some(prebindgen_conversions::BindingState::Resolved(recipe)) => {
+                let ty = &flat.types[&key].ty;
+                Some(prebindgen_conversions::BindingState::Prepared(
+                    prebindgen_declarations::compile_input_value(flat, codec, ty, &recipe, &())?,
+                ))
+            }
+            Some(prebindgen_conversions::BindingState::Configured(())) => {
+                return Err("standalone callback declaration is unresolved".into())
+            }
+            other => other,
+        };
+        flat.types.get_mut(&key).unwrap().metadata.callback = state;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod preflight_tests {
     use super::*;
@@ -1133,5 +1189,3 @@ mod preflight_tests {
             .contains("__prebindgen_input_transfer"));
     }
 }
-
-use prebindgen_conversions::FunctionConversions as _;

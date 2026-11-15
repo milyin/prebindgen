@@ -180,6 +180,8 @@ pub struct Flat<M: Schema = ()> {
     /// Canonical source types and their metadata. Declared names (including opaque
     /// aliases) are keys; built-ins and composites registered through
     /// `Flat::type_metadata_mut` use their qualified type syntax as keys.
+    #[allow(clippy::type_complexity)]
+    // Keep the type, field and variant attachment roles explicit.
     pub types: BTreeMap<String, TypeInfo<M::Type, M::Field, M::Variant>>,
     /// Constants every adapter must emit: captured feature guards and generated
     /// nonzero-size assertions. Layout assertions run when the bindings compile.

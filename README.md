@@ -556,7 +556,8 @@ links each function to its selected error binding, returning only success or fai
 synthetic function into the source model.
 
 Unresolved declaration recipes are owned by their corresponding configured bindings.
-Type defaults and canonical conversions belong to type attachments. Validation sets,
+Type defaults, canonical conversions, standalone JNI callback declarations and
+prepared C target layouts belong to type attachments. Validation sets,
 recursion markers and generated wrapper-local names are temporary working data.
 Emission needs no builder or separate configuration table.
 

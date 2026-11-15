@@ -750,7 +750,7 @@ pub(crate) fn emit_tags<I: KotlinInputConversion, O: KotlinOutputConversion>(
             }
         }
     }
-    for callback in &flat.metadata.callbacks {
+    for callback in crate::callback::declarations(flat)? {
         visit(callback.input_node(), &flat.metadata.package, &mut packages)?;
     }
     if packages.is_empty() {

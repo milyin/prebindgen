@@ -32,7 +32,7 @@ pub(crate) fn nodes<I: KotlinInputConversion, O: KotlinOutputConversion>(
             }
         }
     }
-    for input in &flat.metadata.callbacks {
+    for input in crate::callback::declarations(flat)? {
         nodes.push((true, input.input_node()));
     }
     Ok(nodes)
@@ -61,10 +61,6 @@ pub struct JniModule {
     pub package: String,
     /// Kotlin initialization statements in JNINative.
     pub native_init: String,
-    /// Prepared callback declarations, including interfaces unused by exported functions.
-    pub callbacks: Vec<JniInputConverter>,
-    /// Resolved standalone callback roots, consumed when plans are compiled.
-    pub callback_recipes: Vec<crate::operations::JniInput>,
     /// Use bulk for materialized collection outputs with automatic transport.
     pub bulk_collection_outputs: bool,
 }
@@ -84,6 +80,10 @@ pub struct JniFunction {
 /// Kotlin/JNI declaration information shared by occurrences of a Rust type.
 #[derive(Clone, Debug, Default)]
 pub struct JniType {
+    /// Standalone callback interface attached to its canonical callback type.
+    /// Configured selects this type's input default; later stages retain its recipe/converter.
+    pub callback:
+        Option<prebindgen_conversions::BindingState<(), crate::JniInput, crate::JniInputConverter>>,
     /// Input/output defaults stored on this type, including callback signatures.
     pub defaults:
         prebindgen_declarations::DeclTypeDefaults<crate::JniInputConfig, crate::JniOutputConfig>,

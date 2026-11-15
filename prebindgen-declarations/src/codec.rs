@@ -78,7 +78,7 @@ pub trait Codec {
         cx.output(ty, tree, extra, value, borrowed)
     }
 
-    /// Fixed converter and declaration metadata types, selected before parsing.
+    /// Source attachment types read by conversion hooks; independent of Input and Output.
     type Schema: Schema;
     /// Prepared conversion for a function parameter.
     type Input: prebindgen_conversions::InputConversion + From<CodecInputPlan<Self>>;

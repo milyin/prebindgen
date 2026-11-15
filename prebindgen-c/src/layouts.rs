@@ -121,6 +121,9 @@ pub(crate) fn prepare(
     target: &str,
     artifact: Option<&OpaqueLayouts>,
 ) -> Result<()> {
+    if artifact.is_some_and(|data| data.target != target) {
+        return Err("opaque layout target mismatch in configured C model".into());
+    }
     let mut used = BTreeSet::new();
     for source in flat.functions.values() {
         for binding in &source.metadata.bindings {
@@ -165,8 +168,8 @@ pub(crate) fn prepare(
             info.metadata.owned = None;
         }
     }
-    flat.metadata.opaque_layouts.clear();
-    for info in flat.types.values() {
+    for info in flat.types.values_mut() {
+        info.metadata.target_layout = None;
         if let Some(owner) = &info.metadata.owned {
             let key = owner.layout.key.clone().unwrap_or_else(|| {
                 if owned::std_owner(&owner.ty) {
@@ -198,9 +201,7 @@ pub(crate) fn prepare(
                 })?
             };
             layout.validate()?;
-            flat.metadata
-                .opaque_layouts
-                .insert(owner.name.clone(), layout);
+            info.metadata.target_layout = Some(layout);
         }
     }
     Ok(())
@@ -227,6 +228,18 @@ mod tests {
     ) -> OpaqueLayouts {
         OpaqueLayouts::from_json(&serde_json::json!({"format_version":1,"target":target,"sources":sources,"layouts":layouts}).to_string()).unwrap()
     }
+    fn layouts(flat: &CBindings) -> std::collections::BTreeMap<String, StorageLayout> {
+        flat.types
+            .values()
+            .filter_map(|t| {
+                t.metadata
+                    .owned
+                    .as_ref()
+                    .zip(t.metadata.target_layout)
+                    .map(|(o, l)| (o.name.clone(), l))
+            })
+            .collect()
+    }
     fn native() -> &'static str {
         env!("PREBINDGEN_C_GENERATOR_TARGET")
     }
@@ -238,10 +251,7 @@ mod tests {
             .function(fun!(make))
             .prepare()
             .unwrap();
-        assert_eq!(
-            native.metadata.opaque_layouts["item"].size,
-            std::mem::size_of::<i64>()
-        );
+        assert_eq!(layouts(&native)["item"].size, std::mem::size_of::<i64>());
         let cross = "i686-unknown-linux-gnu";
         let error = make()
             .target(cross)
@@ -274,12 +284,9 @@ mod tests {
             .target(cross)
             .prepare()
             .unwrap();
+        assert_eq!(layouts(&first), layouts(&second));
         assert_eq!(
-            first.metadata.opaque_layouts,
-            second.metadata.opaque_layouts
-        );
-        assert_eq!(
-            first.metadata.opaque_layouts["item"],
+            layouts(&first)["item"],
             StorageLayout {
                 size: 8,
                 alignment: 4
@@ -343,7 +350,7 @@ mod tests {
         .panic()
         .prepare()
         .unwrap();
-        assert!(prepared.metadata.opaque_layouts.is_empty());
+        assert!(layouts(&prepared).is_empty());
     }
     #[test]
     fn invalid_targets_and_header_symbol_collisions_are_diagnostics() {
@@ -390,11 +397,31 @@ mod tests {
             .opaque_layouts(artifact("i686-unknown-linux-gnu",serde_json::json!({"std.vec":{"size":12,"alignment":4},"std.string":{"size":16,"alignment":4}}),serde_json::json!({})))
             .function(fun!(numbers)).function(fun!(text)).function(fun!(strings)).prepare().unwrap();
         let string = owned::declaration(&prepared, &syn::parse_quote!(String)).unwrap();
-        assert_eq!(prepared.metadata.opaque_layouts[&string.name].size, 16);
+        assert_eq!(layouts(&prepared)[&string.name].size, 16);
         let vec = owned::declaration(&prepared, &syn::parse_quote!(Vec<String>)).unwrap();
-        assert_eq!(prepared.metadata.opaque_layouts[&vec.name].size, 12);
+        assert_eq!(layouts(&prepared)[&vec.name].size, 12);
         let header = generate(&prepared).unwrap().header;
         assert!(header.contains("const pb_owned_string *"), "{header}");
+    }
+    #[test]
+    fn completed_type_layout_cannot_be_reused_for_a_different_target() {
+        let prepared = Cbindgen::new(model("pub type Item=i64;pub fn make()->Item{}"))
+            .target("i686-unknown-linux-gnu")
+            .opaque_owned_struct("item", syn::parse_quote!(Item), OpaqueLayout::external())
+            .opaque_layouts(artifact(
+                "i686-unknown-linux-gnu",
+                serde_json::json!({"item":{"size":8,"alignment":4}}),
+                serde_json::json!({}),
+            ))
+            .function(fun!(make))
+            .prepare()
+            .unwrap();
+        assert!(Cbindgen::new(prepared)
+            .target("x86_64-unknown-linux-gnu")
+            .prepare()
+            .err()
+            .unwrap()
+            .contains("layout target mismatch"));
     }
     #[test]
     fn malformed_artifacts_are_diagnostics() {
