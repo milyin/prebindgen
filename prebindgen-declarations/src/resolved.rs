@@ -105,9 +105,7 @@ pub fn compile_resolved<C: Codec>(flat: Flat<ResolvedSchema<C>>) -> Result<Flat<
     let mut result = Flat {
         metadata: flat.metadata.source,
         functions,
-        records: flat.records,
-        enums: flat.enums,
-        payload_enums: flat.payload_enums,
+
         types: flat.types,
         guards: flat.guards,
     };
@@ -263,9 +261,7 @@ pub fn resolve_bindings<C: Codec, I, O, E>(
             compilation: Some((codec, extra)),
         },
         functions,
-        records: flat.records,
-        enums: flat.enums,
-        payload_enums: flat.payload_enums,
+
         types: flat.types,
         guards: flat.guards,
     })

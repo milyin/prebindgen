@@ -55,8 +55,7 @@ impl JniEnum {
         key: &str,
     ) -> Result<Self> {
         let source = flat
-            .enums
-            .get(key)
+            .enum_by_key(key)
             .ok_or("enum_class requires a fieldless source enum")?;
         let mut variant_names = BTreeMap::new();
         for (source, name) in &class.variant_names {
@@ -228,7 +227,7 @@ mod tests {
     fn enum_wire_niches_validate_domain_skip_variants_and_keep_consumed_state() {
         let source = flat("pub enum E { A = -2, B, C = 0, D = 7 }");
         let e = JniEnum {
-            mapping: EnumMapping::new(source.enums.values().next().unwrap()).unwrap(),
+            mapping: EnumMapping::new(source.enums().next().unwrap()).unwrap(),
             class_name: "test.E".into(),
             variant_names: BTreeMap::new(),
         };

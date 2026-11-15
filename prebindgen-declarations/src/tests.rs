@@ -406,7 +406,7 @@ fn binding_keeps_helpers_records_locations_and_guards() {
     let helper = flat.function("make").unwrap();
     assert!(helper.ret.slot.is_none());
     assert!(helper.params.iter().all(|p| p.ty.slot.is_none()));
-    let record = before.records.values().next().unwrap();
+    let record = before.records().next().unwrap();
     let retained = flat.record(&record.ty).unwrap();
     assert_eq!(retained.ty, record.ty);
     assert_eq!(retained.fields[0].name, record.fields[0].name);
@@ -1189,7 +1189,11 @@ fn generation_needs_no_preparation_registry_or_record_lookup() {
     )
     .unwrap()
     .to_string();
-    flat.records.clear();
+    for t in flat.types.values_mut() {
+        if matches!(t.definition, prebindgen_flat::TypeDefinition::Record(_)) {
+            t.definition = prebindgen_flat::TypeDefinition::External;
+        }
+    }
     let call = flat.function("point").unwrap();
     assert_eq!(
         test_return_packet(call, &(), &source_binding())

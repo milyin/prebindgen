@@ -1420,7 +1420,7 @@ impl DeclJniDefaults {
             if !matches!(tree, InputNode::Leaf(JniInputLeafOp::Value)) {
                 return Ok(None);
             }
-            if flat.payload_enums.contains_key(&type_key(ty))
+            if flat.payload_enum_by_key(&type_key(ty)).is_some()
                 && flat
                     .type_info(ty)
                     .ok()
@@ -1489,7 +1489,7 @@ impl DeclJniDefaults {
                 OutputNode::Leaf(JniOutputLeafOp::Projected(p)) => Some(p.clone()),
                 _ => return Ok(None),
             };
-            if flat.payload_enums.contains_key(&type_key(ty))
+            if flat.payload_enum_by_key(&type_key(ty)).is_some()
                 && flat
                     .type_info(ty)
                     .ok()

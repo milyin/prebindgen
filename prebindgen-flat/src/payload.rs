@@ -3,7 +3,7 @@ use super::*;
 use quote::quote;
 
 /// A Rust enum represented by a selected variant and recursively converted fields.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct PayloadEnum<V = (), F = ()> {
     /// Qualified source type, including the arguments of a standard Result.
     pub ty: Type,
@@ -23,7 +23,7 @@ pub enum VariantStyle {
 }
 
 /// One alternative of a data-carrying enum.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct PayloadVariant<V = (), F = ()> {
     /// Generator declaration metadata.
     pub metadata: V,
@@ -36,7 +36,7 @@ pub struct PayloadVariant<V = (), F = ()> {
 }
 
 /// One named or positional enum payload member.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct PayloadField<F = ()> {
     /// Generator field metadata, as on record fields.
     pub metadata: F,
@@ -162,8 +162,7 @@ impl<M: Schema> Flat<M> {
 
     /// Look up a payload enum, including a concrete standard `Result<T, E>`.
     pub fn payload_enum(&self, ty: &Type) -> Result<&PayloadEnum<M::Variant, M::Field>> {
-        self.payload_enums
-            .get(&type_key(ty))
+        self.payload_enum_by_key(&type_key(ty))
             .ok_or_else(|| format!("`{}` is not a payload enum", type_key(ty)))
     }
 
@@ -172,10 +171,11 @@ impl<M: Schema> Flat<M> {
             return;
         };
         let key = type_key(ty);
-        if self.payload_enums.contains_key(&key) {
+        if self.payload_enum_by_key(&key).is_some() {
             return;
         }
         self.types.entry(key.clone()).or_insert_with(|| TypeInfo {
+            definition: crate::TypeDefinition::External,
             ty: ty.clone(),
             metadata: Default::default(),
             conversion: Default::default(),
@@ -193,13 +193,11 @@ impl<M: Schema> Flat<M> {
                 }],
             })
             .collect();
-        self.payload_enums.insert(
-            key,
-            PayloadEnum {
+        self.types.get_mut(&key).unwrap().definition =
+            crate::TypeDefinition::PayloadEnum(PayloadEnum {
                 ty: ty.clone(),
                 variants,
-            },
-        );
+            });
     }
 
     pub(crate) fn register_results(&mut self) {
@@ -223,11 +221,10 @@ impl<M: Schema> Flat<M> {
             })
             .collect::<Vec<_>>();
         roots.extend(
-            self.records
-                .values()
+            self.records()
                 .flat_map(|r| r.fields.iter().map(|f| f.ty.clone())),
         );
-        roots.extend(self.payload_enums.values().flat_map(|e| {
+        roots.extend(self.payload_enums().flat_map(|e| {
             e.variants
                 .iter()
                 .flat_map(|v| v.fields.iter().map(|f| f.ty.clone()))
@@ -257,7 +254,7 @@ mod tests {
     #[test]
     fn payload_syntax_preserves_empty_constructor_shapes() {
         let flat = parse("pub enum Empty { Unit, Tuple(), Named{} }").unwrap();
-        let source = flat.payload_enums.values().next().unwrap();
+        let source = flat.payload_enums().next().unwrap();
         assert_eq!(
             source.variants.iter().map(|v| v.style).collect::<Vec<_>>(),
             [VariantStyle::Unit, VariantStyle::Tuple, VariantStyle::Named]
@@ -284,7 +281,7 @@ mod tests {
         let result = flat
             .resolve_type(&syn::parse_quote!(Result<i64,String>))
             .unwrap();
-        assert!(flat.payload_enums.contains_key(&type_key(&result)));
+        assert!(flat.payload_enum_by_key(&type_key(&result)).is_some());
         let f = flat.function("f").unwrap();
         assert!(result_parts(&f.ret.ty).is_some());
     }

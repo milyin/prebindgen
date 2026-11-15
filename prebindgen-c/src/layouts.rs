@@ -359,6 +359,7 @@ mod tests {
         flat.types.insert(
             "foreign :: PointerOnly".into(),
             prebindgen_flat::TypeInfo {
+                definition: prebindgen_flat::TypeDefinition::External,
                 conversion: Default::default(),
                 ty: syn::parse_quote!(foreign::PointerOnly),
                 metadata: CType::default(),

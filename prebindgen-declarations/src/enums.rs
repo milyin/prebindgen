@@ -195,7 +195,8 @@ mod tests {
                 .into_iter()
                 .map(|i| (i, Default::default())),
         )?;
-        EnumMapping::new(flat.enums.values().next().unwrap())
+        let mapping = EnumMapping::new(flat.enums().next().unwrap());
+        mapping
     }
     #[test]
     fn discriminants_preserve_negative_hex_parenthesized_and_implicit_values() {

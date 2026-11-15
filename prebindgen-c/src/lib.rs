@@ -1402,8 +1402,7 @@ impl Cbindgen {
             }
             let ty = flat.resolve_type(&ty)?;
             let source = flat
-                .enums
-                .get(&prebindgen_flat::type_key(&ty))
+                .enum_by_key(&prebindgen_flat::type_key(&ty))
                 .ok_or("enum_type requires a fieldless enum declaration")?;
             let mapping = std::rc::Rc::new(prebindgen_declarations::EnumMapping::new(source)?);
             for (variant, _) in &mapping.variants {
@@ -1516,12 +1515,12 @@ impl Cbindgen {
                 owned::collect(&p.ty.ty, &mut automatic);
             }
         }
-        for record in flat.records.values() {
+        for record in flat.records() {
             for field in &record.fields {
                 owned::collect(&field.ty, &mut automatic);
             }
         }
-        for record in flat.payload_enums.values() {
+        for record in flat.payload_enums() {
             for variant in &record.variants {
                 for field in &variant.fields {
                     owned::collect(&field.ty, &mut automatic);
@@ -1715,10 +1714,10 @@ fn c_scalar(p: Primitive, prefix: &str) -> String {
         Primitive::I128 | Primitive::U128 => format!("{prefix}_int128"),
     }
 }
-fn c_ty(
+fn c_ty<F, V>(
     wire: &Wire,
     prefix: &str,
-    pointers: &std::collections::BTreeMap<String, prebindgen_flat::TypeInfo<CType>>,
+    pointers: &std::collections::BTreeMap<String, prebindgen_flat::TypeInfo<CType, F, V>>,
     context: &CContext,
 ) -> String {
     match &wire.kind {
@@ -1774,9 +1773,9 @@ fn c_ty(
         ),
     }
 }
-fn validate_wire_declaration(
+fn validate_wire_declaration<F, V>(
     wire: &Wire,
-    pointers: &std::collections::BTreeMap<String, prebindgen_flat::TypeInfo<CType>>,
+    pointers: &std::collections::BTreeMap<String, prebindgen_flat::TypeInfo<CType, F, V>>,
     enums: &[(&String, &prebindgen_declarations::EnumMapping)],
 ) -> Result<()> {
     if let CWire::Enum { name, mapping, .. } = &wire.kind {

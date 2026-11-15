@@ -1602,7 +1602,7 @@ fn emission_reads_only_the_prepared_flat_and_shared_source_metadata() {
         .class
         .is_some());
     assert_eq!(
-        prepared.records["crate :: R"].fields[1]
+        prepared.record_by_key("crate :: R").unwrap().fields[1]
             .metadata
             .kotlin_type,
         "kotlin.String?"

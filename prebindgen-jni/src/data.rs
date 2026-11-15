@@ -283,8 +283,7 @@ pub(crate) fn prepare(flat: &mut JniBindings) -> Result<()> {
         let mut starts = BTreeSet::new();
         let source_fields = if sealed {
             let source = flat
-                .payload_enums
-                .get(key)
+                .payload_enum_by_key(key)
                 .ok_or_else(|| format!("sealed class `{key}` requires a payload enum"))?;
             let mut fields = Vec::new();
             for arm in &source.variants {
@@ -300,8 +299,7 @@ pub(crate) fn prepare(flat: &mut JniBindings) -> Result<()> {
             fields
         } else {
             let record = flat
-                .records
-                .get(key)
+                .record_by_key(key)
                 .ok_or_else(|| format!("data class `{key}` requires a named-field record"))?;
             if record.fields.is_empty() {
                 return Err(format!("data class `{key}` must have at least one field"));
@@ -430,7 +428,7 @@ pub(crate) fn prepare(flat: &mut JniBindings) -> Result<()> {
         stack.pop();
         if sealed {
             let mut start = 0;
-            for arm in &flat.payload_enums[key].variants {
+            for arm in &flat.payload_enum_by_key(key).unwrap().variants {
                 let count = arm.fields.len();
                 let slots = fields[start..start + count]
                     .iter()
@@ -444,15 +442,14 @@ pub(crate) fn prepare(flat: &mut JniBindings) -> Result<()> {
                 start += count;
             }
             let mut metadata = fields.into_iter();
-            for arm in &mut flat.payload_enums.get_mut(key).unwrap().variants {
+            for arm in &mut flat.payload_enum_by_key_mut(key).unwrap().variants {
                 for field in &mut arm.fields {
                     field.metadata = metadata.next().unwrap();
                 }
             }
         } else {
             for (field, metadata) in flat
-                .records
-                .get_mut(key)
+                .record_by_key_mut(key)
                 .unwrap()
                 .fields
                 .iter_mut()
@@ -909,7 +906,7 @@ mod group_tests {
         let ty = flat.resolve_type(&syn::parse_quote!(E)).unwrap();
         let codec = JniCodec::declared();
         let mapping = Rc::new(
-            prebindgen_declarations::EnumMapping::new(flat.enums.values().next().unwrap()).unwrap(),
+            prebindgen_declarations::EnumMapping::new(flat.enums().next().unwrap()).unwrap(),
         );
         for name in ["example.First", "example.Updated"] {
             flat.type_metadata_mut(&ty).unwrap().enumeration = Some(Rc::new(JniEnum {

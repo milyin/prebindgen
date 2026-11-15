@@ -1364,8 +1364,8 @@ impl DeclCDefaults {
                 return Ok(None);
             }
             if flat
-                .payload_enums
-                .contains_key(&prebindgen_flat::type_key(ty))
+                .payload_enum_by_key(&prebindgen_flat::type_key(ty))
+                .is_some()
                 && !flat.type_info(ty).ok().is_some_and(|t| {
                     t.metadata.tagged.is_some()
                         || t.metadata.pointer.is_some()
@@ -1421,8 +1421,8 @@ impl DeclCDefaults {
                 return Ok(None);
             }
             if flat
-                .payload_enums
-                .contains_key(&prebindgen_flat::type_key(ty))
+                .payload_enum_by_key(&prebindgen_flat::type_key(ty))
+                .is_some()
                 && !flat.type_info(ty).ok().is_some_and(|t| {
                     t.metadata.tagged.is_some()
                         || t.metadata.pointer.is_some()

@@ -45,8 +45,7 @@ mod tests {
         let codec = CCodec::declared();
         let mut model = flat("pub enum E { A, B }pub fn echo(x:E)->E{}");
         let ty = model.resolve_type(&syn::parse_quote!(E)).unwrap();
-        let mapping =
-            std::rc::Rc::new(EnumMapping::new(model.enums.values().next().unwrap()).unwrap());
+        let mapping = std::rc::Rc::new(EnumMapping::new(model.enums().next().unwrap()).unwrap());
         for name in ["first", "updated"] {
             model.type_metadata_mut(&ty).unwrap().enumeration = Some(std::rc::Rc::new(CEnum {
                 name: name.into(),
@@ -143,8 +142,7 @@ mod tests {
     #[test]
     fn enum_niches_skip_valid_values_and_survive_optional_composition() {
         let source = flat("pub enum E { A = -2, B, C = 0, D = 7 }");
-        let mapping =
-            std::rc::Rc::new(EnumMapping::new(source.enums.values().next().unwrap()).unwrap());
+        let mapping = std::rc::Rc::new(EnumMapping::new(source.enums().next().unwrap()).unwrap());
         let codec = CCodec::declared();
         let wire = CCodec::enum_wire("code", &mapping);
         assert!(matches!(wire.available_niche(), Some(CNiche::Integer(-3))));
@@ -205,8 +203,7 @@ mod tests {
     #[test]
     fn optional_enum_reservations_cannot_reuse_available_or_reserved_values() {
         let source = flat("pub enum E { A = -1, B = 0 }");
-        let mapping =
-            std::rc::Rc::new(EnumMapping::new(source.enums.values().next().unwrap()).unwrap());
+        let mapping = std::rc::Rc::new(EnumMapping::new(source.enums().next().unwrap()).unwrap());
         let wire = CCodec::enum_wire("code", &mapping);
         let mut tree: prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch> =
             prebindgen_flat::WireNode::Leaf(vec![GenericWire {
@@ -248,8 +245,7 @@ mod tests {
     #[test]
     fn malformed_enum_niches_are_rejected_before_emission() {
         let source = flat("pub enum E { A = -1, B = 0 }");
-        let mapping =
-            std::rc::Rc::new(EnumMapping::new(source.enums.values().next().unwrap()).unwrap());
+        let mapping = std::rc::Rc::new(EnumMapping::new(source.enums().next().unwrap()).unwrap());
         for n in [-1, 0] {
             let mut wire = CCodec::enum_wire("code", &mapping);
             let CWire::Enum {

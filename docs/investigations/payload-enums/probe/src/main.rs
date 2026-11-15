@@ -27,7 +27,7 @@ fn main() -> Result<()> {
         "pub enum Event{Unit,Tuple(),Named{}}",
     ] {
         let flat = Flat::<()>::parse(items(source))?;
-        assert_eq!(flat.payload_enums.len(), 1);
+        assert_eq!(flat.payload_enums().count(), 1);
     }
     println!("payload source model: unit, tuple, named and empty constructor forms succeed");
     let source = "pub enum State{Idle=4,Ready=9}pub fn echo(value:State)->State{value}";

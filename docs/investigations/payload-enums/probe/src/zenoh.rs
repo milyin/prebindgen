@@ -110,7 +110,7 @@ pub fn run() -> Result<()> {
         ("ReplyStruct", syn::parse_quote!(ReplyStruct)),
     ] {
         let flat = Flat::<()>::parse_selected(items(source), &[], &[ty])?;
-        assert!(!flat.payload_enums.is_empty());
+        assert!(!flat.payload_enums().next().is_none());
         println!("Zenoh {name} source shape: payload dependencies captured");
     }
 

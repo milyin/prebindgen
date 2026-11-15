@@ -56,9 +56,7 @@ fn external(flat: JniBindings) -> JniBindings<ExternalInput> {
     // before filling slots; this does not add a schema-changing API.
     Flat {
         metadata: flat.metadata,
-        records: flat.records,
-        enums: flat.enums,
-        payload_enums: flat.payload_enums,
+
         types: flat.types,
         guards: flat.guards,
         functions: flat
