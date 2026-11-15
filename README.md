@@ -567,11 +567,23 @@ Emission needs no builder or separate configuration table.
   and `Schema::Return` are exact attachment types, without an implicit `Option`.
   C and JNI use unit source-position attachments and put each export's conversions
   on its function attachment. `Schema::Type` carries the adapter's defaults and
-  foreign type declaration. The source-only unit schema is also available.
+  foreign type declaration. `Schema::Record`, `Schema::Enum` and
+  `Schema::PayloadEnum` select independent metadata types on the corresponding
+  definitions; fields and variants retain their own slots. Use `()` for data an
+  adapter does not need. Opaque aliases and external types carry only the common
+  type metadata. The source-only unit schema is also available.
 - `try_map_attachments` consumes a Flat and transforms its attachments while moving
   the original source structure. `try_map_function_data` is the narrower version
   for changing only function attachments. Consumers need no handwritten reconstruction
   of source records, enum variants or function signatures.
+
+Source shape and foreign representation are independent. A Rust record can be a
+Kotlin data class or an opaque handle. C records its choice in
+`CType::representation`, with `CRepresentation::Pointer`, `Owned`, `Enum` or
+`Tagged`; only inline owners carry a prepared target layout. JNI class metadata
+similarly keeps cleaner settings on handles, field-resource analysis on data/sealed
+classes, and a checked mapping on enum classes. These choices stay in adapter
+metadata, separate from Flat's source-definition variants.
 
 An export is a `FunctionBinding` with a generated identity, adapter metadata and
 `BindingState::Configured`, `Resolved` or `Prepared`. These types belong to the

@@ -1415,7 +1415,7 @@ impl JniSourceResolver {
                 .type_info(ty)
                 .ok()
                 .and_then(|t| t.metadata.class.as_ref())
-                .is_some_and(|c| c.kind == ClassKind::Sealed)
+                .is_some_and(|c| matches!(c.representation, ClassRepresentation::Sealed { .. }))
             {
                 return Ok(Some(JniInputConfig::enum_variants(
                     flat.payload_enum(ty)?
@@ -1429,7 +1429,7 @@ impl JniSourceResolver {
             let Some(record) = JniCodec::source_record(flat, ty)? else {
                 return Ok(None);
             };
-            if record.has_handles {
+            if record.has_handles() {
                 return Err(format!(
                     "data class `{}` contains handles and cannot be passed into Rust as a record",
                     record.fqn()
@@ -1484,7 +1484,7 @@ impl JniSourceResolver {
                 .type_info(ty)
                 .ok()
                 .and_then(|t| t.metadata.class.as_ref())
-                .is_some_and(|c| c.kind == ClassKind::Sealed)
+                .is_some_and(|c| matches!(c.representation, ClassRepresentation::Sealed { .. }))
             {
                 return Ok(Some(JniOutputConfig::enum_variants(
                     flat.payload_enum(ty)?

@@ -67,6 +67,8 @@ impl Schema for () {
 /// A concrete source type, its common data and its definition-specific data.
 /// Source record/enum structure and consumer metadata share this owner,
 /// including for opaque aliases that have neither fields nor variants.
+/// `M` is common type data; `F` and `V` belong to fields and variants;
+/// `R`, `E` and `P` belong to record, fieldless-enum and payload-enum definitions.
 #[derive(Clone, Debug, PartialEq)]
 pub struct TypeInfo<M = (), F = (), V = (), R = (), E = (), P = ()> {
     /// Captured source structure, owned by this type entry.

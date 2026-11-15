@@ -58,7 +58,13 @@ impl JniEnum {
             .enum_by_key(key)
             .ok_or("enum_class requires a fieldless source enum")?;
         let mut variant_names = BTreeMap::new();
-        for (source, name) in &class.variant_names {
+        let ClassRepresentation::ConfiguredEnum {
+            variant_names: overrides,
+        } = &class.representation
+        else {
+            return Err("enum mapping requires a configured enum class".into());
+        };
+        for (source, name) in overrides {
             if variant_names.insert(source.clone(), name.clone()).is_some() {
                 return Err("duplicate enum variant override".into());
             }

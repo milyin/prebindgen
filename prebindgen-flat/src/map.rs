@@ -4,7 +4,7 @@ use crate::*;
 /// Transform data attached to source declarations, preserving their identities and structure.
 ///
 /// Methods run in source-table order. Within a function parameters precede the
-/// return; within a type the type data precedes variant and field data. The mapper
+/// return; within a type common data precedes definition, variant and field data. The mapper
 /// owns any preparation context it needs. Flat does not interpret the payloads.
 pub trait MapAttachments<A: Schema, B: Schema> {
     /// Transform module data.

@@ -94,9 +94,17 @@ pub struct JniType {
     /// Canonical value conversions selected for this source type.
     pub conversion: prebindgen_conversions::ValueConversions,
     pub(crate) class: Option<Rc<Class>>,
-    pub(crate) enumeration: Option<Rc<JniEnum>>,
     pub(crate) errors: BTreeMap<bool, Rc<errors::ErrorBinding>>,
     pub(crate) error_class: Option<String>,
+}
+
+impl JniType {
+    pub(crate) fn enumeration(&self) -> Option<&Rc<JniEnum>> {
+        match &self.class.as_ref()?.representation {
+            ClassRepresentation::Enum(enumeration) => Some(enumeration),
+            _ => None,
+        }
+    }
 }
 
 /// One JNI export attached to its original source function.

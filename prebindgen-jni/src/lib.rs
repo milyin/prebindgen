@@ -542,24 +542,23 @@ impl JniGenBuilder {
                 let class = Class {
                     pkg: pkg.clone(),
                     name,
-                    kind: match &c {
-                        DeclJniClass::Ptr(_) => ClassKind::Handle,
-                        DeclJniClass::Data(_) => ClassKind::Data,
-                        DeclJniClass::Enum(_) => ClassKind::Enum,
-                        DeclJniClass::Sealed(_) => ClassKind::Sealed,
+                    representation: match c {
+                        DeclJniClass::Ptr(c) => ClassRepresentation::Handle {
+                            gc_managed: c.gc_managed,
+                        },
+                        DeclJniClass::Data(_) => ClassRepresentation::Data { has_handles: false },
+                        DeclJniClass::Enum(c) => ClassRepresentation::ConfiguredEnum {
+                            variant_names: c.variant_names,
+                        },
+                        DeclJniClass::Sealed(c) => ClassRepresentation::Sealed {
+                            variant_names: c.variant_names,
+                            has_handles: false,
+                        },
                         DeclJniClass::Callback(_) => unreachable!(),
-                    },
-                    has_handles: false,
-                    gc_managed: matches!(&c, DeclJniClass::Ptr(c) if c.gc_managed),
-                    variant_names: match c {
-                        DeclJniClass::Enum(c) => c.variant_names,
-                        DeclJniClass::Sealed(c) => c.variant_names,
-                        _ => Vec::new(),
                     },
                 };
                 let metadata = flat.type_metadata_mut(&ty)?;
                 metadata.class = Some(std::rc::Rc::new(class));
-                metadata.enumeration = None;
             }
             for f in p.functions {
                 let name = f.foreign.clone().unwrap_or_else(|| camel(&f.name));
@@ -663,23 +662,47 @@ impl JniGenBuilder {
         generate(&self.prepare()?)
     }
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum ClassKind {
-    Handle,
-    Data,
-    Enum,
-    Sealed,
+/// A foreign class representation, independent of its Rust definition kind.
+#[derive(Clone, Debug)]
+pub(crate) enum ClassRepresentation {
+    Handle {
+        gc_managed: bool,
+    },
+    Data {
+        has_handles: bool,
+    },
+    ConfiguredEnum {
+        variant_names: Vec<(String, String)>,
+    },
+    Enum(std::rc::Rc<JniEnum>),
+    Sealed {
+        variant_names: Vec<(String, String)>,
+        has_handles: bool,
+    },
 }
 #[derive(Clone, Debug)]
 pub(crate) struct Class {
     pkg: String,
     name: String,
-    kind: ClassKind,
-    variant_names: Vec<(String, String)>,
-    has_handles: bool,
-    gc_managed: bool,
+    representation: ClassRepresentation,
 }
 impl Class {
+    fn gc_managed(&self) -> bool {
+        matches!(
+            self.representation,
+            ClassRepresentation::Handle { gc_managed: true }
+        )
+    }
+    fn has_handles(&self) -> bool {
+        matches!(
+            self.representation,
+            ClassRepresentation::Data { has_handles: true }
+                | ClassRepresentation::Sealed {
+                    has_handles: true,
+                    ..
+                }
+        )
+    }
     fn fqn(&self) -> String {
         format!("{}.{}", self.pkg, self.name)
     }
@@ -961,7 +984,7 @@ impl Codec for JniCodec {
                 .type_info(ty)
                 .ok()
                 .and_then(|t| t.metadata.class.as_ref())
-                .is_some_and(|c| c.kind == ClassKind::Data)
+                .is_some_and(|c| matches!(c.representation, ClassRepresentation::Data { .. }))
                 || self.enum_type(_flat, ty).is_some()
             {
                 return false;
@@ -1729,7 +1752,7 @@ pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
             t.metadata
                 .class
                 .as_ref()
-                .filter(|c| c.kind == ClassKind::Handle)
+                .filter(|c| matches!(c.representation, ClassRepresentation::Handle { .. }))
                 .map(|c| (type_key(&t.ty), (&t.ty, c)))
         })
         .collect::<BTreeMap<_, _>>();
@@ -1757,24 +1780,27 @@ pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
     let mut files = BTreeMap::new();
     for t in flat.types.values() {
         if let Some(class) = &t.metadata.class {
-            if class.kind == ClassKind::Data {
+            if matches!(class.representation, ClassRepresentation::Data { .. }) {
                 files.insert(
                     format!("{}/{}.kt", class.pkg.replace('.', "/"), class.name),
                     data::render_record(flat, class, &t.ty)?,
                 );
             }
-            if class.kind == ClassKind::Sealed {
+            if matches!(class.representation, ClassRepresentation::Sealed { .. }) {
                 files.insert(
                     format!("{}/{}.kt", class.pkg.replace('.', "/"), class.name),
                     sealed::render(flat, class, &t.ty)?,
                 );
             }
-            if class.kind == ClassKind::Enum {
+            if matches!(
+                class.representation,
+                ClassRepresentation::ConfiguredEnum { .. } | ClassRepresentation::Enum(_)
+            ) {
                 files.insert(
                     format!("{}/{}.kt", class.pkg.replace('.', "/"), class.name),
                     t.metadata
-                        .enumeration
-                        .as_deref()
+                        .enumeration()
+                        .map(std::rc::Rc::as_ref)
                         .ok_or("missing prepared enum declaration")?
                         .render(class)?,
                 );
@@ -1788,7 +1814,7 @@ pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
     if !init.is_empty() {
         native.push_str(&format!("    init {{ {init} }}\n"));
     }
-    let gc_managed = classes.values().any(|(_, c)| c.gc_managed);
+    let gc_managed = classes.values().any(|(_, c)| c.gc_managed());
     files.insert(
         format!("{}/NativeHandle.kt", prefix.replace('.', "/")),
         native_handle(prefix, gc_managed),
@@ -1810,7 +1836,7 @@ pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
         rust.extend(quote!{#[doc = "# Safety\nOnly generated Kotlin ownership release paths may call this entry point. The pointer must be a live allocation of the declared type with no outstanding native access; an opted-in Cleaner may release an unreachable wrapper without its monitor."]
 #[no_mangle]pub unsafe extern "system" fn #sym(mut env: ::prebindgen_jni_runtime::jni::JNIEnv<'_>,_class: ::prebindgen_jni_runtime::jni::objects::JClass<'_>,id:i64){if let Err(e)=::prebindgen_runtime::boundary(||unsafe {::prebindgen_jni_runtime::drop_pointer::<#ty>(id)}){::prebindgen_jni_runtime::fail(&mut env,&e);}}});
         native.push_str(&format!("    @JvmStatic external fun {method}(id: Long)\n"));
-        let base = if c.gc_managed {
+        let base = if c.gc_managed() {
             format!("{prefix}.GcNativeHandle(raw, {{ {prefix}.JNINative.{method}(it) }})")
         } else {
             format!("{prefix}.NativeHandle(raw)")
@@ -1825,7 +1851,7 @@ pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
                 ty.clone(),
                 KotlinClass {
                     handle_type: allocation_ids[ty],
-                    gc_managed: class.gc_managed,
+                    gc_managed: class.gc_managed(),
                     name: class.fqn(),
                     drop_function: format!(
                         "{prefix}.JNINative.{}",

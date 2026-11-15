@@ -190,7 +190,7 @@ pub(crate) fn input(
                         .metadata
                         .class
                         .as_ref()
-                        .is_some_and(|class| class.gc_managed)
+                        .is_some_and(|class| class.gc_managed())
                 {
                     return Err("callback return constructors cannot borrow gc-managed handles: the raw return protocol does not retain the Kotlin owner during Rust construction; move the handle or leave its class explicitly managed".into());
                 }

@@ -23,7 +23,7 @@ pub(crate) fn package_roots<I: KotlinInputConversion, O: KotlinOutputConversion>
         if let Some(class) = &ty.metadata.class {
             names.push(class.pkg.clone());
         }
-        if let Some(enumeration) = &ty.metadata.enumeration {
+        if let Some(enumeration) = ty.metadata.enumeration() {
             names.push(enumeration.class_name.clone());
         }
         if let Some(exception) = &ty.metadata.error_class {
