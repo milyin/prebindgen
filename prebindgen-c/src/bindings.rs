@@ -72,7 +72,7 @@ pub(crate) fn install(
         flat.function_mut(&source)?
             .metadata
             .bindings
-            .retain(|b| !(b.name == base));
+            .retain(|b| b.name != base);
     }
     if mode != Some(prebindgen_declarations::CallbackReturn::Only) {
         metadata.callback_return = false;
