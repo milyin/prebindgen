@@ -668,7 +668,11 @@ impl<M: Schema> Flat<M> {
     /// Declared types reuse their canonical entry; built-ins and composites can
     /// own declarations such as error handlers without creating another registry.
     pub fn type_metadata_mut(&mut self, ty: &Type) -> Result<&mut M::Type> {
-        let ty = self.resolve_type(ty)?;
+        let ty = if matches!(ty, Type::ImplTrait(_)) {
+            self.resolve_parameter_type(ty)?
+        } else {
+            self.resolve_type(ty)?
+        };
         self.register_result(&ty);
         let key = self
             .types
@@ -758,7 +762,8 @@ impl<M: Schema> Flat<M> {
         self.validate_type(&ty)?;
         Ok(ty)
     }
-    fn resolve_parameter_type(&self, ty: &Type) -> Result<Type> {
+    /// Qualify and validate a source function parameter type, including callable signatures.
+    pub fn resolve_parameter_type(&self, ty: &Type) -> Result<Type> {
         validate_input_lifetimes(ty)?;
         if callback_signature(ty)?.is_none() {
             return self.resolve_type(ty);

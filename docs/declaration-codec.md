@@ -112,7 +112,7 @@ Direct tree construction uses its `prelude` extension traits, for example
 ## Configuration uses concrete adapter trees
 
 `DeclFunction<InTree, OutTree>`, `DeclCallback<InTree, OutTree>` and
-`DeclDefaults<InTree, OutTree>` are generic data containers. They do not select
+`DeclTypeDefaults<InTree, OutTree>` are generic data containers. They do not select
 an operation vocabulary. `DeclJniFunction`, for example, fixes its tree types to
 JNI configuration input/output nodes. Callbacks store output trees for
 their arguments and input trees for their results.
@@ -195,7 +195,7 @@ selectors and getters still apply to the declared type inside containers.
 
 `prepare_value_conversions` borrows declarations. Its shared job is Rust
 conversion validation and registration; the adapter can still read its extension
-settings and apply them to its own metadata. `DeclDefaults` stores only error
+settings and apply them to its own metadata. `DeclTypeDefaults` stores only error
 mapper names. An adapter must apply error extensions to its own Flat metadata
 before registering these mapper defaults.
 Canonical conversion declarations may select opposite directions for one source

@@ -836,7 +836,7 @@ impl crate::CallbackInput<TestInputConfig, TestOutputConfig> for TestInputConfig
 #[derive(Clone)]
 /// This environment is discarded after prepared conversions have been installed.
 pub struct TestDefaults {
-    values: crate::DeclDefaults<TestInputConfig, TestOutputConfig>,
+    values: FixtureDefaults<TestInputConfig, TestOutputConfig>,
 }
 fn input_body(input: TestInputConfig) -> TestInputConfig {
     match input {
@@ -908,7 +908,7 @@ impl TestDefaults {
             })
             .collect::<Result<Vec<_>>>()?;
         Ok(Self {
-            values: crate::DeclDefaults::new(flat, inputs, outputs, errors)?,
+            values: FixtureDefaults::new(flat, inputs, outputs, errors)?,
         })
     }
 
@@ -1099,7 +1099,7 @@ impl TestDefaults {
                 let key = crate::callback::input_key(flat, ty)?;
                 if let Some(tree) = crate::resolve_type_default(
                     &key,
-                    &self.values.inputs,
+                    self.values.inputs.get(&key),
                     stack,
                     crate::Direction::Input,
                     |tree, stack| resolve(ty, tree, stack),
@@ -1237,7 +1237,7 @@ impl TestDefaults {
                         result: codomain.as_ref(),
                     },
                     default,
-                    &self.values.outputs,
+                    |ty| self.values.outputs.contains_key(&type_key(ty)),
                     &TestInputConfig::auto(),
                     &TestOutputConfig::auto(),
                     |tree| {
@@ -1525,7 +1525,7 @@ impl TestDefaults {
                 let key = type_key(ty);
                 if let Some(tree) = crate::resolve_type_default(
                     &key,
-                    &self.values.outputs,
+                    self.values.outputs.get(&key),
                     stack,
                     crate::Direction::Output,
                     |tree, stack| resolve(ty, tree, stack),
@@ -2355,5 +2355,56 @@ impl From<TestOutputBranch> for TestOutputConfigBranch {
             TestOutputBranch::Variant => Self::Variant,
             TestOutputBranch::Arguments => Self::Arguments,
         }
+    }
+}
+
+/// Type-wide defaults containing the caller's own input and output representations.
+#[derive(Clone)]
+struct FixtureDefaults<InTree, OutTree> {
+    /// Input defaults indexed by canonical source type or callback signature.
+    pub inputs: BTreeMap<String, InTree>,
+    /// Output defaults indexed by canonical source type.
+    pub outputs: BTreeMap<String, OutTree>,
+    /// Explicit source-error message helpers indexed by canonical error type.
+    pub errors: BTreeMap<String, String>,
+}
+impl<I, O> Default for FixtureDefaults<I, O> {
+    fn default() -> Self {
+        Self {
+            inputs: BTreeMap::new(),
+            outputs: BTreeMap::new(),
+            errors: BTreeMap::new(),
+        }
+    }
+}
+
+impl<I, O> FixtureDefaults<I, O> {
+    /// Register typed defaults using canonical source identities and reject duplicate declarations.
+    pub fn new<M: Schema>(
+        flat: &Flat<M>,
+        inputs: impl IntoIterator<Item = (Type, I)>,
+        outputs: impl IntoIterator<Item = (Type, O)>,
+        errors: impl IntoIterator<Item = (Type, String)>,
+    ) -> Result<Self> {
+        let mut values = Self::default();
+        for (ty, input) in inputs {
+            let key = type_key(&crate::callback::input_type(flat, &ty)?);
+            if values.inputs.insert(key, input).is_some() {
+                return Err("duplicate input expansion".into());
+            }
+        }
+        for (ty, output) in outputs {
+            let key = type_key(&flat.resolve_type(&ty)?);
+            if values.outputs.insert(key, output).is_some() {
+                return Err("duplicate output expansion".into());
+            }
+        }
+        for (ty, mapper) in errors {
+            let key = type_key(&flat.resolve_type(&ty)?);
+            if values.errors.insert(key, mapper).is_some() {
+                return Err("duplicate error mapper for source type".into());
+            }
+        }
+        Ok(values)
     }
 }

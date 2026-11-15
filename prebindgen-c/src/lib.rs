@@ -1023,7 +1023,7 @@ fn encode_scalar(p: Primitive, v: TokenStream) -> TokenStream {
 /// Start with captured source via [`Self::builder`] and [`Self::source`], or a
 /// flat model via [`Self::new`]. With captured source, declare each
 /// exported function. In either case, declare each opaque pointee type.
-/// Conversion declarations use [`crate::DeclCDefaults`]. When reading
+/// Conversion declarations use [`crate::CSourceResolver`]. When reading
 /// captured source, add the source crate as both a build dependency and a normal
 /// dependency: generation reads its captures, and generated code calls its functions.
 ///
@@ -1560,7 +1560,7 @@ impl Cbindgen {
         }
         owned::accessors(&mut flat)?;
         let declarations =
-            crate::DeclCDefaults::new(&flat, self.inputs, self.outputs, self.error_mappers)?;
+            crate::CSourceResolver::new(&mut flat, self.inputs, self.outputs, self.error_mappers)?;
         let codec = CCodec::declared();
         let mut names = std::collections::BTreeSet::new();
         for decl in &self.functions {
@@ -1594,7 +1594,6 @@ impl Cbindgen {
             resolved_declarations.push(decl);
         }
         let resolved = declarations.resolve(flat, codec, &resolved_declarations, ())?;
-        drop(declarations);
         let mut flat = prebindgen_declarations::compile_resolved(resolved)?;
         for (original, variant, only) in callback_variants {
             sequence::callback_target(
@@ -3492,7 +3491,7 @@ mod generation_tests {
         flat.type_metadata_mut(&ty).unwrap().error = Some(std::rc::Rc::new(
             errors::ErrorBinding::declared("initial".into(), ty.clone()),
         ));
-        let declarations = crate::DeclCDefaults::new(&flat, vec![], vec![], vec![]).unwrap();
+        let declarations = crate::CSourceResolver::new(&mut flat, vec![], vec![], vec![]).unwrap();
         errors::resolve(&mut flat, &codec, &declarations).unwrap();
         codec.compile_declarations(&mut flat, &()).unwrap();
         let error = flat.type_metadata_mut(&ty).unwrap().error.as_mut().unwrap();
@@ -3561,7 +3560,7 @@ mod generation_tests {
         flat.type_metadata_mut(&ty).unwrap().error = Some(std::rc::Rc::new(
             errors::ErrorBinding::declared("failure".into(), ty.clone()),
         ));
-        let declarations = DeclCDefaults::new(&flat, vec![], vec![], vec![]).unwrap();
+        let declarations = CSourceResolver::new(&mut flat, vec![], vec![], vec![]).unwrap();
         errors::resolve(&mut flat, &codec, &declarations).unwrap();
         let decl = fun!(f).callback_return();
         declarations.fill(&mut flat, &codec, &decl, &()).unwrap();
@@ -4159,7 +4158,7 @@ mod generation_tests {
         use crate::fun;
 
         let mut flat = error_model("pub fn message(e:i64)->String{} pub fn f()->Result<i64,i64>{}");
-        let declarations = DeclCDefaults::new(&flat, vec![], vec![], vec![]).unwrap();
+        let declarations = CSourceResolver::new(&mut flat, vec![], vec![], vec![]).unwrap();
         declarations
             .fill(
                 &mut flat,
@@ -4413,8 +4412,9 @@ mod resolved_arrow_tests {
         let items = syn::parse_file("pub fn take(cb:impl Fn(i64)->i64){}")
             .unwrap()
             .items;
-        let flat = CBindings::parse(items.into_iter().map(|i| (i, Default::default()))).unwrap();
-        let defaults = DeclCDefaults::new(&flat, vec![], vec![], vec![]).unwrap();
+        let mut flat =
+            CBindings::parse(items.into_iter().map(|i| (i, Default::default()))).unwrap();
+        let defaults = CSourceResolver::new(&mut flat, vec![], vec![], vec![]).unwrap();
         let ty = &flat.function("take").unwrap().params[0].ty.ty;
         let mut recipe = defaults
             .resolve_input(&flat, &CCodec::declared(), ty, &CInputConfig::auto(), &())

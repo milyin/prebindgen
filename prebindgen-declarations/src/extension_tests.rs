@@ -1,7 +1,7 @@
 //! An independent adapter extends the shared declaration family without C/JNI operations.
 use crate::*;
 use prebindgen_flat::{type_key, Flat};
-use std::{collections::BTreeMap, convert::Infallible};
+use std::convert::Infallible;
 
 #[derive(Clone, Debug)]
 struct Incoming;
@@ -249,7 +249,7 @@ fn callback_settings_inherit_override_and_reach_the_resolved_arrow() {
             &default.ty,
             &local,
             Some(&default),
-            &BTreeMap::new(),
+            |_| false,
             &Input::None,
             &Output::None,
             &mut vec![],
@@ -542,7 +542,7 @@ fn callback_extensions_reach_the_compiler_and_change_generated_behavior() {
         &callback.ty,
         &callback,
         None,
-        &BTreeMap::new(),
+        |_| false,
         &Input::Leaf("result".into()),
         &Output::Leaf("argument".into()),
         &mut vec![],

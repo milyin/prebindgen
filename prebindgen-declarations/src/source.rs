@@ -4,24 +4,94 @@ use prebindgen_flat::{result_parts, same_type, type_key, Flat, Result, Schema};
 use std::collections::BTreeMap;
 use syn::Type;
 
-/// Type-wide defaults containing the caller's own input and output representations.
-#[derive(Clone)]
-pub struct DeclDefaults<InTree, OutTree> {
-    /// Input defaults indexed by canonical source type or callback signature.
-    pub inputs: BTreeMap<String, InTree>,
-    /// Output defaults indexed by canonical source type.
-    pub outputs: BTreeMap<String, OutTree>,
-    /// Explicit source-error message helpers indexed by canonical error type.
-    pub errors: BTreeMap<String, String>,
+/// Conversion defaults attached to one canonical source type by its adapter.
+#[derive(Clone, Debug)]
+pub struct DeclTypeDefaults<I, O> {
+    /// Default construction of this type from foreign values.
+    pub input: Option<I>,
+    /// Default projection of this type to foreign values.
+    pub output: Option<O>,
+    /// Source helper producing this type's error message.
+    pub error: Option<String>,
 }
-impl<I, O> Default for DeclDefaults<I, O> {
+impl<I, O> Default for DeclTypeDefaults<I, O> {
     fn default() -> Self {
         Self {
-            inputs: BTreeMap::new(),
-            outputs: BTreeMap::new(),
-            errors: BTreeMap::new(),
+            input: None,
+            output: None,
+            error: None,
         }
     }
+}
+/// Apply type defaults directly to their canonical Flat owners.
+pub fn install_type_defaults<S: Schema, I, O>(
+    flat: &mut Flat<S>,
+    inputs: impl IntoIterator<Item = (Type, I)>,
+    outputs: impl IntoIterator<Item = (Type, O)>,
+    errors: impl IntoIterator<Item = (Type, String)>,
+    attach: impl Fn(&mut S::Type) -> &mut DeclTypeDefaults<I, O>,
+) -> Result<()> {
+    let mut seen = std::collections::BTreeSet::new();
+    let inputs = inputs
+        .into_iter()
+        .map(|(ty, input)| {
+            let ty = crate::callback::input_type(flat, &ty)?;
+            let ty = if matches!(ty, Type::ImplTrait(_)) {
+                flat.resolve_parameter_type(&ty)?
+            } else {
+                ty
+            };
+            if !seen.insert((0, type_key(&ty)))
+                || flat
+                    .type_info_mut(&ty)
+                    .ok()
+                    .is_some_and(|t| attach(&mut t.metadata).input.is_some())
+            {
+                return Err("duplicate input expansion".into());
+            }
+            Ok((ty, input))
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let outputs = outputs
+        .into_iter()
+        .map(|(ty, output)| {
+            let ty = flat.resolve_type(&ty)?;
+            if !seen.insert((1, type_key(&ty)))
+                || flat
+                    .type_info_mut(&ty)
+                    .ok()
+                    .is_some_and(|t| attach(&mut t.metadata).output.is_some())
+            {
+                return Err("duplicate output expansion".into());
+            }
+            Ok((ty, output))
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let errors = errors
+        .into_iter()
+        .map(|(ty, error)| {
+            let ty = flat.resolve_type(&ty)?;
+            if !seen.insert((2, type_key(&ty)))
+                || flat
+                    .type_info_mut(&ty)
+                    .ok()
+                    .is_some_and(|t| attach(&mut t.metadata).error.is_some())
+            {
+                return Err("duplicate error mapper for source type".into());
+            }
+            Ok((ty, error))
+        })
+        .collect::<Result<Vec<_>>>()?;
+    for (ty, input) in inputs {
+        attach(flat.type_metadata_mut(&ty)?).input = Some(input);
+    }
+    for (ty, output) in outputs {
+        attach(flat.type_metadata_mut(&ty)?).output = Some(output);
+    }
+    for (ty, error) in errors {
+        attach(flat.type_metadata_mut(&ty)?).error = Some(error);
+    }
+    Ok(())
 }
 
 /// Resolve function occurrences, preserving explicitly prepared slots unless overridden.
@@ -242,12 +312,12 @@ pub fn resolve_enum_fields<M: Schema, T, R, B: std::borrow::Borrow<T>>(
 /// Resolve a registered type default with a direction-specific recursion guard.
 pub fn resolve_type_default<T, R>(
     key: &str,
-    defaults: &BTreeMap<String, T>,
+    default: Option<&T>,
     stack: &mut Vec<String>,
     direction: crate::Direction,
     resolve: impl FnOnce(&T, &mut Vec<String>) -> Result<R>,
 ) -> Result<Option<R>> {
-    let Some(tree) = defaults.get(key) else {
+    let Some(tree) = default else {
         return Ok(None);
     };
     if stack.iter().any(|k| k == key) {
@@ -584,7 +654,7 @@ pub fn resolve_callback<M: Schema, I, O, RI, RO, E: Clone>(
     ty: &Type,
     declaration: &crate::DeclCallback<I, O, E>,
     default: Option<&crate::DeclCallback<I, O, E>>,
-    output_defaults: &BTreeMap<String, O>,
+    output_default: impl Fn(&Type) -> bool,
     auto_input: &I,
     auto_output: &O,
     stack: &mut Vec<String>,
@@ -596,7 +666,7 @@ pub fn resolve_callback<M: Schema, I, O, RI, RO, E: Clone>(
         ty,
         CallbackChoices::declaration(declaration),
         default.map(CallbackChoices::declaration),
-        output_defaults,
+        output_default,
         auto_input,
         auto_output,
         stack,
@@ -611,7 +681,7 @@ pub fn resolve_callback_tree<M: Schema, I, O, RI, RO, E: Clone>(
     ty: &Type,
     declaration: CallbackTree<'_, I, O, E>,
     default: Option<CallbackTree<'_, I, O, E>>,
-    output_defaults: &BTreeMap<String, O>,
+    output_default: impl Fn(&Type) -> bool,
     auto_input: &I,
     auto_output: &O,
     is_auto_input: impl Fn(&I) -> bool,
@@ -626,7 +696,7 @@ pub fn resolve_callback_tree<M: Schema, I, O, RI, RO, E: Clone>(
         default
             .map(|tree| CallbackChoices::tree(tree, &is_auto_input))
             .transpose()?,
-        output_defaults,
+        output_default,
         auto_input,
         auto_output,
         stack,
@@ -640,7 +710,7 @@ fn resolve_callback_choices<M: Schema, I, O, RI, RO, E: Clone>(
     ty: &Type,
     declaration: CallbackChoices<'_, I, O, E>,
     default: Option<CallbackChoices<'_, I, O, E>>,
-    output_defaults: &BTreeMap<String, O>,
+    output_default: impl Fn(&Type) -> bool,
     auto_input: &I,
     auto_output: &O,
     stack: &mut Vec<String>,
@@ -695,8 +765,8 @@ fn resolve_callback_choices<M: Schema, I, O, RI, RO, E: Clone>(
             .map(|(index, source)| {
                 let exposed = crate::output_referent(source).unwrap_or(source);
                 let scoped = !selected.params.contains_key(&index)
-                    && !output_defaults.contains_key(&type_key(exposed))
-                    && !output_defaults.contains_key(&type_key(subject(exposed)));
+                    && !output_default(exposed)
+                    && !output_default(subject(exposed));
                 let ownership = if scoped {
                     crate::CallbackArgumentOwnership::Scoped
                 } else {
@@ -854,52 +924,17 @@ pub fn collect_source_items<'a, I: 'a, O: 'a, E: 'a>(
     names
 }
 
-impl<I, O> DeclDefaults<I, O> {
-    /// Register typed defaults using canonical source identities and reject duplicate declarations.
-    pub fn new<M: Schema>(
-        flat: &Flat<M>,
-        inputs: impl IntoIterator<Item = (Type, I)>,
-        outputs: impl IntoIterator<Item = (Type, O)>,
-        errors: impl IntoIterator<Item = (Type, String)>,
-    ) -> Result<Self> {
-        let mut values = Self::default();
-        for (ty, input) in inputs {
-            let key = type_key(&crate::callback::input_type(flat, &ty)?);
-            if values.inputs.insert(key, input).is_some() {
-                return Err("duplicate input expansion".into());
-            }
-        }
-        for (ty, output) in outputs {
-            let key = type_key(&flat.resolve_type(&ty)?);
-            if values.outputs.insert(key, output).is_some() {
-                return Err("duplicate output expansion".into());
-            }
-        }
-        for (ty, mapper) in errors {
-            let key = type_key(&flat.resolve_type(&ty)?);
-            if values.errors.insert(key, mapper).is_some() {
-                return Err("duplicate error mapper for source type".into());
-            }
-        }
-        Ok(values)
-    }
-}
 /// Choose a function's result recipe, including its explicit or type-wide source-error mapper.
 pub fn function_output<I, O: Clone, E>(
     ty: &Type,
     decl: &DeclFunction<I, O, E>,
-    errors: &BTreeMap<String, String>,
+    error_default: impl FnOnce(&Type) -> Option<String>,
     auto: O,
     result: impl FnOnce(Option<String>, O) -> O,
 ) -> O {
     let child = decl.ret.clone().unwrap_or(auto);
     if let Some((_, error)) = crate::result_parts(ty).filter(|_| !decl.result_value) {
-        result(
-            decl.error
-                .clone()
-                .or_else(|| errors.get(&type_key(error)).cloned()),
-            child,
-        )
+        result(decl.error.clone().or_else(|| error_default(error)), child)
     } else {
         child
     }
@@ -981,6 +1016,104 @@ mod tests {
                 .map(|i| (i, Default::default())),
         )
         .unwrap()
+    }
+
+    struct DefaultsSchema;
+    impl Schema for DefaultsSchema {
+        type Parameter = ();
+        type Return = ();
+        type Module = ();
+        type Function = ();
+        type Type = DeclTypeDefaults<i32, i32>;
+        type Field = ();
+        type Variant = ();
+    }
+    fn defaults_model(source: &str) -> Flat<DefaultsSchema> {
+        Flat::parse(
+            syn::parse_file(source)
+                .unwrap()
+                .items
+                .into_iter()
+                .map(|i| (i, Default::default())),
+        )
+        .unwrap()
+    }
+    #[test]
+    fn rejected_default_batch_preserves_existing_type_data() {
+        let mut flat = defaults_model("pub type Item=String;");
+        install_type_defaults(&mut flat, [(syn::parse_quote!(Item), 1)], [], [], |t| t).unwrap();
+        let err = install_type_defaults(
+            &mut flat,
+            [(syn::parse_quote!(i64), 2), (syn::parse_quote!(Item), 3)],
+            [(syn::parse_quote!(Item), 4)],
+            [],
+            |t| t,
+        )
+        .unwrap_err();
+        assert!(err.contains("duplicate input"));
+        let data = &flat
+            .type_info(&syn::parse_quote!(crate::Item))
+            .unwrap()
+            .metadata;
+        assert_eq!(data.input, Some(1));
+        assert_eq!(data.output, None);
+        assert!(flat.type_info(&syn::parse_quote!(i64)).is_err());
+    }
+    #[test]
+    fn invalid_callback_default_does_not_install_earlier_entries() {
+        let mut flat = defaults_model("pub fn f(){}");
+        let result = install_type_defaults(
+            &mut flat,
+            [
+                (syn::parse_quote!(i64), 1),
+                (syn::parse_quote!(impl Fn(&'static str)), 2),
+            ],
+            [],
+            [],
+            |t| t,
+        );
+        assert!(result.is_err());
+        assert!(flat.types.is_empty());
+    }
+    #[test]
+    fn callback_defaults_share_one_canonical_type_owner() {
+        let mut flat = defaults_model("pub fn register(cb:impl Fn(i64)->bool){}");
+        install_type_defaults(
+            &mut flat,
+            [(
+                syn::parse_quote!(impl Fn(i64) -> bool + Send + Sync + 'static),
+                7,
+            )],
+            [],
+            [],
+            |t| t,
+        )
+        .unwrap();
+        let owners = flat
+            .types
+            .values()
+            .filter(|t| matches!(t.ty, Type::ImplTrait(_)))
+            .collect::<Vec<_>>();
+        assert_eq!(owners.len(), 1);
+        assert_eq!(owners[0].metadata.input, Some(7));
+        assert!(install_type_defaults(
+            &mut flat,
+            [(syn::parse_quote!(impl Fn(i64) -> bool), 8)],
+            [],
+            [],
+            |t| t
+        )
+        .unwrap_err()
+        .contains("duplicate input"));
+        assert_eq!(
+            flat.types
+                .values()
+                .find(|t| matches!(t.ty, Type::ImplTrait(_)))
+                .unwrap()
+                .metadata
+                .input,
+            Some(7)
+        );
     }
 
     #[test]
@@ -1130,7 +1263,7 @@ mod tests {
             &ty,
             &local,
             Some(&default),
-            &BTreeMap::new(),
+            |_| false,
             &0,
             &0,
             &mut stack,
@@ -1153,7 +1286,7 @@ mod tests {
             &ty,
             &crate::DeclCallback::<i32, i32>::new(ty.clone()),
             None,
-            &BTreeMap::new(),
+            |_| false,
             &0,
             &0,
             &mut stack,
@@ -1176,7 +1309,7 @@ mod tests {
             &ty,
             &crate::DeclCallback::<i32, i32>::new(ty.clone()),
             None,
-            &BTreeMap::new(),
+            |_| false,
             &0,
             &0,
             &mut stack,

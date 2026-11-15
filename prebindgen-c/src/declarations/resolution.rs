@@ -1,10 +1,8 @@
 use super::*;
 #[derive(Clone)]
-/// This environment is discarded after prepared conversions have been installed.
-pub struct DeclCDefaults {
+/// Resolve source-dependent configuration using defaults owned by Flat type entries.
+pub struct CSourceResolver {
     input_role: std::cell::Cell<InputRole>,
-
-    values: prebindgen_declarations::DeclDefaults<CInputConfig, COutputConfig>,
 }
 
 fn input_body(input: CInputConfig) -> CInputConfig {
@@ -32,12 +30,12 @@ fn output_body(output: COutputConfig) -> COutputConfig {
         other => other,
     }
 }
-impl DeclCDefaults {
+impl CSourceResolver {
     /// Register typed Input/Output defaults and explicit error-message functions.
     /// Typed trees use Input::for_type / Output::for_type. Production declaration
     /// builders also convert directly into these trees with `.into()`.
-    pub fn new<M: prebindgen_flat::Schema>(
-        flat: &Flat<M>,
+    pub fn new<M: prebindgen_flat::Schema<Type = CType>>(
+        flat: &mut Flat<M>,
         inputs: Vec<CInputConfig>,
         outputs: Vec<COutputConfig>,
         errors: Vec<(syn::Type, String)>,
@@ -64,12 +62,26 @@ impl DeclCDefaults {
                 _ => Err("output defaults require a source type".into()),
             })
             .collect::<Result<Vec<_>>>()?;
+        prebindgen_declarations::install_type_defaults(flat, inputs, outputs, errors, |t| {
+            &mut t.defaults
+        })?;
         Ok(Self {
-            values: prebindgen_declarations::DeclDefaults::new(flat, inputs, outputs, errors)?,
             input_role: std::cell::Cell::new(InputRole::Parameter),
         })
     }
 
+    fn input_default<'a>(&self, flat: &'a Flat<CSchema>, key: &str) -> Option<&'a CInputConfig> {
+        flat.types
+            .values()
+            .find(|t| type_key(&t.ty) == key)
+            .and_then(|t| t.metadata.defaults.input.as_ref())
+    }
+    fn output_default<'a>(&self, flat: &'a Flat<CSchema>, key: &str) -> Option<&'a COutputConfig> {
+        flat.types
+            .values()
+            .find(|t| type_key(&t.ty) == key)
+            .and_then(|t| t.metadata.defaults.output.as_ref())
+    }
     /// Clone a source binding for a second explicit sequence delivery policy.
     /// The adapter selects and validates the sequence while resolving the returned declaration.
     pub fn callback_variant(
@@ -143,7 +155,11 @@ impl DeclCDefaults {
         let tree = prebindgen_declarations::function_output(
             ty,
             decl,
-            &self.values.errors,
+            |ty| {
+                flat.type_info(ty)
+                    .ok()
+                    .and_then(|t| t.metadata.defaults.error.clone())
+            },
             COutputConfig::auto(),
             |error, child| OutputNode::Unary {
                 operation: COutputUnary::Result { error },
@@ -156,12 +172,15 @@ impl DeclCDefaults {
     /// Select a function-specific or type-wide explicit error message mapper.
     pub fn error_mapper_for<'a>(
         &'a self,
+        flat: &'a Flat<CSchema>,
         decl: &'a DeclCFunction,
         ty: &syn::Type,
     ) -> Option<&'a str> {
-        decl.error
-            .as_deref()
-            .or_else(|| self.values.errors.get(&type_key(ty)).map(String::as_str))
+        decl.error.as_deref().or_else(|| {
+            flat.type_info(ty)
+                .ok()
+                .and_then(|t| t.metadata.defaults.error.as_deref())
+        })
     }
     /// Prepare owned source-field decomposition, retaining each field's conversion default.
     pub fn owned_record_output(
@@ -316,7 +335,7 @@ impl DeclCDefaults {
                 let key = prebindgen_declarations::callback::input_key(flat, ty)?;
                 if let Some(tree) = prebindgen_declarations::resolve_type_default(
                     &key,
-                    &self.values.inputs,
+                    self.input_default(flat, &key),
                     stack,
                     prebindgen_declarations::Direction::Input,
                     |tree, stack| resolve(ty, tree, stack),
@@ -441,7 +460,7 @@ impl DeclCDefaults {
                 codomain,
             } => {
                 let canonical = prebindgen_declarations::callback::input_key(flat, ty)?;
-                let default = match self.values.inputs.get(&canonical) {
+                let default = match self.input_default(flat, &canonical) {
                     Some(InputNode::Arrow {
                         operation: CInputArrow::ConfigCallback(config),
                         domain,
@@ -462,7 +481,7 @@ impl DeclCDefaults {
                         result: codomain.as_ref(),
                     },
                     default,
-                    &self.values.outputs,
+                    |ty| self.output_default(flat, &type_key(ty)).is_some(),
                     &CInputConfig::auto(),
                     &COutputConfig::auto(),
                     |tree| matches!(tree, CInputConfig::Leaf(CInputLeafOp::ConfigDefault(_))),
@@ -771,7 +790,7 @@ impl DeclCDefaults {
                 let key = type_key(ty);
                 if let Some(tree) = prebindgen_declarations::resolve_type_default(
                     &key,
-                    &self.values.outputs,
+                    self.output_default(flat, &key),
                     stack,
                     prebindgen_declarations::Direction::Output,
                     |tree, stack| resolve(ty, tree, stack),
@@ -1077,7 +1096,7 @@ impl DeclCDefaults {
         }
     }
 }
-impl DeclCDefaults {
+impl CSourceResolver {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn resolve_input_conversion(
         &self,
@@ -1244,7 +1263,7 @@ impl DeclCDefaults {
         )
     }
 }
-impl DeclCDefaults {
+impl CSourceResolver {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn enum_input_recipe(
         &self,
@@ -1308,7 +1327,7 @@ impl DeclCDefaults {
 /// Source-aware context for choosing an adapter representation.
 /// Nested resolution uses the same defaults, local policies and recursion stack.
 pub struct CResolve<'a> {
-    pub(crate) declarations: &'a DeclCDefaults,
+    pub(crate) declarations: &'a CSourceResolver,
     /// Source declarations and adapter metadata.
     pub flat: &'a Flat<CSchema>,
     pub(crate) codec: &'a CCodec,
@@ -1337,11 +1356,11 @@ impl CResolve<'_> {
     }
 }
 
-impl DeclCDefaults {
+impl CSourceResolver {
     /// Resolve function occurrences into an independently compilable Flat.
     ///
     /// Defaults and local overrides are consumed here. The returned model owns
-    /// its compiler policy and occurrence settings; drop this DeclCDefaults value
+    /// its compiler policy and occurrence settings; drop this CSourceResolver value
     /// before calling [`prebindgen_declarations::compile_resolved`] if desired.
     pub fn resolve(
         &self,
@@ -1359,7 +1378,7 @@ impl DeclCDefaults {
         )
     }
 }
-impl DeclCDefaults {
+impl CSourceResolver {
     fn resolve_input_representation(
         &self,
         flat: &Flat<CSchema>,
@@ -1415,7 +1434,7 @@ impl DeclCDefaults {
     }
 }
 
-impl DeclCDefaults {
+impl CSourceResolver {
     fn resolve_output_representation(
         &self,
         flat: &Flat<CSchema>,

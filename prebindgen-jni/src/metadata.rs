@@ -80,6 +80,9 @@ pub struct JniFunction {
 /// Kotlin/JNI declaration information shared by occurrences of a Rust type.
 #[derive(Clone, Debug, Default)]
 pub struct JniType {
+    /// Input/output defaults stored on this type, including callback signatures.
+    pub defaults:
+        prebindgen_declarations::DeclTypeDefaults<crate::JniInputConfig, crate::JniOutputConfig>,
     /// Canonical value conversions selected for this source type.
     pub conversion: prebindgen_conversions::ValueConversions,
     pub(crate) class: Option<Rc<Class>>,

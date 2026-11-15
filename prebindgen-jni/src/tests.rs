@@ -878,7 +878,7 @@ fn optional_niches_and_nested_presence_preserve_distinct_states() {
     assert!(kt.contains("if (returnCapture.s0 == 1)"));
     // Validate raw widths independently from the Kotlin nullable surface.
     let mut flat=flat("pub type Handle=String;pub fn h(x:Option<Handle>)->Option<Handle>{}pub fn n(x:Option<Option<Handle>>)->Option<Option<Handle>>{}pub fn ch2(x:Option<Option<char>>)->Option<Option<char>>{}pub fn u2(x:Option<Option<u32>>)->Option<Option<u32>>{}");
-    let d = crate::DeclJniDefaults::new(&flat, vec![], vec![], vec![]).unwrap();
+    let d = crate::JniSourceResolver::new(&mut flat, vec![], vec![], vec![]).unwrap();
     for (name, count) in [("h", 1), ("n", 2), ("ch2", 1), ("u2", 1)] {
         d.fill(
             &mut flat,
@@ -1010,7 +1010,7 @@ fn reference_and_presence_flag_niches_keep_nested_wire_counts_bounded() {
             }
             let mut source = flat(&format!("pub fn echo(x:{ty})->{ty}{{}}"));
             let declarations =
-                crate::DeclJniDefaults::new(&source, vec![], vec![], vec![]).unwrap();
+                crate::JniSourceResolver::new(&mut source, vec![], vec![], vec![]).unwrap();
             declarations
                 .fill(&mut source, &JniCodec::raw(), &fun!(echo), &())
                 .unwrap();
@@ -1373,11 +1373,11 @@ fn callback_collection_presence_is_a_direct_integer_without_a_jvm_marker() {
 #[test]
 fn logical_outcomes_keep_typed_errors_and_match_both_jni_sequence_deliveries() {
     use crate::fun;
-    use crate::{expand_return, fields, DeclJniDefaults};
+    use crate::{expand_return, fields, JniSourceResolver};
 
     let mut flat=flat("pub struct Failure {pub code:i64,pub info:Option<String>} pub fn parts(e:Failure)->Failure{} pub fn f(v:Option<Vec<i64>>)->Result<Option<Vec<Option<i64>>>,Failure>{}");
-    let defaults = DeclJniDefaults::new(
-        &flat,
+    let defaults = JniSourceResolver::new(
+        &mut flat,
         vec![],
         vec![expand_return!(Failure).fields_into(fields!(parts)).into()],
         vec![],
@@ -4404,12 +4404,12 @@ fn named_output_groups_keep_name_validation_in_both_codec_policies() {
 fn resolved_callback_owns_its_conversions_and_cleanup_policy() {
     use crate::operations::JniInput;
 
-    use crate::{DeclJniCallback, DeclJniDefaults};
+    use crate::{DeclJniCallback, JniSourceResolver};
     use prebindgen_declarations::{compile_resolved, ResolvedSlot};
     let mut source =
         flat("pub fn scoped(cb:impl Fn(i64)->i64){} pub fn owned(cb:impl Fn(i64)->i64){}");
     source.metadata.package = "example".into();
-    let defaults = DeclJniDefaults::new(&source, vec![], vec![], vec![]).unwrap();
+    let defaults = JniSourceResolver::new(&mut source, vec![], vec![], vec![]).unwrap();
     let declarations = vec![
         fun!(scoped),
         fun!(owned).expand_param(
@@ -4421,7 +4421,6 @@ fn resolved_callback_owns_its_conversions_and_cleanup_policy() {
     let resolved = defaults
         .resolve(source, JniCodec::declared(), &declarations, ())
         .unwrap();
-    drop(defaults);
     drop(declarations);
     for (name, scoped) in [("scoped", true), ("owned", false)] {
         let Some(ResolvedSlot::Tree(JniInput::Arrow {
@@ -4452,11 +4451,11 @@ fn resolved_callback_owns_its_conversions_and_cleanup_policy() {
 #[test]
 fn callback_variant_selects_delivery_before_wires_exist() {
     use crate::operations::{JniOutput, JniOutputUnary};
-    use crate::DeclJniDefaults;
+    use crate::JniSourceResolver;
     use prebindgen_declarations::SequenceDelivery;
 
     let mut flat = flat("pub fn f()->Option<Vec<i64>>{}");
-    let defaults = DeclJniDefaults::new(&flat, vec![], vec![], vec![]).unwrap();
+    let defaults = JniSourceResolver::new(&mut flat, vec![], vec![], vec![]).unwrap();
     let variant = defaults
         .callback_variant(&mut flat, &JniCodec::raw(), &fun!(f), "f_fold", &())
         .unwrap();
@@ -4491,12 +4490,12 @@ fn callback_variant_selects_delivery_before_wires_exist() {
 #[test]
 fn callback_delivery_is_selected_before_bulk_promotion() {
     use crate::operations::{JniOutput, JniOutputUnary};
-    use crate::DeclJniDefaults;
+    use crate::JniSourceResolver;
     use prebindgen_declarations::SequenceDelivery;
 
     let mut flat = flat("pub fn values()->Option<Vec<i64>>{}");
-    let defaults = DeclJniDefaults::new(
-        &flat,
+    let defaults = JniSourceResolver::new(
+        &mut flat,
         vec![],
         vec![expand_return!(i64).field_self().bulk().into()],
         vec![],
@@ -4550,10 +4549,10 @@ fn callback_delivery_is_selected_before_bulk_promotion() {
 }
 #[test]
 fn callback_return_preserves_defaults_for_the_full_reference_type() {
-    use crate::{DeclJniDefaults, JniOutputLeafOp};
+    use crate::{JniOutputLeafOp, JniSourceResolver};
     let mut model = flat("pub fn values()->&Vec<i64>{}");
-    let defaults = DeclJniDefaults::new(
-        &model,
+    let defaults = JniSourceResolver::new(
+        &mut model,
         vec![],
         vec![expand_return!(&Vec<i64>)
             .view(JniOutputConfig::Leaf(JniOutputLeafOp::Discard))

@@ -45,6 +45,9 @@ pub struct CFunction {
 /// C representation information belonging to one named Rust type.
 #[derive(Clone, Debug, Default)]
 pub struct CType {
+    /// Input/output defaults stored on this type, including callback signatures.
+    pub defaults:
+        prebindgen_declarations::DeclTypeDefaults<crate::CInputConfig, crate::COutputConfig>,
     /// Canonical value conversions selected for this source type.
     pub conversion: prebindgen_conversions::ValueConversions,
     /// Ordinary tagged carrier of a source payload enum.

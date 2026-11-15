@@ -65,7 +65,7 @@ pub fn bind_input(
     tree: &JniInputConfig,
     extra: &(),
 ) -> Result<()> {
-    let defaults = DeclJniDefaults::new(flat, vec![], vec![], vec![])?;
+    let defaults = JniSourceResolver::new(flat, vec![], vec![], vec![])?;
     let ty = &flat
         .function(function)?
         .params
@@ -85,7 +85,7 @@ pub fn bind_output(
     tree: &JniOutputConfig,
     extra: &(),
 ) -> Result<()> {
-    let defaults = DeclJniDefaults::new(flat, vec![], vec![], vec![])?;
+    let defaults = JniSourceResolver::new(flat, vec![], vec![], vec![])?;
     let tree =
         defaults.resolve_output(flat, codec, &flat.function(function)?.ret.ty, tree, extra)?;
     prebindgen_declarations::bind_output(flat, codec, function, &tree, extra)

@@ -1,9 +1,7 @@
 use super::*;
 #[derive(Clone)]
-/// This environment is discarded after prepared conversions have been installed.
-pub struct DeclJniDefaults {
-    values: prebindgen_declarations::DeclDefaults<JniInputConfig, JniOutputConfig>,
-}
+/// Resolve source-dependent configuration using defaults owned by Flat type entries.
+pub struct JniSourceResolver {}
 
 fn input_body(input: JniInputConfig) -> JniInputConfig {
     match input {
@@ -44,12 +42,12 @@ fn output_body(output: JniOutputConfig) -> JniOutputConfig {
         other => other,
     }
 }
-impl DeclJniDefaults {
+impl JniSourceResolver {
     /// Register typed Input/Output defaults and explicit error-message functions.
     /// Typed trees use Input::for_type / Output::for_type. Production declaration
     /// builders also convert directly into these trees with `.into()`.
-    pub fn new<M: prebindgen_flat::Schema>(
-        flat: &Flat<M>,
+    pub fn new<M: prebindgen_flat::Schema<Type = JniType>>(
+        flat: &mut Flat<M>,
         inputs: Vec<JniInputConfig>,
         outputs: Vec<JniOutputConfig>,
         errors: Vec<(syn::Type, String)>,
@@ -76,11 +74,32 @@ impl DeclJniDefaults {
                 _ => Err("output defaults require a source type".into()),
             })
             .collect::<Result<Vec<_>>>()?;
-        Ok(Self {
-            values: prebindgen_declarations::DeclDefaults::new(flat, inputs, outputs, errors)?,
-        })
+        prebindgen_declarations::install_type_defaults(flat, inputs, outputs, errors, |t| {
+            &mut t.defaults
+        })?;
+        Ok(Self {})
     }
 
+    fn input_default<'a>(
+        &self,
+        flat: &'a Flat<JniSchema>,
+        key: &str,
+    ) -> Option<&'a JniInputConfig> {
+        flat.types
+            .values()
+            .find(|t| type_key(&t.ty) == key)
+            .and_then(|t| t.metadata.defaults.input.as_ref())
+    }
+    fn output_default<'a>(
+        &self,
+        flat: &'a Flat<JniSchema>,
+        key: &str,
+    ) -> Option<&'a JniOutputConfig> {
+        flat.types
+            .values()
+            .find(|t| type_key(&t.ty) == key)
+            .and_then(|t| t.metadata.defaults.output.as_ref())
+    }
     /// Clone a source binding for a second explicit sequence delivery policy.
     /// The adapter selects and validates the sequence while resolving the returned declaration.
     pub fn callback_variant(
@@ -154,7 +173,11 @@ impl DeclJniDefaults {
         let tree = prebindgen_declarations::function_output(
             ty,
             decl,
-            &self.values.errors,
+            |ty| {
+                flat.type_info(ty)
+                    .ok()
+                    .and_then(|t| t.metadata.defaults.error.clone())
+            },
             JniOutputConfig::auto(),
             |error, child| OutputNode::Unary {
                 operation: JniOutputUnary::Result { error },
@@ -167,12 +190,15 @@ impl DeclJniDefaults {
     /// Select a function-specific or type-wide explicit error message mapper.
     pub fn error_mapper_for<'a>(
         &'a self,
+        flat: &'a Flat<JniSchema>,
         decl: &'a DeclJniFunction,
         ty: &syn::Type,
     ) -> Option<&'a str> {
-        decl.error
-            .as_deref()
-            .or_else(|| self.values.errors.get(&type_key(ty)).map(String::as_str))
+        decl.error.as_deref().or_else(|| {
+            flat.type_info(ty)
+                .ok()
+                .and_then(|t| t.metadata.defaults.error.as_deref())
+        })
     }
     /// Prepare owned source-field decomposition, retaining each field's conversion default.
     pub fn owned_record_output(
@@ -329,7 +355,7 @@ impl DeclJniDefaults {
                 let key = prebindgen_declarations::callback::input_key(flat, ty)?;
                 if let Some(tree) = prebindgen_declarations::resolve_type_default(
                     &key,
-                    &self.values.inputs,
+                    self.input_default(flat, &key),
                     stack,
                     prebindgen_declarations::Direction::Input,
                     |tree, stack| resolve(ty, tree, stack),
@@ -449,7 +475,7 @@ impl DeclJniDefaults {
                 codomain,
             } => {
                 let canonical = prebindgen_declarations::callback::input_key(flat, ty)?;
-                let default = match self.values.inputs.get(&canonical) {
+                let default = match self.input_default(flat, &canonical) {
                     Some(InputNode::Arrow {
                         operation: JniInputArrow::ConfigCallback(config),
                         domain,
@@ -470,7 +496,7 @@ impl DeclJniDefaults {
                         result: codomain.as_ref(),
                     },
                     default,
-                    &self.values.outputs,
+                    |ty| self.output_default(flat, &type_key(ty)).is_some(),
                     &JniInputConfig::auto(),
                     &JniOutputConfig::auto(),
                     |tree| matches!(tree, JniInputConfig::Leaf(JniInputLeafOp::ConfigDefault(_))),
@@ -815,7 +841,7 @@ impl DeclJniDefaults {
                 let key = type_key(ty);
                 if let Some(tree) = prebindgen_declarations::resolve_type_default(
                     &key,
-                    &self.values.outputs,
+                    self.output_default(flat, &key),
                     stack,
                     prebindgen_declarations::Direction::Output,
                     |tree, stack| resolve(ty, tree, stack),
@@ -1133,7 +1159,7 @@ impl DeclJniDefaults {
     }
 }
 
-impl DeclJniDefaults {
+impl JniSourceResolver {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn resolve_input_conversion(
         &self,
@@ -1299,7 +1325,7 @@ impl DeclJniDefaults {
     }
 }
 
-impl DeclJniDefaults {
+impl JniSourceResolver {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn enum_input_recipe(
         &self,
@@ -1356,7 +1382,7 @@ impl DeclJniDefaults {
 /// Source-aware context for choosing an adapter representation.
 /// Nested resolution uses the same defaults, local policies and recursion stack.
 pub struct JniResolve<'a> {
-    pub(crate) declarations: &'a DeclJniDefaults,
+    pub(crate) declarations: &'a JniSourceResolver,
     /// Source declarations and adapter metadata.
     pub flat: &'a Flat<JniSchema>,
     pub(crate) codec: &'a JniCodec,
@@ -1389,11 +1415,11 @@ impl JniResolve<'_> {
     }
 }
 
-impl DeclJniDefaults {
+impl JniSourceResolver {
     /// Resolve function occurrences into an independently compilable Flat.
     ///
     /// Defaults and local overrides are consumed here. The returned model owns
-    /// its compiler policy and occurrence settings; drop this DeclJniDefaults value
+    /// its compiler policy and occurrence settings; drop this JniSourceResolver value
     /// before calling [`prebindgen_declarations::compile_resolved`] if desired.
     pub fn resolve(
         &self,
@@ -1412,7 +1438,7 @@ impl DeclJniDefaults {
     }
 }
 
-impl DeclJniDefaults {
+impl JniSourceResolver {
     fn resolve_input_representation(
         &self,
         flat: &Flat<JniSchema>,
@@ -1478,7 +1504,7 @@ impl DeclJniDefaults {
     }
 }
 
-impl DeclJniDefaults {
+impl JniSourceResolver {
     fn resolve_output_representation(
         &self,
         flat: &Flat<JniSchema>,

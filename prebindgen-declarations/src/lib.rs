@@ -2,7 +2,7 @@
 //!
 //! Language adapters own their operations, configuration and source-representation policies.
 //! Shared [`DeclFunction`] and [`DeclCallback`] containers hold the caller's tree types.
-//! [`DeclDefaults`] stores typed defaults; source helpers resolve constructors, getters,
+//! [`DeclTypeDefaults`] attaches typed defaults to source types; source helpers resolve constructors, getters,
 //! fields, callbacks and local overrides without a shared operation vocabulary.
 //! [`resolve_bindings`] produces a complete [`Flat<ResolvedSchema<C>>`](ResolvedSchema).
 //! [`compile_resolved`] compiles that model using the adapter's [`Codec`].

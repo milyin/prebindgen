@@ -2251,7 +2251,7 @@ handle-containing data-class inputs remain unsupported. The C ABI exposes all se
 ## API documentation
 
 Run `cargo doc --workspace --no-deps --open` to browse the API. Start with
-`prebindgen_flat::Flat` for occurrence slots, `prebindgen_c::DeclCDefaults` / `prebindgen_jni::DeclJniDefaults`
+`prebindgen_flat::Flat` for occurrence slots, `prebindgen_c::CSourceResolver` / `prebindgen_jni::JniSourceResolver`
 for build-script expansions, and `prebindgen_declarations::Codec` for adapter authors.
 The Flat traits describe expression requests; the optional staged protocol in
 `prebindgen-conversions` explains validation, ownership acquisition and output delivery; `Cbindgen` and `JniGen` document configuration and writing files.

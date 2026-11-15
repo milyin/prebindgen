@@ -34,7 +34,7 @@ impl ErrorBinding {
 pub(crate) fn resolve(
     flat: &mut CBindings,
     codec: &CCodec,
-    declarations: &crate::DeclCDefaults,
+    declarations: &crate::CSourceResolver,
 ) -> Result<()> {
     let mut types = flat
         .types

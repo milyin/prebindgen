@@ -91,7 +91,7 @@ fn helper_name(names: &mut names::Names, ty: &syn::Type, mapped: bool) -> Result
 pub(crate) fn resolve(
     flat: &mut JniBindings,
     codec: &JniCodec,
-    declarations: &crate::DeclJniDefaults,
+    declarations: &crate::JniSourceResolver,
     functions: &[DeclJniFunction],
 ) -> Result<()> {
     let mut names = names::Names::default();
@@ -117,7 +117,9 @@ pub(crate) fn resolve(
         };
         flat.type_metadata_mut(error)?;
         let canonical_error = flat.type_info(error)?.ty.clone();
-        let mapped = declarations.error_mapper_for(function, error).is_some();
+        let mapped = declarations
+            .error_mapper_for(flat, function, error)
+            .is_some();
         let exception = flat.type_info(error)?.metadata.error_class.clone();
         if exception.is_some() && !mapped {
             return Err(

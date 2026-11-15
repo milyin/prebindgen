@@ -1240,7 +1240,7 @@ use prebindgen_conversions::{OutputConversion, Outcomes, WireNode};
             let conversion=prebindgen_declarations::compile_output(flat,&prebindgen_jni::JniCodec::raw(),"jni_output_mixed",&recipe,&())?;
             flat.function_mut("jni_output_mixed")?.ret.slot=Some(conversion);
             let mut probe = flat.clone();
-            let declarations = prebindgen_jni::DeclJniDefaults::new(&probe, vec![],vec![],vec![])?;
+            let declarations = prebindgen_jni::JniSourceResolver::new(&mut probe, vec![],vec![],vec![])?;
             declarations.fill(&mut probe, &prebindgen_jni::JniCodec::raw(), &fun!(collection_probe).expand_return(expand_return!(Vec<char>).field_self()), &())?;
             // Observe a clone so the builder still installs its own codec.
             // Collections.kt exercises the separately generated JNI boundary.

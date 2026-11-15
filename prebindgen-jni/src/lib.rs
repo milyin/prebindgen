@@ -311,7 +311,7 @@ impl JniGenBuilder {
     /// use prebindgen_jni::{JniInput, JniOutput, JniBindings, JniGen, JniCodec, fun, package};
     /// use prebindgen_declarations::{bind_input,bind_output};
     /// let source = syn::parse_file("pub fn echo(x: i64) -> i64 { x }")?;
-    /// let flat = JniBindings::parse(
+    /// let mut flat = JniBindings::parse(
     ///     source.items.into_iter().map(|item| (item, Default::default())),
     /// )?;
     /// let generated = JniGen::builder().flat(flat)
@@ -616,8 +616,12 @@ impl JniGenBuilder {
             |t| &mut t.conversion,
         )?;
         data::prepare(&mut flat)?;
-        let defaults =
-            crate::DeclJniDefaults::new(&flat, self.inputs, self.outputs, self.error_mappers)?;
+        let defaults = crate::JniSourceResolver::new(
+            &mut flat,
+            self.inputs,
+            self.outputs,
+            self.error_mappers,
+        )?;
         errors::resolve(&mut flat, &codec, &defaults, &declarations)?;
         for ty in callback_types {
             let recipe =
@@ -675,7 +679,6 @@ impl JniGenBuilder {
             resolved_declarations.push(declaration);
         }
         let resolved = defaults.resolve(flat, codec, &resolved_declarations, ())?;
-        drop(defaults);
         let mut flat = prebindgen_declarations::compile_resolved(resolved)?;
         for (original, variant, only) in callback_variants {
             sequence::callback_target(

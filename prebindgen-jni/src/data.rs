@@ -952,7 +952,7 @@ mod group_tests {
         }));
         prepare(&mut flat).unwrap();
         let codec = JniCodec::declared();
-        let defaults = crate::DeclJniDefaults::new(&flat, vec![], vec![], vec![]).unwrap();
+        let defaults = crate::JniSourceResolver::new(&mut flat, vec![], vec![], vec![]).unwrap();
         let request = JniOutputConfig::Unary {
             operation: JniOutputUnary::Sequence {
                 delivery: prebindgen_declarations::SequenceDelivery::Callback,
@@ -974,7 +974,6 @@ mod group_tests {
         assert!(
             matches!(&resolved,crate::operations::JniOutput::Unary { operation: crate::operations::JniOutputUnary::Sequence { .. }, child: element, .. } if matches!(element.as_ref(),crate::operations::JniOutput::Branch { operation: crate::operations::JniOutputBranch::Record { mode: Some(ProjectionMode::Owned) }, children: fields,  } if matches!(fields.as_slice(),[crate::operations::JniOutput::Leaf(crate::operations::JniOutputLeafOp::Projected(_))])))
         );
-        drop(defaults);
         let plan = prebindgen_declarations::compile_output(&flat, &codec, "items", &resolved, &())
             .unwrap();
         flat.function_mut("items").unwrap().ret.slot = Some(plan);
