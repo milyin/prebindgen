@@ -69,3 +69,6 @@ pub use wire_tree::{
 };
 #[cfg(test)]
 mod request_tests;
+
+mod binding;
+pub use binding::{BoundFunction, BoundParam, BoundTypeUse, PreparedCall};

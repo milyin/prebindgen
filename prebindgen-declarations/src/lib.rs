@@ -545,3 +545,6 @@ mod niche_tests;
 
 mod source;
 pub use source::*;
+
+mod binding;
+pub use binding::{BindingState, ConfiguredCall, ConfiguredSlot, DeclBinding, ResolvedCall};

@@ -3,7 +3,7 @@
 //! Other generators can define entirely different request enums.
 use crate::{Conversion, WireKind};
 use crate::{InputPlan, OutputPlan, TemplateContext};
-use prebindgen_flat::{Function, Result};
+use prebindgen_flat::Result;
 use proc_macro2::TokenStream;
 use quote::quote;
 
@@ -143,8 +143,8 @@ impl<W: WireKind, C: TemplateContext + 'static, N, B> OutputPlan<W, C, N, B> {
 ///
 /// Adapters establish their boundary receipt before entering this expression.
 /// Other generators may compose their own request protocols outside Flat.
-pub fn emit_call<I, O, C: TemplateContext + 'static, M>(
-    function: &Function<Option<I>, Option<O>, M>,
+pub fn emit_call<I, O, C: TemplateContext + 'static, F: crate::FunctionConversions<I, O>>(
+    function: &F,
     context: &C,
     source: &syn::Ident,
     result_type: &syn::Type,
@@ -159,7 +159,7 @@ where
     let unit = syn::parse_quote!(());
     let expected = syn::parse_quote!(::core::result::Result<#result_type, ::std::string::String>);
     let continuation = crate::template_parameter("continuation");
-    let path = &function.path;
+    let path = function.source_path();
     let prepare = output.code_fragment_slot(
         OutputFragment::Prepare {
             context,
@@ -304,5 +304,3 @@ impl<W: WireKind, C: TemplateContext + 'static, N, B> crate::OutputConversion
         &self.outcomes
     }
 }
-
-use crate::FunctionConversions as _;

@@ -253,6 +253,8 @@ pub fn bind_fragment(
 }
 /// Read standard conversions attached to a source function.
 pub trait FunctionConversions<I: Conversion, O: Conversion> {
+    /// Original Rust callable path shared by all exports.
+    fn source_path(&self) -> &syn::Path;
     /// Filled parameter conversions in source order.
     fn input_conversions(&self) -> Result<Vec<&I>>;
     /// Filled return conversion.
@@ -266,6 +268,10 @@ pub trait FunctionConversions<I: Conversion, O: Conversion> {
 impl<I: Conversion, O: Conversion, M> FunctionConversions<I, O>
     for prebindgen_flat::Function<Option<I>, Option<O>, M>
 {
+    fn source_path(&self) -> &syn::Path {
+        &self.path
+    }
+
     /// Filled input slots, preserving source parameter order and grouping.
     fn input_conversions(&self) -> Result<Vec<&I>> {
         self.params
