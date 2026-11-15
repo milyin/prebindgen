@@ -7,12 +7,6 @@ fn __pb_owned_owned_string_view(value: &String) -> &[u8] {
     value.as_bytes()
 }
 #[allow(dead_code, clippy::ptr_arg)]
-fn __pb_owned_owned_vec_vec_c_collection_flat_resource_1887aa00ecbbafc7_len(
-    value: &Vec<Vec<c_collection_flat::Resource>>,
-) -> usize {
-    value.len()
-}
-#[allow(dead_code, clippy::ptr_arg)]
 fn __pb_owned_owned_vec_c_collection_flat_buffersinput_81ed43e9857f6d9e_len(
     value: &Vec<c_collection_flat::BuffersInput>,
 ) -> usize {
@@ -99,6 +93,12 @@ fn __pb_owned_owned_vec_u8_672e72343c1b4cb4_view(value: &Vec<u8>) -> &[u8] {
 #[allow(dead_code, clippy::ptr_arg)]
 fn __pb_owned_owned_vec_u8_672e72343c1b4cb4_view_mut(value: &mut Vec<u8>) -> &mut [u8] {
     value.as_mut_slice()
+}
+#[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_owned_vec_vec_c_collection_flat_resource_1887aa00ecbbafc7_len(
+    value: &Vec<Vec<c_collection_flat::Resource>>,
+) -> usize {
+    value.len()
 }
 #[allow(dead_code)]
 struct __PbOutputOwner<T: ?Sized>(*mut T);
