@@ -183,9 +183,8 @@ mod tests {
                 &(),
             )
             .unwrap();
-            let function = model.function("echo").unwrap();
-            let input = function.params[0].ty.slot.as_ref().unwrap();
-            let output = function.ret.slot.as_ref().unwrap();
+            let input = test_input(&model, "echo", 0);
+            let output = test_output(&model, "echo");
             assert_eq!(
                 prebindgen_conversions::wire_definitions(std::iter::once(&input.node)).count(),
                 1

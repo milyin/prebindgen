@@ -46,19 +46,32 @@ pub fn bind_error_output<I, O>(
     function: &str,
     output: impl KotlinOutputConversion + 'static,
 ) -> Result<()> {
-    let function = flat.function_mut(function)?;
-    let identity = format!(
-        "{}::{}",
-        names::path_identity(&function.path),
-        function.name
-    );
-    let hash = prebindgen_reprc::schema_id(&identity);
-    let label = function.name.to_string();
-    let label = label.trim_start_matches("r#");
-    let metadata = function
+    let source = flat.function(function)?;
+    if source.metadata.len() != 1 {
+        return Err("select a binding explicitly when replacing its error output".into());
+    }
+    let binding = source.metadata[0].name.to_string();
+    bind_export_error_output(flat, function, &binding, output)
+}
+/// Replace the domain-error converter of one explicitly selected export.
+pub fn bind_export_error_output<I, O>(
+    flat: &mut Flat<JniSchema<I, O>>,
+    source: &str,
+    binding: &str,
+    output: impl KotlinOutputConversion + 'static,
+) -> Result<()> {
+    let function = flat.function_mut(source)?;
+    let binding = function
         .metadata
-        .as_mut()
-        .ok_or("function has no export metadata")?;
+        .iter_mut()
+        .find(|b| b.name == binding)
+        .ok_or("unknown binding")?;
+
+    let identity = format!("{}::{}", names::path_identity(&function.path), binding.name);
+    let hash = prebindgen_reprc::schema_id(&identity);
+    let label = binding.name.to_string();
+    let label = label.trim_start_matches("r#");
+    let metadata = &mut binding.metadata;
     let previous = metadata
         .error
         .as_ref()
@@ -92,7 +105,6 @@ pub(crate) fn resolve(
     flat: &mut JniBindings,
     codec: &JniCodec,
     declarations: &crate::JniSourceResolver,
-    functions: &[DeclJniFunction],
 ) -> Result<()> {
     let mut names = names::Names::default();
     for ty in flat.types.values() {
@@ -107,19 +119,51 @@ pub(crate) fn resolve(
             )?;
         }
     }
-    for function in functions {
-        if function.result_value {
-            continue;
+    let pending = flat
+        .functions
+        .iter()
+        .flat_map(|(name, f)| {
+            f.metadata
+                .iter()
+                .enumerate()
+                .filter_map(move |(index, b)| match &b.state {
+                    prebindgen_declarations::BindingState::Configured(_) => {
+                        Some((name.clone(), index))
+                    }
+                    _ => None,
+                })
+        })
+        .collect::<Vec<_>>();
+    for (source, index) in pending {
+        let binding = &mut flat.function_mut(&source)?.metadata[index];
+        if let prebindgen_declarations::BindingState::Configured(call) = &binding.state {
+            if let prebindgen_declarations::ConfiguredSlot::Prepared(output) = &call.output {
+                if output.output_outcomes().source_error.is_none() {
+                    binding.metadata.error = None;
+                    continue;
+                }
+                if binding.metadata.error.is_some() {
+                    continue;
+                }
+            }
+            if call.result_value {
+                binding.metadata.error = None;
+                continue;
+            }
         }
-        let ret = flat.function(&function.name)?.ret.ty.clone();
+        flat.function_mut(&source)?.metadata[index].metadata.error = None;
+        let ret = flat.function(&source)?.ret.ty.clone();
         let Some((_, error)) = prebindgen_flat::result_parts(&ret) else {
             continue;
         };
         flat.type_metadata_mut(error)?;
         let canonical_error = flat.type_info(error)?.ty.clone();
-        let mapped = declarations
-            .error_mapper_for(flat, function, error)
-            .is_some();
+        let mapped = match &flat.function(&source)?.metadata[index].state {
+            prebindgen_declarations::BindingState::Configured(call) => {
+                call.error.is_some() || flat.type_info(error)?.metadata.defaults.error.is_some()
+            }
+            _ => false,
+        };
         let exception = flat.type_info(error)?.metadata.error_class.clone();
         if exception.is_some() && !mapped {
             return Err(
@@ -128,11 +172,7 @@ pub(crate) fn resolve(
             );
         }
         if let Some(binding) = flat.type_info(error)?.metadata.errors.get(&mapped).cloned() {
-            flat.function_mut(&function.name)?
-                .metadata
-                .as_mut()
-                .ok_or_else(|| format!("JNI function `{}` has no export metadata", function.name))?
-                .error = Some(binding);
+            flat.function_mut(&source)?.metadata[index].metadata.error = Some(binding);
             continue;
         }
         let (ty, recipe) = if mapped {
@@ -196,11 +236,7 @@ pub(crate) fn resolve(
         flat.type_metadata_mut(error)?
             .errors
             .insert(mapped, binding.clone());
-        flat.function_mut(&function.name)?
-            .metadata
-            .as_mut()
-            .ok_or_else(|| format!("JNI function `{}` has no export metadata", function.name))?
-            .error = Some(binding);
+        flat.function_mut(&source)?.metadata[index].metadata.error = Some(binding);
     }
     Ok(())
 }
@@ -224,11 +260,12 @@ pub(crate) fn compile(flat: &mut JniBindings, codec: &JniCodec) -> Result<()> {
             prebindgen_declarations::compile_output_value(flat, codec, &binding.ty, &recipe, &())
                 .map_err(|error| {
                 let function = flat.functions.values().find(|function| {
-                    function
-                        .metadata
-                        .as_ref()
-                        .and_then(|m| m.error.as_ref())
-                        .is_some_and(|binding| std::rc::Rc::ptr_eq(binding, &old))
+                    function.metadata.iter().any(|b| {
+                        b.metadata
+                            .error
+                            .as_ref()
+                            .is_some_and(|binding| std::rc::Rc::ptr_eq(binding, &old))
+                    })
                 });
                 match function {
                     Some(function) => format!("JNI error `{key}` in `{}`: {error}", function.name),
@@ -244,7 +281,8 @@ pub(crate) fn compile(flat: &mut JniBindings, codec: &JniCodec) -> Result<()> {
             .errors
             .insert(mapped, binding.clone());
         for function in flat.functions.values_mut() {
-            if let Some(metadata) = &mut function.metadata {
+            for export in &mut function.metadata {
+                let metadata = &mut export.metadata;
                 if metadata
                     .error
                     .as_ref()
@@ -274,6 +312,7 @@ pub(crate) fn emit(errors: &BTreeMap<String, &ErrorBinding>) -> Result<TokenStre
             prepared_delivery: None,
             environment: format_ident!("env"),
             domain_output: format_ident!("reported"),
+            source_error_helper: None,
             return_sink: None,
             is_domain_error: true,
             output_committed: quote!(*reported = Some(result.as_raw());),

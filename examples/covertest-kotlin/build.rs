@@ -319,6 +319,9 @@ fn main() {
                     convert!(CanonMillis).input(fun!(canonical_from_borrowed_token)),
                 ))
                 .fun(fun!(canonical_millis_echo))
+                .fun(fun!(canonical_millis_echo).name("canonicalMillisEchoInt")
+                    .expand_param("value",convert!(CanonMillis).input(from!(i32)))
+                    .expand_return(convert!(CanonMillis).output(into!(i32))))
                 .fun(fun!(canonical_millis_optional))
                 .fun(fun!(canonical_millis_rows).expand_return(expand_return!(Vec<CanonMillis>).element(expand_return!(CanonMillis).default())))
                 .fun(fun!(canonical_millis_callback))
@@ -1238,13 +1241,10 @@ use prebindgen_conversions::{OutputConversion, Outcomes, WireNode};
             let sequence = |element,mode| prebindgen_jni::operations::JniOutput::Unary { operation: prebindgen_jni::operations::JniOutputUnary::Sequence { delivery: prebindgen_declarations::SequenceDelivery::Value, mode }, child: Box::new(element),  };
             let recipe=sequence(prebindgen_jni::operations::JniOutput::Branch { operation: prebindgen_jni::operations::JniOutputBranch::Combine, children: vec![prebindgen_jni::operations::JniOutput::Unary { operation: prebindgen_jni::operations::JniOutputUnary::Bulk, child: Box::new(sequence(prebindgen_jni::operations::JniOutput::Leaf(prebindgen_jni::operations::JniOutputLeafOp::Value),Some(prebindgen_declarations::ProjectionMode::Borrowed))) }] },None);
             let conversion=prebindgen_declarations::compile_output(flat,&prebindgen_jni::JniCodec::raw(),"jni_output_mixed",&recipe,&())?;
-            flat.function_mut("jni_output_mixed")?.ret.slot=Some(conversion);
-            let mut probe = flat.clone();
-            let declarations = prebindgen_jni::JniSourceResolver::new(&mut probe, vec![],vec![],vec![])?;
-            declarations.fill(&mut probe, &prebindgen_jni::JniCodec::raw(), &fun!(collection_probe).expand_return(expand_return!(Vec<char>).field_self()), &())?;
-            // Observe a clone so the builder still installs its own codec.
-            // Collections.kt exercises the separately generated JNI boundary.
-            let output = probe.function("collection_probe")?.output_conversion()?;
+            prebindgen_declarations::bind_prepared_output(&mut flat.function_mut("jni_output_mixed")?.metadata[0],conversion);
+            let declarations=prebindgen_jni::JniSourceResolver::default();
+            let recipe=declarations.resolve_output(flat,&prebindgen_jni::JniCodec::raw(),&flat.function("collection_probe")?.ret.ty,&expand_return!(Vec<char>).field_self().into(),&())?;
+            let output=prebindgen_declarations::compile_output(flat,&prebindgen_jni::JniCodec::raw(),"collection_probe",&recipe,&())?;
             let Outcomes { success, source_error: None, binding_failure: Some(_) } = output.output_outcomes() else {
                 return Err("collection probe must declare success and binding failure only".into());
             };
@@ -2517,6 +2517,14 @@ use prebindgen_conversions::{OutputConversion, Outcomes, WireNode};
         )
         .prepare()
         .expect("prepare supported declarations");
+    assert_eq!(
+        prepared
+            .function("canonical_millis_echo")
+            .unwrap()
+            .metadata
+            .len(),
+        2
+    );
     for name in ["scoped_input_pair", "scoped_input_failure"] {
         let ty = prepared.function(name).unwrap().params[0].ty.ty.clone();
         let leaf = prebindgen_declarations::Codec::input_leaf(
@@ -2531,7 +2539,12 @@ use prebindgen_conversions::{OutputConversion, Outcomes, WireNode};
             ),
         )
         .unwrap();
-        prepared.function_mut(name).unwrap().params[0].ty.slot = Some(leaf.into());
+        prebindgen_declarations::bind_prepared_input(
+            &mut prepared.function_mut(name).unwrap().metadata[0],
+            0,
+            leaf.into(),
+        )
+        .unwrap();
     }
     let mut jni = prebindgen_jni::generate(&prepared).expect("generate mixed input declarations");
     // Test-only constructor fault injection: handwritten OutputCleanupRow has
@@ -2582,6 +2595,12 @@ use prebindgen_conversions::{OutputConversion, Outcomes, WireNode};
     let independent = output_contracts::generate().expect("generate independent output converters");
     independent.write_rust("output-contracts.rs").unwrap();
     for (path, source) in independent.kotlin {
+        assert!(jni.kotlin.insert(path, source).is_none());
+    }
+    let isolated =
+        output_contracts::generate_isolated_error().expect("isolated custom error output");
+    isolated.write_rust("isolated-errors.rs").unwrap();
+    for (path, source) in isolated.kotlin {
         assert!(jni.kotlin.insert(path, source).is_none());
     }
     for native_check in [
@@ -2638,5 +2657,3 @@ fn callback_mixed_batch_input(
             .field("tail", tail),
     )
 }
-
-use prebindgen_conversions::FunctionConversions as _;

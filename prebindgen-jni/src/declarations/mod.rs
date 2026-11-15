@@ -2,14 +2,12 @@
 use super::*;
 use prebindgen_conversions::ValueConversion;
 use prebindgen_declarations::{option_inner, result_parts, sequence_parts};
-use prebindgen_declarations::{
-    CallbackArgumentOwnership, DeclConvert, FunctionRecipe, ResolvedSchema,
-};
-use prebindgen_declarations::{Codec, ResolvedInput, ResolvedOutput};
+use prebindgen_declarations::{CallbackArgumentOwnership, DeclConvert};
 use prebindgen_declarations::{
     InputNode, OutputNode, Projection, ProjectionMode, SequenceDelivery,
 };
-use prebindgen_flat::{same_type, type_key, Flat, Result, Schema};
+use prebindgen_declarations::{ResolvedInput, ResolvedOutput};
+use prebindgen_flat::{same_type, type_key, Flat, Result};
 use std::collections::BTreeMap;
 use syn::Type;
 /// Function binding choices containing this adapter's conversion trees.
@@ -75,7 +73,12 @@ pub fn bind_input(
         .ty
         .ty;
     let tree = defaults.resolve_input(flat, codec, ty, tree, extra)?;
-    prebindgen_declarations::bind_input(flat, codec, function, parameter, &tree, extra)
+    crate::bindings::set_input(
+        flat,
+        function,
+        parameter,
+        prebindgen_declarations::compile_input(flat, codec, function, parameter, &tree, extra)?,
+    )
 }
 /// Resolve and bind one output with no generator-wide defaults.
 pub fn bind_output(
@@ -88,7 +91,11 @@ pub fn bind_output(
     let defaults = JniSourceResolver::new(flat, vec![], vec![], vec![])?;
     let tree =
         defaults.resolve_output(flat, codec, &flat.function(function)?.ret.ty, tree, extra)?;
-    prebindgen_declarations::bind_output(flat, codec, function, &tree, extra)
+    crate::bindings::set_output(
+        flat,
+        function,
+        prebindgen_declarations::compile_output(flat, codec, function, &tree, extra)?,
+    )
 }
 
 #[doc(hidden)]

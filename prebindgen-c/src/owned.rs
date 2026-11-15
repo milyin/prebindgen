@@ -355,24 +355,26 @@ pub(crate) fn accessors(flat: &mut CBindings) -> Result<()> {
             flat.functions.insert(
                 name.to_string(),
                 prebindgen_flat::Function {
-                    metadata: None,
+                    metadata: crate::CFunctionData {
+                        bindings: Vec::new(),
+                        helper: Some(crate::metadata::RustHelper {
+                            attributes: function.attrs,
+                            body: function.block,
+                        }),
+                    },
                     name: name.clone(),
                     path: syn::parse_quote!(#name),
                     params: vec![prebindgen_flat::Param {
                         name: syn::parse_quote!(value),
                         ty: prebindgen_flat::TypeUse {
                             ty: receiver,
-                            slot: None,
+                            slot: (),
                         },
                     }],
-                    ret: prebindgen_flat::TypeUse {
-                        ty: ret,
-                        slot: None,
-                    },
+                    ret: prebindgen_flat::TypeUse { ty: ret, slot: () },
                     location: Default::default(),
                 },
             );
-            flat.metadata.helpers.push(function);
         }
     }
     Ok(())
@@ -537,10 +539,10 @@ mod tests {
             .panic()
             .prepare()
             .unwrap();
-        let native = model.function("f").unwrap().ret.slot.as_ref().unwrap();
+        let native = test_output(&model, "f");
         assert!(group::result_packet_fields(&native.outcomes.success)
             .any(|w| matches!(w.kind, CWire::Owned { by_value: true, .. })));
-        let visitor = model.function("f_each").unwrap().ret.slot.as_ref().unwrap();
+        let visitor = test_output(&model, "f_each");
         assert!(sequence::callback_delivery(&visitor.outcomes.success).unwrap());
         let generated = generate(&model).unwrap();
         syn::parse_file(&generated.rust).unwrap();

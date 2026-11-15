@@ -206,30 +206,33 @@ fn field_options_and_omission_survive_common_builders_and_registration() {
 }
 #[test]
 fn function_settings_survive_common_methods_resolution_and_callback_variants() {
-    let mut flat = model();
+    let flat = model();
     let declaration: Function = crate::fun!(call)
         .with_extension(Settings("function"))
         .name("Call")
         .expand_param("value", Input::Leaf("in".into()))
         .expand_return(Output::Leaf("out".into()));
-    let recipe = resolve_function(
-        &flat,
-        &declaration,
-        |_, tree| Ok(tree.unwrap().clone()),
-        |_| Ok(declaration.extension.as_ref().unwrap().0),
+    let settings = declaration.extension.as_ref().unwrap().0;
+    let call = ConfiguredCall::<Input, Output, (), ()>::from_declaration(
+        flat.function("call").unwrap(),
+        declaration,
+        None,
     )
     .unwrap();
-    assert!(matches!(&recipe.inputs[..],[Some(Input::Leaf(s))] if s=="in"));
-    assert_eq!(recipe.output, Some("function"));
+    let recipe = resolve_call(
+        flat.function("call").unwrap(),
+        call,
+        |_, tree| Ok(tree.unwrap()),
+        |_, _, _, _| Ok(settings),
+    )
+    .unwrap();
+    assert!(matches!(&recipe.inputs[..],[ResolvedSlot::Tree(Input::Leaf(s))] if s=="in"));
+    assert!(matches!(recipe.output, ResolvedSlot::Tree("function")));
     let declaration = Function::new(syn::parse_quote!(rows))
         .with_extension(Settings("function"))
         .callback_return_only();
-    let variant = callback_variant(&mut flat, &declaration, "rows_each", |_, _| {
-        Output::Leaf("each".into())
-    })
-    .unwrap();
+    let variant = declaration.output(Output::Leaf("each".into()));
     assert_eq!(variant.extension, Some(Settings("function")));
-    assert!(variant.callback_return.is_none());
 }
 #[test]
 fn callback_settings_inherit_override_and_reach_the_resolved_arrow() {

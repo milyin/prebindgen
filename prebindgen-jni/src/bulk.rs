@@ -1051,7 +1051,7 @@ pub(crate) fn emit<I: KotlinInputConversion, O: KotlinOutputConversion>(
     let mut catalogue = BTreeMap::new();
     let prefix = &flat.metadata.package;
     let mut writers = BTreeMap::new();
-    for (input, node) in crate::metadata::nodes(flat) {
+    for (input, node) in crate::metadata::nodes(flat)? {
         records(node, &mut catalogue)?;
         input_writers(node, input, prefix, &mut writers)?;
     }

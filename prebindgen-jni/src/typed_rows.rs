@@ -48,7 +48,7 @@ pub(crate) fn emit<I: KotlinInputConversion, O: KotlinOutputConversion>(
     emitted: &mut BTreeSet<String>,
 ) -> Result<()> {
     let mut rows = Vec::new();
-    for (input, node) in metadata::nodes(flat) {
+    for (input, node) in metadata::nodes(flat)? {
         visit(node, input, &mut rows);
     }
     let mut schemas = BTreeMap::new();

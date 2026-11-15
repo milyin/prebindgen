@@ -121,3 +121,7 @@ mod boundary_faults;
 mod buffer_allocations;
 
 mod row_metadata;
+
+mod isolated_errors {
+    include!(concat!(env!("OUT_DIR"), "/isolated-errors.rs"));
+}

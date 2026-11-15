@@ -5,10 +5,10 @@ use std::rc::Rc;
 /// Metadata schema for a C binding model.
 pub struct CSchema;
 impl prebindgen_flat::Schema for CSchema {
-    type Parameter = Option<CInputConverter>;
-    type Return = Option<COutputConverter>;
+    type Parameter = ();
+    type Return = ();
     type Module = CModule;
-    type Function = Option<CFunction>;
+    type Function = CFunctionData;
     type Type = CType;
     type Field = ();
     type Variant = ();
@@ -18,17 +18,16 @@ impl prebindgen_flat::Schema for CSchema {
 pub struct CModule {
     /// Prefix of generated symbols and declarations.
     pub prefix: String,
-    /// Generated source accessors callable by expansion recipes.
-    pub helpers: Vec<syn::ItemFn>,
     pub(crate) target: Option<(String, u32, TokenStream)>,
+    pub(crate) layout_artifact: Option<crate::OpaqueLayouts>,
     pub(crate) opaque_layouts: std::collections::BTreeMap<String, crate::layouts::StorageLayout>,
 }
 impl Default for CModule {
     fn default() -> Self {
         Self {
             prefix: "pb".into(),
-            helpers: Vec::new(),
             opaque_layouts: Default::default(),
+            layout_artifact: None,
             target: None,
         }
     }
@@ -36,6 +35,8 @@ impl Default for CModule {
 /// Export decisions belonging to one function binding.
 #[derive(Clone, Debug, Default)]
 pub struct CFunction {
+    /// This export delivers a returned sequence through a visitor/folder.
+    pub callback_return: bool,
     /// Whether conversion failure deliberately aborts this non-Result binding.
     pub abort_on_failure: bool,
     /// Whether these conversions can fail outside a Result error channel.
@@ -69,4 +70,37 @@ pub struct CEnum {
     pub name: String,
     /// Source variants and their checked wire values.
     pub mapping: Rc<prebindgen_declarations::EnumMapping>,
+}
+
+/// One C export attached to its original source function.
+pub type CBinding<I = CInputConverter, O = COutputConverter> = prebindgen_declarations::DeclBinding<
+    crate::CInputConfig,
+    crate::COutputConfig,
+    crate::CInput,
+    crate::COutput,
+    I,
+    O,
+    CFunction,
+>;
+
+/// C-specific data attached to one source callable.
+/// Export conversions and generated helper bodies share the source signature owner.
+#[derive(Clone, Debug)]
+pub struct CFunctionData<I = CInputConverter, O = COutputConverter> {
+    /// Foreign uses of this callable, each with independent conversions.
+    pub bindings: Vec<CBinding<I, O>>,
+    pub(crate) helper: Option<RustHelper>,
+}
+impl<I, O> Default for CFunctionData<I, O> {
+    fn default() -> Self {
+        Self {
+            bindings: Vec::new(),
+            helper: None,
+        }
+    }
+}
+#[derive(Clone, Debug)]
+pub(crate) struct RustHelper {
+    pub attributes: Vec<syn::Attribute>,
+    pub body: Box<syn::Block>,
 }

@@ -328,6 +328,7 @@ impl JniCallback {
             prepared_delivery: None,
             environment: environment.clone(),
             domain_output: format_ident!("unused_domain"),
+            source_error_helper: None,
             return_sink: None,
             is_domain_error: false,
             output_committed: quote!(),
@@ -949,7 +950,8 @@ pub(crate) fn files<I: KotlinInputConversion, O: KotlinOutputConversion>(
             input.input_node(),
         )));
     }
-    for function in flat.functions.values().filter(|f| f.metadata.is_some()) {
+    let functions = crate::bindings::views(flat)?;
+    for function in &functions {
         wires.extend(function.input_wire_definitions()?);
     }
     for wire in wires {

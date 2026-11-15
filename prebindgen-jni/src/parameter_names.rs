@@ -17,7 +17,7 @@ fn segment_identity(segment: &ComponentSegment) -> String {
 /// module is relocated. Those roots remain free references in any function body.
 pub(crate) fn package_roots<I: KotlinInputConversion, O: KotlinOutputConversion>(
     flat: &Flat<JniSchema<I, O>>,
-) -> BTreeSet<String> {
+) -> Result<BTreeSet<String>> {
     let mut names = vec![flat.metadata.package.clone()];
     for ty in flat.types.values() {
         if let Some(class) = &ty.metadata.class {
@@ -30,7 +30,7 @@ pub(crate) fn package_roots<I: KotlinInputConversion, O: KotlinOutputConversion>
             names.push(exception.clone());
         }
     }
-    let nodes = crate::metadata::nodes(flat);
+    let nodes = crate::metadata::nodes(flat)?;
     for wire in prebindgen_conversions::wire_definitions(nodes.into_iter().map(|(_, node)| node)) {
         match &wire.kind {
             JniWire::Callback { callback } => names.push(callback.fqn()),
@@ -38,10 +38,10 @@ pub(crate) fn package_roots<I: KotlinInputConversion, O: KotlinOutputConversion>
             _ => {}
         }
     }
-    names
+    Ok(names
         .into_iter()
         .filter_map(|name| name.split('.').next().map(str::to_owned))
-        .collect()
+        .collect())
 }
 
 fn reserved(name: &str, roots: &BTreeSet<String>, locals: &BTreeSet<String>) -> bool {

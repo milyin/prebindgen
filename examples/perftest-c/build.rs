@@ -97,6 +97,13 @@ fn main() {
         .panic()
         .function(fun!(canonical_millis_echo))
         .panic()
+        .function(
+            fun!(canonical_millis_echo)
+                .name("canonical_millis_echo_i32")
+                .expand_param("value", convert!(CanonMillis).input(from!(i32)))
+                .expand_return(convert!(CanonMillis).output(into!(i32))),
+        )
+        .panic()
         .function(fun!(canonical_millis_optional))
         .panic()
         .function(
@@ -1426,6 +1433,15 @@ fn main() {
         ))
         .prepare()
         .expect("prepare supported declarations");
+    assert_eq!(
+        prepared
+            .function("canonical_millis_echo")
+            .unwrap()
+            .metadata
+            .bindings
+            .len(),
+        2
+    );
     for name in ["scoped_input_pair", "scoped_input_failure"] {
         let ty = prepared.function(name).unwrap().params[0].ty.ty.clone();
         let leaf = prebindgen_declarations::Codec::input_leaf(
@@ -1440,7 +1456,12 @@ fn main() {
             ),
         )
         .unwrap();
-        prepared.function_mut(name).unwrap().params[0].ty.slot = Some(leaf);
+        prebindgen_declarations::bind_prepared_input(
+            &mut prepared.function_mut(name).unwrap().metadata.bindings[0],
+            0,
+            leaf,
+        )
+        .unwrap();
     }
     let generation = prebindgen_c::generate(&prepared).expect("generate mixed input declarations");
     generation.write_rust(out.join("bindings.rs")).unwrap();

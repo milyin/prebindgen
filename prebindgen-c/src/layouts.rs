@@ -74,20 +74,62 @@ pub(crate) fn output_names(plan: &COutputPlan<CWire>, names: &mut BTreeSet<Strin
 pub(crate) fn input_names(plan: &CInputPlan<CWire>, names: &mut BTreeSet<String>) {
     used_node(&plan.node, names);
 }
-pub(crate) fn prepare(
+pub(crate) fn verify_sources(
     flat: &mut CBindings,
     target: &str,
     artifact: Option<&OpaqueLayouts>,
     sources: &[prebindgen::Source],
 ) -> Result<()> {
-    let mut used = BTreeSet::new();
-    for f in flat.functions.values().filter(|f| f.ret.slot.is_some()) {
-        for p in &f.params {
-            if let Some(plan) = &p.ty.slot {
-                input_names(plan, &mut used);
+    if let Some(data) = artifact {
+        if data.target != target {
+            return Err(format!(
+                "opaque layout target mismatch: artifact `{}`, binding `{target}`",
+                data.target
+            ));
+        }
+        let mut verified = BTreeSet::new();
+        for source in sources {
+            let name = source.crate_name();
+            verified.insert(name.to_owned());
+            let features = data
+                .sources
+                .get(name)
+                .ok_or_else(|| format!("missing opaque layout source features for `{name}`"))?;
+            let guard = source.require_features(&features.features)?;
+            if !flat
+                .guards
+                .iter()
+                .any(|g| quote!(#g).to_string() == quote!(#guard).to_string())
+            {
+                flat.guards.push(guard);
             }
         }
-        output_names(f.ret.slot.as_ref().unwrap(), &mut used);
+        for function in flat.functions.values() {
+            if let Some(name) = &function.location.crate_name {
+                if !verified.contains(name) {
+                    return Err(format!(
+                        "register layout source `{name}` to verify captured features"
+                    ));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+pub(crate) fn prepare(
+    flat: &mut CBindings,
+    target: &str,
+    artifact: Option<&OpaqueLayouts>,
+) -> Result<()> {
+    let mut used = BTreeSet::new();
+    for source in flat.functions.values() {
+        for binding in &source.metadata.bindings {
+            let call = binding.call()?;
+            for input in &call.inputs {
+                input_names(input, &mut used);
+            }
+            output_names(&call.output, &mut used);
+        }
     }
     for info in flat.types.values() {
         if let Some(error) = &info.metadata.error {
@@ -121,40 +163,6 @@ pub(crate) fn prepare(
             .is_some_and(|o| !o.explicit && !used.contains(&o.name))
         {
             info.metadata.owned = None;
-        }
-    }
-    if let Some(data) = artifact {
-        if data.target != target {
-            return Err(format!(
-                "opaque layout target mismatch: artifact `{}`, binding `{target}`",
-                data.target
-            ));
-        }
-        let mut verified = BTreeSet::new();
-        for source in sources {
-            let name = source.crate_name();
-            verified.insert(name.to_owned());
-            let features = data
-                .sources
-                .get(name)
-                .ok_or_else(|| format!("missing opaque layout source features for `{name}`"))?;
-            let guard = source.require_features(&features.features)?;
-            if !flat
-                .guards
-                .iter()
-                .any(|g| quote!(#g).to_string() == quote!(#guard).to_string())
-            {
-                flat.guards.push(guard);
-            }
-        }
-        for function in flat.functions.values() {
-            if let Some(name) = &function.location.crate_name {
-                if !verified.contains(name) {
-                    return Err(format!(
-                        "register layout source `{name}` to verify captured features"
-                    ));
-                }
-            }
         }
     }
     flat.metadata.opaque_layouts.clear();

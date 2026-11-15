@@ -1,7 +1,7 @@
 //! Declaration compilation operations implemented by a language adapter.
 use super::*;
 
-/// Interpret adapter-specific trees into the fixed schema’s parameter/result slots.
+/// Compile adapter-specific conversion trees against source facts in the selected schema.
 /// Adapters select their operation vocabularies and dispatch to concrete helpers.
 /// Optional features reject unsupported work or decline a specialization.
 /// All operations run during generation; the returned fragments run in the library.
@@ -79,7 +79,7 @@ pub trait Codec {
     }
 
     /// Fixed converter and declaration metadata types, selected before parsing.
-    type Schema: Schema<Parameter = Option<Self::Input>, Return = Option<Self::Output>>;
+    type Schema: Schema;
     /// Prepared conversion for a function parameter.
     type Input: prebindgen_conversions::InputConversion + From<CodecInputPlan<Self>>;
     /// Prepared conversion for a function return.

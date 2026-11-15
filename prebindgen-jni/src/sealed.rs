@@ -721,8 +721,9 @@ pub(crate) fn emit_tags<I: KotlinInputConversion, O: KotlinOutputConversion>(
         Ok(())
     }
     let mut packages = BTreeMap::new();
-    for f in flat.functions.values() {
-        if let Some(metadata) = &f.metadata {
+    for f in crate::bindings::views(flat)? {
+        {
+            let metadata = f.metadata;
             for input in f.input_conversions()? {
                 visit(input.input_node(), &metadata.package, &mut packages)?;
             }

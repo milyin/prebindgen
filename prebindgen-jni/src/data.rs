@@ -976,7 +976,7 @@ mod group_tests {
         );
         let plan = prebindgen_declarations::compile_output(&flat, &codec, "items", &resolved, &())
             .unwrap();
-        flat.function_mut("items").unwrap().ret.slot = Some(plan);
+        bindings::set_output(&mut flat, "items", plan).unwrap();
     }
 
     fn record(root: &str) -> WireNode<JniWire, crate::JniChain, crate::JniBranch> {

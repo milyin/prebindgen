@@ -7,25 +7,27 @@ use std::rc::Rc;
 /// whose callback interfaces are emitted without a direct exported occurrence.
 pub(crate) fn nodes<I: KotlinInputConversion, O: KotlinOutputConversion>(
     flat: &Flat<JniSchema<I, O>>,
-) -> Vec<(bool, &kotlin::JniNode)> {
+) -> Result<Vec<(bool, &kotlin::JniNode)>> {
     let mut nodes = Vec::new();
-    for function in flat.functions.values() {
-        for param in &function.params {
-            if let Some(plan) = &param.ty.slot {
+    for source in flat.functions.values() {
+        for binding in &source.metadata {
+            let call = binding.call()?;
+            for plan in &call.inputs {
                 nodes.push((true, plan.input_node()));
             }
-        }
-        if let Some(plan) = &function.ret.slot {
-            let outcomes = plan.output_outcomes();
+            let outcomes = call.output.output_outcomes();
             nodes.extend(
                 std::iter::once(&outcomes.success)
                     .chain(outcomes.source_error.iter())
                     .chain(outcomes.binding_failure.iter())
                     .map(|node| (false, node)),
             );
-        }
-        if let Some(error) = function.metadata.as_ref().and_then(|m| m.error.as_deref()) {
-            if let Some(output) = &error.output {
+            if let Some(output) = binding
+                .metadata
+                .error
+                .as_deref()
+                .and_then(|e| e.output.as_ref())
+            {
                 nodes.push((false, &output.output_outcomes().success));
             }
         }
@@ -33,7 +35,7 @@ pub(crate) fn nodes<I: KotlinInputConversion, O: KotlinOutputConversion>(
     for input in &flat.metadata.callbacks {
         nodes.push((true, input.input_node()));
     }
-    nodes
+    Ok(nodes)
 }
 
 /// Metadata schema for a Kotlin/JNI binding model.
@@ -44,10 +46,10 @@ pub struct JniSchema<InConverter = JniInputConverter, OutConverter = JniOutputCo
     std::marker::PhantomData<fn() -> (InConverter, OutConverter)>,
 );
 impl<InConverter, OutConverter> prebindgen_flat::Schema for JniSchema<InConverter, OutConverter> {
-    type Parameter = Option<InConverter>;
-    type Return = Option<OutConverter>;
+    type Parameter = ();
+    type Return = ();
     type Module = JniModule;
-    type Function = Option<JniFunction>;
+    type Function = Vec<JniBinding<InConverter, OutConverter>>;
     type Type = JniType;
     type Field = data::JniField;
     type Variant = ();
@@ -69,6 +71,8 @@ pub struct JniModule {
 /// Export and placement decisions belonging to one function.
 #[derive(Clone, Debug, Default)]
 pub struct JniFunction {
+    /// This export delivers a returned sequence through a visitor/folder.
+    pub callback_return: bool,
     /// Fully qualified destination package.
     pub package: String,
     /// Destination function name.
@@ -90,3 +94,15 @@ pub struct JniType {
     pub(crate) errors: BTreeMap<bool, Rc<errors::ErrorBinding>>,
     pub(crate) error_class: Option<String>,
 }
+
+/// One JNI export attached to its original source function.
+pub type JniBinding<I = JniInputConverter, O = JniOutputConverter> =
+    prebindgen_declarations::DeclBinding<
+        crate::JniInputConfig,
+        crate::JniOutputConfig,
+        crate::JniInput,
+        crate::JniOutput,
+        I,
+        O,
+        JniFunction,
+    >;

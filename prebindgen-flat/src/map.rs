@@ -282,3 +282,76 @@ mod tests {
         assert_eq!(mapped.guards.len(), guard_count);
     }
 }
+
+impl<A: Schema> Flat<A> {
+    /// Change function attachments while moving every source declaration unchanged.
+    /// Other node payload types are preserved, so consumers only map their own function data.
+    pub fn try_map_function_data<B, F>(self, map: F) -> Result<Flat<B>>
+    where
+        B: Schema<
+            Module = A::Module,
+            Type = A::Type,
+            Field = A::Field,
+            Variant = A::Variant,
+            Parameter = A::Parameter,
+            Return = A::Return,
+        >,
+        F: FnMut(&syn::Ident, &syn::Path, A::Function) -> Result<B::Function>,
+    {
+        struct Functions<F>(F);
+        impl<A, B, F> MapAttachments<A, B> for Functions<F>
+        where
+            A: Schema,
+            B: Schema<
+                Module = A::Module,
+                Type = A::Type,
+                Field = A::Field,
+                Variant = A::Variant,
+                Parameter = A::Parameter,
+                Return = A::Return,
+            >,
+            F: FnMut(&syn::Ident, &syn::Path, A::Function) -> Result<B::Function>,
+        {
+            fn module(&mut self, d: A::Module) -> Result<B::Module> {
+                Ok(d)
+            }
+            fn function(
+                &mut self,
+                n: &syn::Ident,
+                p: &syn::Path,
+                d: A::Function,
+            ) -> Result<B::Function> {
+                (self.0)(n, p, d)
+            }
+            fn parameter(
+                &mut self,
+                _: &syn::Ident,
+                _: &syn::Ident,
+                _: &Type,
+                d: A::Parameter,
+            ) -> Result<B::Parameter> {
+                Ok(d)
+            }
+            fn returned(&mut self, _: &syn::Ident, _: &Type, d: A::Return) -> Result<B::Return> {
+                Ok(d)
+            }
+            fn ty(&mut self, _: &Type, d: A::Type) -> Result<B::Type> {
+                Ok(d)
+            }
+            fn field(
+                &mut self,
+                _: &Type,
+                _: Option<&syn::Ident>,
+                _: &syn::Member,
+                _: &Type,
+                d: A::Field,
+            ) -> Result<B::Field> {
+                Ok(d)
+            }
+            fn variant(&mut self, _: &Type, _: &syn::Ident, d: A::Variant) -> Result<B::Variant> {
+                Ok(d)
+            }
+        }
+        self.try_map_attachments(&mut Functions(map))
+    }
+}

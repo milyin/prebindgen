@@ -4,9 +4,9 @@
 //! Shared [`DeclFunction`] and [`DeclCallback`] containers hold the caller's tree types.
 //! [`DeclTypeDefaults`] attaches typed defaults to source types; source helpers resolve constructors, getters,
 //! fields, callbacks and local overrides without a shared operation vocabulary.
-//! [`resolve_bindings`] produces a complete [`Flat<ResolvedSchema<C>>`](ResolvedSchema).
-//! [`compile_resolved`] compiles that model using the adapter's [`Codec`].
-//! All generation settings and resolved conversions belong to Flat.
+//! Adapters attach [`DeclBinding`] values to their source function owners.
+//! [`resolve_call`] resolves one configured export and [`compile_call`] compiles it
+//! against the same source model using the adapter's [`Codec`].
 #![warn(missing_docs)]
 mod builders;
 #[cfg(test)]
@@ -42,10 +42,15 @@ mod resolved;
 
 pub use node::*;
 
-pub use resolved::{
+pub use resolved::ResolvedSlot;
+#[cfg(test)]
+mod test_pipeline;
+#[cfg(test)]
+use test_pipeline::{
     compile_function, compile_resolved, resolve_bindings, FunctionRecipe, ResolvedModule,
-    ResolvedSchema, ResolvedSlot,
+    ResolvedSchema,
 };
+
 mod enums;
 pub use enums::{enum_input, enum_output, EnumMapping};
 mod optional;
@@ -188,11 +193,16 @@ pub fn compile_input<C: Codec>(
         .iter()
         .position(|p| p.name == parameter)
         .ok_or_else(|| format!("`{function}`: unknown parameter `{parameter}`"))?;
-    let mut plan = Compiler::new(flat, codec, format!("p{index}")).input(
+    let compiler = Compiler::new(flat, codec, format!("p{index}"));
+    let wire = format_ident!("p{index}_callback");
+    let value = format_ident!("p{index}_callback_value");
+    let names = matches!(recipe, InputNode::Arrow { .. }).then_some((&wire, &value));
+    let mut plan = compiler.input_named(
         &f.params[index].ty.ty,
         recipe,
         extra,
         &Condition::default(),
+        names,
     )?;
     codec.finish_input(&mut plan, extra)?;
     codec.validate_input(&plan)?;
@@ -321,46 +331,6 @@ fn compile_output_at<C: Codec>(
     codec.finish_output(&mut plan, extra)?;
     codec.validate_output(&plan)?;
     Ok(plan.into())
-}
-
-/// Compile and install a resolved adapter input tree.
-pub fn bind_input<C: Codec>(
-    flat: &mut Flat<C::Schema>,
-    codec: &C,
-    function: &str,
-    parameter: &str,
-    tree: &ResolvedInput<C>,
-    extra: &C::Extra,
-) -> Result<()> {
-    let input = compile_input(flat, codec, function, parameter, tree, extra)?;
-    flat.function_mut(function)?
-        .params
-        .iter_mut()
-        .find(|p| p.name == parameter)
-        .ok_or("unknown parameter")?
-        .ty
-        .slot = Some(input);
-    Ok(())
-}
-/// Compile and install a resolved adapter output conversion.
-/// Input and output trees cannot be interchanged:
-/// ```compile_fail
-/// use prebindgen_declarations::{bind_output,Codec,ResolvedInput};
-/// use prebindgen_flat::Flat;
-/// fn wrong<C:Codec>(flat:&mut Flat<C::Schema>,codec:&C,input:&ResolvedInput<C>,extra:&C::Extra) {
-///     bind_output(flat,codec,"function",input,extra).unwrap();
-/// }
-/// ```
-pub fn bind_output<C: Codec>(
-    flat: &mut Flat<C::Schema>,
-    codec: &C,
-    function: &str,
-    tree: &ResolvedOutput<C>,
-    extra: &C::Extra,
-) -> Result<()> {
-    let output = compile_output(flat, codec, function, tree, extra)?;
-    flat.function_mut(function)?.ret.slot = Some(output);
-    Ok(())
 }
 
 fn finalize_output_schema<C: Codec>(
@@ -547,4 +517,7 @@ mod source;
 pub use source::*;
 
 mod binding;
-pub use binding::{BindingState, ConfiguredCall, ConfiguredSlot, DeclBinding, ResolvedCall};
+pub use binding::{
+    bind_prepared_input, bind_prepared_output, compile_call, resolve_call, BindingState,
+    ConfiguredCall, ConfiguredSlot, DeclBinding, ResolvedCall,
+};

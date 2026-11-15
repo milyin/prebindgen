@@ -718,21 +718,20 @@ fn explicit_data_expansion_replaces_a_configured_handle_slot() {
         if replace {
             function = function.input("value", expand_param!(Value).variant_self());
         }
+        let mut model =
+            flat("pub struct Value { pub n: i64 } pub fn echo(value: Value) -> Value {}");
+        crate::bind_input(
+            &mut model,
+            &JniCodec::raw(),
+            "echo",
+            "value",
+            &JniInputConfig::value(),
+            &(),
+        )
+        .unwrap();
         let result = JniGen::builder()
-            .flat(flat(
-                "pub struct Value { pub n: i64 } pub fn echo(value: Value) -> Value {}",
-            ))
+            .flat(model)
             .set_package_prefix("test")
-            .configure(|flat| {
-                crate::bind_input(
-                    flat,
-                    &JniCodec::raw(),
-                    "echo",
-                    "value",
-                    &crate::JniInputConfig::Leaf(JniInputLeafOp::Value),
-                    &(),
-                )
-            })
             .package(package!().class(data_class!(Value)).fun(function))
             .build();
         if replace {
@@ -889,13 +888,12 @@ fn optional_niches_and_nested_presence_preserve_distinct_states() {
         .unwrap();
         let f = flat.function(name).unwrap();
         assert_eq!(
-            crate::group::argument_parameters(f.params[0].ty.slot.as_ref().unwrap().input_node())
-                .len(),
+            crate::group::argument_parameters(f.input_conversions().unwrap()[0].input_node()).len(),
             count
         );
         assert_eq!(
             crate::group::result_packet_fields(
-                &(f.ret.slot.as_ref().unwrap()).output_outcomes().success
+                &(f.output_conversion().unwrap()).output_outcomes().success
             )
             .len(),
             count
@@ -939,8 +937,8 @@ fn scalar_niches_exhaust_at_the_carrier_limit() {
 
 #[test]
 fn optional_unannotated_fields_keep_outer_presence_in_both_directions() {
-    use crate::JniInput;
-    use prebindgen_declarations::bind_input;
+    use crate::bind_input;
+    use crate::JniInputConfig as JniInput;
     let mut source = flat("pub struct Wrapped { pub value: Option<i64> } pub fn wrapped_fields(x: &Wrapped) -> Wrapped {} pub fn echo(value: Option<Wrapped>) -> Option<Wrapped> {}");
     let input = JniInput::Unary {
         operation: JniInputUnary::Optional,
@@ -1015,8 +1013,8 @@ fn reference_and_presence_flag_niches_keep_nested_wire_counts_bounded() {
                 .fill(&mut source, &JniCodec::raw(), &fun!(echo), &())
                 .unwrap();
             let function = source.function("echo").unwrap();
-            let input = function.params[0].ty.slot.as_ref().unwrap();
-            let output = function.ret.slot.as_ref().unwrap();
+            let input = function.input_conversions().unwrap()[0];
+            let output = function.output_conversion().unwrap();
             let reference = base == "String" || base == "Vec<u8>";
             let count = if base == "()" || (reference && depth == 1) {
                 1
@@ -1058,8 +1056,8 @@ fn reference_and_presence_flag_niches_keep_nested_wire_counts_bounded() {
 
 #[test]
 fn nested_optional_selectors_reserve_distinct_tags_and_disable_arm_niches() {
-    use crate::JniInput;
-    use prebindgen_declarations::bind_input;
+    use crate::bind_input;
+    use crate::JniInputConfig as JniInput;
     let mut source = flat("pub fn echo(x:Option<Option<char>>)->char {} pub fn first(x:char)->char{} pub fn second(x:char)->char{}");
     let selector = JniInput::selector([
         JniInput::constructor("first", [JniInput::Leaf(JniInputLeafOp::Value)]),
@@ -1080,11 +1078,14 @@ fn nested_optional_selectors_reserve_distinct_tags_and_disable_arm_niches() {
         &(),
     )
     .unwrap();
-    let input = source.function("echo").unwrap().params[0]
-        .ty
-        .slot
-        .as_ref()
-        .unwrap();
+    let prebindgen_declarations::BindingState::Configured(call) =
+        &source.function("echo").unwrap().metadata[0].state
+    else {
+        panic!()
+    };
+    let prebindgen_declarations::ConfiguredSlot::Prepared(input) = &call.inputs[0] else {
+        panic!()
+    };
     assert_eq!(
         crate::group::argument_parameters(input.input_node()).len(),
         3
@@ -1253,10 +1254,7 @@ fn sequence_callback_variants_are_explicit_and_support_decomposed_elements() {
         .unwrap();
     assert!(both.kotlin["test/Functions.kt"].contains("values("));
     assert!(both.kotlin["test/Functions.kt"].contains("valuesFold("));
-    for source in [
-        "pub fn f()->i64{}",
-        "pub fn f()->Vec<i64>{} pub fn f_fold(){}",
-    ] {
+    for source in ["pub fn f()->i64{}"] {
         assert!(JniGen::builder()
             .flat(flat(source))
             .set_package_prefix("test")
@@ -1386,23 +1384,18 @@ fn logical_outcomes_keep_typed_errors_and_match_both_jni_sequence_deliveries() {
     let codec = JniCodec::declared();
     let decl = fun!(f).callback_return();
     flat.metadata.package = "test".into();
-    flat.function_mut("f").unwrap().metadata = Some(JniFunction {
-        package: "test".into(),
-        name: "f".into(),
-        order: 0,
-        error: None,
-    });
-    errors::resolve(&mut flat, &codec, &defaults, std::slice::from_ref(&decl)).unwrap();
-    assert!(flat
-        .function("f")
-        .unwrap()
+    bindings::install(&mut flat, decl, None).unwrap();
+    errors::resolve(&mut flat, &codec, &defaults).unwrap();
+    bindings::resolve_with(&mut flat, &defaults, &codec, &()).unwrap();
+    codec.compile_declarations(&mut flat, &()).unwrap();
+    bindings::compile_with(&mut flat, &codec, &()).unwrap();
+    assert_eq!(flat.functions.len(), 2); // f plus its explicit error accessor
+    assert!(flat.function("f").unwrap().metadata[0]
         .metadata
-        .as_ref()
-        .unwrap()
         .error
         .is_some());
-    defaults.fill(&mut flat, &codec, &decl, &()).unwrap();
-    let output = flat.function("f").unwrap().output_conversion().unwrap();
+    let ordinary = test_export(&flat, "f");
+    let output = ordinary.output_conversion().unwrap();
     let prebindgen_conversions::Outcomes {
         success,
         source_error: Some(error),
@@ -1457,20 +1450,10 @@ fn logical_outcomes_keep_typed_errors_and_match_both_jni_sequence_deliveries() {
                 .collect::<Vec<_>>()
         };
     let expected = shape(&output.output_outcomes().success);
-    sequence::callback_target(
-        &(flat.function("f").unwrap().output_conversion().unwrap())
-            .output_outcomes()
-            .success,
-    )
-    .unwrap();
-    let variant = defaults
-        .callback_variant(&mut flat, &codec, &decl, "f_fold", &())
+    sequence::callback_target(&(test_export(&flat, "f").ret.slot).output_outcomes().success)
         .unwrap();
-    defaults.fill(&mut flat, &codec, &variant, &()).unwrap();
     let callback_shape = shape(
-        &flat
-            .function("f_fold")
-            .unwrap()
+        &test_export(&flat, "f_fold")
             .output_conversion()
             .unwrap()
             .output_outcomes()
@@ -1515,9 +1498,15 @@ fn manual_jni_plans_share_one_tree_through_flat_and_configure() {
             output.outcomes.binding_failure =
                 Some(JniCodec::raw().binding_failure_layout(&())?.unwrap());
         }
-        let function = model.function_mut("echo")?;
-        function.params[0].ty.slot = Some(input.into());
-        function.ret.slot = Some(output.into());
+        if model.function("echo")?.metadata.is_empty() {
+            bindings::install(model, fun!(echo), None)?;
+        }
+        model.function_mut("echo")?.metadata[0].state =
+            prebindgen_declarations::BindingState::Prepared(prebindgen_conversions::PreparedCall {
+                inputs: vec![input.into()],
+                output: output.into(),
+            });
+        let function = model.function("echo")?;
         let input = function.input_conversions()?[0];
         assert!(std::ptr::eq(
             prebindgen_conversions::wire_definitions(std::iter::once(input.input_node()))
@@ -1610,12 +1599,8 @@ fn emission_reads_only_the_prepared_flat_and_shared_source_metadata() {
             .kotlin_type,
         "kotlin.String?"
     );
-    let error = prepared
-        .function("echo")
-        .unwrap()
+    let error = prepared.function("echo").unwrap().metadata[0]
         .metadata
-        .as_ref()
-        .unwrap()
         .error
         .as_ref()
         .unwrap();
@@ -1644,8 +1629,9 @@ fn public_emission_rejects_invalid_settings_and_unplaced_bindings() {
     prepared.metadata.package = "invalid-package".into();
     assert!(generate(&prepared).is_err());
     prepared.metadata.package = "test".into();
-    prepared.function_mut("f").unwrap().metadata = None;
-    assert!(generate(&prepared).is_err());
+    prepared.function_mut("f").unwrap().metadata.clear();
+    let generated = generate(&prepared).unwrap();
+    assert!(!generated.kotlin.contains_key("test/Functions.kt"));
 }
 
 #[test]
@@ -1663,11 +1649,11 @@ fn production_declarations_write_direct_trees_and_preserve_named_error_views() {
             .expand_return(expand_return!(Key).field_self())))
         .expand(DeclJniError::new(syn::parse_quote!(Key),fun!(err_message)))
         .prepare().unwrap();
-    let input = prepared.function("echo").unwrap().params[0]
-        .ty
-        .slot
-        .as_ref()
-        .unwrap();
+    let input = prepared
+        .function("echo")
+        .unwrap()
+        .input_conversions()
+        .unwrap()[0];
     assert!(matches!(
         input.input_node(),
         prebindgen_conversions::WireNode::Leaf(_)
@@ -1747,18 +1733,15 @@ fn preparation_uses_module_placement_and_error_selection_from_flat() {
         )
         .configure(|flat| {
             assert_eq!(flat.metadata.package, "initial");
-            assert_eq!(
-                flat.function("rows")?.metadata.as_ref().unwrap().name,
-                "rows"
-            );
+            assert_eq!(flat.function("rows")?.metadata[0].metadata.name, "rowsFold");
             flat.metadata.package = "canonical".into();
             flat.metadata.native_init = "/* canonical init */".into();
             for f in flat.functions.values_mut() {
-                if let Some(m) = &mut f.metadata {
-                    m.package = "canonical".into();
+                for binding in &mut f.metadata {
+                    binding.metadata.package = "canonical".into();
                 }
             }
-            flat.function_mut("mapped")?.metadata.as_mut().unwrap().name = "renamed".into();
+            flat.function_mut("mapped")?.metadata[0].metadata.name = "renamed".into();
             Ok(())
         })
         .prepare()
@@ -1766,18 +1749,8 @@ fn preparation_uses_module_placement_and_error_selection_from_flat() {
     let ty = prepared.resolve_type(&syn::parse_quote!(E)).unwrap();
     let errors = &prepared.type_info(&ty).unwrap().metadata.errors;
     assert_eq!(errors.len(), 2);
-    let rows = prepared
-        .function("rows_fold")
-        .unwrap()
-        .metadata
-        .as_ref()
-        .unwrap();
-    let mapped = prepared
-        .function("mapped")
-        .unwrap()
-        .metadata
-        .as_ref()
-        .unwrap();
+    let rows = test_export(&prepared, "rows_fold").metadata;
+    let mapped = &prepared.function("mapped").unwrap().metadata[0].metadata;
     assert!(Rc::ptr_eq(rows.error.as_ref().unwrap(), &errors[&false]));
     assert!(Rc::ptr_eq(mapped.error.as_ref().unwrap(), &errors[&true]));
     assert!(!prepared
@@ -1836,7 +1809,7 @@ fn configured_function_names_are_validated_from_flat() {
         .set_package_prefix("test")
         .package(package!().fun(fun!(first)).fun(fun!(second)))
         .configure(|flat| {
-            flat.function_mut("second")?.metadata.as_mut().unwrap().name = "first".into();
+            flat.function_mut("second")?.metadata[0].metadata.name = "first".into();
             Ok(())
         })
         .prepare()
@@ -1877,12 +1850,8 @@ fn extending_prepared_flat_keeps_error_helpers_unique_and_existing_projections()
         .package(package!().fun(fun!(first)))
         .prepare()
         .unwrap();
-    let original = initial
-        .function("first")
-        .unwrap()
+    let original = initial.function("first").unwrap().metadata[0]
         .metadata
-        .as_ref()
-        .unwrap()
         .error
         .as_ref()
         .unwrap()
@@ -1894,21 +1863,13 @@ fn extending_prepared_flat_keeps_error_helpers_unique_and_existing_projections()
         .package(package!().fun(fun!(second)))
         .prepare()
         .unwrap();
-    let first = extended
-        .function("first")
-        .unwrap()
+    let first = extended.function("first").unwrap().metadata[0]
         .metadata
-        .as_ref()
-        .unwrap()
         .error
         .as_ref()
         .unwrap();
-    let second = extended
-        .function("second")
-        .unwrap()
+    let second = extended.function("second").unwrap().metadata[0]
         .metadata
-        .as_ref()
-        .unwrap()
         .error
         .as_ref()
         .unwrap();
@@ -1920,24 +1881,23 @@ fn extending_prepared_flat_keeps_error_helpers_unique_and_existing_projections()
 }
 
 #[test]
-fn clearing_declared_metadata_and_editing_invalid_package_return_errors() {
+fn removing_exports_in_configuration_and_invalid_package_edits() {
     for source in ["pub fn f()->Result<i64,String>{}", "pub fn f()->Vec<i64>{}"] {
-        let result = std::panic::catch_unwind(|| {
-            JniGen::builder()
-                .flat(flat(source))
-                .set_package_prefix("test")
-                .package(package!().fun(fun!(f).callback_return()))
-                .configure(|flat| {
-                    flat.function_mut("f")?.metadata = None;
-                    Ok(())
-                })
-                .prepare()
-        });
-        let error = result
-            .expect("preparation must return an error, not panic")
-            .err()
+        let prepared = JniGen::builder()
+            .flat(flat(source))
+            .set_package_prefix("test")
+            .package(package!().fun(fun!(f).callback_return()))
+            .configure(|flat| {
+                flat.function_mut("f")?.metadata.clear();
+                Ok(())
+            })
+            .prepare()
             .unwrap();
-        assert!(error.contains("has no export metadata"));
+        assert_eq!(prepared.functions.len(), 1);
+        assert!(!generate(&prepared)
+            .unwrap()
+            .kotlin
+            .contains_key("test/Functions.kt"));
     }
     let error = JniGen::builder()
         .flat(flat("pub fn f()->i64{}"))
@@ -1961,7 +1921,15 @@ fn emission_rejects_placed_functions_with_missing_converters() {
         .package(package!().fun(fun!(f)))
         .prepare()
         .unwrap();
-    prepared.function_mut("f").unwrap().ret.slot = None;
+    prepared.function_mut("f").unwrap().metadata[0].state =
+        prebindgen_declarations::BindingState::Configured(
+            prebindgen_declarations::ConfiguredCall::from_declaration(
+                prepared.function("f").unwrap(),
+                fun!(f),
+                None,
+            )
+            .unwrap(),
+        );
     assert!(generate(&prepared).is_err());
 }
 
@@ -2098,7 +2066,7 @@ fn callback_constructor_is_resolved_without_exporting_the_helper() {
         )
         .prepare()
         .expect("callback-taking helpers must compose with input defaults");
-    assert!(prepared.function("make").unwrap().metadata.is_none());
+    assert!(prepared.function("make").unwrap().metadata.is_empty());
     let generated = generate(&prepared).unwrap();
     assert!(generated.kotlin.contains_key("test/i64Callback.kt"));
     assert!(!generated.kotlin["test/Functions.kt"].contains("make("));
@@ -2852,7 +2820,7 @@ fn type_derived_bulk_runtime_names_are_also_reserved() {
 }
 
 fn bulk_result(model: &JniBindings, name: &str) -> bool {
-    let output = model.function(name).unwrap().output_conversion().unwrap();
+    let output = test_export(model, name).ret.slot;
     group::result_packet_fields(&output.output_outcomes().success)
         .any(|wire| matches!(wire.kind, JniWire::BulkBuffer { .. }))
 }
@@ -2890,11 +2858,7 @@ fn automatic_bulk_collection_outputs_keep_inputs_and_direct_buffers_ordinary() {
     for name in ["single", "bytes"] {
         assert!(!bulk_result(&model, name), "{name}");
     }
-    let input = model.function("echo").unwrap().params[0]
-        .ty
-        .slot
-        .as_ref()
-        .unwrap();
+    let input = model.function("echo").unwrap().input_conversions().unwrap()[0];
     assert!(matches!(
         input.input_node(),
         prebindgen_conversions::WireNode::Chain {
@@ -3408,11 +3372,7 @@ fn input_collections_and_callback_results_do_not_emit_output_cleanup_helpers() {
 // A callback element is one boundary argument even when it expands into many
 // Kotlin values or contains its own dynamic collection.
 fn callback_element_is_bulk(model: &JniBindings, function: &str) -> bool {
-    let output = model
-        .function(function)
-        .unwrap()
-        .output_conversion()
-        .unwrap();
+    let output = test_export(model, function).ret.slot;
     let (_, element, delivery) =
         sequence::return_sequence(&output.output_outcomes().success).unwrap();
     assert!(matches!(delivery, JniSequence::Callback));
@@ -3609,14 +3569,9 @@ fn resolved_callback_elements_can_keep_optional_presence_outside_a_bulk_frame() 
             ),
         }),
     };
-    let conversion = prebindgen_declarations::compile_output(
-        &model,
-        &JniCodec::raw(),
-        "rows_fold",
-        &recipe,
-        &(),
-    )
-    .unwrap();
+    let conversion =
+        prebindgen_declarations::compile_output(&model, &JniCodec::raw(), "rows", &recipe, &())
+            .unwrap();
     let (_, element, _) = sequence::return_sequence(&conversion.output_outcomes().success).unwrap();
     let fields = group::callback_parameters(element).collect::<Vec<_>>();
     // The optional uses a null frame, so presence stays outside its payload
@@ -3632,7 +3587,16 @@ fn resolved_callback_elements_can_keep_optional_presence_outside_a_bulk_frame() 
             .count(),
         1
     );
-    model.function_mut("rows_fold").unwrap().ret.slot = Some(conversion);
+    model
+        .function_mut("rows")
+        .unwrap()
+        .metadata
+        .iter_mut()
+        .find(|b| b.name == "rows_fold")
+        .unwrap()
+        .call_mut()
+        .unwrap()
+        .output = conversion;
     let generated = generate(&model).unwrap();
     assert!(generated.kotlin["test/Functions.kt"]
         .contains("fold: (A, kotlin.collections.List<test.Owner>?) -> A"));
@@ -4153,7 +4117,7 @@ fn raw_borrowed_leaf_composes_with_declared_inputs_using_wire_access() {
             &Default::default(),
         ))
         .unwrap();
-    model.function_mut("call").unwrap().params[0].ty.slot = Some(plan.into());
+    bindings::set_input(&mut model, "call", "first", plan.into()).unwrap();
     let generated = generate(&model).unwrap();
     assert!(generated
         .kotlin
@@ -4405,11 +4369,11 @@ fn resolved_callback_owns_its_conversions_and_cleanup_policy() {
     use crate::operations::JniInput;
 
     use crate::{DeclJniCallback, JniSourceResolver};
-    use prebindgen_declarations::{compile_resolved, ResolvedSlot};
+    use prebindgen_declarations::{BindingState, ResolvedSlot};
     let mut source =
         flat("pub fn scoped(cb:impl Fn(i64)->i64){} pub fn owned(cb:impl Fn(i64)->i64){}");
     source.metadata.package = "example".into();
-    let defaults = JniSourceResolver::new(&mut source, vec![], vec![], vec![]).unwrap();
+    let _resolver = JniSourceResolver::new(&mut source, vec![], vec![], vec![]).unwrap();
     let declarations = vec![
         fun!(scoped),
         fun!(owned).expand_param(
@@ -4418,16 +4382,21 @@ fn resolved_callback_owns_its_conversions_and_cleanup_policy() {
                 .expand_param(0, crate::JniOutputConfig::value()),
         ),
     ];
-    let resolved = defaults
-        .resolve(source, JniCodec::declared(), &declarations, ())
-        .unwrap();
-    drop(declarations);
+    for declaration in declarations {
+        bindings::install(&mut source, declaration, None).unwrap();
+    }
+    let mut resolved = crate::resolve(source).unwrap();
     for (name, scoped) in [("scoped", true), ("owned", false)] {
-        let Some(ResolvedSlot::Tree(JniInput::Arrow {
+        let BindingState::Resolved(prebindgen_declarations::ResolvedCall { inputs, .. }) =
+            &resolved.function(name).unwrap().metadata[0].state
+        else {
+            panic!("not resolved")
+        };
+        let ResolvedSlot::Tree(JniInput::Arrow {
             operation,
             domain,
             codomain,
-        })) = &resolved.function(name).unwrap().params[0].ty.slot
+        }) = &inputs[0]
         else {
             panic!("expected arrow")
         };
@@ -4442,12 +4411,47 @@ fn resolved_callback_owns_its_conversions_and_cleanup_policy() {
         assert_eq!(domain.argument_nodes().unwrap().len(), 1);
         assert!(matches!(codomain.as_ref(), JniInput::Leaf(_)));
     }
-    let compiled = compile_resolved(resolved).unwrap();
+    JniCodec::declared()
+        .compile_declarations(&mut resolved, &())
+        .unwrap();
+    bindings::compile_with(&mut resolved, &JniCodec::declared(), &()).unwrap();
     for name in ["scoped", "owned"] {
-        assert!(compiled.function(name).unwrap().params[0].ty.slot.is_some());
+        assert_eq!(
+            resolved
+                .function(name)
+                .unwrap()
+                .input_conversions()
+                .unwrap()
+                .len(),
+            1
+        );
     }
 }
 
+fn callback_output_recipe(
+    model: &mut JniBindings,
+    resolver: &JniSourceResolver,
+    codec: &JniCodec,
+    declaration: DeclJniFunction,
+) -> JniOutput {
+    let name = declaration.name.clone();
+    bindings::install(model, declaration, None).unwrap();
+    bindings::resolve_with(model, resolver, codec, &()).unwrap();
+    let prebindgen_declarations::BindingState::Resolved(call) = &model
+        .function(&name)
+        .unwrap()
+        .metadata
+        .last()
+        .unwrap()
+        .state
+    else {
+        panic!("expected resolved callback")
+    };
+    let prebindgen_declarations::ResolvedSlot::Tree(tree) = &call.output else {
+        panic!("expected recipe")
+    };
+    tree.clone()
+}
 #[test]
 fn callback_variant_selects_delivery_before_wires_exist() {
     use crate::operations::{JniOutput, JniOutputUnary};
@@ -4456,19 +4460,14 @@ fn callback_variant_selects_delivery_before_wires_exist() {
 
     let mut flat = flat("pub fn f()->Option<Vec<i64>>{}");
     let defaults = JniSourceResolver::new(&mut flat, vec![], vec![], vec![]).unwrap();
-    let variant = defaults
-        .callback_variant(&mut flat, &JniCodec::raw(), &fun!(f), "f_fold", &())
-        .unwrap();
-    assert!(flat.function("f_fold").unwrap().ret.slot.is_none());
-    let tree = defaults
-        .resolve_output(
-            &flat,
-            &JniCodec::raw(),
-            &flat.function("f_fold").unwrap().ret.ty,
-            variant.ret.as_ref().unwrap(),
-            &(),
-        )
-        .unwrap();
+    let tree = callback_output_recipe(
+        &mut flat,
+        &defaults,
+        &JniCodec::raw(),
+        fun!(f).callback_return_only(),
+    );
+    assert_eq!(flat.functions.len(), 1);
+    assert_eq!(flat.function("f").unwrap().metadata.len(), 1);
     let JniOutput::Unary {
         operation: JniOutputUnary::Optional,
         child,
@@ -4518,24 +4517,12 @@ fn callback_delivery_is_selected_before_bulk_promotion() {
             child: _
         }
     ));
-    let variant = defaults
-        .callback_variant(
-            &mut flat,
-            &JniCodec::raw(),
-            &fun!(values),
-            "values_fold",
-            &(),
-        )
-        .unwrap();
-    let callback = defaults
-        .resolve_output(
-            &flat,
-            &JniCodec::raw(),
-            &ty,
-            variant.ret.as_ref().unwrap(),
-            &(),
-        )
-        .unwrap();
+    let callback = callback_output_recipe(
+        &mut flat,
+        &defaults,
+        &JniCodec::raw(),
+        fun!(values).callback_return_only(),
+    );
     let JniOutput::Unary {
         operation: JniOutputUnary::Optional,
         child,
@@ -4561,18 +4548,8 @@ fn callback_return_preserves_defaults_for_the_full_reference_type() {
     )
     .unwrap();
     let codec = JniCodec::raw();
-    let variant = defaults
-        .callback_variant(&mut model, &codec, &fun!(values), "values_fold", &())
-        .unwrap();
-    let error = defaults
-        .resolve_output(
-            &model,
-            &codec,
-            &model.function("values_fold").unwrap().ret.ty,
-            variant.ret.as_ref().unwrap(),
-            &(),
-        )
-        .unwrap_err();
+    bindings::install(&mut model, fun!(values).callback_return_only(), None).unwrap();
+    let error = bindings::resolve_with(&mut model, &defaults, &codec, &()).unwrap_err();
     assert!(
         error.contains("requires exactly one outer sequence"),
         "{error}"
@@ -4580,3 +4557,196 @@ fn callback_return_preserves_defaults_for_the_full_reference_type() {
 }
 
 use prebindgen_conversions::FunctionConversions as _;
+
+#[test]
+fn stage_transitions_need_only_the_configured_flat() {
+    let configured = JniGen::builder()
+        .flat(flat("pub fn send(value:i64)->Result<i64,i64>{}"))
+        .set_package_prefix("test")
+        .package(package!().fun(fun!(send)))
+        .configured()
+        .unwrap();
+    assert!(generate(&configured).is_err());
+    let resolved = crate::resolve(configured).unwrap();
+    assert!(matches!(
+        resolved.function("send").unwrap().metadata[0].state,
+        prebindgen_declarations::BindingState::Resolved(_)
+    ));
+    let prepared = crate::compile(resolved).unwrap();
+    assert!(generate(&prepared)
+        .unwrap()
+        .kotlin
+        .contains_key("test/i64Handler.kt"));
+    assert_eq!(prepared.functions.len(), 1);
+}
+
+#[test]
+fn input_only_reconfiguration_preserves_mapped_and_custom_error_outputs() {
+    for custom in [false, true] {
+        let mut prepared=JniGen::builder()
+            .flat(flat("pub type Failure=String;pub fn message(e:&Failure)->String{}pub fn send(value:i64)->Result<i64,Failure>{}"))
+            .set_package_prefix("test")
+            .package(package!().fun(fun!(send).on_error(fun!(message))))
+            .prepare().unwrap();
+        if custom {
+            let output = prepared.function("send").unwrap().metadata[0]
+                .metadata
+                .error
+                .as_ref()
+                .unwrap()
+                .output()
+                .unwrap()
+                .clone()
+                .packet_only();
+            bind_error_output(&mut prepared, "send", output).unwrap();
+        }
+        let previous = prepared.function("send").unwrap().metadata[0]
+            .metadata
+            .error
+            .as_ref()
+            .unwrap()
+            .clone();
+        let prepared = JniGen::builder()
+            .flat(prepared)
+            .set_package_prefix("test")
+            .package(
+                package!().fun(fun!(send).expand_param("value", expand_param!(i64).variant_self())),
+            )
+            .prepare()
+            .unwrap();
+        let current = prepared.function("send").unwrap().metadata[0]
+            .metadata
+            .error
+            .as_ref()
+            .unwrap();
+        assert!(std::rc::Rc::ptr_eq(&previous, current));
+        let generated = generate(&prepared).unwrap();
+        assert!(generated.kotlin["test/Functions.kt"].contains(&current.handler));
+    }
+}
+
+#[test]
+fn callback_exports_preserve_native_inputs_without_cloning_source_functions() {
+    for only in [false, true] {
+        let mut prepared = JniGen::builder()
+            .flat(flat("pub fn rows(count:i64)->Vec<i64>{}"))
+            .set_package_prefix("test")
+            .package(package!().fun(fun!(rows)))
+            .prepare()
+            .unwrap();
+        let input = JniCodec::raw()
+            .input_leaf(InputLeaf::new(
+                &prepared,
+                &syn::parse_quote!(i64),
+                &(),
+                syn::parse_quote!(native_count),
+                syn::parse_quote!(native_value),
+                &Default::default(),
+            ))
+            .unwrap();
+        bindings::set_input(&mut prepared, "rows", "count", input.into()).unwrap();
+        let declaration = if only {
+            fun!(rows).callback_return_only()
+        } else {
+            fun!(rows).callback_return()
+        };
+        let prepared = JniGen::builder()
+            .flat(prepared)
+            .set_package_prefix("test")
+            .package(
+                package!().fun(declaration.expand_return(expand_return!(Vec<i64>).field_self())),
+            )
+            .prepare()
+            .unwrap();
+        assert_eq!(prepared.functions.len(), 1);
+        assert_eq!(
+            prepared.function("rows").unwrap().metadata.len(),
+            if only { 1 } else { 2 }
+        );
+        for binding in &prepared.function("rows").unwrap().metadata {
+            let view = binding
+                .prepared(prepared.function("rows").unwrap())
+                .unwrap();
+            assert!(std::ptr::eq(
+                view.path,
+                &prepared.function("rows").unwrap().path
+            ));
+            assert_eq!(
+                view.input_wire_definitions().unwrap().next().unwrap().name,
+                "native_count"
+            );
+        }
+        generate(&prepared).unwrap();
+    }
+}
+
+#[test]
+fn callback_native_labels_do_not_claim_other_source_function_names() {
+    let prepared = JniGen::builder()
+        .flat(flat("pub fn rows()->Vec<i64>{}pub fn rows_fold()->i64{}"))
+        .set_package_prefix("test")
+        .package(
+            package!()
+                .fun(fun!(rows).callback_return_only())
+                .fun(fun!(rows_fold).name("other")),
+        )
+        .prepare()
+        .unwrap();
+    assert_eq!(prepared.functions.len(), 2);
+    let names = bindings::views(&prepared)
+        .unwrap()
+        .into_iter()
+        .map(|f| f.name.to_string())
+        .collect::<BTreeSet<_>>();
+    assert_eq!(names.len(), 2);
+    let generated = generate(&prepared).unwrap();
+    assert!(generated.rust.contains("crate::rows_fold()"));
+    assert!(generated.kotlin["test/Functions.kt"].contains("other("));
+}
+
+#[test]
+fn prebound_converters_are_adopted_by_nested_or_renamed_exports() {
+    for nested in [false, true] {
+        let mut source = flat("pub fn echo(value:i64)->i64{}");
+        let input = JniCodec::raw()
+            .input_leaf(InputLeaf::new(
+                &source,
+                &syn::parse_quote!(i64),
+                &(),
+                syn::parse_quote!(custom_wire),
+                syn::parse_quote!(custom_value),
+                &Default::default(),
+            ))
+            .unwrap();
+        bindings::set_input(&mut source, "echo", "value", input.into()).unwrap();
+        let package = if nested {
+            package!("api").fun(fun!(echo))
+        } else {
+            package!().fun(fun!(echo).name("renamed"))
+        };
+        let prepared = JniGen::builder()
+            .flat(source)
+            .set_package_prefix("test")
+            .package(package)
+            .prepare()
+            .unwrap();
+        assert_eq!(prepared.function("echo").unwrap().metadata.len(), 1);
+        assert_eq!(
+            prepared
+                .function("echo")
+                .unwrap()
+                .input_wire_definitions()
+                .unwrap()
+                .next()
+                .unwrap()
+                .name,
+            "custom_wire"
+        );
+        let output = generate(&prepared).unwrap();
+        if nested {
+            assert!(output.kotlin["test/api/Functions.kt"].contains("echo("));
+        } else {
+            assert!(output.kotlin["test/Functions.kt"].contains("renamed("));
+        }
+    }
+}

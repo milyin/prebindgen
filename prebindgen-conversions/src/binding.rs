@@ -4,6 +4,7 @@ use prebindgen_flat::{Function, Result};
 
 /// Conversions and export data for one foreign use of a source function.
 /// The source function retains the only Rust signature and callable path.
+#[derive(Clone, Debug)]
 pub struct PreparedCall<I, O> {
     /// One conversion per source argument, in declaration order.
     pub inputs: Vec<I>,
@@ -84,6 +85,91 @@ impl<I: Conversion, O: Conversion, M> FunctionConversions<I, O> for BoundFunctio
     }
     fn output_conversion(&self) -> Result<&O> {
         Ok(self.ret.slot)
+    }
+    fn input_wire_definitions<'a>(&'a self) -> Result<impl Iterator<Item = &'a Wire<I::Wire>>>
+    where
+        I: InputConversion,
+        I::Wire: 'a,
+    {
+        Ok(self
+            .input_conversions()?
+            .into_iter()
+            .flat_map(|i| crate::wire_definitions(std::iter::once(i.input_node()))))
+    }
+}
+
+/// Preparation stage of one exported call, owned by the binding library.
+#[derive(Clone, Debug)]
+pub enum BindingState<C, R, P> {
+    /// User configuration awaiting source-dependent resolution.
+    Configured(C),
+    /// Explicit conversion operations awaiting compilation.
+    Resolved(R),
+    /// Complete call conversions ready for emission.
+    Prepared(P),
+}
+/// One exported use of a source callable, without a duplicate Rust signature.
+#[derive(Clone, Debug)]
+pub struct FunctionBinding<M, C, R, P> {
+    /// Generated wrapper identity.
+    pub name: syn::Ident,
+    /// Adapter placement, names and error associations.
+    pub metadata: M,
+    /// Current preparation data for this export.
+    pub state: BindingState<C, R, P>,
+}
+impl<M, C, R, I, O> FunctionBinding<M, C, R, PreparedCall<I, O>> {
+    /// Mutably access the compiled conversions of an already prepared export.
+    pub fn call_mut(&mut self) -> Result<&mut PreparedCall<I, O>> {
+        match &mut self.state {
+            BindingState::Prepared(call) => Ok(call),
+            _ => Err(format!("binding `{}` is not prepared", self.name)),
+        }
+    }
+    /// Read this export's compiled argument/result conversions.
+    pub fn call(&self) -> Result<&PreparedCall<I, O>> {
+        match &self.state {
+            BindingState::Prepared(call) => Ok(call),
+            _ => Err(format!("binding `{}` is not prepared", self.name)),
+        }
+    }
+    /// Borrow this export alongside its authoritative source declaration.
+    pub fn prepared<'a, SP, SR, SF>(
+        &'a self,
+        source: &'a Function<SP, SR, SF>,
+    ) -> Result<BoundFunction<'a, I, O, M>> {
+        self.call()?.view(source, &self.name, &self.metadata)
+    }
+}
+impl<C, R, I: Conversion, O: Conversion, M> FunctionConversions<I, O>
+    for Function<(), (), Vec<FunctionBinding<M, C, R, PreparedCall<I, O>>>>
+{
+    fn source_path(&self) -> &syn::Path {
+        &self.path
+    }
+    fn input_conversions(&self) -> Result<Vec<&I>> {
+        if self.metadata.len() != 1 {
+            return Err(format!(
+                "source `{}` has {} bindings; select an export explicitly",
+                self.name,
+                self.metadata.len()
+            ));
+        }
+        let call = self.metadata[0].call()?;
+        if call.inputs.len() != self.params.len() {
+            return Err("prepared input count does not match source parameters".into());
+        }
+        Ok(call.inputs.iter().collect())
+    }
+    fn output_conversion(&self) -> Result<&O> {
+        if self.metadata.len() != 1 {
+            return Err(format!(
+                "source `{}` has {} bindings; select an export explicitly",
+                self.name,
+                self.metadata.len()
+            ));
+        }
+        Ok(&self.metadata[0].call()?.output)
     }
     fn input_wire_definitions<'a>(&'a self) -> Result<impl Iterator<Item = &'a Wire<I::Wire>>>
     where

@@ -1,0 +1,283 @@
+//! Private storage adapter for the small declaration-compiler unit-test language.
+use crate::*;
+use prebindgen_flat::{Function, Param, TypeUse};
+use std::collections::BTreeMap;
+/// Schema with resolved input/output trees and the adapter's source metadata.
+pub struct ResolvedSchema<C: Codec>(std::marker::PhantomData<C>);
+impl<C: Codec> Schema for ResolvedSchema<C> {
+    type Parameter = Option<ResolvedSlot<ResolvedInput<C>, C::Input>>;
+    type Return = Option<ResolvedSlot<ResolvedOutput<C>, C::Output>>;
+    type Module = ResolvedModule<C>;
+    type Function = <C::Schema as Schema>::Function;
+    type Type = <C::Schema as Schema>::Type;
+    type Field = <C::Schema as Schema>::Field;
+    type Variant = <C::Schema as Schema>::Variant;
+}
+/// Adapter settings and compilation policy owned by the resolved model.
+/// No declarations or default-expansion registries are retained.
+pub struct ResolvedModule<C: Codec> {
+    /// Source module's foreign declarations and generation settings.
+    pub source: <C::Schema as Schema>::Module,
+    /// Compiler and occurrence settings; absent only in an unfinished model.
+    pub compilation: Option<(C, C::Extra)>,
+}
+impl<C: Codec> ResolvedModule<C> {
+    /// Own the adapter and occurrence settings needed to compile this model.
+    /// Language generators can build resolved trees directly with their own source resolver.
+    pub fn new(source: <C::Schema as Schema>::Module, codec: C, extra: C::Extra) -> Self {
+        Self {
+            source,
+            compilation: Some((codec, extra)),
+        }
+    }
+}
+impl<C: Codec> Default for ResolvedModule<C> {
+    fn default() -> Self {
+        Self {
+            source: Default::default(),
+            compilation: None,
+        }
+    }
+}
+
+/// Independently resolved conversions of one function's parameter and result occurrences.
+pub struct FunctionRecipe<InTree, OutTree> {
+    /// Source-ordered parameter recipes; None preserves a supplied converter.
+    pub inputs: Vec<Option<InTree>>,
+    /// Result recipe; None preserves a supplied converter.
+    pub output: Option<OutTree>,
+}
+
+/// Compile a resolved Flat without any external configuration or default registry.
+/// Source metadata and custom converters are moved into the result unchanged.
+pub fn compile_resolved<C: Codec>(flat: Flat<ResolvedSchema<C>>) -> Result<Flat<C::Schema>>
+where
+    C::Schema: Schema<Parameter = Option<C::Input>, Return = Option<C::Output>>,
+{
+    let mut stage = CompileAttachments::<C> {
+        compilation: None,
+        inputs: Vec::new(),
+        recipes: Vec::new(),
+    };
+    let mut result = flat.try_map_attachments(&mut stage)?;
+    let (codec, extra) = stage
+        .compilation
+        .ok_or("resolved Flat has no compilation policy")?;
+    let recipes = stage.recipes;
+    codec.compile_declarations(&mut result, &extra)?;
+    for (name, recipe) in recipes {
+        compile_function(&mut result, &codec, &name, recipe, &extra)
+            .map_err(|e| format!("{name}: {e}"))?;
+    }
+    Ok(result)
+}
+struct CompileAttachments<C: Codec> {
+    compilation: Option<(C, C::Extra)>,
+    inputs: Vec<Option<ResolvedInput<C>>>,
+    recipes: Vec<(String, FunctionRecipe<ResolvedInput<C>, ResolvedOutput<C>>)>,
+}
+impl<C: Codec> prebindgen_flat::MapAttachments<ResolvedSchema<C>, C::Schema>
+    for CompileAttachments<C>
+where
+    C::Schema: Schema<Parameter = Option<C::Input>, Return = Option<C::Output>>,
+{
+    fn module(&mut self, data: ResolvedModule<C>) -> Result<<C::Schema as Schema>::Module> {
+        self.compilation = data.compilation;
+        Ok(data.source)
+    }
+    fn function(
+        &mut self,
+        _: &syn::Ident,
+        _: &syn::Path,
+        data: <C::Schema as Schema>::Function,
+    ) -> Result<<C::Schema as Schema>::Function> {
+        Ok(data)
+    }
+    fn parameter(
+        &mut self,
+        _: &syn::Ident,
+        _: &syn::Ident,
+        _: &Type,
+        data: Option<ResolvedSlot<ResolvedInput<C>, C::Input>>,
+    ) -> Result<Option<C::Input>> {
+        let (tree, slot) = separate(data);
+        self.inputs.push(tree);
+        Ok(slot)
+    }
+    fn returned(
+        &mut self,
+        function: &syn::Ident,
+        _: &Type,
+        data: Option<ResolvedSlot<ResolvedOutput<C>, C::Output>>,
+    ) -> Result<Option<C::Output>> {
+        let (output, slot) = separate(data);
+        self.recipes.push((
+            function.to_string(),
+            FunctionRecipe {
+                inputs: std::mem::take(&mut self.inputs),
+                output,
+            },
+        ));
+        Ok(slot)
+    }
+    fn ty(
+        &mut self,
+        _: &Type,
+        data: <C::Schema as Schema>::Type,
+    ) -> Result<<C::Schema as Schema>::Type> {
+        Ok(data)
+    }
+    fn field(
+        &mut self,
+        _: &Type,
+        _: Option<&syn::Ident>,
+        _: &syn::Member,
+        _: &Type,
+        data: <C::Schema as Schema>::Field,
+    ) -> Result<<C::Schema as Schema>::Field> {
+        Ok(data)
+    }
+    fn variant(
+        &mut self,
+        _: &Type,
+        _: &syn::Ident,
+        data: <C::Schema as Schema>::Variant,
+    ) -> Result<<C::Schema as Schema>::Variant> {
+        Ok(data)
+    }
+}
+
+fn separate<T, P>(slot: Option<ResolvedSlot<T, P>>) -> (Option<T>, Option<P>) {
+    match slot {
+        Some(ResolvedSlot::Tree(tree)) => (Some(tree), None),
+        Some(ResolvedSlot::Prepared(plan)) => (None, Some(plan)),
+        None => (None, None),
+    }
+}
+
+/// Compile and atomically install the resolved conversions of one function.
+pub fn compile_function<C: Codec>(
+    flat: &mut Flat<C::Schema>,
+    codec: &C,
+    name: &str,
+    recipe: FunctionRecipe<ResolvedInput<C>, ResolvedOutput<C>>,
+    extra: &C::Extra,
+) -> Result<()>
+where
+    C::Schema: Schema<Parameter = Option<C::Input>, Return = Option<C::Output>>,
+{
+    let source = flat.function(name)?;
+    if recipe.inputs.len() != source.params.len() {
+        return Err(format!(
+            "`{name}`: input recipe count does not match source parameters"
+        ));
+    }
+    let inputs = source
+        .params
+        .iter()
+        .zip(recipe.inputs)
+        .map(|(p, tree)| {
+            tree.map(|tree| {
+                crate::compile_input(flat, codec, name, &p.name.to_string(), &tree, extra)
+            })
+            .transpose()
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let output = recipe
+        .output
+        .map(|tree| crate::compile_output(flat, codec, name, &tree, extra))
+        .transpose()?;
+    let dest = flat.function_mut(name)?;
+    for (p, plan) in dest.params.iter_mut().zip(inputs) {
+        if let Some(plan) = plan {
+            p.ty.slot = Some(plan);
+        }
+    }
+    if let Some(plan) = output {
+        dest.ret.slot = Some(plan);
+    }
+    Ok(())
+}
+
+/// Resolve declarations into a complete Flat using the caller's resolution function.
+pub fn resolve_bindings<C: Codec, I, O, E>(
+    flat: Flat<C::Schema>,
+    codec: C,
+    declarations: &[DeclFunction<I, O, E>],
+    mut resolve: impl FnMut(
+        &Flat<C::Schema>,
+        &C,
+        &DeclFunction<I, O, E>,
+        &C::Extra,
+    ) -> Result<FunctionRecipe<ResolvedInput<C>, ResolvedOutput<C>>>,
+    extra: C::Extra,
+) -> Result<Flat<ResolvedSchema<C>>>
+where
+    C::Schema: Schema<Parameter = Option<C::Input>, Return = Option<C::Output>>,
+{
+    let mut recipes = BTreeMap::new();
+    for decl in declarations {
+        let recipe =
+            resolve(&flat, &codec, decl, &extra).map_err(|e| format!("{}: {e}", decl.name))?;
+        if recipe.inputs.len() != flat.function(&decl.name)?.params.len() {
+            return Err(format!(
+                "`{}`: input recipe count does not match source parameters",
+                decl.name
+            ));
+        }
+        if recipes.insert(decl.name.clone(), recipe).is_some() {
+            return Err(format!("duplicate function declaration `{}`", decl.name));
+        }
+    }
+    let functions = flat
+        .functions
+        .into_iter()
+        .map(|(name, function)| {
+            let recipe = recipes.remove(&name).unwrap_or_else(|| FunctionRecipe {
+                inputs: (0..function.params.len()).map(|_| None).collect(),
+                output: None,
+            });
+            let params = function
+                .params
+                .into_iter()
+                .zip(recipe.inputs)
+                .map(|(p, tree)| Param {
+                    name: p.name,
+                    ty: TypeUse {
+                        ty: p.ty.ty,
+                        slot: tree
+                            .map(ResolvedSlot::Tree)
+                            .or_else(|| p.ty.slot.map(ResolvedSlot::Prepared)),
+                    },
+                })
+                .collect();
+            (
+                name,
+                Function {
+                    metadata: function.metadata,
+                    name: function.name,
+                    path: function.path,
+                    location: function.location,
+                    params,
+                    ret: TypeUse {
+                        ty: function.ret.ty,
+                        slot: recipe
+                            .output
+                            .map(ResolvedSlot::Tree)
+                            .or_else(|| function.ret.slot.map(ResolvedSlot::Prepared)),
+                    },
+                },
+            )
+        })
+        .collect();
+    Ok(Flat {
+        metadata: ResolvedModule {
+            source: flat.metadata,
+            compilation: Some((codec, extra)),
+        },
+        functions,
+
+        types: flat.types,
+        guards: flat.guards,
+    })
+}

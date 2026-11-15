@@ -357,12 +357,13 @@ pub(crate) fn argument_parameters(
     values(node)
 }
 pub(crate) fn function_parameters<
+    'a,
     I: prebindgen_conversions::InputConversion<Wire = CWire, Chain = CChain, Branch = CBranch>,
     O: prebindgen_conversions::Conversion,
     M,
 >(
-    f: &prebindgen_flat::Function<Option<I>, Option<O>, M>,
-) -> Result<std::vec::IntoIter<&Wire<CWire>>> {
+    f: &'a prebindgen_conversions::BoundFunction<'_, I, O, M>,
+) -> Result<std::vec::IntoIter<&'a Wire<CWire>>> {
     let mut out = vec![];
     for input in f.input_conversions()? {
         out.extend(argument_parameters(input.input_node()));
@@ -943,10 +944,18 @@ mod abi_tests {
             ))
             .unwrap();
         input.node = sequence;
-        flat.function_mut("f").unwrap().params[0].ty.slot = Some(input.clone());
+        bindings::set_input(&mut flat, "f", "value", input.clone()).unwrap();
+        let output = prebindgen_declarations::compile_output(
+            &flat,
+            &CCodec::raw(),
+            "f",
+            &COutput::None,
+            &(),
+        )
+        .unwrap();
+        bindings::set_output(&mut flat, "f", output).unwrap();
         assert_eq!(
-            function_parameters(flat.function("f").unwrap())
-                .unwrap()
+            argument_parameters(input.input_node())
                 .map(|w| w.name.to_string())
                 .collect::<Vec<_>>(),
             ["rows"]

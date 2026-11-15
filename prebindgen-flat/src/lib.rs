@@ -1,8 +1,7 @@
-//! Source types, occurrence slots, and generator-defined conversion interfaces.
-//! Preparation fills slots; language generators interpret their request protocols.
-//! Named objects must have nonzero Rust size, including opaque aliases. Their
-//! layout is checked by the emitted compile-time guards, independently of the
-//! slot data types. Unit remains available for absence of a value.
+//! Rust source structure and typed data attached to its owners.
+//! Flat captures names, types, definitions, signatures, locations and source guards.
+//! Consumers choose and interpret attachment types; conversion and export policy
+//! belong to libraries above this source model.
 #![warn(missing_docs)]
 use prebindgen::SourceLocation;
 use quote::ToTokens;
@@ -24,11 +23,10 @@ pub type Result<T> = std::result::Result<T, String>;
 
 /// Types of data attached to every owner in a flat binding model.
 ///
-/// A generator chooses schemas for occurrence data, module settings, functions,
-/// source types, fields and variants. Parsing leaves occurrence slots empty.
-/// Resolution can fill them with conversion trees; compilation can move the same
-/// source declarations into a schema carrying compiled plans. The unit schema
-/// supports source-only inspection.
+/// A consumer chooses the data carried by module, type, function, field, variant,
+/// parameter and return owners. These are exact types: Flat adds no Option wrapper
+/// and assigns no conversion semantics. Parsing initializes them with Default;
+/// consumers can move source structure between schemas with MapAttachments.
 pub trait Schema {
     /// Converter or other consumer data attached to one function parameter.
     type Parameter: Default;
@@ -46,8 +44,8 @@ pub trait Schema {
     type Variant: Default;
 }
 impl Schema for () {
-    type Parameter = Option<()>;
-    type Return = Option<()>;
+    type Parameter = ();
+    type Return = ();
     type Module = ();
     type Function = ();
     type Type = ();
@@ -155,11 +153,11 @@ pub struct EnumVariant<M = ()> {
     pub discriminant: Option<syn::Expr>,
 }
 
-/// Source structure with independently configured input and output conversions.
+/// Source structure with consumer-selected typed attachments.
 ///
 /// Every parameter carries `M::Parameter`; every result carries `M::Return`.
 /// Record fields describe source structure. Slot payloads belong to the consumer;
-/// the source model does not interpret that data. Source-only inspection uses `Flat<()>` with empty slots.
+/// the source model does not interpret that data. Source-only inspection uses `Flat<()>` with unit attachments.
 ///
 /// Use [`Flat::parse`] or [`Flat::parse_selected`] to validate source syntax and
 /// qualify declared names. Aliases stay opaque. Named types must have nonzero
@@ -170,7 +168,7 @@ pub struct EnumVariant<M = ()> {
 /// let items = syn::parse_file("pub fn add(x: i64, y: i64) -> i64 { x + y }")?.items;
 /// let flat = Flat::<()>::parse(
 ///     items.into_iter().map(|item| (item, Default::default())))?;
-/// assert_eq!(flat.function("add")?.params[0].ty.slot, None);
+/// assert_eq!(flat.function("add")?.params[0].ty.slot, ());
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub struct Flat<M: Schema = ()> {
@@ -331,7 +329,7 @@ impl<M: Schema> Flat<M> {
     /// Rejects duplicate names, non-public declarations, unsupported
     /// signatures and types, and inaccessible record fields.
     ///
-    /// Input and output slots start at `None`; no default conversion is required.
+    /// Attachments start with the defaults selected by the schema.
     /// Unqualified declared types and callable paths are qualified with the captured
     /// crate name (or `crate` if absent).
     /// Opaque alias implementations are not inspected. Rust layout and trait

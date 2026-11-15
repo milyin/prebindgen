@@ -8,6 +8,8 @@ fun checkCanonicalValues() {
         check(canonicalMillisOptional(number) == number)
         check(canonicalMillisBorrow(number) == number)
     }
+    check(canonicalMillisEchoInt(Int.MIN_VALUE) == Int.MIN_VALUE)
+    check(canonicalMillisEchoInt(Int.MAX_VALUE) == Int.MAX_VALUE)
     check(canonicalMillisOptional(null) == null)
     check(canonicalMillisStatic() == 31L)
     check(canonicalMillisViews { first, second -> check(first == 37L && second == first); first + second } == 74L)

@@ -920,7 +920,10 @@ impl TestDefaults {
         codec: &C,
         decl: &TestFunction,
         extra: &C::Extra,
-    ) -> Result<()> {
+    ) -> Result<()>
+    where
+        C::Schema: Schema<Parameter = Option<C::Input>, Return = Option<C::Output>>,
+    {
         let recipe = self
             .resolve_function(flat, codec, decl, extra)
             .map_err(|e| format!("{}: {e}", decl.name))?;
@@ -934,7 +937,10 @@ impl TestDefaults {
         codec: &C,
         decl: &TestFunction,
         extra: &C::Extra,
-    ) -> Result<crate::FunctionRecipe<ResolvedInput<C>, ResolvedOutput<C>>> {
+    ) -> Result<crate::FunctionRecipe<ResolvedInput<C>, ResolvedOutput<C>>>
+    where
+        C::Schema: Schema<Parameter = Option<C::Input>, Return = Option<C::Output>>,
+    {
         crate::resolve_function(
             flat,
             decl,
@@ -2065,7 +2071,10 @@ impl TestDefaults {
         codec: C,
         declarations: &[TestFunction],
         extra: C::Extra,
-    ) -> Result<Flat<ResolvedSchema<C>>> {
+    ) -> Result<Flat<ResolvedSchema<C>>>
+    where
+        C::Schema: Schema<Parameter = Option<C::Input>, Return = Option<C::Output>>,
+    {
         crate::resolve_bindings(
             flat,
             codec,
@@ -2100,7 +2109,10 @@ pub fn test_bind_input<C: Codec<InOps = TestInputOps, OutOps = TestOutputOps>>(
     parameter: &str,
     recipe: &TestInputConfig,
     extra: &C::Extra,
-) -> Result<()> {
+) -> Result<()>
+where
+    C::Schema: Schema<Parameter = Option<C::Input>, Return = Option<C::Output>>,
+{
     let f = flat.function(function)?;
     let index = f
         .params
@@ -2136,7 +2148,10 @@ pub fn test_bind_output<C: Codec<InOps = TestInputOps, OutOps = TestOutputOps>>(
     function: &str,
     recipe: &TestOutputConfig,
     extra: &C::Extra,
-) -> Result<()> {
+) -> Result<()>
+where
+    C::Schema: Schema<Parameter = Option<C::Input>, Return = Option<C::Output>>,
+{
     let defaults = TestDefaults::new(flat, vec![], vec![], vec![])?;
     let recipe =
         defaults.resolve_output(flat, codec, &flat.function(function)?.ret.ty, recipe, extra)?;

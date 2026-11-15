@@ -71,4 +71,6 @@ pub use wire_tree::{
 mod request_tests;
 
 mod binding;
-pub use binding::{BoundFunction, BoundParam, BoundTypeUse, PreparedCall};
+pub use binding::{
+    BindingState, BoundFunction, BoundParam, BoundTypeUse, FunctionBinding, PreparedCall,
+};

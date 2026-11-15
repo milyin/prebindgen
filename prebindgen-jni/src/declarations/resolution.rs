@@ -1,5 +1,5 @@
 use super::*;
-#[derive(Clone)]
+#[derive(Clone, Default)]
 /// Resolve source-dependent configuration using defaults owned by Flat type entries.
 pub struct JniSourceResolver {}
 
@@ -100,105 +100,72 @@ impl JniSourceResolver {
             .find(|t| type_key(&t.ty) == key)
             .and_then(|t| t.metadata.defaults.output.as_ref())
     }
-    /// Clone a source binding for a second explicit sequence delivery policy.
-    /// The adapter selects and validates the sequence while resolving the returned declaration.
-    pub fn callback_variant(
-        &self,
-        flat: &mut Flat<JniSchema>,
-        _codec: &JniCodec,
-        decl: &DeclJniFunction,
-        name: &str,
-        _extra: &(),
-    ) -> Result<DeclJniFunction>
-    where
-        <JniSchema as Schema>::Parameter: Clone,
-        <JniSchema as Schema>::Return: Clone,
-        <JniSchema as prebindgen_flat::Schema>::Function: Clone,
-    {
-        prebindgen_declarations::callback_variant(flat, decl, name, |output, structural| {
-            OutputNode::Unary {
-                operation: JniOutputUnary::ConfigSequenceCallback { structural },
-                child: Box::new(output.cloned().unwrap_or_else(JniOutputConfig::auto)),
-            }
-        })
-    }
-
-    /// Resolve source-dependent operations, compile them, and atomically install one binding.
-    /// Existing converters are preserved unless explicitly replaced.
-    pub fn fill(
+    /// Configure and prepare one explicit export using the same pipeline as the builder.
+    #[cfg(test)]
+    pub(crate) fn fill(
         &self,
         flat: &mut Flat<JniSchema>,
         codec: &JniCodec,
         decl: &DeclJniFunction,
         extra: &(),
     ) -> Result<()> {
-        let recipe = self
-            .resolve_function(flat, codec, decl, extra)
-            .map_err(|e| format!("{}: {e}", decl.name))?;
+        crate::bindings::install(flat, decl.clone(), None)?;
+        crate::bindings::resolve_with(flat, self, codec, extra)?;
         codec.compile_declarations(flat, extra)?;
-        prebindgen_declarations::compile_function(flat, codec, &decl.name, recipe, extra)
-            .map_err(|e| format!("{}: {e}", decl.name))
+        crate::bindings::compile_with(flat, codec, extra)
     }
-    pub(crate) fn resolve_function(
+    pub(crate) fn resolve_call(
         &self,
         flat: &Flat<JniSchema>,
         codec: &JniCodec,
-        decl: &DeclJniFunction,
+        source: &str,
+        call: prebindgen_declarations::ConfiguredCall<
+            JniInputConfig,
+            JniOutputConfig,
+            JniInputConverter,
+            JniOutputConverter,
+        >,
         extra: &(),
-    ) -> Result<FunctionRecipe<JniInput, JniOutput>> {
-        prebindgen_declarations::resolve_function(
-            flat,
-            decl,
-            |ty, explicit| {
+    ) -> Result<
+        prebindgen_declarations::ResolvedCall<
+            JniInput,
+            JniOutput,
+            JniInputConverter,
+            JniOutputConverter,
+        >,
+    > {
+        prebindgen_declarations::resolve_call(
+            flat.function(source)?,
+            call,
+            |ty, tree| {
                 self.resolve_input(
                     flat,
                     codec,
                     ty,
-                    explicit.unwrap_or(&JniInputConfig::auto()),
+                    &tree.unwrap_or_else(JniInputConfig::auto),
                     extra,
                 )
             },
-            |ty| self.function_output(flat, codec, ty, decl, extra),
+            |ty, tree, result_value, error| {
+                let tree = prebindgen_declarations::function_output_policy(
+                    ty,
+                    tree,
+                    result_value,
+                    error,
+                    |ty| {
+                        flat.type_info(ty)
+                            .ok()
+                            .and_then(|t| t.metadata.defaults.error.clone())
+                    },
+                    JniOutputConfig::auto(),
+                    |error, child| OutputNode::Unary {
+                        operation: JniOutputUnary::Result { error },
+                        child: Box::new(child),
+                    },
+                );
+                self.resolve_output(flat, codec, ty, &tree, extra)
+            },
         )
-    }
-
-    fn function_output(
-        &self,
-        flat: &Flat<JniSchema>,
-        codec: &JniCodec,
-        ty: &syn::Type,
-        decl: &DeclJniFunction,
-        extra: &(),
-    ) -> Result<JniOutput> {
-        let tree = prebindgen_declarations::function_output(
-            ty,
-            decl,
-            |ty| {
-                flat.type_info(ty)
-                    .ok()
-                    .and_then(|t| t.metadata.defaults.error.clone())
-            },
-            JniOutputConfig::auto(),
-            |error, child| OutputNode::Unary {
-                operation: JniOutputUnary::Result { error },
-                child: Box::new(child),
-            },
-        );
-        self.resolve_output(flat, codec, ty, &tree, extra)
-    }
-
-    /// Select a function-specific or type-wide explicit error message mapper.
-    pub fn error_mapper_for<'a>(
-        &'a self,
-        flat: &'a Flat<JniSchema>,
-        decl: &'a DeclJniFunction,
-        ty: &syn::Type,
-    ) -> Option<&'a str> {
-        decl.error.as_deref().or_else(|| {
-            flat.type_info(ty)
-                .ok()
-                .and_then(|t| t.metadata.defaults.error.as_deref())
-        })
     }
     /// Prepare owned source-field decomposition, retaining each field's conversion default.
     pub fn owned_record_output(
@@ -1411,29 +1378,6 @@ impl JniResolve<'_> {
             self.extra,
             self.stack,
             self.getter,
-        )
-    }
-}
-
-impl JniSourceResolver {
-    /// Resolve function occurrences into an independently compilable Flat.
-    ///
-    /// Defaults and local overrides are consumed here. The returned model owns
-    /// its compiler policy and occurrence settings; drop this JniSourceResolver value
-    /// before calling [`prebindgen_declarations::compile_resolved`] if desired.
-    pub fn resolve(
-        &self,
-        flat: Flat<JniSchema>,
-        codec: JniCodec,
-        declarations: &[DeclJniFunction],
-        extra: (),
-    ) -> Result<Flat<ResolvedSchema<JniCodec>>> {
-        prebindgen_declarations::resolve_bindings(
-            flat,
-            codec,
-            declarations,
-            |flat, codec, decl, extra| self.resolve_function(flat, codec, decl, extra),
-            extra,
         )
     }
 }

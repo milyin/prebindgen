@@ -24,6 +24,8 @@ static void check_canonical_values(void) {
         assert(perftest_canonical_millis_optional(1, values[i], &result) == 1);
         assert(result == values[i]);
     }
+    assert(perftest_canonical_millis_echo_i32(INT32_MIN) == INT32_MIN);
+    assert(perftest_canonical_millis_echo_i32(INT32_MAX) == INT32_MAX);
     int64_t absent = 99;
     assert(perftest_canonical_millis_optional(0, 0, &absent) == 0);
     assert(perftest_canonical_millis_static() == 31);

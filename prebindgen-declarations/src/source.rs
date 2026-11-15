@@ -1,6 +1,10 @@
 //! Source-aware resolution helpers. Each operation accepts only its own dependencies.
-use crate::{DeclFunction, FunctionRecipe, InputNode, InputOps, OutputOps};
-use prebindgen_flat::{result_parts, same_type, type_key, Flat, Result, Schema};
+#[cfg(test)]
+use crate::FunctionRecipe;
+use crate::{DeclFunction, InputNode, InputOps, OutputOps};
+#[cfg(test)]
+use prebindgen_flat::result_parts;
+use prebindgen_flat::{same_type, type_key, Flat, Result, Schema};
 use std::collections::BTreeMap;
 use syn::Type;
 
@@ -96,7 +100,8 @@ pub fn install_type_defaults<S: Schema, I, O>(
 
 /// Resolve function occurrences, preserving explicitly prepared slots unless overridden.
 /// The caller supplies input defaults and its policy for the complete function result.
-pub fn resolve_function<
+#[cfg(test)]
+pub(crate) fn resolve_function<
     P,
     R,
     M: Schema<Parameter = Option<P>, Return = Option<R>>,
@@ -932,13 +937,34 @@ pub fn function_output<I, O: Clone, E>(
     auto: O,
     result: impl FnOnce(Option<String>, O) -> O,
 ) -> O {
-    let child = decl.ret.clone().unwrap_or(auto);
-    if let Some((_, error)) = crate::result_parts(ty).filter(|_| !decl.result_value) {
-        result(decl.error.clone().or_else(|| error_default(error)), child)
+    function_output_policy(
+        ty,
+        decl.ret.clone(),
+        decl.result_value,
+        decl.error.clone(),
+        error_default,
+        auto,
+        result,
+    )
+}
+/// Apply one binding's Result policy to its owned output configuration.
+pub fn function_output_policy<O>(
+    ty: &Type,
+    output: Option<O>,
+    result_value: bool,
+    error: Option<String>,
+    error_default: impl FnOnce(&Type) -> Option<String>,
+    auto: O,
+    result: impl FnOnce(Option<String>, O) -> O,
+) -> O {
+    let child = output.unwrap_or(auto);
+    if let Some((_, ty)) = crate::result_parts(ty).filter(|_| !result_value) {
+        result(error.or_else(|| error_default(ty)), child)
     } else {
         child
     }
 }
+
 /// Check a source error mapper's owned/shared error parameter and String result.
 pub fn validate_error_mapper<M: Schema>(flat: &Flat<M>, error: &Type, name: &str) -> Result<()> {
     let f = flat.function(name)?;
@@ -949,39 +975,6 @@ pub fn validate_error_mapper<M: Schema>(flat: &Flat<M>, error: &Type, name: &str
         return Err("Result error mapper must take exactly E or &E and return String".into());
     }
     Ok(())
-}
-/// Clone a source binding for another sequence delivery policy, retaining existing input slots.
-pub fn callback_variant<
-    P,
-    R,
-    M: Schema<Parameter = Option<P>, Return = Option<R>>,
-    I: Clone,
-    O: Clone,
-    E: Clone,
->(
-    flat: &mut Flat<M>,
-    decl: &DeclFunction<I, O, E>,
-    name: &str,
-    output: impl FnOnce(Option<&O>, bool) -> O,
-) -> Result<DeclFunction<I, O, E>>
-where
-    M::Parameter: Clone,
-    M::Return: Clone,
-    M::Function: Clone,
-{
-    let mut function = flat.function(&decl.name)?.clone();
-    function.name = crate::ident(name)?;
-    function.ret.slot = None;
-    if flat.functions.contains_key(name) {
-        return Err("callback return function name collision".into());
-    }
-    flat.functions.insert(name.into(), function);
-    let mut variant = decl.clone();
-    variant.name = name.into();
-    variant.foreign = None;
-    variant.callback_return = None;
-    variant.ret = Some(output(decl.ret.as_ref(), decl.ret.is_none()));
-    Ok(variant)
 }
 
 #[cfg(test)]
