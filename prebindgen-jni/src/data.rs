@@ -1162,6 +1162,7 @@ mod group_tests {
         let context = KotlinContext {
             package: "example",
             source_types: &types,
+            bulk: false,
             result: "result",
             failure: "failure",
             cleanup_failure: None,

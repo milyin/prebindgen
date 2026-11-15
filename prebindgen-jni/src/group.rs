@@ -179,6 +179,25 @@ pub(crate) fn values_mut(
 pub(crate) fn validate_layout(
     node: &WireNode<JniWire, crate::JniChain, crate::JniBranch>,
 ) -> Result<()> {
+    validate_layout_in(node, false)
+}
+pub(crate) fn validate_layout_in(
+    node: &WireNode<JniWire, crate::JniChain, crate::JniBranch>,
+    bulk: bool,
+) -> Result<()> {
+    validate_scope(node, Some(bulk))
+}
+// Codec hooks also validate fragments before their enclosing scope is attached.
+// They can check the physical shape, but cannot require a boundary context yet.
+pub(crate) fn validate_fragment(
+    node: &WireNode<JniWire, crate::JniChain, crate::JniBranch>,
+) -> Result<()> {
+    validate_scope(node, None)
+}
+fn validate_scope(
+    node: &WireNode<JniWire, crate::JniChain, crate::JniBranch>,
+    bulk: Option<bool>,
+) -> Result<()> {
     prebindgen_conversions::validate_wire_names(prebindgen_conversions::wire_definitions(
         std::iter::once(node),
     ))?;
@@ -190,6 +209,7 @@ pub(crate) fn validate_layout(
         bindings: &mut std::collections::BTreeSet<String>,
         in_fields: bool,
         reserved: &mut std::collections::BTreeMap<String, Vec<JniNiche>>,
+        bulk: Option<bool>,
     ) -> Result<()> {
         match node {
             WireNode::Chain {
@@ -197,14 +217,32 @@ pub(crate) fn validate_layout(
                 child,
                 controls,
             } => {
+                if bulk == Some(true) {
+                    return Err(
+                        "nested bulk frames must be lowered into the enclosing bulk scope".into(),
+                    );
+                }
                 if controls.is_empty() || !matches!(controls[0].kind, JniWire::BulkBuffer { .. }) {
                     return Err("bulk scope requires a byte-array carrier".into());
                 }
-                visit(child, bindings, in_fields, reserved)?;
+                visit(child, bindings, in_fields, reserved, Some(true))?;
             }
             WireNode::Leaf(wires) => {
                 for w in wires {
-                    if matches!(w.kind, JniWire::Rows { .. }) {
+                    if let JniWire::Callback { callback } = &w.kind {
+                        for (_, node) in callback.bulk_nodes() {
+                            validate_layout(node)?;
+                        }
+                    }
+                    if bulk == Some(false)
+                        && matches!(
+                            w.kind,
+                            JniWire::NativeBuffer { .. } | JniWire::Native128 { .. }
+                        )
+                    {
+                        return Err("native bulk fields require an enclosing bulk scope".into());
+                    }
+                    if matches!(w.kind, JniWire::Rows { .. } | JniWire::NativeRows { .. }) {
                         return Err("array carrier requires a sequence node".into());
                     }
                 }
@@ -224,7 +262,7 @@ pub(crate) fn validate_layout(
                     return Err("alternatives require one selector control".into());
                 }
                 for arm in alternatives {
-                    visit(arm, bindings, false, reserved)?;
+                    visit(arm, bindings, false, reserved, bulk)?;
                 }
             }
             WireNode::Chain {
@@ -237,27 +275,39 @@ pub(crate) fn validate_layout(
                     return Err("sequence requires one carrier control".into());
                 };
                 let valid = match metadata {
-                    JniSequence::Buffered | JniSequence::TypedBuffered => {
-                        matches!(carrier.kind, JniWire::Rows { .. })
-                    }
-                    JniSequence::Bulk(_) => matches!(carrier.kind, JniWire::NativeRows { .. }),
+                    JniSequence::Buffered | JniSequence::TypedBuffered => match bulk {
+                        Some(true) => matches!(carrier.kind, JniWire::NativeRows { .. }),
+                        Some(false) => matches!(carrier.kind, JniWire::Rows { .. }),
+                        None => matches!(
+                            carrier.kind,
+                            JniWire::Rows { .. } | JniWire::NativeRows { .. }
+                        ),
+                    },
                     JniSequence::Callback => {
+                        if bulk == Some(true) {
+                            return Err(
+                                "bulk scopes cannot enclose callback sequence delivery".into()
+                            );
+                        }
                         matches!(&carrier.kind, JniWire::Selector { .. })
                     }
                 };
                 if !valid {
                     return Err("sequence carrier control is incompatible with its delivery".into());
                 }
-                if *metadata == JniSequence::TypedBuffered && !typed_rows::supported(element) {
+                if matches!(carrier.kind, JniWire::Rows { .. })
+                    && *metadata == JniSequence::TypedBuffered
+                    && !typed_rows::supported(element)
+                {
                     return Err(
                         "typed output row constructor exceeds 254 JVM parameter slots".into(),
                     );
                 }
-                if values(element).len() == 0 && !matches!(metadata, JniSequence::Bulk(_)) {
+                if values(element).len() == 0 && matches!(carrier.kind, JniWire::Rows { .. }) {
                     return Err("sequence requires a nonempty element layout".into());
                 }
                 crate::sequence::validate_buffered(element)?;
-                validate_layout(element)?;
+                validate_scope(element, bulk)?;
             }
             WireNode::Chain {
                 child: element,
@@ -302,7 +352,7 @@ pub(crate) fn validate_layout(
                     }
                     values.push(niche.clone());
                 }
-                visit(element, bindings, false, reserved)?;
+                visit(element, bindings, false, reserved, bulk)?;
             }
             WireNode::Branch {
                 children,
@@ -351,6 +401,7 @@ pub(crate) fn validate_layout(
                         bindings,
                         matches!(metadata, JniGroup::Fields(_)),
                         reserved,
+                        bulk,
                     )?;
                 }
             }
@@ -362,6 +413,7 @@ pub(crate) fn validate_layout(
         &mut Default::default(),
         false,
         &mut Default::default(),
+        bulk,
     )
 }
 
@@ -1030,6 +1082,7 @@ pub(crate) fn error_wire_shape(node: &kotlin::JniNode) -> Vec<String> {
                 }
                 JniWire::Enum { enum_type, .. } => type_key(&enum_type.mapping.ty),
                 JniWire::NativeBuffer { text } => text.to_string(),
+                JniWire::NativeRows { layout, .. } => layout.key.clone(),
                 JniWire::Callback { callback } => callback.fqn(),
                 _ => String::new(),
             };
@@ -1040,7 +1093,7 @@ pub(crate) fn error_wire_shape(node: &kotlin::JniNode) -> Vec<String> {
             ));
         }
     }
-    fn visit(node: &kotlin::JniNode, out: &mut Vec<String>) {
+    fn visit(node: &kotlin::JniNode, out: &mut Vec<String>, bulk: bool) {
         match node {
             WireNode::Leaf(fields) => wires(fields, out),
             WireNode::Branch {
@@ -1050,7 +1103,7 @@ pub(crate) fn error_wire_shape(node: &kotlin::JniNode) -> Vec<String> {
             } => {
                 wires(controls, out);
                 for child in children {
-                    visit(child, out);
+                    visit(child, out, bulk);
                 }
             }
             WireNode::Branch {
@@ -1060,7 +1113,7 @@ pub(crate) fn error_wire_shape(node: &kotlin::JniNode) -> Vec<String> {
                 wires(controls, out);
                 for child in children {
                     out.push("arm[".into());
-                    visit(child, out);
+                    visit(child, out, bulk);
                     out.push("]".into());
                 }
                 out.push("]".into());
@@ -1079,6 +1132,7 @@ pub(crate) fn error_wire_shape(node: &kotlin::JniNode) -> Vec<String> {
                         .position(|wire| wire.name == reservation.discriminator);
                         format!("optional:niche:{:?}:{index:?}", reservation.niche)
                     }
+                    JniChain::Sequence(_) if bulk => "sequence:native-rows".into(),
                     JniChain::Sequence(delivery) => format!("sequence:{delivery:?}"),
                     JniChain::Bulk(_) => {
                         let mut fields = group::row_fields(child)
@@ -1097,13 +1151,13 @@ pub(crate) fn error_wire_shape(node: &kotlin::JniNode) -> Vec<String> {
                 out.push(label);
                 out.push("[".into());
                 wires(controls, out);
-                visit(child, out);
+                visit(child, out, bulk || matches!(meta, JniChain::Bulk(_)));
                 out.push("]".into());
             }
         }
     }
     let mut out = Vec::new();
-    visit(node, &mut out);
+    visit(node, &mut out, false);
     out
 }
 

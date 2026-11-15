@@ -297,9 +297,10 @@ pub(crate) fn sequence_input(
             name: wire.clone(),
             kind: JniWire::NativeRows {
                 condition: kotlin_condition(active),
+                layout: layout.clone(),
             },
         }],
-        metadata: JniChain::Sequence(JniSequence::Bulk(layout.clone())),
+        metadata: JniChain::Sequence(JniSequence::Buffered),
         open: quote!(let(#start,#length)=#reader.rows(#wire,::core::mem::size_of::<#row>())?;),
         bind,
         validation_values: values,
@@ -357,9 +358,10 @@ pub(crate) fn sequence_output(
             name: wire.clone(),
             kind: JniWire::NativeRows {
                 condition: "true".into(),
+                layout: layout.clone(),
             },
         }],
-        metadata: JniChain::Sequence(JniSequence::Bulk(layout.clone())),
+        metadata: JniChain::Sequence(JniSequence::Buffered),
         commit_each: true,
         fallible: true,
         begin: quote!(let #wire=#writer.rows(#length,::core::mem::size_of::<#row>(),::core::mem::align_of::<#row>())?; #owners),
@@ -784,7 +786,7 @@ pub(crate) fn input_list(
     let (_, ty) = input.parameters[0].split_once(": ").unwrap();
     let name = carrier.name.to_string();
     let state = format!("{name}_elements");
-    let JniWire::NativeRows { condition } = &carrier.kind else {
+    let JniWire::NativeRows { condition, .. } = &carrier.kind else {
         return Err("bulk sequence requires native rows".into());
     };
     Ok(KotlinInput {
@@ -815,6 +817,11 @@ pub(crate) fn input_kotlin(
     context: &KotlinContext<'_>,
     active: &str,
 ) -> Result<KotlinInput> {
+    let scoped = KotlinContext {
+        bulk: true,
+        ..*context
+    };
+    let context = &scoped;
     let mut input = crate::kotlin::input_kotlin_when(child, context, active)?;
     let writer = format!("{}_writer", controls[0].name);
     let schema = kt_layout(layout, context);
@@ -920,6 +927,7 @@ pub(crate) fn output_kotlin(
     let reader_state = format!("{}bulkReader", context.output_prefix);
     let reader = format!("requireNotNull({reader_state})");
     let ctx = KotlinContext {
+        bulk: true,
         result: &token,
         ..*context
     };
@@ -1037,6 +1045,7 @@ fn records(
     node: &JniNode,
     out: &mut BTreeMap<String, Rc<JniBulkRecord>>,
     types: &JniTypes,
+    bulk: bool,
 ) -> Result<()> {
     match node {
         WireNode::Chain {
@@ -1046,28 +1055,34 @@ fn records(
         } => {
             validate_prepared_record(r, child, types)?;
             register(r.clone(), out)?;
-            records(child, out, types)?;
+            records(child, out, types, true)?;
         }
         WireNode::Chain {
-            meta: JniChain::Sequence(JniSequence::Bulk(r)),
+            meta: JniChain::Sequence(_),
+            controls,
             child,
-            ..
         } => {
-            validate_prepared_record(r, child, types)?;
-            register(r.clone(), out)?;
-            records(child, out, types)?;
+            let row = controls.first().and_then(|wire| wire.kind.row_layout());
+            if bulk {
+                let row = row.ok_or("bulk sequences require a compiled native row range")?;
+                validate_prepared_record(row, child, types)?;
+                register(row.clone(), out)?;
+            } else if row.is_some() {
+                return Err("native rows require an enclosing bulk scope".into());
+            }
+            records(child, out, types, bulk)?;
         }
-        WireNode::Chain { child, .. } => records(child, out, types)?,
+        WireNode::Chain { child, .. } => records(child, out, types, bulk)?,
         WireNode::Branch { children, .. } => {
             for child in children {
-                records(child, out, types)?;
+                records(child, out, types, bulk)?;
             }
         }
         WireNode::Leaf(wires) => {
             for wire in wires {
                 if let JniWire::Callback { callback } = &wire.kind {
                     for (_, node) in callback.bulk_nodes() {
-                        records(node, out, types)?;
+                        records(node, out, types, false)?;
                     }
                 }
             }
@@ -1086,7 +1101,8 @@ pub(crate) fn emit<I: KotlinInputConversion, O: KotlinOutputConversion>(
     let prefix = &flat.metadata.package;
     let mut writers = BTreeMap::new();
     for (input, node) in crate::metadata::nodes(flat)? {
-        records(node, &mut catalogue, &flat.types)?;
+        crate::group::validate_layout(node)?;
+        records(node, &mut catalogue, &flat.types, false)?;
         input_writers(node, input, prefix, &mut writers, &flat.types)?;
     }
     if catalogue.is_empty() {
@@ -1452,10 +1468,20 @@ fn cleanup_native(
             cleanup_attempt(quote!(let #name=#value; if #present { #scan }))
         }
         WireNode::Chain {
-            meta: JniChain::Sequence(JniSequence::Bulk(element)),
+            meta: JniChain::Sequence(_),
             controls,
             child,
         } => {
+            let [Wire {
+                kind:
+                    JniWire::NativeRows {
+                        layout: element, ..
+                    },
+                ..
+            }] = controls.as_slice()
+            else {
+                return Err("bulk cleanup requires a compiled native row range".into());
+            };
             let value = read(&controls[0].name)?;
             let ty = &element.name;
             let start = format_ident!("{}_cleanup_start", controls[0].name);

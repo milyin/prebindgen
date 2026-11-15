@@ -894,11 +894,11 @@ impl Codec for JniCodec {
     type Wire = JniWire;
     type Context = JniContext;
     fn finish_input(&self, plan: &mut JniInputPlan<JniWire>, _: &()) -> Result<()> {
-        group::validate_layout(&plan.node)
+        group::validate_fragment(&plan.node)
     }
     fn finish_output(&self, plan: &mut JniOutputPlan<JniWire>, _: &()) -> Result<()> {
         plan.fallible = true;
-        group::validate_layout(&plan.outcomes.success)?;
+        group::validate_fragment(&plan.outcomes.success)?;
         plan.commit
             .extend(prebindgen_conversions::template_parameter(
                 "output_committed",
@@ -1236,7 +1236,7 @@ impl Codec for JniCodec {
 
     fn validate_input(&self, plan: &prebindgen_declarations::CodecInputPlan<Self>) -> Result<()> {
         sequence::validate_buffered(&plan.node)?;
-        crate::group::validate_layout(&plan.node)
+        crate::group::validate_fragment(&plan.node)
     }
     fn validate_output(&self, plan: &prebindgen_declarations::CodecOutputPlan<Self>) -> Result<()> {
         sequence::callback_delivery(&plan.outcomes.success)?;
@@ -1252,7 +1252,7 @@ impl Codec for JniCodec {
             .chain(plan.outcomes.source_error.iter())
             .chain(plan.outcomes.binding_failure.iter())
         {
-            crate::group::validate_layout(node)?;
+            crate::group::validate_fragment(node)?;
         }
         crate::group::result_packet(&plan.outcomes.success, &plan.values)?;
         Ok(())
@@ -1835,6 +1835,7 @@ pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
         &KotlinContext {
             package: prefix,
             source_types: &flat.types,
+            bulk: false,
             result: "result",
             failure: "failure",
             cleanup_failure: None,
@@ -1868,6 +1869,7 @@ pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
         let kotlin_context = KotlinContext {
             package: prefix,
             source_types: &flat.types,
+            bulk: false,
             result: "result",
             failure: "failure",
             cleanup_failure: None,
@@ -2545,3 +2547,6 @@ fn test_export<'a>(
 
 #[cfg(test)]
 mod source_facts_tests;
+
+#[cfg(test)]
+mod bulk_scope_tests;

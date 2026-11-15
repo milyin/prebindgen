@@ -1,6 +1,6 @@
 //! JNI slot converters own Kotlin conversion, locking and rollback behavior.
 use super::*;
-use crate::group::validate_layout;
+use crate::group::validate_layout_in;
 use prebindgen_declarations::{ComponentPath, ComponentSegment};
 
 use prebindgen_conversions::{Conversion, Wire};
@@ -60,6 +60,9 @@ pub struct KotlinContext<'a> {
     pub package: &'a str,
     /// Canonical source declarations and JNI type/field metadata, borrowed from Flat.
     pub source_types: &'a BTreeMap<String, prebindgen_flat::TypeInfo<JniType, JniField>>,
+    /// Inherited packed encoding, set by an enclosing JniChain::Bulk while
+    /// interpreting its descendants. Start ordinary call/callback boundaries false.
+    pub bulk: bool,
     /// Variable holding the native output array.
     pub result: &'a str,
     /// Caught delivery exception to which rollback failures are attached.
@@ -385,7 +388,7 @@ impl Conversion for PlanOutput {
 impl KotlinInputConversion for PlanInput {
     fn kotlin(&self, context: &KotlinContext<'_>) -> Result<KotlinInput> {
         crate::sequence::validate_buffered(self.input_node())?;
-        validate_layout(self.input_node())?;
+        validate_layout_in(self.input_node(), context.bulk)?;
         input_kotlin(self.input_node(), context)
     }
     fn callback_return_fragment(
@@ -568,7 +571,7 @@ pub(crate) fn input_leaves(
 }
 impl KotlinOutputConversion for PlanOutput {
     fn kotlin(&self, context: &KotlinContext<'_>) -> Result<KotlinOutput> {
-        validate_layout(&self.output_outcomes().success)?;
+        validate_layout_in(&self.output_outcomes().success, context.bulk)?;
         output_kotlin(&self.output_outcomes().success, context)
     }
     fn delivery_policy(&self) -> prebindgen_conversions::DeliveryPolicy {
@@ -941,18 +944,24 @@ pub(crate) fn output_kotlin_scoped(
             let name = format!("{}owners", context.output_prefix);
             let root = owners.is_none() && input_handles(element, false);
             let scope = if root { Some(name.as_str()) } else { owners };
-            let mut output = match metadata {
-                JniSequence::Buffered => {
-                    crate::sequence::output_list(element, context, scope, false)?
+            let mut output = if context.bulk {
+                if *metadata == JniSequence::Callback {
+                    return Err("bulk scopes cannot enclose callback sequence delivery".into());
                 }
-                JniSequence::TypedBuffered => {
-                    crate::sequence::output_list(element, context, scope, true)?
-                }
-                JniSequence::Bulk(_) => crate::bulk::output_list(element, context, scope)?,
-                JniSequence::Callback => {
-                    return Err(
-                        "callback sequence requires function-level callback delivery".into(),
-                    )
+                crate::bulk::output_list(element, context, scope)?
+            } else {
+                match metadata {
+                    JniSequence::Buffered => {
+                        crate::sequence::output_list(element, context, scope, false)?
+                    }
+                    JniSequence::TypedBuffered => {
+                        crate::sequence::output_list(element, context, scope, true)?
+                    }
+                    JniSequence::Callback => {
+                        return Err(
+                            "callback sequence requires function-level callback delivery".into(),
+                        )
+                    }
                 }
             };
             if root {
@@ -1079,6 +1088,7 @@ mod tests {
         let context = KotlinContext {
             package: "example",
             source_types: &flat.types,
+            bulk: false,
             result: "native_values",
             failure: "delivery_error",
             cleanup_failure: None,

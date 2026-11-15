@@ -13,27 +13,32 @@ pub(crate) fn cache(element: &JniNode) -> Result<syn::Ident> {
     let (name, _) = sequence_callback::capture(element, &mut names::Names::default())?;
     Ok(format_ident!("__pb_row_type_{name}"))
 }
-fn visit<'a>(node: &'a JniNode, input: bool, rows: &mut Vec<&'a JniNode>) {
+fn visit<'a>(node: &'a JniNode, input: bool, rows: &mut Vec<&'a JniNode>, bulk: bool) {
     match node {
+        WireNode::Chain {
+            meta: JniChain::Bulk(_),
+            child,
+            ..
+        } => visit(child, input, rows, true),
         WireNode::Chain {
             meta: JniChain::Sequence(JniSequence::TypedBuffered),
             child,
             ..
-        } if !input => {
+        } if !input && !bulk => {
             rows.push(child);
-            visit(child, input, rows);
+            visit(child, input, rows, bulk);
         }
-        WireNode::Chain { child, .. } => visit(child, input, rows),
+        WireNode::Chain { child, .. } => visit(child, input, rows, bulk),
         WireNode::Branch { children, .. } => {
             for child in children {
-                visit(child, input, rows)
+                visit(child, input, rows, bulk)
             }
         }
         WireNode::Leaf(wires) => {
             for wire in wires {
                 if let JniWire::Callback { callback } = &wire.kind {
                     for (input, node) in callback.bulk_nodes() {
-                        visit(node, input, rows);
+                        visit(node, input, rows, false);
                     }
                 }
             }
@@ -49,7 +54,7 @@ pub(crate) fn emit<I: KotlinInputConversion, O: KotlinOutputConversion>(
 ) -> Result<()> {
     let mut rows = Vec::new();
     for (input, node) in metadata::nodes(flat)? {
-        visit(node, input, &mut rows);
+        visit(node, input, &mut rows, false);
     }
     let mut schemas = BTreeMap::new();
     for row in rows {

@@ -662,15 +662,28 @@ property types are read from the canonical Flat declarations during emission.
 converters. Handle conversions use this same table; there is no separate
 `KotlinClass` registry. Record and enum fields are validated as their conversions
 are emitted, without retaining property tables or emitting a field again just to
-check its type. Native bulk sequence
-metadata retains its compiled physical row layout. Changing its source tag/layout
-identity after preparation requires preparing the conversions again; Kotlin class
+check its type. Compiled native row-range wires retain their physical row layout.
+Changing the referenced source tags or wire layout after preparation requires
+preparing the conversions again; Kotlin class
 and variant-name overrides are resolved from the current declarations.
 
-Custom JNI sequence converters construct a bulk row policy with
-`JniSequence::bulk(&flat, &element_node)?`. Sequence transport requests and the
-shared sequence composition helpers receive the source Flat explicitly, so adapters
-can resolve declaration facts without embedding them in each element tree.
+`JniChain::Bulk` establishes packed encoding for its entire child tree during
+Rust preparation and Kotlin interpretation. Sequences inherit this scope: their
+`JniSequence` metadata selects materialized or callback delivery, with an optional
+ordinary-JVM typed-row preference. There is no sequence-level bulk policy.
+Under bulk, materialized sequences use offset/count ranges and contiguous native
+rows; nested collections share the enclosing frame. Callback delivery can wrap a
+bulk element, but a bulk frame cannot enclose a callback-delivered sequence.
+
+Custom Kotlin conversion contexts start with `KotlinContext::bulk = false` at a
+call/callback boundary; the enclosing Bulk interpreter sets it for descendants.
+Custom native sequence compilers can prepare the derived range descriptor with
+`JniWire::native_rows(&flat, &element_node, condition)?`. Its cached layout is ABI
+data, not an encoding selector. Sequence transport requests and shared sequence
+helpers receive the source Flat explicitly, so adapters can resolve declarations
+without embedding them in each element tree. Fragment validation permits an
+unattached enclosing scope; complete boundary validation requires a matching
+physical encoding under the actual Bulk nodes.
 
 Each adapter has operations for actual ABI tasks: building a function's
 parameters, laying out a successful result packet, defining one sequence row,

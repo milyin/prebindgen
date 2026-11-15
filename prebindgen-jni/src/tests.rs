@@ -3839,6 +3839,7 @@ fn legacy_buffered_schema_keeps_array_decoder_and_input_only_skips_registration(
     let context = KotlinContext {
         package: "test",
         source_types: &BTreeMap::new(),
+        bulk: false,
         result: "packet",
         failure: "failure",
         cleanup_failure: None,

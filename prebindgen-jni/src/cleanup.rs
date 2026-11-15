@@ -56,10 +56,10 @@ fn carrier_child<'a>(node: &'a JniNode, name: &syn::Ident) -> Option<CarrierChil
         } if controls.iter().any(|w| &w.name == name) => Some(CarrierChild {
             node: child,
             sequence: Some(sequence),
-            layout: match sequence {
-                JniSequence::Bulk(layout) => Some(layout),
-                _ => None,
-            },
+            layout: controls
+                .iter()
+                .find(|wire| &wire.name == name)
+                .and_then(|wire| wire.kind.row_layout()),
         }),
         WireNode::Chain {
             meta: JniChain::Bulk(layout),
@@ -384,44 +384,52 @@ impl Helpers {
         Ok(name)
     }
 
-    fn visit(&mut self, node: &JniNode, input: bool) -> Result<()> {
+    fn visit(&mut self, node: &JniNode, input: bool, bulk: bool) -> Result<()> {
         match node {
+            WireNode::Chain {
+                meta: JniChain::Bulk(_),
+                child,
+                ..
+            } => self.visit(child, input, true)?,
             WireNode::Chain {
                 meta: JniChain::Sequence(sequence),
                 child,
-                ..
+                controls,
             } => {
                 if !input {
-                    let carrier = match sequence {
-                        JniSequence::Buffered => Some(Carrier::Objects),
-                        JniSequence::TypedBuffered => Some(Carrier::TypedObjects),
-                        JniSequence::Bulk(_) => Some(Carrier::Native),
-                        JniSequence::Callback => None,
+                    let carrier = if bulk {
+                        Some(Carrier::Native)
+                    } else {
+                        match sequence {
+                            JniSequence::Buffered => Some(Carrier::Objects),
+                            JniSequence::TypedBuffered => Some(Carrier::TypedObjects),
+                            JniSequence::Callback => None,
+                        }
                     };
                     if let Some(carrier) = carrier {
-                        let layout = match sequence {
-                            JniSequence::Bulk(layout) => Some(layout.clone()),
-                            _ => None,
-                        };
+                        let layout = controls
+                            .first()
+                            .and_then(|wire| wire.kind.row_layout())
+                            .cloned();
                         let row = Row::new(child, carrier, layout)?;
                         if !row.fields.is_empty() {
                             self.intern(&row)?;
                         }
                     }
                 }
-                self.visit(child, input)?;
+                self.visit(child, input, bulk)?;
             }
-            WireNode::Chain { child, .. } => self.visit(child, input)?,
+            WireNode::Chain { child, .. } => self.visit(child, input, bulk)?,
             WireNode::Branch { children, .. } => {
                 for child in children {
-                    self.visit(child, input)?;
+                    self.visit(child, input, bulk)?;
                 }
             }
             WireNode::Leaf(wires) => {
                 for wire in wires {
                     if let JniWire::Callback { callback } = &wire.kind {
                         for (input, node) in callback.bulk_nodes() {
-                            self.visit(node, input)?;
+                            self.visit(node, input, false)?;
                         }
                     }
                 }
@@ -436,7 +444,7 @@ pub(crate) fn emit<I: KotlinInputConversion, O: KotlinOutputConversion>(
 ) -> Result<TokenStream> {
     let mut helpers = Helpers::default();
     for (input, node) in metadata::nodes(flat)? {
-        helpers.visit(node, input)?;
+        helpers.visit(node, input, false)?;
     }
     Ok(helpers.definitions.into_values().collect())
 }

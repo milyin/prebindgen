@@ -970,6 +970,7 @@ pub(crate) fn files<I: KotlinInputConversion, O: KotlinOutputConversion>(
         let context = KotlinContext {
             package: &flat.metadata.package,
             source_types: &flat.types,
+            bulk: false,
             result: "parts",
             failure: "failure",
             cleanup_failure: None,
