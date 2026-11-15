@@ -563,19 +563,22 @@ pub(crate) fn render_record<I: KotlinInputConversion, O: KotlinOutputConversion>
     ty: &syn::Type,
 ) -> Result<String> {
     let record = flat.record(ty)?;
-    render_record_fields(class, &record.fields)
+    render_record_fields(
+        class,
+        record.fields.iter().map(|f| (field_name(f), &f.metadata)),
+    )
 }
-pub(crate) fn render_record_fields(
+pub(crate) fn render_record_fields<'a>(
     class: &Class,
-    fields: &[prebindgen_flat::Field<JniField>],
+    fields: impl Iterator<Item = (String, &'a JniField)> + Clone,
 ) -> Result<String> {
     let parameters = fields
-        .iter()
-        .map(|f| {
+        .clone()
+        .map(|(name, metadata)| {
             format!(
                 "    public val {}: {}",
-                kotlin_identifier(&field_name(f)),
-                f.metadata.kotlin_type
+                kotlin_identifier(&name),
+                metadata.kotlin_type
             )
         })
         .collect::<Vec<_>>()
@@ -589,16 +592,16 @@ pub(crate) fn render_record_fields(
         "package {}\n\n{lifecycle}public data class {}(\n{parameters}\n)",
         class.pkg, class.name
     );
-    if fields.iter().any(|f| f.metadata.bytes) {
+    if fields.clone().any(|(_, metadata)| metadata.bytes) {
         let equal = fields
-            .iter()
-            .map(|f| {
-                let n = kotlin_identifier(&field_name(f));
-                match &f.metadata {
-                    _ if f.metadata.bytes => {
+            .clone()
+            .map(|(name, metadata)| {
+                let n = kotlin_identifier(&name);
+                match metadata {
+                    _ if metadata.bytes => {
                         format!("this.{n}.contentEquals(other.{n})")
                     }
-                    _ if f.metadata.floating => {
+                    _ if metadata.floating => {
                         format!("this.{n}.compareTo(other.{n}) == 0")
                     }
                     _ => format!("this.{n} == other.{n}"),
@@ -607,10 +610,10 @@ pub(crate) fn render_record_fields(
             .collect::<Vec<_>>()
             .join(" &&\n            ");
         let hashes = fields
-            .iter()
-            .map(|f| {
-                let n = kotlin_identifier(&field_name(f));
-                if f.metadata.bytes {
+            .clone()
+            .map(|(name, metadata)| {
+                let n = kotlin_identifier(&name);
+                if metadata.bytes {
                     format!("this.{n}.contentHashCode()")
                 } else {
                     format!("this.{n}.hashCode()")
@@ -622,11 +625,11 @@ pub(crate) fn render_record_fields(
             hash = format!("31 * ({hash}) + {h}");
         }
         let display = fields
-            .iter()
-            .map(|f| {
-                let label = field_name(f);
+            .clone()
+            .map(|(name, metadata)| {
+                let label = name;
                 let n = kotlin_identifier(&label);
-                let suffix = if f.metadata.bytes {
+                let suffix = if metadata.bytes {
                     ".contentToString()"
                 } else {
                     ""
@@ -1164,10 +1167,8 @@ mod group_tests {
             name: "Empty".into(),
             representation: ClassRepresentation::Data { has_handles: false },
         }));
-        let classes = BTreeMap::new();
         let context = KotlinContext {
             package: "example",
-            classes: &classes,
             source_types: &types,
             result: "result",
             failure: "failure",

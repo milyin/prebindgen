@@ -909,8 +909,10 @@ stored or rendered by the shared protocol.
 `allocation_type` identifies an independently owned allocation class used by
 Kotlin's handle preflight; C loans can use `None` for interior pointers.
 
-Low-level JNI adapter struct literals also need `KotlinClass::{handle_type,
-gc_managed}` and `KotlinInput::handle_inputs`. Resource-bearing inputs must expose
+Low-level JNI adapters read class settings from `KotlinContext::source_types`,
+the canonical Flat declarations, and provide `KotlinInput::handle_inputs`.
+Allocation IDs and destructor names derive from canonical source types, with no
+separate class registry. Resource-bearing inputs must expose
 all retained handles with their allocation types, access modes and individual or
 collection grouping. Missing or inconsistent metadata fails generation. Inputs
 without resources or handle locks may leave `handle_inputs` absent. Normal

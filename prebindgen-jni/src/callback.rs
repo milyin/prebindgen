@@ -832,20 +832,13 @@ fn returned_handle_cleanup(
             if source.variants.len() != children.len() {
                 return Err("enum occurrence differs from its source variants".into());
             }
-            let names = source
-                .variants
-                .iter()
-                .map(|v| v.name.to_string().trim_start_matches("r#").to_owned())
-                .collect::<Vec<_>>();
-            let classes = crate::sealed::variant_names(class, &names)?;
-            let class = class.fqn();
             let mut arms = String::new();
-            for (index, child) in children.iter().enumerate() {
-                let fields = crate::sealed::variant_fields(child, &source.variants[index])?;
+            for (child, variant) in children.iter().zip(&source.variants) {
+                let variant_class = crate::sealed::variant_name(class, &variant.name);
+                let fields = crate::sealed::variant_fields(child, variant)?;
                 let mut body = String::new();
                 for (field_index, (_, node)) in fields.iter().enumerate() {
-                    let property =
-                        kotlin_identifier(&source.variants[index].fields[field_index].property());
+                    let property = kotlin_identifier(&variant.fields[field_index].property());
                     body.push_str(&returned_handle_cleanup(
                         node,
                         &format!("{local}.{property}"),
@@ -854,7 +847,10 @@ fn returned_handle_cleanup(
                         context,
                     )?);
                 }
-                arms.push_str(&format!("is {class}.{} -> {{ {body} }}\n", classes[index]));
+                arms.push_str(&format!(
+                    "is {}.{variant_class} -> {{ {body} }}\n",
+                    class.fqn()
+                ));
             }
             format!("when(val {local}={value}) {{ {arms} else -> {{}} }}\n")
         }
@@ -959,7 +955,6 @@ fn render(context: &JniContext, code: &TokenStream, source: &syn::Ident) -> Resu
 }
 pub(crate) fn files<I: KotlinInputConversion, O: KotlinOutputConversion>(
     flat: &Flat<JniSchema<I, O>>,
-    classes: &BTreeMap<String, KotlinClass>,
     files: &mut BTreeMap<String, String>,
 ) -> Result<()> {
     let mut ownership_by_name = BTreeMap::new();
@@ -979,7 +974,6 @@ pub(crate) fn files<I: KotlinInputConversion, O: KotlinOutputConversion>(
         };
         let context = KotlinContext {
             package: &flat.metadata.package,
-            classes,
             source_types: &flat.types,
             result: "parts",
             failure: "failure",

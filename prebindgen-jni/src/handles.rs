@@ -8,6 +8,9 @@ use prebindgen_conversions::WireNode;
 pub(crate) fn allocation_type_id(ty: &syn::Type) -> i64 {
     prebindgen_reprc::schema_id(&format!("jni-allocation:{}", names::type_identity(ty))) as i64
 }
+pub(crate) fn drop_method(ty: &syn::Type, names: &mut names::Names) -> Result<String> {
+    names.name("drop", &names::type_label(ty), &[&names::type_identity(ty)])
+}
 pub(crate) fn access_key(access: Access) -> u8 {
     match access {
         Access::Shared => 0,
@@ -226,10 +229,8 @@ impl HandleLocks {
         for (native, input) in inputs {
             complete_handle_inputs(native.input_node(), input)?;
             for handle in input.handle_inputs.clone().unwrap() {
-                let class = context
-                    .classes
-                    .get(&type_key(&handle.ty))
-                    .ok_or("missing handle input class")?;
+                let (source, class) =
+                    crate::metadata::source_handle(context.source_types, &handle.ty)?;
                 let local = format!("__pb_handle{}", out.sources.len());
                 let value = &handle.value;
                 let ty = if handle.many {
@@ -263,9 +264,9 @@ impl HandleLocks {
                     local,
                     many: handle.many,
                     access: handle.access,
-                    ty: class.handle_type,
+                    ty: allocation_type_id(source),
                 });
-                out.gc |= class.gc_managed;
+                out.gc |= class.gc_managed();
             }
         }
         Ok(out)

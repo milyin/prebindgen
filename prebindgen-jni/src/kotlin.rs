@@ -54,24 +54,10 @@ impl KotlinReturnContext<'_> {
         Ok(output)
     }
 }
-/// Configured names for a generated handle class and its native destructor.
-#[derive(Clone, Debug)]
-pub struct KotlinClass {
-    /// Stable allocation-class identifier used for one consistent lock order.
-    pub handle_type: i64,
-    /// Whether inputs of this class need a JVM reachability fence.
-    pub gc_managed: bool,
-    /// Fully qualified Kotlin class name.
-    pub name: String,
-    /// Fully qualified native function accepting a raw handle address.
-    pub drop_function: String,
-}
 /// Names and class settings supplied by the Kotlin wrapper writer.
 pub struct KotlinContext<'a> {
     /// Root package of this binding module and its bulk runtime.
     pub package: &'a str,
-    /// Configured classes indexed by [`prebindgen_flat::type_key`].
-    pub classes: &'a BTreeMap<String, KotlinClass>,
     /// Canonical source declarations and JNI type/field metadata, borrowed from Flat.
     pub source_types: &'a BTreeMap<String, prebindgen_flat::TypeInfo<JniType, JniField>>,
     /// Variable holding the native output array.
@@ -99,20 +85,15 @@ impl KotlinContext<'_> {
     }
     /// Resolve the configured Kotlin class name for a source type.
     pub fn class_name(&self, ty: &syn::Type) -> Result<String> {
-        Ok(self
-            .classes
-            .get(&type_key(ty))
-            .ok_or_else(|| format!("no handle class for `{}`", type_key(ty)))?
-            .name
-            .clone())
+        Ok(crate::metadata::source_handle(self.source_types, ty)?
+            .1
+            .fqn())
     }
     /// Emit the configured native destructor invocation for an unwrapped handle.
     pub fn drop_handle(&self, ty: &syn::Type, value: &str) -> Result<String> {
-        let class = self
-            .classes
-            .get(&type_key(ty))
-            .ok_or_else(|| format!("no handle class for `{}`", type_key(ty)))?;
-        Ok(format!("{}({value})", class.drop_function))
+        let (ty, _) = crate::metadata::source_handle(self.source_types, ty)?;
+        let method = crate::handles::drop_method(ty, &mut names::Names::default())?;
+        Ok(format!("{}.JNINative.{method}({value})", self.package))
     }
 }
 /// A prepared local binding, evaluated before collecting handle locks.
@@ -1080,19 +1061,20 @@ mod tests {
 
     #[test]
     fn slots_emit_private_conditions_and_use_supplied_output_bindings() {
-        let classes = BTreeMap::from([(
-            "Counter".into(),
-            KotlinClass {
-                name: "example.Counter".into(),
-                drop_function: "example.Native.release".into(),
-                handle_type: 0,
-                gc_managed: false,
-            },
-        )]);
+        let flat = JniGen::builder()
+            .items([(
+                syn::parse_quote!(
+                    pub struct Counter {}
+                ),
+                Default::default(),
+            )])
+            .set_package_prefix("example")
+            .package(package!().class(ptr_class!(Counter)))
+            .configured()
+            .unwrap();
         let context = KotlinContext {
             package: "example",
-            classes: &classes,
-            source_types: &BTreeMap::new(),
+            source_types: &flat.types,
             result: "native_values",
             failure: "delivery_error",
             cleanup_failure: None,
@@ -1102,7 +1084,7 @@ mod tests {
         let mut plan = JniCodec::raw()
             .input_leaf(prebindgen_declarations::InputLeaf::new(
                 &JniBindings::parse([]).unwrap(),
-                &syn::parse_quote!(Counter),
+                &syn::parse_quote!(crate::Counter),
                 &(),
                 syn::parse_quote!(incoming),
                 syn::parse_quote!(value),
@@ -1153,7 +1135,7 @@ mod tests {
         let plan = JniCodec::raw()
             .output_leaf(prebindgen_declarations::OutputLeaf::new(
                 &JniBindings::parse([]).unwrap(),
-                &syn::parse_quote!(Counter),
+                &syn::parse_quote!(crate::Counter),
                 &(),
                 syn::parse_quote!(wire),
                 quote!(returned),
@@ -1165,9 +1147,8 @@ mod tests {
         assert!(output
             .materialize
             .contains("example.Counter(native_values[0] as Long)"));
-        assert!(output
-            .cleanup
-            .contains("example.Native.release(native_values[0] as Long)"));
+        assert!(output.cleanup.contains("example.JNINative.drop_Counter_"));
+        assert!(output.cleanup.contains("(native_values[0] as Long)"));
         assert!(output
             .cleanup
             .contains("delivery_error.addSuppressed(cleanup)"));

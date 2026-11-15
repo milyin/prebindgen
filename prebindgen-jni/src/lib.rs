@@ -68,7 +68,7 @@ mod converters;
 pub use converters::{JniInputConverter, JniOutputConverter};
 mod kotlin;
 pub use kotlin::{
-    JniReturnDelivery, KotlinBinding, KotlinClass, KotlinContext, KotlinHandleInput, KotlinInput,
+    JniReturnDelivery, KotlinBinding, KotlinContext, KotlinHandleInput, KotlinInput,
     KotlinInputConversion, KotlinOutput, KotlinOutputConversion, KotlinReturnContext,
 };
 /// Flat source model with JNI conversion data for wrapper emission.
@@ -1737,27 +1737,17 @@ pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
         validate_name(&f.metadata.name)?;
     }
     let init = &flat.metadata.native_init;
-    let classes = flat
-        .types
-        .values()
-        .filter_map(|t| {
-            t.metadata
-                .class
-                .as_ref()
-                .filter(|c| matches!(c.representation, ClassRepresentation::Handle { .. }))
-                .map(|c| (type_key(&t.ty), (&t.ty, c)))
-        })
-        .collect::<BTreeMap<_, _>>();
-    let mut allocation_ids = BTreeMap::new();
+    let mut gc_managed = false;
     let mut claimed_ids = BTreeMap::new();
-    for (key, (ty, _)) in &classes {
+    for (ty, class) in metadata::handle_classes(&flat.types) {
+        gc_managed |= class.gc_managed();
         let id = handles::allocation_type_id(ty);
+        let key = type_key(ty);
         if let Some(previous) = claimed_ids.insert(id, key.clone()) {
             return Err(format!(
                 "allocation-type identity collision between `{previous}` and `{key}`"
             ));
         }
-        allocation_ids.insert(key.clone(), id);
     }
     functions.sort_by_key(|f| f.metadata.order);
     let errors = functions
@@ -1806,7 +1796,6 @@ pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
     if !init.is_empty() {
         native.push_str(&format!("    init {{ {init} }}\n"));
     }
-    let gc_managed = classes.values().any(|(_, c)| c.gc_managed());
     files.insert(
         format!("{}/NativeHandle.kt", prefix.replace('.', "/")),
         native_handle(prefix, gc_managed),
@@ -1820,10 +1809,10 @@ pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
     let mut names = names::Names::default();
     let mut row_captures = BTreeSet::new();
     let mut capacity_registered = false;
-    for (ty, c) in classes.values() {
-        let id = allocation_ids[&type_key(ty)];
+    for (ty, c) in metadata::handle_classes(&flat.types) {
+        let id = handles::allocation_type_id(ty);
         let handle_type = wire::jvm::long_literal(id);
-        let method = names.name("drop", &names::type_label(ty), &[&names::type_identity(ty)])?;
+        let method = handles::drop_method(ty, &mut names)?;
         let sym = symbol(prefix, &method);
         rust.extend(quote!{#[doc = "# Safety\nOnly generated Kotlin ownership release paths may call this entry point. The pointer must be a live allocation of the declared type with no outstanding native access; an opted-in Cleaner may release an unreachable wrapper without its monitor."]
 #[no_mangle]pub unsafe extern "system" fn #sym(mut env: ::prebindgen_jni_runtime::jni::JNIEnv<'_>,_class: ::prebindgen_jni_runtime::jni::objects::JClass<'_>,id:i64){if let Err(e)=::prebindgen_runtime::boundary(||unsafe {::prebindgen_jni_runtime::drop_pointer::<#ty>(id)}){::prebindgen_jni_runtime::fail(&mut env,&e);}}});
@@ -1836,37 +1825,15 @@ pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
         let text=format!("package {}\n\npublic class {} internal constructor(raw: Long) : {base} {{\n    override val handleType: Long get() = {handle_type}\n    public fun take(): {} = synchronized(this) {{ check(!isClosed) {{ \"closed or consumed handle\" }}; val owner = {}(raw); markConsumed(); owner }}\n    override fun freeNative(raw: Long) {{ {prefix}.JNINative.{method}(raw) }}\n}}\n",c.pkg,c.name,c.name,c.name);
         files.insert(format!("{}/{}.kt", c.pkg.replace('.', "/"), c.name), text);
     }
-    let kotlin_classes = classes
-        .iter()
-        .map(|(ty, (source, class))| {
-            Ok((
-                ty.clone(),
-                KotlinClass {
-                    handle_type: allocation_ids[ty],
-                    gc_managed: class.gc_managed(),
-                    name: class.fqn(),
-                    drop_function: format!(
-                        "{prefix}.JNINative.{}",
-                        names.name(
-                            "drop",
-                            &names::type_label(source),
-                            &[&names::type_identity(source)]
-                        )?
-                    ),
-                },
-            ))
-        })
-        .collect::<Result<_>>()?;
     typed_rows::emit(flat, &mut rust, &mut native, &mut names, &mut row_captures)?;
     sealed::emit_tags(flat, &mut rust, &mut native, &mut files)?;
     bulk::emit(flat, &mut rust, &mut native, &mut files)?;
     rust.extend(cleanup::emit(flat)?);
-    callback::files(flat, &kotlin_classes, &mut files)?;
+    callback::files(flat, &mut files)?;
     errors::handler_files(
         &errors,
         &KotlinContext {
             package: prefix,
-            classes: &kotlin_classes,
             source_types: &flat.types,
             result: "result",
             failure: "failure",
@@ -1900,7 +1867,6 @@ pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
             .sum();
         let kotlin_context = KotlinContext {
             package: prefix,
-            classes: &kotlin_classes,
             source_types: &flat.types,
             result: "result",
             failure: "failure",

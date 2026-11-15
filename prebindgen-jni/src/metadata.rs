@@ -122,6 +122,37 @@ pub type JniBinding<I = JniInputConverter, O = JniOutputConverter> =
 // Borrow the actual Flat type table, independent of its export converter types.
 pub(crate) type JniTypes = BTreeMap<String, prebindgen_flat::TypeInfo<JniType, data::JniField>>;
 
+pub(crate) fn handle_classes(types: &JniTypes) -> impl Iterator<Item = (&syn::Type, &Class)> {
+    let mut classes = types
+        .values()
+        .filter_map(|source| {
+            source
+                .metadata
+                .class
+                .as_deref()
+                .filter(|class| matches!(class.representation, ClassRepresentation::Handle { .. }))
+                .map(|class| (&source.ty, class))
+        })
+        .collect::<Vec<_>>();
+    // Preserve emitted declaration order across captured and external types.
+    classes.sort_by_key(|(ty, _)| type_key(ty));
+    classes.into_iter()
+}
+
+pub(crate) fn source_handle<'a>(
+    types: &'a JniTypes,
+    ty: &syn::Type,
+) -> Result<(&'a syn::Type, &'a Class)> {
+    let source = source_type(types, ty)?;
+    let class = source
+        .metadata
+        .class
+        .as_deref()
+        .filter(|class| matches!(class.representation, ClassRepresentation::Handle { .. }))
+        .ok_or_else(|| format!("no handle class for `{}`", type_key(ty)))?;
+    Ok((&source.ty, class))
+}
+
 pub(crate) fn source_type<'a>(
     types: &'a JniTypes,
     ty: &syn::Type,
