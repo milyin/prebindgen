@@ -143,7 +143,10 @@ pub(crate) fn source_handle<'a>(
     types: &'a JniTypes,
     ty: &syn::Type,
 ) -> Result<(&'a syn::Type, &'a Class)> {
-    let source = source_type(types, ty)?;
+    let source = types
+        .values()
+        .find(|entry| prebindgen_flat::same_type(&entry.ty, ty))
+        .ok_or_else(|| format!("unregistered JNI source type `{}`", type_key(ty)))?;
     let class = source
         .metadata
         .class
@@ -155,18 +158,17 @@ pub(crate) fn source_handle<'a>(
 
 pub(crate) fn source_type<'a>(
     types: &'a JniTypes,
-    ty: &syn::Type,
+    reference: &prebindgen_flat::TypeRef,
 ) -> Result<&'a prebindgen_flat::TypeInfo<JniType, data::JniField>> {
     types
-        .values()
-        .find(|entry| prebindgen_flat::same_type(&entry.ty, ty))
-        .ok_or_else(|| format!("unregistered JNI source type `{}`", type_key(ty)))
+        .get(reference.key())
+        .ok_or_else(|| format!("missing JNI source type entry `{}`", reference.key()))
 }
 pub(crate) fn source_data_class<'a>(
     types: &'a JniTypes,
-    ty: &syn::Type,
+    reference: &prebindgen_flat::TypeRef,
 ) -> Result<(&'a prebindgen_flat::Record<data::JniField>, &'a Class)> {
-    let source = source_type(types, ty)?;
+    let source = source_type(types, reference)?;
     let class = source
         .metadata
         .class
@@ -175,15 +177,18 @@ pub(crate) fn source_data_class<'a>(
         .ok_or("record conversion requires a declared data class")?;
     match &source.definition {
         prebindgen_flat::TypeDefinition::Record(record) => Ok((record, class)),
-        _ => Err(format!("`{}` is not a source record", type_key(ty))),
+        _ => Err(format!("`{}` is not a source record", reference.key())),
     }
 }
 pub(crate) fn source_enum<'a>(
     types: &'a JniTypes,
-    ty: &syn::Type,
+    reference: &prebindgen_flat::TypeRef,
 ) -> Result<&'a prebindgen_flat::PayloadEnum<(), data::JniField>> {
-    match &source_type(types, ty)?.definition {
+    match &source_type(types, reference)?.definition {
         prebindgen_flat::TypeDefinition::PayloadEnum(enumeration) => Ok(enumeration),
-        _ => Err(format!("`{}` is not a source payload enum", type_key(ty))),
+        _ => Err(format!(
+            "`{}` is not a source payload enum",
+            reference.key()
+        )),
     }
 }

@@ -859,7 +859,7 @@ fn returned_handle_cleanup(
         } => {
             let mut body = String::new();
             let (record, class) =
-                crate::metadata::source_data_class(context.source_types, &data.ty)?;
+                crate::metadata::source_data_class(context.source_types, &data.source)?;
             for pair in crate::data::record_fields(children, record)? {
                 let (field, child) = pair?;
                 let expr = format!(

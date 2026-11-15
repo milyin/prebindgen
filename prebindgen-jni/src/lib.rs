@@ -1276,7 +1276,7 @@ impl Codec for JniCodec {
             &mut plan.node,
             wire.to_string(),
             kotlin_condition(active),
-            ty,
+            flat.type_ref(ty)?,
         )
     }
     fn output_record_metadata(
@@ -1296,7 +1296,7 @@ impl Codec for JniCodec {
             &mut plan.outcomes.success,
             wire.to_string(),
             "true".into(),
-            ty,
+            flat.type_ref(ty)?,
         )
     }
 

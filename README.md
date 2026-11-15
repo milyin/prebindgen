@@ -649,7 +649,13 @@ All definitions occur in terminal bundles or the `controls` of chain and branch
 nodes. Metadata retains encoding decisions and references to
 those definitions; it owns no wire descriptors or copies of child trees.
 
-JNI record and payload-enum occurrences retain a source-type reference and their
+`Flat::type_ref(&rust_type)` issues an opaque `TypeRef` only for a registered
+type. Its private key supports direct `Flat::get_type` / `get_type_mut` lookup;
+there is no public constructor, default or conversion from a string. References
+remain usable when Flat is cloned or its attachments are mapped with table keys
+preserved. Lookup fails if the referenced entry is removed.
+
+JNI record and payload-enum occurrences retain a Flat-issued `TypeRef` and their
 local binding/grouping policy. Class names, variant/field names and Kotlin
 property types are read from the canonical Flat declarations during emission.
 `KotlinContext::source_types` borrows that actual type table, including for custom

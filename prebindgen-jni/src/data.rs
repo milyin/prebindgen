@@ -1,7 +1,7 @@
 //! Kotlin record declarations and their occurrence conversions.
 use super::*;
 use crate::kotlin::JniNode;
-use prebindgen_flat::{Field, Record};
+use prebindgen_flat::{Field, Record, TypeRef};
 use std::rc::Rc;
 
 /// A Kotlin data class whose fields are converted across the JNI boundary.
@@ -136,7 +136,7 @@ pub struct JniField {
 #[derive(Clone, Debug)]
 pub struct JniDataGroup {
     pub(crate) root: String,
-    pub(crate) ty: Rc<syn::Type>,
+    pub(crate) source: TypeRef,
     pub(crate) condition: String,
 }
 
@@ -653,7 +653,7 @@ pub(super) fn mark(
     layout: &mut prebindgen_conversions::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
     root: String,
     condition: String,
-    ty: &syn::Type,
+    source: TypeRef,
 ) -> Result<()> {
     group::retire_niches(layout, None)?;
     let mut nodes = std::mem::take(layout);
@@ -669,7 +669,7 @@ pub(super) fn mark(
     }
     *metadata = JniGroup::Fields(Some(JniDataGroup {
         root,
-        ty: Rc::new(ty.clone()),
+        source,
         condition,
     }));
     *layout = nodes;
@@ -770,7 +770,7 @@ pub(crate) fn input_kotlin(
     context: &KotlinContext<'_>,
     active: &str,
 ) -> Result<KotlinInput> {
-    let (record, class) = crate::metadata::source_data_class(context.source_types, &d.ty)?;
+    let (record, class) = crate::metadata::source_data_class(context.source_types, &d.source)?;
     let class_name = class.fqn();
     let inner = nodes
         .iter()
@@ -901,7 +901,7 @@ pub(crate) fn output_kotlin(
     context: &KotlinContext<'_>,
     owners: Option<&str>,
 ) -> Result<KotlinOutput> {
-    let (record, class) = crate::metadata::source_data_class(context.source_types, &d.ty)?;
+    let (record, class) = crate::metadata::source_data_class(context.source_types, &d.source)?;
     let class_name = class.fqn();
     let mut fields = record_fields(nodes, record)?;
     let mut c = kotlin::output_components_checked(nodes, context, owners, |child| {
@@ -1063,12 +1063,12 @@ mod group_tests {
         bindings::set_output(&mut flat, "items", plan).unwrap();
     }
 
-    fn record(root: &str) -> WireNode<JniWire, crate::JniChain, crate::JniBranch> {
+    fn record(root: &str, source: TypeRef) -> WireNode<JniWire, crate::JniChain, crate::JniBranch> {
         WireNode::Branch {
             controls: vec![],
             meta: JniBranch::Group(JniGroup::Fields(Some(JniDataGroup {
                 root: root.into(),
-                ty: Rc::new(syn::parse_quote!(crate::Empty)),
+                source,
                 condition: "true".into(),
             }))),
             children: Vec::new(),
@@ -1076,6 +1076,16 @@ mod group_tests {
     }
     #[test]
     fn kotlin_record_and_presence_bindings_share_a_namespace() {
+        let flat: JniBindings = JniBindings::parse([(
+            syn::parse_quote!(
+                pub struct Empty {}
+            ),
+            Default::default(),
+        )])
+        .unwrap();
+        let reference = flat.type_ref(&syn::parse_quote!(Empty)).unwrap();
+        let record = |root| record(root, reference.clone());
+
         let optional = WireNode::Chain {
             controls: vec![Wire {
                 name: syn::parse_quote!(flag),
@@ -1113,6 +1123,15 @@ mod group_tests {
     }
     #[test]
     fn kotlin_record_emission_reads_names_from_shared_fields() {
+        let items = syn::parse_file("pub struct Point { pub r#type:i32 }pub struct Empty {}")
+            .unwrap()
+            .items;
+        let flat = JniGen::builder()
+            .flat(JniBindings::parse(items.into_iter().map(|i| (i, Default::default()))).unwrap())
+            .set_package_prefix("example")
+            .package(package!().class(data_class!(Point)))
+            .configured()
+            .unwrap();
         let mut field = prebindgen_conversions::WireNode::Leaf(vec![Wire {
             name: syn::parse_quote!(incoming),
             kind: JniWire::scalar(Primitive::I32),
@@ -1126,21 +1145,13 @@ mod group_tests {
             controls: vec![],
             meta: JniBranch::Group(JniGroup::Fields(Some(JniDataGroup {
                 root: "point".into(),
-                ty: Rc::new(syn::parse_quote!(crate::Point)),
+                source: flat.type_ref(&syn::parse_quote!(Point)).unwrap(),
                 condition: "true".into(),
             }))),
             children: vec![std::mem::take(&mut field)],
         };
         crate::group::validate_layout(&field).unwrap();
-        let items = syn::parse_file("pub struct Point { pub r#type:i32 }pub struct Empty {}")
-            .unwrap()
-            .items;
-        let flat = JniGen::builder()
-            .flat(JniBindings::parse(items.into_iter().map(|i| (i, Default::default()))).unwrap())
-            .set_package_prefix("example")
-            .package(package!().class(data_class!(Point)))
-            .configured()
-            .unwrap();
+        let empty = record("empty", flat.type_ref(&syn::parse_quote!(Empty)).unwrap());
         let mut types = flat.types;
         // Zero-field records are only exercised by this direct wire-contract test.
         types.get_mut("Empty").unwrap().metadata.class = Some(Rc::new(Class {
@@ -1163,7 +1174,6 @@ mod group_tests {
         assert_eq!(output.result_types, ["example.Point"]);
         assert!(output.delivered[0].contains("example.Point(result[0]"));
         // An empty record still denotes one Kotlin object with no ABI wires.
-        let empty = record("empty");
         let output = kotlin::output_kotlin(&empty, &context).unwrap();
         assert_eq!(output.delivered, ["example.Empty()"]);
     }

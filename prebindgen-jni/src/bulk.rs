@@ -1248,16 +1248,19 @@ fn schema(node: &JniNode, types: &JniTypes) -> Result<String> {
         } => {
             let kind = match meta {
                 JniBranch::Alternatives => "alternatives".into(),
-                JniBranch::Enum(e) => format!(
-                    "enum:{}:{}",
-                    type_key(&e.ty),
-                    crate::metadata::source_enum(types, &e.ty)?
-                        .variants
-                        .iter()
-                        .map(|v| v.name.to_string().trim_start_matches("r#").to_owned())
-                        .collect::<Vec<_>>()
-                        .join(";")
-                ),
+                JniBranch::Enum(e) => {
+                    let source = crate::metadata::source_enum(types, &e.source)?;
+                    format!(
+                        "enum:{}:{}",
+                        type_key(&source.ty),
+                        source
+                            .variants
+                            .iter()
+                            .map(|v| v.name.to_string().trim_start_matches("r#").to_owned())
+                            .collect::<Vec<_>>()
+                            .join(";")
+                    )
+                }
                 JniBranch::Group(JniGroup::Field(name)) => format!("field:{name}"),
                 JniBranch::Group(JniGroup::Named(name)) => format!("view:{name}"),
                 JniBranch::Group(JniGroup::Fields(_)) => "fields".into(),

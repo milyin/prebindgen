@@ -4,7 +4,7 @@ use prebindgen_declarations::{EnumEncoding, EnumForm, EnumVariants};
 
 use crate::kotlin::JniNode;
 use prebindgen_conversions::{InputConversion, Wire, WireNode};
-use prebindgen_flat::{PayloadEnum, PayloadField, PayloadVariant, TypeDefinition};
+use prebindgen_flat::{PayloadEnum, PayloadField, PayloadVariant, TypeDefinition, TypeRef};
 use std::rc::Rc;
 
 /// Declare a Kotlin sealed interface for a Rust payload enum or concrete Result.
@@ -44,8 +44,8 @@ macro_rules! sealed_class {($($ty:tt)+)=>{$crate::DeclJniSealedClass::new($crate
 /// Prepared enum grouping in an occurrence's wire tree.
 #[derive(Clone, Debug)]
 pub struct JniEnumGroup {
-    /// Source type, also identifying the tag mapping.
-    pub ty: syn::Type,
+    /// Flat-issued source type reference, also identifying the tag mapping.
+    pub source: TypeRef,
     /// Expose one sealed-class value rather than expanded tag/field parameters.
     pub value: bool,
     /// Public Kotlin input binding.
@@ -56,11 +56,11 @@ impl JniEnumGroup {
         &self,
         types: &'a crate::metadata::JniTypes,
     ) -> Result<(&'a PayloadEnum<(), JniField>, Option<&'a Class>)> {
-        let source = crate::metadata::source_type(types, &self.ty)?;
+        let source = crate::metadata::source_type(types, &self.source)?;
         let TypeDefinition::PayloadEnum(enumeration) = &source.definition else {
             return Err(format!(
                 "`{}` is not a source payload enum",
-                type_key(&self.ty)
+                type_key(&source.ty)
             ));
         };
         let class = if self.value {
@@ -170,7 +170,7 @@ pub(crate) fn encoding(request: EnumVariants<'_, JniCodec>) -> Result<EnumEncodi
     };
     Ok(EnumEncoding {
         metadata: JniBranch::Enum(Rc::new(JniEnumGroup {
-            ty: request.ty.clone(),
+            source: request.flat.type_ref(request.ty)?,
             value: grouped,
             root: request
                 .selector
@@ -732,7 +732,7 @@ pub(crate) fn emit_tags<I: KotlinInputConversion, O: KotlinOutputConversion>(
     fn visit(
         node: &kotlin::JniNode,
         package: &str,
-        by_package: &mut BTreeMap<String, BTreeMap<String, Rc<JniEnumGroup>>>,
+        by_package: &mut BTreeMap<String, BTreeSet<TypeRef>>,
     ) -> Result<()> {
         match node {
             WireNode::Leaf(wires) => {
@@ -747,11 +747,10 @@ pub(crate) fn emit_tags<I: KotlinInputConversion, O: KotlinOutputConversion>(
             WireNode::Chain { child, .. } => visit(child, package, by_package)?,
             WireNode::Branch { meta, children, .. } => {
                 if let JniBranch::Enum(e) = meta {
-                    let key = names::type_identity(&e.ty);
                     by_package
                         .entry(package.into())
                         .or_default()
-                        .insert(key, e.clone());
+                        .insert(e.source.clone());
                 }
                 for child in children {
                     visit(child, package, by_package)?;
@@ -799,9 +798,10 @@ pub(crate) fn emit_tags<I: KotlinInputConversion, O: KotlinOutputConversion>(
     let mut catalogue = BTreeMap::new();
     for (package, enums) in packages {
         let mut constants = BTreeMap::new();
-        for (identity, e) in enums {
-            let stem = tag_stem(&e.ty);
-            let source = crate::metadata::source_enum(&flat.types, &e.ty)?;
+        for reference in enums {
+            let source = crate::metadata::source_enum(&flat.types, &reference)?;
+            let identity = names::type_identity(&source.ty);
+            let stem = tag_stem(&source.ty);
             for (index, variant) in source.variants.iter().enumerate() {
                 let variant = tag_word(&variant.name.to_string());
                 let name = format!("{stem}_{variant}_TAG");

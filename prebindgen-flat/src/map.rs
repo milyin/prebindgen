@@ -383,7 +383,12 @@ mod tests {
         assert_eq!(flat.enum_by_key("crate :: E").unwrap().metadata.0 .0, "e");
         assert_eq!(flat.payload_enum(&result).unwrap().metadata.0 .0, "result");
         let guard_count = flat.guards.len();
+        let reference = flat.type_ref(&syn::parse_quote!(R)).unwrap();
         let mapped = flat.try_map_attachments::<After>(&mut Label).unwrap();
+        assert!(std::ptr::eq(
+            mapped.get_type(&reference).unwrap(),
+            &mapped.types["R"]
+        ));
         assert_eq!(mapped.metadata, "module");
         assert_eq!(mapped.function("f").unwrap().metadata, "function:f:export");
         assert_eq!(

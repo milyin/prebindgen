@@ -10,6 +10,8 @@ use syn::{visit_mut::VisitMut, Type};
 
 mod map;
 pub use map::MapAttachments;
+mod type_ref;
+pub use type_ref::TypeRef;
 mod payload;
 pub use payload::{PayloadEnum, PayloadField, PayloadVariant, VariantStyle};
 
