@@ -1,6 +1,7 @@
 //! Custom projections through ordinary returns, retained callbacks and typed errors.
+use prebindgen_conversions::{Conversion, InputConversion, OutputConversion, WireNode};
 use prebindgen_conversions::{Delivery, DeliveryPolicy, InputFragment, OutputFragment};
-use prebindgen_flat::{Conversion, InputConversion, OutputConversion, Result, WireNode};
+use prebindgen_flat::Result;
 use prebindgen_jni::{
     expand_return, fun, package, ptr_class, JniBindings, JniBranch, JniCallback, JniChain,
     JniContext, JniGen, JniInputConverter, JniOutputConverter, JniWire, KotlinContext, KotlinInput,
@@ -26,7 +27,7 @@ impl Conversion for DurationOutput {
 impl OutputConversion for DurationOutput {
     fn output_outcomes(
         &self,
-    ) -> &prebindgen_flat::Outcomes<WireNode<JniWire, JniChain, JniBranch>> {
+    ) -> &prebindgen_conversions::Outcomes<WireNode<JniWire, JniChain, JniBranch>> {
         self.0.output_outcomes()
     }
 }
@@ -168,18 +169,17 @@ pub fn generate() -> Result<JniGen> {
         "duration_packet",
         "duration_pair",
         "duration_series",
-        "duration_series_fold",
         "duration_optional",
         "duration_result",
     ] {
-        let function = flat.function_mut(name)?;
-        let mut output = JniOutputConverter::new(DurationOutput(
-            function.ret.slot.take().ok_or("missing output")?,
-        ));
-        if name == "duration_packet" {
-            output = output.packet_only();
+        for binding in &mut flat.function_mut(name)?.metadata {
+            let call = binding.call_mut()?;
+            let mut output = JniOutputConverter::new(DurationOutput(call.output.clone()));
+            if name == "duration_packet" {
+                output = output.packet_only();
+            }
+            call.output = output;
         }
-        function.ret.slot = Some(output);
     }
     // A local error override must not change plain_result's Long error handler.
     let error_output = prebindgen_declarations::compile_output_value(
@@ -193,13 +193,11 @@ pub fn generate() -> Result<JniGen> {
     )?;
     prebindgen_jni::bind_error_output(&mut flat, "duration_result", DurationOutput(error_output))?;
 
-    let original = flat.function("duration_callback")?.params[0]
-        .ty
-        .slot
-        .as_ref()
-        .ok_or("missing callback")?;
+    let original = &flat.function("duration_callback")?.metadata[0]
+        .call()?
+        .inputs[0];
     let node = original.input_node();
-    let callback = prebindgen_flat::wire_definitions(std::iter::once(node))
+    let callback = prebindgen_conversions::wire_definitions(std::iter::once(node))
         .find_map(|wire| {
             if let JniWire::Callback { callback } = &wire.kind {
                 Some(callback.clone())
@@ -233,10 +231,53 @@ pub fn generate() -> Result<JniGen> {
             &prebindgen_declarations::Condition::default(),
         ))?;
     callback.set_return_converter(DurationInput(JniInputConverter::from(input)))?;
-    flat.function_mut("duration_callback")?.params[0].ty.slot = Some(callback.into_input(
+    flat.function_mut("duration_callback")?.metadata[0]
+        .call_mut()?
+        .inputs[0] = callback.into_input(
         syn::parse_quote!(custom_callback),
         syn::parse_quote!(callback_value),
-    )?);
+    )?;
     // Keep declarations in the one Flat model; there is no side table of overrides.
+    prebindgen_jni::generate(&flat)
+}
+
+// This module contains only the export with a replaced error converter. Its
+// native code must not depend on another export retaining the old shared helper.
+pub fn generate_isolated_error() -> Result<JniGen> {
+    let items = syn::parse_file("pub fn duration_result(milliseconds:i64)->Result<i64,i64>{}")
+        .map_err(|e| e.to_string())?
+        .items;
+    let mut flat = JniGen::builder()
+        .items(items.into_iter().map(|item| {
+            (
+                item,
+                prebindgen::SourceLocation {
+                    crate_name: Some("crate::output_contracts".into()),
+                    ..Default::default()
+                },
+            )
+        }))
+        .set_package_prefix("io.prebindgen.covertest.isolatederror")
+        .set_jni_native_init("io.prebindgen.covertest.NativeLibrary.ensureLoaded()")
+        .package(package!().fun(fun!(duration_result)))
+        .prepare()?;
+    let output = prebindgen_declarations::compile_output_value(
+        &JniBindings::parse([])?,
+        &prebindgen_jni::JniCodec::raw(),
+        &syn::parse_quote!(i64),
+        &prebindgen_jni::operations::JniOutput::Leaf(prebindgen_jni::JniOutputLeafOp::Value),
+        &(),
+    )?;
+    prebindgen_jni::bind_error_output(&mut flat, "duration_result", DurationOutput(output))?;
+    // Reconfiguration must retain the new error helper as well as the prepared result.
+    let flat = JniGen::builder()
+        .flat(flat)
+        .set_package_prefix("io.prebindgen.covertest.isolatederror")
+        .set_jni_native_init("io.prebindgen.covertest.NativeLibrary.ensureLoaded()")
+        .package(package!().fun(fun!(duration_result).expand_param(
+            "milliseconds",
+            prebindgen_jni::JniInputConfig::Leaf(prebindgen_jni::JniInputLeafOp::Value),
+        )))
+        .prepare()?;
     prebindgen_jni::generate(&flat)
 }

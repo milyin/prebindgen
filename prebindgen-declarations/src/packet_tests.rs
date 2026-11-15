@@ -1,7 +1,7 @@
 //! A backend whose sequence boundary has separate pointer and length values.
 use super::*;
+use prebindgen_conversions::InputConversion;
 use prebindgen_conversions::{validate_wire_names, value};
-use prebindgen_flat::InputConversion;
 
 #[derive(Clone, Debug)]
 enum Metadata {
@@ -126,6 +126,9 @@ struct CodecImpl {
     row_only_leaf: bool,
 }
 impl Codec for CodecImpl {
+    type Input = crate::CodecInputPlan<Self>;
+    type Output = crate::CodecOutputPlan<Self>;
+
     test_operations!();
     type Schema = prebindgen_conversions::PlanSchema<Type, (), PacketChain, Metadata>;
     type Wire = Type;
@@ -401,7 +404,7 @@ fn pointer_length_round_trip(reverse: bool, row_only: bool) {
     filled.unwrap();
     let f = flat.function("echo").unwrap();
     assert_eq!(
-        prebindgen_flat::wire_definitions(std::iter::once(
+        prebindgen_conversions::wire_definitions(std::iter::once(
             f.input_conversions().unwrap()[0].input_node()
         ))
         .count(),
@@ -579,3 +582,5 @@ fn rows_lend_temporary_values_and_construct_once() {
     );
     assert!(std::process::Command::new(exe).status().unwrap().success());
 }
+
+use prebindgen_conversions::FunctionConversions as _;

@@ -1,6 +1,6 @@
 use super::*;
+use prebindgen_conversions::InputConversion;
 use prebindgen_conversions::{Delivery, DeliveryPolicy, OutputFragment};
-use prebindgen_flat::{Function, InputConversion, TypeUse};
 use std::{cell::Cell, rc::Rc};
 
 struct ExternalOutput {
@@ -30,7 +30,7 @@ impl Conversion for ExternalOutput {
     }
 }
 impl OutputConversion for ExternalOutput {
-    fn output_outcomes(&self) -> &prebindgen_flat::Outcomes<kotlin::JniNode> {
+    fn output_outcomes(&self) -> &prebindgen_conversions::Outcomes<kotlin::JniNode> {
         self.native.output_outcomes()
     }
 }
@@ -94,40 +94,33 @@ fn prepared() -> JniBindings {
 }
 
 fn external(flat: JniBindings) -> JniBindings<JniInputConverter, ExternalOutput> {
-    Flat {
-        metadata: flat.metadata,
-        records: flat.records,
-        enums: flat.enums,
-        payload_enums: flat.payload_enums,
-        types: flat.types,
-        guards: flat.guards,
-        functions: flat
-            .functions
+    flat.try_map_function_data(|_, _, bindings| {
+        bindings
             .into_iter()
-            .map(|(key, f)| {
-                (
-                    key,
-                    Function {
-                        metadata: f.metadata,
-                        name: f.name,
-                        path: f.path,
-                        location: f.location,
-                        params: f.params,
-                        ret: TypeUse {
-                            ty: f.ret.ty,
-                            slot: f.ret.slot.map(|native| ExternalOutput {
-                                native,
+            .map(|binding| {
+                let prebindgen_declarations::BindingState::Prepared(call) = binding.state else {
+                    return Err("expected prepared export".into());
+                };
+                Ok(prebindgen_conversions::FunctionBinding {
+                    name: binding.name,
+                    metadata: binding.metadata,
+                    state: prebindgen_declarations::BindingState::Prepared(
+                        prebindgen_conversions::PreparedCall {
+                            inputs: call.inputs,
+                            output: ExternalOutput {
+                                native: call.output,
                                 preparations: Rc::default(),
                                 projections: Rc::default(),
                                 omit_delivery: false,
                                 mark_delivery: false,
-                            }),
+                            },
                         },
-                    },
-                )
+                    ),
+                })
             })
-            .collect(),
-    }
+            .collect()
+    })
+    .unwrap()
 }
 
 #[test]
@@ -139,7 +132,8 @@ fn independent_outputs_use_the_same_emitter_and_prepare_delivery_once() {
     assert_eq!(actual.rust, expected.rust);
     assert_eq!(actual.kotlin, expected.kotlin);
     for function in flat.functions.values() {
-        if let Some(output) = &function.ret.slot {
+        for binding in &function.metadata {
+            let output = &binding.call().unwrap().output;
             assert_eq!(output.preparations.get(), 1, "{}", function.name);
             assert_eq!(output.projections.get(), 1, "{}", function.name);
         }
@@ -149,12 +143,10 @@ fn independent_outputs_use_the_same_emitter_and_prepare_delivery_once() {
 #[test]
 fn a_missing_selected_delivery_is_a_generation_error() {
     let mut flat = external(prepared());
-    flat.function_mut("scalar")
+    flat.function_mut("scalar").unwrap().metadata[0]
+        .call_mut()
         .unwrap()
-        .ret
-        .slot
-        .as_mut()
-        .unwrap()
+        .output
         .omit_delivery = true;
     assert!(generate(&flat)
         .err()
@@ -166,14 +158,13 @@ fn a_missing_selected_delivery_is_a_generation_error() {
 fn packet_policy_is_explicit_and_does_not_require_token_recognition() {
     let mut flat = prepared();
     let function = flat.function_mut("scalar").unwrap();
-    function.ret.slot = Some(function.ret.slot.take().unwrap().packet_only());
+    let output = &mut function.metadata[0].call_mut().unwrap().output;
+    *output = output.clone().packet_only();
     let mut flat = external(flat);
-    flat.function_mut("scalar")
+    flat.function_mut("scalar").unwrap().metadata[0]
+        .call_mut()
         .unwrap()
-        .ret
-        .slot
-        .as_mut()
-        .unwrap()
+        .output
         .mark_delivery = true;
     let actual = generate(&flat).unwrap();
     assert!(actual.rust.contains("__pb_custom_packet_marker"));
@@ -181,9 +172,7 @@ fn packet_policy_is_explicit_and_does_not_require_token_recognition() {
     assert_eq!(
         flat.function("scalar")
             .unwrap()
-            .ret
-            .slot
-            .as_ref()
+            .output_conversion()
             .unwrap()
             .preparations
             .get(),
@@ -212,13 +201,18 @@ fn local_error_override_rejects_an_incompatible_wire_description() {
 #[test]
 fn one_prepared_output_supports_packet_direct_and_capture_without_mutation() {
     let flat = prepared();
-    let output = flat.function("scalar").unwrap().ret.slot.as_ref().unwrap();
+    let output = flat
+        .function("scalar")
+        .unwrap()
+        .output_conversion()
+        .unwrap();
     let mut context = JniContext {
         input_transfers: prebindgen_conversions::InputTransfers::Forbidden,
         return_delivery: JniReturnDelivery::Packet,
         prepared_delivery: None,
         environment: syn::parse_quote!(env),
         domain_output: syn::parse_quote!(unused_domain),
+        source_error_helper: None,
         return_sink: Some(syn::parse_quote!(capture)),
         is_domain_error: false,
         output_committed: quote!(),
@@ -263,7 +257,7 @@ impl Conversion for TextOutput {
     }
 }
 impl OutputConversion for TextOutput {
-    fn output_outcomes(&self) -> &prebindgen_flat::Outcomes<kotlin::JniNode> {
+    fn output_outcomes(&self) -> &prebindgen_conversions::Outcomes<kotlin::JniNode> {
         self.0.output_outcomes()
     }
 }
@@ -285,12 +279,8 @@ impl KotlinOutputConversion for TextOutput {
     }
 }
 fn callback(flat: &JniBindings, name: &str) -> JniCallback {
-    let input = flat.function(name).unwrap().params[0]
-        .ty
-        .slot
-        .as_ref()
-        .unwrap();
-    prebindgen_flat::wire_definitions(std::iter::once(input.input_node()))
+    let input = flat.function(name).unwrap().input_conversions().unwrap()[0];
+    prebindgen_conversions::wire_definitions(std::iter::once(input.input_node()))
         .find_map(|wire| {
             if let JniWire::Callback { callback } = &wire.kind {
                 Some(callback.as_ref().clone())
@@ -307,30 +297,36 @@ fn a_local_callback_projection_needs_a_distinct_shared_interface_name() {
     let native = flat
         .function("scalar")
         .unwrap()
-        .ret
-        .slot
-        .as_ref()
+        .output_conversion()
         .unwrap()
         .clone();
     custom
         .set_argument_converter(0, TextOutput(native))
         .unwrap();
-    flat.function_mut("invoke").unwrap().params[0].ty.slot = Some(
+    bindings::set_input(
+        &mut flat,
+        "invoke",
+        "callback",
         custom
             .clone()
             .into_input(syn::parse_quote!(wire), syn::parse_quote!(value))
             .unwrap(),
-    );
+    )
+    .unwrap();
     assert!(generate(&flat)
         .err()
         .unwrap()
         .contains("signature collision"));
     custom.set_interface_name("TextCallback").unwrap();
-    flat.function_mut("invoke").unwrap().params[0].ty.slot = Some(
+    bindings::set_input(
+        &mut flat,
+        "invoke",
+        "callback",
         custom
             .into_input(syn::parse_quote!(wire), syn::parse_quote!(value))
             .unwrap(),
-    );
+    )
+    .unwrap();
     let output = generate(&flat).unwrap();
     assert!(output.kotlin["test/TextCallback.kt"].contains("arg0_0: String"));
     assert!(output.kotlin["test/i64Toi64Callback.kt"].contains("arg0_0: Long"));
@@ -339,18 +335,9 @@ fn a_local_callback_projection_needs_a_distinct_shared_interface_name() {
 fn local_error_handlers_are_independent_for_overloads() {
     let mut flat = prepared();
     for name in ["overloaded_i64", "overloaded_string"] {
-        flat.function_mut(name)
-            .unwrap()
+        flat.function_mut(name).unwrap().metadata[0].metadata.name = "overloaded".into();
+        let native = flat.function(name).unwrap().metadata[0]
             .metadata
-            .as_mut()
-            .unwrap()
-            .name = "overloaded".into();
-        let native = flat
-            .function(name)
-            .unwrap()
-            .metadata
-            .as_ref()
-            .unwrap()
             .error
             .as_ref()
             .unwrap()
@@ -359,21 +346,13 @@ fn local_error_handlers_are_independent_for_overloads() {
             .clone();
         bind_error_output(&mut flat, name, native).unwrap();
     }
-    let first = flat
-        .function("overloaded_i64")
-        .unwrap()
+    let first = flat.function("overloaded_i64").unwrap().metadata[0]
         .metadata
-        .as_ref()
-        .unwrap()
         .error
         .as_ref()
         .unwrap();
-    let second = flat
-        .function("overloaded_string")
-        .unwrap()
+    let second = flat.function("overloaded_string").unwrap().metadata[0]
         .metadata
-        .as_ref()
-        .unwrap()
         .error
         .as_ref()
         .unwrap();
@@ -423,9 +402,7 @@ fn nested_error_layouts_must_match_even_with_the_same_outer_byte_array() {
     let old = flat
         .function("failed")
         .unwrap()
-        .ret
-        .slot
-        .as_ref()
+        .output_conversion()
         .unwrap()
         .output_outcomes()
         .source_error
@@ -464,7 +441,7 @@ fn explicit_plan_delivery_edits_are_preserved_with_fixed_policy() {
         .statements
         .extend(quote!(let __pb_plan_delivery_hook=();));
     plan.delivery.policy = DeliveryPolicy::Fixed;
-    flat.function_mut("scalar").unwrap().ret.slot = Some(plan.into());
+    bindings::set_output(&mut flat, "scalar", plan.into()).unwrap();
     let output = generate(&flat).unwrap();
     assert!(output.rust.contains("__pb_plan_delivery_hook"));
     assert!(output.kotlin["test/JNINative.kt"].contains("): Array<Any?>"));

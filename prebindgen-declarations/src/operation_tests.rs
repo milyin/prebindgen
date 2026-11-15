@@ -4,6 +4,9 @@ use prebindgen_conversions::{staged::emit_call, value};
 
 struct Scalars;
 impl Codec for Scalars {
+    type Input = crate::CodecInputPlan<Self>;
+    type Output = crate::CodecOutputPlan<Self>;
+
     test_operations!();
     type Schema = prebindgen_conversions::PlanSchema<Type>;
     type Wire = Type;
@@ -88,7 +91,9 @@ fn declaration_helpers_compile_and_execute_a_complete_call() {
         .params
         .iter()
         .flat_map(|p| {
-            prebindgen_flat::wire_definitions(std::iter::once(&p.ty.slot.as_ref().unwrap().node))
+            prebindgen_conversions::wire_definitions(std::iter::once(
+                &p.ty.slot.as_ref().unwrap().node,
+            ))
         })
         .map(|w| w.name.clone())
         .collect::<Vec<_>>();
@@ -282,6 +287,9 @@ struct Probe(
     std::cell::Cell<bool>,
 );
 impl Codec for Probe {
+    type Input = crate::CodecInputPlan<Self>;
+    type Output = crate::CodecOutputPlan<Self>;
+
     test_operations!();
     type Schema = <Scalars as Codec>::Schema;
     type Wire = Type;
@@ -397,6 +405,9 @@ fn input_context_preserves_all_dispatch_cases_and_callback_roles() {
 
 struct MalformedOptional(u8);
 impl Codec for MalformedOptional {
+    type Input = crate::CodecInputPlan<Self>;
+    type Output = crate::CodecOutputPlan<Self>;
+
     test_operations!();
     type Schema = <Scalars as Codec>::Schema;
     type Wire = Type;
@@ -438,7 +449,7 @@ impl Codec for MalformedOptional {
         let absent_values = match self.0 {
             3 => vec![(format_ident!("unexpected"), quote!(0i64))],
             4 => vec![],
-            _ => prebindgen_flat::wire_definitions(std::iter::once(&*r.payload))
+            _ => prebindgen_conversions::wire_definitions(std::iter::once(&*r.payload))
                 .map(|w| (w.name.clone(), quote!(0i64)))
                 .collect(),
         };
@@ -541,7 +552,7 @@ fn resolved_flat_compiles_after_its_configuration_is_dropped() {
         Some(ResolvedSlot::Tree(TestInput::Leaf(_)))
     ));
     let compiled = compile_resolved(resolved).unwrap();
-    prebindgen_flat::validate_bindings(&compiled).unwrap();
+    prebindgen_conversions::validate_bindings(&compiled).unwrap();
     assert_eq!(compiled.function("add").unwrap().params.len(), 2);
 }
 
@@ -617,6 +628,9 @@ impl OutputOps for ArithmeticOutputs {
 }
 struct Arithmetic;
 impl Codec for Arithmetic {
+    type Input = crate::CodecInputPlan<Self>;
+    type Output = crate::CodecOutputPlan<Self>;
+
     fn finish_output(&self, plan: &mut CodecOutputPlan<Self>, _: &()) -> Result<()> {
         plan.delivery.result = plan.values[0].1.clone();
         Ok(())
@@ -733,7 +747,9 @@ fn independent_operation_vocabularies_compile_without_declaration_frontend() {
         .params
         .iter()
         .flat_map(|p| {
-            prebindgen_flat::wire_definitions(std::iter::once(&p.ty.slot.as_ref().unwrap().node))
+            prebindgen_conversions::wire_definitions(std::iter::once(
+                &p.ty.slot.as_ref().unwrap().node,
+            ))
         })
         .map(|w| w.name.clone())
         .collect::<Vec<_>>();

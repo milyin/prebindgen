@@ -1,7 +1,8 @@
 //! Retain heterogeneous converters in callback/error metadata, only at generation time.
 use super::*;
 use prebindgen_conversions::{Delivery, DeliveryPolicy, InputFragment, OutputFragment};
-use prebindgen_flat::{InputConversion, Outcomes, OutputConversion};
+
+use prebindgen_conversions::{InputConversion, Outcomes, OutputConversion};
 use std::rc::Rc;
 
 // Conversion's associated request family is intentionally not object safe.
@@ -182,7 +183,7 @@ impl JniOutputConverter {
     /// Successful packet fields in native order; excludes status/error framing.
     pub fn result_packet_fields(
         &self,
-    ) -> Result<std::vec::IntoIter<&prebindgen_flat::Wire<JniWire>>> {
+    ) -> Result<std::vec::IntoIter<&prebindgen_conversions::Wire<JniWire>>> {
         group::validate_layout(&self.output_outcomes().success)?;
         Ok(group::result_packet_fields(&self.output_outcomes().success))
     }

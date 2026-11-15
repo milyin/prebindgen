@@ -17,6 +17,8 @@ pub struct JniContext {
     pub environment: syn::Ident,
     /// Local retaining a committed domain-error packet or delivery marker across Rust unwinding.
     pub domain_output: syn::Ident,
+    /// Current export's typed domain-error helper, selected when emitting its call.
+    pub source_error_helper: Option<syn::Ident>,
     /// Borrowed synchronous function-return capture. None preserves custom
     /// packet delivery and source-callback argument conversion.
     pub return_sink: Option<syn::Ident>,
@@ -33,6 +35,11 @@ impl TemplateContext for JniContext {
             &|name| match name {
                 "environment" => Ok(self.environment.to_token_stream()),
                 "domain_output" => Ok(self.domain_output.to_token_stream()),
+                "source_error_helper" => self
+                    .source_error_helper
+                    .as_ref()
+                    .map(ToTokens::to_token_stream)
+                    .ok_or("missing source error helper for export".into()),
                 "return_sink" => Ok(self
                     .return_sink
                     .as_ref()
@@ -63,7 +70,7 @@ impl JniContext {
     pub fn cached_callback_validation(
         &self,
         validation: &TokenStream,
-        node: &prebindgen_flat::WireNode<crate::JniWire, crate::JniChain, crate::JniBranch>,
+        node: &prebindgen_conversions::WireNode<crate::JniWire, crate::JniChain, crate::JniBranch>,
     ) -> Result<TokenStream> {
         crate::bulk::cached_reads(validation, node)
     }
@@ -72,8 +79,8 @@ impl JniContext {
     /// refer to source_result_expr; the output fragment resolves that binding.
     pub fn output_delivery(
         &self,
-        outcomes: &prebindgen_flat::Outcomes<
-            prebindgen_flat::WireNode<crate::JniWire, crate::JniChain, crate::JniBranch>,
+        outcomes: &prebindgen_conversions::Outcomes<
+            prebindgen_conversions::WireNode<crate::JniWire, crate::JniChain, crate::JniBranch>,
         >,
         values: &[(syn::Ident, TokenStream)],
     ) -> Result<prebindgen_conversions::Delivery> {

@@ -1,12 +1,12 @@
 //! Decode and construct collection elements directly into their final storage.
 use super::*;
 
+use prebindgen_conversions::WireNode;
 use prebindgen_flat::SequenceView;
-use prebindgen_flat::WireNode;
 use quote::ToTokens;
 
 /// Adapter-supplied array input transport. Element conversion remains shared.
-pub struct SequenceInput<W: prebindgen_flat::WireKind, G> {
+pub struct SequenceInput<W: prebindgen_conversions::WireKind, G> {
     /// Adapter policy for interpreting `controls`; must not own wire descriptors.
     pub metadata: G,
     /// Supporting boundary values, stored on the resulting sequence node.
@@ -23,7 +23,7 @@ pub struct SequenceInput<W: prebindgen_flat::WireKind, G> {
     pub release: TokenStream,
 }
 /// Adapter-supplied array output transport. Owners are committed only after delivery.
-pub struct SequenceOutput<W: prebindgen_flat::WireKind, G> {
+pub struct SequenceOutput<W: prebindgen_conversions::WireKind, G> {
     /// Transfer each element inside `store`, after capturing its prepared wire
     /// values, into a rollback-capable carrier or to a foreign visitor. A carrier
     /// must reclaim transferred owners if outer output delivery fails.
@@ -161,7 +161,7 @@ pub fn input<C: Codec>(
     }
     prebindgen_conversions::validate_value_bindings(&transport.validation_values)?;
     for (name, _) in &transport.validation_values {
-        if !prebindgen_flat::wire_definitions(std::iter::once(&child.node))
+        if !prebindgen_conversions::wire_definitions(std::iter::once(&child.node))
             .any(|wire| wire.name == *name)
         {
             return Err(format!("unknown collection validation binding `{name}`"));
@@ -407,7 +407,7 @@ pub fn output<C: Codec>(
         fallible: child.fallible || fallible,
         context: Default::default(),
         delivery: Default::default(),
-        outcomes: prebindgen_flat::Outcomes {
+        outcomes: prebindgen_conversions::Outcomes {
             success: WireNode::Chain {
                 controls,
                 child: Box::new(child.outcomes.success),

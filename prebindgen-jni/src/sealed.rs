@@ -1,7 +1,8 @@
 //! Kotlin sealed values and selected-variant JNI conversion.
 use super::*;
 use prebindgen_declarations::{EnumEncoding, EnumForm, EnumVariants};
-use prebindgen_flat::{InputConversion, Wire, WireNode};
+
+use prebindgen_conversions::{InputConversion, Wire, WireNode};
 use std::rc::Rc;
 
 /// Declare a Kotlin sealed interface for a Rust payload enum or concrete Result.
@@ -58,7 +59,10 @@ pub struct JniEnumGroup {
 }
 fn variant_names(class: &Class, names: &[String]) -> Result<Vec<String>> {
     let mut overrides = BTreeMap::new();
-    for (source, name) in &class.variant_names {
+    let ClassRepresentation::Sealed { variant_names, .. } = &class.representation else {
+        return Err("variant naming requires a sealed class".into());
+    };
+    for (source, name) in variant_names {
         let source = source.trim_start_matches("r#");
         if !names.iter().any(|name| name == source) {
             return Err(format!("unknown enum variant `{source}`"));
@@ -93,7 +97,7 @@ pub(crate) fn encoding(request: EnumVariants<'_, JniCodec>) -> Result<EnumEncodi
         .type_info(request.ty)
         .ok()
         .and_then(|t| t.metadata.class.as_ref())
-        .filter(|c| c.kind == ClassKind::Sealed);
+        .filter(|c| matches!(c.representation, ClassRepresentation::Sealed { .. }));
     let grouped = request.form == EnumForm::Value;
     if grouped && class.is_none() {
         return Err(format!(
@@ -529,7 +533,7 @@ pub(crate) fn render<I: KotlinInputConversion, O: KotlinOutputConversion>(
         "package {}\n\npublic sealed interface {}{} {{\n",
         class.pkg,
         class.name,
-        if class.has_handles {
+        if class.has_handles() {
             " : AutoCloseable"
         } else {
             ""
@@ -540,7 +544,7 @@ pub(crate) fn render<I: KotlinInputConversion, O: KotlinOutputConversion>(
             out.push_str(&format!(
                 "public data object {name} : {}{}\n",
                 class.fqn(),
-                if class.has_handles {
+                if class.has_handles() {
                     " { override fun close() {} }"
                 } else {
                     ""
@@ -560,10 +564,7 @@ pub(crate) fn render<I: KotlinInputConversion, O: KotlinOutputConversion>(
         let nested = Class {
             name: name.clone(),
             pkg: class.pkg.clone(),
-            kind: ClassKind::Data,
-            has_handles: false,
-            gc_managed: false,
-            variant_names: vec![],
+            representation: ClassRepresentation::Data { has_handles: false },
         };
         let rendered = data::render_record_fields(&nested, &fields)?;
         let text = rendered
@@ -573,7 +574,7 @@ pub(crate) fn render<I: KotlinInputConversion, O: KotlinOutputConversion>(
         let mut text = format!("public data class{text}");
         let at = text.find("\n)").ok_or("invalid variant constructor")? + 2;
         text.insert_str(at, &format!(" : {}", class.fqn()));
-        if class.has_handles {
+        if class.has_handles() {
             let mut close = String::new();
             for f in &fields {
                 close.push_str(&close_member(
@@ -622,21 +623,23 @@ fn close_member<S: prebindgen_flat::Schema<Field = data::JniField, Type = JniTyp
     let Some(info) = flat.type_info(ty).ok() else {
         return Ok(String::new());
     };
-    if let Some(c) = info
+    if let Some(c) = info.metadata.conversion.input.as_ref().or(info
+        .metadata
         .conversion
-        .input
-        .as_ref()
-        .or(info.conversion.output.as_ref())
+        .output
+        .as_ref())
     {
         return close_member(flat, &c.representation, value, depth + 1);
     }
     let Some(class) = &info.metadata.class else {
         return Ok(String::new());
     };
-    Ok(match class.kind {
-        ClassKind::Handle => format!("{value}.close()\n"),
-        ClassKind::Sealed if class.has_handles => format!("{value}.close()\n"),
-        ClassKind::Data => flat
+    Ok(match &class.representation {
+        ClassRepresentation::Handle { .. } => format!("{value}.close()\n"),
+        ClassRepresentation::Sealed {
+            has_handles: true, ..
+        } => format!("{value}.close()\n"),
+        ClassRepresentation::Data { .. } => flat
             .record(ty)?
             .fields
             .iter()
@@ -653,7 +656,9 @@ fn close_member<S: prebindgen_flat::Schema<Field = data::JniField, Type = JniTyp
             })
             .collect::<Result<Vec<_>>>()?
             .join(""),
-        ClassKind::Enum | ClassKind::Sealed => String::new(),
+        ClassRepresentation::ConfiguredEnum { .. }
+        | ClassRepresentation::Enum(_)
+        | ClassRepresentation::Sealed { .. } => String::new(),
     })
 }
 
@@ -720,8 +725,9 @@ pub(crate) fn emit_tags<I: KotlinInputConversion, O: KotlinOutputConversion>(
         Ok(())
     }
     let mut packages = BTreeMap::new();
-    for f in flat.functions.values() {
-        if let Some(metadata) = &f.metadata {
+    for f in crate::bindings::views(flat)? {
+        {
+            let metadata = f.metadata;
             for input in f.input_conversions()? {
                 visit(input.input_node(), &metadata.package, &mut packages)?;
             }
@@ -748,7 +754,7 @@ pub(crate) fn emit_tags<I: KotlinInputConversion, O: KotlinOutputConversion>(
             }
         }
     }
-    for callback in &flat.metadata.callbacks {
+    for callback in crate::callback::declarations(flat)? {
         visit(callback.input_node(), &flat.metadata.package, &mut packages)?;
     }
     if packages.is_empty() {
@@ -794,3 +800,5 @@ pub(crate) fn emit_tags<I: KotlinInputConversion, O: KotlinOutputConversion>(
     native.push_str(&format!("    @JvmStatic external fun payloadEnumSchema(): Long\n    init {{ require(payloadEnumSchema() == {hash}L) {{ \"incompatible payload enum tag mapping\" }} }}\n"));
     Ok(())
 }
+
+use prebindgen_conversions::FunctionConversions as _;

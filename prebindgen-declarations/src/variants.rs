@@ -28,8 +28,8 @@ where
 }
 
 /// Check override names against the source enum's variants and fields.
-pub fn validate_overrides<V, F, T>(
-    source: &prebindgen_flat::PayloadEnum<V, F>,
+pub fn validate_overrides<V, F, M, T>(
+    source: &prebindgen_flat::PayloadEnum<V, F, M>,
     entries: &BTreeMap<String, BTreeMap<String, T>>,
 ) -> Result<()> {
     for (variant, fields) in entries {

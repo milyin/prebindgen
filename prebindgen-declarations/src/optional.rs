@@ -19,7 +19,7 @@ pub struct PreparedOptionalPayload<N> {
     pub absent_values: WireValues,
 }
 /// Select the first available representation from adapter-chosen native-scope wires.
-pub fn select_optional_niche<'a, W: prebindgen_flat::WireKind + 'a, N>(
+pub fn select_optional_niche<'a, W: prebindgen_conversions::WireKind + 'a, N>(
     wires: impl IntoIterator<Item = &'a Wire<W>>,
     mut available: impl FnMut(&W) -> Option<N>,
 ) -> Option<NicheReservation<N>> {
@@ -31,7 +31,7 @@ pub fn select_optional_niche<'a, W: prebindgen_flat::WireKind + 'a, N>(
     })
 }
 /// Prepare a total input presence test using the reserved payload discriminator.
-pub fn optional_presence<'a, W: prebindgen_flat::WireKind + 'a, N>(
+pub fn optional_presence<'a, W: prebindgen_conversions::WireKind + 'a, N>(
     wires: impl IntoIterator<Item = &'a Wire<W>>,
     reservation: &NicheReservation<N>,
     mut present: impl FnMut(&W, &N, TokenStream) -> Result<TokenStream>,
@@ -44,7 +44,7 @@ pub fn optional_presence<'a, W: prebindgen_flat::WireKind + 'a, N>(
     present(&wire.kind, &reservation.niche, quote!(#name))
 }
 /// Prepare absent output values, using the reserved niche on its donor wire.
-pub fn absent_output_values<'a, W: prebindgen_flat::WireKind + 'a, N>(
+pub fn absent_output_values<'a, W: prebindgen_conversions::WireKind + 'a, N>(
     wires: impl IntoIterator<Item = &'a Wire<W>>,
     reservation: Option<&NicheReservation<N>>,
     mut absent: impl FnMut(&W, Option<&N>) -> Result<TokenStream>,
@@ -66,7 +66,7 @@ pub fn absent_output_values<'a, W: prebindgen_flat::WireKind + 'a, N>(
 }
 /// Retire inactive offers within one native scope, preserving only the donor's
 /// remaining domain. Also used for alternatives and foreign-record annotation.
-pub fn retire_optional_niches<'a, W: prebindgen_flat::WireKind + 'a, N>(
+pub fn retire_optional_niches<'a, W: prebindgen_conversions::WireKind + 'a, N>(
     wires: impl IntoIterator<Item = &'a mut Wire<W>>,
     reservation: Option<&NicheReservation<N>>,
     mut remaining: impl FnMut(&W, &N) -> Option<N>,
@@ -93,7 +93,7 @@ pub fn retire_optional_niches<'a, W: prebindgen_flat::WireKind + 'a, N>(
 /// Prepare a complete optional payload using only adapter-selected scope wires.
 /// Tests/defaults are generated before modifying the available representation state.
 /// All callbacks execute during generation, not in the generated library.
-pub fn prepare_optional_payload<'a, W: prebindgen_flat::WireKind + 'a, N>(
+pub fn prepare_optional_payload<'a, W: prebindgen_conversions::WireKind + 'a, N>(
     wires: impl IntoIterator<Item = &'a mut Wire<W>>,
     direction: Direction,
     available: impl FnMut(&W) -> Option<N>,

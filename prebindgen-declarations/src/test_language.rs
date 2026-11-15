@@ -1,8 +1,9 @@
 //! Test adapter syntax used only by compiler conformance tests.
 #![allow(missing_docs, unused_imports, unused_variables)]
 use crate::*;
+use prebindgen_conversions::ValueConversion;
 use prebindgen_flat::{same_type, type_key, Flat, Result, Schema};
-use prebindgen_flat::{Function, Param, TypeUse, ValueConversion};
+use prebindgen_flat::{Function, Param, TypeUse};
 use proc_macro2::TokenStream;
 use std::collections::BTreeMap;
 use std::convert::Infallible;
@@ -109,7 +110,7 @@ pub enum TestInputUnary<TypeScope = Infallible> {
     /// Apply an explicitly selected Rust value conversion.
     Convert {
         /// Checked source/representation conversion.
-        conversion: Box<prebindgen_flat::ValueConversion>,
+        conversion: Box<prebindgen_conversions::ValueConversion>,
     },
     /// Construct a collection from converted elements.
     Sequence,
@@ -197,7 +198,7 @@ pub enum TestOutputUnary<TypeScope = Infallible, SequenceSelection = Infallible>
     /// Apply an explicitly selected Rust value conversion.
     Convert {
         /// Checked source/representation conversion.
-        conversion: Box<prebindgen_flat::ValueConversion>,
+        conversion: Box<prebindgen_conversions::ValueConversion>,
     },
     /// Convert and deliver each collection element.
     Sequence {
@@ -835,7 +836,7 @@ impl crate::CallbackInput<TestInputConfig, TestOutputConfig> for TestInputConfig
 #[derive(Clone)]
 /// This environment is discarded after prepared conversions have been installed.
 pub struct TestDefaults {
-    values: crate::DeclDefaults<TestInputConfig, TestOutputConfig>,
+    values: FixtureDefaults<TestInputConfig, TestOutputConfig>,
 }
 fn input_body(input: TestInputConfig) -> TestInputConfig {
     match input {
@@ -907,7 +908,7 @@ impl TestDefaults {
             })
             .collect::<Result<Vec<_>>>()?;
         Ok(Self {
-            values: crate::DeclDefaults::new(flat, inputs, outputs, errors)?,
+            values: FixtureDefaults::new(flat, inputs, outputs, errors)?,
         })
     }
 
@@ -919,7 +920,10 @@ impl TestDefaults {
         codec: &C,
         decl: &TestFunction,
         extra: &C::Extra,
-    ) -> Result<()> {
+    ) -> Result<()>
+    where
+        C::Schema: Schema<Parameter = Option<C::Input>, Return = Option<C::Output>>,
+    {
         let recipe = self
             .resolve_function(flat, codec, decl, extra)
             .map_err(|e| format!("{}: {e}", decl.name))?;
@@ -933,7 +937,10 @@ impl TestDefaults {
         codec: &C,
         decl: &TestFunction,
         extra: &C::Extra,
-    ) -> Result<crate::FunctionRecipe<ResolvedInput<C>, ResolvedOutput<C>>> {
+    ) -> Result<crate::FunctionRecipe<ResolvedInput<C>, ResolvedOutput<C>>>
+    where
+        C::Schema: Schema<Parameter = Option<C::Input>, Return = Option<C::Output>>,
+    {
         crate::resolve_function(
             flat,
             decl,
@@ -1098,7 +1105,7 @@ impl TestDefaults {
                 let key = crate::callback::input_key(flat, ty)?;
                 if let Some(tree) = crate::resolve_type_default(
                     &key,
-                    &self.values.inputs,
+                    self.values.inputs.get(&key),
                     stack,
                     crate::Direction::Input,
                     |tree, stack| resolve(ty, tree, stack),
@@ -1150,7 +1157,9 @@ impl TestDefaults {
                 )
             }
             InputNode::Leaf(TestInputLeafOp::Value) => {
-                if let Some(conversion) = crate::input_value_conversion(flat, ty)? {
+                if let Some(conversion) =
+                    crate::input_value_conversion(flat, ty, |_| Default::default())?
+                {
                     return self.resolve_input_conversion(
                         flat,
                         codec,
@@ -1234,7 +1243,7 @@ impl TestDefaults {
                         result: codomain.as_ref(),
                     },
                     default,
-                    &self.values.outputs,
+                    |ty| self.values.outputs.contains_key(&type_key(ty)),
                     &TestInputConfig::auto(),
                     &TestOutputConfig::auto(),
                     |tree| {
@@ -1522,7 +1531,7 @@ impl TestDefaults {
                 let key = type_key(ty);
                 if let Some(tree) = crate::resolve_type_default(
                     &key,
-                    &self.values.outputs,
+                    self.values.outputs.get(&key),
                     stack,
                     crate::Direction::Output,
                     |tree, stack| resolve(ty, tree, stack),
@@ -1598,7 +1607,9 @@ impl TestDefaults {
             }
             OutputNode::Leaf(TestOutputLeafOp::Value)
             | OutputNode::Leaf(TestOutputLeafOp::Projected(_)) => {
-                if let Some(conversion) = crate::output_value_conversion(flat, ty, None)? {
+                if let Some(conversion) =
+                    crate::output_value_conversion(flat, ty, None, |_| Default::default())?
+                {
                     if let OutputNode::Leaf(TestOutputLeafOp::Projected(policy)) = tree {
                         return self.resolve_output_value(
                             flat,
@@ -1909,7 +1920,7 @@ impl TestDefaults {
                 children: vec![],
             });
         }
-        if let Some(c) = crate::input_value_conversion(flat, ty)? {
+        if let Some(c) = crate::input_value_conversion(flat, ty, |_| Default::default())? {
             return self.resolve_input_conversion(
                 flat,
                 codec,
@@ -1961,7 +1972,7 @@ impl TestDefaults {
                 children: vec![],
             });
         }
-        if let Some(c) = crate::output_value_conversion(flat, ty, policy)? {
+        if let Some(c) = crate::output_value_conversion(flat, ty, policy, |_| Default::default())? {
             return self.resolve_output_conversion(
                 flat,
                 codec,
@@ -2060,7 +2071,10 @@ impl TestDefaults {
         codec: C,
         declarations: &[TestFunction],
         extra: C::Extra,
-    ) -> Result<Flat<ResolvedSchema<C>>> {
+    ) -> Result<Flat<ResolvedSchema<C>>>
+    where
+        C::Schema: Schema<Parameter = Option<C::Input>, Return = Option<C::Output>>,
+    {
         crate::resolve_bindings(
             flat,
             codec,
@@ -2095,7 +2109,10 @@ pub fn test_bind_input<C: Codec<InOps = TestInputOps, OutOps = TestOutputOps>>(
     parameter: &str,
     recipe: &TestInputConfig,
     extra: &C::Extra,
-) -> Result<()> {
+) -> Result<()>
+where
+    C::Schema: Schema<Parameter = Option<C::Input>, Return = Option<C::Output>>,
+{
     let f = flat.function(function)?;
     let index = f
         .params
@@ -2131,7 +2148,10 @@ pub fn test_bind_output<C: Codec<InOps = TestInputOps, OutOps = TestOutputOps>>(
     function: &str,
     recipe: &TestOutputConfig,
     extra: &C::Extra,
-) -> Result<()> {
+) -> Result<()>
+where
+    C::Schema: Schema<Parameter = Option<C::Input>, Return = Option<C::Output>>,
+{
     let defaults = TestDefaults::new(flat, vec![], vec![], vec![])?;
     let recipe =
         defaults.resolve_output(flat, codec, &flat.function(function)?.ret.ty, recipe, extra)?;
@@ -2181,7 +2201,7 @@ pub fn source_items<'a>(
                 operation: TestInputUnary::Convert { conversion },
                 ..
             } => {
-                if let prebindgen_flat::ValueSource::Function(name) = &conversion.source {
+                if let prebindgen_conversions::ValueSource::Function(name) = &conversion.source {
                     names.push(name.clone())
                 }
             }
@@ -2202,7 +2222,7 @@ pub fn source_items<'a>(
                 operation: TestOutputUnary::Convert { conversion },
                 ..
             } => {
-                if let prebindgen_flat::ValueSource::Function(name) = &conversion.source {
+                if let prebindgen_conversions::ValueSource::Function(name) = &conversion.source {
                     names.push(name.clone())
                 }
             }
@@ -2350,5 +2370,56 @@ impl From<TestOutputBranch> for TestOutputConfigBranch {
             TestOutputBranch::Variant => Self::Variant,
             TestOutputBranch::Arguments => Self::Arguments,
         }
+    }
+}
+
+/// Type-wide defaults containing the caller's own input and output representations.
+#[derive(Clone)]
+struct FixtureDefaults<InTree, OutTree> {
+    /// Input defaults indexed by canonical source type or callback signature.
+    pub inputs: BTreeMap<String, InTree>,
+    /// Output defaults indexed by canonical source type.
+    pub outputs: BTreeMap<String, OutTree>,
+    /// Explicit source-error message helpers indexed by canonical error type.
+    pub errors: BTreeMap<String, String>,
+}
+impl<I, O> Default for FixtureDefaults<I, O> {
+    fn default() -> Self {
+        Self {
+            inputs: BTreeMap::new(),
+            outputs: BTreeMap::new(),
+            errors: BTreeMap::new(),
+        }
+    }
+}
+
+impl<I, O> FixtureDefaults<I, O> {
+    /// Register typed defaults using canonical source identities and reject duplicate declarations.
+    pub fn new<M: Schema>(
+        flat: &Flat<M>,
+        inputs: impl IntoIterator<Item = (Type, I)>,
+        outputs: impl IntoIterator<Item = (Type, O)>,
+        errors: impl IntoIterator<Item = (Type, String)>,
+    ) -> Result<Self> {
+        let mut values = Self::default();
+        for (ty, input) in inputs {
+            let key = type_key(&crate::callback::input_type(flat, &ty)?);
+            if values.inputs.insert(key, input).is_some() {
+                return Err("duplicate input expansion".into());
+            }
+        }
+        for (ty, output) in outputs {
+            let key = type_key(&flat.resolve_type(&ty)?);
+            if values.outputs.insert(key, output).is_some() {
+                return Err("duplicate output expansion".into());
+            }
+        }
+        for (ty, mapper) in errors {
+            let key = type_key(&flat.resolve_type(&ty)?);
+            if values.errors.insert(key, mapper).is_some() {
+                return Err("duplicate error mapper for source type".into());
+            }
+        }
+        Ok(values)
     }
 }

@@ -2,11 +2,11 @@
 //!
 //! Language adapters own their operations, configuration and source-representation policies.
 //! Shared [`DeclFunction`] and [`DeclCallback`] containers hold the caller's tree types.
-//! [`DeclDefaults`] stores typed defaults; source helpers resolve constructors, getters,
+//! [`DeclTypeDefaults`] attaches typed defaults to source types; source helpers resolve constructors, getters,
 //! fields, callbacks and local overrides without a shared operation vocabulary.
-//! [`resolve_bindings`] produces a complete [`Flat<ResolvedSchema<C>>`](ResolvedSchema).
-//! [`compile_resolved`] compiles that model using the adapter's [`Codec`].
-//! All generation settings and resolved conversions belong to Flat.
+//! Adapters attach [`DeclBinding`] values to their source function owners.
+//! [`resolve_call`] resolves one configured export and [`compile_call`] compiles it
+//! against the same source model using the adapter's [`Codec`].
 #![warn(missing_docs)]
 mod builders;
 #[cfg(test)]
@@ -21,9 +21,11 @@ pub use convert::{
     DeclConvertSource, LocalConversion,
 };
 
+use prebindgen_conversions::Wire;
+use prebindgen_conversions::WireNode;
 use prebindgen_conversions::{InputPlan, OutputPlan};
-use prebindgen_flat::{same_type, type_key, Flat, Result, Wire};
-use prebindgen_flat::{Schema, WireNode};
+use prebindgen_flat::Schema;
+use prebindgen_flat::{same_type, type_key, Flat, Result};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::Type;
@@ -40,10 +42,15 @@ mod resolved;
 
 pub use node::*;
 
-pub use resolved::{
+pub use resolved::ResolvedSlot;
+#[cfg(test)]
+mod test_pipeline;
+#[cfg(test)]
+use test_pipeline::{
     compile_function, compile_resolved, resolve_bindings, FunctionRecipe, ResolvedModule,
-    ResolvedSchema, ResolvedSlot,
+    ResolvedSchema,
 };
+
 mod enums;
 pub use enums::{enum_input, enum_output, EnumMapping};
 mod optional;
@@ -147,7 +154,7 @@ pub use operations::*;
 /// A flat model whose slots contain only conversion data for wrapper emission.
 ///
 /// Unbound source helpers have `None` slots. Bound functions need `Some` for their
-/// result and every parameter; [`prebindgen_flat::validate_bindings`] checks this before emission.
+/// result and every parameter; [`prebindgen_conversions::validate_bindings`] checks this before emission.
 /// Record fields retain their canonical source information and metadata. Descriptions and [`Codec::Extra`]
 /// are construction inputs, not stored in this model.
 ///
@@ -179,18 +186,23 @@ pub fn compile_input<C: Codec>(
     parameter: &str,
     recipe: &ResolvedInput<C>,
     extra: &C::Extra,
-) -> Result<<C::Schema as Schema>::Input> {
+) -> Result<C::Input> {
     let f = flat.function(function)?;
     let index = f
         .params
         .iter()
         .position(|p| p.name == parameter)
         .ok_or_else(|| format!("`{function}`: unknown parameter `{parameter}`"))?;
-    let mut plan = Compiler::new(flat, codec, format!("p{index}")).input(
+    let compiler = Compiler::new(flat, codec, format!("p{index}"));
+    let wire = format_ident!("p{index}_callback");
+    let value = format_ident!("p{index}_callback_value");
+    let names = matches!(recipe, InputNode::Arrow { .. }).then_some((&wire, &value));
+    let mut plan = compiler.input_named(
         &f.params[index].ty.ty,
         recipe,
         extra,
         &Condition::default(),
+        names,
     )?;
     codec.finish_input(&mut plan, extra)?;
     codec.validate_input(&plan)?;
@@ -211,7 +223,7 @@ pub fn compile_output<C: Codec>(
     function: &str,
     recipe: &ResolvedOutput<C>,
     extra: &C::Extra,
-) -> Result<<C::Schema as Schema>::Output> {
+) -> Result<C::Output> {
     compile_output_value(flat, codec, &flat.function(function)?.ret.ty, recipe, extra)
 }
 
@@ -224,7 +236,7 @@ pub fn compile_output_value<C: Codec>(
     ty: &Type,
     recipe: &ResolvedOutput<C>,
     extra: &C::Extra,
-) -> Result<<C::Schema as Schema>::Output> {
+) -> Result<C::Output> {
     compile_output_at(flat, codec, ty, recipe, extra, OutputPosition::Return)
 }
 
@@ -236,7 +248,7 @@ pub fn compile_input_value<C: Codec>(
     ty: &Type,
     recipe: &ResolvedInput<C>,
     extra: &C::Extra,
-) -> Result<<C::Schema as Schema>::Input> {
+) -> Result<C::Input> {
     let mut plan = Compiler::new(flat, codec, "value".into()).input(
         ty,
         recipe,
@@ -258,7 +270,7 @@ pub fn compile_callback_return<C: Codec>(
     ty: &Type,
     recipe: &ResolvedInput<C>,
     extra: &C::Extra,
-) -> Result<<C::Schema as Schema>::Input> {
+) -> Result<C::Input> {
     let compiler = Compiler {
         input_role: std::cell::Cell::new(InputRole::CallbackResult),
         ..Compiler::new(flat, codec, "callback_return".into())
@@ -282,7 +294,7 @@ pub fn compile_callback_argument<C: Codec>(
     index: usize,
     borrowed: bool,
     extra: &C::Extra,
-) -> Result<<C::Schema as Schema>::Output> {
+) -> Result<C::Output> {
     compile_output_at(
         flat,
         codec,
@@ -305,7 +317,7 @@ fn compile_output_at<C: Codec>(
     recipe: &ResolvedOutput<C>,
     extra: &C::Extra,
     position: OutputPosition,
-) -> Result<<C::Schema as Schema>::Output> {
+) -> Result<C::Output> {
     let value = prebindgen_conversions::source_result_expr();
     let mut plan = match position {
         OutputPosition::Return => Compiler::new(flat, codec, "ret".into())
@@ -321,46 +333,6 @@ fn compile_output_at<C: Codec>(
     Ok(plan.into())
 }
 
-/// Compile and install a resolved adapter input tree.
-pub fn bind_input<C: Codec>(
-    flat: &mut Flat<C::Schema>,
-    codec: &C,
-    function: &str,
-    parameter: &str,
-    tree: &ResolvedInput<C>,
-    extra: &C::Extra,
-) -> Result<()> {
-    let input = compile_input(flat, codec, function, parameter, tree, extra)?;
-    flat.function_mut(function)?
-        .params
-        .iter_mut()
-        .find(|p| p.name == parameter)
-        .ok_or("unknown parameter")?
-        .ty
-        .slot = Some(input);
-    Ok(())
-}
-/// Compile and install a resolved adapter output conversion.
-/// Input and output trees cannot be interchanged:
-/// ```compile_fail
-/// use prebindgen_declarations::{bind_output,Codec,ResolvedInput};
-/// use prebindgen_flat::Flat;
-/// fn wrong<C:Codec>(flat:&mut Flat<C::Schema>,codec:&C,input:&ResolvedInput<C>,extra:&C::Extra) {
-///     bind_output(flat,codec,"function",input,extra).unwrap();
-/// }
-/// ```
-pub fn bind_output<C: Codec>(
-    flat: &mut Flat<C::Schema>,
-    codec: &C,
-    function: &str,
-    tree: &ResolvedOutput<C>,
-    extra: &C::Extra,
-) -> Result<()> {
-    let output = compile_output(flat, codec, function, tree, extra)?;
-    flat.function_mut(function)?.ret.slot = Some(output);
-    Ok(())
-}
-
 fn finalize_output_schema<C: Codec>(
     codec: &C,
     plan: &mut CodecOutputPlan<C>,
@@ -374,6 +346,9 @@ fn finalize_output_schema<C: Codec>(
 
 /// Generation context shared by nested adapter conversion operations.
 /// It holds source metadata and a deterministic name scope, not an operation vocabulary.
+/// Conversion hooks read source signatures and type/module data from Flat. Binding-local
+/// policy comes through the resolved operation or Extra: an adapter can temporarily
+/// move the current function's binding states out while compiling them.
 pub struct Compiler<'a, C: Codec> {
     /// Whether the input supplies a function parameter or callback result.
     pub input_role: std::cell::Cell<InputRole>,
@@ -476,7 +451,7 @@ fn mutable_reference(ty: &Type) -> bool {
     matches!(ty, Type::Reference(r) if r.mutability.is_some())
         || option_inner(ty).is_some_and(mutable_reference)
 }
-fn validate_nested_output<W: prebindgen_flat::WireKind, C, N, B>(
+fn validate_nested_output<W: prebindgen_conversions::WireKind, C, N, B>(
     plan: &OutputPlan<W, C, N, B>,
 ) -> Result<()> {
     if plan.outcomes.source_error.is_some() || plan.outcomes.binding_failure.is_some() {
@@ -485,7 +460,7 @@ fn validate_nested_output<W: prebindgen_flat::WireKind, C, N, B>(
     Ok(())
 }
 /// Append one output view while preserving its preparation and ownership commit.
-pub fn append<W: prebindgen_flat::WireKind, C, N, B>(
+pub fn append<W: prebindgen_conversions::WireKind, C, N, B>(
     to: &mut OutputPlan<W, C, N, B>,
     from: OutputPlan<W, C, N, B>,
 ) -> Result<()> {
@@ -543,3 +518,9 @@ mod niche_tests;
 
 mod source;
 pub use source::*;
+
+mod binding;
+pub use binding::{
+    bind_prepared_input, bind_prepared_output, compile_call, resolve_call, BindingState,
+    ConfiguredCall, ConfiguredSlot, DeclBinding, ResolvedCall,
+};

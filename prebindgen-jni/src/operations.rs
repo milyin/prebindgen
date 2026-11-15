@@ -166,7 +166,7 @@ pub enum JniInputUnary<TypeScope = Infallible> {
     /// Apply an explicitly selected Rust value conversion.
     Convert {
         /// Checked source/representation conversion.
-        conversion: Box<prebindgen_flat::ValueConversion>,
+        conversion: Box<prebindgen_conversions::ValueConversion>,
     },
     /// Construct a collection from converted elements.
     Sequence,
@@ -263,7 +263,7 @@ pub enum JniOutputUnary<TypeScope = Infallible, SequenceSelection = Infallible> 
     /// Apply an explicitly selected Rust value conversion.
     Convert {
         /// Checked source/representation conversion.
-        conversion: Box<prebindgen_flat::ValueConversion>,
+        conversion: Box<prebindgen_conversions::ValueConversion>,
     },
     /// Convert and deliver each collection element.
     Sequence {

@@ -55,13 +55,7 @@ fn placeholder_reference_spelling_preserves_direct_c_loans() {
     .panic()
     .prepare()
     .unwrap();
-    let output = prepared
-        .function("view")
-        .unwrap()
-        .ret
-        .slot
-        .as_ref()
-        .unwrap();
+    let output = test_output(&prepared, "view");
     assert!(
         crate::group::result_packet_fields(&output.outcomes.success).all(
             |wire| matches!(&wire.kind,CWire::Pointer{pointer,..} if pointer.access==Access::Shared)

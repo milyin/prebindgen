@@ -5,13 +5,16 @@ struct TestInput(u8);
 struct TestOutput(u32);
 struct TestSchema;
 impl Schema for TestSchema {
-    type Input = TestInput;
-    type Output = TestOutput;
+    type Parameter = Option<TestInput>;
+    type Return = Option<TestOutput>;
     type Module = ();
     type Function = ();
     type Type = ();
     type Field = ();
     type Variant = ();
+    type Record = ();
+    type Enum = ();
+    type PayloadEnum = ();
 }
 fn parse(text: &str) -> Result<Flat<TestSchema>> {
     let items = syn::parse_file(text).unwrap().items;
@@ -160,7 +163,7 @@ fn mapping_visits_only_boundary_slots_and_preserves_source_structure() {
         .unwrap();
     assert_eq!(inputs, ["source_crate :: Payload"]);
     assert_eq!(outputs, ["source_crate :: Payload"]);
-    let field = &mapped.records.values().next().unwrap().fields[0];
+    let field = &mapped.records().next().unwrap().fields[0];
     assert_eq!(field.name, "data");
     assert_eq!(type_key(&field.ty), "Vec < u8 >");
     let f = mapped.function("f").unwrap();
@@ -298,7 +301,7 @@ fn options_preserve_payload_types_and_reject_malformed_arguments() {
 #[test]
 fn fieldless_enum_source_metadata_survives_selection_and_slot_mapping() {
     let flat = parse("pub enum Code { A = -3, B, C = 8 } pub struct Record { pub code: Option<Code> } pub fn echo(x: Record) -> Record {}").unwrap();
-    let source = &flat.enums["source_crate :: Code"];
+    let source = &flat.enum_by_key("source_crate :: Code").unwrap();
     assert_eq!(
         source
             .variants
@@ -314,8 +317,15 @@ fn fieldless_enum_source_metadata_survives_selection_and_slot_mapping() {
             |_, _| Ok(Some(TestOutput(0))),
         )
         .unwrap();
-    assert_eq!(mapped.enums.len(), 1);
-    assert_eq!(mapped.enums["source_crate :: Code"].variants.len(), 3);
+    assert_eq!(mapped.enums().count(), 1);
+    assert_eq!(
+        mapped
+            .enum_by_key("source_crate :: Code")
+            .unwrap()
+            .variants
+            .len(),
+        3
+    );
     for bad in [
         "enum E { A }",
         "pub enum E<T> { A }",
@@ -364,13 +374,16 @@ fn filling_fixed_schema_slots_preserves_metadata_on_each_source_owner() {
     // The schema marker itself deliberately implements neither Clone nor Debug.
     struct OwnerSchema;
     impl Schema for OwnerSchema {
-        type Input = u8;
-        type Output = u16;
+        type Parameter = Option<u8>;
+        type Return = Option<u16>;
         type Module = String;
         type Function = String;
         type Type = String;
         type Field = String;
         type Variant = String;
+        type Record = String;
+        type Enum = String;
+        type PayloadEnum = String;
     }
     let items =
         syn::parse_file("pub struct R { pub x:i32 } pub enum E { A } pub fn echo(x:R)->R{}")
@@ -383,14 +396,24 @@ fn filling_fixed_schema_slots_preserves_metadata_on_each_source_owner() {
     flat.type_metadata_mut(&syn::parse_quote!(R))
         .unwrap()
         .clone_from(&"record".into());
-    flat.records.get_mut("crate :: R").unwrap().fields[0].metadata = "property".into();
-    flat.enums.get_mut("crate :: E").unwrap().variants[0].metadata = "constant".into();
+    flat.record_by_key_mut("crate :: R").unwrap().metadata = "record definition".into();
+    flat.enum_by_key_mut("crate :: E").unwrap().metadata = "enum definition".into();
+    flat.record_by_key_mut("crate :: R").unwrap().fields[0].metadata = "property".into();
+    flat.enum_by_key_mut("crate :: E").unwrap().variants[0].metadata = "constant".into();
     let mut prepared = flat
         .map_slots(|_, _| Ok(Some(1u8)), |_, _| Ok(Some(2u16)))
         .unwrap();
     prepared.function_mut("echo").unwrap().params[0].ty.slot = Some(3);
     let copied = prepared.clone();
     assert_eq!(copied.metadata, "module");
+    assert_eq!(
+        copied.record_by_key("crate :: R").unwrap().metadata,
+        "record definition"
+    );
+    assert_eq!(
+        copied.enum_by_key("crate :: E").unwrap().metadata,
+        "enum definition"
+    );
     assert_eq!(copied.function("echo").unwrap().metadata, "export");
     assert_eq!(
         copied
@@ -399,8 +422,14 @@ fn filling_fixed_schema_slots_preserves_metadata_on_each_source_owner() {
             .metadata,
         "record"
     );
-    assert_eq!(copied.records["crate :: R"].fields[0].metadata, "property");
-    assert_eq!(copied.enums["crate :: E"].variants[0].metadata, "constant");
+    assert_eq!(
+        copied.record_by_key("crate :: R").unwrap().fields[0].metadata,
+        "property"
+    );
+    assert_eq!(
+        copied.enum_by_key("crate :: E").unwrap().variants[0].metadata,
+        "constant"
+    );
     assert_eq!(copied.function("echo").unwrap().params[0].ty.slot, Some(3));
     assert_eq!(copied.function("echo").unwrap().ret.slot, Some(2));
     assert!(format!("{copied:?}").contains("property"));

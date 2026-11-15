@@ -84,7 +84,7 @@ pub fn record_output<C: Codec>(
         context: Default::default(),
         delivery: Default::default(),
         commit: TokenStream::new(),
-        outcomes: prebindgen_flat::Outcomes {
+        outcomes: prebindgen_conversions::Outcomes {
             success: WireNode::Branch {
                 controls: vec![],
                 children: vec![],
@@ -104,7 +104,7 @@ pub fn record_output<C: Codec>(
             &mut child.outcomes.success,
             ComponentSegment::Field(name.to_string()),
         );
-        child.outcomes.success = prebindgen_flat::WireNode::Branch {
+        child.outcomes.success = prebindgen_conversions::WireNode::Branch {
             controls: vec![],
             meta: codec.group(GroupKind::Field(&(name)))?,
             children: vec![std::mem::take(&mut child.outcomes.success)],
@@ -142,7 +142,7 @@ pub fn record_output_owned<C: Codec>(
         context: Default::default(),
         delivery: Default::default(),
         commit: TokenStream::new(),
-        outcomes: prebindgen_flat::Outcomes {
+        outcomes: prebindgen_conversions::Outcomes {
             success: WireNode::Branch {
                 controls: vec![],
                 children: vec![],
@@ -162,7 +162,7 @@ pub fn record_output_owned<C: Codec>(
             &mut child.outcomes.success,
             ComponentSegment::Field(name.to_string()),
         );
-        child.outcomes.success = prebindgen_flat::WireNode::Branch {
+        child.outcomes.success = prebindgen_conversions::WireNode::Branch {
             controls: vec![],
             meta: codec.group(GroupKind::Field(&(name)))?,
             children: vec![std::mem::take(&mut child.outcomes.success)],

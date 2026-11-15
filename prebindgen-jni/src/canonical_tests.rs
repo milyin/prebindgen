@@ -212,10 +212,17 @@ fn canonical_helpers_validate_source_signatures() {
 #[test]
 fn canonical_conversions_use_existing_flat_type_entries() {
     let mut flat = model(VALUE);
-    prebindgen_declarations::prepare_value_conversions(&mut flat, &[conversion()]).unwrap();
+    prebindgen_declarations::prepare_value_conversions(
+        &mut flat,
+        &[conversion()],
+        |t| &t.conversion,
+        |t| &mut t.conversion,
+    )
+    .unwrap();
     assert!(flat
         .type_info(&flat.resolve_type(&syn::parse_quote!(Value)).unwrap())
         .unwrap()
+        .metadata
         .conversion
         .input
         .is_some());

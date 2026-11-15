@@ -11,16 +11,16 @@ pub(crate) fn compatible(element: Primitive) -> bool {
     )
 }
 /// A primitive whose configured C representation is still the native scalar.
-pub(crate) fn primitive(
+pub(crate) fn primitive<R, E, P>(
     ty: &syn::Type,
-    types: &BTreeMap<String, prebindgen_flat::TypeInfo<CType>>,
+    types: &BTreeMap<String, prebindgen_flat::TypeInfo<CType, (), (), R, E, P>>,
 ) -> Option<Primitive> {
     let primitive = Primitive::from_type(ty).filter(|p| compatible(*p))?;
     if types.values().any(|info| {
         Primitive::from_type(&info.ty) == Some(primitive)
-            && (info.metadata.pointer.is_some()
-                || info.metadata.owned.is_some()
-                || info.metadata.enumeration.is_some())
+            && (info.metadata.pointer().is_some()
+                || info.metadata.owned().is_some()
+                || info.metadata.enumeration().is_some())
     }) {
         return None;
     }
@@ -80,8 +80,8 @@ pub(crate) fn sequence(
         context: Default::default(),
         delivery: Default::default(),
         commit: TokenStream::new(),
-        outcomes: prebindgen_flat::Outcomes {
-            success: prebindgen_flat::WireNode::Leaf(vec![Wire {
+        outcomes: prebindgen_conversions::Outcomes {
+            success: prebindgen_conversions::WireNode::Leaf(vec![Wire {
                 name: wire.clone(),
                 kind: CWire::SliceView { element },
             }]),
@@ -139,7 +139,7 @@ pub(crate) fn input_sequence(
         quote!(#slice)
     };
     Ok(CInputPlan::new(
-        prebindgen_flat::WireNode::Leaf(vec![Wire {
+        prebindgen_conversions::WireNode::Leaf(vec![Wire {
             name: wire.clone(),
             kind: CWire::SliceView { element },
         }]),
@@ -151,8 +151,8 @@ pub(crate) fn input_sequence(
     ))
 }
 /// A loan anywhere in a packet, including fields inside converted rows.
-pub(crate) fn has_loans(node: &prebindgen_flat::WireNode<CWire, CChain, CBranch>) -> bool {
-    prebindgen_flat::wire_definitions(std::iter::once(node)).any(|wire| {
+pub(crate) fn has_loans(node: &prebindgen_conversions::WireNode<CWire, CChain, CBranch>) -> bool {
+    prebindgen_conversions::wire_definitions(std::iter::once(node)).any(|wire| {
         matches!(
             wire.kind,
             CWire::View
@@ -166,10 +166,10 @@ pub(crate) fn has_loans(node: &prebindgen_flat::WireNode<CWire, CChain, CBranch>
     })
 }
 pub(crate) fn collect(
-    node: &prebindgen_flat::WireNode<CWire, CChain, CBranch>,
+    node: &prebindgen_conversions::WireNode<CWire, CChain, CBranch>,
     out: &mut BTreeMap<String, Primitive>,
 ) {
-    for wire in prebindgen_flat::wire_definitions(std::iter::once(node)) {
+    for wire in prebindgen_conversions::wire_definitions(std::iter::once(node)) {
         match &wire.kind {
             CWire::SliceView { element } => {
                 out.insert(prebindgen_flat::type_key(&element.rust_type()), *element);
@@ -415,7 +415,7 @@ mod tests {
                 ))
                 .unwrap();
             assert!(
-                matches!(view.outcomes.success,prebindgen_flat::WireNode::Leaf(ref w) if matches!(w[0].kind,CWire::View))
+                matches!(view.outcomes.success,prebindgen_conversions::WireNode::Leaf(ref w) if matches!(w[0].kind,CWire::View))
             );
             let copied = CCodec::raw()
                 .output_projected(
@@ -435,7 +435,7 @@ mod tests {
                 .to_string()
                 .contains("ToOwned :: to_owned"));
             assert!(
-                matches!(copied.outcomes.success,prebindgen_flat::WireNode::Leaf(ref w) if matches!(w[0].kind,CWire::Buffer))
+                matches!(copied.outcomes.success,prebindgen_conversions::WireNode::Leaf(ref w) if matches!(w[0].kind,CWire::Buffer))
             );
         }
     }
@@ -482,12 +482,12 @@ mod tests {
     }
     #[test]
     fn loans_inside_rows_are_not_hidden_by_the_owning_container() {
-        let node = prebindgen_flat::WireNode::Chain {
+        let node = prebindgen_conversions::WireNode::Chain {
             controls: vec![Wire {
                 name: syn::parse_quote!(rows),
                 kind: CWire::Rows,
             }],
-            child: Box::new(prebindgen_flat::WireNode::Leaf(vec![Wire {
+            child: Box::new(prebindgen_conversions::WireNode::Leaf(vec![Wire {
                 name: syn::parse_quote!(view),
                 kind: CWire::SliceView {
                     element: Primitive::I64,

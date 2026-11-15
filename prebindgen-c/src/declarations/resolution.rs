@@ -1,10 +1,8 @@
 use super::*;
 #[derive(Clone)]
-/// This environment is discarded after prepared conversions have been installed.
-pub struct DeclCDefaults {
+/// Resolve source-dependent configuration using defaults owned by Flat type entries.
+pub struct CSourceResolver {
     input_role: std::cell::Cell<InputRole>,
-
-    values: prebindgen_declarations::DeclDefaults<CInputConfig, COutputConfig>,
 }
 
 fn input_body(input: CInputConfig) -> CInputConfig {
@@ -32,12 +30,12 @@ fn output_body(output: COutputConfig) -> COutputConfig {
         other => other,
     }
 }
-impl DeclCDefaults {
+impl CSourceResolver {
     /// Register typed Input/Output defaults and explicit error-message functions.
     /// Typed trees use Input::for_type / Output::for_type. Production declaration
     /// builders also convert directly into these trees with `.into()`.
-    pub fn new<M: prebindgen_flat::Schema>(
-        flat: &Flat<M>,
+    pub fn new<M: prebindgen_flat::Schema<Type = CType>>(
+        flat: &mut Flat<M>,
         inputs: Vec<CInputConfig>,
         outputs: Vec<COutputConfig>,
         errors: Vec<(syn::Type, String)>,
@@ -64,104 +62,87 @@ impl DeclCDefaults {
                 _ => Err("output defaults require a source type".into()),
             })
             .collect::<Result<Vec<_>>>()?;
+        prebindgen_declarations::install_type_defaults(flat, inputs, outputs, errors, |t| {
+            &mut t.defaults
+        })?;
         Ok(Self {
-            values: prebindgen_declarations::DeclDefaults::new(flat, inputs, outputs, errors)?,
             input_role: std::cell::Cell::new(InputRole::Parameter),
         })
     }
 
-    /// Clone a source binding for a second explicit sequence delivery policy.
-    /// The adapter selects and validates the sequence while resolving the returned declaration.
-    pub fn callback_variant(
-        &self,
-        flat: &mut Flat<CSchema>,
-        _codec: &CCodec,
-        decl: &DeclCFunction,
-        name: &str,
-        _extra: &(),
-    ) -> Result<DeclCFunction>
-    where
-        <CSchema as Schema>::Input: Clone,
-        <CSchema as Schema>::Output: Clone,
-        <CSchema as prebindgen_flat::Schema>::Function: Clone,
-    {
-        prebindgen_declarations::callback_variant(flat, decl, name, |output, structural| {
-            OutputNode::Unary {
-                operation: COutputUnary::ConfigSequenceCallback { structural },
-                child: Box::new(output.cloned().unwrap_or_else(COutputConfig::auto)),
-            }
-        })
+    fn input_default<'a>(&self, flat: &'a Flat<CSchema>, key: &str) -> Option<&'a CInputConfig> {
+        flat.types
+            .values()
+            .find(|t| type_key(&t.ty) == key)
+            .and_then(|t| t.metadata.defaults.input.as_ref())
     }
-
-    /// Resolve source-dependent operations, compile them, and atomically install one binding.
-    /// Existing converters are preserved unless explicitly replaced.
-    pub fn fill(
+    fn output_default<'a>(&self, flat: &'a Flat<CSchema>, key: &str) -> Option<&'a COutputConfig> {
+        flat.types
+            .values()
+            .find(|t| type_key(&t.ty) == key)
+            .and_then(|t| t.metadata.defaults.output.as_ref())
+    }
+    /// Configure and prepare one explicit export using the same pipeline as the builder.
+    #[cfg(test)]
+    pub(crate) fn fill(
         &self,
         flat: &mut Flat<CSchema>,
         codec: &CCodec,
         decl: &DeclCFunction,
         extra: &(),
     ) -> Result<()> {
-        let recipe = self
-            .resolve_function(flat, codec, decl, extra)
-            .map_err(|e| format!("{}: {e}", decl.name))?;
+        crate::bindings::install(flat, decl.clone(), None)?;
+        crate::bindings::resolve_with(flat, self, codec, extra)?;
         codec.compile_declarations(flat, extra)?;
-        prebindgen_declarations::compile_function(flat, codec, &decl.name, recipe, extra)
-            .map_err(|e| format!("{}: {e}", decl.name))
+        crate::bindings::compile_with(flat, codec, extra)
     }
-    pub(crate) fn resolve_function(
+    pub(crate) fn resolve_call(
         &self,
         flat: &Flat<CSchema>,
         codec: &CCodec,
-        decl: &DeclCFunction,
+        source: &str,
+        call: prebindgen_declarations::ConfiguredCall<
+            CInputConfig,
+            COutputConfig,
+            CInputConverter,
+            COutputConverter,
+        >,
         extra: &(),
-    ) -> Result<FunctionRecipe<CInput, COutput>> {
-        prebindgen_declarations::resolve_function(
-            flat,
-            decl,
-            |ty, explicit| {
+    ) -> Result<
+        prebindgen_declarations::ResolvedCall<CInput, COutput, CInputConverter, COutputConverter>,
+    > {
+        prebindgen_declarations::resolve_call(
+            flat.function(source)?,
+            call,
+            |ty, tree| {
                 self.resolve_input(
                     flat,
                     codec,
                     ty,
-                    explicit.unwrap_or(&CInputConfig::auto()),
+                    &tree.unwrap_or_else(CInputConfig::auto),
                     extra,
                 )
             },
-            |ty| self.function_output(flat, codec, ty, decl, extra),
-        )
-    }
-
-    fn function_output(
-        &self,
-        flat: &Flat<CSchema>,
-        codec: &CCodec,
-        ty: &syn::Type,
-        decl: &DeclCFunction,
-        extra: &(),
-    ) -> Result<COutput> {
-        let tree = prebindgen_declarations::function_output(
-            ty,
-            decl,
-            &self.values.errors,
-            COutputConfig::auto(),
-            |error, child| OutputNode::Unary {
-                operation: COutputUnary::Result { error },
-                child: Box::new(child),
+            |ty, tree, result_value, error| {
+                let tree = prebindgen_declarations::function_output_policy(
+                    ty,
+                    tree,
+                    result_value,
+                    error,
+                    |ty| {
+                        flat.type_info(ty)
+                            .ok()
+                            .and_then(|t| t.metadata.defaults.error.clone())
+                    },
+                    COutputConfig::auto(),
+                    |error, child| OutputNode::Unary {
+                        operation: COutputUnary::Result { error },
+                        child: Box::new(child),
+                    },
+                );
+                self.resolve_output(flat, codec, ty, &tree, extra)
             },
-        );
-        self.resolve_output(flat, codec, ty, &tree, extra)
-    }
-
-    /// Select a function-specific or type-wide explicit error message mapper.
-    pub fn error_mapper_for<'a>(
-        &'a self,
-        decl: &'a DeclCFunction,
-        ty: &syn::Type,
-    ) -> Option<&'a str> {
-        decl.error
-            .as_deref()
-            .or_else(|| self.values.errors.get(&type_key(ty)).map(String::as_str))
+        )
     }
     /// Prepare owned source-field decomposition, retaining each field's conversion default.
     pub fn owned_record_output(
@@ -316,7 +297,7 @@ impl DeclCDefaults {
                 let key = prebindgen_declarations::callback::input_key(flat, ty)?;
                 if let Some(tree) = prebindgen_declarations::resolve_type_default(
                     &key,
-                    &self.values.inputs,
+                    self.input_default(flat, &key),
                     stack,
                     prebindgen_declarations::Direction::Input,
                     |tree, stack| resolve(ty, tree, stack),
@@ -371,7 +352,10 @@ impl DeclCDefaults {
                 )
             }
             InputNode::Leaf(CInputLeafOp::Value) => {
-                if let Some(conversion) = prebindgen_declarations::input_value_conversion(flat, ty)?
+                if let Some(conversion) =
+                    prebindgen_declarations::input_value_conversion(flat, ty, |t| {
+                        t.conversion.clone()
+                    })?
                 {
                     return self.resolve_input_conversion(
                         flat,
@@ -438,7 +422,7 @@ impl DeclCDefaults {
                 codomain,
             } => {
                 let canonical = prebindgen_declarations::callback::input_key(flat, ty)?;
-                let default = match self.values.inputs.get(&canonical) {
+                let default = match self.input_default(flat, &canonical) {
                     Some(InputNode::Arrow {
                         operation: CInputArrow::ConfigCallback(config),
                         domain,
@@ -459,7 +443,7 @@ impl DeclCDefaults {
                         result: codomain.as_ref(),
                     },
                     default,
-                    &self.values.outputs,
+                    |ty| self.output_default(flat, &type_key(ty)).is_some(),
                     &CInputConfig::auto(),
                     &COutputConfig::auto(),
                     |tree| matches!(tree, CInputConfig::Leaf(CInputLeafOp::ConfigDefault(_))),
@@ -768,7 +752,7 @@ impl DeclCDefaults {
                 let key = type_key(ty);
                 if let Some(tree) = prebindgen_declarations::resolve_type_default(
                     &key,
-                    &self.values.outputs,
+                    self.output_default(flat, &key),
                     stack,
                     prebindgen_declarations::Direction::Output,
                     |tree, stack| resolve(ty, tree, stack),
@@ -857,7 +841,9 @@ impl DeclCDefaults {
             OutputNode::Leaf(COutputLeafOp::Value)
             | OutputNode::Leaf(COutputLeafOp::Projected(_)) => {
                 if let Some(conversion) =
-                    prebindgen_declarations::output_value_conversion(flat, ty, None)?
+                    prebindgen_declarations::output_value_conversion(flat, ty, None, |t| {
+                        t.conversion.clone()
+                    })?
                 {
                     if let OutputNode::Leaf(COutputLeafOp::Projected(policy)) = tree {
                         return self.resolve_output_value(
@@ -1072,7 +1058,7 @@ impl DeclCDefaults {
         }
     }
 }
-impl DeclCDefaults {
+impl CSourceResolver {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn resolve_input_conversion(
         &self,
@@ -1139,7 +1125,9 @@ impl DeclCDefaults {
                 children: vec![],
             });
         }
-        if let Some(c) = prebindgen_declarations::input_value_conversion(flat, ty)? {
+        if let Some(c) =
+            prebindgen_declarations::input_value_conversion(flat, ty, |t| t.conversion.clone())?
+        {
             return self.resolve_input_conversion(
                 flat,
                 codec,
@@ -1193,7 +1181,9 @@ impl DeclCDefaults {
                 children: vec![],
             });
         }
-        if let Some(c) = prebindgen_declarations::output_value_conversion(flat, ty, policy)? {
+        if let Some(c) = prebindgen_declarations::output_value_conversion(flat, ty, policy, |t| {
+            t.conversion.clone()
+        })? {
             return self.resolve_output_conversion(
                 flat,
                 codec,
@@ -1235,7 +1225,7 @@ impl DeclCDefaults {
         )
     }
 }
-impl DeclCDefaults {
+impl CSourceResolver {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn enum_input_recipe(
         &self,
@@ -1299,7 +1289,7 @@ impl DeclCDefaults {
 /// Source-aware context for choosing an adapter representation.
 /// Nested resolution uses the same defaults, local policies and recursion stack.
 pub struct CResolve<'a> {
-    pub(crate) declarations: &'a DeclCDefaults,
+    pub(crate) declarations: &'a CSourceResolver,
     /// Source declarations and adapter metadata.
     pub flat: &'a Flat<CSchema>,
     pub(crate) codec: &'a CCodec,
@@ -1328,29 +1318,7 @@ impl CResolve<'_> {
     }
 }
 
-impl DeclCDefaults {
-    /// Resolve function occurrences into an independently compilable Flat.
-    ///
-    /// Defaults and local overrides are consumed here. The returned model owns
-    /// its compiler policy and occurrence settings; drop this DeclCDefaults value
-    /// before calling [`prebindgen_declarations::compile_resolved`] if desired.
-    pub fn resolve(
-        &self,
-        flat: Flat<CSchema>,
-        codec: CCodec,
-        declarations: &[DeclCFunction],
-        extra: (),
-    ) -> Result<Flat<ResolvedSchema<CCodec>>> {
-        prebindgen_declarations::resolve_bindings(
-            flat,
-            codec,
-            declarations,
-            |flat, codec, decl, extra| self.resolve_function(flat, codec, decl, extra),
-            extra,
-        )
-    }
-}
-impl DeclCDefaults {
+impl CSourceResolver {
     fn resolve_input_representation(
         &self,
         flat: &Flat<CSchema>,
@@ -1364,12 +1332,12 @@ impl DeclCDefaults {
                 return Ok(None);
             }
             if flat
-                .payload_enums
-                .contains_key(&prebindgen_flat::type_key(ty))
+                .payload_enum_by_key(&prebindgen_flat::type_key(ty))
+                .is_some()
                 && !flat.type_info(ty).ok().is_some_and(|t| {
-                    t.metadata.tagged.is_some()
-                        || t.metadata.pointer.is_some()
-                        || t.metadata.owned.is_some()
+                    t.metadata.tagged().is_some()
+                        || t.metadata.pointer().is_some()
+                        || t.metadata.owned().is_some()
                 })
             {
                 return Err(format!(
@@ -1380,7 +1348,7 @@ impl DeclCDefaults {
             if flat
                 .type_info(ty)
                 .ok()
-                .is_some_and(|t| t.metadata.tagged.is_some())
+                .is_some_and(|t| t.metadata.tagged().is_some())
             {
                 let e = flat.payload_enum(ty)?;
                 return Ok(Some(crate::CInputConfig::enum_variants(
@@ -1406,7 +1374,7 @@ impl DeclCDefaults {
     }
 }
 
-impl DeclCDefaults {
+impl CSourceResolver {
     fn resolve_output_representation(
         &self,
         flat: &Flat<CSchema>,
@@ -1421,12 +1389,12 @@ impl DeclCDefaults {
                 return Ok(None);
             }
             if flat
-                .payload_enums
-                .contains_key(&prebindgen_flat::type_key(ty))
+                .payload_enum_by_key(&prebindgen_flat::type_key(ty))
+                .is_some()
                 && !flat.type_info(ty).ok().is_some_and(|t| {
-                    t.metadata.tagged.is_some()
-                        || t.metadata.pointer.is_some()
-                        || t.metadata.owned.is_some()
+                    t.metadata.tagged().is_some()
+                        || t.metadata.pointer().is_some()
+                        || t.metadata.owned().is_some()
                 })
             {
                 return Err(format!(
@@ -1437,7 +1405,7 @@ impl DeclCDefaults {
             if flat
                 .type_info(ty)
                 .ok()
-                .is_some_and(|t| t.metadata.tagged.is_some())
+                .is_some_and(|t| t.metadata.tagged().is_some())
             {
                 let e = flat.payload_enum(ty)?;
                 return Ok(Some(crate::COutputConfig::enum_variants(
@@ -1466,6 +1434,14 @@ impl DeclCDefaults {
                 }
                 _ => unreachable!(),
             }),
+        }
+    }
+}
+
+impl Default for CSourceResolver {
+    fn default() -> Self {
+        Self {
+            input_role: std::cell::Cell::new(InputRole::Parameter),
         }
     }
 }

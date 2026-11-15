@@ -1,6 +1,7 @@
 //! C adapter metadata and interpretation of logical value trees.
 use super::*;
-use prebindgen_flat::{Wire, WireNode};
+
+use prebindgen_conversions::{Wire, WireNode};
 use syn::ext::IdentExt;
 
 /// Meaning and encoding of a parent with one child description.
@@ -173,7 +174,7 @@ pub(crate) fn values_mut(
     out.into_iter()
 }
 pub(crate) fn validate_layout(node: &WireNode<CWire, crate::CChain, crate::CBranch>) -> Result<()> {
-    prebindgen_conversions::validate_wire_names(prebindgen_flat::wire_definitions(
+    prebindgen_conversions::validate_wire_names(prebindgen_conversions::wire_definitions(
         std::iter::once(node),
     ))?;
     for wire in values(node) {
@@ -356,12 +357,13 @@ pub(crate) fn argument_parameters(
     values(node)
 }
 pub(crate) fn function_parameters<
-    I: prebindgen_flat::InputConversion<Wire = CWire, Chain = CChain, Branch = CBranch>,
-    O: prebindgen_flat::Conversion,
+    'a,
+    I: prebindgen_conversions::InputConversion<Wire = CWire, Chain = CChain, Branch = CBranch>,
+    O: prebindgen_conversions::Conversion,
     M,
 >(
-    f: &prebindgen_flat::Function<I, O, M>,
-) -> Result<std::vec::IntoIter<&Wire<CWire>>> {
+    f: &'a prebindgen_conversions::BoundFunction<'_, I, O, M>,
+) -> Result<std::vec::IntoIter<&'a Wire<CWire>>> {
     let mut out = vec![];
     for input in f.input_conversions()? {
         out.extend(argument_parameters(input.input_node()));
@@ -460,8 +462,8 @@ pub(crate) fn record_fields(
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn selector(name: syn::Ident) -> prebindgen_flat::Wire<CWire> {
-        prebindgen_flat::Wire {
+    fn selector(name: syn::Ident) -> prebindgen_conversions::Wire<CWire> {
+        prebindgen_conversions::Wire {
             name,
             kind: CWire::scalar(Primitive::I32),
         }
@@ -487,8 +489,8 @@ mod tests {
             meta: CChain::Optional(metadata),
         };
     }
-    fn leaf(name: &str) -> prebindgen_flat::Wire<CWire> {
-        prebindgen_flat::Wire {
+    fn leaf(name: &str) -> prebindgen_conversions::Wire<CWire> {
+        prebindgen_conversions::Wire {
             name: syn::parse_str(name).unwrap(),
             kind: CWire::scalar(Primitive::Char),
         }
@@ -557,7 +559,7 @@ mod tests {
         .unwrap_err()
         .contains("integer tag"));
         let sequence: WireNode<CWire, CChain, CBranch> = WireNode::Chain {
-            controls: vec![prebindgen_flat::Wire {
+            controls: vec![prebindgen_conversions::Wire {
                 name: syn::parse_quote!(rows),
                 kind: CWire::Rows,
             }],
@@ -566,7 +568,7 @@ mod tests {
         };
         validate_layout(&sequence).unwrap();
         let empty = WireNode::Chain {
-            controls: vec![prebindgen_flat::Wire {
+            controls: vec![prebindgen_conversions::Wire {
                 name: syn::parse_quote!(rows),
                 kind: CWire::Rows,
             }],
@@ -622,8 +624,8 @@ mod tests {
     }
     #[test]
     fn nested_optional_references_and_presence_bindings_are_validated() {
-        let mut tree = prebindgen_flat::WireNode::Leaf(vec![leaf("value")]);
-        prebindgen_flat::wire_definitions_mut(std::iter::once(&mut tree))
+        let mut tree = prebindgen_conversions::WireNode::Leaf(vec![leaf("value")]);
+        prebindgen_conversions::wire_definitions_mut(std::iter::once(&mut tree))
             .next()
             .expect("logical wire index out of range")
             .kind
@@ -646,7 +648,7 @@ mod tests {
             .contains("outside payload"));
         enclose_optional_metadata(&mut tree, optional("inner", "value", true));
         assert!(validate_layout(&tree).unwrap_err().contains("duplicate"));
-        let mut flag = prebindgen_flat::WireNode::Leaf(vec![leaf("flag")]);
+        let mut flag = prebindgen_conversions::WireNode::Leaf(vec![leaf("flag")]);
         crate::group::values_mut(&mut flag).next().unwrap().kind = CWire::scalar(Primitive::I32);
         enclose_optional_metadata(&mut flag, optional("flag", "flag", false));
         validate_layout(&flag).unwrap();
@@ -671,7 +673,7 @@ mod tests {
                 CNiche::Null,
             ),
         ] {
-            let mut tree = prebindgen_flat::WireNode::Leaf(vec![GenericWire {
+            let mut tree = prebindgen_conversions::WireNode::Leaf(vec![GenericWire {
                 name: syn::parse_quote!(value),
                 kind,
             }]);
@@ -688,7 +690,7 @@ mod tests {
             assert!(validate_layout(&tree)
                 .unwrap_err()
                 .contains("already reserved"));
-            prebindgen_flat::wire_definitions_mut(std::iter::once(&mut tree))
+            prebindgen_conversions::wire_definitions_mut(std::iter::once(&mut tree))
                 .next()
                 .expect("logical wire index out of range")
                 .kind
@@ -711,7 +713,7 @@ mod tests {
                 CNiche::Integer(0),
             ),
         ] {
-            let mut tree = prebindgen_flat::WireNode::Leaf(vec![GenericWire {
+            let mut tree = prebindgen_conversions::WireNode::Leaf(vec![GenericWire {
                 name: syn::parse_quote!(value),
                 kind,
             }]);
@@ -779,7 +781,7 @@ mod tests {
                 &prebindgen_declarations::Condition::default(),
             ))
             .unwrap();
-        input.node = prebindgen_flat::WireNode::Branch {
+        input.node = prebindgen_conversions::WireNode::Branch {
             controls: vec![],
             meta: CBranch::Group(CGroup::Field(syn::parse_quote!(orphan))),
             children: vec![std::mem::take(&mut input.node)],
@@ -798,7 +800,7 @@ mod tests {
                 prebindgen_declarations::ValueAccess::Owned,
             ))
             .unwrap();
-        output.outcomes.success = prebindgen_flat::WireNode::Branch {
+        output.outcomes.success = prebindgen_conversions::WireNode::Branch {
             controls: vec![],
             meta: CBranch::Group(CGroup::Field(syn::parse_quote!(orphan))),
             children: vec![std::mem::take(&mut output.outcomes.success)],
@@ -880,22 +882,22 @@ mod abi_tests {
     use super::*;
     #[test]
     fn function_parameters_result_packets_and_sequence_fields_have_explicit_roles() {
-        let scalar = |name: &str| prebindgen_flat::Wire {
+        let scalar = |name: &str| prebindgen_conversions::Wire {
             name: syn::parse_str(name).unwrap(),
             kind: CWire::scalar(Primitive::I32),
         };
-        let element: prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch> =
-            prebindgen_flat::WireNode::Leaf(vec![scalar("first"), scalar("second")]);
+        let element: prebindgen_conversions::WireNode<CWire, crate::CChain, crate::CBranch> =
+            prebindgen_conversions::WireNode::Leaf(vec![scalar("first"), scalar("second")]);
         let mut sequence = element.clone();
-        sequence = prebindgen_flat::WireNode::Chain {
-            controls: vec![prebindgen_flat::Wire {
+        sequence = prebindgen_conversions::WireNode::Chain {
+            controls: vec![prebindgen_conversions::Wire {
                 name: syn::parse_quote!(rows),
                 kind: CWire::Rows,
             }],
             meta: CChain::Sequence(CSequence::Buffered),
             child: Box::new(std::mem::take(&mut sequence)),
         };
-        let result = prebindgen_flat::Outcomes {
+        let result = prebindgen_conversions::Outcomes {
             success: sequence.clone(),
             source_error: Some(WireNode::Leaf(vec![scalar("error")])),
             binding_failure: None,
@@ -942,10 +944,18 @@ mod abi_tests {
             ))
             .unwrap();
         input.node = sequence;
-        flat.function_mut("f").unwrap().params[0].ty.slot = Some(input.clone());
+        bindings::set_input(&mut flat, "f", "value", input.clone()).unwrap();
+        let output = prebindgen_declarations::compile_output(
+            &flat,
+            &CCodec::raw(),
+            "f",
+            &COutput::None,
+            &(),
+        )
+        .unwrap();
+        bindings::set_output(&mut flat, "f", output).unwrap();
         assert_eq!(
-            function_parameters(flat.function("f").unwrap())
-                .unwrap()
+            argument_parameters(input.input_node())
                 .map(|w| w.name.to_string())
                 .collect::<Vec<_>>(),
             ["rows"]
@@ -979,3 +989,5 @@ mod structural_validation_tests {
             .contains("control wires"));
     }
 }
+
+use prebindgen_conversions::FunctionConversions as _;

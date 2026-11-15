@@ -153,9 +153,9 @@ fn value_type(
         .ok()
         .and_then(|i| {
             if input {
-                i.conversion.input.as_ref()
+                i.metadata.conversion.input.as_ref()
             } else {
-                i.conversion.output.as_ref()
+                i.metadata.conversion.output.as_ref()
             }
         })
         .or_else(|| {
@@ -166,7 +166,7 @@ fn value_type(
                     syn::Type::Reference(r) => flat
                         .type_info(&r.elem)
                         .ok()
-                        .and_then(|i| i.conversion.output.as_ref()),
+                        .and_then(|i| i.metadata.conversion.output.as_ref()),
                     _ => None,
                 }
             }
@@ -238,10 +238,16 @@ pub(crate) fn prepare(flat: &mut JniBindings) -> Result<()> {
             .ok()
             .and_then(|t| t.metadata.class.clone())
         {
-            let handles = if matches!(class.kind, ClassKind::Data | ClassKind::Sealed) {
+            let handles = if matches!(
+                class.representation,
+                ClassRepresentation::Data { .. } | ClassRepresentation::Sealed { .. }
+            ) {
                 resolve(flat, &type_key(ty), stack, resolved)?
             } else {
-                class.kind != ClassKind::Enum
+                !matches!(
+                    class.representation,
+                    ClassRepresentation::ConfiguredEnum { .. } | ClassRepresentation::Enum(_)
+                )
             };
             return Ok((class.fqn(), handles));
         }
@@ -271,7 +277,7 @@ pub(crate) fn prepare(flat: &mut JniBindings) -> Result<()> {
                 .class
                 .as_ref()
                 .unwrap()
-                .has_handles);
+                .has_handles());
         }
         let class = flat
             .type_info(&syn::parse_str::<syn::Type>(key).map_err(|e| e.to_string())?)?
@@ -279,12 +285,11 @@ pub(crate) fn prepare(flat: &mut JniBindings) -> Result<()> {
             .class
             .as_ref()
             .unwrap();
-        let sealed = class.kind == ClassKind::Sealed;
+        let sealed = matches!(class.representation, ClassRepresentation::Sealed { .. });
         let mut starts = BTreeSet::new();
         let source_fields = if sealed {
             let source = flat
-                .payload_enums
-                .get(key)
+                .payload_enum_by_key(key)
                 .ok_or_else(|| format!("sealed class `{key}` requires a payload enum"))?;
             let mut fields = Vec::new();
             for arm in &source.variants {
@@ -300,8 +305,7 @@ pub(crate) fn prepare(flat: &mut JniBindings) -> Result<()> {
             fields
         } else {
             let record = flat
-                .records
-                .get(key)
+                .record_by_key(key)
                 .ok_or_else(|| format!("data class `{key}` requires a named-field record"))?;
             if record.fields.is_empty() {
                 return Err(format!("data class `{key}` must have at least one field"));
@@ -397,9 +401,15 @@ pub(crate) fn prepare(flat: &mut JniBindings) -> Result<()> {
                 .ok()
                 .and_then(|t| t.metadata.class.clone())
             {
-                if matches!(child.kind, ClassKind::Data | ClassKind::Sealed) {
+                if matches!(
+                    child.representation,
+                    ClassRepresentation::Data { .. } | ClassRepresentation::Sealed { .. }
+                ) {
                     has_handles |= resolve(flat, &field_key, stack, resolved)?;
-                } else if child.kind != ClassKind::Enum {
+                } else if !matches!(
+                    child.representation,
+                    ClassRepresentation::ConfiguredEnum { .. } | ClassRepresentation::Enum(_)
+                ) {
                     has_handles = true;
                 }
                 child.fqn()
@@ -430,7 +440,7 @@ pub(crate) fn prepare(flat: &mut JniBindings) -> Result<()> {
         stack.pop();
         if sealed {
             let mut start = 0;
-            for arm in &flat.payload_enums[key].variants {
+            for arm in &flat.payload_enum_by_key(key).unwrap().variants {
                 let count = arm.fields.len();
                 let slots = fields[start..start + count]
                     .iter()
@@ -444,15 +454,14 @@ pub(crate) fn prepare(flat: &mut JniBindings) -> Result<()> {
                 start += count;
             }
             let mut metadata = fields.into_iter();
-            for arm in &mut flat.payload_enums.get_mut(key).unwrap().variants {
+            for arm in &mut flat.payload_enum_by_key_mut(key).unwrap().variants {
                 for field in &mut arm.fields {
                     field.metadata = metadata.next().unwrap();
                 }
             }
         } else {
             for (field, metadata) in flat
-                .records
-                .get_mut(key)
+                .record_by_key_mut(key)
                 .unwrap()
                 .fields
                 .iter_mut()
@@ -463,7 +472,13 @@ pub(crate) fn prepare(flat: &mut JniBindings) -> Result<()> {
         }
         let ty = syn::parse_str::<syn::Type>(key).map_err(|e| e.to_string())?;
         let class = flat.type_metadata_mut(&ty)?.class.as_mut().unwrap();
-        Rc::make_mut(class).has_handles = has_handles;
+        match &mut Rc::make_mut(class).representation {
+            ClassRepresentation::Data { has_handles: value }
+            | ClassRepresentation::Sealed {
+                has_handles: value, ..
+            } => *value = has_handles,
+            _ => return Err("record analysis requires a data or sealed representation".into()),
+        }
         resolved.insert(key.into());
         Ok(has_handles)
     }
@@ -484,17 +499,21 @@ pub(crate) fn prepare(flat: &mut JniBindings) -> Result<()> {
             .as_ref()
             .unwrap()
             .clone();
-        if matches!(class.kind, ClassKind::Data | ClassKind::Sealed) {
+        if matches!(
+            class.representation,
+            ClassRepresentation::Data { .. } | ClassRepresentation::Sealed { .. }
+        ) {
             resolve(flat, &key, &mut Vec::new(), &mut resolved)?;
         }
-        if class.kind == ClassKind::Enum && flat.type_info(&ty)?.metadata.enumeration.is_none() {
+        if matches!(
+            class.representation,
+            ClassRepresentation::ConfiguredEnum { .. }
+        ) {
             let enumeration = Rc::new(JniEnum::from_class(flat, &class, &key)?);
             flat.guards.extend(enumeration.mapping.guards());
             let info = flat.type_metadata_mut(&ty)?;
-            info.enumeration = Some(enumeration);
-            Rc::make_mut(info.class.as_mut().unwrap())
-                .variant_names
-                .clear();
+            Rc::make_mut(info.class.as_mut().unwrap()).representation =
+                ClassRepresentation::Enum(enumeration);
         }
     }
     Ok(())
@@ -513,7 +532,7 @@ impl JniCodec {
         } else {
             ty
         };
-        flat.type_info(ty).ok()?.metadata.enumeration.as_ref()
+        flat.type_info(ty).ok()?.metadata.enumeration()
     }
     pub(super) fn source_record<'a>(
         flat: &'a Flat<JniSchema>,
@@ -524,7 +543,7 @@ impl JniCodec {
                 .type_info(&r.elem)
                 .ok()
                 .and_then(|t| t.metadata.class.as_ref())
-                .is_some_and(|c| c.kind == ClassKind::Data)
+                .is_some_and(|c| matches!(c.representation, ClassRepresentation::Data { .. }))
             {
                 return Err(format!(
                     "data class `{}` supports owned occurrences only",
@@ -536,7 +555,7 @@ impl JniCodec {
             .type_info(ty)
             .ok()
             .and_then(|t| t.metadata.class.as_ref())
-            .filter(|c| c.kind == ClassKind::Data))
+            .filter(|c| matches!(c.representation, ClassRepresentation::Data { .. })))
     }
 }
 pub(crate) fn render_record<I: KotlinInputConversion, O: KotlinOutputConversion>(
@@ -562,7 +581,7 @@ pub(crate) fn render_record_fields(
         })
         .collect::<Vec<_>>()
         .join(",\n");
-    let lifecycle = if class.has_handles {
+    let lifecycle = if class.has_handles() {
         "/** Close each handle member explicitly. Copies share the same handle objects. */\n"
     } else {
         ""
@@ -629,14 +648,14 @@ fn field_name(field: &prebindgen_flat::Field<JniField>) -> String {
 impl Class {
     pub(super) fn mark(
         &self,
-        layout: &mut prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
+        layout: &mut prebindgen_conversions::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
         root: String,
         condition: String,
         property_types: Vec<String>,
     ) -> Result<()> {
         group::retire_niches(layout, None)?;
         let mut nodes = std::mem::take(layout);
-        let prebindgen_flat::WireNode::Branch {
+        let prebindgen_conversions::WireNode::Branch {
             meta: JniBranch::Group(metadata),
             ..
         } = &mut nodes
@@ -659,7 +678,7 @@ impl Class {
 
 type FieldNode<'a> = (
     &'a syn::Ident,
-    &'a prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
+    &'a prebindgen_conversions::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
 );
 pub(crate) fn fields(nodes: &[kotlin::JniNode]) -> Result<Vec<FieldNode<'_>>> {
     nodes
@@ -893,8 +912,59 @@ pub(crate) fn output_kotlin(
 #[cfg(test)]
 mod group_tests {
     use super::*;
-    use prebindgen_flat::Wire;
-    use prebindgen_flat::WireNode;
+    use prebindgen_conversions::Wire;
+    use prebindgen_conversions::WireNode;
+
+    #[test]
+    fn enum_preparation_replaces_its_configuration_and_can_be_repeated() {
+        let items = syn::parse_file("pub enum E { A, B }").unwrap().items;
+        let mut flat =
+            JniBindings::parse(items.into_iter().map(|i| (i, Default::default()))).unwrap();
+        let ty = flat.resolve_type(&syn::parse_quote!(E)).unwrap();
+        flat.type_metadata_mut(&ty).unwrap().class = Some(Rc::new(Class {
+            pkg: "example".into(),
+            name: "E".into(),
+            representation: ClassRepresentation::ConfiguredEnum {
+                variant_names: vec![("A".into(), "First".into())],
+            },
+        }));
+        assert!(matches!(
+            flat.type_info(&ty)
+                .unwrap()
+                .metadata
+                .class
+                .as_ref()
+                .unwrap()
+                .representation,
+            ClassRepresentation::ConfiguredEnum { .. }
+        ));
+        prepare(&mut flat).unwrap();
+        let mapping = flat
+            .type_info(&ty)
+            .unwrap()
+            .metadata
+            .enumeration()
+            .unwrap()
+            .clone();
+        assert_eq!(mapping.variant_name(&syn::parse_quote!(A)), "First");
+        assert!(matches!(
+            flat.type_info(&ty)
+                .unwrap()
+                .metadata
+                .class
+                .as_ref()
+                .unwrap()
+                .representation,
+            ClassRepresentation::Enum(_)
+        ));
+        let guards = flat.guards.len();
+        prepare(&mut flat).unwrap();
+        assert!(Rc::ptr_eq(
+            &mapping,
+            flat.type_info(&ty).unwrap().metadata.enumeration().unwrap()
+        ));
+        assert_eq!(flat.guards.len(), guards);
+    }
 
     #[test]
     fn codec_reads_current_enum_metadata_without_a_preparation_cache() {
@@ -909,13 +979,18 @@ mod group_tests {
         let ty = flat.resolve_type(&syn::parse_quote!(E)).unwrap();
         let codec = JniCodec::declared();
         let mapping = Rc::new(
-            prebindgen_declarations::EnumMapping::new(flat.enums.values().next().unwrap()).unwrap(),
+            prebindgen_declarations::EnumMapping::new(flat.enums().next().unwrap()).unwrap(),
         );
         for name in ["example.First", "example.Updated"] {
-            flat.type_metadata_mut(&ty).unwrap().enumeration = Some(Rc::new(JniEnum {
-                mapping: (*mapping).clone(),
-                class_name: name.into(),
-                variant_names: BTreeMap::new(),
+            let (pkg, short) = name.rsplit_once('.').unwrap();
+            flat.type_metadata_mut(&ty).unwrap().class = Some(Rc::new(Class {
+                pkg: pkg.into(),
+                name: short.into(),
+                representation: ClassRepresentation::Enum(Rc::new(JniEnum {
+                    mapping: (*mapping).clone(),
+                    class_name: name.into(),
+                    variant_names: BTreeMap::new(),
+                })),
             }));
             let output = codec
                 .output_leaf(prebindgen_declarations::OutputLeaf::new(
@@ -927,9 +1002,10 @@ mod group_tests {
                     prebindgen_declarations::ValueAccess::Owned,
                 ))
                 .unwrap();
-            let wire = prebindgen_flat::wire_definitions(std::iter::once(&output.outcomes.success))
-                .next()
-                .unwrap();
+            let wire =
+                prebindgen_conversions::wire_definitions(std::iter::once(&output.outcomes.success))
+                    .next()
+                    .unwrap();
             assert!(matches!(&wire.kind,JniWire::Enum{enum_type,..} if enum_type.class_name==name));
         }
     }
@@ -947,14 +1023,11 @@ mod group_tests {
         flat.type_metadata_mut(&ty).unwrap().class = Some(Rc::new(Class {
             pkg: "example".into(),
             name: "Record".into(),
-            kind: ClassKind::Data,
-            has_handles: false,
-            gc_managed: false,
-            variant_names: vec![],
+            representation: ClassRepresentation::Data { has_handles: false },
         }));
         prepare(&mut flat).unwrap();
         let codec = JniCodec::declared();
-        let defaults = crate::DeclJniDefaults::new(&flat, vec![], vec![], vec![]).unwrap();
+        let defaults = crate::JniSourceResolver::new(&mut flat, vec![], vec![], vec![]).unwrap();
         let request = JniOutputConfig::Unary {
             operation: JniOutputUnary::Sequence {
                 delivery: prebindgen_declarations::SequenceDelivery::Callback,
@@ -976,10 +1049,9 @@ mod group_tests {
         assert!(
             matches!(&resolved,crate::operations::JniOutput::Unary { operation: crate::operations::JniOutputUnary::Sequence { .. }, child: element, .. } if matches!(element.as_ref(),crate::operations::JniOutput::Branch { operation: crate::operations::JniOutputBranch::Record { mode: Some(ProjectionMode::Owned) }, children: fields,  } if matches!(fields.as_slice(),[crate::operations::JniOutput::Leaf(crate::operations::JniOutputLeafOp::Projected(_))])))
         );
-        drop(defaults);
         let plan = prebindgen_declarations::compile_output(&flat, &codec, "items", &resolved, &())
             .unwrap();
-        flat.function_mut("items").unwrap().ret.slot = Some(plan);
+        bindings::set_output(&mut flat, "items", plan).unwrap();
     }
 
     fn record(root: &str) -> WireNode<JniWire, crate::JniChain, crate::JniBranch> {
@@ -1033,16 +1105,16 @@ mod group_tests {
     }
     #[test]
     fn kotlin_record_emission_reads_names_from_shared_fields() {
-        let mut field = prebindgen_flat::WireNode::Leaf(vec![Wire {
+        let mut field = prebindgen_conversions::WireNode::Leaf(vec![Wire {
             name: syn::parse_quote!(incoming),
             kind: JniWire::scalar(Primitive::I32),
         }]);
-        field = prebindgen_flat::WireNode::Branch {
+        field = prebindgen_conversions::WireNode::Branch {
             controls: vec![],
             meta: JniBranch::Group(JniGroup::Field(syn::parse_quote!(r#type))),
             children: vec![std::mem::take(&mut field)],
         };
-        field = prebindgen_flat::WireNode::Branch {
+        field = prebindgen_conversions::WireNode::Branch {
             controls: vec![],
             meta: JniBranch::Group(JniGroup::Fields(Some(JniDataGroup {
                 root: "point".into(),

@@ -20,6 +20,9 @@ fun checkOutputContracts() {
         Duration.ofMillis(123)
     }) == Duration.ofMillis(123))
     check(plainResult(-7, onError = { error -> error + 1 }) == 8L)
+    check(io.prebindgen.covertest.isolatederror.durationResult(-11, onError = { failure ->
+        check(failure == Duration.ofMillis(11)); 123L
+    }) == 123L)
     check(durationCallback(callback = { value ->
         check(value == Duration.ofMillis(43))
         value.plusMillis(5)

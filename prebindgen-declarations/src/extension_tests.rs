@@ -1,7 +1,7 @@
 //! An independent adapter extends the shared declaration family without C/JNI operations.
 use crate::*;
 use prebindgen_flat::{type_key, Flat};
-use std::{collections::BTreeMap, convert::Infallible};
+use std::convert::Infallible;
 
 #[derive(Clone, Debug)]
 struct Incoming;
@@ -206,30 +206,33 @@ fn field_options_and_omission_survive_common_builders_and_registration() {
 }
 #[test]
 fn function_settings_survive_common_methods_resolution_and_callback_variants() {
-    let mut flat = model();
+    let flat = model();
     let declaration: Function = crate::fun!(call)
         .with_extension(Settings("function"))
         .name("Call")
         .expand_param("value", Input::Leaf("in".into()))
         .expand_return(Output::Leaf("out".into()));
-    let recipe = resolve_function(
-        &flat,
-        &declaration,
-        |_, tree| Ok(tree.unwrap().clone()),
-        |_| Ok(declaration.extension.as_ref().unwrap().0),
+    let settings = declaration.extension.as_ref().unwrap().0;
+    let call = ConfiguredCall::<Input, Output, (), ()>::from_declaration(
+        flat.function("call").unwrap(),
+        declaration,
+        None,
     )
     .unwrap();
-    assert!(matches!(&recipe.inputs[..],[Some(Input::Leaf(s))] if s=="in"));
-    assert_eq!(recipe.output, Some("function"));
+    let recipe = resolve_call(
+        flat.function("call").unwrap(),
+        call,
+        |_, tree| Ok(tree.unwrap()),
+        |_, _, _, _| Ok(settings),
+    )
+    .unwrap();
+    assert!(matches!(&recipe.inputs[..],[ResolvedSlot::Tree(Input::Leaf(s))] if s=="in"));
+    assert!(matches!(recipe.output, ResolvedSlot::Tree("function")));
     let declaration = Function::new(syn::parse_quote!(rows))
         .with_extension(Settings("function"))
         .callback_return_only();
-    let variant = callback_variant(&mut flat, &declaration, "rows_each", |_, _| {
-        Output::Leaf("each".into())
-    })
-    .unwrap();
+    let variant = declaration.output(Output::Leaf("each".into()));
     assert_eq!(variant.extension, Some(Settings("function")));
-    assert!(variant.callback_return.is_none());
 }
 #[test]
 fn callback_settings_inherit_override_and_reach_the_resolved_arrow() {
@@ -249,7 +252,7 @@ fn callback_settings_inherit_override_and_reach_the_resolved_arrow() {
             &default.ty,
             &local,
             Some(&default),
-            &BTreeMap::new(),
+            |_| false,
             &Input::None,
             &Output::None,
             &mut vec![],
@@ -302,17 +305,37 @@ fn callback_settings_inherit_override_and_reach_the_resolved_arrow() {
 #[test]
 fn canonical_conversion_preparation_preserves_nonclone_adapter_settings() {
     struct ConversionSettings(String);
-    let mut flat = model();
+    struct CanonicalSchema;
+    impl prebindgen_flat::Schema for CanonicalSchema {
+        type Parameter = Option<()>;
+        type Return = Option<()>;
+        type Module = ();
+        type Function = ();
+        type Type = prebindgen_conversions::ValueConversions;
+        type Field = ();
+        type Variant = ();
+        type Record = ();
+        type Enum = ();
+        type PayloadEnum = ();
+    }
+    let mut flat = prebindgen_flat::Flat::<CanonicalSchema>::parse(
+        syn::parse_file("pub type Value=String;")
+            .unwrap()
+            .items
+            .into_iter()
+            .map(|i| (i, Default::default())),
+    )
+    .unwrap();
     let declaration = convert!(Value)
         .input(DeclConvertSource::input(syn::parse_quote!(String), false))
         .output(DeclConvertSource::output(syn::parse_quote!(String), false))
         .with_extension(ConversionSettings("conversion".into()));
-    prepare_value_conversions(&mut flat, std::slice::from_ref(&declaration)).unwrap();
+    prepare_value_conversions(&mut flat, std::slice::from_ref(&declaration), |t| t, |t| t).unwrap();
     assert_eq!(declaration.extension.as_ref().unwrap().0, "conversion");
     assert!(flat
         .type_info(&flat.resolve_type(&declaration.ty).unwrap())
         .unwrap()
-        .conversion
+        .metadata
         .input
         .is_some());
 }
@@ -388,6 +411,9 @@ fn cloning_builders_does_not_require_clonable_function_declarations() {
 
 struct ArrowCodec;
 impl Codec for ArrowCodec {
+    type Input = crate::CodecInputPlan<Self>;
+    type Output = crate::CodecOutputPlan<Self>;
+
     type InOps = Incoming;
     type OutOps = Outgoing;
     type CompileState = ();
@@ -463,7 +489,7 @@ impl Codec for ArrowCodec {
         let wire = &request.wire;
         let target = &request.target;
         Ok(prebindgen_conversions::InputPlan::new(
-            prebindgen_flat::WireNode::Leaf(vec![prebindgen_flat::Wire {
+            prebindgen_conversions::WireNode::Leaf(vec![prebindgen_conversions::Wire {
                 name: wire.clone(),
                 kind: syn::parse_quote!(i64),
             }]),
@@ -522,7 +548,7 @@ fn callback_extensions_reach_the_compiler_and_change_generated_behavior() {
         &callback.ty,
         &callback,
         None,
-        &BTreeMap::new(),
+        |_| false,
         &Input::Leaf("result".into()),
         &Output::Leaf("argument".into()),
         &mut vec![],
@@ -555,7 +581,7 @@ fn callback_extensions_reach_the_compiler_and_change_generated_behavior() {
     drop(callback);
     let compiled = compile_resolved(resolved).unwrap();
     let function = compiled.function("apply").unwrap();
-    let params = prebindgen_flat::wire_definitions(std::iter::once(
+    let params = prebindgen_conversions::wire_definitions(std::iter::once(
         &function.params[0].ty.slot.as_ref().unwrap().node,
     ))
     .map(|wire| wire.name.clone())

@@ -46,14 +46,14 @@ impl Consumes for COutput {
                 operation: COutputUnary::Convert { conversion, .. },
                 ..
             } => match &conversion.source {
-                prebindgen_flat::ValueSource::Function(name) => {
+                prebindgen_conversions::ValueSource::Function(name) => {
                     flat.function(name).is_ok_and(|f| {
                         f.params
                             .first()
                             .is_some_and(|p| !matches!(p.ty.ty, Type::Reference(_)))
                     })
                 }
-                prebindgen_flat::ValueSource::Into { .. } => true,
+                prebindgen_conversions::ValueSource::Into { .. } => true,
             },
             COutput::Unary {
                 operation: COutputUnary::Sequence { mode, .. },

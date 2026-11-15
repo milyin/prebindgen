@@ -92,7 +92,7 @@ pub(crate) fn replace(s: &str, from: &str, to: &str) -> String {
     out
 }
 pub(crate) fn input_kotlin(
-    nodes: &prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
+    nodes: &prebindgen_conversions::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
     o: &JniOptional,
     context: &KotlinContext<'_>,
     active: &str,
@@ -273,7 +273,7 @@ pub(crate) fn input_kotlin(
     Ok(out)
 }
 pub(crate) fn output_kotlin(
-    nodes: &prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
+    nodes: &prebindgen_conversions::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
     o: &JniOptional,
     context: &KotlinContext<'_>,
     owners: Option<&str>,

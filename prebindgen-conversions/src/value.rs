@@ -4,8 +4,8 @@
 //! the conversion around the adapter's own decode and encode expressions.
 use prebindgen_flat::{type_key, Primitive, Result};
 
+use crate::Wire;
 use crate::{InputPlan, OutputPlan};
-use prebindgen_flat::Wire;
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::Type;
@@ -73,10 +73,10 @@ impl Value {
 ///     &syn::parse_quote!(&str), syn::parse_quote!(raw), syn::parse_quote!(text),
 ///     quote::quote!(read(raw)?), syn::parse_quote!(&str),
 /// )?;
-/// assert_eq!(prebindgen_flat::type_key(&prebindgen_flat::wire_definitions(std::iter::once(&input.node)).next().unwrap().rust_type()), "& str");
+/// assert_eq!(prebindgen_flat::type_key(&prebindgen_conversions::wire_definitions(std::iter::once(&input.node)).next().unwrap().rust_type()), "& str");
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
-pub fn input<W: prebindgen_flat::WireKind, C, N, B>(
+pub fn input<W: crate::WireKind, C, N, B>(
     ty: &Type,
     wire: syn::Ident,
     var: syn::Ident,
@@ -113,7 +113,7 @@ pub fn input<W: prebindgen_flat::WireKind, C, N, B>(
         ),
     };
     let mut plan = InputPlan::new(
-        prebindgen_flat::WireNode::Leaf(vec![Wire { name: wire, kind }]),
+        crate::WireNode::Leaf(vec![Wire { name: wire, kind }]),
         code,
         value,
     );
@@ -139,7 +139,7 @@ pub fn input<W: prebindgen_flat::WireKind, C, N, B>(
 /// * `encode` — maps a Rust expression of the owned value to the expression
 ///   delivered on the wire.
 /// * `kind` — the adapter's [`Wire::kind`] for the wire.
-pub fn output<W: prebindgen_flat::WireKind, C, N, B>(
+pub fn output<W: crate::WireKind, C, N, B>(
     ty: &Type,
     wire: syn::Ident,
     value: TokenStream,
@@ -166,8 +166,8 @@ pub fn output<W: prebindgen_flat::WireKind, C, N, B>(
         fallible: true,
         context: Default::default(),
         delivery: Default::default(),
-        outcomes: prebindgen_flat::Outcomes {
-            success: prebindgen_flat::WireNode::Leaf(vec![Wire {
+        outcomes: crate::Outcomes {
+            success: crate::WireNode::Leaf(vec![Wire {
                 name: wire.clone(),
                 kind,
             }]),

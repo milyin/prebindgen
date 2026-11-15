@@ -2,7 +2,8 @@
 use super::*;
 use crate::kotlin::{JniNode, KotlinBinding, KotlinContext, KotlinInput, KotlinOutput};
 use prebindgen_declarations::{Condition, SequenceInput, SequenceOutput};
-use prebindgen_flat::{Wire, WireNode};
+
+use prebindgen_conversions::{Wire, WireNode};
 use std::{fmt::Write, rc::Rc};
 
 /// Physical record shared by the Rust encoder and the initialized Kotlin layout table.
@@ -423,7 +424,7 @@ pub(crate) fn output_leaf(
             fallible: true,
             context: Default::default(),
             delivery: Default::default(),
-            outcomes: prebindgen_flat::Outcomes {
+            outcomes: prebindgen_conversions::Outcomes {
                 success: WireNode::Leaf(vec![Wire {
                     name: w.clone(),
                     kind: JniWire::NativeBuffer { text },
@@ -1050,7 +1051,7 @@ pub(crate) fn emit<I: KotlinInputConversion, O: KotlinOutputConversion>(
     let mut catalogue = BTreeMap::new();
     let prefix = &flat.metadata.package;
     let mut writers = BTreeMap::new();
-    for (input, node) in crate::metadata::nodes(flat) {
+    for (input, node) in crate::metadata::nodes(flat)? {
         records(node, &mut catalogue)?;
         input_writers(node, input, prefix, &mut writers)?;
     }

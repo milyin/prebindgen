@@ -1,7 +1,7 @@
 //! Declaration compilation operations implemented by a language adapter.
 use super::*;
 
-/// Interpret adapter-specific trees into the fixed schema’s parameter/result slots.
+/// Compile adapter-specific conversion trees against source facts in the selected schema.
 /// Adapters select their operation vocabularies and dispatch to concrete helpers.
 /// Optional features reject unsupported work or decline a specialization.
 /// All operations run during generation; the returned fragments run in the library.
@@ -78,13 +78,14 @@ pub trait Codec {
         cx.output(ty, tree, extra, value, borrowed)
     }
 
-    /// Fixed converter and declaration metadata types, selected before parsing.
-    type Schema: Schema<
-        Input: prebindgen_flat::InputConversion + From<CodecInputPlan<Self>>,
-        Output: prebindgen_flat::OutputConversion + From<CodecOutputPlan<Self>>,
-    >;
+    /// Source attachment types read by conversion hooks; independent of Input and Output.
+    type Schema: Schema;
+    /// Prepared conversion for a function parameter.
+    type Input: prebindgen_conversions::InputConversion + From<CodecInputPlan<Self>>;
+    /// Prepared conversion for a function return.
+    type Output: prebindgen_conversions::OutputConversion + From<CodecOutputPlan<Self>>;
     /// Complete description of one foreign wire value.
-    type Wire: prebindgen_flat::WireKind + Clone + std::fmt::Debug;
+    type Wire: prebindgen_conversions::WireKind + Clone + std::fmt::Debug;
     /// Names supplied by the language's Rust wrapper emitter.
     type Context: prebindgen_conversions::TemplateContext + 'static;
     /// Borrowed occurrence settings used while preparing nested conversions.
@@ -285,7 +286,8 @@ pub trait Codec {
     fn binding_failure_layout(
         &self,
         _extra: &Self::Extra,
-    ) -> Result<Option<prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>>> {
+    ) -> Result<Option<prebindgen_conversions::WireNode<Self::Wire, Self::Chain, Self::Branch>>>
+    {
         Ok(None)
     }
 
@@ -306,7 +308,7 @@ pub trait Codec {
     /// path context. Codecs without source-path metadata need no implementation.
     fn prefix_layout(
         &self,
-        _layout: &mut prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
+        _layout: &mut prebindgen_conversions::WireNode<Self::Wire, Self::Chain, Self::Branch>,
         _segment: ComponentSegment,
     ) {
     }

@@ -1,7 +1,7 @@
 //! Function success/error delivery through typed, reusable capture callbacks.
 use super::*;
 use prebindgen_conversions::Delivery;
-use prebindgen_flat::Wire;
+use prebindgen_conversions::Wire;
 
 #[derive(Clone, Debug)]
 pub(crate) enum NativeReturn {
@@ -355,12 +355,8 @@ mod tests {
     #[test]
     fn a_custom_error_delivery_keeps_the_whole_call_on_its_packet_protocol() {
         let mut flat = prepared();
-        let error = flat
-            .function_mut("failed")
-            .unwrap()
+        let error = flat.function_mut("failed").unwrap().metadata[0]
             .metadata
-            .as_mut()
-            .unwrap()
             .error
             .as_mut()
             .unwrap();
@@ -394,12 +390,8 @@ mod tests {
             .package(package!().fun(fun!(rows).callback_return_only()))
             .prepare()
             .unwrap();
-        let error = flat
-            .function_mut("rows_fold")
-            .unwrap()
+        let error = flat.function_mut("rows").unwrap().metadata[0]
             .metadata
-            .as_mut()
-            .unwrap()
             .error
             .as_mut()
             .unwrap();

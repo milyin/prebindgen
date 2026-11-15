@@ -112,7 +112,7 @@ Direct tree construction uses its `prelude` extension traits, for example
 ## Configuration uses concrete adapter trees
 
 `DeclFunction<InTree, OutTree>`, `DeclCallback<InTree, OutTree>` and
-`DeclDefaults<InTree, OutTree>` are generic data containers. They do not select
+`DeclTypeDefaults<InTree, OutTree>` are generic data containers. They do not select
 an operation vocabulary. `DeclJniFunction`, for example, fixes its tree types to
 JNI configuration input/output nodes. Callbacks store output trees for
 their arguments and input trees for their results.
@@ -130,7 +130,7 @@ callbacks instead of a trait describing every supported operation.
 
 | Helper | Shared responsibility | Adapter supplies |
 | --- | --- | --- |
-| `resolve_function` | Validate occurrence overrides and preserve prebound slots | Parameter/result resolution |
+| `ConfiguredCall::from_declaration` / `resolve_call` | Attach local overrides by source position and preserve supplied converters | Parameter/result resolution |
 | `resolve_constructor` | Check constructor signature and resolve arguments | Child resolution and constructor operation |
 | `resolve_getter` | Check borrowed or consuming receiver and select result type | Child resolution |
 | `resolve_record_fields` / `resolve_named_fields` | Check fields and select local/default recipes | Field resolution |
@@ -195,7 +195,7 @@ selectors and getters still apply to the declared type inside containers.
 
 `prepare_value_conversions` borrows declarations. Its shared job is Rust
 conversion validation and registration; the adapter can still read its extension
-settings and apply them to its own metadata. `DeclDefaults` stores only error
+settings and apply them to its own metadata. `DeclTypeDefaults` stores only error
 mapper names. An adapter must apply error extensions to its own Flat metadata
 before registering these mapper defaults.
 Canonical conversion declarations may select opposite directions for one source
@@ -242,17 +242,29 @@ uses the same source helpers as C and JNI.
 
 ## Resolved Flat and compilation
 
-`resolve_bindings` installs resolved adapter trees in
-`Flat<ResolvedSchema<C>>`, where `C` is the compilation codec. The model owns
-source declarations, adapter metadata, compiler settings and resolved standalone
-callback/error recipes. `compile_resolved(flat)` needs no external defaults table.
-Explicitly supplied converters remain authoritative unless explicitly overridden.
+The language builder's `configured()` method returns `Flat<CSchema>` or
+`Flat<JniSchema>`. Every configured export belongs to its original source function;
+type defaults and canonical conversions belong to their source types. No external
+declaration list, builder or defaults inventory is needed after that boundary.
+
+Adapter `resolve(flat)` resolves each `ConfiguredCall` to `ResolvedCall`.
+Adapter `compile(flat)` compiles shared declarations, then each resolved call to
+`PreparedCall`. Both consume Flat and keep its original source owners. The
+binding's state changes; Flat does not interpret it. `prepare(flat)` combines these
+stages. Builder `prepare()` first runs `configured()` and uses the same stages.
 
 The adapter implements `Codec::compile_input_tree` and `compile_output_tree` to
-interpret its operations. Compilation produces `Flat<C::Schema>` for wrapper
-emission. Shared `bind_input` and `bind_output` accept resolved adapter trees;
-the adapters also expose convenience functions of those names that first resolve
-their own configuration with an empty defaults table.
+interpret its own operations. `compile_call` passes the original source signature
+to these operations; `PreparedCall::view` borrows that signature for emission.
+`Codec::Input` / `Output` select compiled converters independently of the schema's
+parameter and return attachments. Multiple exports never require cloned source
+functions. Callback-only delivery compiles only the requested callback export.
+
+Shared `compile_input` / `compile_output` accept resolved adapter trees. The C/JNI
+`bind_input` and `bind_output` conveniences accept their configuration trees.
+For an explicit export, `bind_prepared_input` / `bind_prepared_output` install a
+converter in its configured, resolved or prepared state. Existing converters move
+through resolution and compilation unless explicitly replaced.
 
 `Codec` still selects compiled converter types, physical representations and
 compilation hooks. Narrowing that compilation interface is separate from removing

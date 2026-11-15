@@ -1,8 +1,7 @@
 //! Single-value conversion declarations and preparation into Flat.
 use crate::DeclFunction;
-use prebindgen_flat::{
-    same_type, type_key, Flat, Primitive, Result, Schema, ValueConversion, ValueSource,
-};
+use prebindgen_conversions::{ValueConversion, ValueSource};
+use prebindgen_flat::{same_type, type_key, Flat, Primitive, Result, Schema};
 use syn::Type;
 
 /// Declare a Rust type's canonical single-value representation.
@@ -210,6 +209,8 @@ impl<Extension> DeclConvert<Extension> {
 pub fn prepare_value_conversions<S: Schema, Extension>(
     flat: &mut Flat<S>,
     decls: &[DeclConvert<Extension>],
+    read: impl Fn(&S::Type) -> &prebindgen_conversions::ValueConversions,
+    write: impl Fn(&mut S::Type) -> &mut prebindgen_conversions::ValueConversions,
 ) -> Result<()> {
     let mut selected = std::collections::BTreeMap::new();
     for decl in decls {
@@ -230,7 +231,7 @@ pub fn prepare_value_conversions<S: Schema, Extension>(
         let key = type_key(&ty);
         let pair = selected.entry(key.clone()).or_insert_with(|| {
             flat.type_info(&ty)
-                .map(|i| i.conversion.clone())
+                .map(|i| read(&i.metadata).clone())
                 .unwrap_or_default()
         });
         for (input, source) in [(true, decl.input.as_ref()), (false, decl.output.as_ref())] {
@@ -251,30 +252,38 @@ pub fn prepare_value_conversions<S: Schema, Extension>(
     // is just as recursive as `A -> B -> A`, even when no function uses A.
     fn check<S: Schema>(
         flat: &Flat<S>,
-        selected: &std::collections::BTreeMap<String, prebindgen_flat::ValueConversions>,
+        selected: &std::collections::BTreeMap<String, prebindgen_conversions::ValueConversions>,
         ty: &Type,
         input: bool,
         active: &mut Vec<String>,
+        read: &impl Fn(&S::Type) -> &prebindgen_conversions::ValueConversions,
     ) -> Result<()> {
         let key = type_key(ty);
         let pair = selected
             .get(&key)
             .cloned()
-            .or_else(|| flat.type_info(ty).ok().map(|i| i.conversion.clone()));
+            .or_else(|| flat.type_info(ty).ok().map(|i| read(&i.metadata).clone()));
         if let Some(conversion) = pair.and_then(|p| if input { p.input } else { p.output }) {
             if active.contains(&key) {
                 return Err(format!("recursive canonical conversion `{key}`"));
             }
             active.push(key);
-            check(flat, selected, &conversion.representation, input, active)?;
+            check(
+                flat,
+                selected,
+                &conversion.representation,
+                input,
+                active,
+                read,
+            )?;
             active.pop();
         } else if let Some(inner) = prebindgen_flat::option_inner(ty) {
-            check(flat, selected, inner, input, active)?;
+            check(flat, selected, inner, input, active, read)?;
         } else if let Some((inner, _)) = prebindgen_flat::sequence_parts(ty) {
-            check(flat, selected, inner, input, active)?;
+            check(flat, selected, inner, input, active, read)?;
         } else if !input {
             if let Some(inner) = crate::output_referent(ty) {
-                check(flat, selected, inner, input, active)?;
+                check(flat, selected, inner, input, active, read)?;
             }
         }
         Ok(())
@@ -282,12 +291,12 @@ pub fn prepare_value_conversions<S: Schema, Extension>(
     for key in selected.keys() {
         for input in [true, false] {
             let ty = syn::parse_str(key).map_err(|e| format!("conversion type: {e}"))?;
-            check(flat, &selected, &ty, input, &mut Vec::new())?;
+            check(flat, &selected, &ty, input, &mut Vec::new(), &read)?;
         }
     }
     for (key, pair) in selected {
         let ty = syn::parse_str(&key).map_err(|e| format!("conversion type: {e}"))?;
-        flat.type_info_mut(&ty)?.conversion = pair;
+        *write(&mut flat.type_info_mut(&ty)?.metadata) = pair;
     }
     Ok(())
 }

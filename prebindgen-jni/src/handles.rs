@@ -1,7 +1,7 @@
 //! Prepare handle inputs once for alias validation and globally ordered locking.
 use super::*;
 use crate::kotlin::{JniNode, KotlinHandleInput};
-use prebindgen_flat::WireNode;
+use prebindgen_conversions::WireNode;
 
 /// Stable across declaration order and unrelated additions. Collisions are
 /// diagnosed by generate rather than weakening resource separation at runtime.
@@ -22,7 +22,7 @@ pub(crate) fn key(handle: &BoxedWire) -> (String, u8) {
 /// patch walk, and the enclosing Kotlin call; no runtime type lookup is needed.
 pub(crate) fn kinds(node: &JniNode) -> Vec<BoxedWire> {
     let mut kinds = BTreeMap::new();
-    for wire in prebindgen_flat::wire_definitions(std::iter::once(node)) {
+    for wire in prebindgen_conversions::wire_definitions(std::iter::once(node)) {
         if let JniWire::Handle { handle, .. } = &wire.kind {
             kinds
                 .entry(key(handle))
@@ -369,7 +369,7 @@ impl HandleLocks {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use prebindgen_flat::Wire;
+    use prebindgen_conversions::Wire;
 
     fn handle(name: &str, ty: syn::Type) -> Wire<JniWire> {
         Wire {
@@ -441,7 +441,7 @@ mod tests {
 #[cfg(test)]
 mod preflight_tests {
     use super::*;
-    use prebindgen_flat::Wire;
+    use prebindgen_conversions::Wire;
 
     #[test]
     fn retained_handle_metadata_must_cover_the_wires() {

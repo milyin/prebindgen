@@ -19,7 +19,7 @@ pub fn source_items<'a>(
                 operation: CInputUnary::Convert { conversion },
                 ..
             } => {
-                if let prebindgen_flat::ValueSource::Function(name) = &conversion.source {
+                if let prebindgen_conversions::ValueSource::Function(name) = &conversion.source {
                     names.push(name.clone())
                 }
             }
@@ -42,7 +42,7 @@ pub fn source_items<'a>(
                 operation: COutputUnary::Convert { conversion },
                 ..
             } => {
-                if let prebindgen_flat::ValueSource::Function(name) = &conversion.source {
+                if let prebindgen_conversions::ValueSource::Function(name) = &conversion.source {
                     names.push(name.clone())
                 }
             }

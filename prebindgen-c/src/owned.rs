@@ -35,12 +35,12 @@ pub(crate) fn referent(ty: &syn::Type) -> &syn::Type {
     }
 }
 pub(crate) fn declaration(flat: &CBindings, ty: &syn::Type) -> Option<Rc<COwned>> {
-    flat.type_info(referent(ty)).ok()?.metadata.owned.clone()
+    flat.type_info(referent(ty)).ok()?.metadata.owned().cloned()
 }
 pub(crate) fn pointer_declared(flat: &CBindings, ty: &syn::Type) -> bool {
     flat.type_info(referent(ty))
         .ok()
-        .is_some_and(|t| t.metadata.pointer.is_some())
+        .is_some_and(|t| t.metadata.pointer().is_some())
 }
 pub(crate) fn native_input(flat: &CBindings, ty: &syn::Type) -> bool {
     pointer_declared(flat, ty) || declaration(flat, ty).is_some_and(|o| o.explicit)
@@ -85,8 +85,8 @@ pub(crate) fn output(
         fallible: false,
         context: Default::default(),
         delivery: Default::default(),
-        outcomes: prebindgen_flat::Outcomes {
-            success: prebindgen_flat::WireNode::Leaf(vec![Wire {
+        outcomes: prebindgen_conversions::Outcomes {
+            success: prebindgen_conversions::WireNode::Leaf(vec![Wire {
                 name: wire.clone(),
                 kind: CWire::Owned {
                     owner,
@@ -119,8 +119,8 @@ pub(crate) fn borrowed(
         fallible: false,
         context: Default::default(),
         delivery: Default::default(),
-        outcomes: prebindgen_flat::Outcomes {
-            success: prebindgen_flat::WireNode::Leaf(vec![Wire {
+        outcomes: prebindgen_conversions::Outcomes {
+            success: prebindgen_conversions::WireNode::Leaf(vec![Wire {
                 name: wire.clone(),
                 kind: CWire::Owned {
                     owner,
@@ -201,7 +201,7 @@ pub(crate) fn input(
         quote!(#storage let #pointer=#ptr;#prepare_empty)
     };
     let plan = CInputPlan::new(
-        prebindgen_flat::WireNode::Leaf(vec![Wire {
+        prebindgen_conversions::WireNode::Leaf(vec![Wire {
             name: wire,
             kind: CWire::Owned {
                 owner,
@@ -304,7 +304,7 @@ pub(crate) fn accessors(flat: &mut CBindings) -> Result<()> {
     let owners: Vec<_> = flat
         .types
         .values()
-        .filter_map(|t| t.metadata.owned.clone())
+        .filter_map(|t| t.metadata.owned().cloned())
         .collect();
     for owner in owners {
         if !std_owner(&owner.ty) {
@@ -355,32 +355,34 @@ pub(crate) fn accessors(flat: &mut CBindings) -> Result<()> {
             flat.functions.insert(
                 name.to_string(),
                 prebindgen_flat::Function {
-                    metadata: None,
+                    metadata: crate::CFunctionData {
+                        bindings: Vec::new(),
+                        helper: Some(crate::metadata::RustHelper {
+                            attributes: function.attrs,
+                            body: function.block,
+                        }),
+                    },
                     name: name.clone(),
                     path: syn::parse_quote!(#name),
                     params: vec![prebindgen_flat::Param {
                         name: syn::parse_quote!(value),
                         ty: prebindgen_flat::TypeUse {
                             ty: receiver,
-                            slot: None,
+                            slot: (),
                         },
                     }],
-                    ret: prebindgen_flat::TypeUse {
-                        ty: ret,
-                        slot: None,
-                    },
+                    ret: prebindgen_flat::TypeUse { ty: ret, slot: () },
                     location: Default::default(),
                 },
             );
-            flat.metadata.helpers.push(function);
         }
     }
     Ok(())
 }
-pub(crate) fn emit_accessors(
+pub(crate) fn emit_accessors<R, E, P>(
     owner: &COwned,
     prefix: &str,
-    types: &std::collections::BTreeMap<String, prebindgen_flat::TypeInfo<CType>>,
+    types: &std::collections::BTreeMap<String, prebindgen_flat::TypeInfo<CType, (), (), R, E, P>>,
     symbols: &mut std::collections::BTreeSet<String>,
     tokens: &mut TokenStream,
     header: &mut String,
@@ -439,9 +441,8 @@ pub(crate) fn emit_accessors(
             .find(|t| prebindgen_flat::same_type(&t.ty, element))
             .and_then(|t| {
                 t.metadata
-                    .pointer
-                    .as_ref()
-                    .or_else(|| t.metadata.owned.as_ref().map(|o| &o.name))
+                    .pointer()
+                    .or_else(|| t.metadata.owned().map(|o| &o.name))
             });
         let c_element = if let Some(name) = declared {
             format!("{prefix}_{name}")
@@ -515,7 +516,7 @@ mod tests {
             request.role = prebindgen_declarations::InputRole::CallbackResult;
             let plan = CCodec::declared().input_leaf(request).unwrap();
             assert!(
-                matches!(&plan.node,prebindgen_flat::WireNode::Leaf(w) if matches!(&w[0].kind,CWire::Owned{by_value:false,..}))
+                matches!(&plan.node,prebindgen_conversions::WireNode::Leaf(w) if matches!(&w[0].kind,CWire::Owned{by_value:false,..}))
             );
             assert!(input(
                 owner.clone(),
@@ -537,10 +538,10 @@ mod tests {
             .panic()
             .prepare()
             .unwrap();
-        let native = model.function("f").unwrap().ret.slot.as_ref().unwrap();
+        let native = test_output(&model, "f");
         assert!(group::result_packet_fields(&native.outcomes.success)
             .any(|w| matches!(w.kind, CWire::Owned { by_value: true, .. })));
-        let visitor = model.function("f_each").unwrap().ret.slot.as_ref().unwrap();
+        let visitor = test_output(&model, "f_each");
         assert!(sequence::callback_delivery(&visitor.outcomes.success).unwrap());
         let generated = generate(&model).unwrap();
         syn::parse_file(&generated.rust).unwrap();

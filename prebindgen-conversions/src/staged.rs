@@ -1,8 +1,9 @@
 //! Optional expression protocol for stored plans used by the C and JNI adapters.
 //! Scoped requests keep prepared temporaries alive while evaluating a continuation.
 //! Other generators can define entirely different request enums.
+use crate::{Conversion, WireKind};
 use crate::{InputPlan, OutputPlan, TemplateContext};
-use prebindgen_flat::{Conversion, Function, Result, WireKind};
+use prebindgen_flat::Result;
 use proc_macro2::TokenStream;
 use quote::quote;
 
@@ -142,8 +143,8 @@ impl<W: WireKind, C: TemplateContext + 'static, N, B> OutputPlan<W, C, N, B> {
 ///
 /// Adapters establish their boundary receipt before entering this expression.
 /// Other generators may compose their own request protocols outside Flat.
-pub fn emit_call<I, O, C: TemplateContext + 'static, M>(
-    function: &Function<I, O, M>,
+pub fn emit_call<I, O, C: TemplateContext + 'static, F: crate::FunctionConversions<I, O>>(
+    function: &F,
     context: &C,
     source: &syn::Ident,
     result_type: &syn::Type,
@@ -158,7 +159,7 @@ where
     let unit = syn::parse_quote!(());
     let expected = syn::parse_quote!(::core::result::Result<#result_type, ::std::string::String>);
     let continuation = crate::template_parameter("continuation");
-    let path = &function.path;
+    let path = function.source_path();
     let prepare = output.code_fragment_slot(
         OutputFragment::Prepare {
             context,
@@ -289,17 +290,17 @@ fn reserve(code: &TokenStream, used: &mut std::collections::BTreeSet<String>) {
     }
 }
 
-impl<W: WireKind, C: TemplateContext + 'static, N, B> prebindgen_flat::InputConversion
+impl<W: WireKind, C: TemplateContext + 'static, N, B> crate::InputConversion
     for InputPlan<W, C, N, B>
 {
-    fn input_node(&self) -> &prebindgen_flat::WireNode<W, N, B> {
+    fn input_node(&self) -> &crate::WireNode<W, N, B> {
         &self.node
     }
 }
-impl<W: WireKind, C: TemplateContext + 'static, N, B> prebindgen_flat::OutputConversion
+impl<W: WireKind, C: TemplateContext + 'static, N, B> crate::OutputConversion
     for OutputPlan<W, C, N, B>
 {
-    fn output_outcomes(&self) -> &prebindgen_flat::Outcomes<prebindgen_flat::WireNode<W, N, B>> {
+    fn output_outcomes(&self) -> &crate::Outcomes<crate::WireNode<W, N, B>> {
         &self.outcomes
     }
 }

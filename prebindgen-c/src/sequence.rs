@@ -2,7 +2,7 @@
 use super::*;
 use prebindgen_declarations::{SequenceInput, SequenceOutput};
 
-use prebindgen_flat::WireNode;
+use prebindgen_conversions::WireNode;
 
 /// Selected delivery of a logical sequence.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -28,7 +28,7 @@ pub(crate) fn input(
     wire: syn::Ident,
     length: syn::Ident,
     index: syn::Ident,
-    element: &prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>,
+    element: &prebindgen_conversions::WireNode<CWire, crate::CChain, crate::CBranch>,
 ) -> Result<SequenceInput<CWire, crate::CChain>> {
     let row = prebindgen_conversions::template_parameter(&format!("row_{wire}"));
     let data = format_ident!("{wire}_data");
@@ -41,7 +41,7 @@ pub(crate) fn input(
         values.push((field.name.clone(), quote!(#name)));
     }
     Ok(SequenceInput {
-        controls: vec![prebindgen_flat::Wire {
+        controls: vec![prebindgen_conversions::Wire {
             name: wire.clone(),
             kind: CWire::Rows,
         }],
@@ -55,7 +55,7 @@ pub(crate) fn input(
 pub(crate) fn output(
     wire: syn::Ident,
     length: syn::Ident,
-    element: &prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>,
+    element: &prebindgen_conversions::WireNode<CWire, crate::CChain, crate::CBranch>,
     values: &[(syn::Ident, TokenStream)],
 ) -> Result<SequenceOutput<CWire, crate::CChain>> {
     let row = prebindgen_conversions::template_parameter(&format!("row_{wire}"));
@@ -82,7 +82,7 @@ pub(crate) fn output(
             quote!(#field:#value)
         });
     Ok(SequenceOutput {
-        controls: vec![prebindgen_flat::Wire {
+        controls: vec![prebindgen_conversions::Wire {
             name: wire.clone(),
             kind: CWire::Rows,
         }],
@@ -114,10 +114,10 @@ pub(crate) fn output(
 /// Visit every sequence, including callback elements that need C declaration checks.
 /// Nested schemas precede their parents so generated row types can refer to them.
 pub(crate) fn schemas<'a>(
-    node: &'a prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>,
+    node: &'a prebindgen_conversions::WireNode<CWire, crate::CChain, crate::CBranch>,
     out: &mut Vec<(
-        &'a prebindgen_flat::Wire<CWire>,
-        &'a prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>,
+        &'a prebindgen_conversions::Wire<CWire>,
+        &'a prebindgen_conversions::WireNode<CWire, crate::CChain, crate::CBranch>,
         &'a CSequence,
     )>,
 ) {
@@ -156,16 +156,19 @@ pub(crate) fn schemas<'a>(
     }
 }
 #[allow(clippy::type_complexity, clippy::too_many_arguments)]
-pub(crate) fn emit_schemas(
+pub(crate) fn emit_schemas<R, E, P>(
     schemas: Vec<(
-        &prebindgen_flat::Wire<CWire>,
-        &prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>,
+        &prebindgen_conversions::Wire<CWire>,
+        &prebindgen_conversions::WireNode<CWire, crate::CChain, crate::CBranch>,
         &CSequence,
     )>,
     output_carriers: &std::collections::BTreeSet<String>,
     context: &CContext,
     prefix: &str,
-    pointers: &std::collections::BTreeMap<String, prebindgen_flat::TypeInfo<CType>>,
+    pointers: &std::collections::BTreeMap<
+        String,
+        prebindgen_flat::TypeInfo<CType, (), (), R, E, P>,
+    >,
     symbols: &mut std::collections::BTreeSet<String>,
     tokens: &mut TokenStream,
     header: &mut String,
@@ -225,7 +228,7 @@ pub(crate) fn emit_schemas(
 
 /// Reclaim a committed output that will not reach its caller, including nested rows.
 pub(crate) fn release(
-    layout: &prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>,
+    layout: &prebindgen_conversions::WireNode<CWire, crate::CChain, crate::CBranch>,
     fields: &[(&Wire, TokenStream)],
     context: &CContext,
     catch_panics: bool,
@@ -245,7 +248,7 @@ pub(crate) fn release(
 // The same schema destruction is used before delivery (row-type placeholders)
 // and after delivery (resolved wrapper context), including nested collections.
 pub(crate) fn release_fields(
-    layout: &prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>,
+    layout: &prebindgen_conversions::WireNode<CWire, crate::CChain, crate::CBranch>,
     fields: &[(&Wire, TokenStream)],
     conditions: &[(&Wire, TokenStream)],
     row_type: &impl Fn(&Wire) -> TokenStream,
@@ -302,7 +305,7 @@ pub(crate) fn release_fields(
 pub(crate) fn callback_output(
     wire: syn::Ident,
     values: &[(syn::Ident, TokenStream)],
-    element: &prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>,
+    element: &prebindgen_conversions::WireNode<CWire, crate::CChain, crate::CBranch>,
     length: syn::Ident,
 ) -> Result<SequenceOutput<CWire, crate::CChain>> {
     let values = prebindgen_conversions::match_output_fields(
@@ -318,7 +321,7 @@ pub(crate) fn callback_output(
         .map(|(name, (_, value))| quote!(let #name=#value;));
     let commit = prebindgen_conversions::template_parameter("commit_element");
     Ok(SequenceOutput {
-        controls: vec![prebindgen_flat::Wire {
+        controls: vec![prebindgen_conversions::Wire {
             name: wire.clone(),
             kind: CWire::scalar(Primitive::Usize),
         }],
@@ -336,7 +339,7 @@ pub(crate) fn callback_output(
 
 /// A visitor may replace exactly one collection, optionally with its presence flag.
 pub(crate) fn callback_shape(
-    node: &prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>,
+    node: &prebindgen_conversions::WireNode<CWire, crate::CChain, crate::CBranch>,
 ) -> bool {
     match node {
         WireNode::Chain {
@@ -362,10 +365,10 @@ pub(crate) fn callback_shape(
 /// The adapter selects its native scope before looking for a sequence.
 #[allow(clippy::type_complexity)]
 pub(crate) fn return_sequence(
-    layout: &prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>,
+    layout: &prebindgen_conversions::WireNode<CWire, crate::CChain, crate::CBranch>,
 ) -> Option<(
-    &prebindgen_flat::Wire<CWire>,
-    &prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>,
+    &prebindgen_conversions::Wire<CWire>,
+    &prebindgen_conversions::WireNode<CWire, crate::CChain, crate::CBranch>,
     &CSequence,
 )> {
     outer_sequences(layout)
@@ -377,7 +380,7 @@ pub(crate) fn return_sequence(
         })
 }
 pub(crate) fn callback_target(
-    layout: &prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>,
+    layout: &prebindgen_conversions::WireNode<CWire, crate::CChain, crate::CBranch>,
 ) -> Result<syn::Ident> {
     if outer_sequences(layout).len() != 1 || crate::group::result_packet_fields(layout).len() > 2 {
         return Err(
@@ -391,7 +394,7 @@ pub(crate) fn callback_target(
 
 /// Whether the successful return uses the function's sequence callback.
 pub(crate) fn callback_delivery(
-    node: &prebindgen_flat::WireNode<CWire, CChain, CBranch>,
+    node: &prebindgen_conversions::WireNode<CWire, CChain, CBranch>,
 ) -> Result<bool> {
     let sequences = outer_sequences(node);
     if !sequences
@@ -409,11 +412,11 @@ pub(crate) fn callback_delivery(
 
 /// Function sequence callbacks are not available in parameters, error channels or rows.
 pub(crate) fn validate_buffered(
-    node: &prebindgen_flat::WireNode<CWire, CChain, CBranch>,
+    node: &prebindgen_conversions::WireNode<CWire, CChain, CBranch>,
 ) -> Result<()> {
     match node {
-        prebindgen_flat::WireNode::Leaf(_) => {}
-        prebindgen_flat::WireNode::Chain {
+        prebindgen_conversions::WireNode::Leaf(_) => {}
+        prebindgen_conversions::WireNode::Chain {
             child: element,
             meta: CChain::Sequence(metadata),
             ..
@@ -426,17 +429,17 @@ pub(crate) fn validate_buffered(
             }
             validate_buffered(element)?;
         }
-        prebindgen_flat::WireNode::Chain {
+        prebindgen_conversions::WireNode::Chain {
             meta: CChain::Optional(_) | CChain::Tagged(_),
             child: element,
             ..
         } => validate_buffered(element)?,
-        prebindgen_flat::WireNode::Branch {
+        prebindgen_conversions::WireNode::Branch {
             meta: CBranch::Group(_),
             children: elements,
             ..
         }
-        | prebindgen_flat::WireNode::Branch {
+        | prebindgen_conversions::WireNode::Branch {
             meta: CBranch::Alternatives | CBranch::Enum(_),
             children: elements,
             ..
@@ -452,21 +455,21 @@ pub(crate) fn validate_buffered(
 // A sequence owns a separate row scope: find the outer occurrences only.
 #[allow(clippy::type_complexity)] // Borrow the element schema, controls and delivery policy together.
 fn outer_sequences(
-    node: &prebindgen_flat::WireNode<CWire, CChain, CBranch>,
+    node: &prebindgen_conversions::WireNode<CWire, CChain, CBranch>,
 ) -> Vec<(
-    &prebindgen_flat::WireNode<CWire, CChain, CBranch>,
-    &[prebindgen_flat::Wire<CWire>],
+    &prebindgen_conversions::WireNode<CWire, CChain, CBranch>,
+    &[prebindgen_conversions::Wire<CWire>],
     &CSequence,
 )> {
     fn visit<'a>(
-        node: &'a prebindgen_flat::WireNode<CWire, CChain, CBranch>,
+        node: &'a prebindgen_conversions::WireNode<CWire, CChain, CBranch>,
         out: &mut Vec<(
-            &'a prebindgen_flat::WireNode<CWire, CChain, CBranch>,
-            &'a [prebindgen_flat::Wire<CWire>],
+            &'a prebindgen_conversions::WireNode<CWire, CChain, CBranch>,
+            &'a [prebindgen_conversions::Wire<CWire>],
             &'a CSequence,
         )>,
     ) {
-        use prebindgen_flat::WireNode;
+        use prebindgen_conversions::WireNode;
         match node {
             WireNode::Chain {
                 meta: CChain::Sequence(meta),
@@ -553,8 +556,8 @@ fn release_condition(
 #[cfg(test)]
 mod delivery_tests {
     use super::*;
-    fn leaf() -> prebindgen_flat::WireNode<CWire, CChain, CBranch> {
-        WireNode::Leaf(vec![prebindgen_flat::Wire {
+    fn leaf() -> prebindgen_conversions::WireNode<CWire, CChain, CBranch> {
+        WireNode::Leaf(vec![prebindgen_conversions::Wire {
             name: syn::parse_quote!(element),
             kind: CWire::scalar(Primitive::I32),
         }])
@@ -562,14 +565,14 @@ mod delivery_tests {
     fn sequence(
         delivery: CSequence,
         name: &str,
-        element: prebindgen_flat::WireNode<CWire, CChain, CBranch>,
-    ) -> prebindgen_flat::WireNode<CWire, CChain, CBranch> {
+        element: prebindgen_conversions::WireNode<CWire, CChain, CBranch>,
+    ) -> prebindgen_conversions::WireNode<CWire, CChain, CBranch> {
         let kind = match delivery {
             CSequence::Buffered => CWire::Rows,
             CSequence::Callback => CWire::scalar(Primitive::Usize),
         };
         WireNode::Chain {
-            controls: vec![prebindgen_flat::Wire {
+            controls: vec![prebindgen_conversions::Wire {
                 name: syn::parse_str(name).unwrap(),
                 kind,
             }],

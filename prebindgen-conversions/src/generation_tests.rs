@@ -2,7 +2,8 @@
 use super::*;
 use crate::staged::emit_call;
 use prebindgen_flat::Result;
-use prebindgen_flat::{Conversion, Wire, WireKind};
+
+use crate::{Conversion, Wire, WireKind};
 type Flat<W = syn::Type, C = ()> = prebindgen_flat::Flat<crate::PlanSchema<W, C>>;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
@@ -40,8 +41,8 @@ impl Output {
                 statements: quote!(log("deliver"); if fail_delivery { return Err("delivery".into()); }),
                 result: source_result_expr(),
             },
-            outcomes: prebindgen_flat::Outcomes {
-                success: prebindgen_flat::WireNode::Leaf(vec![Wire {
+            outcomes: crate::Outcomes {
+                success: crate::WireNode::Leaf(vec![Wire {
                     name: syn::parse_quote!(out),
                     kind: syn::parse_quote!(i32),
                 }]),
@@ -258,8 +259,8 @@ fn record_model() -> Flat {
         context: Default::default(),
         delivery: Default::default(),
         // Slot code owns field projection; callers only see ordered carriers and values.
-        outcomes: prebindgen_flat::Outcomes {
-            success: prebindgen_flat::WireNode::Leaf(
+        outcomes: crate::Outcomes {
+            success: crate::WireNode::Leaf(
                 ["y", "x"]
                     .into_iter()
                     .map(|name| Wire {
@@ -327,11 +328,11 @@ fn partial_projection_is_self_contained() {
         .slot
         .as_mut()
         .unwrap();
-    let retained = prebindgen_flat::wire_definitions(std::iter::once(&output.outcomes.success))
+    let retained = crate::wire_definitions(std::iter::once(&output.outcomes.success))
         .next()
         .unwrap()
         .clone();
-    output.outcomes.success = prebindgen_flat::WireNode::Leaf(vec![retained]);
+    output.outcomes.success = crate::WireNode::Leaf(vec![retained]);
     output.values.pop();
     assert_eq!(
         test_return_packet(flat.function("point").unwrap(), &(), &source_binding())
@@ -351,12 +352,12 @@ fn several_physical_wires_may_supply_one_component() {
         .slot
         .as_mut()
         .unwrap();
-    let mut extra = prebindgen_flat::wire_definitions(std::iter::once(&output.outcomes.success))
+    let mut extra = crate::wire_definitions(std::iter::once(&output.outcomes.success))
         .next()
         .unwrap()
         .clone();
     extra.name = syn::parse_quote!(additional_wire);
-    let prebindgen_flat::WireNode::Leaf(wires) = &mut output.outcomes.success else {
+    let crate::WireNode::Leaf(wires) = &mut output.outcomes.success else {
         panic!()
     };
     wires.push(extra);
@@ -425,7 +426,7 @@ fn function_accessors_borrow_non_clone_wire_metadata() {
         let acquire = quote!();
         let statements = quote!();
         let mut plan = InputPlan::new(
-            prebindgen_flat::WireNode::Leaf(vec![wire()]),
+            crate::WireNode::Leaf(vec![wire()]),
             quote!(#validation #acquire #statements),
             quote!(x),
         );
@@ -435,8 +436,8 @@ fn function_accessors_borrow_non_clone_wire_metadata() {
     f.ret.slot = Some(OutputPlan {
         fallible: false,
         context: Default::default(),
-        outcomes: prebindgen_flat::Outcomes {
-            success: prebindgen_flat::WireNode::Leaf(vec![wire()]),
+        outcomes: crate::Outcomes {
+            success: crate::WireNode::Leaf(vec![wire()]),
             source_error: None,
             binding_failure: None,
         },
@@ -453,19 +454,15 @@ fn function_accessors_borrow_non_clone_wire_metadata() {
     let f = flat.function("echo").unwrap();
     assert!(std::ptr::eq(
         call.input_wire_definitions().unwrap().next().unwrap(),
-        prebindgen_flat::wire_definitions(std::iter::once(
-            &f.params[0].ty.slot.as_ref().unwrap().node
-        ))
-        .next()
-        .expect("logical wire index out of range")
+        crate::wire_definitions(std::iter::once(&f.params[0].ty.slot.as_ref().unwrap().node))
+            .next()
+            .expect("logical wire index out of range")
     ));
     assert!(std::ptr::eq(
         test_parameters(call).unwrap().next().unwrap(),
-        prebindgen_flat::wire_definitions(std::iter::once(
-            &f.params[0].ty.slot.as_ref().unwrap().node
-        ))
-        .next()
-        .expect("logical wire index out of range")
+        crate::wire_definitions(std::iter::once(&f.params[0].ty.slot.as_ref().unwrap().node))
+            .next()
+            .expect("logical wire index out of range")
     ));
     assert!(std::ptr::eq(
         test_return_packet(call, &(), &source_binding())
@@ -473,7 +470,7 @@ fn function_accessors_borrow_non_clone_wire_metadata() {
             .next()
             .unwrap()
             .wire,
-        prebindgen_flat::wire_definitions(std::iter::once(
+        crate::wire_definitions(std::iter::once(
             &f.ret.slot.as_ref().unwrap().outcomes.success
         ))
         .next()
@@ -575,7 +572,7 @@ fn the_same_slots_execute_with_two_explicit_wrapper_environments() {
         let acquire = quote!();
         let statements = quote!(let converted = incoming + #env;);
         let mut plan = InputPlan::new(
-            prebindgen_flat::WireNode::Leaf(vec![wire()]),
+            crate::WireNode::Leaf(vec![wire()]),
             quote!(#validation #acquire #statements),
             quote!(converted),
         );
@@ -585,8 +582,8 @@ fn the_same_slots_execute_with_two_explicit_wrapper_environments() {
     function.ret.slot = Some(OutputPlan {
         fallible: false,
         context: Default::default(),
-        outcomes: prebindgen_flat::Outcomes {
-            success: prebindgen_flat::WireNode::Leaf(vec![wire()]),
+        outcomes: crate::Outcomes {
+            success: crate::WireNode::Leaf(vec![wire()]),
             source_error: None,
             binding_failure: None,
         },
@@ -708,7 +705,7 @@ fn caller_targets_avoid_surrounding_bindings_and_keep_borrowed_storage_alive() {
         let acquire = quote!();
         let statements = quote!(let storage = String::from("abc"););
         let mut plan = InputPlan::new(
-            prebindgen_flat::WireNode::Leaf(vec![Wire {
+            crate::WireNode::Leaf(vec![Wire {
                 name: syn::parse_quote!(__prebindgen_argument_0),
                 kind: syn::parse_quote!(usize),
             }]),
@@ -722,7 +719,7 @@ fn caller_targets_avoid_surrounding_bindings_and_keep_borrowed_storage_alive() {
     function.ret.slot = Some(OutputPlan {
         fallible: false,
         context: Default::default(),
-        outcomes: prebindgen_flat::Outcomes {
+        outcomes: crate::Outcomes {
             success: Default::default(),
             source_error: None,
             binding_failure: None,
@@ -794,23 +791,23 @@ fn caller_targets_avoid_surrounding_bindings_and_keep_borrowed_storage_alive() {
 }
 
 #[derive(Debug)]
-struct TestPacketValue<'a, W: prebindgen_flat::WireKind> {
+struct TestPacketValue<'a, W: crate::WireKind> {
     wire: &'a Wire<W>,
     value: TokenStream,
 }
 fn test_return_packet<
     'a,
-    W: prebindgen_flat::WireKind,
-    I: prebindgen_flat::Conversion,
+    W: crate::WireKind,
+    I: crate::Conversion,
     C: crate::TemplateContext + 'static,
 >(
-    f: &'a prebindgen_flat::Function<I, OutputPlan<W, C>>,
+    f: &'a prebindgen_flat::Function<Option<I>, Option<OutputPlan<W, C>>>,
     context: &C,
     source: &syn::Ident,
 ) -> prebindgen_flat::Result<std::vec::IntoIter<TestPacketValue<'a, W>>> {
     let plan = f.output_conversion()?;
     crate::match_output_fields(
-        prebindgen_flat::wire_definitions(std::iter::once(&plan.outcomes.success)),
+        crate::wire_definitions(std::iter::once(&plan.outcomes.success)),
         &plan.values,
     )?
     .into_iter()
@@ -823,17 +820,17 @@ fn test_return_packet<
     .collect::<prebindgen_flat::Result<Vec<_>>>()
     .map(Vec::into_iter)
 }
-fn test_parameters<I: prebindgen_flat::InputConversion, O: prebindgen_flat::Conversion>(
-    f: &prebindgen_flat::Function<I, O>,
+fn test_parameters<I: crate::InputConversion, O: crate::Conversion>(
+    f: &prebindgen_flat::Function<Option<I>, Option<O>>,
 ) -> prebindgen_flat::Result<std::vec::IntoIter<&Wire<I::Wire>>> {
     Ok(f.input_conversions()?
         .into_iter()
-        .flat_map(|p| prebindgen_flat::wire_definitions(std::iter::once(p.input_node())))
+        .flat_map(|p| crate::wire_definitions(std::iter::once(p.input_node())))
         .collect::<Vec<_>>()
         .into_iter())
 }
-fn test_parameter_names<I: prebindgen_flat::InputConversion, O: prebindgen_flat::Conversion>(
-    f: &prebindgen_flat::Function<I, O>,
+fn test_parameter_names<I: crate::InputConversion, O: crate::Conversion>(
+    f: &prebindgen_flat::Function<Option<I>, Option<O>>,
 ) -> Vec<syn::Ident> {
     test_parameters(f)
         .map(|wires| wires.map(|w| w.name.clone()).collect())
@@ -851,7 +848,7 @@ fn result_fields_match_named_expressions_independently_of_binding_order() {
         .clone();
     plan.values.reverse();
     let matched = crate::match_output_fields(
-        prebindgen_flat::wire_definitions(std::iter::once(&plan.outcomes.success)),
+        crate::wire_definitions(std::iter::once(&plan.outcomes.success)),
         &plan.values,
     )
     .unwrap();
@@ -861,7 +858,7 @@ fn result_fields_match_named_expressions_independently_of_binding_order() {
     let mut broken = plan.values.clone();
     broken.pop();
     assert!(crate::match_output_fields(
-        prebindgen_flat::wire_definitions(std::iter::once(&plan.outcomes.success)),
+        crate::wire_definitions(std::iter::once(&plan.outcomes.success)),
         &broken
     )
     .unwrap_err()
@@ -869,7 +866,7 @@ fn result_fields_match_named_expressions_independently_of_binding_order() {
     broken = plan.values.clone();
     broken.push((syn::parse_quote!(unknown), quote!(0)));
     assert!(crate::match_output_fields(
-        prebindgen_flat::wire_definitions(std::iter::once(&plan.outcomes.success)),
+        crate::wire_definitions(std::iter::once(&plan.outcomes.success)),
         &broken
     )
     .unwrap_err()
@@ -877,7 +874,7 @@ fn result_fields_match_named_expressions_independently_of_binding_order() {
     broken = plan.values.clone();
     broken.push(broken[0].clone());
     assert!(crate::match_output_fields(
-        prebindgen_flat::wire_definitions(std::iter::once(&plan.outcomes.success)),
+        crate::wire_definitions(std::iter::once(&plan.outcomes.success)),
         &broken
     )
     .unwrap_err()

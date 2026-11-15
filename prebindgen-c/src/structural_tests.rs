@@ -61,8 +61,8 @@ fn flat(source: &str) -> CBindings {
 }
 #[test]
 fn mismatched_names_and_children_are_rejected_before_conversion() {
-    let flat = flat("pub struct Row {pub value:i64}pub fn rows()->Row{}");
-    let defaults = DeclCDefaults::new(&flat, vec![], vec![], vec![]).unwrap();
+    let mut flat = flat("pub struct Row {pub value:i64}pub fn rows()->Row{}");
+    let defaults = CSourceResolver::new(&mut flat, vec![], vec![], vec![]).unwrap();
     let tree = OutputNode::Branch {
         operation: COutputBranch::ConfigNamedFields(CNamedFields {
             fields: vec!["value".into()],
@@ -83,8 +83,8 @@ fn mismatched_names_and_children_are_rejected_before_conversion() {
 }
 #[test]
 fn callback_argument_indices_must_correspond_to_domain_children() {
-    let flat = flat("pub fn register(cb:impl Fn(i64)->i64){}");
-    let defaults = DeclCDefaults::new(&flat, vec![], vec![], vec![]).unwrap();
+    let mut flat = flat("pub fn register(cb:impl Fn(i64)->i64){}");
+    let defaults = CSourceResolver::new(&mut flat, vec![], vec![], vec![]).unwrap();
     let mut tree: CInputConfig = callback!(impl Fn(i64) -> i64)
         .expand_param(0, expand_return!(i64).field_self())
         .into();
@@ -116,7 +116,7 @@ fn callback_argument_indices_must_correspond_to_domain_children() {
 
 #[test]
 fn local_conversion_combinators_preserve_type_scope_and_container_defaults() {
-    let flat = flat("pub struct Item{pub value:i64} pub fn make(value:i64)->Item{} pub fn read(item:&Item)->i64{}");
+    let mut flat = flat("pub struct Item{pub value:i64} pub fn make(value:i64)->Item{} pub fn read(item:&Item)->i64{}");
     let conversion = || {
         prebindgen_declarations::convert!(Item)
             .input(fun!(make))
@@ -124,8 +124,8 @@ fn local_conversion_combinators_preserve_type_scope_and_container_defaults() {
     };
     let input: CInputConfig = conversion().into();
     let output: COutputConfig = conversion().into();
-    let defaults = DeclCDefaults::new(
-        &flat,
+    let defaults = CSourceResolver::new(
+        &mut flat,
         vec![input.clone().variant("make")],
         vec![output.field("read")],
         vec![],
@@ -190,8 +190,8 @@ fn local_conversion_combinators_preserve_type_scope_and_container_defaults() {
 
 #[test]
 fn reference_type_local_conversions_keep_their_declared_scope() {
-    let flat = flat("pub struct Item{pub value:i64}");
-    let defaults = DeclCDefaults::new(&flat, vec![], vec![], vec![]).unwrap();
+    let mut flat = flat("pub struct Item{pub value:i64}");
+    let defaults = CSourceResolver::new(&mut flat, vec![], vec![], vec![]).unwrap();
     let output = prebindgen_declarations::convert!(&Item)
         .output(prebindgen_declarations::into!(i64))
         .into();
@@ -215,8 +215,8 @@ fn reference_type_local_conversions_keep_their_declared_scope() {
 
 #[test]
 fn implicit_callback_result_cannot_hide_an_explicit_child() {
-    let flat = flat("pub fn register(cb:impl Fn()->i64){}");
-    let defaults = DeclCDefaults::new(&flat, vec![], vec![], vec![]).unwrap();
+    let mut flat = flat("pub fn register(cb:impl Fn()->i64){}");
+    let defaults = CSourceResolver::new(&mut flat, vec![], vec![], vec![]).unwrap();
     let mut tree: CInputConfig = callback!(impl Fn() -> i64).into();
     let InputNode::Unary { child, .. } = &mut tree else {
         panic!("expected typed callback")

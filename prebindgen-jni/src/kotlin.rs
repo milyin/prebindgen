@@ -2,8 +2,10 @@
 use super::*;
 use crate::group::validate_layout;
 use prebindgen_declarations::{ComponentPath, ComponentSegment};
-use prebindgen_flat::{Conversion, Wire};
-use prebindgen_flat::{InputConversion, OutputConversion};
+
+use prebindgen_conversions::{Conversion, Wire};
+
+use prebindgen_conversions::{InputConversion, OutputConversion};
 
 /// Native transport selected for an ordinary function result.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -32,7 +34,7 @@ impl KotlinReturnContext<'_> {
     /// Place a canonical Kotlin projection in the selected function-return ABI.
     pub fn project(
         &self,
-        outcomes: &prebindgen_flat::Outcomes<JniNode>,
+        outcomes: &prebindgen_conversions::Outcomes<JniNode>,
         mut output: KotlinOutput,
     ) -> Result<KotlinOutput> {
         let fields = crate::group::result_packet_fields(&outcomes.success).collect::<Vec<_>>();
@@ -86,7 +88,7 @@ impl KotlinContext<'_> {
     /// while preserving its ownership and cleanup code.
     pub fn sequence_element(
         &self,
-        outcomes: &prebindgen_flat::Outcomes<JniNode>,
+        outcomes: &prebindgen_conversions::Outcomes<JniNode>,
         owners: Option<&str>,
     ) -> Result<KotlinOutput> {
         let (_, element, _) = crate::sequence::return_sequence(&outcomes.success)
@@ -703,7 +705,8 @@ pub(crate) fn record_cleanup_failure(context: &KotlinContext<'_>, error: &str) -
     }
 }
 
-pub(crate) type JniNode = prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>;
+pub(crate) type JniNode =
+    prebindgen_conversions::WireNode<JniWire, crate::JniChain, crate::JniBranch>;
 pub(crate) fn leaf_wires(node: &JniNode) -> Vec<&Wire<JniWire>> {
     crate::group::kotlin_result_fields(node).collect()
 }
@@ -1058,13 +1061,13 @@ pub(crate) fn output_components(
     Ok(out)
 }
 
-impl prebindgen_flat::InputConversion for PlanInput {
+impl prebindgen_conversions::InputConversion for PlanInput {
     fn input_node(&self) -> &JniNode {
         &self.rust.node
     }
 }
-impl prebindgen_flat::OutputConversion for PlanOutput {
-    fn output_outcomes(&self) -> &prebindgen_flat::Outcomes<JniNode> {
+impl prebindgen_conversions::OutputConversion for PlanOutput {
+    fn output_outcomes(&self) -> &prebindgen_conversions::Outcomes<JniNode> {
         &self.rust.outcomes
     }
 }
@@ -1104,7 +1107,7 @@ mod tests {
             ))
             .unwrap();
         let JniWire::Handle { condition, .. } =
-            &mut prebindgen_flat::wire_definitions_mut(std::iter::once(&mut plan.node))
+            &mut prebindgen_conversions::wire_definitions_mut(std::iter::once(&mut plan.node))
                 .next()
                 .expect("logical wire index out of range")
                 .kind
@@ -1118,7 +1121,7 @@ mod tests {
         let scalar = JniWire::scalar(Primitive::I64);
         assert_eq!(
             prebindgen_flat::type_key(
-                &prebindgen_flat::wire_definitions(std::iter::once(input.input_node()))
+                &prebindgen_conversions::wire_definitions(std::iter::once(input.input_node()))
                     .next()
                     .unwrap()
                     .kind
@@ -1127,7 +1130,7 @@ mod tests {
             prebindgen_flat::type_key(&scalar.rust_type())
         );
         assert_eq!(
-            prebindgen_flat::wire_definitions(std::iter::once(input.input_node()))
+            prebindgen_conversions::wire_definitions(std::iter::once(input.input_node()))
                 .next()
                 .unwrap()
                 .kind

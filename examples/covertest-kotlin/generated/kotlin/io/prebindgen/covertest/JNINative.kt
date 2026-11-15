@@ -93,7 +93,8 @@ internal object JNINative {
     @JvmStatic external fun call_wire_result_callback_5f00a3d27cff8113(p0_callback: Any?, returns: Return_Int_Long_String3_ErrorEmpty_88f96e73723eb19e): Unit
     @JvmStatic external fun call_canonical_millis_borrow_785f06d63a7833ec(p0_w4: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_canonical_millis_from_token_29b5b9a7d4693cc6(p0_w3: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
-    @JvmStatic external fun call_canonical_millis_echo_78944b36ef45859e(p0_w3: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_binding_canonical_millis_echo_e079a1302b984387_f7765eedc5b5ae0f(p0_w3: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_binding_canonical_millis_echo_460d0194b3819cd1_3eb97bc75a2bdba1(p0_w3: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Int
     @JvmStatic external fun call_canonical_millis_optional_a1a3b5cc3bee6c0c(p0_w1: Int, p0_w5: Long, returns: Return_Int_Long2_ErrorEmpty_62eb913ef507b63c): Unit
     @JvmStatic external fun call_canonical_millis_rows_1a2c665200830afe(p0_w1: Array<Any?>?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
     @JvmStatic external fun call_canonical_millis_callback_7a6e8a46e55294f2(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long

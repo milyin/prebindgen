@@ -37,7 +37,10 @@ fn every_mixed_raw_and_declared_input_combination_generates() {
                     &Default::default(),
                 ))
                 .unwrap();
-            model.function_mut("mixed").unwrap().params[index].ty.slot = Some(plan);
+            model.function_mut("mixed").unwrap().metadata.bindings[0]
+                .call_mut()
+                .unwrap()
+                .inputs[index] = plan;
         }
         let generated = generate(&model).unwrap();
         syn::parse_file(&generated.rust).unwrap();

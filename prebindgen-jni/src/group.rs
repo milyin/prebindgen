@@ -1,6 +1,7 @@
 //! JNI adapter metadata and interpretation of logical value trees.
 use super::*;
-use prebindgen_flat::{Wire, WireNode};
+
+use prebindgen_conversions::{Wire, WireNode};
 use syn::ext::IdentExt;
 
 /// Meaning and encoding of a parent with one child description.
@@ -178,7 +179,7 @@ pub(crate) fn values_mut(
 pub(crate) fn validate_layout(
     node: &WireNode<JniWire, crate::JniChain, crate::JniBranch>,
 ) -> Result<()> {
-    prebindgen_conversions::validate_wire_names(prebindgen_flat::wire_definitions(
+    prebindgen_conversions::validate_wire_names(prebindgen_conversions::wire_definitions(
         std::iter::once(node),
     ))?;
     for wire in values(node) {
@@ -371,12 +372,13 @@ pub(crate) fn argument_parameters(
     values(node)
 }
 pub(crate) fn function_parameters<
-    I: prebindgen_flat::InputConversion<Wire = JniWire, Chain = JniChain, Branch = JniBranch>,
-    O: prebindgen_flat::Conversion,
+    'a,
+    I: prebindgen_conversions::InputConversion<Wire = JniWire, Chain = JniChain, Branch = JniBranch>,
+    O: prebindgen_conversions::Conversion,
     M,
 >(
-    f: &prebindgen_flat::Function<I, O, M>,
-) -> Result<std::vec::IntoIter<&Wire<JniWire>>> {
+    f: &'a prebindgen_conversions::BoundFunction<'_, I, O, M>,
+) -> Result<std::vec::IntoIter<&'a Wire<JniWire>>> {
     let mut out = vec![];
     for input in f.input_conversions()? {
         out.extend(argument_parameters(input.input_node()));
@@ -473,8 +475,8 @@ pub(crate) fn kotlin_result_fields(
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn selector(name: syn::Ident) -> prebindgen_flat::Wire<JniWire> {
-        prebindgen_flat::Wire {
+    fn selector(name: syn::Ident) -> prebindgen_conversions::Wire<JniWire> {
+        prebindgen_conversions::Wire {
             name,
             kind: JniWire::selector(),
         }
@@ -503,8 +505,8 @@ mod tests {
             meta: JniChain::Optional(metadata),
         };
     }
-    fn leaf(name: &str) -> prebindgen_flat::Wire<JniWire> {
-        prebindgen_flat::Wire {
+    fn leaf(name: &str) -> prebindgen_conversions::Wire<JniWire> {
+        prebindgen_conversions::Wire {
             name: syn::parse_str(name).unwrap(),
             kind: JniWire::scalar(Primitive::Char),
         }
@@ -574,7 +576,7 @@ mod tests {
             };
             validate_layout(&node).unwrap();
             assert_eq!(
-                prebindgen_flat::wire_definitions(std::iter::once(&node))
+                prebindgen_conversions::wire_definitions(std::iter::once(&node))
                     .next()
                     .unwrap()
                     .kind
@@ -597,7 +599,7 @@ mod tests {
         .unwrap_err()
         .contains("integer tag"));
         let sequence: WireNode<JniWire, JniChain, JniBranch> = WireNode::Chain {
-            controls: vec![prebindgen_flat::Wire {
+            controls: vec![prebindgen_conversions::Wire {
                 name: syn::parse_quote!(rows),
                 kind: JniWire::Rows {
                     condition: ("true").into(),
@@ -609,7 +611,7 @@ mod tests {
         };
         validate_layout(&sequence).unwrap();
         let empty = WireNode::Chain {
-            controls: vec![prebindgen_flat::Wire {
+            controls: vec![prebindgen_conversions::Wire {
                 name: syn::parse_quote!(rows),
                 kind: JniWire::Rows {
                     condition: ("true").into(),
@@ -701,8 +703,8 @@ mod tests {
     }
     #[test]
     fn nested_optional_references_and_presence_bindings_are_validated() {
-        let mut tree = prebindgen_flat::WireNode::Leaf(vec![leaf("value")]);
-        prebindgen_flat::wire_definitions_mut(std::iter::once(&mut tree))
+        let mut tree = prebindgen_conversions::WireNode::Leaf(vec![leaf("value")]);
+        prebindgen_conversions::wire_definitions_mut(std::iter::once(&mut tree))
             .next()
             .expect("logical wire index out of range")
             .kind
@@ -719,7 +721,7 @@ mod tests {
             .contains("outside payload"));
         enclose_optional_metadata(&mut tree, optional("inner", "value", Some(-1)));
         assert!(validate_layout(&tree).unwrap_err().contains("duplicate"));
-        let mut flag = prebindgen_flat::WireNode::Leaf(vec![leaf("flag")]);
+        let mut flag = prebindgen_conversions::WireNode::Leaf(vec![leaf("flag")]);
         crate::group::values_mut(&mut flag).next().unwrap().kind = JniWire::selector();
         enclose_optional_metadata(&mut flag, optional("flag", "flag", None));
         validate_layout(&flag).unwrap();
@@ -783,7 +785,7 @@ mod tests {
                 &prebindgen_declarations::Condition::default(),
             ))
             .unwrap();
-        input.node = prebindgen_flat::WireNode::Branch {
+        input.node = prebindgen_conversions::WireNode::Branch {
             controls: vec![],
             meta: JniBranch::Group(JniGroup::Field(syn::parse_quote!(orphan))),
             children: vec![std::mem::take(&mut input.node)],
@@ -802,7 +804,7 @@ mod tests {
                 prebindgen_declarations::ValueAccess::Owned,
             ))
             .unwrap();
-        output.outcomes.success = prebindgen_flat::WireNode::Branch {
+        output.outcomes.success = prebindgen_conversions::WireNode::Branch {
             controls: vec![],
             meta: JniBranch::Group(JniGroup::Field(syn::parse_quote!(orphan))),
             children: vec![std::mem::take(&mut output.outcomes.success)],
@@ -816,7 +818,7 @@ mod tests {
     fn reserved_niches_are_checked_independently_of_remaining_availability() {
         let mut wire = JniWire::scalar(Primitive::Char);
         wire.clear_niche();
-        let mut tree = prebindgen_flat::WireNode::Leaf(vec![prebindgen_flat::Wire {
+        let mut tree = prebindgen_conversions::WireNode::Leaf(vec![prebindgen_conversions::Wire {
             name: syn::parse_quote!(value),
             kind: wire,
         }]);
@@ -878,12 +880,12 @@ mod tests {
     }
     #[test]
     fn optional_reservations_cannot_overlap_each_other_or_available_state() {
-        let mut tree = prebindgen_flat::WireNode::Leaf(vec![leaf("value")]);
+        let mut tree = prebindgen_conversions::WireNode::Leaf(vec![leaf("value")]);
         enclose_optional_metadata(&mut tree, optional("inner", "value", Some(-1)));
         assert!(validate_layout(&tree)
             .unwrap_err()
             .contains("already reserved"));
-        prebindgen_flat::wire_definitions_mut(std::iter::once(&mut tree))
+        prebindgen_conversions::wire_definitions_mut(std::iter::once(&mut tree))
             .next()
             .expect("logical wire index out of range")
             .kind
@@ -902,15 +904,15 @@ mod abi_tests {
     use super::*;
     #[test]
     fn function_parameters_result_packets_and_sequence_fields_have_explicit_roles() {
-        let scalar = |name: &str| prebindgen_flat::Wire {
+        let scalar = |name: &str| prebindgen_conversions::Wire {
             name: syn::parse_str(name).unwrap(),
             kind: JniWire::scalar(Primitive::I32),
         };
-        let element: prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch> =
-            prebindgen_flat::WireNode::Leaf(vec![scalar("first"), scalar("second")]);
+        let element: prebindgen_conversions::WireNode<JniWire, crate::JniChain, crate::JniBranch> =
+            prebindgen_conversions::WireNode::Leaf(vec![scalar("first"), scalar("second")]);
         let mut sequence = element.clone();
-        sequence = prebindgen_flat::WireNode::Chain {
-            controls: vec![prebindgen_flat::Wire {
+        sequence = prebindgen_conversions::WireNode::Chain {
+            controls: vec![prebindgen_conversions::Wire {
                 name: syn::parse_quote!(rows),
                 kind: JniWire::Rows {
                     condition: ("true").into(),
@@ -920,7 +922,7 @@ mod abi_tests {
             meta: JniChain::Sequence(JniSequence::Buffered),
             child: Box::new(std::mem::take(&mut sequence)),
         };
-        let result = prebindgen_flat::Outcomes {
+        let result = prebindgen_conversions::Outcomes {
             success: sequence.clone(),
             source_error: Some(WireNode::Leaf(vec![scalar("error")])),
             binding_failure: None,
@@ -967,10 +969,18 @@ mod abi_tests {
             ))
             .unwrap();
         input.node = sequence;
-        flat.function_mut("f").unwrap().params[0].ty.slot = Some(input.clone().into());
+        bindings::set_input(&mut flat, "f", "value", input.clone().into()).unwrap();
+        let output = prebindgen_declarations::compile_output(
+            &flat,
+            &JniCodec::raw(),
+            "f",
+            &JniOutput::None,
+            &(),
+        )
+        .unwrap();
+        bindings::set_output(&mut flat, "f", output).unwrap();
         assert_eq!(
-            function_parameters(flat.function("f").unwrap())
-                .unwrap()
+            argument_parameters(&input.node)
                 .map(|w| w.name.to_string())
                 .collect::<Vec<_>>(),
             ["rows"]
@@ -1063,9 +1073,10 @@ pub(crate) fn error_wire_shape(node: &kotlin::JniNode) -> Vec<String> {
                 let label = match meta {
                     JniChain::Optional(JniOptional::Flag(_)) => "optional:flag".into(),
                     JniChain::Optional(JniOptional::Niche { reservation, .. }) => {
-                        let index =
-                            prebindgen_flat::wire_definitions(std::iter::once(child.as_ref()))
-                                .position(|wire| wire.name == reservation.discriminator);
+                        let index = prebindgen_conversions::wire_definitions(std::iter::once(
+                            child.as_ref(),
+                        ))
+                        .position(|wire| wire.name == reservation.discriminator);
                         format!("optional:niche:{:?}:{index:?}", reservation.niche)
                     }
                     JniChain::Sequence(delivery) => format!("sequence:{delivery:?}"),
@@ -1095,3 +1106,5 @@ pub(crate) fn error_wire_shape(node: &kotlin::JniNode) -> Vec<String> {
     visit(node, &mut out);
     out
 }
+
+use prebindgen_conversions::FunctionConversions as _;

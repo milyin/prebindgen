@@ -1,21 +1,17 @@
-//! Source types, occurrence slots, and generator-defined conversion interfaces.
-//! Preparation fills slots; language generators interpret their request protocols.
-//! Named objects must have nonzero Rust size, including opaque aliases. Their
-//! layout is checked by the emitted compile-time guards, independently of the
-//! slot data types. Unit remains available for absence of a value.
+//! Rust source structure and typed data attached to its owners.
+//! Flat captures names, types, definitions, signatures, locations and source guards.
+//! Consumers choose and interpret attachment types; conversion and export policy
+//! belong to libraries above this source model.
 #![warn(missing_docs)]
 use prebindgen::SourceLocation;
 use quote::ToTokens;
 use std::collections::{BTreeMap, BTreeSet};
 use syn::{visit_mut::VisitMut, Type};
 
-mod value;
-pub use value::{ValueConversion, ValueConversions, ValueSource};
+mod map;
+pub use map::MapAttachments;
 mod payload;
 pub use payload::{PayloadEnum, PayloadField, PayloadVariant, VariantStyle};
-
-mod conversion;
-pub use conversion::*;
 
 mod primitive;
 pub use primitive::Primitive;
@@ -27,48 +23,76 @@ pub type Result<T> = std::result::Result<T, String>;
 
 /// Types of data attached to every owner in a flat binding model.
 ///
-/// A generator chooses schemas for occurrence data, module settings, functions,
-/// source types, fields and variants. Parsing leaves occurrence slots empty.
-/// Resolution can fill them with conversion trees; compilation can move the same
-/// source declarations into a schema carrying compiled plans. The unit schema
-/// supports source-only inspection.
+/// A consumer chooses the data carried by module, type, function, field, variant,
+/// parameter and return owners. Record and enum definitions have additional slots
+/// with independently selected types; opaque/external types use only the common
+/// type slot. These are exact types: Flat adds no Option wrapper
+/// and assigns no conversion semantics. Parsing initializes them with Default;
+/// consumers can move source structure between schemas with MapAttachments.
 pub trait Schema {
     /// Converter or other consumer data attached to one function parameter.
-    type Input;
+    type Parameter: Default;
     /// Converter or other consumer data attached to one function result.
-    type Output;
+    type Return: Default;
     /// Settings and generated infrastructure belonging to the binding module.
     type Module: Default;
     /// Export decisions, names and placement for a source function.
     type Function: Default;
     /// Representation and declaration information for one source type.
     type Type: Default;
+    /// Data specific to a source record definition.
+    type Record: Default;
+    /// Data specific to a source fieldless enum definition.
+    type Enum: Default;
+    /// Data specific to a source payload enum definition.
+    type PayloadEnum: Default;
     /// Declaration-level information for one source record field.
     type Field: Default;
     /// Declaration-level information for one source enum variant.
     type Variant: Default;
 }
 impl Schema for () {
-    type Input = ();
-    type Output = ();
+    type Parameter = ();
+    type Return = ();
     type Module = ();
     type Function = ();
     type Type = ();
+    type Record = ();
+    type Enum = ();
+    type PayloadEnum = ();
     type Field = ();
     type Variant = ();
 }
 
-/// A concrete source type and its single generator-owned metadata slot.
-/// Source record/enum structure is indexed separately; binding metadata belongs here,
+/// A concrete source type, its common data and its definition-specific data.
+/// Source record/enum structure and consumer metadata share this owner,
 /// including for opaque aliases that have neither fields nor variants.
+/// `M` is common type data; `F` and `V` belong to fields and variants;
+/// `R`, `E` and `P` belong to record, fieldless-enum and payload-enum definitions.
 #[derive(Clone, Debug, PartialEq)]
-pub struct TypeInfo<M = ()> {
-    /// Prepared canonical value representations; empty for source-only inspection.
-    pub conversion: ValueConversions,
+pub struct TypeInfo<M = (), F = (), V = (), R = (), E = (), P = ()> {
+    /// Captured source structure, owned by this type entry.
+    pub definition: TypeDefinition<F, V, R, E, P>,
     /// Qualified Rust type. Alias implementations remain opaque.
     pub ty: Type,
     /// Generator-owned declaration information shared by every occurrence.
     pub metadata: M,
+}
+
+/// Source definition owned by one canonical type entry.
+#[derive(Clone, Debug, PartialEq, Default)]
+pub enum TypeDefinition<F = (), V = (), R = (), E = (), P = ()> {
+    /// A referenced type whose structural definition is unavailable.
+    #[default]
+    External,
+    /// An explicitly captured opaque alias.
+    Opaque,
+    /// A source record.
+    Record(Record<F, R>),
+    /// A source enum without payloads.
+    Enum(FieldlessEnum<V, E>),
+    /// A source enum with payloads, including standard Result.
+    PayloadEnum(PayloadEnum<V, F, P>),
 }
 
 /// One function parameter or result type, paired with consumer-defined data.
@@ -99,22 +123,24 @@ pub struct Function<I, O, M = ()> {
     /// Qualified path used to call the source function from generated Rust.
     pub path: syn::Path,
     /// Parameters in call order.
-    pub params: Vec<Param<Option<I>>>,
+    pub params: Vec<Param<I>>,
     /// Result occurrence; an omitted Rust return type becomes `()`.
-    pub ret: TypeUse<Option<O>>,
+    pub ret: TypeUse<O>,
     /// Origin recorded by source capture, for diagnostics and qualification.
     pub location: SourceLocation,
 }
 /// A named-field record available for field construction and projection.
-#[derive(Clone, Debug)]
-pub struct Record<M = ()> {
+#[derive(Clone, Debug, PartialEq)]
+pub struct Record<F = (), M = ()> {
+    /// Consumer data specific to this record definition.
+    pub metadata: M,
     /// Qualified record type.
     pub ty: Type,
     /// Public fields in declaration order.
-    pub fields: Vec<Field<M>>,
+    pub fields: Vec<Field<F>>,
 }
 /// A named record field, independent of function input and output data.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Field<M = ()> {
     /// Generator-owned declaration information for this field.
     pub metadata: M,
@@ -124,15 +150,17 @@ pub struct Field<M = ()> {
     pub ty: Type,
 }
 /// A fieldless Rust enum, retaining source discriminant expressions.
-#[derive(Clone, Debug)]
-pub struct FieldlessEnum<M = ()> {
+#[derive(Clone, Debug, PartialEq)]
+pub struct FieldlessEnum<V = (), M = ()> {
+    /// Consumer data specific to this fieldless enum definition.
+    pub metadata: M,
     /// Qualified source enum type.
     pub ty: Type,
     /// Variants in source order, without an imposed foreign representation.
-    pub variants: Vec<EnumVariant<M>>,
+    pub variants: Vec<EnumVariant<V>>,
 }
 /// A variant with no payload fields.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct EnumVariant<M = ()> {
     /// Generator-owned declaration information for this variant.
     pub metadata: M,
@@ -142,12 +170,11 @@ pub struct EnumVariant<M = ()> {
     pub discriminant: Option<syn::Expr>,
 }
 
-/// Source structure with independently configured input and output conversions.
+/// Source structure with consumer-selected typed attachments.
 ///
-/// Every parameter carries `Option<M::Input>`; every result carries `Option<M::Output>`.
+/// Every parameter carries `M::Parameter`; every result carries `M::Return`.
 /// Record fields describe source structure. Slot payloads belong to the consumer;
-/// generators may use [`Conversion`] for expression
-/// emission. Source-only inspection uses `Flat<()>` with empty slots.
+/// the source model does not interpret that data. Source-only inspection uses `Flat<()>` with unit attachments.
 ///
 /// Use [`Flat::parse`] or [`Flat::parse_selected`] to validate source syntax and
 /// qualify declared names. Aliases stay opaque. Named types must have nonzero
@@ -158,7 +185,7 @@ pub struct EnumVariant<M = ()> {
 /// let items = syn::parse_file("pub fn add(x: i64, y: i64) -> i64 { x + y }")?.items;
 /// let flat = Flat::<()>::parse(
 ///     items.into_iter().map(|item| (item, Default::default())))?;
-/// assert!(flat.function("add")?.params[0].ty.slot.is_none());
+/// assert_eq!(flat.function("add")?.params[0].ty.slot, ());
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub struct Flat<M: Schema = ()> {
@@ -166,17 +193,16 @@ pub struct Flat<M: Schema = ()> {
     pub metadata: M::Module,
     /// Free functions indexed by unqualified source name.
     #[allow(clippy::type_complexity)] // Keep the schema payloads explicit.
-    pub functions: BTreeMap<String, Function<M::Input, M::Output, M::Function>>,
-    /// Records indexed by `type_key` of their qualified type.
-    pub records: BTreeMap<String, Record<M::Field>>,
-    /// Fieldless enums indexed by qualified source type.
-    pub enums: BTreeMap<String, FieldlessEnum<M::Variant>>,
-    /// Data-carrying source enums and concrete standard Result shapes.
-    pub payload_enums: BTreeMap<String, PayloadEnum<M::Variant, M::Field>>,
+    pub functions: BTreeMap<String, Function<M::Parameter, M::Return, M::Function>>,
     /// Canonical source types and their metadata. Declared names (including opaque
     /// aliases) are keys; built-ins and composites registered through
     /// `Flat::type_metadata_mut` use their qualified type syntax as keys.
-    pub types: BTreeMap<String, TypeInfo<M::Type>>,
+    #[allow(clippy::type_complexity)]
+    // Keep the type, field and variant attachment roles explicit.
+    pub types: BTreeMap<
+        String,
+        TypeInfo<M::Type, M::Field, M::Variant, M::Record, M::Enum, M::PayloadEnum>,
+    >,
     /// Constants every adapter must emit: captured feature guards and generated
     /// nonzero-size assertions. Layout assertions run when the bindings compile.
     pub guards: Vec<syn::ItemConst>,
@@ -184,11 +210,14 @@ pub struct Flat<M: Schema = ()> {
 
 impl<M: Schema> Clone for Flat<M>
 where
-    M::Input: Clone,
-    M::Output: Clone,
+    M::Parameter: Clone,
+    M::Return: Clone,
     M::Module: Clone,
     M::Function: Clone,
     M::Type: Clone,
+    M::Record: Clone,
+    M::Enum: Clone,
+    M::PayloadEnum: Clone,
     M::Field: Clone,
     M::Variant: Clone,
 {
@@ -196,9 +225,7 @@ where
         Self {
             metadata: self.metadata.clone(),
             functions: self.functions.clone(),
-            records: self.records.clone(),
-            enums: self.enums.clone(),
-            payload_enums: self.payload_enums.clone(),
+
             types: self.types.clone(),
             guards: self.guards.clone(),
         }
@@ -206,11 +233,14 @@ where
 }
 impl<M: Schema> std::fmt::Debug for Flat<M>
 where
-    M::Input: std::fmt::Debug,
-    M::Output: std::fmt::Debug,
+    M::Parameter: std::fmt::Debug,
+    M::Return: std::fmt::Debug,
     M::Module: std::fmt::Debug,
     M::Function: std::fmt::Debug,
     M::Type: std::fmt::Debug,
+    M::Record: std::fmt::Debug,
+    M::Enum: std::fmt::Debug,
+    M::PayloadEnum: std::fmt::Debug,
     M::Field: std::fmt::Debug,
     M::Variant: std::fmt::Debug,
 {
@@ -218,9 +248,6 @@ where
         f.debug_struct("Flat")
             .field("metadata", &self.metadata)
             .field("functions", &self.functions)
-            .field("records", &self.records)
-            .field("enums", &self.enums)
-            .field("payload_enums", &self.payload_enums)
             .field("types", &self.types)
             .field("guards", &self.guards)
             .finish()
@@ -330,7 +357,7 @@ impl<M: Schema> Flat<M> {
     /// Rejects duplicate names, non-public declarations, unsupported
     /// signatures and types, and inaccessible record fields.
     ///
-    /// Input and output slots start at `None`; no default conversion is required.
+    /// Attachments start with the defaults selected by the schema.
     /// Unqualified declared types and callable paths are qualified with the captured
     /// crate name (or `crate` if absent).
     /// Opaque alias implementations are not inspected. Rust layout and trait
@@ -375,7 +402,7 @@ impl<M: Schema> Flat<M> {
                 types.insert(
                     id.to_string(),
                     TypeInfo {
-                        conversion: Default::default(),
+                        definition: TypeDefinition::External,
                         ty: syn::parse_quote!(#module::#id),
                         metadata: Default::default(),
                     },
@@ -385,9 +412,7 @@ impl<M: Schema> Flat<M> {
         let mut flat = Self {
             metadata: Default::default(),
             functions: BTreeMap::new(),
-            records: BTreeMap::new(),
-            enums: BTreeMap::new(),
-            payload_enums: BTreeMap::new(),
+
             types,
             guards: Vec::new(),
         };
@@ -430,7 +455,7 @@ impl<M: Schema> Flat<M> {
                             name: id.ident,
                             ty: TypeUse {
                                 ty: flat.resolve_parameter_type(&p.ty)?,
-                                slot: None,
+                                slot: Default::default(),
                             },
                         });
                     }
@@ -440,7 +465,7 @@ impl<M: Schema> Flat<M> {
                     };
                     let ret = TypeUse {
                         ty: flat.resolve_type(&ret)?,
-                        slot: None,
+                        slot: Default::default(),
                     };
                     flat.functions.insert(
                         name.to_string(),
@@ -477,8 +502,11 @@ impl<M: Schema> Flat<M> {
                             ty: flat.resolve_type(&field.ty)?,
                         });
                     }
-                    flat.records
-                        .insert(type_key(&ty), Record { ty, fields: out });
+                    flat.type_info_mut(&ty)?.definition = TypeDefinition::Record(Record {
+                        metadata: Default::default(),
+                        ty: ty.clone(),
+                        fields: out,
+                    });
                 }
                 syn::Item::Enum(e) => {
                     if e.attrs.iter().any(|a| {
@@ -500,7 +528,7 @@ impl<M: Schema> Flat<M> {
                         .any(|v| !matches!(v.fields, syn::Fields::Unit))
                     {
                         let payload = flat.parse_payload(ty.clone(), e)?;
-                        flat.payload_enums.insert(type_key(&ty), payload);
+                        flat.type_info_mut(&ty)?.definition = TypeDefinition::PayloadEnum(payload);
                         continue;
                     }
                     let mut variants = Vec::new();
@@ -534,13 +562,18 @@ impl<M: Schema> Flat<M> {
                             discriminant: variant.discriminant.map(|(_, e)| e),
                         });
                     }
-                    flat.enums
-                        .insert(type_key(&ty), FieldlessEnum { ty, variants });
+                    flat.type_info_mut(&ty)?.definition = TypeDefinition::Enum(FieldlessEnum {
+                        metadata: Default::default(),
+                        ty: ty.clone(),
+                        variants,
+                    });
                 }
                 syn::Item::Type(t) => {
                     if !t.generics.params.is_empty() || t.generics.where_clause.is_some() {
                         return Err("generic aliases are unsupported".into());
                     }
+                    flat.types.get_mut(&t.ident.to_string()).unwrap().definition =
+                        TypeDefinition::Opaque;
                     // The alias's contents remain opaque, as in the flat source contract.
                 }
                 syn::Item::Const(c) => flat.guards.push(c),
@@ -565,20 +598,109 @@ impl<M: Schema> Flat<M> {
     /// Look up a free function by its unqualified source name.
     ///
     /// Returns an error if it was not included in this model.
-    pub fn function(&self, name: &str) -> Result<&Function<M::Input, M::Output, M::Function>> {
+    pub fn function(&self, name: &str) -> Result<&Function<M::Parameter, M::Return, M::Function>> {
         self.functions
             .get(name)
             .ok_or_else(|| format!("unknown function `{name}`"))
     }
     /// Look up the canonical type entry by its qualified Rust type.
-    pub fn type_info(&self, ty: &Type) -> Result<&TypeInfo<M::Type>> {
+    #[allow(clippy::type_complexity)] // Keep the independently typed attachment roles explicit.
+    pub fn type_info(
+        &self,
+        ty: &Type,
+    ) -> Result<&TypeInfo<M::Type, M::Field, M::Variant, M::Record, M::Enum, M::PayloadEnum>> {
         self.types
             .values()
             .find(|named| same_type(&named.ty, ty))
             .ok_or_else(|| format!("unregistered source type `{}`", type_key(ty)))
     }
+    /// Borrow the source record for a qualified type key.
+    pub fn record_by_key(&self, key: &str) -> Option<&Record<M::Field, M::Record>> {
+        self.types.values().find_map(|t| match &t.definition {
+            TypeDefinition::Record(r) if type_key(&t.ty) == key => Some(r),
+            _ => None,
+        })
+    }
+    /// Mutably borrow a source record without a parallel record table.
+    pub fn record_by_key_mut(&mut self, key: &str) -> Option<&mut Record<M::Field, M::Record>> {
+        self.types
+            .values_mut()
+            .find_map(|t| match &mut t.definition {
+                TypeDefinition::Record(r) if type_key(&t.ty) == key => Some(r),
+                _ => None,
+            })
+    }
+    /// Iterate captured records.
+    pub fn records(&self) -> impl Iterator<Item = &Record<M::Field, M::Record>> {
+        self.types.values().filter_map(|t| match &t.definition {
+            TypeDefinition::Record(r) => Some(r),
+            _ => None,
+        })
+    }
+    /// Iterate fieldless enums.
+    pub fn enums(&self) -> impl Iterator<Item = &FieldlessEnum<M::Variant, M::Enum>> {
+        self.types.values().filter_map(|t| match &t.definition {
+            TypeDefinition::Enum(e) => Some(e),
+            _ => None,
+        })
+    }
+    /// Borrow a fieldless enum by qualified type key.
+    pub fn enum_by_key(&self, key: &str) -> Option<&FieldlessEnum<M::Variant, M::Enum>> {
+        self.types.values().find_map(|t| match &t.definition {
+            TypeDefinition::Enum(e) if type_key(&t.ty) == key => Some(e),
+            _ => None,
+        })
+    }
+    /// Mutably borrow a fieldless enum by qualified type key.
+    pub fn enum_by_key_mut(
+        &mut self,
+        key: &str,
+    ) -> Option<&mut FieldlessEnum<M::Variant, M::Enum>> {
+        self.types
+            .values_mut()
+            .find_map(|t| match &mut t.definition {
+                TypeDefinition::Enum(e) if type_key(&t.ty) == key => Some(e),
+                _ => None,
+            })
+    }
+    /// Iterate payload enums.
+    pub fn payload_enums(
+        &self,
+    ) -> impl Iterator<Item = &PayloadEnum<M::Variant, M::Field, M::PayloadEnum>> {
+        self.types.values().filter_map(|t| match &t.definition {
+            TypeDefinition::PayloadEnum(e) => Some(e),
+            _ => None,
+        })
+    }
+    /// Borrow a payload enum by qualified type key.
+    pub fn payload_enum_by_key(
+        &self,
+        key: &str,
+    ) -> Option<&PayloadEnum<M::Variant, M::Field, M::PayloadEnum>> {
+        self.types.values().find_map(|t| match &t.definition {
+            TypeDefinition::PayloadEnum(e) if type_key(&t.ty) == key => Some(e),
+            _ => None,
+        })
+    }
+    /// Mutably borrow a payload enum by qualified type key.
+    pub fn payload_enum_by_key_mut(
+        &mut self,
+        key: &str,
+    ) -> Option<&mut PayloadEnum<M::Variant, M::Field, M::PayloadEnum>> {
+        self.types
+            .values_mut()
+            .find_map(|t| match &mut t.definition {
+                TypeDefinition::PayloadEnum(e) if type_key(&t.ty) == key => Some(e),
+                _ => None,
+            })
+    }
     /// Configure the single metadata owner for a registered source type.
-    pub fn type_info_mut(&mut self, ty: &Type) -> Result<&mut TypeInfo<M::Type>> {
+    #[allow(clippy::type_complexity)] // Keep the independently typed attachment roles explicit.
+    pub fn type_info_mut(
+        &mut self,
+        ty: &Type,
+    ) -> Result<&mut TypeInfo<M::Type, M::Field, M::Variant, M::Record, M::Enum, M::PayloadEnum>>
+    {
         self.types
             .values_mut()
             .find(|named| same_type(&named.ty, ty))
@@ -588,7 +710,11 @@ impl<M: Schema> Flat<M> {
     /// Declared types reuse their canonical entry; built-ins and composites can
     /// own declarations such as error handlers without creating another registry.
     pub fn type_metadata_mut(&mut self, ty: &Type) -> Result<&mut M::Type> {
-        let ty = self.resolve_type(ty)?;
+        let ty = if matches!(ty, Type::ImplTrait(_)) {
+            self.resolve_parameter_type(ty)?
+        } else {
+            self.resolve_type(ty)?
+        };
         self.register_result(&ty);
         let key = self
             .types
@@ -600,7 +726,7 @@ impl<M: Schema> Flat<M> {
             .types
             .entry(key)
             .or_insert_with(|| TypeInfo {
-                conversion: Default::default(),
+                definition: TypeDefinition::External,
                 ty,
                 metadata: Default::default(),
             })
@@ -613,7 +739,7 @@ impl<M: Schema> Flat<M> {
     pub fn function_mut(
         &mut self,
         name: &str,
-    ) -> Result<&mut Function<M::Input, M::Output, M::Function>> {
+    ) -> Result<&mut Function<M::Parameter, M::Return, M::Function>> {
         self.functions
             .get_mut(name)
             .ok_or_else(|| format!("unknown function `{name}`"))
@@ -622,9 +748,8 @@ impl<M: Schema> Flat<M> {
     ///
     /// Use [`Self::resolve_type`] first for an unqualified declaration name. Opaque
     /// aliases have no record entry and return an error.
-    pub fn record(&self, ty: &Type) -> Result<&Record<M::Field>> {
-        self.records
-            .get(&type_key(ty))
+    pub fn record(&self, ty: &Type) -> Result<&Record<M::Field, M::Record>> {
+        self.record_by_key(&type_key(ty))
             .ok_or_else(|| format!("`{}` is not a record", type_key(ty)))
     }
     /// Qualify the declared names in `ty` and validate the supported source-type grammar.
@@ -637,8 +762,8 @@ impl<M: Schema> Flat<M> {
     /// the type in every position. Aliases remain opaque.
     pub fn resolve_type(&self, ty: &Type) -> Result<Type> {
         let mut ty = ty.clone();
-        struct Names<'a, T>(&'a BTreeMap<String, TypeInfo<T>>);
-        impl<T> VisitMut for Names<'_, T> {
+        struct Names<'a, T, F, V, R, E, P>(&'a BTreeMap<String, TypeInfo<T, F, V, R, E, P>>);
+        impl<T, F, V, R, E, P> VisitMut for Names<'_, T, F, V, R, E, P> {
             fn visit_type_reference_mut(&mut self, reference: &mut syn::TypeReference) {
                 if reference.lifetime.as_ref().is_some_and(|l| l.ident == "_") {
                     reference.lifetime = None;
@@ -679,7 +804,8 @@ impl<M: Schema> Flat<M> {
         self.validate_type(&ty)?;
         Ok(ty)
     }
-    fn resolve_parameter_type(&self, ty: &Type) -> Result<Type> {
+    /// Qualify and validate a source function parameter type, including callable signatures.
+    pub fn resolve_parameter_type(&self, ty: &Type) -> Result<Type> {
         validate_input_lifetimes(ty)?;
         if callback_signature(ty)?.is_none() {
             return self.resolve_type(ty);
@@ -761,8 +887,8 @@ impl<M: Schema> Flat<M> {
     ///   slot; returns the new slot.
     pub fn map_slots(
         self,
-        mut input: impl FnMut(&Type, Option<M::Input>) -> Result<Option<M::Input>>,
-        mut output: impl FnMut(&Type, Option<M::Output>) -> Result<Option<M::Output>>,
+        mut input: impl FnMut(&Type, M::Parameter) -> Result<M::Parameter>,
+        mut output: impl FnMut(&Type, M::Return) -> Result<M::Return>,
     ) -> Result<Self> {
         let mut functions = BTreeMap::new();
         for (name, fun) in self.functions {
@@ -796,9 +922,7 @@ impl<M: Schema> Flat<M> {
         Ok(Flat {
             metadata: self.metadata,
             functions,
-            records: self.records,
-            enums: self.enums,
-            payload_enums: self.payload_enums,
+
             types: self.types,
             guards: self.guards,
         })
@@ -837,9 +961,6 @@ pub fn same_type(a: &Type, b: &Type) -> bool {
 
 #[cfg(test)]
 mod tests;
-
-#[cfg(test)]
-mod request_tests;
 
 /// Extract the payload type of a standard `Option<T>` spelling.
 pub fn option_inner(ty: &Type) -> Option<&Type> {
@@ -1051,9 +1172,3 @@ pub fn sequence_parts(ty: &Type) -> Option<(&Type, SequenceView)> {
     };
     Some((element, view))
 }
-
-mod wire_tree;
-pub use wire_tree::{
-    wire_at_path, wire_definitions, wire_definitions_mut, wire_definitions_with_paths, Outcomes,
-    WireEntry, WireNode, WirePath,
-};

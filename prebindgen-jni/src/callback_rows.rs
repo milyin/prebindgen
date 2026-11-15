@@ -1,7 +1,8 @@
 //! Failure-only ownership cleanup for ordinary Kotlin callback result trees.
 use super::*;
 use crate::kotlin::JniNode;
-use prebindgen_flat::{Wire, WireNode};
+
+use prebindgen_conversions::{Wire, WireNode};
 
 /// Generated Kotlin creates private row arrays and fresh packed byte arrays per
 /// occurrence, retained by the JNI local frame. Packed capacity starts zeroed;

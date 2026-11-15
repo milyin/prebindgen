@@ -2,7 +2,7 @@
 //! during generation. These predicates also preserve original optional presence
 //! while an input carrier's pointer slots are emptied by ownership transfers.
 use super::*;
-use prebindgen_flat::WireNode;
+use prebindgen_conversions::WireNode;
 
 #[derive(Clone)]
 pub(crate) enum Test {
@@ -33,7 +33,7 @@ pub(crate) fn condition(
         .unwrap_or_else(|| quote!(true))
 }
 pub(crate) fn values(
-    node: &prebindgen_flat::WireNode<CWire, CChain, CBranch>,
+    node: &prebindgen_conversions::WireNode<CWire, CChain, CBranch>,
 ) -> Result<Vec<(&Wire, Vec<Test>)>> {
     fn visit<'a>(
         node: &'a WireNode<CWire, CChain, CBranch>,

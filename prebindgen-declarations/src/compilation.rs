@@ -1,6 +1,7 @@
 //! Reusable concrete conversion operations. Adapters choose when to call them.
 use super::*;
-use prebindgen_flat::{ValueConversion, ValueSource};
+
+use prebindgen_conversions::{ValueConversion, ValueSource};
 use std::collections::BTreeMap;
 #[allow(missing_docs, clippy::too_many_arguments)]
 impl<C: Codec> Compiler<'_, C> {
@@ -35,7 +36,7 @@ impl<C: Codec> Compiler<'_, C> {
     }
     pub fn prefix(
         &self,
-        wires: &mut prebindgen_flat::WireNode<C::Wire, C::Chain, C::Branch>,
+        wires: &mut prebindgen_conversions::WireNode<C::Wire, C::Chain, C::Branch>,
         segment: ComponentSegment,
     ) {
         self.codec.prefix_layout(wires, segment);
@@ -46,7 +47,7 @@ impl<C: Codec> Compiler<'_, C> {
             context: Default::default(),
             delivery: Default::default(),
             commit: TokenStream::new(),
-            outcomes: prebindgen_flat::Outcomes {
+            outcomes: prebindgen_conversions::Outcomes {
                 success: WireNode::Branch {
                     controls: vec![],
                     children: vec![],
@@ -290,7 +291,7 @@ impl<C: Codec> Compiler<'_, C> {
                 return Err("selector results must be owned in this subset".into());
             }
             let tag = self.name();
-            let mut selector_layout = prebindgen_flat::WireNode::Leaf(vec![Wire {
+            let mut selector_layout = prebindgen_conversions::WireNode::Leaf(vec![Wire {
                 name: tag.clone(),
                 kind: self.codec.selector(extra)?,
             }]);
@@ -950,7 +951,7 @@ impl<C: Codec> Compiler<'_, C> {
                 commit: TokenStream::new(),
                 statements: TokenStream::new(),
                 values: vec![],
-                outcomes: prebindgen_flat::Outcomes {
+                outcomes: prebindgen_conversions::Outcomes {
                     success: WireNode::Branch {
                         controls: vec![],
                         children: vec![],
@@ -1098,7 +1099,7 @@ impl<C: Codec> Compiler<'_, C> {
             statements,
             commit,
             values,
-            outcomes: prebindgen_flat::Outcomes {
+            outcomes: prebindgen_conversions::Outcomes {
                 success: WireNode::Branch {
                     controls: vec![selector],
                     children: arms,
@@ -1326,7 +1327,7 @@ impl<C: Codec> Compiler<'_, C> {
                 commit: TokenStream::new(),
                 statements: TokenStream::new(),
                 values: vec![],
-                outcomes: prebindgen_flat::Outcomes {
+                outcomes: prebindgen_conversions::Outcomes {
                     success: WireNode::Branch {
                         controls: vec![],
                         children: vec![],
@@ -1420,7 +1421,7 @@ impl<C: Codec> Compiler<'_, C> {
             commit: TokenStream::new(),
             statements: TokenStream::new(),
             values: vec![],
-            outcomes: prebindgen_flat::Outcomes {
+            outcomes: prebindgen_conversions::Outcomes {
                 success: WireNode::Branch {
                     controls: vec![],
                     children: vec![],

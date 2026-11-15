@@ -18,8 +18,7 @@ impl CCodec {
         flat.type_info(ty)
             .ok()?
             .metadata
-            .enumeration
-            .as_ref()
+            .enumeration()
             .map(|e| (e.name.as_str(), &e.mapping))
     }
     pub(super) fn enum_wire(name: &str, mapping: &std::rc::Rc<EnumMapping>) -> CWire {
@@ -45,13 +44,13 @@ mod tests {
         let codec = CCodec::declared();
         let mut model = flat("pub enum E { A, B }pub fn echo(x:E)->E{}");
         let ty = model.resolve_type(&syn::parse_quote!(E)).unwrap();
-        let mapping =
-            std::rc::Rc::new(EnumMapping::new(model.enums.values().next().unwrap()).unwrap());
+        let mapping = std::rc::Rc::new(EnumMapping::new(model.enums().next().unwrap()).unwrap());
         for name in ["first", "updated"] {
-            model.type_metadata_mut(&ty).unwrap().enumeration = Some(std::rc::Rc::new(CEnum {
-                name: name.into(),
-                mapping: mapping.clone(),
-            }));
+            model.type_metadata_mut(&ty).unwrap().representation =
+                Some(CRepresentation::Enum(std::rc::Rc::new(CEnum {
+                    name: name.into(),
+                    mapping: mapping.clone(),
+                })));
             let output = codec
                 .output_leaf(prebindgen_declarations::OutputLeaf::new(
                     &model,
@@ -62,9 +61,10 @@ mod tests {
                     prebindgen_declarations::ValueAccess::Owned,
                 ))
                 .unwrap();
-            let wire = prebindgen_flat::wire_definitions(std::iter::once(&output.outcomes.success))
-                .next()
-                .unwrap();
+            let wire =
+                prebindgen_conversions::wire_definitions(std::iter::once(&output.outcomes.success))
+                    .next()
+                    .unwrap();
             assert!(matches!(&wire.kind,CWire::Enum{name:actual,..} if actual==name));
         }
     }
@@ -116,7 +116,7 @@ mod tests {
             .build()
             .err()
             .unwrap()
-            .contains("only one of opaque_ptr, opaque_owned_struct and tagged_union"));
+            .contains("select only one representation"));
     }
     #[test]
     fn enum_symbols_cannot_shadow_runtime_or_generated_result_types() {
@@ -143,8 +143,7 @@ mod tests {
     #[test]
     fn enum_niches_skip_valid_values_and_survive_optional_composition() {
         let source = flat("pub enum E { A = -2, B, C = 0, D = 7 }");
-        let mapping =
-            std::rc::Rc::new(EnumMapping::new(source.enums.values().next().unwrap()).unwrap());
+        let mapping = std::rc::Rc::new(EnumMapping::new(source.enums().next().unwrap()).unwrap());
         let codec = CCodec::declared();
         let wire = CCodec::enum_wire("code", &mapping);
         assert!(matches!(wire.available_niche(), Some(CNiche::Integer(-3))));
@@ -163,10 +162,10 @@ mod tests {
             model
                 .type_metadata_mut(&syn::parse_quote!(E))
                 .unwrap()
-                .enumeration = Some(std::rc::Rc::new(CEnum {
+                .representation = Some(CRepresentation::Enum(std::rc::Rc::new(CEnum {
                 name: "code".into(),
                 mapping: mapping.clone(),
-            }));
+            })));
             crate::bind_input(
                 &mut model,
                 &codec,
@@ -184,11 +183,10 @@ mod tests {
                 &(),
             )
             .unwrap();
-            let function = model.function("echo").unwrap();
-            let input = function.params[0].ty.slot.as_ref().unwrap();
-            let output = function.ret.slot.as_ref().unwrap();
+            let input = test_input(&model, "echo", 0);
+            let output = test_output(&model, "echo");
             assert_eq!(
-                prebindgen_flat::wire_definitions(std::iter::once(&input.node)).count(),
+                prebindgen_conversions::wire_definitions(std::iter::once(&input.node)).count(),
                 1
             );
             assert_eq!(
@@ -196,7 +194,7 @@ mod tests {
                 1
             );
             assert!(
-                matches!(prebindgen_flat::wire_definitions(std::iter::once(&input.node)).next().unwrap().kind.available_niche(),Some(CNiche::Integer(n)) if n == -3-depth)
+                matches!(prebindgen_conversions::wire_definitions(std::iter::once(&input.node)).next().unwrap().kind.available_niche(),Some(CNiche::Integer(n)) if n == -3-depth)
             );
             super::super::group::validate_layout(&input.node).unwrap();
             super::super::group::validate_layout(&output.outcomes.success).unwrap();
@@ -205,11 +203,10 @@ mod tests {
     #[test]
     fn optional_enum_reservations_cannot_reuse_available_or_reserved_values() {
         let source = flat("pub enum E { A = -1, B = 0 }");
-        let mapping =
-            std::rc::Rc::new(EnumMapping::new(source.enums.values().next().unwrap()).unwrap());
+        let mapping = std::rc::Rc::new(EnumMapping::new(source.enums().next().unwrap()).unwrap());
         let wire = CCodec::enum_wire("code", &mapping);
-        let mut tree: prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch> =
-            prebindgen_flat::WireNode::Leaf(vec![GenericWire {
+        let mut tree: prebindgen_conversions::WireNode<CWire, crate::CChain, crate::CBranch> =
+            prebindgen_conversions::WireNode::Leaf(vec![GenericWire {
                 name: syn::parse_quote!(wire),
                 kind: wire,
             }]);
@@ -222,7 +219,7 @@ mod tests {
             )
             .unwrap()
         };
-        tree = prebindgen_flat::WireNode::Chain {
+        tree = prebindgen_conversions::WireNode::Chain {
             controls: vec![],
             meta: CChain::Optional(group("inner", -2)),
             child: Box::new(std::mem::take(&mut tree)),
@@ -230,13 +227,13 @@ mod tests {
         assert!(super::super::group::validate_layout(&tree)
             .unwrap_err()
             .contains("already reserved"));
-        prebindgen_flat::wire_definitions_mut(std::iter::once(&mut tree))
+        prebindgen_conversions::wire_definitions_mut(std::iter::once(&mut tree))
             .next()
             .expect("logical wire index out of range")
             .kind
             .clear_niche();
         super::super::group::validate_layout(&tree).unwrap();
-        tree = prebindgen_flat::WireNode::Chain {
+        tree = prebindgen_conversions::WireNode::Chain {
             controls: vec![],
             meta: CChain::Optional(group("outer", -2)),
             child: Box::new(std::mem::take(&mut tree)),
@@ -248,8 +245,7 @@ mod tests {
     #[test]
     fn malformed_enum_niches_are_rejected_before_emission() {
         let source = flat("pub enum E { A = -1, B = 0 }");
-        let mapping =
-            std::rc::Rc::new(EnumMapping::new(source.enums.values().next().unwrap()).unwrap());
+        let mapping = std::rc::Rc::new(EnumMapping::new(source.enums().next().unwrap()).unwrap());
         for n in [-1, 0] {
             let mut wire = CCodec::enum_wire("code", &mapping);
             let CWire::Enum {
@@ -259,8 +255,8 @@ mod tests {
                 unreachable!()
             };
             *next_integer_niche = Some(n);
-            let layout: prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch> =
-                prebindgen_flat::WireNode::Leaf(vec![GenericWire {
+            let layout: prebindgen_conversions::WireNode<CWire, crate::CChain, crate::CBranch> =
+                prebindgen_conversions::WireNode::Leaf(vec![GenericWire {
                     name: syn::parse_quote!(value),
                     kind: wire,
                 }]);

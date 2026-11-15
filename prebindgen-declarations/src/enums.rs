@@ -16,7 +16,7 @@ pub struct EnumMapping {
 }
 impl EnumMapping {
     /// Preserve the source discriminants in a checked `i32` mapping.
-    pub fn new<M>(source: &prebindgen_flat::FieldlessEnum<M>) -> Result<Self> {
+    pub fn new<V, M>(source: &prebindgen_flat::FieldlessEnum<V, M>) -> Result<Self> {
         fn integer(e: &syn::Expr) -> Result<i128> {
             match e {
                 syn::Expr::Lit(syn::ExprLit {
@@ -123,7 +123,7 @@ impl EnumMapping {
 
 /// Prepare checked enum decoding with the supplied boundary carrier.
 /// References borrow the decoded local; mutable references are unsupported.
-pub fn enum_input<W: prebindgen_flat::WireKind, C, N, B>(
+pub fn enum_input<W: prebindgen_conversions::WireKind, C, N, B>(
     mapping: &EnumMapping,
     ty: &Type,
     wire: syn::Ident,
@@ -150,7 +150,7 @@ pub fn enum_input<W: prebindgen_flat::WireKind, C, N, B>(
         (quote!(), quote!(let #var=#decode;), quote!(#var))
     };
     let mut plan = InputPlan::new(
-        prebindgen_flat::WireNode::Leaf(vec![Wire { name: wire, kind }]),
+        prebindgen_conversions::WireNode::Leaf(vec![Wire { name: wire, kind }]),
         code,
         value,
     );
@@ -159,7 +159,7 @@ pub fn enum_input<W: prebindgen_flat::WireKind, C, N, B>(
     Ok(plan)
 }
 /// Prepare enum output by matching a borrow, without requiring `Copy` or `Clone`.
-pub fn enum_output<W: prebindgen_flat::WireKind, C, N, B>(
+pub fn enum_output<W: prebindgen_conversions::WireKind, C, N, B>(
     mapping: &EnumMapping,
     wire: syn::Ident,
     value: TokenStream,
@@ -170,8 +170,8 @@ pub fn enum_output<W: prebindgen_flat::WireKind, C, N, B>(
         fallible: false,
         context: Default::default(),
         delivery: Default::default(),
-        outcomes: prebindgen_flat::Outcomes {
-            success: prebindgen_flat::WireNode::Leaf(vec![Wire {
+        outcomes: prebindgen_conversions::Outcomes {
+            success: prebindgen_conversions::WireNode::Leaf(vec![Wire {
                 name: wire.clone(),
                 kind,
             }]),
@@ -195,7 +195,8 @@ mod tests {
                 .into_iter()
                 .map(|i| (i, Default::default())),
         )?;
-        EnumMapping::new(flat.enums.values().next().unwrap())
+        let mapping = EnumMapping::new(flat.enums().next().unwrap());
+        mapping
     }
     #[test]
     fn discriminants_preserve_negative_hex_parenthesized_and_implicit_values() {

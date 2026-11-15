@@ -47,16 +47,16 @@ pub(crate) fn builtin(ty: &syn::Type) -> OpaqueLayout {
 }
 fn nodes(
     plan: &COutputPlan<CWire>,
-) -> impl Iterator<Item = &prebindgen_flat::WireNode<CWire, CChain, CBranch>> {
+) -> impl Iterator<Item = &prebindgen_conversions::WireNode<CWire, CChain, CBranch>> {
     std::iter::once(&plan.outcomes.success)
         .chain(plan.outcomes.source_error.iter())
         .chain(plan.outcomes.binding_failure.iter())
 }
 fn used_node(
-    node: &prebindgen_flat::WireNode<CWire, CChain, CBranch>,
+    node: &prebindgen_conversions::WireNode<CWire, CChain, CBranch>,
     names: &mut BTreeSet<String>,
 ) {
-    for wire in prebindgen_flat::wire_definitions(std::iter::once(node)) {
+    for wire in prebindgen_conversions::wire_definitions(std::iter::once(node)) {
         match &wire.kind {
             CWire::Owned { owner, .. } => {
                 names.insert(owner.name.clone());
@@ -74,55 +74,12 @@ pub(crate) fn output_names(plan: &COutputPlan<CWire>, names: &mut BTreeSet<Strin
 pub(crate) fn input_names(plan: &CInputPlan<CWire>, names: &mut BTreeSet<String>) {
     used_node(&plan.node, names);
 }
-pub(crate) fn prepare(
+pub(crate) fn verify_sources(
     flat: &mut CBindings,
     target: &str,
     artifact: Option<&OpaqueLayouts>,
     sources: &[prebindgen::Source],
 ) -> Result<()> {
-    let mut used = BTreeSet::new();
-    for f in flat.functions.values().filter(|f| f.ret.slot.is_some()) {
-        for p in &f.params {
-            if let Some(plan) = &p.ty.slot {
-                input_names(plan, &mut used);
-            }
-        }
-        output_names(f.ret.slot.as_ref().unwrap(), &mut used);
-    }
-    for info in flat.types.values() {
-        if let Some(error) = &info.metadata.error {
-            output_names(error.plan()?, &mut used);
-        }
-    }
-    // Keep nested standard owners so Vec<String>/Vec<Vec<T>> can expose typed
-    // borrowed element pointers and their ordinary accessors.
-    loop {
-        let before = used.len();
-        for info in flat.types.values() {
-            if let Some(owner) = &info.metadata.owned {
-                if used.contains(&owner.name) || owner.explicit {
-                    if let Some((element, _)) = prebindgen_flat::sequence_parts(&owner.ty) {
-                        if let Some(child) = owned::declaration(flat, element) {
-                            used.insert(child.name.clone());
-                        }
-                    }
-                }
-            }
-        }
-        if before == used.len() {
-            break;
-        }
-    }
-    for info in flat.types.values_mut() {
-        if info
-            .metadata
-            .owned
-            .as_ref()
-            .is_some_and(|o| !o.explicit && !used.contains(&o.name))
-        {
-            info.metadata.owned = None;
-        }
-    }
     if let Some(data) = artifact {
         if data.target != target {
             return Err(format!(
@@ -157,9 +114,66 @@ pub(crate) fn prepare(
             }
         }
     }
-    flat.metadata.opaque_layouts.clear();
+    Ok(())
+}
+pub(crate) fn prepare(
+    flat: &mut CBindings,
+    target: &str,
+    artifact: Option<&OpaqueLayouts>,
+) -> Result<()> {
+    if artifact.is_some_and(|data| data.target != target) {
+        return Err("opaque layout target mismatch in configured C model".into());
+    }
+    let mut used = BTreeSet::new();
+    for source in flat.functions.values() {
+        for binding in &source.metadata.bindings {
+            let call = binding.call()?;
+            for input in &call.inputs {
+                input_names(input, &mut used);
+            }
+            output_names(&call.output, &mut used);
+        }
+    }
     for info in flat.types.values() {
-        if let Some(owner) = &info.metadata.owned {
+        if let Some(error) = &info.metadata.error {
+            output_names(error.plan()?, &mut used);
+        }
+    }
+    // Keep nested standard owners so Vec<String>/Vec<Vec<T>> can expose typed
+    // borrowed element pointers and their ordinary accessors.
+    loop {
+        let before = used.len();
+        for info in flat.types.values() {
+            if let Some(owner) = info.metadata.owned() {
+                if used.contains(&owner.name) || owner.explicit {
+                    if let Some((element, _)) = prebindgen_flat::sequence_parts(&owner.ty) {
+                        if let Some(child) = owned::declaration(flat, element) {
+                            used.insert(child.name.clone());
+                        }
+                    }
+                }
+            }
+        }
+        if before == used.len() {
+            break;
+        }
+    }
+    for info in flat.types.values_mut() {
+        if info
+            .metadata
+            .owned()
+            .is_some_and(|o| !o.explicit && !used.contains(&o.name))
+        {
+            info.metadata.representation = None;
+        }
+    }
+    for info in flat.types.values_mut() {
+        if let Some(CRepresentation::Owned {
+            owner,
+            target_layout,
+        }) = &mut info.metadata.representation
+        {
+            *target_layout = None;
             let key = owner.layout.key.clone().unwrap_or_else(|| {
                 if owned::std_owner(&owner.ty) {
                     if prebindgen_flat::type_key(&owner.ty) == "String" {
@@ -190,9 +204,7 @@ pub(crate) fn prepare(
                 })?
             };
             layout.validate()?;
-            flat.metadata
-                .opaque_layouts
-                .insert(owner.name.clone(), layout);
+            *target_layout = Some(layout);
         }
     }
     Ok(())
@@ -219,6 +231,18 @@ mod tests {
     ) -> OpaqueLayouts {
         OpaqueLayouts::from_json(&serde_json::json!({"format_version":1,"target":target,"sources":sources,"layouts":layouts}).to_string()).unwrap()
     }
+    fn layouts(flat: &CBindings) -> std::collections::BTreeMap<String, StorageLayout> {
+        flat.types
+            .values()
+            .filter_map(|t| match &t.metadata.representation {
+                Some(CRepresentation::Owned {
+                    owner,
+                    target_layout: Some(layout),
+                }) => Some((owner.name.clone(), *layout)),
+                _ => None,
+            })
+            .collect()
+    }
     fn native() -> &'static str {
         env!("PREBINDGEN_C_GENERATOR_TARGET")
     }
@@ -230,10 +254,7 @@ mod tests {
             .function(fun!(make))
             .prepare()
             .unwrap();
-        assert_eq!(
-            native.metadata.opaque_layouts["item"].size,
-            std::mem::size_of::<i64>()
-        );
+        assert_eq!(layouts(&native)["item"].size, std::mem::size_of::<i64>());
         let cross = "i686-unknown-linux-gnu";
         let error = make()
             .target(cross)
@@ -266,12 +287,9 @@ mod tests {
             .target(cross)
             .prepare()
             .unwrap();
+        assert_eq!(layouts(&first), layouts(&second));
         assert_eq!(
-            first.metadata.opaque_layouts,
-            second.metadata.opaque_layouts
-        );
-        assert_eq!(
-            first.metadata.opaque_layouts["item"],
+            layouts(&first)["item"],
             StorageLayout {
                 size: 8,
                 alignment: 4
@@ -335,7 +353,7 @@ mod tests {
         .panic()
         .prepare()
         .unwrap();
-        assert!(prepared.metadata.opaque_layouts.is_empty());
+        assert!(layouts(&prepared).is_empty());
     }
     #[test]
     fn invalid_targets_and_header_symbol_collisions_are_diagnostics() {
@@ -359,7 +377,7 @@ mod tests {
         flat.types.insert(
             "foreign :: PointerOnly".into(),
             prebindgen_flat::TypeInfo {
-                conversion: Default::default(),
+                definition: prebindgen_flat::TypeDefinition::External,
                 ty: syn::parse_quote!(foreign::PointerOnly),
                 metadata: CType::default(),
             },
@@ -382,11 +400,31 @@ mod tests {
             .opaque_layouts(artifact("i686-unknown-linux-gnu",serde_json::json!({"std.vec":{"size":12,"alignment":4},"std.string":{"size":16,"alignment":4}}),serde_json::json!({})))
             .function(fun!(numbers)).function(fun!(text)).function(fun!(strings)).prepare().unwrap();
         let string = owned::declaration(&prepared, &syn::parse_quote!(String)).unwrap();
-        assert_eq!(prepared.metadata.opaque_layouts[&string.name].size, 16);
+        assert_eq!(layouts(&prepared)[&string.name].size, 16);
         let vec = owned::declaration(&prepared, &syn::parse_quote!(Vec<String>)).unwrap();
-        assert_eq!(prepared.metadata.opaque_layouts[&vec.name].size, 12);
+        assert_eq!(layouts(&prepared)[&vec.name].size, 12);
         let header = generate(&prepared).unwrap().header;
         assert!(header.contains("const pb_owned_string *"), "{header}");
+    }
+    #[test]
+    fn completed_type_layout_cannot_be_reused_for_a_different_target() {
+        let prepared = Cbindgen::new(model("pub type Item=i64;pub fn make()->Item{}"))
+            .target("i686-unknown-linux-gnu")
+            .opaque_owned_struct("item", syn::parse_quote!(Item), OpaqueLayout::external())
+            .opaque_layouts(artifact(
+                "i686-unknown-linux-gnu",
+                serde_json::json!({"item":{"size":8,"alignment":4}}),
+                serde_json::json!({}),
+            ))
+            .function(fun!(make))
+            .prepare()
+            .unwrap();
+        assert!(Cbindgen::new(prepared)
+            .target("x86_64-unknown-linux-gnu")
+            .prepare()
+            .err()
+            .unwrap()
+            .contains("layout target mismatch"));
     }
     #[test]
     fn malformed_artifacts_are_diagnostics() {

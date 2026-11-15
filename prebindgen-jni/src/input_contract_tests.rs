@@ -2,7 +2,7 @@ use super::*;
 use prebindgen_conversions::InputFragment;
 
 use crate::{JniInputLeafOp, JniInputUnary};
-use prebindgen_flat::{Function, InputConversion, Param, TypeUse};
+use prebindgen_conversions::InputConversion;
 use std::{cell::Cell, rc::Rc};
 
 // Independent storage also records how often the emitter prepares Kotlin input.
@@ -29,7 +29,7 @@ impl Conversion for ExternalInput {
     }
 }
 impl InputConversion for ExternalInput {
-    fn input_node(&self) -> &prebindgen_flat::WireNode<JniWire, JniChain, JniBranch> {
+    fn input_node(&self) -> &prebindgen_conversions::WireNode<JniWire, JniChain, JniBranch> {
         self.native.input_node()
     }
 }
@@ -51,46 +51,36 @@ impl KotlinInputConversion for ExternalInput {
 }
 
 fn external(flat: JniBindings) -> JniBindings<ExternalInput> {
-    // Test fixture: preserve every declaration and metadata value while changing
-    // just the input implementation. Production preparation chooses its schema
-    // before filling slots; this does not add a schema-changing API.
-    Flat {
-        metadata: flat.metadata,
-        records: flat.records,
-        enums: flat.enums,
-        payload_enums: flat.payload_enums,
-        types: flat.types,
-        guards: flat.guards,
-        functions: flat
-            .functions
+    flat.try_map_function_data(|_, _, bindings| {
+        bindings
             .into_iter()
-            .map(|(key, f)| {
-                let params = f.params.into_iter().map(|p| Param {
-                    name: p.name,
-                    ty: TypeUse {
-                        ty: p.ty.ty,
-                        slot: p.ty.slot.map(|native| ExternalInput {
-                            native,
-                            preparations: Rc::default(),
-                            omit_handles: false,
-                            omit_consumption: false,
-                        }),
-                    },
-                });
-                (
-                    key,
-                    Function {
-                        metadata: f.metadata,
-                        name: f.name,
-                        path: f.path,
-                        location: f.location,
-                        ret: f.ret,
-                        params: params.collect(),
-                    },
-                )
+            .map(|binding| {
+                let prebindgen_declarations::BindingState::Prepared(call) = binding.state else {
+                    return Err("expected prepared export".into());
+                };
+                Ok(prebindgen_conversions::FunctionBinding {
+                    name: binding.name,
+                    metadata: binding.metadata,
+                    state: prebindgen_declarations::BindingState::Prepared(
+                        prebindgen_conversions::PreparedCall {
+                            inputs: call
+                                .inputs
+                                .into_iter()
+                                .map(|native| ExternalInput {
+                                    native,
+                                    preparations: Rc::default(),
+                                    omit_handles: false,
+                                    omit_consumption: false,
+                                })
+                                .collect(),
+                            output: call.output,
+                        },
+                    ),
+                })
             })
-            .collect(),
-    }
+            .collect()
+    })
+    .unwrap()
 }
 
 fn handles() -> JniBindings {
@@ -118,11 +108,7 @@ fn external_inputs_share_the_builtin_emitter_and_prepare_kotlin_once() {
 #[test]
 fn callback_bulk_return_requires_cached_carrier_support() {
     let flat = external(handles());
-    let input = flat.function("mixed").unwrap().params[3]
-        .ty
-        .slot
-        .as_ref()
-        .unwrap();
+    let input = flat.function("mixed").unwrap().input_conversions().unwrap()[3];
     let context = JniContext {
         input_transfers: prebindgen_conversions::InputTransfers::Report(syn::parse_quote!(
             __pb_input_consumed
@@ -131,6 +117,7 @@ fn callback_bulk_return_requires_cached_carrier_support() {
         prepared_delivery: None,
         environment: syn::parse_quote!(env),
         domain_output: syn::parse_quote!(domain),
+        source_error_helper: None,
         return_sink: None,
         is_domain_error: false,
         output_committed: quote!(),
@@ -163,20 +150,25 @@ fn callback_bulk_return_requires_cached_carrier_support() {
 #[test]
 fn external_inputs_must_report_handles_and_native_ownership() {
     let mut flat = external(handles());
-    flat.function_mut("mixed").unwrap().params[2]
-        .ty
-        .slot
-        .as_mut()
+    flat.function_mut("mixed").unwrap().metadata[0]
+        .call_mut()
         .unwrap()
+        .inputs[2]
         .omit_handles = true;
     let error = generate(&flat).err().unwrap();
     assert!(error.contains("complete prepared handle inputs"), "{error}");
 
     let mut flat = external(handles());
     // Remove every consuming update, leaving the native acknowledgement active.
-    for parameter in &mut flat.function_mut("mixed").unwrap().params {
-        parameter.ty.slot.as_mut().unwrap().omit_consumption = true;
+    for input in &mut flat.function_mut("mixed").unwrap().metadata[0]
+        .call_mut()
+        .unwrap()
+        .inputs
+    {
+        input.omit_consumption = true;
     }
     let error = generate(&flat).err().unwrap();
     assert!(error.contains("acknowledgement does not match"), "{error}");
 }
+
+use prebindgen_conversions::FunctionConversions as _;

@@ -1,6 +1,7 @@
 //! An independently implemented input, without a JniInputConverter or InputPlan.
 use prebindgen_conversions::InputFragment;
-use prebindgen_flat::{Conversion, Flat, InputConversion, Primitive, Result, Wire, WireNode};
+use prebindgen_conversions::{Conversion, InputConversion, Wire, WireNode};
+use prebindgen_flat::{Flat, Primitive, Result};
 use prebindgen_jni::{
     JniBindings, JniBranch, JniChain, JniContext, JniFunction, JniGen, JniSchema, JniWire,
     KotlinContext, KotlinInput, KotlinInputConversion,
@@ -66,11 +67,18 @@ pub fn generate() -> Result<JniGen> {
     )?;
     let function = flat.function_mut("duration_millis")?;
     function.path = syn::parse_quote!(crate::input_contracts::duration_millis);
-    function.metadata = Some(placement);
-    function.params[0].ty.slot = Some(DurationInput(WireNode::Leaf(vec![Wire {
-        name: syn::parse_quote!(millis_wire),
-        kind: JniWire::scalar(Primitive::I64),
-    }])));
-    function.ret.slot = Some(output);
+    function.metadata.push(prebindgen_jni::JniBinding {
+        name: syn::parse_quote!(duration_millis),
+        metadata: placement,
+        state: prebindgen_conversions::BindingState::Prepared(
+            prebindgen_conversions::PreparedCall {
+                inputs: vec![DurationInput(WireNode::Leaf(vec![Wire {
+                    name: syn::parse_quote!(millis_wire),
+                    kind: JniWire::scalar(Primitive::I64),
+                }]))],
+                output,
+            },
+        ),
+    });
     prebindgen_jni::generate(&flat)
 }

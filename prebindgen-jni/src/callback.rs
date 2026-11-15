@@ -1,8 +1,10 @@
 //! Preparation and emission of retained source callbacks.
 use super::*;
 use crate::operations::{JniInput, JniInputBranch};
+use prebindgen_conversions::FunctionConversions as _;
+use prebindgen_conversions::{InputConversion, Wire, WireNode};
 use prebindgen_conversions::{InputFragment, OutputFragment, TemplateContext};
-use prebindgen_flat::{callback_signature, InputConversion, Wire, WireNode};
+use prebindgen_flat::callback_signature;
 use std::rc::Rc;
 
 /// Prepared callback signature and the independent output boundary of its arguments.
@@ -180,7 +182,7 @@ pub(crate) fn input(
         // until construction finishes, so a temporary Cleaner-managed wrapper
         // could disappear while Rust still borrows it. Moving the handle disarms
         // cleanup and does not have this problem.
-        for wire in prebindgen_flat::wire_definitions(std::iter::once(input.input_node())) {
+        for wire in prebindgen_conversions::wire_definitions(std::iter::once(input.input_node())) {
             if let JniWire::Handle { handle, .. } = &wire.kind {
                 if handle.access != prebindgen_conversions::Access::Move
                     && flat
@@ -188,7 +190,7 @@ pub(crate) fn input(
                         .metadata
                         .class
                         .as_ref()
-                        .is_some_and(|class| class.gc_managed)
+                        .is_some_and(|class| class.gc_managed())
                 {
                     return Err("callback return constructors cannot borrow gc-managed handles: the raw return protocol does not retain the Kotlin owner during Rust construction; move the handle or leave its class explicitly managed".into());
                 }
@@ -298,7 +300,7 @@ impl JniCallback {
     /// itself has no handle inputs.
     pub(crate) fn requires_preflight(&self) -> bool {
         self.return_value.as_ref().is_some_and(|value| {
-            prebindgen_flat::wire_definitions(std::iter::once(value.input.input_node()))
+            prebindgen_conversions::wire_definitions(std::iter::once(value.input.input_node()))
                 .any(|wire| matches!(wire.kind, JniWire::Handle { .. }))
         })
     }
@@ -314,7 +316,7 @@ impl JniCallback {
         active: &prebindgen_declarations::Condition,
     ) -> Result<JniInputPlan<JniWire>> {
         prebindgen_conversions::validate_wire_names(self.arguments.iter().flat_map(|arg| {
-            prebindgen_flat::wire_definitions(std::iter::once(
+            prebindgen_conversions::wire_definitions(std::iter::once(
                 &arg.output.output_outcomes().success,
             ))
         }))?;
@@ -327,6 +329,7 @@ impl JniCallback {
             prepared_delivery: None,
             environment: environment.clone(),
             domain_output: format_ident!("unused_domain"),
+            source_error_helper: None,
             return_sink: None,
             is_domain_error: false,
             output_committed: quote!(),
@@ -943,12 +946,13 @@ pub(crate) fn files<I: KotlinInputConversion, O: KotlinOutputConversion>(
 ) -> Result<()> {
     let mut ownership_by_name = BTreeMap::new();
     let mut wires = Vec::new();
-    for input in &flat.metadata.callbacks {
-        wires.extend(prebindgen_flat::wire_definitions(std::iter::once(
+    for input in declarations(flat)? {
+        wires.extend(prebindgen_conversions::wire_definitions(std::iter::once(
             input.input_node(),
         )));
     }
-    for function in flat.functions.values().filter(|f| f.metadata.is_some()) {
+    let functions = crate::bindings::views(flat)?;
+    for function in &functions {
         wires.extend(function.input_wire_definitions()?);
     }
     for wire in wires {
@@ -1000,7 +1004,7 @@ pub(crate) fn files<I: KotlinInputConversion, O: KotlinOutputConversion>(
             .arguments
             .iter()
             .map(|arg| {
-                let handles = prebindgen_flat::wire_definitions(std::iter::once(
+                let handles = prebindgen_conversions::wire_definitions(std::iter::once(
                     &arg.output.output_outcomes().success,
                 ))
                 .any(|wire| matches!(wire.kind, JniWire::Handle { .. }));
@@ -1074,6 +1078,61 @@ fn argument_local(name: &str, ty: &str) -> String {
         Some(default) => format!("        var {name}: {ty} = {default}\n"),
         None => format!("        lateinit var {name}: {ty}\n"),
     }
+}
+
+/// Borrow prepared standalone interfaces from their canonical source type owners.
+pub(crate) fn declarations<I, O>(flat: &Flat<JniSchema<I, O>>) -> Result<Vec<&JniInputConverter>> {
+    flat.types
+        .values()
+        .filter_map(|ty| ty.metadata.callback.as_ref())
+        .map(|state| match state {
+            prebindgen_conversions::BindingState::Prepared(plan) => Ok(plan),
+            _ => Err("standalone callback declaration is not prepared".into()),
+        })
+        .collect()
+}
+pub(crate) fn resolve_declarations(
+    flat: &mut JniBindings,
+    resolver: &JniSourceResolver,
+    codec: &JniCodec,
+) -> Result<()> {
+    let pending = flat
+        .types
+        .iter()
+        .filter(|(_, t)| {
+            matches!(
+                t.metadata.callback,
+                Some(prebindgen_conversions::BindingState::Configured(()))
+            )
+        })
+        .map(|(key, t)| (key.clone(), t.ty.clone()))
+        .collect::<Vec<_>>();
+    for (key, ty) in pending {
+        let recipe = resolver.resolve_input(flat, codec, &ty, &JniInputConfig::auto(), &())?;
+        flat.types.get_mut(&key).unwrap().metadata.callback =
+            Some(prebindgen_conversions::BindingState::Resolved(recipe));
+    }
+    Ok(())
+}
+pub(crate) fn compile_declarations(flat: &mut JniBindings, codec: &JniCodec) -> Result<()> {
+    let keys = flat.types.keys().cloned().collect::<Vec<_>>();
+    for key in keys {
+        let state = flat.types.get_mut(&key).unwrap().metadata.callback.take();
+        let state = match state {
+            Some(prebindgen_conversions::BindingState::Resolved(recipe)) => {
+                let ty = &flat.types[&key].ty;
+                Some(prebindgen_conversions::BindingState::Prepared(
+                    prebindgen_declarations::compile_input_value(flat, codec, ty, &recipe, &())?,
+                ))
+            }
+            Some(prebindgen_conversions::BindingState::Configured(())) => {
+                return Err("standalone callback declaration is unresolved".into())
+            }
+            other => other,
+        };
+        flat.types.get_mut(&key).unwrap().metadata.callback = state;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
