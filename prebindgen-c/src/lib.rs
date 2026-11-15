@@ -696,10 +696,11 @@ impl Codec for CCodec {
             let pointer = quote!(::core::ptr::addr_of_mut!(#wire.0).cast::<#ty>());
             return Ok(Some((plan, pointer)));
         }
-        if !flat
+        if flat
             .type_info(ty)
             .ok()
-            .is_some_and(|t| t.metadata.pointer().is_some())
+            .and_then(|t| t.metadata.pointer())
+            .is_none()
         {
             return Ok(None);
         }
