@@ -1,5 +1,7 @@
 //! Kotlin record declarations and their occurrence conversions.
 use super::*;
+use crate::kotlin::JniNode;
+use prebindgen_flat::{Field, Record};
 use std::rc::Rc;
 
 /// A Kotlin data class whose fields are converted across the JNI boundary.
@@ -674,21 +676,14 @@ pub(super) fn mark(
     Ok(())
 }
 
-type FieldNode<'a> = (
-    &'a syn::Ident,
-    &'a prebindgen_conversions::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
-);
-pub(crate) fn fields(nodes: &[kotlin::JniNode]) -> Result<Vec<FieldNode<'_>>> {
-    nodes
-        .iter()
-        .map(|node| match node {
-            kotlin::JniNode::Branch {
-                meta: JniBranch::Group(JniGroup::Field(name)),
-                ..
-            } => Ok((name, node)),
-            _ => Err("Kotlin record requires named field children".into()),
-        })
-        .collect()
+pub(crate) fn field(node: &kotlin::JniNode) -> Result<&syn::Ident> {
+    match node {
+        kotlin::JniNode::Branch {
+            meta: JniBranch::Group(JniGroup::Field(name)),
+            ..
+        } => Ok(name),
+        _ => Err("Kotlin record requires named field children".into()),
+    }
 }
 // A grouped Kotlin value has a fixed property contract. An occurrence override
 // may change native conversion/ownership but must still accept that property.
@@ -756,18 +751,17 @@ pub(crate) fn check_property_output(expected: &str, results: &[String]) -> Resul
 
 pub(crate) fn record_fields<'a>(
     nodes: &'a [kotlin::JniNode],
-    source: &prebindgen_flat::Record<JniField>,
-) -> Result<Vec<FieldNode<'a>>> {
-    let fields = fields(nodes)?;
-    if fields.len() != source.fields.len()
-        || fields
-            .iter()
-            .zip(&source.fields)
-            .any(|((name, _), field)| *name != &field.name)
-    {
+    source: &'a Record<JniField>,
+) -> Result<impl Iterator<Item = Result<(&'a Field<JniField>, &'a JniNode)>>> {
+    if nodes.len() != source.fields.len() {
         return Err("record occurrence differs from its source fields".into());
     }
-    Ok(fields)
+    Ok(source.fields.iter().zip(nodes).map(|(source, node)| {
+        if field(node)? != &source.name {
+            return Err("record occurrence differs from its source fields".into());
+        }
+        Ok((source, node))
+    }))
 }
 
 pub(crate) fn input_kotlin(
@@ -776,21 +770,24 @@ pub(crate) fn input_kotlin(
     context: &KotlinContext<'_>,
     active: &str,
 ) -> Result<KotlinInput> {
-    let declaration = crate::metadata::source_type(context.source_types, &d.ty)?;
-    let class_name = declaration
-        .metadata
-        .class
-        .as_ref()
-        .filter(|class| matches!(class.representation, ClassRepresentation::Data { .. }))
-        .ok_or("record conversion requires a declared data class")?
-        .fqn();
-    let record = crate::metadata::source_record(context.source_types, &d.ty)?;
+    let (record, class) = crate::metadata::source_data_class(context.source_types, &d.ty)?;
+    let class_name = class.fqn();
     let inner = nodes
         .iter()
         .flat_map(kotlin::leaf_wires)
         .collect::<Vec<_>>();
     let mut out = KotlinInput::default();
-    let mut c = kotlin::input_components(nodes, context)?;
+    let mut c = KotlinInput {
+        handle_inputs: Some(Vec::new()),
+        ..Default::default()
+    };
+    for pair in record_fields(nodes, record)? {
+        let (field, node) = pair?;
+        let child = kotlin::input_kotlin(node, context)?;
+        check_property_input(&field.metadata.kotlin_type, &child.parameters)
+            .map_err(|error| format!("{class_name}.{}: {error}", field.name))?;
+        kotlin::merge_input(&mut c, child)?;
+    }
     c.prepare_arguments(nodes.iter().any(|n| kotlin::input_handles(n, false)))?;
     out.parameters.push(format!(
         "{}: {}{}",
@@ -798,18 +795,11 @@ pub(crate) fn input_kotlin(
         class_name,
         if active == "true" { "" } else { "?" }
     ));
-    let fields = record_fields(nodes, record)?;
-    for ((name, node), expected) in fields.iter().zip(&record.fields) {
-        let expected = &expected.metadata.kotlin_type;
-        let child = kotlin::input_kotlin_when(node, context, active)?;
-        check_property_input(expected, &child.parameters)
-            .map_err(|error| format!("{}.{name}: {error}", class_name))?;
-    }
-    if c.parameters.len() != fields.len() {
+    if c.parameters.len() != record.fields.len() {
         return Err("incomplete data-class input occurrence".into());
     }
     let snapshot_fields = nodes.iter().any(|node| kotlin::input_handles(node, false));
-    for (index, (p, (field, _))) in c.parameters.iter().zip(&fields).enumerate() {
+    for (index, (p, field)) in c.parameters.iter().zip(&record.fields).enumerate() {
         let name = p.split_once(": ").unwrap().0;
         let receiver = if active == "true" {
             d.root.clone()
@@ -818,7 +808,7 @@ pub(crate) fn input_kotlin(
         };
         let expr = format!(
             "{receiver}.{}",
-            kotlin_identifier(field.to_string().trim_start_matches("r#"))
+            kotlin_identifier(field.name.to_string().trim_start_matches("r#"))
         );
         // Retain each field of a handle-bearing record once. Controls and
         // handle values then describe the same input, even for handwritten
@@ -911,25 +901,16 @@ pub(crate) fn output_kotlin(
     context: &KotlinContext<'_>,
     owners: Option<&str>,
 ) -> Result<KotlinOutput> {
-    let declaration = crate::metadata::source_type(context.source_types, &d.ty)?;
-    let class_name = declaration
-        .metadata
-        .class
-        .as_ref()
-        .filter(|class| matches!(class.representation, ClassRepresentation::Data { .. }))
-        .ok_or("record conversion requires a declared data class")?
-        .fqn();
-    let record = crate::metadata::source_record(context.source_types, &d.ty)?;
-    let mut c = kotlin::output_components(nodes, context, owners)?;
-    let fields = record_fields(nodes, record)?;
-    if c.delivered.len() != fields.len() {
+    let (record, class) = crate::metadata::source_data_class(context.source_types, &d.ty)?;
+    let class_name = class.fqn();
+    let mut fields = record_fields(nodes, record)?;
+    let mut c = kotlin::output_components_checked(nodes, context, owners, |child| {
+        let (field, _) = fields.next().ok_or("missing record field")??;
+        check_property_output(&field.metadata.kotlin_type, &child.result_types)
+            .map_err(|error| format!("{class_name}.{}: {error}", field.name))
+    })?;
+    if c.delivered.len() != record.fields.len() {
         return Err("incomplete data-class output occurrence".into());
-    }
-    for ((name, node), expected) in fields.iter().zip(&record.fields) {
-        let expected = &expected.metadata.kotlin_type;
-        let child = kotlin::output_kotlin_scoped(node, context, owners)?;
-        check_property_output(expected, &child.result_types)
-            .map_err(|error| format!("{}.{name}: {error}", class_name))?;
     }
     c.delivered = vec![format!("{}({})", class_name, c.delivered.join(", "))];
     c.result_types = vec![class_name.clone()];

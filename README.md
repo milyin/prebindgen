@@ -653,7 +653,10 @@ JNI record and payload-enum occurrences retain a source-type reference and their
 local binding/grouping policy. Class names, variant/field names and Kotlin
 property types are read from the canonical Flat declarations during emission.
 `KotlinContext::source_types` borrows that actual type table, including for custom
-converters; it is not a reconstructed declaration registry. Native bulk sequence
+converters. Handle conversions use this same table; there is no separate
+`KotlinClass` registry. Record and enum fields are validated as their conversions
+are emitted, without retaining property tables or emitting a field again just to
+check its type. Native bulk sequence
 metadata retains its compiled physical row layout. Changing its source tag/layout
 identity after preparation requires preparing the conversions again; Kotlin class
 and variant-name overrides are resolved from the current declarations.

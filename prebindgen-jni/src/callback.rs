@@ -825,20 +825,18 @@ fn returned_handle_cleanup(
             children,
             ..
         } => {
-            let class = group
-                .class(context.source_types)?
-                .ok_or("expanded enum callback result must expose one value")?;
-            let source = crate::metadata::source_enum(context.source_types, &group.ty)?;
+            let (source, class) = group.declaration(context.source_types)?;
+            let class = class.ok_or("expanded enum callback result must expose one value")?;
             if source.variants.len() != children.len() {
                 return Err("enum occurrence differs from its source variants".into());
             }
             let mut arms = String::new();
             for (child, variant) in children.iter().zip(&source.variants) {
                 let variant_class = crate::sealed::variant_name(class, &variant.name);
-                let fields = crate::sealed::variant_fields(child, variant)?;
                 let mut body = String::new();
-                for (field_index, (_, node)) in fields.iter().enumerate() {
-                    let property = kotlin_identifier(&variant.fields[field_index].property());
+                for pair in crate::sealed::variant_fields(child, variant)? {
+                    let (field, node) = pair?;
+                    let property = kotlin_identifier(&field.property());
                     body.push_str(&returned_handle_cleanup(
                         node,
                         &format!("{local}.{property}"),
@@ -860,11 +858,13 @@ fn returned_handle_cleanup(
             ..
         } => {
             let mut body = String::new();
-            let record = crate::metadata::source_record(context.source_types, &data.ty)?;
-            for (field, child) in crate::data::record_fields(children, record)? {
+            let (record, class) =
+                crate::metadata::source_data_class(context.source_types, &data.ty)?;
+            for pair in crate::data::record_fields(children, record)? {
+                let (field, child) = pair?;
                 let expr = format!(
                     "{local}.{}",
-                    kotlin_identifier(field.to_string().trim_start_matches("r#"))
+                    kotlin_identifier(field.name.to_string().trim_start_matches("r#"))
                 );
                 body.push_str(&returned_handle_cleanup(
                     child, &expr, prefix, next, context,
@@ -872,12 +872,7 @@ fn returned_handle_cleanup(
             }
             format!(
                 "({value} as? {})?.let {{ {local} -> {body} }}\n",
-                crate::metadata::source_type(context.source_types, &data.ty)?
-                    .metadata
-                    .class
-                    .as_ref()
-                    .ok_or("missing record class")?
-                    .fqn()
+                class.fqn()
             )
         }
         WireNode::Branch { children, .. } => {

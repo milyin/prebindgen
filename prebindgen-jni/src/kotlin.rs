@@ -843,12 +843,6 @@ pub(crate) fn input_kotlin_when(
     out.complete_parameter_paths()?;
     Ok(out)
 }
-pub(crate) fn input_components(
-    nodes: &[JniNode],
-    context: &KotlinContext<'_>,
-) -> Result<KotlinInput> {
-    input_components_when(nodes, context, "true")
-}
 fn input_components_when(
     nodes: &[JniNode],
     context: &KotlinContext<'_>,
@@ -1019,6 +1013,15 @@ pub(crate) fn output_components(
         let wires = nodes.iter().flat_map(leaf_wires).collect::<Vec<_>>();
         return output_leaves(&wires, context, owners);
     }
+    output_components_checked(nodes, context, owners, |_| Ok(()))
+}
+// Validate or normalize each property while its conversion is emitted once.
+pub(crate) fn output_components_checked(
+    nodes: &[JniNode],
+    context: &KotlinContext<'_>,
+    owners: Option<&str>,
+    mut check: impl FnMut(&mut KotlinOutput) -> Result<()>,
+) -> Result<KotlinOutput> {
     let mut out = KotlinOutput::default();
     let mut offset = 0;
     for (index, node) in nodes.iter().enumerate() {
@@ -1031,6 +1034,7 @@ pub(crate) fn output_components(
         };
         let count = crate::group::kotlin_result_fields(node).len();
         let mut c = output_kotlin_scoped(node, &ctx, owners)?;
+        check(&mut c)?;
         remap_output(&mut c, &local, context.result, offset, count);
         c.result_names.resize(c.result_types.len(), None);
         out.result_names.extend(c.result_names);

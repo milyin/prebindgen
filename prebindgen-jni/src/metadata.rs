@@ -162,12 +162,19 @@ pub(crate) fn source_type<'a>(
         .find(|entry| prebindgen_flat::same_type(&entry.ty, ty))
         .ok_or_else(|| format!("unregistered JNI source type `{}`", type_key(ty)))
 }
-pub(crate) fn source_record<'a>(
+pub(crate) fn source_data_class<'a>(
     types: &'a JniTypes,
     ty: &syn::Type,
-) -> Result<&'a prebindgen_flat::Record<data::JniField>> {
-    match &source_type(types, ty)?.definition {
-        prebindgen_flat::TypeDefinition::Record(record) => Ok(record),
+) -> Result<(&'a prebindgen_flat::Record<data::JniField>, &'a Class)> {
+    let source = source_type(types, ty)?;
+    let class = source
+        .metadata
+        .class
+        .as_deref()
+        .filter(|class| matches!(class.representation, ClassRepresentation::Data { .. }))
+        .ok_or("record conversion requires a declared data class")?;
+    match &source.definition {
+        prebindgen_flat::TypeDefinition::Record(record) => Ok((record, class)),
         _ => Err(format!("`{}` is not a source record", type_key(ty))),
     }
 }
