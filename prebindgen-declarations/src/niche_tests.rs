@@ -2,7 +2,7 @@
 use super::*;
 type InputPlan<W> = prebindgen_conversions::InputPlan<W, (), DomainGroup, DomainGroup>;
 type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, (), DomainGroup, DomainGroup>;
-use prebindgen_flat::WireKind;
+use prebindgen_conversions::WireKind;
 
 // This is intentionally not an enum of primitive sentinel kinds. An adapter may
 // retain arbitrary structured metadata and choose its own expression language.
@@ -42,14 +42,14 @@ impl DomainAbi {
     fn wires(
         node: &WireNode<Domain, DomainGroup, DomainGroup>,
     ) -> std::vec::IntoIter<&Wire<Domain>> {
-        prebindgen_flat::wire_definitions(std::iter::once(node))
+        prebindgen_conversions::wire_definitions(std::iter::once(node))
             .collect::<Vec<_>>()
             .into_iter()
     }
     fn wires_mut(
         node: &mut WireNode<Domain, DomainGroup, DomainGroup>,
     ) -> std::vec::IntoIter<&mut Wire<Domain>> {
-        prebindgen_flat::wire_definitions_mut(std::iter::once(node))
+        prebindgen_conversions::wire_definitions_mut(std::iter::once(node))
             .collect::<Vec<_>>()
             .into_iter()
     }
@@ -275,7 +275,7 @@ fn output(domain: &Domain, depth: usize, source: TokenStream) -> OutputPlan<Doma
             fallible: false,
             context: Default::default(),
             delivery: Default::default(),
-            outcomes: prebindgen_flat::Outcomes {
+            outcomes: prebindgen_conversions::Outcomes {
                 success: WireNode::Leaf(wires),
                 source_error: None,
                 binding_failure: None,
@@ -565,7 +565,7 @@ fn optional_niches_live_on_leaves_and_only_the_discriminator_keeps_one() {
     .unwrap();
     assert_eq!(DomainAbi::wires(&plan.outcomes.success).len(), 2);
     assert!(
-        prebindgen_flat::wire_definitions(std::iter::once(&plan.outcomes.success))
+        prebindgen_conversions::wire_definitions(std::iter::once(&plan.outcomes.success))
             .all(|w| DomainCodec.niche(&w.kind).is_none())
     );
     plan = optional_output(
@@ -587,7 +587,7 @@ fn optional_niches_live_on_leaves_and_only_the_discriminator_keeps_one() {
         "tag3"
     );
 
-    let prebindgen_flat::WireNode::Chain {
+    let prebindgen_conversions::WireNode::Chain {
         child: outer_element,
         meta: outer_metadata,
         controls: outer_controls,
@@ -598,7 +598,7 @@ fn optional_niches_live_on_leaves_and_only_the_discriminator_keeps_one() {
     };
     assert!(outer_metadata.starts_with("optional:tag3:"));
     assert!(outer_controls.len() == 1);
-    let prebindgen_flat::WireNode::Chain {
+    let prebindgen_conversions::WireNode::Chain {
         meta: inner_metadata,
         ..
     } = &**outer_element

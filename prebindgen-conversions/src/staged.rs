@@ -1,8 +1,9 @@
 //! Optional expression protocol for stored plans used by the C and JNI adapters.
 //! Scoped requests keep prepared temporaries alive while evaluating a continuation.
 //! Other generators can define entirely different request enums.
+use crate::{Conversion, WireKind};
 use crate::{InputPlan, OutputPlan, TemplateContext};
-use prebindgen_flat::{Conversion, Function, Result, WireKind};
+use prebindgen_flat::{Function, Result};
 use proc_macro2::TokenStream;
 use quote::quote;
 
@@ -289,17 +290,19 @@ fn reserve(code: &TokenStream, used: &mut std::collections::BTreeSet<String>) {
     }
 }
 
-impl<W: WireKind, C: TemplateContext + 'static, N, B> prebindgen_flat::InputConversion
+impl<W: WireKind, C: TemplateContext + 'static, N, B> crate::InputConversion
     for InputPlan<W, C, N, B>
 {
-    fn input_node(&self) -> &prebindgen_flat::WireNode<W, N, B> {
+    fn input_node(&self) -> &crate::WireNode<W, N, B> {
         &self.node
     }
 }
-impl<W: WireKind, C: TemplateContext + 'static, N, B> prebindgen_flat::OutputConversion
+impl<W: WireKind, C: TemplateContext + 'static, N, B> crate::OutputConversion
     for OutputPlan<W, C, N, B>
 {
-    fn output_outcomes(&self) -> &prebindgen_flat::Outcomes<prebindgen_flat::WireNode<W, N, B>> {
+    fn output_outcomes(&self) -> &crate::Outcomes<crate::WireNode<W, N, B>> {
         &self.outcomes
     }
 }
+
+use crate::FunctionConversions as _;

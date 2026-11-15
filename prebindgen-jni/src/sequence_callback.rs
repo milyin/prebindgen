@@ -5,7 +5,7 @@ use prebindgen_declarations::SequenceOutput;
 pub(crate) fn transport(
     wire: syn::Ident,
     length: syn::Ident,
-    element: &prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
+    element: &prebindgen_conversions::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
     values: &[(syn::Ident, TokenStream)],
 ) -> Result<SequenceOutput<JniWire, crate::JniChain>> {
     let env = prebindgen_conversions::template_parameter("environment");
@@ -51,7 +51,7 @@ pub(crate) fn transport(
     };
     let commit_element = prebindgen_conversions::template_parameter("commit_element");
     Ok(SequenceOutput {
-        controls: vec![prebindgen_flat::Wire {
+        controls: vec![prebindgen_conversions::Wire {
             name: wire.clone(),
             // Zero means present, even when no rows arrived. The enclosing
             // option reserves -1; both values use cached boxes in packet mode.
@@ -162,13 +162,13 @@ pub(crate) fn fold<O: KotlinOutputConversion>(
     // can use their existing locals without allocating a journal or a lambda.
     fn nested_owners(node: &kotlin::JniNode) -> bool {
         match node {
-            prebindgen_flat::WireNode::Chain {
+            prebindgen_conversions::WireNode::Chain {
                 meta: JniChain::Sequence(_),
                 child,
                 ..
             } => kotlin::input_handles(child, false),
-            prebindgen_flat::WireNode::Chain { child, .. } => nested_owners(child),
-            prebindgen_flat::WireNode::Branch { children, .. } => {
+            prebindgen_conversions::WireNode::Chain { child, .. } => nested_owners(child),
+            prebindgen_conversions::WireNode::Branch { children, .. } => {
                 children.iter().any(nested_owners)
             }
             _ => false,

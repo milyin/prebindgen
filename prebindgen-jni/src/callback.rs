@@ -1,8 +1,9 @@
 //! Preparation and emission of retained source callbacks.
 use super::*;
 use crate::operations::{JniInput, JniInputBranch};
+use prebindgen_conversions::{InputConversion, Wire, WireNode};
 use prebindgen_conversions::{InputFragment, OutputFragment, TemplateContext};
-use prebindgen_flat::{callback_signature, InputConversion, Wire, WireNode};
+use prebindgen_flat::callback_signature;
 use std::rc::Rc;
 
 /// Prepared callback signature and the independent output boundary of its arguments.
@@ -180,7 +181,7 @@ pub(crate) fn input(
         // until construction finishes, so a temporary Cleaner-managed wrapper
         // could disappear while Rust still borrows it. Moving the handle disarms
         // cleanup and does not have this problem.
-        for wire in prebindgen_flat::wire_definitions(std::iter::once(input.input_node())) {
+        for wire in prebindgen_conversions::wire_definitions(std::iter::once(input.input_node())) {
             if let JniWire::Handle { handle, .. } = &wire.kind {
                 if handle.access != prebindgen_conversions::Access::Move
                     && flat
@@ -298,7 +299,7 @@ impl JniCallback {
     /// itself has no handle inputs.
     pub(crate) fn requires_preflight(&self) -> bool {
         self.return_value.as_ref().is_some_and(|value| {
-            prebindgen_flat::wire_definitions(std::iter::once(value.input.input_node()))
+            prebindgen_conversions::wire_definitions(std::iter::once(value.input.input_node()))
                 .any(|wire| matches!(wire.kind, JniWire::Handle { .. }))
         })
     }
@@ -314,7 +315,7 @@ impl JniCallback {
         active: &prebindgen_declarations::Condition,
     ) -> Result<JniInputPlan<JniWire>> {
         prebindgen_conversions::validate_wire_names(self.arguments.iter().flat_map(|arg| {
-            prebindgen_flat::wire_definitions(std::iter::once(
+            prebindgen_conversions::wire_definitions(std::iter::once(
                 &arg.output.output_outcomes().success,
             ))
         }))?;
@@ -944,7 +945,7 @@ pub(crate) fn files<I: KotlinInputConversion, O: KotlinOutputConversion>(
     let mut ownership_by_name = BTreeMap::new();
     let mut wires = Vec::new();
     for input in &flat.metadata.callbacks {
-        wires.extend(prebindgen_flat::wire_definitions(std::iter::once(
+        wires.extend(prebindgen_conversions::wire_definitions(std::iter::once(
             input.input_node(),
         )));
     }
@@ -1000,7 +1001,7 @@ pub(crate) fn files<I: KotlinInputConversion, O: KotlinOutputConversion>(
             .arguments
             .iter()
             .map(|arg| {
-                let handles = prebindgen_flat::wire_definitions(std::iter::once(
+                let handles = prebindgen_conversions::wire_definitions(std::iter::once(
                     &arg.output.output_outcomes().success,
                 ))
                 .any(|wire| matches!(wire.kind, JniWire::Handle { .. }));
@@ -1130,3 +1131,5 @@ mod preflight_tests {
             .contains("__prebindgen_input_transfer"));
     }
 }
+
+use prebindgen_conversions::FunctionConversions as _;

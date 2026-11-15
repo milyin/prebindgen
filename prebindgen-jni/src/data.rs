@@ -153,9 +153,9 @@ fn value_type(
         .ok()
         .and_then(|i| {
             if input {
-                i.conversion.input.as_ref()
+                i.metadata.conversion.input.as_ref()
             } else {
-                i.conversion.output.as_ref()
+                i.metadata.conversion.output.as_ref()
             }
         })
         .or_else(|| {
@@ -166,7 +166,7 @@ fn value_type(
                     syn::Type::Reference(r) => flat
                         .type_info(&r.elem)
                         .ok()
-                        .and_then(|i| i.conversion.output.as_ref()),
+                        .and_then(|i| i.metadata.conversion.output.as_ref()),
                     _ => None,
                 }
             }
@@ -626,14 +626,14 @@ fn field_name(field: &prebindgen_flat::Field<JniField>) -> String {
 impl Class {
     pub(super) fn mark(
         &self,
-        layout: &mut prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
+        layout: &mut prebindgen_conversions::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
         root: String,
         condition: String,
         property_types: Vec<String>,
     ) -> Result<()> {
         group::retire_niches(layout, None)?;
         let mut nodes = std::mem::take(layout);
-        let prebindgen_flat::WireNode::Branch {
+        let prebindgen_conversions::WireNode::Branch {
             meta: JniBranch::Group(metadata),
             ..
         } = &mut nodes
@@ -656,7 +656,7 @@ impl Class {
 
 type FieldNode<'a> = (
     &'a syn::Ident,
-    &'a prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
+    &'a prebindgen_conversions::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
 );
 pub(crate) fn fields(nodes: &[kotlin::JniNode]) -> Result<Vec<FieldNode<'_>>> {
     nodes
@@ -890,8 +890,8 @@ pub(crate) fn output_kotlin(
 #[cfg(test)]
 mod group_tests {
     use super::*;
-    use prebindgen_flat::Wire;
-    use prebindgen_flat::WireNode;
+    use prebindgen_conversions::Wire;
+    use prebindgen_conversions::WireNode;
 
     #[test]
     fn codec_reads_current_enum_metadata_without_a_preparation_cache() {
@@ -924,9 +924,10 @@ mod group_tests {
                     prebindgen_declarations::ValueAccess::Owned,
                 ))
                 .unwrap();
-            let wire = prebindgen_flat::wire_definitions(std::iter::once(&output.outcomes.success))
-                .next()
-                .unwrap();
+            let wire =
+                prebindgen_conversions::wire_definitions(std::iter::once(&output.outcomes.success))
+                    .next()
+                    .unwrap();
             assert!(matches!(&wire.kind,JniWire::Enum{enum_type,..} if enum_type.class_name==name));
         }
     }
@@ -1030,16 +1031,16 @@ mod group_tests {
     }
     #[test]
     fn kotlin_record_emission_reads_names_from_shared_fields() {
-        let mut field = prebindgen_flat::WireNode::Leaf(vec![Wire {
+        let mut field = prebindgen_conversions::WireNode::Leaf(vec![Wire {
             name: syn::parse_quote!(incoming),
             kind: JniWire::scalar(Primitive::I32),
         }]);
-        field = prebindgen_flat::WireNode::Branch {
+        field = prebindgen_conversions::WireNode::Branch {
             controls: vec![],
             meta: JniBranch::Group(JniGroup::Field(syn::parse_quote!(r#type))),
             children: vec![std::mem::take(&mut field)],
         };
-        field = prebindgen_flat::WireNode::Branch {
+        field = prebindgen_conversions::WireNode::Branch {
             controls: vec![],
             meta: JniBranch::Group(JniGroup::Fields(Some(JniDataGroup {
                 root: "point".into(),

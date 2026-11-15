@@ -1,7 +1,8 @@
 //! Kotlin sealed values and selected-variant JNI conversion.
 use super::*;
 use prebindgen_declarations::{EnumEncoding, EnumForm, EnumVariants};
-use prebindgen_flat::{InputConversion, Wire, WireNode};
+
+use prebindgen_conversions::{InputConversion, Wire, WireNode};
 use std::rc::Rc;
 
 /// Declare a Kotlin sealed interface for a Rust payload enum or concrete Result.
@@ -622,11 +623,11 @@ fn close_member<S: prebindgen_flat::Schema<Field = data::JniField, Type = JniTyp
     let Some(info) = flat.type_info(ty).ok() else {
         return Ok(String::new());
     };
-    if let Some(c) = info
+    if let Some(c) = info.metadata.conversion.input.as_ref().or(info
+        .metadata
         .conversion
-        .input
-        .as_ref()
-        .or(info.conversion.output.as_ref())
+        .output
+        .as_ref())
     {
         return close_member(flat, &c.representation, value, depth + 1);
     }
@@ -794,3 +795,5 @@ pub(crate) fn emit_tags<I: KotlinInputConversion, O: KotlinOutputConversion>(
     native.push_str(&format!("    @JvmStatic external fun payloadEnumSchema(): Long\n    init {{ require(payloadEnumSchema() == {hash}L) {{ \"incompatible payload enum tag mapping\" }} }}\n"));
     Ok(())
 }
+
+use prebindgen_conversions::FunctionConversions as _;

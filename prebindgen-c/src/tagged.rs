@@ -3,7 +3,8 @@ use super::*;
 use prebindgen_declarations::Condition;
 use prebindgen_declarations::{Direction, EnumEncoding, EnumForm, EnumVariants, InputRole};
 use prebindgen_flat::type_key;
-use prebindgen_flat::{Wire as SourceWire, WireNode};
+
+use prebindgen_conversions::{Wire as SourceWire, WireNode};
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
@@ -107,7 +108,7 @@ fn storage_type(w: &CWire) -> syn::Type {
             let n = &value.rust;
             syn::parse_quote!(#n)
         }
-        _ => prebindgen_flat::Wire {
+        _ => prebindgen_conversions::Wire {
             name: syn::parse_quote!(unused),
             kind: w.clone(),
         }
@@ -158,7 +159,7 @@ fn arm_fields(node: &WireNode<CWire, CChain, CBranch>) -> Result<Vec<(&syn::Iden
 pub(crate) fn shape<S: prebindgen_flat::Schema<Module = CModule, Type = CType>>(
     flat: &Flat<S>,
     ty: &syn::Type,
-    node: &prebindgen_flat::WireNode<CWire, CChain, CBranch>,
+    node: &prebindgen_conversions::WireNode<CWire, CChain, CBranch>,
 ) -> Result<(Rc<CTagged>, prebindgen_reprc::TaggedUnion)> {
     let name = flat
         .type_info(ty)?

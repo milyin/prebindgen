@@ -1,8 +1,9 @@
 //! Test adapter syntax used only by compiler conformance tests.
 #![allow(missing_docs, unused_imports, unused_variables)]
 use crate::*;
+use prebindgen_conversions::ValueConversion;
 use prebindgen_flat::{same_type, type_key, Flat, Result, Schema};
-use prebindgen_flat::{Function, Param, TypeUse, ValueConversion};
+use prebindgen_flat::{Function, Param, TypeUse};
 use proc_macro2::TokenStream;
 use std::collections::BTreeMap;
 use std::convert::Infallible;
@@ -109,7 +110,7 @@ pub enum TestInputUnary<TypeScope = Infallible> {
     /// Apply an explicitly selected Rust value conversion.
     Convert {
         /// Checked source/representation conversion.
-        conversion: Box<prebindgen_flat::ValueConversion>,
+        conversion: Box<prebindgen_conversions::ValueConversion>,
     },
     /// Construct a collection from converted elements.
     Sequence,
@@ -197,7 +198,7 @@ pub enum TestOutputUnary<TypeScope = Infallible, SequenceSelection = Infallible>
     /// Apply an explicitly selected Rust value conversion.
     Convert {
         /// Checked source/representation conversion.
-        conversion: Box<prebindgen_flat::ValueConversion>,
+        conversion: Box<prebindgen_conversions::ValueConversion>,
     },
     /// Convert and deliver each collection element.
     Sequence {
@@ -1150,7 +1151,9 @@ impl TestDefaults {
                 )
             }
             InputNode::Leaf(TestInputLeafOp::Value) => {
-                if let Some(conversion) = crate::input_value_conversion(flat, ty)? {
+                if let Some(conversion) =
+                    crate::input_value_conversion(flat, ty, |_| Default::default())?
+                {
                     return self.resolve_input_conversion(
                         flat,
                         codec,
@@ -1598,7 +1601,9 @@ impl TestDefaults {
             }
             OutputNode::Leaf(TestOutputLeafOp::Value)
             | OutputNode::Leaf(TestOutputLeafOp::Projected(_)) => {
-                if let Some(conversion) = crate::output_value_conversion(flat, ty, None)? {
+                if let Some(conversion) =
+                    crate::output_value_conversion(flat, ty, None, |_| Default::default())?
+                {
                     if let OutputNode::Leaf(TestOutputLeafOp::Projected(policy)) = tree {
                         return self.resolve_output_value(
                             flat,
@@ -1909,7 +1914,7 @@ impl TestDefaults {
                 children: vec![],
             });
         }
-        if let Some(c) = crate::input_value_conversion(flat, ty)? {
+        if let Some(c) = crate::input_value_conversion(flat, ty, |_| Default::default())? {
             return self.resolve_input_conversion(
                 flat,
                 codec,
@@ -1961,7 +1966,7 @@ impl TestDefaults {
                 children: vec![],
             });
         }
-        if let Some(c) = crate::output_value_conversion(flat, ty, policy)? {
+        if let Some(c) = crate::output_value_conversion(flat, ty, policy, |_| Default::default())? {
             return self.resolve_output_conversion(
                 flat,
                 codec,
@@ -2181,7 +2186,7 @@ pub fn source_items<'a>(
                 operation: TestInputUnary::Convert { conversion },
                 ..
             } => {
-                if let prebindgen_flat::ValueSource::Function(name) = &conversion.source {
+                if let prebindgen_conversions::ValueSource::Function(name) = &conversion.source {
                     names.push(name.clone())
                 }
             }
@@ -2202,7 +2207,7 @@ pub fn source_items<'a>(
                 operation: TestOutputUnary::Convert { conversion },
                 ..
             } => {
-                if let prebindgen_flat::ValueSource::Function(name) = &conversion.source {
+                if let prebindgen_conversions::ValueSource::Function(name) = &conversion.source {
                     names.push(name.clone())
                 }
             }

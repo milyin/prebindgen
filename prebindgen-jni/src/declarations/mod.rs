@@ -1,5 +1,6 @@
 //! Language-owned configuration and source resolution.
 use super::*;
+use prebindgen_conversions::ValueConversion;
 use prebindgen_declarations::{option_inner, result_parts, sequence_parts};
 use prebindgen_declarations::{
     CallbackArgumentOwnership, DeclConvert, FunctionRecipe, ResolvedSchema,
@@ -8,7 +9,6 @@ use prebindgen_declarations::{Codec, ResolvedInput, ResolvedOutput};
 use prebindgen_declarations::{
     InputNode, OutputNode, Projection, ProjectionMode, SequenceDelivery,
 };
-use prebindgen_flat::ValueConversion;
 use prebindgen_flat::{same_type, type_key, Flat, Result, Schema};
 use std::collections::BTreeMap;
 use syn::Type;

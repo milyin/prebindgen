@@ -1,6 +1,7 @@
 //! Custom projections through ordinary returns, retained callbacks and typed errors.
+use prebindgen_conversions::{Conversion, InputConversion, OutputConversion, WireNode};
 use prebindgen_conversions::{Delivery, DeliveryPolicy, InputFragment, OutputFragment};
-use prebindgen_flat::{Conversion, InputConversion, OutputConversion, Result, WireNode};
+use prebindgen_flat::Result;
 use prebindgen_jni::{
     expand_return, fun, package, ptr_class, JniBindings, JniBranch, JniCallback, JniChain,
     JniContext, JniGen, JniInputConverter, JniOutputConverter, JniWire, KotlinContext, KotlinInput,
@@ -26,7 +27,7 @@ impl Conversion for DurationOutput {
 impl OutputConversion for DurationOutput {
     fn output_outcomes(
         &self,
-    ) -> &prebindgen_flat::Outcomes<WireNode<JniWire, JniChain, JniBranch>> {
+    ) -> &prebindgen_conversions::Outcomes<WireNode<JniWire, JniChain, JniBranch>> {
         self.0.output_outcomes()
     }
 }
@@ -199,7 +200,7 @@ pub fn generate() -> Result<JniGen> {
         .as_ref()
         .ok_or("missing callback")?;
     let node = original.input_node();
-    let callback = prebindgen_flat::wire_definitions(std::iter::once(node))
+    let callback = prebindgen_conversions::wire_definitions(std::iter::once(node))
         .find_map(|wire| {
             if let JniWire::Callback { callback } = &wire.kind {
                 Some(callback.clone())

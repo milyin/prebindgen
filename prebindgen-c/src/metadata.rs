@@ -5,8 +5,8 @@ use std::rc::Rc;
 /// Metadata schema for a C binding model.
 pub struct CSchema;
 impl prebindgen_flat::Schema for CSchema {
-    type Input = CInputConverter;
-    type Output = COutputConverter;
+    type Parameter = CInputConverter;
+    type Return = COutputConverter;
     type Module = CModule;
     type Function = Option<CFunction>;
     type Type = CType;
@@ -45,6 +45,8 @@ pub struct CFunction {
 /// C representation information belonging to one named Rust type.
 #[derive(Clone, Debug, Default)]
 pub struct CType {
+    /// Canonical value conversions selected for this source type.
+    pub conversion: prebindgen_conversions::ValueConversions,
     /// Ordinary tagged carrier of a source payload enum.
     pub tagged: Option<String>,
     /// Unprefixed opaque C typedef name, when this type has a handle representation.

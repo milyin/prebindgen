@@ -1,6 +1,7 @@
 //! An independently implemented input, without a JniInputConverter or InputPlan.
 use prebindgen_conversions::InputFragment;
-use prebindgen_flat::{Conversion, Flat, InputConversion, Primitive, Result, Wire, WireNode};
+use prebindgen_conversions::{Conversion, InputConversion, Wire, WireNode};
+use prebindgen_flat::{Flat, Primitive, Result};
 use prebindgen_jni::{
     JniBindings, JniBranch, JniChain, JniContext, JniFunction, JniGen, JniSchema, JniWire,
     KotlinContext, KotlinInput, KotlinInputConversion,

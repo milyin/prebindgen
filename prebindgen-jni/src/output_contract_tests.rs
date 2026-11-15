@@ -1,6 +1,7 @@
 use super::*;
+use prebindgen_conversions::InputConversion;
 use prebindgen_conversions::{Delivery, DeliveryPolicy, OutputFragment};
-use prebindgen_flat::{Function, InputConversion, TypeUse};
+use prebindgen_flat::{Function, TypeUse};
 use std::{cell::Cell, rc::Rc};
 
 struct ExternalOutput {
@@ -30,7 +31,7 @@ impl Conversion for ExternalOutput {
     }
 }
 impl OutputConversion for ExternalOutput {
-    fn output_outcomes(&self) -> &prebindgen_flat::Outcomes<kotlin::JniNode> {
+    fn output_outcomes(&self) -> &prebindgen_conversions::Outcomes<kotlin::JniNode> {
         self.native.output_outcomes()
     }
 }
@@ -261,7 +262,7 @@ impl Conversion for TextOutput {
     }
 }
 impl OutputConversion for TextOutput {
-    fn output_outcomes(&self) -> &prebindgen_flat::Outcomes<kotlin::JniNode> {
+    fn output_outcomes(&self) -> &prebindgen_conversions::Outcomes<kotlin::JniNode> {
         self.0.output_outcomes()
     }
 }
@@ -288,7 +289,7 @@ fn callback(flat: &JniBindings, name: &str) -> JniCallback {
         .slot
         .as_ref()
         .unwrap();
-    prebindgen_flat::wire_definitions(std::iter::once(input.input_node()))
+    prebindgen_conversions::wire_definitions(std::iter::once(input.input_node()))
         .find_map(|wire| {
             if let JniWire::Callback { callback } = &wire.kind {
                 Some(callback.as_ref().clone())

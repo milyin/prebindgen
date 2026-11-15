@@ -3,7 +3,7 @@ use super::*;
 use crate::{
     JniInputBranch, JniInputLeafOp, JniInputUnary, JniOutputBranch, JniOutputLeafOp, JniOutputUnary,
 };
-use prebindgen_flat::InputConversion;
+use prebindgen_conversions::InputConversion;
 fn flat(source: &str) -> JniBindings {
     Flat::parse(
         syn::parse_file(source)
@@ -970,9 +970,9 @@ fn optional_unannotated_fields_keep_outer_presence_in_both_directions() {
 
 #[test]
 fn reference_and_presence_flag_niches_keep_nested_wire_counts_bounded() {
-    use prebindgen_flat::WireNode;
+    use prebindgen_conversions::WireNode;
     fn reservations(
-        layout: &prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
+        layout: &prebindgen_conversions::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
     ) -> Vec<Option<JniNiche>> {
         let mut result = vec![];
         match layout {
@@ -1403,7 +1403,7 @@ fn logical_outcomes_keep_typed_errors_and_match_both_jni_sequence_deliveries() {
         .is_some());
     defaults.fill(&mut flat, &codec, &decl, &()).unwrap();
     let output = flat.function("f").unwrap().output_conversion().unwrap();
-    let prebindgen_flat::Outcomes {
+    let prebindgen_conversions::Outcomes {
         success,
         source_error: Some(error),
         binding_failure: Some(binding_failure),
@@ -1413,16 +1413,16 @@ fn logical_outcomes_keep_typed_errors_and_match_both_jni_sequence_deliveries() {
     };
 
     assert_eq!(
-        prebindgen_flat::wire_definitions(std::iter::once(success)).count(),
+        prebindgen_conversions::wire_definitions(std::iter::once(success)).count(),
         3
     );
 
     assert_eq!(
-        prebindgen_flat::wire_definitions(std::iter::once(error)).count(),
+        prebindgen_conversions::wire_definitions(std::iter::once(error)).count(),
         2
     );
     assert!(matches!(
-        prebindgen_flat::wire_definitions(std::iter::once(error))
+        prebindgen_conversions::wire_definitions(std::iter::once(error))
             .next()
             .unwrap()
             .kind,
@@ -1432,29 +1432,30 @@ fn logical_outcomes_keep_typed_errors_and_match_both_jni_sequence_deliveries() {
         }
     ));
     assert!(matches!(
-        prebindgen_flat::wire_definitions(std::iter::once(error))
+        prebindgen_conversions::wire_definitions(std::iter::once(error))
             .nth(1)
             .unwrap()
             .kind,
         JniWire::Text { .. }
     ));
     assert_eq!(
-        prebindgen_flat::wire_definitions(std::iter::once(binding_failure)).count(),
+        prebindgen_conversions::wire_definitions(std::iter::once(binding_failure)).count(),
         1
     );
     assert_eq!(
-        prebindgen_flat::wire_definitions([success, error, binding_failure]).count(),
+        prebindgen_conversions::wire_definitions([success, error, binding_failure]).count(),
         6
     );
     assert_eq!(
         crate::group::result_packet_fields(&output.output_outcomes().success).count(),
         1
     );
-    let shape = |layout: &prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>| {
-        prebindgen_flat::wire_definitions_with_paths(std::iter::once(layout))
-            .map(|e| (e.path, prebindgen_flat::type_key(&e.wire.rust_type())))
-            .collect::<Vec<_>>()
-    };
+    let shape =
+        |layout: &prebindgen_conversions::WireNode<JniWire, crate::JniChain, crate::JniBranch>| {
+            prebindgen_conversions::wire_definitions_with_paths(std::iter::once(layout))
+                .map(|e| (e.path, prebindgen_flat::type_key(&e.wire.rust_type())))
+                .collect::<Vec<_>>()
+        };
     let expected = shape(&output.output_outcomes().success);
     sequence::callback_target(
         &(flat.function("f").unwrap().output_conversion().unwrap())
@@ -1519,7 +1520,7 @@ fn manual_jni_plans_share_one_tree_through_flat_and_configure() {
         function.ret.slot = Some(output.into());
         let input = function.input_conversions()?[0];
         assert!(std::ptr::eq(
-            prebindgen_flat::wire_definitions(std::iter::once(input.input_node()))
+            prebindgen_conversions::wire_definitions(std::iter::once(input.input_node()))
                 .next()
                 .unwrap(),
             crate::group::argument_parameters(input.input_node())
@@ -1528,15 +1529,17 @@ fn manual_jni_plans_share_one_tree_through_flat_and_configure() {
         ));
         let output = function.output_conversion()?;
         assert!(std::ptr::eq(
-            prebindgen_flat::wire_definitions(std::iter::once(&output.output_outcomes().success))
-                .next()
-                .unwrap(),
+            prebindgen_conversions::wire_definitions(std::iter::once(
+                &output.output_outcomes().success
+            ))
+            .next()
+            .unwrap(),
             crate::group::result_packet_fields(&output.output_outcomes().success)
                 .next()
                 .unwrap()
         ));
         assert_eq!(
-            prebindgen_flat::wire_definitions(std::iter::once(
+            prebindgen_conversions::wire_definitions(std::iter::once(
                 function.input_conversions()?[0].input_node()
             ))
             .next()
@@ -1545,7 +1548,7 @@ fn manual_jni_plans_share_one_tree_through_flat_and_configure() {
             "native_input"
         );
         assert_eq!(
-            prebindgen_flat::wire_definitions(std::iter::once(
+            prebindgen_conversions::wire_definitions(std::iter::once(
                 &function.output_conversion()?.output_outcomes().success
             ))
             .next()
@@ -1667,7 +1670,7 @@ fn production_declarations_write_direct_trees_and_preserve_named_error_views() {
         .unwrap();
     assert!(matches!(
         input.input_node(),
-        prebindgen_flat::WireNode::Leaf(_)
+        prebindgen_conversions::WireNode::Leaf(_)
     ));
     let generated = generate(&prepared).unwrap();
     assert!(generated.kotlin["test/Functions.kt"].contains("test.Key"));
@@ -2894,7 +2897,7 @@ fn automatic_bulk_collection_outputs_keep_inputs_and_direct_buffers_ordinary() {
         .unwrap();
     assert!(matches!(
         input.input_node(),
-        prebindgen_flat::WireNode::Chain {
+        prebindgen_conversions::WireNode::Chain {
             meta: JniChain::Sequence(JniSequence::Buffered),
             ..
         }
@@ -3619,7 +3622,7 @@ fn resolved_callback_elements_can_keep_optional_presence_outside_a_bulk_frame() 
     // The optional uses a null frame, so presence stays outside its payload
     // without adding a separate discriminator argument.
     assert!(
-        matches!(element, prebindgen_flat::WireNode::Chain {meta:JniChain::Optional(_),child,..} if matches!(child.as_ref(),prebindgen_flat::WireNode::Chain {meta:JniChain::Bulk(_),..}))
+        matches!(element, prebindgen_conversions::WireNode::Chain {meta:JniChain::Optional(_),child,..} if matches!(child.as_ref(),prebindgen_conversions::WireNode::Chain {meta:JniChain::Bulk(_),..}))
     );
     assert_eq!(fields.len(), 1);
     assert_eq!(
@@ -3755,7 +3758,7 @@ fn callback_capture_rows_use_all_jvm_carriers_and_keep_nested_cleanup() {
 
 #[test]
 fn typed_output_remapping_preserves_nullable_and_longer_cast_types() {
-    let wire = prebindgen_flat::Wire {
+    let wire = prebindgen_conversions::Wire {
         name: syn::parse_quote!(value),
         kind: JniWire::scalar(Primitive::I64),
     };
@@ -3821,7 +3824,7 @@ fn ordinary_output_rows_respect_jvm_constructor_slot_limit() {
         let fields = (0..longs)
             .map(|i| (format!("n{i}"), Primitive::I64))
             .chain((0..ints).map(|i| (format!("x{i}"), Primitive::I32)))
-            .map(|(name, primitive)| prebindgen_flat::Wire {
+            .map(|(name, primitive)| prebindgen_conversions::Wire {
                 name: syn::parse_str(&name).unwrap(),
                 kind: JniWire::scalar(primitive),
             })
@@ -3833,7 +3836,7 @@ fn ordinary_output_rows_respect_jvm_constructor_slot_limit() {
                 (name.clone(), quote!(#name))
             })
             .collect::<Vec<_>>();
-        let element = prebindgen_flat::WireNode::Leaf(fields);
+        let element = prebindgen_conversions::WireNode::Leaf(fields);
         let output = sequence::output(
             syn::parse_quote!(rows),
             syn::parse_quote!(length),
@@ -3852,16 +3855,16 @@ fn ordinary_output_rows_respect_jvm_constructor_slot_limit() {
 
 #[test]
 fn legacy_buffered_schema_keeps_array_decoder_and_input_only_skips_registration() {
-    let node = prebindgen_flat::WireNode::Chain {
-        controls: vec![prebindgen_flat::Wire {
+    let node = prebindgen_conversions::WireNode::Chain {
+        controls: vec![prebindgen_conversions::Wire {
             name: syn::parse_quote!(rows),
             kind: JniWire::Rows {
                 condition: "true".into(),
                 null_niche_available: true,
             },
         }],
-        child: Box::new(prebindgen_flat::WireNode::Leaf(vec![
-            prebindgen_flat::Wire {
+        child: Box::new(prebindgen_conversions::WireNode::Leaf(vec![
+            prebindgen_conversions::Wire {
                 name: syn::parse_quote!(value),
                 kind: JniWire::scalar(Primitive::I64),
             },
@@ -3909,7 +3912,7 @@ fn callback_collectors_reserve_once_before_rows_without_changing_row_signatures(
     let text = &generated.kotlin["test/Functions.kt"];
     assert!(text.contains("val __pb_rows = __pb_sink.rows"));
     assert!(!text.contains("ArrayList<"));
-    let row = prebindgen_flat::WireNode::Leaf(vec![prebindgen_flat::Wire {
+    let row = prebindgen_conversions::WireNode::Leaf(vec![prebindgen_conversions::Wire {
         name: syn::parse_quote!(value),
         kind: JniWire::scalar(Primitive::I64),
     }]);
@@ -4576,3 +4579,5 @@ fn callback_return_preserves_defaults_for_the_full_reference_type() {
         "{error}"
     );
 }
+
+use prebindgen_conversions::FunctionConversions as _;

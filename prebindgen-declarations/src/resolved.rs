@@ -16,8 +16,8 @@ pub enum ResolvedSlot<T, P> {
 /// Schema with resolved input/output trees and the adapter's source metadata.
 pub struct ResolvedSchema<C: Codec>(std::marker::PhantomData<C>);
 impl<C: Codec> Schema for ResolvedSchema<C> {
-    type Input = ResolvedSlot<ResolvedInput<C>, <C::Schema as Schema>::Input>;
-    type Output = ResolvedSlot<ResolvedOutput<C>, <C::Schema as Schema>::Output>;
+    type Parameter = ResolvedSlot<ResolvedInput<C>, <C::Schema as Schema>::Parameter>;
+    type Return = ResolvedSlot<ResolvedOutput<C>, <C::Schema as Schema>::Return>;
     type Module = ResolvedModule<C>;
     type Function = <C::Schema as Schema>::Function;
     type Type = <C::Schema as Schema>::Type;

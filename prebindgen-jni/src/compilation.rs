@@ -53,14 +53,14 @@ impl Consumes for JniOutput {
                 operation: JniOutputUnary::Convert { conversion, .. },
                 ..
             } => match &conversion.source {
-                prebindgen_flat::ValueSource::Function(name) => {
+                prebindgen_conversions::ValueSource::Function(name) => {
                     flat.function(name).is_ok_and(|f| {
                         f.params
                             .first()
                             .is_some_and(|p| !matches!(p.ty.ty, Type::Reference(_)))
                     })
                 }
-                prebindgen_flat::ValueSource::Into { .. } => true,
+                prebindgen_conversions::ValueSource::Into { .. } => true,
             },
             JniOutput::Unary {
                 operation: JniOutputUnary::Sequence { mode, .. },

@@ -2,12 +2,11 @@
 #![warn(missing_docs)]
 use prebindgen_conversions::value::Value;
 pub use prebindgen_conversions::Access;
+use prebindgen_conversions::{Conversion, InputConversion, OutputConversion, WireKind};
 pub use prebindgen_declarations::{
     convert, from, into, try_from, try_into, DeclConvert, DeclConvertSource,
 };
-use prebindgen_flat::{
-    Conversion, Flat, InputConversion, OutputConversion, Primitive, Result, WireKind,
-};
+use prebindgen_flat::{Flat, Primitive, Result};
 
 mod callback;
 pub use callback::CCallback;
@@ -45,12 +44,12 @@ mod selected;
 mod sequence;
 use group::validate_layout;
 pub use group::{CBranch, CChain, CGroup, COptional};
+use prebindgen_conversions::Wire as GenericWire;
 use prebindgen_declarations::{
     Alternatives, Codec, GroupKind, InputLeaf, InputRole, Optional, OptionalEncoding, OutputLeaf,
     Presence, Representation, SequenceInputRequest, SequenceOutputRequest, SourceError,
     SourceErrorPlan, ValueAccess,
 };
-use prebindgen_flat::Wire as GenericWire;
 pub use sequence::CSequence;
 mod emission;
 pub use emission::CContext;
@@ -175,9 +174,10 @@ impl Codec for CCodec {
     fn binding_failure_layout(
         &self,
         _: &(),
-    ) -> Result<Option<prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>>> {
-        Ok(Some(prebindgen_flat::WireNode::Leaf(vec![
-            prebindgen_flat::Wire {
+    ) -> Result<Option<prebindgen_conversions::WireNode<Self::Wire, Self::Chain, Self::Branch>>>
+    {
+        Ok(Some(prebindgen_conversions::WireNode::Leaf(vec![
+            prebindgen_conversions::Wire {
                 name: syn::parse_quote!(message),
                 kind: CWire::Buffer,
             },
@@ -646,8 +646,8 @@ impl Codec for CCodec {
             context: Default::default(),
             delivery: Default::default(),
             commit: TokenStream::new(),
-            outcomes: prebindgen_flat::Outcomes {
-                success: prebindgen_flat::WireNode::Leaf(vec![Wire {
+            outcomes: prebindgen_conversions::Outcomes {
+                success: prebindgen_conversions::WireNode::Leaf(vec![Wire {
                     name: wire.clone(),
                     kind,
                 }]),
@@ -875,7 +875,7 @@ impl CCodec {
                     (quote!(), quote!(let #v=#decode;), quote!(#v))
                 };
                 let mut plan = CInputPlan::new(
-                    prebindgen_flat::WireNode::Leaf(vec![Wire {
+                    prebindgen_conversions::WireNode::Leaf(vec![Wire {
                         name: w,
                         kind: Self::enum_wire(name, mapping),
                     }]),
@@ -975,8 +975,8 @@ fn owned_pointer_output(
             fallible: false,
             context: Default::default(),
             delivery: Default::default(),
-            outcomes: prebindgen_flat::Outcomes {
-                success: prebindgen_flat::WireNode::Leaf(vec![Wire {
+            outcomes: prebindgen_conversions::Outcomes {
+                success: prebindgen_conversions::WireNode::Leaf(vec![Wire {
                     name: wire.clone(),
                     kind: CWire::pointer(CPointer {
                         ty: ty.clone(),
@@ -1507,7 +1507,12 @@ impl Cbindgen {
                 explicit: true,
             }));
         }
-        prebindgen_declarations::prepare_value_conversions(&mut flat, &self.conversions)?;
+        prebindgen_declarations::prepare_value_conversions(
+            &mut flat,
+            &self.conversions,
+            |t| &t.conversion,
+            |t| &mut t.conversion,
+        )?;
         let mut automatic = std::collections::BTreeMap::new();
         for f in flat.functions.values() {
             owned::collect(&f.ret.ty, &mut automatic);
@@ -1528,9 +1533,12 @@ impl Cbindgen {
             }
         }
         for named in flat.types.values() {
-            for conversion in [&named.conversion.input, &named.conversion.output]
-                .into_iter()
-                .flatten()
+            for conversion in [
+                &named.metadata.conversion.input,
+                &named.metadata.conversion.output,
+            ]
+            .into_iter()
+            .flatten()
             {
                 owned::collect(&conversion.representation, &mut automatic);
             }
@@ -1602,7 +1610,7 @@ impl Cbindgen {
             }
         }
 
-        prebindgen_flat::validate_bindings(&flat)?;
+        prebindgen_conversions::validate_bindings(&flat)?;
         for f in flat.functions.values().filter(|f| f.ret.slot.is_some()) {
             let is_result = f
                 .output_conversion()?
@@ -1684,8 +1692,8 @@ fn byte_view(wire: syn::Ident, value: TokenStream, mutable: bool) -> COutputPlan
         fallible: false,
         context: Default::default(),
         delivery: Default::default(),
-        outcomes: prebindgen_flat::Outcomes {
-            success: prebindgen_flat::WireNode::Leaf(vec![Wire {
+        outcomes: prebindgen_conversions::Outcomes {
+            success: prebindgen_conversions::WireNode::Leaf(vec![Wire {
                 name: wire.clone(),
                 kind,
             }]),
@@ -1826,13 +1834,13 @@ where
         Field = (),
         Variant = (),
     >,
-    S::Input: for<'a> prebindgen_flat::InputConversion<
+    S::Parameter: for<'a> prebindgen_conversions::InputConversion<
         Wire = CWire,
         Chain = CChain,
         Branch = CBranch,
         SlotFragment<'a> = prebindgen_conversions::InputFragment<'a, CContext>,
     >,
-    S::Output: for<'a> prebindgen_flat::OutputConversion<
+    S::Return: for<'a> prebindgen_conversions::OutputConversion<
         Wire = CWire,
         Chain = CChain,
         Branch = CBranch,
@@ -2238,7 +2246,7 @@ The pointer must be null or a live allocation of the declared type returned by t
         for param in &f.params {
             if let Some(slot) = &param.ty.slot {
                 let callbacks =
-                    prebindgen_flat::wire_definitions(std::iter::once(slot.input_node()))
+                    prebindgen_conversions::wire_definitions(std::iter::once(slot.input_node()))
                         .filter_map(|w| {
                             if let CWire::Callback { callback } = &w.kind {
                                 Some((w, callback))
@@ -2542,7 +2550,7 @@ The pointer must be null or a live allocation of the declared type returned by t
     tokens.extend(quote!(#(#guards)*));
     header.push_str("#ifdef __cplusplus\n}\n#endif\n#endif\n");
     Ok(CGeneration {
-        rust: prebindgen_flat::rust_source(tokens)?,
+        rust: prebindgen_conversions::rust_source(tokens)?,
         header,
     })
 }
@@ -2561,7 +2569,7 @@ fn pointer_owns_value(pointer: &syn::Type, returned: &syn::Type) -> bool {
 }
 fn validate_return_loans<I, O, M>(
     function: &prebindgen_flat::Function<I, O, M>,
-    output: &prebindgen_flat::WireNode<CWire, CChain, CBranch>,
+    output: &prebindgen_conversions::WireNode<CWire, CChain, CBranch>,
 ) -> Result<()>
 where
     I: InputConversion<Wire = CWire, Chain = CChain, Branch = CBranch>,
@@ -2591,11 +2599,11 @@ where
     }
     fn stable_input(
         ty: &syn::Type,
-        node: &prebindgen_flat::WireNode<CWire, CChain, CBranch>,
+        node: &prebindgen_conversions::WireNode<CWire, CChain, CBranch>,
     ) -> bool {
         if let (
             Some(inner),
-            prebindgen_flat::WireNode::Chain {
+            prebindgen_conversions::WireNode::Chain {
                 meta: CChain::Optional(_),
                 child,
                 ..
@@ -2605,7 +2613,7 @@ where
             return stable_input(inner, child);
         }
         match (ty, node) {
-            (syn::Type::Reference(r), prebindgen_flat::WireNode::Leaf(wires))
+            (syn::Type::Reference(r), prebindgen_conversions::WireNode::Leaf(wires))
                 if wires.len() == 1 =>
             {
                 matches!(&wires[0].kind,CWire::Pointer {pointer,..} if prebindgen_flat::same_type(&pointer.ty,&r.elem))
@@ -2675,14 +2683,14 @@ where
 }
 
 fn describe_groups(
-    layout: &prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>,
+    layout: &prebindgen_conversions::WireNode<CWire, crate::CChain, crate::CBranch>,
     wires: &[&Wire],
     output: bool,
     next_label: &mut usize,
     root: &str,
 ) -> String {
     fn visit(
-        node: &prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>,
+        node: &prebindgen_conversions::WireNode<CWire, crate::CChain, crate::CBranch>,
         names: &std::collections::BTreeMap<String, String>,
         parents: &mut Vec<String>,
         out: &mut String,
@@ -2691,14 +2699,14 @@ fn describe_groups(
     ) {
         if matches!(
             node,
-            prebindgen_flat::WireNode::Chain {
+            prebindgen_conversions::WireNode::Chain {
                 meta: CChain::Tagged(_),
                 ..
             }
         ) {
             return;
         }
-        if let prebindgen_flat::WireNode::Branch {
+        if let prebindgen_conversions::WireNode::Branch {
             meta: CBranch::Alternatives,
             children: alternatives,
             ..
@@ -2708,7 +2716,7 @@ fn describe_groups(
                 visit(arm, names, parents, out, next_label, field_path);
             }
         }
-        if let prebindgen_flat::WireNode::Chain {
+        if let prebindgen_conversions::WireNode::Chain {
             controls,
             child: element,
             meta: CChain::Sequence(metadata),
@@ -2737,7 +2745,7 @@ fn describe_groups(
                 *last = original;
             }
         }
-        if let prebindgen_flat::WireNode::Chain {
+        if let prebindgen_conversions::WireNode::Chain {
             child: element,
             meta: CChain::Optional(g),
             ..
@@ -2761,7 +2769,7 @@ fn describe_groups(
             visit(element, names, parents, out, next_label, field_path);
             parents.pop();
         }
-        if let prebindgen_flat::WireNode::Branch {
+        if let prebindgen_conversions::WireNode::Branch {
             meta: CBranch::Group(metadata),
             children,
             ..
@@ -3559,7 +3567,7 @@ mod generation_tests {
             2
         );
         let output = normal.output_conversion().unwrap();
-        let prebindgen_flat::Outcomes {
+        let prebindgen_conversions::Outcomes {
             success,
             source_error: Some(errors),
             binding_failure: Some(binding_failure),
@@ -3569,12 +3577,12 @@ mod generation_tests {
         };
 
         assert_eq!(
-            prebindgen_flat::wire_definitions(std::iter::once(success)).count(),
+            prebindgen_conversions::wire_definitions(std::iter::once(success)).count(),
             4
         );
 
         assert_eq!(
-            prebindgen_flat::wire_definitions(std::iter::once(errors)).count(),
+            prebindgen_conversions::wire_definitions(std::iter::once(errors)).count(),
             3
         );
         assert_eq!(
@@ -3595,15 +3603,15 @@ mod generation_tests {
             3
         );
         assert_eq!(
-            prebindgen_flat::wire_definitions(std::iter::once(binding_failure)).count(),
+            prebindgen_conversions::wire_definitions(std::iter::once(binding_failure)).count(),
             1
         );
         assert_ne!(
-            prebindgen_flat::wire_definitions([success, errors, binding_failure]).count(),
+            prebindgen_conversions::wire_definitions([success, errors, binding_failure]).count(),
             output.values.len()
         );
         assert!(matches!(
-            prebindgen_flat::wire_definitions(std::iter::once(success))
+            prebindgen_conversions::wire_definitions(std::iter::once(success))
                 .last()
                 .unwrap()
                 .kind,
@@ -3612,14 +3620,15 @@ mod generation_tests {
                 ..
             }
         ));
-        let shape = |layout: &prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>| {
-            let (_, element, _) = sequence::return_sequence(layout).unwrap();
-            prebindgen_flat::wire_definitions_with_paths(std::iter::once(element))
-                .map(|e| (e.path, prebindgen_flat::type_key(&e.wire.rust_type())))
-                .collect::<Vec<_>>()
-        };
+        let shape =
+            |layout: &prebindgen_conversions::WireNode<CWire, crate::CChain, crate::CBranch>| {
+                let (_, element, _) = sequence::return_sequence(layout).unwrap();
+                prebindgen_conversions::wire_definitions_with_paths(std::iter::once(element))
+                    .map(|e| (e.path, prebindgen_flat::type_key(&e.wire.rust_type())))
+                    .collect::<Vec<_>>()
+            };
         let expected = shape(&output.output_outcomes().success);
-        let expected_paths = prebindgen_flat::wire_definitions_with_paths(std::iter::once(
+        let expected_paths = prebindgen_conversions::wire_definitions_with_paths(std::iter::once(
             &output.output_outcomes().success,
         ))
         .map(|entry| entry.path)
@@ -3641,7 +3650,7 @@ mod generation_tests {
             .unwrap();
         assert_eq!(shape(&callback.output_outcomes().success), expected);
         assert_eq!(
-            prebindgen_flat::wire_definitions_with_paths(std::iter::once(
+            prebindgen_conversions::wire_definitions_with_paths(std::iter::once(
                 &callback.output_outcomes().success
             ))
             .map(|entry| entry.path)
@@ -4012,7 +4021,7 @@ mod generation_tests {
                     .len(),
                 4
             );
-            let prebindgen_flat::WireNode::Chain {
+            let prebindgen_conversions::WireNode::Chain {
                 meta: CChain::Optional(outer_metadata),
                 ..
             } = &plan.node
@@ -4166,11 +4175,11 @@ mod generation_tests {
         #[allow(clippy::type_complexity)] // Custom slot storage keeps every metadata type explicit.
         struct CountedOutput(
             std::rc::Rc<std::cell::Cell<usize>>,
-            prebindgen_flat::Outcomes<
-                prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>,
+            prebindgen_conversions::Outcomes<
+                prebindgen_conversions::WireNode<CWire, crate::CChain, crate::CBranch>,
             >,
         );
-        impl prebindgen_flat::Conversion for CountedOutput {
+        impl prebindgen_conversions::Conversion for CountedOutput {
             type Wire = CWire;
             type Chain = CChain;
             type Branch = CBranch;
@@ -4192,19 +4201,19 @@ mod generation_tests {
                 })
             }
         }
-        impl prebindgen_flat::OutputConversion for CountedOutput {
+        impl prebindgen_conversions::OutputConversion for CountedOutput {
             fn output_outcomes(
                 &self,
-            ) -> &prebindgen_flat::Outcomes<
-                prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>,
+            ) -> &prebindgen_conversions::Outcomes<
+                prebindgen_conversions::WireNode<CWire, crate::CChain, crate::CBranch>,
             > {
                 &self.1
             }
         }
         struct CountedSchema;
         impl prebindgen_flat::Schema for CountedSchema {
-            type Input = CInputPlan<CWire>;
-            type Output = CountedOutput;
+            type Parameter = CInputPlan<CWire>;
+            type Return = CountedOutput;
             type Module = CModule;
             type Function = Option<CFunction>;
             type Type = CType;
@@ -4373,8 +4382,8 @@ mod abort_policy_tests {
     }
 }
 
-fn takes_input_owners(node: &prebindgen_flat::WireNode<CWire, CChain, CBranch>) -> bool {
-    prebindgen_flat::wire_definitions(std::iter::once(node)).any(|w| match &w.kind {
+fn takes_input_owners(node: &prebindgen_conversions::WireNode<CWire, CChain, CBranch>) -> bool {
+    prebindgen_conversions::wire_definitions(std::iter::once(node)).any(|w| match &w.kind {
         CWire::Pointer { pointer, .. } => pointer.access == Access::Move,
         CWire::Owned { access, .. } => *access == Access::Move,
         CWire::Callback { .. } => true,
@@ -4464,3 +4473,5 @@ const _: () = ();
 mod borrowing_tests;
 #[cfg(test)]
 mod structural_tests;
+
+use prebindgen_conversions::FunctionConversions as _;

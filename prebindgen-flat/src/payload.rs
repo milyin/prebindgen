@@ -178,7 +178,6 @@ impl<M: Schema> Flat<M> {
             definition: crate::TypeDefinition::External,
             ty: ty.clone(),
             metadata: Default::default(),
-            conversion: Default::default(),
         });
         let variants = [("Ok", ok), ("Err", error)]
             .into_iter()

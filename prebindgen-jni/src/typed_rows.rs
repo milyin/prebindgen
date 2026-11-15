@@ -1,7 +1,7 @@
 //! Shared immutable row classes and their native constructor registration.
 use super::*;
 use kotlin::JniNode;
-use prebindgen_flat::WireNode;
+use prebindgen_conversions::WireNode;
 
 pub(crate) fn supported(element: &JniNode) -> bool {
     group::row_fields(element)

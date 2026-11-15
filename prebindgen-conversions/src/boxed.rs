@@ -1,8 +1,9 @@
 //! Foreign conversion helpers for adapters using boxed allocations.
 //! Adapters select a [`Storage`] policy and map
 //! [`BoxedWire`] data into their own wire kind.
+use crate::Wire;
 use crate::{Access, InputPlan, OutputPlan};
-use prebindgen_flat::{Result, Wire};
+use prebindgen_flat::Result;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 /// Source type and access mode for a wire carrying a boxed allocation address.
@@ -77,10 +78,10 @@ impl Storage {
 ///         syn::parse_quote!(*const #ty)
 ///     },
 /// )?;
-/// assert_eq!(prebindgen_flat::type_key(&prebindgen_flat::wire_definitions(std::iter::once(&input.node)).next().unwrap().rust_type()), "* const Counter");
+/// assert_eq!(prebindgen_flat::type_key(&prebindgen_conversions::wire_definitions(std::iter::once(&input.node)).next().unwrap().rust_type()), "* const Counter");
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
-pub fn input<W: prebindgen_flat::WireKind, C, N, B>(
+pub fn input<W: crate::WireKind, C, N, B>(
     storage: &Storage,
     ty: &syn::Type,
     wire: syn::Ident,
@@ -122,7 +123,7 @@ pub fn input<W: prebindgen_flat::WireKind, C, N, B>(
         Access::Exclusive => quote!(let #var:#ty=unsafe {&mut (*#pointer)#field};),
     };
     let mut plan = InputPlan::new(
-        prebindgen_flat::WireNode::Leaf(vec![Wire {
+        crate::WireNode::Leaf(vec![Wire {
             name: wire.clone(),
             kind: wire_kind(BoxedWire {
                 ty: target.clone(),
@@ -152,7 +153,7 @@ pub fn input<W: prebindgen_flat::WireKind, C, N, B>(
 /// * `borrowed` — `true` when `value` is a shared reference to `ty`; the generated
 ///   code then boxes a clone, which requires `ty: Clone`. `false` moves the value.
 /// * `wire_kind` — builds [`Wire::kind`] from the source type and access mode.
-pub fn output<W: prebindgen_flat::WireKind, C, N, B>(
+pub fn output<W: crate::WireKind, C, N, B>(
     storage: &Storage,
     ty: &syn::Type,
     wire: syn::Ident,
@@ -174,8 +175,8 @@ pub fn output<W: prebindgen_flat::WireKind, C, N, B>(
         fallible: false,
         context: Default::default(),
         delivery: Default::default(),
-        outcomes: prebindgen_flat::Outcomes {
-            success: prebindgen_flat::WireNode::Leaf(vec![Wire {
+        outcomes: crate::Outcomes {
+            success: crate::WireNode::Leaf(vec![Wire {
                 name: wire.clone(),
                 kind: wire_kind(BoxedWire {
                     ty: ty.clone(),

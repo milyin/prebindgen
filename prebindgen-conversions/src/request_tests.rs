@@ -306,3 +306,5 @@ impl OutputConversion for Output {
         &self.outcomes
     }
 }
+
+use prebindgen_flat::{same_type, Result};

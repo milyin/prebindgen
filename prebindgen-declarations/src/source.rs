@@ -383,7 +383,7 @@ pub fn resolve_enum_variants<M: Schema, T, R>(
 /// Resolve one canonical value conversion while detecting recursive representation chains.
 pub fn resolve_conversion<T, R>(
     ty: &Type,
-    conversion: &prebindgen_flat::ValueConversion,
+    conversion: &prebindgen_conversions::ValueConversion,
     child: &T,
     stack: &mut Vec<String>,
     direction: crate::Direction,
@@ -426,17 +426,18 @@ pub fn resolve_container<T>(
 pub fn input_value_conversion<M: Schema>(
     flat: &Flat<M>,
     ty: &Type,
-) -> Result<Option<prebindgen_flat::ValueConversion>> {
+    read: impl Fn(&M::Type) -> prebindgen_conversions::ValueConversions,
+) -> Result<Option<prebindgen_conversions::ValueConversion>> {
     let Some(info) = flat.type_info(ty).ok() else {
         return Ok(None);
     };
-    if info.conversion.input.is_none() && info.conversion.output.is_some() {
+    if read(&info.metadata).input.is_none() && read(&info.metadata).output.is_some() {
         return Err(format!(
             "`{}` has no canonical input conversion",
             type_key(ty)
         ));
     }
-    Ok(info.conversion.input.clone())
+    Ok(read(&info.metadata).input.clone())
 }
 
 /// Override a named field through accessor and typed-expansion wrappers.
@@ -470,12 +471,13 @@ pub fn output_value_conversion<M: Schema>(
     flat: &Flat<M>,
     ty: &Type,
     policy: Option<&crate::Projection>,
-) -> Result<Option<prebindgen_flat::ValueConversion>> {
+    read: impl Fn(&M::Type) -> prebindgen_conversions::ValueConversions,
+) -> Result<Option<prebindgen_conversions::ValueConversion>> {
     let conversion_type = crate::output_referent(ty).unwrap_or(ty);
     if flat
         .type_info(conversion_type)
         .ok()
-        .is_some_and(|i| i.conversion.output.is_none() && i.conversion.input.is_some())
+        .is_some_and(|i| read(&i.metadata).output.is_none() && read(&i.metadata).input.is_some())
     {
         return Err(format!(
             "`{}` has no canonical output conversion",
@@ -485,11 +487,11 @@ pub fn output_value_conversion<M: Schema>(
     let conversion = flat
         .type_info(ty)
         .ok()
-        .and_then(|i| i.conversion.output.clone())
+        .and_then(|i| read(&i.metadata).output.clone())
         .or_else(|| {
             crate::output_referent(ty)
                 .and_then(|t| flat.type_info(t).ok())
-                .and_then(|i| i.conversion.output.clone())
+                .and_then(|i| read(&i.metadata).output.clone())
         });
     if let Some(c) = &conversion {
         if policy.is_some_and(|p| !p.fields.is_empty()) {
@@ -912,8 +914,8 @@ pub fn callback_variant<M: Schema, I: Clone, O: Clone, E: Clone>(
     output: impl FnOnce(Option<&O>, bool) -> O,
 ) -> Result<DeclFunction<I, O, E>>
 where
-    M::Input: Clone,
-    M::Output: Clone,
+    M::Parameter: Clone,
+    M::Return: Clone,
     M::Function: Clone,
 {
     let mut function = flat.function(&decl.name)?.clone();

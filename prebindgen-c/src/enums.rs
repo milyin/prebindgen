@@ -61,9 +61,10 @@ mod tests {
                     prebindgen_declarations::ValueAccess::Owned,
                 ))
                 .unwrap();
-            let wire = prebindgen_flat::wire_definitions(std::iter::once(&output.outcomes.success))
-                .next()
-                .unwrap();
+            let wire =
+                prebindgen_conversions::wire_definitions(std::iter::once(&output.outcomes.success))
+                    .next()
+                    .unwrap();
             assert!(matches!(&wire.kind,CWire::Enum{name:actual,..} if actual==name));
         }
     }
@@ -186,7 +187,7 @@ mod tests {
             let input = function.params[0].ty.slot.as_ref().unwrap();
             let output = function.ret.slot.as_ref().unwrap();
             assert_eq!(
-                prebindgen_flat::wire_definitions(std::iter::once(&input.node)).count(),
+                prebindgen_conversions::wire_definitions(std::iter::once(&input.node)).count(),
                 1
             );
             assert_eq!(
@@ -194,7 +195,7 @@ mod tests {
                 1
             );
             assert!(
-                matches!(prebindgen_flat::wire_definitions(std::iter::once(&input.node)).next().unwrap().kind.available_niche(),Some(CNiche::Integer(n)) if n == -3-depth)
+                matches!(prebindgen_conversions::wire_definitions(std::iter::once(&input.node)).next().unwrap().kind.available_niche(),Some(CNiche::Integer(n)) if n == -3-depth)
             );
             super::super::group::validate_layout(&input.node).unwrap();
             super::super::group::validate_layout(&output.outcomes.success).unwrap();
@@ -205,8 +206,8 @@ mod tests {
         let source = flat("pub enum E { A = -1, B = 0 }");
         let mapping = std::rc::Rc::new(EnumMapping::new(source.enums().next().unwrap()).unwrap());
         let wire = CCodec::enum_wire("code", &mapping);
-        let mut tree: prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch> =
-            prebindgen_flat::WireNode::Leaf(vec![GenericWire {
+        let mut tree: prebindgen_conversions::WireNode<CWire, crate::CChain, crate::CBranch> =
+            prebindgen_conversions::WireNode::Leaf(vec![GenericWire {
                 name: syn::parse_quote!(wire),
                 kind: wire,
             }]);
@@ -219,7 +220,7 @@ mod tests {
             )
             .unwrap()
         };
-        tree = prebindgen_flat::WireNode::Chain {
+        tree = prebindgen_conversions::WireNode::Chain {
             controls: vec![],
             meta: CChain::Optional(group("inner", -2)),
             child: Box::new(std::mem::take(&mut tree)),
@@ -227,13 +228,13 @@ mod tests {
         assert!(super::super::group::validate_layout(&tree)
             .unwrap_err()
             .contains("already reserved"));
-        prebindgen_flat::wire_definitions_mut(std::iter::once(&mut tree))
+        prebindgen_conversions::wire_definitions_mut(std::iter::once(&mut tree))
             .next()
             .expect("logical wire index out of range")
             .kind
             .clear_niche();
         super::super::group::validate_layout(&tree).unwrap();
-        tree = prebindgen_flat::WireNode::Chain {
+        tree = prebindgen_conversions::WireNode::Chain {
             controls: vec![],
             meta: CChain::Optional(group("outer", -2)),
             child: Box::new(std::mem::take(&mut tree)),
@@ -255,8 +256,8 @@ mod tests {
                 unreachable!()
             };
             *next_integer_niche = Some(n);
-            let layout: prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch> =
-                prebindgen_flat::WireNode::Leaf(vec![GenericWire {
+            let layout: prebindgen_conversions::WireNode<CWire, crate::CChain, crate::CBranch> =
+                prebindgen_conversions::WireNode::Leaf(vec![GenericWire {
                     name: syn::parse_quote!(value),
                     kind: wire,
                 }]);

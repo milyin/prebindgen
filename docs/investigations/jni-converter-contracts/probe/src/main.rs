@@ -1,7 +1,8 @@
 //! Independent input/output entry-point controls for the completed contracts.
 use prebindgen_conversions::{InputFragment, OutputFragment};
 use prebindgen_declarations::{Codec, Condition};
-use prebindgen_flat::{Conversion, InputConversion, OutputConversion, Result, Schema};
+use prebindgen_flat::{Result, Schema};
+use prebindgen_conversions::{Conversion, InputConversion, OutputConversion};
 use prebindgen_jni::{
     fun, package, JniBranch, JniChain, JniContext, JniGen, JniInputConverter, JniOutputConverter,
     JniSchema, JniWire, KotlinContext, KotlinInput, KotlinInputConversion, KotlinOutput,
@@ -28,7 +29,7 @@ impl Conversion for IndependentInput {
     }
 }
 impl InputConversion for IndependentInput {
-    fn input_node(&self) -> &prebindgen_flat::WireNode<JniWire, JniChain, JniBranch> {
+    fn input_node(&self) -> &prebindgen_conversions::WireNode<JniWire, JniChain, JniBranch> {
         self.0.input_node()
     }
 }
@@ -56,7 +57,7 @@ impl Conversion for IndependentOutput {
 impl OutputConversion for IndependentOutput {
     fn output_outcomes(
         &self,
-    ) -> &prebindgen_flat::Outcomes<prebindgen_flat::WireNode<JniWire, JniChain, JniBranch>> {
+    ) -> &prebindgen_conversions::Outcomes<prebindgen_conversions::WireNode<JniWire, JniChain, JniBranch>> {
         self.0.output_outcomes()
     }
 }
@@ -69,8 +70,8 @@ impl KotlinOutputConversion for IndependentOutput {
 // Keep all adapter metadata identical; vary only the occurrence converter types.
 struct IndependentSchema<I, O>(std::marker::PhantomData<(I, O)>);
 impl<I, O> Schema for IndependentSchema<I, O> {
-    type Input = I;
-    type Output = O;
+    type Parameter = I;
+    type Return = O;
     type Module = <JniSchema as Schema>::Module;
     type Function = <JniSchema as Schema>::Function;
     type Type = <JniSchema as Schema>::Type;

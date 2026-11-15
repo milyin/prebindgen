@@ -259,7 +259,7 @@ The original investigation PR records this proposal. The subsequent
 
 ## Source map
 
-- [Flat converter contracts](../../../prebindgen-flat/src/conversion.rs)
+- [Flat converter contracts](../../../prebindgen-conversions/src/contract.rs)
 - [JNI entry point and call assembly](../../../prebindgen-jni/src/lib.rs)
 - [Kotlin projections and concrete JNI converters](../../../prebindgen-jni/src/kotlin.rs)
 - [JNI handle preflight](../../../prebindgen-jni/src/handles.rs)

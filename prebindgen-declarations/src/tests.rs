@@ -1,5 +1,5 @@
 use super::*;
-use prebindgen_flat::InputConversion;
+use prebindgen_conversions::InputConversion;
 #[derive(Clone, Debug)]
 enum TestGroup {
     Values,
@@ -12,14 +12,14 @@ impl TestAbi {
     fn wires(
         node: &WireNode<TestWire, TestGroup, TestGroup>,
     ) -> std::vec::IntoIter<&Wire<TestWire>> {
-        prebindgen_flat::wire_definitions(std::iter::once(node))
+        prebindgen_conversions::wire_definitions(std::iter::once(node))
             .collect::<Vec<_>>()
             .into_iter()
     }
     fn wires_mut(
         node: &mut WireNode<TestWire, TestGroup, TestGroup>,
     ) -> std::vec::IntoIter<&mut Wire<TestWire>> {
-        prebindgen_flat::wire_definitions_mut(std::iter::once(node))
+        prebindgen_conversions::wire_definitions_mut(std::iter::once(node))
             .collect::<Vec<_>>()
             .into_iter()
     }
@@ -46,8 +46,8 @@ impl TestAbi {
 type TestBindings<W> = super::PlanBindings<W, (), TestGroup, TestGroup>;
 type InputPlan<W> = prebindgen_conversions::InputPlan<W, (), TestGroup, TestGroup>;
 type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, (), TestGroup, TestGroup>;
+use prebindgen_conversions::validate_bindings;
 use prebindgen_conversions::value::{self, Value};
-use prebindgen_flat::validate_bindings;
 struct TestCodec;
 const TEST_CODEC: TestCodec = TestCodec;
 #[derive(Clone, Debug, PartialEq)]
@@ -63,7 +63,7 @@ struct TestWire {
     ty: String,
     component: ComponentPath,
 }
-impl prebindgen_flat::WireKind for TestWire {
+impl prebindgen_conversions::WireKind for TestWire {
     fn rust_type(&self) -> syn::Type {
         syn::parse_str(&self.ty).unwrap()
     }
@@ -129,7 +129,7 @@ impl Codec for TestCodec {
     }
     fn prefix_layout(
         &self,
-        layout: &mut prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
+        layout: &mut prebindgen_conversions::WireNode<Self::Wire, Self::Chain, Self::Branch>,
         segment: ComponentSegment,
     ) {
         for w in TestAbi::wires_mut(layout) {
@@ -179,7 +179,7 @@ impl Codec for TestCodec {
             let acquire = quote!();
             let statements = quote!(let #v=receive_token(#w););
             let mut plan = InputPlan::new(
-                prebindgen_flat::WireNode::Leaf(vec![Wire {
+                prebindgen_conversions::WireNode::Leaf(vec![Wire {
                     name: w.clone(),
                     kind: wire(Kind::Token, ty, extra),
                 }]),
@@ -214,8 +214,8 @@ impl Codec for TestCodec {
             fallible: false,
             context: Default::default(),
             delivery: Default::default(),
-            outcomes: prebindgen_flat::Outcomes {
-                success: prebindgen_flat::WireNode::Leaf(vec![Wire {
+            outcomes: prebindgen_conversions::Outcomes {
+                success: prebindgen_conversions::WireNode::Leaf(vec![Wire {
                     name: w.clone(),
                     kind: wire(Kind::Token, ty, extra),
                 }]),
@@ -579,7 +579,7 @@ fn declarations_preserve_converters_and_replace_explicit_overrides() {
         "override"
     );
     assert_eq!(
-        prebindgen_flat::wire_definitions(std::iter::once(
+        prebindgen_conversions::wire_definitions(std::iter::once(
             &f.ret.slot.as_ref().unwrap().outcomes.success
         ))
         .next()
@@ -648,9 +648,11 @@ fn independent_binding_and_rebinding_keeps_names_unique_and_stable() {
         .params
         .iter()
         .flat_map(|p| {
-            prebindgen_flat::wire_definitions(std::iter::once(&p.ty.slot.as_ref().unwrap().node))
+            prebindgen_conversions::wire_definitions(std::iter::once(
+                &p.ty.slot.as_ref().unwrap().node,
+            ))
         })
-        .chain(prebindgen_flat::wire_definitions(std::iter::once(
+        .chain(prebindgen_conversions::wire_definitions(std::iter::once(
             &f.ret.slot.as_ref().unwrap().outcomes.success,
         )))
         .collect::<Vec<_>>();
@@ -824,8 +826,8 @@ fn nested_recipes_use_only_the_callers_extra() {
     )
     .unwrap();
     let f = flat.function("foo").unwrap();
-    let foreign = |wires: &prebindgen_flat::WireNode<TestWire, TestGroup, TestGroup>| {
-        prebindgen_flat::wire_definitions(std::iter::once(wires))
+    let foreign = |wires: &prebindgen_conversions::WireNode<TestWire, TestGroup, TestGroup>| {
+        prebindgen_conversions::wire_definitions(std::iter::once(wires))
             .filter_map(|w| match &w.kind.kind {
                 Kind::Token => Some((w.kind.name, w.kind.ty.clone())),
                 _ => None,
@@ -930,7 +932,7 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
         }
         fn prefix_layout(
             &self,
-            layout: &mut prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
+            layout: &mut prebindgen_conversions::WireNode<Self::Wire, Self::Chain, Self::Branch>,
             segment: ComponentSegment,
         ) {
             for w in TestAbi::wires_mut(layout) {
@@ -1005,10 +1007,10 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
             }
             assert_eq!(TestAbi::wires(&plan.node).len(), 2);
             assert_eq!(
-                prebindgen_flat::wire_definitions(std::iter::once(&plan.node)).count(),
+                prebindgen_conversions::wire_definitions(std::iter::once(&plan.node)).count(),
                 2
             );
-            plan.node = prebindgen_flat::WireNode::Branch {
+            plan.node = prebindgen_conversions::WireNode::Branch {
                 controls: vec![],
                 meta: TestGroup::Record,
                 children: vec![std::mem::take(&mut plan.node)],
@@ -1023,7 +1025,7 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
             assert!(TestAbi::wires(&plan.outcomes.success).len() == 0);
             assert!(matches!(
                 &plan.outcomes.success,
-                prebindgen_flat::WireNode::Branch { .. }
+                prebindgen_conversions::WireNode::Branch { .. }
             ));
             plan.delivery.statements = quote!(deliver_unit(););
             Ok(())
@@ -1099,7 +1101,7 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
             .input_conversions()
             .unwrap()[0]
             .node,
-        prebindgen_flat::WireNode::Branch {
+        prebindgen_conversions::WireNode::Branch {
             meta: TestGroup::Record,
             ..
         }
@@ -1340,7 +1342,7 @@ fn owned_record_cleanup_covers_partial_conversion_and_failed_delivery() {
                 fallible: false,
                 context: Default::default(),
                 delivery: Default::default(),
-                outcomes: prebindgen_flat::Outcomes {
+                outcomes: prebindgen_conversions::Outcomes {
                     success: Default::default(),
                     source_error: None,
                     binding_failure: None,
@@ -1468,7 +1470,7 @@ fn optional_output_drops_prepared_owners_on_failure_and_skips_absent_payloads() 
                 fallible: false,
                 context: Default::default(),
                 delivery: Default::default(),
-                outcomes: prebindgen_flat::Outcomes {
+                outcomes: prebindgen_conversions::Outcomes {
                     success: Default::default(),
                     source_error: None,
                     binding_failure: None,
@@ -1525,7 +1527,7 @@ fn optional_output_drops_prepared_owners_on_failure_and_skips_absent_payloads() 
 
 #[test]
 fn field_groups_preserve_empty_and_multiwire_fields_in_both_directions() {
-    use prebindgen_flat::WireNode;
+    use prebindgen_conversions::WireNode;
     let mut flat = parse("pub struct Empty {} pub struct Pair { pub x: i32, pub y: i32 } pub struct Record { pub maybe: Option<i32>, pub empty: Empty, pub pair: Pair } pub fn echo(value: Record) -> Record { value }");
     let input = TestInputConfig::Branch {
         operation: TestInputBranch::Fields,
@@ -1556,9 +1558,9 @@ fn field_groups_preserve_empty_and_multiwire_fields_in_both_directions() {
         &Extra::default(),
     )
     .unwrap();
-    fn check(layout: &prebindgen_flat::WireNode<TestWire, TestGroup, TestGroup>) {
+    fn check(layout: &prebindgen_conversions::WireNode<TestWire, TestGroup, TestGroup>) {
         assert_eq!(
-            prebindgen_flat::wire_definitions(std::iter::once(layout)).count(),
+            prebindgen_conversions::wire_definitions(std::iter::once(layout)).count(),
             4
         );
         assert_eq!(TestAbi::wires(layout).len(), 4);
@@ -1585,10 +1587,10 @@ fn field_groups_preserve_empty_and_multiwire_fields_in_both_directions() {
         }
         assert_eq!(names, ["maybe", "empty", "pair"]);
         assert_eq!(widths, [2, 0, 2]);
-        for entry in prebindgen_flat::wire_definitions_with_paths(std::iter::once(layout)) {
+        for entry in prebindgen_conversions::wire_definitions_with_paths(std::iter::once(layout)) {
             assert!(std::ptr::eq(
                 entry.wire,
-                prebindgen_flat::wire_at_path(std::iter::once(layout), &entry.path).unwrap()
+                prebindgen_conversions::wire_at_path(std::iter::once(layout), &entry.path).unwrap()
             ));
         }
     }
@@ -1863,7 +1865,7 @@ fn result_error_defaults_are_explicit_unique_and_selected_with_helpers() {
 
 #[test]
 fn selector_schema_separates_control_from_mutually_exclusive_payloads() {
-    use prebindgen_flat::WireNode;
+    use prebindgen_conversions::WireNode;
     let mut model = parse("pub struct Item {} pub fn empty()->Item{} pub fn numbered(n:i32)->Item{} pub fn take(v:Item){}");
     test_bind_input(
         &mut model,
@@ -1890,15 +1892,15 @@ fn selector_schema_separates_control_from_mutually_exclusive_payloads() {
         panic!()
     };
     assert_eq!(
-        prebindgen_flat::wire_definitions(std::iter::once(&alternatives[0])).count(),
+        prebindgen_conversions::wire_definitions(std::iter::once(&alternatives[0])).count(),
         0
     );
     assert_eq!(
-        prebindgen_flat::wire_definitions(std::iter::once(&alternatives[1])).count(),
+        prebindgen_conversions::wire_definitions(std::iter::once(&alternatives[1])).count(),
         1
     );
     assert_eq!(
-        prebindgen_flat::wire_definitions(std::iter::once(input.input_node())).count(),
+        prebindgen_conversions::wire_definitions(std::iter::once(input.input_node())).count(),
         2
     );
     assert_eq!(TestAbi::wires(&input.node).len(), 2);
@@ -1906,7 +1908,7 @@ fn selector_schema_separates_control_from_mutually_exclusive_payloads() {
     assert!(matches!(controls[0].kind.kind, Kind::Selector));
     assert_eq!(
         TestAbi::wires(&input.node).next().unwrap().name,
-        prebindgen_flat::wire_definitions(std::iter::once(input.input_node()))
+        prebindgen_conversions::wire_definitions(std::iter::once(input.input_node()))
             .next()
             .unwrap()
             .name
@@ -1998,7 +2000,7 @@ fn nested_output_completion_channels_are_rejected_without_losing_unit_errors() {
         .unwrap_err()
         .contains("outermost"));
         let mut parent = child.clone();
-        parent.outcomes = prebindgen_flat::Outcomes {
+        parent.outcomes = prebindgen_conversions::Outcomes {
             success: WireNode::Branch {
                 controls: vec![],
                 children: vec![],
@@ -2330,7 +2332,7 @@ fn omitted_typed_fields_drop_all_enclosing_option_and_sequence_wires() {
     test_bind_output(&mut model, &TEST_CODEC, "read", &output, &Extra::default()).unwrap();
     let plan = model.function("read").unwrap().ret.slot.as_ref().unwrap();
     assert_eq!(
-        prebindgen_flat::wire_definitions(std::iter::once(&plan.outcomes.success)).count(),
+        prebindgen_conversions::wire_definitions(std::iter::once(&plan.outcomes.success)).count(),
         1
     );
     assert_eq!(plan.values.len(), 1);
@@ -2761,3 +2763,5 @@ fn optional_temporary_borrows_survive_through_the_next_parameter_and_source_call
         .unwrap()
         .success());
 }
+
+use prebindgen_conversions::FunctionConversions as _;

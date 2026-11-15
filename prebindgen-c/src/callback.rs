@@ -1,7 +1,8 @@
 //! Typed C callbacks retained by source closures.
 use super::*;
+use prebindgen_conversions::{InputConversion, WireNode};
 use prebindgen_conversions::{InputFragment, OutputFragment, TemplateContext};
-use prebindgen_flat::{callback_signature, type_key, InputConversion, WireNode};
+use prebindgen_flat::{callback_signature, type_key};
 use std::{
     collections::{BTreeMap, BTreeSet},
     rc::Rc,
@@ -501,7 +502,7 @@ impl CCallback {
     }
 }
 fn receive_return_owners(
-    node: &prebindgen_flat::WireNode<CWire, CChain, CBranch>,
+    node: &prebindgen_conversions::WireNode<CWire, CChain, CBranch>,
     context: &CContext,
     locations: &BTreeMap<String, TokenStream>,
 ) -> Result<TokenStream> {

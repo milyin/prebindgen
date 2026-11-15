@@ -2,7 +2,7 @@
 //! no runtime ownership registry or row-by-row plan is required.
 use super::*;
 use crate::kotlin::JniNode;
-use prebindgen_flat::WireNode;
+use prebindgen_conversions::WireNode;
 
 #[derive(Clone, Debug)]
 pub(crate) enum Test {
@@ -54,7 +54,7 @@ impl Selection {
             indices: &BTreeMap<String, usize>,
             out: &mut [Vec<Test>],
         ) -> Result<()> {
-            let set = |wires: &[prebindgen_flat::Wire<JniWire>], out: &mut [Vec<Test>]| {
+            let set = |wires: &[prebindgen_conversions::Wire<JniWire>], out: &mut [Vec<Test>]| {
                 for w in wires {
                     out[indices[&w.name.to_string()]] = path.to_vec();
                 }

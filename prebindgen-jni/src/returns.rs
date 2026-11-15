@@ -1,7 +1,7 @@
 //! Function success/error delivery through typed, reusable capture callbacks.
 use super::*;
 use prebindgen_conversions::Delivery;
-use prebindgen_flat::Wire;
+use prebindgen_conversions::Wire;
 
 #[derive(Clone, Debug)]
 pub(crate) enum NativeReturn {

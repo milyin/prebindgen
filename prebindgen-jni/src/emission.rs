@@ -63,7 +63,7 @@ impl JniContext {
     pub fn cached_callback_validation(
         &self,
         validation: &TokenStream,
-        node: &prebindgen_flat::WireNode<crate::JniWire, crate::JniChain, crate::JniBranch>,
+        node: &prebindgen_conversions::WireNode<crate::JniWire, crate::JniChain, crate::JniBranch>,
     ) -> Result<TokenStream> {
         crate::bulk::cached_reads(validation, node)
     }
@@ -72,8 +72,8 @@ impl JniContext {
     /// refer to source_result_expr; the output fragment resolves that binding.
     pub fn output_delivery(
         &self,
-        outcomes: &prebindgen_flat::Outcomes<
-            prebindgen_flat::WireNode<crate::JniWire, crate::JniChain, crate::JniBranch>,
+        outcomes: &prebindgen_conversions::Outcomes<
+            prebindgen_conversions::WireNode<crate::JniWire, crate::JniChain, crate::JniBranch>,
         >,
         values: &[(syn::Ident, TokenStream)],
     ) -> Result<prebindgen_conversions::Delivery> {

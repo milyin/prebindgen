@@ -549,15 +549,18 @@ Unresolved declaration recipes are temporary preparation inputs. Validation sets
 recursion markers and generated wrapper-local names are temporary working data.
 Emission needs no builder or separate configuration table.
 
-`prebindgen-flat` provides the source model and minimal conversion interfaces:
+`prebindgen-flat` provides source declarations and typed attachment points:
 
 - `Flat<S>` owns source declarations and binding data. `S: Schema` selects the
-  input/output converter types together with metadata types for the module,
+  parameter/return attachment types together with metadata types for the module,
   functions, source types, fields and enum variants. `S = ()` supports source-only
-  inspection. Parameters hold `Option<S::Input>` and returns `Option<S::Output>`.
+  inspection. Parameters hold `Option<S::Parameter>` and returns `Option<S::Return>`.
   `CSchema` and `JniSchema` choose their final converter types before parsing;
   preparation fills the slots without changing the schema. `map_slots` transforms
   values within an existing schema.
+
+`prebindgen-conversions` provides the conversion contracts used by the adapters:
+
 - `Conversion::code_fragment_slot(mode, expected_type)` accepts the generator's
   own requests, including any element or branch context.
 - `InputConversion::input_node()` describes one input value.
@@ -574,7 +577,8 @@ Emission needs no builder or separate configuration table.
   all wire definitions, visiting node controls, a sequence's element schema
   and every alternative once. Select an output channel before traversing its tree.
   `wire_definitions_mut` edits definitions without cloning metadata.
-  `Function::input_wire_definitions()` visits all input definitions.
+  Import `prebindgen_conversions::FunctionConversions` to use
+  `function.input_wire_definitions()` on standard conversion attachments.
   `wire_definitions_with_paths` includes structural `WirePath` addresses;
   `wire_at_path` resolves a definition. These operations accept filtered or
   chained root iterators. Paths are relative to that selection and must be

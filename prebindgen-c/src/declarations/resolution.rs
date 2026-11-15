@@ -81,8 +81,8 @@ impl DeclCDefaults {
         _extra: &(),
     ) -> Result<DeclCFunction>
     where
-        <CSchema as Schema>::Input: Clone,
-        <CSchema as Schema>::Output: Clone,
+        <CSchema as Schema>::Parameter: Clone,
+        <CSchema as Schema>::Return: Clone,
         <CSchema as prebindgen_flat::Schema>::Function: Clone,
     {
         prebindgen_declarations::callback_variant(flat, decl, name, |output, structural| {
@@ -371,7 +371,10 @@ impl DeclCDefaults {
                 )
             }
             InputNode::Leaf(CInputLeafOp::Value) => {
-                if let Some(conversion) = prebindgen_declarations::input_value_conversion(flat, ty)?
+                if let Some(conversion) =
+                    prebindgen_declarations::input_value_conversion(flat, ty, |t| {
+                        t.conversion.clone()
+                    })?
                 {
                     return self.resolve_input_conversion(
                         flat,
@@ -857,7 +860,9 @@ impl DeclCDefaults {
             OutputNode::Leaf(COutputLeafOp::Value)
             | OutputNode::Leaf(COutputLeafOp::Projected(_)) => {
                 if let Some(conversion) =
-                    prebindgen_declarations::output_value_conversion(flat, ty, None)?
+                    prebindgen_declarations::output_value_conversion(flat, ty, None, |t| {
+                        t.conversion.clone()
+                    })?
                 {
                     if let OutputNode::Leaf(COutputLeafOp::Projected(policy)) = tree {
                         return self.resolve_output_value(
@@ -1139,7 +1144,9 @@ impl DeclCDefaults {
                 children: vec![],
             });
         }
-        if let Some(c) = prebindgen_declarations::input_value_conversion(flat, ty)? {
+        if let Some(c) =
+            prebindgen_declarations::input_value_conversion(flat, ty, |t| t.conversion.clone())?
+        {
             return self.resolve_input_conversion(
                 flat,
                 codec,
@@ -1193,7 +1200,9 @@ impl DeclCDefaults {
                 children: vec![],
             });
         }
-        if let Some(c) = prebindgen_declarations::output_value_conversion(flat, ty, policy)? {
+        if let Some(c) = prebindgen_declarations::output_value_conversion(flat, ty, policy, |t| {
+            t.conversion.clone()
+        })? {
             return self.resolve_output_conversion(
                 flat,
                 codec,

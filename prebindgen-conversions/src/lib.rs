@@ -29,11 +29,11 @@ pub use staged::{InputFragment, OutputFragment};
 pub struct PlanSchema<WireType, Context = (), Chain = (), Branch = ()>(
     std::marker::PhantomData<fn() -> (WireType, Context, Chain, Branch)>,
 );
-impl<WireType: prebindgen_flat::WireKind, Context, Chain, Branch> prebindgen_flat::Schema
+impl<WireType: crate::WireKind, Context, Chain, Branch> prebindgen_flat::Schema
     for PlanSchema<WireType, Context, Chain, Branch>
 {
-    type Input = InputPlan<WireType, Context, Chain, Branch>;
-    type Output = OutputPlan<WireType, Context, Chain, Branch>;
+    type Parameter = InputPlan<WireType, Context, Chain, Branch>;
+    type Return = OutputPlan<WireType, Context, Chain, Branch>;
     type Module = ();
     type Function = ();
     type Type = ();
@@ -43,8 +43,8 @@ impl<WireType: prebindgen_flat::WireKind, Context, Chain, Branch> prebindgen_fla
 
 /// Check one adapter-selected namespace. The caller decides which values share
 /// a namespace; this helper knows nothing about tree shape or ABI placement.
-pub fn validate_wire_names<'a, W: prebindgen_flat::WireKind + 'a>(
-    wires: impl IntoIterator<Item = &'a prebindgen_flat::Wire<W>>,
+pub fn validate_wire_names<'a, W: crate::WireKind + 'a>(
+    wires: impl IntoIterator<Item = &'a crate::Wire<W>>,
 ) -> prebindgen_flat::Result<()> {
     let mut names = std::collections::BTreeSet::new();
     for wire in wires {
@@ -57,3 +57,15 @@ pub fn validate_wire_names<'a, W: prebindgen_flat::WireKind + 'a>(
 
 #[cfg(test)]
 mod generation_tests;
+
+mod canonical;
+pub use canonical::{ValueConversion, ValueConversions, ValueSource};
+mod contract;
+pub use contract::*;
+mod wire_tree;
+pub use wire_tree::{
+    wire_at_path, wire_definitions, wire_definitions_mut, wire_definitions_with_paths, Outcomes,
+    WireEntry, WireNode, WirePath,
+};
+#[cfg(test)]
+mod request_tests;

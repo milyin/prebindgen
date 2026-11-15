@@ -21,9 +21,11 @@ pub use convert::{
     DeclConvertSource, LocalConversion,
 };
 
+use prebindgen_conversions::Wire;
+use prebindgen_conversions::WireNode;
 use prebindgen_conversions::{InputPlan, OutputPlan};
-use prebindgen_flat::{same_type, type_key, Flat, Result, Wire};
-use prebindgen_flat::{Schema, WireNode};
+use prebindgen_flat::Schema;
+use prebindgen_flat::{same_type, type_key, Flat, Result};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::Type;
@@ -147,7 +149,7 @@ pub use operations::*;
 /// A flat model whose slots contain only conversion data for wrapper emission.
 ///
 /// Unbound source helpers have `None` slots. Bound functions need `Some` for their
-/// result and every parameter; [`prebindgen_flat::validate_bindings`] checks this before emission.
+/// result and every parameter; [`prebindgen_conversions::validate_bindings`] checks this before emission.
 /// Record fields retain their canonical source information and metadata. Descriptions and [`Codec::Extra`]
 /// are construction inputs, not stored in this model.
 ///
@@ -179,7 +181,7 @@ pub fn compile_input<C: Codec>(
     parameter: &str,
     recipe: &ResolvedInput<C>,
     extra: &C::Extra,
-) -> Result<<C::Schema as Schema>::Input> {
+) -> Result<<C::Schema as Schema>::Parameter> {
     let f = flat.function(function)?;
     let index = f
         .params
@@ -211,7 +213,7 @@ pub fn compile_output<C: Codec>(
     function: &str,
     recipe: &ResolvedOutput<C>,
     extra: &C::Extra,
-) -> Result<<C::Schema as Schema>::Output> {
+) -> Result<<C::Schema as Schema>::Return> {
     compile_output_value(flat, codec, &flat.function(function)?.ret.ty, recipe, extra)
 }
 
@@ -224,7 +226,7 @@ pub fn compile_output_value<C: Codec>(
     ty: &Type,
     recipe: &ResolvedOutput<C>,
     extra: &C::Extra,
-) -> Result<<C::Schema as Schema>::Output> {
+) -> Result<<C::Schema as Schema>::Return> {
     compile_output_at(flat, codec, ty, recipe, extra, OutputPosition::Return)
 }
 
@@ -236,7 +238,7 @@ pub fn compile_input_value<C: Codec>(
     ty: &Type,
     recipe: &ResolvedInput<C>,
     extra: &C::Extra,
-) -> Result<<C::Schema as Schema>::Input> {
+) -> Result<<C::Schema as Schema>::Parameter> {
     let mut plan = Compiler::new(flat, codec, "value".into()).input(
         ty,
         recipe,
@@ -258,7 +260,7 @@ pub fn compile_callback_return<C: Codec>(
     ty: &Type,
     recipe: &ResolvedInput<C>,
     extra: &C::Extra,
-) -> Result<<C::Schema as Schema>::Input> {
+) -> Result<<C::Schema as Schema>::Parameter> {
     let compiler = Compiler {
         input_role: std::cell::Cell::new(InputRole::CallbackResult),
         ..Compiler::new(flat, codec, "callback_return".into())
@@ -282,7 +284,7 @@ pub fn compile_callback_argument<C: Codec>(
     index: usize,
     borrowed: bool,
     extra: &C::Extra,
-) -> Result<<C::Schema as Schema>::Output> {
+) -> Result<<C::Schema as Schema>::Return> {
     compile_output_at(
         flat,
         codec,
@@ -305,7 +307,7 @@ fn compile_output_at<C: Codec>(
     recipe: &ResolvedOutput<C>,
     extra: &C::Extra,
     position: OutputPosition,
-) -> Result<<C::Schema as Schema>::Output> {
+) -> Result<<C::Schema as Schema>::Return> {
     let value = prebindgen_conversions::source_result_expr();
     let mut plan = match position {
         OutputPosition::Return => Compiler::new(flat, codec, "ret".into())
@@ -476,7 +478,7 @@ fn mutable_reference(ty: &Type) -> bool {
     matches!(ty, Type::Reference(r) if r.mutability.is_some())
         || option_inner(ty).is_some_and(mutable_reference)
 }
-fn validate_nested_output<W: prebindgen_flat::WireKind, C, N, B>(
+fn validate_nested_output<W: prebindgen_conversions::WireKind, C, N, B>(
     plan: &OutputPlan<W, C, N, B>,
 ) -> Result<()> {
     if plan.outcomes.source_error.is_some() || plan.outcomes.binding_failure.is_some() {
@@ -485,7 +487,7 @@ fn validate_nested_output<W: prebindgen_flat::WireKind, C, N, B>(
     Ok(())
 }
 /// Append one output view while preserving its preparation and ownership commit.
-pub fn append<W: prebindgen_flat::WireKind, C, N, B>(
+pub fn append<W: prebindgen_conversions::WireKind, C, N, B>(
     to: &mut OutputPlan<W, C, N, B>,
     from: OutputPlan<W, C, N, B>,
 ) -> Result<()> {

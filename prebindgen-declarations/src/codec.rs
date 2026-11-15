@@ -80,11 +80,11 @@ pub trait Codec {
 
     /// Fixed converter and declaration metadata types, selected before parsing.
     type Schema: Schema<
-        Input: prebindgen_flat::InputConversion + From<CodecInputPlan<Self>>,
-        Output: prebindgen_flat::OutputConversion + From<CodecOutputPlan<Self>>,
+        Parameter: prebindgen_conversions::InputConversion + From<CodecInputPlan<Self>>,
+        Return: prebindgen_conversions::OutputConversion + From<CodecOutputPlan<Self>>,
     >;
     /// Complete description of one foreign wire value.
-    type Wire: prebindgen_flat::WireKind + Clone + std::fmt::Debug;
+    type Wire: prebindgen_conversions::WireKind + Clone + std::fmt::Debug;
     /// Names supplied by the language's Rust wrapper emitter.
     type Context: prebindgen_conversions::TemplateContext + 'static;
     /// Borrowed occurrence settings used while preparing nested conversions.
@@ -285,7 +285,8 @@ pub trait Codec {
     fn binding_failure_layout(
         &self,
         _extra: &Self::Extra,
-    ) -> Result<Option<prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>>> {
+    ) -> Result<Option<prebindgen_conversions::WireNode<Self::Wire, Self::Chain, Self::Branch>>>
+    {
         Ok(None)
     }
 
@@ -306,7 +307,7 @@ pub trait Codec {
     /// path context. Codecs without source-path metadata need no implementation.
     fn prefix_layout(
         &self,
-        _layout: &mut prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
+        _layout: &mut prebindgen_conversions::WireNode<Self::Wire, Self::Chain, Self::Branch>,
         _segment: ComponentSegment,
     ) {
     }

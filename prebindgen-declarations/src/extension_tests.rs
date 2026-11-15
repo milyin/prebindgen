@@ -302,17 +302,34 @@ fn callback_settings_inherit_override_and_reach_the_resolved_arrow() {
 #[test]
 fn canonical_conversion_preparation_preserves_nonclone_adapter_settings() {
     struct ConversionSettings(String);
-    let mut flat = model();
+    struct CanonicalSchema;
+    impl prebindgen_flat::Schema for CanonicalSchema {
+        type Parameter = ();
+        type Return = ();
+        type Module = ();
+        type Function = ();
+        type Type = prebindgen_conversions::ValueConversions;
+        type Field = ();
+        type Variant = ();
+    }
+    let mut flat = prebindgen_flat::Flat::<CanonicalSchema>::parse(
+        syn::parse_file("pub type Value=String;")
+            .unwrap()
+            .items
+            .into_iter()
+            .map(|i| (i, Default::default())),
+    )
+    .unwrap();
     let declaration = convert!(Value)
         .input(DeclConvertSource::input(syn::parse_quote!(String), false))
         .output(DeclConvertSource::output(syn::parse_quote!(String), false))
         .with_extension(ConversionSettings("conversion".into()));
-    prepare_value_conversions(&mut flat, std::slice::from_ref(&declaration)).unwrap();
+    prepare_value_conversions(&mut flat, std::slice::from_ref(&declaration), |t| t, |t| t).unwrap();
     assert_eq!(declaration.extension.as_ref().unwrap().0, "conversion");
     assert!(flat
         .type_info(&flat.resolve_type(&declaration.ty).unwrap())
         .unwrap()
-        .conversion
+        .metadata
         .input
         .is_some());
 }
@@ -463,7 +480,7 @@ impl Codec for ArrowCodec {
         let wire = &request.wire;
         let target = &request.target;
         Ok(prebindgen_conversions::InputPlan::new(
-            prebindgen_flat::WireNode::Leaf(vec![prebindgen_flat::Wire {
+            prebindgen_conversions::WireNode::Leaf(vec![prebindgen_conversions::Wire {
                 name: wire.clone(),
                 kind: syn::parse_quote!(i64),
             }]),
@@ -555,7 +572,7 @@ fn callback_extensions_reach_the_compiler_and_change_generated_behavior() {
     drop(callback);
     let compiled = compile_resolved(resolved).unwrap();
     let function = compiled.function("apply").unwrap();
-    let params = prebindgen_flat::wire_definitions(std::iter::once(
+    let params = prebindgen_conversions::wire_definitions(std::iter::once(
         &function.params[0].ty.slot.as_ref().unwrap().node,
     ))
     .map(|wire| wire.name.clone())

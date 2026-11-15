@@ -1,5 +1,5 @@
 use crate::template_parameter;
-use prebindgen_flat::WireKind;
+use crate::WireKind;
 
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -14,7 +14,7 @@ pub struct InputPlan<WireType: WireKind, Context = (), Chain = (), Branch = ()> 
     /// Context supplied by the language adapter during emission.
     pub context: std::marker::PhantomData<fn(&Context)>,
     /// Authoritative incoming representation, including adapter access metadata.
-    pub node: prebindgen_flat::WireNode<WireType, Chain, Branch>,
+    pub node: crate::WireNode<WireType, Chain, Branch>,
     /// Backing-storage declarations, without wire reads or ownership takes.
     pub storage: TokenStream,
     /// Complete scoped conversion with target and continuation markers.
@@ -24,7 +24,7 @@ impl<WireType: WireKind, Context, Chain, Branch> InputPlan<WireType, Context, Ch
     /// Prepare conversion statements and their value as one scoped operation.
     /// Supporting owners needed outside conditional branches belong in `storage`.
     pub fn new(
-        node: prebindgen_flat::WireNode<WireType, Chain, Branch>,
+        node: crate::WireNode<WireType, Chain, Branch>,
         code: TokenStream,
         value: TokenStream,
     ) -> Self {
@@ -52,7 +52,7 @@ impl<WireType: WireKind, Context, Chain, Branch> InputPlan<WireType, Context, Ch
 }
 /// Output conversion whose owned temporaries survive until successful delivery.
 ///
-/// Optional concrete storage implementing [`prebindgen_flat::Conversion`].
+/// Optional concrete storage implementing [`crate::Conversion`].
 /// Delivery and ownership commit are separate requests.
 pub struct OutputPlan<WireType: WireKind, Context = (), Chain = (), Branch = ()> {
     /// Whether preparation or delivery can return a binding error, excluding
@@ -64,7 +64,7 @@ pub struct OutputPlan<WireType: WireKind, Context = (), Chain = (), Branch = ()>
     pub delivery: Delivery,
     /// Authoritative success/error value tree. Adapter metadata on its nodes
     /// records explicit native encodings without duplicating payload subtrees.
-    pub outcomes: prebindgen_flat::Outcomes<prebindgen_flat::WireNode<WireType, Chain, Branch>>,
+    pub outcomes: crate::Outcomes<crate::WireNode<WireType, Chain, Branch>>,
     /// Complete transfers for the selected protocol. Buffered outputs commit after
     /// foreign delivery succeeds; explicit visitor protocols can commit each
     /// element at callback entry during preparation.
@@ -150,9 +150,9 @@ plan_traits!(OutputPlan; fallible, outcomes, delivery, commit, statements, value
 /// The caller supplies destination fields in ABI order. Names, rather than the
 /// expression list's order, establish correspondence; missing/extra names fail.
 pub fn match_output_fields<'a, WireType: WireKind + 'a>(
-    fields: impl IntoIterator<Item = &'a prebindgen_flat::Wire<WireType>>,
+    fields: impl IntoIterator<Item = &'a crate::Wire<WireType>>,
     bindings: &'a [(syn::Ident, TokenStream)],
-) -> prebindgen_flat::Result<Vec<(&'a prebindgen_flat::Wire<WireType>, &'a TokenStream)>> {
+) -> prebindgen_flat::Result<Vec<(&'a crate::Wire<WireType>, &'a TokenStream)>> {
     validate_value_bindings(bindings)?;
     let mut remaining = bindings
         .iter()

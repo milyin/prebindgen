@@ -1,7 +1,7 @@
 //! Compose cleanup from resolved output shapes and emit each helper once.
 use super::*;
 use crate::kotlin::JniNode;
-use prebindgen_flat::WireNode;
+use prebindgen_conversions::WireNode;
 use std::rc::Rc;
 
 #[derive(Clone, Copy)]
@@ -299,7 +299,7 @@ impl Helpers {
                 let i = test.index();
                 let kind = &row.wires[i];
                 let read = if let Some(layout) = &row.layout {
-                    let wire = prebindgen_flat::Wire {
+                    let wire = prebindgen_conversions::Wire {
                         name: syn::parse_quote!(control),
                         kind: kind.clone(),
                     };
@@ -424,7 +424,7 @@ mod tests {
     use super::*;
 
     fn owner(name: &str) -> JniNode {
-        WireNode::Leaf(vec![prebindgen_flat::Wire {
+        WireNode::Leaf(vec![prebindgen_conversions::Wire {
             name: syn::parse_str(name).unwrap(),
             kind: JniWire::handle(
                 BoxedWire {

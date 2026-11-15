@@ -2,7 +2,8 @@
 use super::*;
 use crate::kotlin::{JniNode, KotlinBinding, KotlinContext, KotlinInput, KotlinOutput};
 use prebindgen_declarations::{Condition, SequenceInput, SequenceOutput};
-use prebindgen_flat::{Wire, WireNode};
+
+use prebindgen_conversions::{Wire, WireNode};
 use std::{fmt::Write, rc::Rc};
 
 /// Physical record shared by the Rust encoder and the initialized Kotlin layout table.
@@ -423,7 +424,7 @@ pub(crate) fn output_leaf(
             fallible: true,
             context: Default::default(),
             delivery: Default::default(),
-            outcomes: prebindgen_flat::Outcomes {
+            outcomes: prebindgen_conversions::Outcomes {
                 success: WireNode::Leaf(vec![Wire {
                     name: w.clone(),
                     kind: JniWire::NativeBuffer { text },

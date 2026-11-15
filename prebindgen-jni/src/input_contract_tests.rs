@@ -2,7 +2,8 @@ use super::*;
 use prebindgen_conversions::InputFragment;
 
 use crate::{JniInputLeafOp, JniInputUnary};
-use prebindgen_flat::{Function, InputConversion, Param, TypeUse};
+use prebindgen_conversions::InputConversion;
+use prebindgen_flat::{Function, Param, TypeUse};
 use std::{cell::Cell, rc::Rc};
 
 // Independent storage also records how often the emitter prepares Kotlin input.
@@ -29,7 +30,7 @@ impl Conversion for ExternalInput {
     }
 }
 impl InputConversion for ExternalInput {
-    fn input_node(&self) -> &prebindgen_flat::WireNode<JniWire, JniChain, JniBranch> {
+    fn input_node(&self) -> &prebindgen_conversions::WireNode<JniWire, JniChain, JniBranch> {
         self.native.input_node()
     }
 }
@@ -178,3 +179,5 @@ fn external_inputs_must_report_handles_and_native_ownership() {
     let error = generate(&flat).err().unwrap();
     assert!(error.contains("acknowledgement does not match"), "{error}");
 }
+
+use prebindgen_conversions::FunctionConversions as _;

@@ -1,9 +1,9 @@
 //! JNI error channels reuse ordinary output conversions. User callbacks run in Kotlin.
 use super::*;
 use crate::operations::JniOutputLeafOp;
+use prebindgen_conversions::Conversion;
+use prebindgen_conversions::OutputConversion;
 use prebindgen_conversions::OutputFragment;
-use prebindgen_flat::Conversion;
-use prebindgen_flat::OutputConversion;
 
 #[derive(Clone, Debug)]
 pub(crate) struct ErrorBinding {

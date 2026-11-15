@@ -21,7 +21,7 @@ pub fn source_items<'a>(
                 operation: JniInputUnary::Convert { conversion },
                 ..
             } => {
-                if let prebindgen_flat::ValueSource::Function(name) = &conversion.source {
+                if let prebindgen_conversions::ValueSource::Function(name) = &conversion.source {
                     names.push(name.clone())
                 }
             }
@@ -46,7 +46,7 @@ pub fn source_items<'a>(
                 operation: JniOutputUnary::Convert { conversion },
                 ..
             } => {
-                if let prebindgen_flat::ValueSource::Function(name) = &conversion.source {
+                if let prebindgen_conversions::ValueSource::Function(name) = &conversion.source {
                     names.push(name.clone())
                 }
             }

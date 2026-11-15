@@ -85,8 +85,8 @@ pub(crate) fn output(
         fallible: false,
         context: Default::default(),
         delivery: Default::default(),
-        outcomes: prebindgen_flat::Outcomes {
-            success: prebindgen_flat::WireNode::Leaf(vec![Wire {
+        outcomes: prebindgen_conversions::Outcomes {
+            success: prebindgen_conversions::WireNode::Leaf(vec![Wire {
                 name: wire.clone(),
                 kind: CWire::Owned {
                     owner,
@@ -119,8 +119,8 @@ pub(crate) fn borrowed(
         fallible: false,
         context: Default::default(),
         delivery: Default::default(),
-        outcomes: prebindgen_flat::Outcomes {
-            success: prebindgen_flat::WireNode::Leaf(vec![Wire {
+        outcomes: prebindgen_conversions::Outcomes {
+            success: prebindgen_conversions::WireNode::Leaf(vec![Wire {
                 name: wire.clone(),
                 kind: CWire::Owned {
                     owner,
@@ -201,7 +201,7 @@ pub(crate) fn input(
         quote!(#storage let #pointer=#ptr;#prepare_empty)
     };
     let plan = CInputPlan::new(
-        prebindgen_flat::WireNode::Leaf(vec![Wire {
+        prebindgen_conversions::WireNode::Leaf(vec![Wire {
             name: wire,
             kind: CWire::Owned {
                 owner,
@@ -515,7 +515,7 @@ mod tests {
             request.role = prebindgen_declarations::InputRole::CallbackResult;
             let plan = CCodec::declared().input_leaf(request).unwrap();
             assert!(
-                matches!(&plan.node,prebindgen_flat::WireNode::Leaf(w) if matches!(&w[0].kind,CWire::Owned{by_value:false,..}))
+                matches!(&plan.node,prebindgen_conversions::WireNode::Leaf(w) if matches!(&w[0].kind,CWire::Owned{by_value:false,..}))
             );
             assert!(input(
                 owner.clone(),

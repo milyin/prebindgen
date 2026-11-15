@@ -1,6 +1,6 @@
 //! Kotlin/JNI declarations stored on their Flat owners.
 use super::*;
-use prebindgen_flat::InputConversion;
+use prebindgen_conversions::InputConversion;
 use std::rc::Rc;
 
 /// Prepared boundary roots, including typed error converters and declarations
@@ -44,8 +44,8 @@ pub struct JniSchema<InConverter = JniInputConverter, OutConverter = JniOutputCo
     std::marker::PhantomData<fn() -> (InConverter, OutConverter)>,
 );
 impl<InConverter, OutConverter> prebindgen_flat::Schema for JniSchema<InConverter, OutConverter> {
-    type Input = InConverter;
-    type Output = OutConverter;
+    type Parameter = InConverter;
+    type Return = OutConverter;
     type Module = JniModule;
     type Function = Option<JniFunction>;
     type Type = JniType;
@@ -80,6 +80,8 @@ pub struct JniFunction {
 /// Kotlin/JNI declaration information shared by occurrences of a Rust type.
 #[derive(Clone, Debug, Default)]
 pub struct JniType {
+    /// Canonical value conversions selected for this source type.
+    pub conversion: prebindgen_conversions::ValueConversions,
     pub(crate) class: Option<Rc<Class>>,
     pub(crate) enumeration: Option<Rc<JniEnum>>,
     pub(crate) errors: BTreeMap<bool, Rc<errors::ErrorBinding>>,

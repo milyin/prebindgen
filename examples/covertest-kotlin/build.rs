@@ -1231,7 +1231,8 @@ fn main() {
             .fun(fun!(output_cleanup_callback).expand_param("callback",callback!(impl Fn(Vec<Option<Vec<OutputCleanupRow>>>)).name("OutputCleanupCallback").expand_param(0, expand_return!(Vec<Option<Vec<OutputCleanupRow>>>).field_self())))
             .fun(fun!(output_cleanup_callback_bulk).expand_param("callback",callback!(impl Fn(Vec<Option<Vec<OutputCleanupRow>>>)).name("OutputCleanupBulkCallback").expand_param(0,expand_return!(OutputCleanupRow).field_self_into().bulk()))))
         .configure(|flat| {
-            use prebindgen_flat::{OutputConversion, Outcomes, WireNode};
+
+use prebindgen_conversions::{OutputConversion, Outcomes, WireNode};
             // Compile a mixed prepared tree directly: declaration defaults
             // deliberately lift inner bulk modifiers to the enclosing sequence.
             let sequence = |element,mode| prebindgen_jni::operations::JniOutput::Unary { operation: prebindgen_jni::operations::JniOutputUnary::Sequence { delivery: prebindgen_declarations::SequenceDelivery::Value, mode }, child: Box::new(element),  };
@@ -1250,8 +1251,8 @@ fn main() {
             let logical = success;
             let WireNode::Chain {meta: prebindgen_jni::JniChain::Sequence(_), child: element, controls}=logical else {return Err("expected sequence".into());};
             assert_eq!(controls.len(),1);
-            assert_eq!(prebindgen_flat::wire_definitions(std::iter::once(logical)).count(),2);
-            assert!(matches!(prebindgen_flat::wire_definitions(std::iter::once(element.as_ref())).next().unwrap().kind, prebindgen_jni::JniWire::Scalar {
+            assert_eq!(prebindgen_conversions::wire_definitions(std::iter::once(logical)).count(),2);
+            assert!(matches!(prebindgen_conversions::wire_definitions(std::iter::once(element.as_ref())).next().unwrap().kind, prebindgen_jni::JniWire::Scalar {
                 primitive: prebindgen_flat::Primitive::Char, ..
             }));
             assert!(matches!(output.result_packet_fields()?.next().unwrap().kind, prebindgen_jni::JniWire::Rows { .. }));
@@ -2637,3 +2638,5 @@ fn callback_mixed_batch_input(
             .field("tail", tail),
     )
 }
+
+use prebindgen_conversions::FunctionConversions as _;

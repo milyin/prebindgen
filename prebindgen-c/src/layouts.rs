@@ -47,16 +47,16 @@ pub(crate) fn builtin(ty: &syn::Type) -> OpaqueLayout {
 }
 fn nodes(
     plan: &COutputPlan<CWire>,
-) -> impl Iterator<Item = &prebindgen_flat::WireNode<CWire, CChain, CBranch>> {
+) -> impl Iterator<Item = &prebindgen_conversions::WireNode<CWire, CChain, CBranch>> {
     std::iter::once(&plan.outcomes.success)
         .chain(plan.outcomes.source_error.iter())
         .chain(plan.outcomes.binding_failure.iter())
 }
 fn used_node(
-    node: &prebindgen_flat::WireNode<CWire, CChain, CBranch>,
+    node: &prebindgen_conversions::WireNode<CWire, CChain, CBranch>,
     names: &mut BTreeSet<String>,
 ) {
-    for wire in prebindgen_flat::wire_definitions(std::iter::once(node)) {
+    for wire in prebindgen_conversions::wire_definitions(std::iter::once(node)) {
         match &wire.kind {
             CWire::Owned { owner, .. } => {
                 names.insert(owner.name.clone());
@@ -360,7 +360,6 @@ mod tests {
             "foreign :: PointerOnly".into(),
             prebindgen_flat::TypeInfo {
                 definition: prebindgen_flat::TypeDefinition::External,
-                conversion: Default::default(),
                 ty: syn::parse_quote!(foreign::PointerOnly),
                 metadata: CType::default(),
             },

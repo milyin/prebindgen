@@ -23,7 +23,7 @@ pub(crate) fn input(
     wire: syn::Ident,
     length: syn::Ident,
     index: syn::Ident,
-    element: &prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
+    element: &prebindgen_conversions::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
     active: &Condition,
 ) -> Result<SequenceInput<JniWire, crate::JniChain>> {
     let env = prebindgen_conversions::template_parameter("environment");
@@ -47,7 +47,7 @@ pub(crate) fn input(
         ));
     }
     Ok(SequenceInput {
-        controls: vec![prebindgen_flat::Wire {
+        controls: vec![prebindgen_conversions::Wire {
             name: wire.clone(),
             kind: JniWire::Rows {
                 condition: kotlin_condition(active),
@@ -65,7 +65,7 @@ pub(crate) fn output(
     wire: syn::Ident,
     length: syn::Ident,
     index: syn::Ident,
-    element: &prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
+    element: &prebindgen_conversions::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
     values: &[(syn::Ident, TokenStream)],
 ) -> Result<SequenceOutput<JniWire, crate::JniChain>> {
     let env = prebindgen_conversions::template_parameter("environment");
@@ -143,7 +143,7 @@ pub(crate) fn output(
     };
     let commit_element = prebindgen_conversions::template_parameter("commit_element");
     Ok(SequenceOutput {
-        controls: vec![prebindgen_flat::Wire {
+        controls: vec![prebindgen_conversions::Wire {
             name: wire.clone(),
             kind: JniWire::Rows {
                 condition: ("true").into(),
@@ -174,9 +174,9 @@ pub(crate) fn output(
 }
 
 pub(crate) fn input_list(
-    carrier: &prebindgen_flat::Wire<JniWire>,
+    carrier: &prebindgen_conversions::Wire<JniWire>,
     sequence: &JniSequence,
-    element: &prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
+    element: &prebindgen_conversions::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
     context: &KotlinContext<'_>,
     active: &str,
 ) -> Result<KotlinInput> {
@@ -276,7 +276,7 @@ pub(crate) fn input_list(
 }
 
 pub(crate) fn output_list(
-    element: &prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
+    element: &prebindgen_conversions::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
     context: &KotlinContext<'_>,
     owners: Option<&str>,
     typed: bool,
@@ -342,10 +342,10 @@ pub(crate) fn output_list(
 /// The adapter selects its native scope before looking for a sequence.
 #[allow(clippy::type_complexity)]
 pub(crate) fn return_sequence(
-    layout: &prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
+    layout: &prebindgen_conversions::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
 ) -> Option<(
-    &prebindgen_flat::Wire<JniWire>,
-    &prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
+    &prebindgen_conversions::Wire<JniWire>,
+    &prebindgen_conversions::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
     &JniSequence,
 )> {
     outer_sequences(layout)
@@ -357,7 +357,7 @@ pub(crate) fn return_sequence(
         })
 }
 pub(crate) fn callback_target(
-    layout: &prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
+    layout: &prebindgen_conversions::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
 ) -> Result<syn::Ident> {
     if outer_sequences(layout).len() != 1 || crate::group::result_packet_fields(layout).len() > 2 {
         return Err(
@@ -371,7 +371,7 @@ pub(crate) fn callback_target(
 
 /// Whether the successful return uses the function's sequence callback.
 pub(crate) fn callback_delivery(
-    node: &prebindgen_flat::WireNode<JniWire, JniChain, JniBranch>,
+    node: &prebindgen_conversions::WireNode<JniWire, JniChain, JniBranch>,
 ) -> Result<bool> {
     let sequences = outer_sequences(node);
     if !sequences
@@ -392,9 +392,9 @@ pub(crate) fn callback_delivery(
 /// distinguish None from Some(None). Integer niches must not silently enable
 /// that previously unsupported shape. Options inside rows are independent.
 pub(crate) fn callback_optional(
-    node: &prebindgen_flat::WireNode<JniWire, JniChain, JniBranch>,
+    node: &prebindgen_conversions::WireNode<JniWire, JniChain, JniBranch>,
 ) -> Result<bool> {
-    use prebindgen_flat::WireNode;
+    use prebindgen_conversions::WireNode;
     match node {
         WireNode::Chain {
             meta: JniChain::Optional(_),
@@ -423,11 +423,11 @@ pub(crate) fn callback_optional(
 
 /// Function sequence callbacks are not available in parameters, error channels or rows.
 pub(crate) fn validate_buffered(
-    node: &prebindgen_flat::WireNode<JniWire, JniChain, JniBranch>,
+    node: &prebindgen_conversions::WireNode<JniWire, JniChain, JniBranch>,
 ) -> Result<()> {
     match node {
-        prebindgen_flat::WireNode::Leaf(_) => {}
-        prebindgen_flat::WireNode::Chain {
+        prebindgen_conversions::WireNode::Leaf(_) => {}
+        prebindgen_conversions::WireNode::Chain {
             child: element,
             meta: JniChain::Sequence(metadata),
             ..
@@ -440,17 +440,17 @@ pub(crate) fn validate_buffered(
             }
             validate_buffered(element)?;
         }
-        prebindgen_flat::WireNode::Chain {
+        prebindgen_conversions::WireNode::Chain {
             meta: JniChain::Optional(_) | JniChain::Bulk(_),
             child: element,
             ..
         } => validate_buffered(element)?,
-        prebindgen_flat::WireNode::Branch {
+        prebindgen_conversions::WireNode::Branch {
             meta: JniBranch::Group(_),
             children: elements,
             ..
         }
-        | prebindgen_flat::WireNode::Branch {
+        | prebindgen_conversions::WireNode::Branch {
             meta: JniBranch::Alternatives | JniBranch::Enum(_),
             children: elements,
             ..
@@ -466,21 +466,21 @@ pub(crate) fn validate_buffered(
 // A sequence owns a separate row scope: find the outer occurrences only.
 #[allow(clippy::type_complexity)] // Borrow the element schema, controls and delivery policy together.
 fn outer_sequences(
-    node: &prebindgen_flat::WireNode<JniWire, JniChain, JniBranch>,
+    node: &prebindgen_conversions::WireNode<JniWire, JniChain, JniBranch>,
 ) -> Vec<(
-    &prebindgen_flat::WireNode<JniWire, JniChain, JniBranch>,
-    &[prebindgen_flat::Wire<JniWire>],
+    &prebindgen_conversions::WireNode<JniWire, JniChain, JniBranch>,
+    &[prebindgen_conversions::Wire<JniWire>],
     &JniSequence,
 )> {
     fn visit<'a>(
-        node: &'a prebindgen_flat::WireNode<JniWire, JniChain, JniBranch>,
+        node: &'a prebindgen_conversions::WireNode<JniWire, JniChain, JniBranch>,
         out: &mut Vec<(
-            &'a prebindgen_flat::WireNode<JniWire, JniChain, JniBranch>,
-            &'a [prebindgen_flat::Wire<JniWire>],
+            &'a prebindgen_conversions::WireNode<JniWire, JniChain, JniBranch>,
+            &'a [prebindgen_conversions::Wire<JniWire>],
             &'a JniSequence,
         )>,
     ) {
-        use prebindgen_flat::WireNode;
+        use prebindgen_conversions::WireNode;
         match node {
             WireNode::Chain {
                 meta: JniChain::Sequence(meta),
@@ -504,9 +504,9 @@ fn outer_sequences(
 #[cfg(test)]
 mod delivery_tests {
     use super::*;
-    use prebindgen_flat::WireNode;
-    fn leaf() -> prebindgen_flat::WireNode<JniWire, JniChain, JniBranch> {
-        WireNode::Leaf(vec![prebindgen_flat::Wire {
+    use prebindgen_conversions::WireNode;
+    fn leaf() -> prebindgen_conversions::WireNode<JniWire, JniChain, JniBranch> {
+        WireNode::Leaf(vec![prebindgen_conversions::Wire {
             name: syn::parse_quote!(element),
             kind: JniWire::scalar(Primitive::I32),
         }])
@@ -514,8 +514,8 @@ mod delivery_tests {
     fn sequence(
         delivery: JniSequence,
         name: &str,
-        element: prebindgen_flat::WireNode<JniWire, JniChain, JniBranch>,
-    ) -> prebindgen_flat::WireNode<JniWire, JniChain, JniBranch> {
+        element: prebindgen_conversions::WireNode<JniWire, JniChain, JniBranch>,
+    ) -> prebindgen_conversions::WireNode<JniWire, JniChain, JniBranch> {
         let kind = match delivery {
             JniSequence::Bulk => JniWire::NativeRows {
                 condition: "true".into(),
@@ -527,7 +527,7 @@ mod delivery_tests {
             },
         };
         WireNode::Chain {
-            controls: vec![prebindgen_flat::Wire {
+            controls: vec![prebindgen_conversions::Wire {
                 name: syn::parse_str(name).unwrap(),
                 kind,
             }],

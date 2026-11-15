@@ -13,7 +13,7 @@ use crate::{Wire, WireKind};
 ///
 /// Chain and branch metadata cannot be interchanged:
 /// ```compile_fail,E0308
-/// use prebindgen_flat::WireNode;
+/// use prebindgen_conversions::WireNode;
 /// struct ChainInfo;
 /// struct BranchInfo;
 /// let node: WireNode<syn::Type, ChainInfo, BranchInfo> = WireNode::Chain {
@@ -22,7 +22,8 @@ use crate::{Wire, WireKind};
 /// ```
 /// Completion channels surround value trees and cannot be nested inside them:
 /// ```compile_fail,E0308
-/// use prebindgen_flat::{Outcomes, WireNode};
+///
+/// use prebindgen_conversions::{Outcomes, WireNode};
 /// let node: WireNode<syn::Type> = WireNode::Chain {
 ///     controls: vec![], child: Box::new(Outcomes::<WireNode<syn::Type>>::default()), meta: (),
 /// };
@@ -488,7 +489,7 @@ mod tests {
                     wire.kind = syn::parse_quote!(u32);
                 }
                 assert_eq!(
-                    crate::type_key(
+                    prebindgen_flat::type_key(
                         &wire_at_path(std::iter::once(&outcomes.success), &success_path)
                             .unwrap()
                             .kind

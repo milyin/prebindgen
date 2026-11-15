@@ -88,7 +88,9 @@ fn declaration_helpers_compile_and_execute_a_complete_call() {
         .params
         .iter()
         .flat_map(|p| {
-            prebindgen_flat::wire_definitions(std::iter::once(&p.ty.slot.as_ref().unwrap().node))
+            prebindgen_conversions::wire_definitions(std::iter::once(
+                &p.ty.slot.as_ref().unwrap().node,
+            ))
         })
         .map(|w| w.name.clone())
         .collect::<Vec<_>>();
@@ -438,7 +440,7 @@ impl Codec for MalformedOptional {
         let absent_values = match self.0 {
             3 => vec![(format_ident!("unexpected"), quote!(0i64))],
             4 => vec![],
-            _ => prebindgen_flat::wire_definitions(std::iter::once(&*r.payload))
+            _ => prebindgen_conversions::wire_definitions(std::iter::once(&*r.payload))
                 .map(|w| (w.name.clone(), quote!(0i64)))
                 .collect(),
         };
@@ -541,7 +543,7 @@ fn resolved_flat_compiles_after_its_configuration_is_dropped() {
         Some(ResolvedSlot::Tree(TestInput::Leaf(_)))
     ));
     let compiled = compile_resolved(resolved).unwrap();
-    prebindgen_flat::validate_bindings(&compiled).unwrap();
+    prebindgen_conversions::validate_bindings(&compiled).unwrap();
     assert_eq!(compiled.function("add").unwrap().params.len(), 2);
 }
 
@@ -733,7 +735,9 @@ fn independent_operation_vocabularies_compile_without_declaration_frontend() {
         .params
         .iter()
         .flat_map(|p| {
-            prebindgen_flat::wire_definitions(std::iter::once(&p.ty.slot.as_ref().unwrap().node))
+            prebindgen_conversions::wire_definitions(std::iter::once(
+                &p.ty.slot.as_ref().unwrap().node,
+            ))
         })
         .map(|w| w.name.clone())
         .collect::<Vec<_>>();

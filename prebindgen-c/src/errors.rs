@@ -1,7 +1,7 @@
 //! Explicit Result error outputs. Message buffers and structured errors are caller-owned.
 use super::*;
+use prebindgen_conversions::Conversion;
 use prebindgen_conversions::{OutputFragment, TemplateContext};
-use prebindgen_flat::Conversion;
 
 #[derive(Clone, Debug)]
 pub(crate) struct ErrorBinding {
@@ -84,9 +84,9 @@ pub(crate) fn compile(flat: &mut CBindings, codec: &CCodec) -> Result<()> {
 }
 
 fn field_names(
-    layout: &prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>,
+    layout: &prebindgen_conversions::WireNode<CWire, crate::CChain, crate::CBranch>,
 ) -> Vec<String> {
-    use prebindgen_flat::WireNode;
+    use prebindgen_conversions::WireNode;
     let mut names = Vec::new();
     if let WireNode::Branch {
         meta: CBranch::Group(CGroup::Fields),
@@ -310,7 +310,7 @@ pub(crate) fn result_function(
     source_name: &syn::Ident,
     error_ty: &syn::Type,
     outputs: &[&Wire],
-    function_output_layout: &prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>,
+    function_output_layout: &prebindgen_conversions::WireNode<CWire, crate::CChain, crate::CBranch>,
     mut params: Vec<TokenStream>,
     mut cparams: Vec<String>,
     body: &TokenStream,

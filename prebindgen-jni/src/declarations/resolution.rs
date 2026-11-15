@@ -92,8 +92,8 @@ impl DeclJniDefaults {
         _extra: &(),
     ) -> Result<DeclJniFunction>
     where
-        <JniSchema as Schema>::Input: Clone,
-        <JniSchema as Schema>::Output: Clone,
+        <JniSchema as Schema>::Parameter: Clone,
+        <JniSchema as Schema>::Return: Clone,
         <JniSchema as prebindgen_flat::Schema>::Function: Clone,
     {
         prebindgen_declarations::callback_variant(flat, decl, name, |output, structural| {
@@ -382,7 +382,10 @@ impl DeclJniDefaults {
                 )
             }
             InputNode::Leaf(JniInputLeafOp::Value) => {
-                if let Some(conversion) = prebindgen_declarations::input_value_conversion(flat, ty)?
+                if let Some(conversion) =
+                    prebindgen_declarations::input_value_conversion(flat, ty, |t| {
+                        t.conversion.clone()
+                    })?
                 {
                     return self.resolve_input_conversion(
                         flat,
@@ -901,7 +904,9 @@ impl DeclJniDefaults {
             OutputNode::Leaf(JniOutputLeafOp::Value)
             | OutputNode::Leaf(JniOutputLeafOp::Projected(_)) => {
                 if let Some(conversion) =
-                    prebindgen_declarations::output_value_conversion(flat, ty, None)?
+                    prebindgen_declarations::output_value_conversion(flat, ty, None, |t| {
+                        t.conversion.clone()
+                    })?
                 {
                     if let OutputNode::Leaf(JniOutputLeafOp::Projected(policy)) = tree {
                         return self.resolve_output_value(
@@ -1195,7 +1200,9 @@ impl DeclJniDefaults {
                 children: vec![],
             });
         }
-        if let Some(c) = prebindgen_declarations::input_value_conversion(flat, ty)? {
+        if let Some(c) =
+            prebindgen_declarations::input_value_conversion(flat, ty, |t| t.conversion.clone())?
+        {
             return self.resolve_input_conversion(
                 flat,
                 codec,
@@ -1247,7 +1254,9 @@ impl DeclJniDefaults {
                 children: vec![],
             });
         }
-        if let Some(c) = prebindgen_declarations::output_value_conversion(flat, ty, policy)? {
+        if let Some(c) = prebindgen_declarations::output_value_conversion(flat, ty, policy, |t| {
+            t.conversion.clone()
+        })? {
             return self.resolve_output_conversion(
                 flat,
                 codec,

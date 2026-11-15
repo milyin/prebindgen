@@ -173,7 +173,7 @@ pub struct Optional<'a, C: Codec + ?Sized> {
     pub direction: Direction,
 }
 /// Presence encoding selected by one optional preparation operation.
-pub enum Presence<W: prebindgen_flat::WireKind> {
+pub enum Presence<W: prebindgen_conversions::WireKind> {
     /// One i32-compatible 0/1 control, named by the requested presence binding.
     Flag(Wire<W>),
     /// No added wire. Input requires a total, side-effect-free boolean test;

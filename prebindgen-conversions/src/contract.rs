@@ -1,5 +1,5 @@
 //! Wire descriptions and generator-defined expression requests.
-use crate::Result;
+use prebindgen_flat::Result;
 use proc_macro2::TokenStream;
 use quote::quote;
 
@@ -9,7 +9,7 @@ use quote::quote;
 /// For example, a boolean conversion may use `u8` as its Rust carrier type.
 ///
 /// ```
-/// use prebindgen_flat::WireKind;
+/// use prebindgen_conversions::WireKind;
 /// struct BoolCarrier;
 /// impl WireKind for BoolCarrier {
 ///     fn rust_type(&self) -> syn::Type { syn::parse_quote!(u8) }
@@ -33,7 +33,7 @@ impl WireKind for syn::Type {
 /// to obtain the Rust carrier type supplied by the kind.
 ///
 /// ```
-/// use prebindgen_flat::Wire;
+/// use prebindgen_conversions::Wire;
 /// let wire: Wire<syn::Type> = Wire {
 ///     name: syn::parse_quote!(value),
 ///     kind: syn::parse_quote!(i64),
@@ -44,7 +44,7 @@ impl WireKind for syn::Type {
 /// A wire kind without a Rust carrier type is rejected:
 ///
 /// ```compile_fail
-/// use prebindgen_flat::Wire;
+/// use prebindgen_conversions::Wire;
 /// struct Untyped;
 /// let wire = Wire { name: syn::parse_quote!(value), kind: Untyped };
 /// ```
@@ -72,7 +72,9 @@ impl<W: WireKind> Wire<W> {
 /// Functions with entirely empty slots remain source-only helpers. This check
 /// neither builds conversions nor changes the model. Adapters call it before
 /// writing wrappers. It does not validate code fragments supplied directly by callers.
-pub fn validate_bindings<M: crate::Schema>(flat: &crate::Flat<M>) -> Result<()> {
+pub fn validate_bindings<M: prebindgen_flat::Schema>(
+    flat: &prebindgen_flat::Flat<M>,
+) -> Result<()> {
     for f in flat.functions.values() {
         if f.ret.slot.is_some() {
             for p in &f.params {
@@ -133,7 +135,8 @@ pub fn rust_source(tokens: TokenStream) -> Result<String> {
 /// policy; other implementations may use the expectation to configure emission.
 ///
 /// ```
-/// use prebindgen_flat::{bind_fragment, same_type, Conversion, InputConversion, Result, Wire, WireKind, WireNode, wire_definitions};
+/// use prebindgen_flat::{same_type, Result};
+/// use prebindgen_conversions::{bind_fragment, Conversion, InputConversion, Wire, WireKind, WireNode, wire_definitions};
 /// use proc_macro2::TokenStream;
 /// use quote::quote;
 /// use syn::{parse_quote, Type};
@@ -244,9 +247,23 @@ pub fn bind_fragment(
         syn::parse2(fragment).map_err(|error| format!("expected a Rust expression: {error}"))?;
     Ok(quote!(let #target: #expected_type = #expression;))
 }
-impl<I: Conversion, O: Conversion, M> crate::Function<I, O, M> {
+/// Read standard conversions attached to a source function.
+pub trait FunctionConversions<I: Conversion, O: Conversion> {
+    /// Filled parameter conversions in source order.
+    fn input_conversions(&self) -> Result<Vec<&I>>;
+    /// Filled return conversion.
+    fn output_conversion(&self) -> Result<&O>;
+    /// Logical parameter wire definitions.
+    fn input_wire_definitions<'a>(&'a self) -> Result<impl Iterator<Item = &'a Wire<I::Wire>>>
+    where
+        I: InputConversion,
+        I::Wire: 'a;
+}
+impl<I: Conversion, O: Conversion, M> FunctionConversions<I, O>
+    for prebindgen_flat::Function<I, O, M>
+{
     /// Filled input slots, preserving source parameter order and grouping.
-    pub fn input_conversions(&self) -> Result<Vec<&I>> {
+    fn input_conversions(&self) -> Result<Vec<&I>> {
         self.params
             .iter()
             .map(|p| {
@@ -257,7 +274,7 @@ impl<I: Conversion, O: Conversion, M> crate::Function<I, O, M> {
             .collect()
     }
     /// Filled result slot, borrowed without requesting any generated code.
-    pub fn output_conversion(&self) -> Result<&O> {
+    fn output_conversion(&self) -> Result<&O> {
         let output = self
             .ret
             .slot
@@ -266,9 +283,10 @@ impl<I: Conversion, O: Conversion, M> crate::Function<I, O, M> {
         Ok(output)
     }
     /// Logical input definitions, including each element/branch schema once.
-    pub fn input_wire_definitions(&self) -> Result<impl Iterator<Item = &Wire<I::Wire>>>
+    fn input_wire_definitions<'a>(&'a self) -> Result<impl Iterator<Item = &'a Wire<I::Wire>>>
     where
         I: InputConversion,
+        I::Wire: 'a,
     {
         Ok(self
             .input_conversions()?

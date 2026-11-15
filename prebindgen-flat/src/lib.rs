@@ -9,13 +9,8 @@ use quote::ToTokens;
 use std::collections::{BTreeMap, BTreeSet};
 use syn::{visit_mut::VisitMut, Type};
 
-mod value;
-pub use value::{ValueConversion, ValueConversions, ValueSource};
 mod payload;
 pub use payload::{PayloadEnum, PayloadField, PayloadVariant, VariantStyle};
-
-mod conversion;
-pub use conversion::*;
 
 mod primitive;
 pub use primitive::Primitive;
@@ -34,9 +29,9 @@ pub type Result<T> = std::result::Result<T, String>;
 /// supports source-only inspection.
 pub trait Schema {
     /// Converter or other consumer data attached to one function parameter.
-    type Input;
+    type Parameter;
     /// Converter or other consumer data attached to one function result.
-    type Output;
+    type Return;
     /// Settings and generated infrastructure belonging to the binding module.
     type Module: Default;
     /// Export decisions, names and placement for a source function.
@@ -49,8 +44,8 @@ pub trait Schema {
     type Variant: Default;
 }
 impl Schema for () {
-    type Input = ();
-    type Output = ();
+    type Parameter = ();
+    type Return = ();
     type Module = ();
     type Function = ();
     type Type = ();
@@ -65,8 +60,6 @@ impl Schema for () {
 pub struct TypeInfo<M = (), F = (), V = ()> {
     /// Captured source structure, owned by this type entry.
     pub definition: TypeDefinition<F, V>,
-    /// Prepared canonical value representations; empty for source-only inspection.
-    pub conversion: ValueConversions,
     /// Qualified Rust type. Alias implementations remain opaque.
     pub ty: Type,
     /// Generator-owned declaration information shared by every occurrence.
@@ -162,10 +155,9 @@ pub struct EnumVariant<M = ()> {
 
 /// Source structure with independently configured input and output conversions.
 ///
-/// Every parameter carries `Option<M::Input>`; every result carries `Option<M::Output>`.
+/// Every parameter carries `Option<M::Parameter>`; every result carries `Option<M::Return>`.
 /// Record fields describe source structure. Slot payloads belong to the consumer;
-/// generators may use [`Conversion`] for expression
-/// emission. Source-only inspection uses `Flat<()>` with empty slots.
+/// the source model does not interpret that data. Source-only inspection uses `Flat<()>` with empty slots.
 ///
 /// Use [`Flat::parse`] or [`Flat::parse_selected`] to validate source syntax and
 /// qualify declared names. Aliases stay opaque. Named types must have nonzero
@@ -184,7 +176,7 @@ pub struct Flat<M: Schema = ()> {
     pub metadata: M::Module,
     /// Free functions indexed by unqualified source name.
     #[allow(clippy::type_complexity)] // Keep the schema payloads explicit.
-    pub functions: BTreeMap<String, Function<M::Input, M::Output, M::Function>>,
+    pub functions: BTreeMap<String, Function<M::Parameter, M::Return, M::Function>>,
     /// Canonical source types and their metadata. Declared names (including opaque
     /// aliases) are keys; built-ins and composites registered through
     /// `Flat::type_metadata_mut` use their qualified type syntax as keys.
@@ -196,8 +188,8 @@ pub struct Flat<M: Schema = ()> {
 
 impl<M: Schema> Clone for Flat<M>
 where
-    M::Input: Clone,
-    M::Output: Clone,
+    M::Parameter: Clone,
+    M::Return: Clone,
     M::Module: Clone,
     M::Function: Clone,
     M::Type: Clone,
@@ -216,8 +208,8 @@ where
 }
 impl<M: Schema> std::fmt::Debug for Flat<M>
 where
-    M::Input: std::fmt::Debug,
-    M::Output: std::fmt::Debug,
+    M::Parameter: std::fmt::Debug,
+    M::Return: std::fmt::Debug,
     M::Module: std::fmt::Debug,
     M::Function: std::fmt::Debug,
     M::Type: std::fmt::Debug,
@@ -383,7 +375,6 @@ impl<M: Schema> Flat<M> {
                     id.to_string(),
                     TypeInfo {
                         definition: TypeDefinition::External,
-                        conversion: Default::default(),
                         ty: syn::parse_quote!(#module::#id),
                         metadata: Default::default(),
                     },
@@ -577,7 +568,7 @@ impl<M: Schema> Flat<M> {
     /// Look up a free function by its unqualified source name.
     ///
     /// Returns an error if it was not included in this model.
-    pub fn function(&self, name: &str) -> Result<&Function<M::Input, M::Output, M::Function>> {
+    pub fn function(&self, name: &str) -> Result<&Function<M::Parameter, M::Return, M::Function>> {
         self.functions
             .get(name)
             .ok_or_else(|| format!("unknown function `{name}`"))
@@ -688,7 +679,6 @@ impl<M: Schema> Flat<M> {
             .entry(key)
             .or_insert_with(|| TypeInfo {
                 definition: TypeDefinition::External,
-                conversion: Default::default(),
                 ty,
                 metadata: Default::default(),
             })
@@ -701,7 +691,7 @@ impl<M: Schema> Flat<M> {
     pub fn function_mut(
         &mut self,
         name: &str,
-    ) -> Result<&mut Function<M::Input, M::Output, M::Function>> {
+    ) -> Result<&mut Function<M::Parameter, M::Return, M::Function>> {
         self.functions
             .get_mut(name)
             .ok_or_else(|| format!("unknown function `{name}`"))
@@ -848,8 +838,8 @@ impl<M: Schema> Flat<M> {
     ///   slot; returns the new slot.
     pub fn map_slots(
         self,
-        mut input: impl FnMut(&Type, Option<M::Input>) -> Result<Option<M::Input>>,
-        mut output: impl FnMut(&Type, Option<M::Output>) -> Result<Option<M::Output>>,
+        mut input: impl FnMut(&Type, Option<M::Parameter>) -> Result<Option<M::Parameter>>,
+        mut output: impl FnMut(&Type, Option<M::Return>) -> Result<Option<M::Return>>,
     ) -> Result<Self> {
         let mut functions = BTreeMap::new();
         for (name, fun) in self.functions {
@@ -922,9 +912,6 @@ pub fn same_type(a: &Type, b: &Type) -> bool {
 
 #[cfg(test)]
 mod tests;
-
-#[cfg(test)]
-mod request_tests;
 
 /// Extract the payload type of a standard `Option<T>` spelling.
 pub fn option_inner(ty: &Type) -> Option<&Type> {
@@ -1136,9 +1123,3 @@ pub fn sequence_parts(ty: &Type) -> Option<(&Type, SequenceView)> {
     };
     Some((element, view))
 }
-
-mod wire_tree;
-pub use wire_tree::{
-    wire_at_path, wire_definitions, wire_definitions_mut, wire_definitions_with_paths, Outcomes,
-    WireEntry, WireNode, WirePath,
-};

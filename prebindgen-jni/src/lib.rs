@@ -5,7 +5,8 @@
 //! Declaration processing fills occurrence slots before wrappers are generated.
 #![warn(missing_docs)]
 
-use prebindgen_flat::{type_key, Conversion, Flat, OutputConversion, Result, WireKind};
+use prebindgen_conversions::{Conversion, OutputConversion, WireKind};
+use prebindgen_flat::{type_key, Flat, Result};
 
 pub use prebindgen_declarations::{
     convert, from, into, try_from, try_into, DeclConvert, DeclConvertSource, Projection,
@@ -608,7 +609,12 @@ impl JniGenBuilder {
             }
         }
         validate_declaration_names(&flat)?;
-        prebindgen_declarations::prepare_value_conversions(&mut flat, &self.conversions)?;
+        prebindgen_declarations::prepare_value_conversions(
+            &mut flat,
+            &self.conversions,
+            |t| &t.conversion,
+            |t| &mut t.conversion,
+        )?;
         data::prepare(&mut flat)?;
         let defaults =
             crate::DeclJniDefaults::new(&flat, self.inputs, self.outputs, self.error_mappers)?;
@@ -690,7 +696,7 @@ impl JniGenBuilder {
             }
         }
 
-        prebindgen_flat::validate_bindings(&flat)?;
+        prebindgen_conversions::validate_bindings(&flat)?;
         for (name, f) in &flat.functions {
             if f.ret.slot.is_some() && f.metadata.is_none() {
                 return Err(format!(
@@ -892,11 +898,11 @@ impl Codec for JniCodec {
 
     fn prefix_layout(
         &self,
-        node: &mut prebindgen_flat::WireNode<JniWire, JniChain, JniBranch>,
+        node: &mut prebindgen_conversions::WireNode<JniWire, JniChain, JniBranch>,
         segment: prebindgen_declarations::ComponentSegment,
     ) {
         if let prebindgen_declarations::ComponentSegment::Argument(name) = segment {
-            *node = prebindgen_flat::WireNode::Branch {
+            *node = prebindgen_conversions::WireNode::Branch {
                 controls: vec![],
                 meta: JniBranch::Group(JniGroup::Argument(name)),
                 children: vec![std::mem::take(node)],
@@ -907,9 +913,10 @@ impl Codec for JniCodec {
     fn binding_failure_layout(
         &self,
         _: &(),
-    ) -> Result<Option<prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>>> {
-        Ok(Some(prebindgen_flat::WireNode::Leaf(vec![
-            prebindgen_flat::Wire {
+    ) -> Result<Option<prebindgen_conversions::WireNode<Self::Wire, Self::Chain, Self::Branch>>>
+    {
+        Ok(Some(prebindgen_conversions::WireNode::Leaf(vec![
+            prebindgen_conversions::Wire {
                 name: syn::parse_quote!(message),
                 kind: JniWire::text(),
             },
@@ -1087,11 +1094,13 @@ impl Codec for JniCodec {
                 fallible: true,
                 context: Default::default(),
                 delivery: Default::default(),
-                outcomes: prebindgen_flat::Outcomes {
-                    success: prebindgen_flat::WireNode::Leaf(vec![prebindgen_flat::Wire {
-                        name: w.clone(),
-                        kind,
-                    }]),
+                outcomes: prebindgen_conversions::Outcomes {
+                    success: prebindgen_conversions::WireNode::Leaf(vec![
+                        prebindgen_conversions::Wire {
+                            name: w.clone(),
+                            kind,
+                        },
+                    ]),
                     source_error: None,
                     binding_failure: None,
                 },
@@ -1463,7 +1472,7 @@ fn output_value_kind(ty: &syn::Type) -> Option<Value> {
 }
 
 pub(crate) fn encode_array(
-    fields: Vec<(&prebindgen_flat::Wire<JniWire>, &TokenStream)>,
+    fields: Vec<(&prebindgen_conversions::Wire<JniWire>, &TokenStream)>,
     array: &syn::Ident,
     offset: usize,
 ) -> TokenStream {
@@ -2019,13 +2028,13 @@ pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
                 .as_ref()
                 .map(|node| crate::group::result_packet_fields(node).collect::<Vec<_>>())
                 .unwrap_or_default();
-            let signature = |fields: &[&prebindgen_flat::Wire<JniWire>]| {
+            let signature = |fields: &[&prebindgen_conversions::Wire<JniWire>]| {
                 fields
                     .iter()
                     .map(|w| w.kind.jvm_descriptor())
                     .collect::<String>()
             };
-            let label = |fields: &[&prebindgen_flat::Wire<JniWire>]| {
+            let label = |fields: &[&prebindgen_conversions::Wire<JniWire>]| {
                 if fields.is_empty() {
                     "Empty".into()
                 } else {
@@ -2103,7 +2112,7 @@ pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
         )
         .map_err(|error| format!("function `{}`: {error}", f.name))?;
         let delegated_callbacks = inputs.iter().any(|input| {
-            prebindgen_flat::wire_definitions(std::iter::once(input.input_node())).any(|wire| {
+            prebindgen_conversions::wire_definitions(std::iter::once(input.input_node())).any(|wire| {
                 matches!(&wire.kind,JniWire::Callback{callback} if callback.requires_preflight())
             })
         });
@@ -2492,7 +2501,7 @@ pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
     let guards = &flat.guards;
     rust.extend(quote!(#(#guards)*));
     Ok(JniGen {
-        rust: prebindgen_flat::rust_source(rust)?,
+        rust: prebindgen_conversions::rust_source(rust)?,
         kotlin: files,
     })
 }
@@ -2534,7 +2543,7 @@ fn native_handle(prefix: &str, gc_managed: bool) -> String {
 }
 
 fn takes_input_owners(node: &crate::kotlin::JniNode) -> bool {
-    prebindgen_flat::wire_definitions(std::iter::once(node))
+    prebindgen_conversions::wire_definitions(std::iter::once(node))
         .any(|w| matches!(&w.kind,JniWire::Handle{handle,..} if handle.access==Access::Move))
 }
 
@@ -2571,3 +2580,5 @@ pub mod prelude {
         JniOutputExpansion, JniOutputExt,
     };
 }
+
+use prebindgen_conversions::FunctionConversions as _;
