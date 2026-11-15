@@ -72,7 +72,7 @@
 <a href=#72 id=72 data-nosnippet>72</a>        flat.function_mut(<span class="kw-2">&amp;</span>source)<span class="question-mark">?
 <a href=#73 id=73 data-nosnippet>73</a>            </span>.metadata
 <a href=#74 id=74 data-nosnippet>74</a>            .bindings
-<a href=#75 id=75 data-nosnippet>75</a>            .retain(|b| !(b.name == base));
+<a href=#75 id=75 data-nosnippet>75</a>            .retain(|b| b.name != base);
 <a href=#76 id=76 data-nosnippet>76</a>    }
 <a href=#77 id=77 data-nosnippet>77</a>    <span class="kw">if </span>mode != <span class="prelude-val">Some</span>(prebindgen_declarations::CallbackReturn::Only) {
 <a href=#78 id=78 data-nosnippet>78</a>        metadata.callback_return = <span class="bool-val">false</span>;
