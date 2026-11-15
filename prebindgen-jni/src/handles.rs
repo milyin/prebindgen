@@ -125,7 +125,7 @@ pub(crate) fn require_preflight<I: KotlinInputConversion>(input: &I) -> Result<(
                 ..
             } => true,
             WireNode::Chain {
-                meta: JniChain::Sequence(JniSequence::Bulk),
+                meta: JniChain::Sequence(JniSequence::Bulk(_)),
                 ..
             } => !crate::kotlin::input_handles(node, false),
             WireNode::Chain { child, .. } => prepared(child),

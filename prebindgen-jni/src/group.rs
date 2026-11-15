@@ -240,7 +240,7 @@ pub(crate) fn validate_layout(
                     JniSequence::Buffered | JniSequence::TypedBuffered => {
                         matches!(carrier.kind, JniWire::Rows { .. })
                     }
-                    JniSequence::Bulk => matches!(carrier.kind, JniWire::NativeRows { .. }),
+                    JniSequence::Bulk(_) => matches!(carrier.kind, JniWire::NativeRows { .. }),
                     JniSequence::Callback => {
                         matches!(&carrier.kind, JniWire::Selector { .. })
                     }
@@ -253,7 +253,7 @@ pub(crate) fn validate_layout(
                         "typed output row constructor exceeds 254 JVM parameter slots".into(),
                     );
                 }
-                if values(element).len() == 0 && *metadata != JniSequence::Bulk {
+                if values(element).len() == 0 && !matches!(metadata, JniSequence::Bulk(_)) {
                     return Err("sequence requires a nonempty element layout".into());
                 }
                 crate::sequence::validate_buffered(element)?;

@@ -649,6 +649,20 @@ All definitions occur in terminal bundles or the `controls` of chain and branch
 nodes. Metadata retains encoding decisions and references to
 those definitions; it owns no wire descriptors or copies of child trees.
 
+JNI record and payload-enum occurrences retain a source-type reference and their
+local binding/grouping policy. Class names, variant/field names and Kotlin
+property types are read from the canonical Flat declarations during emission.
+`KotlinContext::source_types` borrows that actual type table, including for custom
+converters; it is not a reconstructed declaration registry. Native bulk sequence
+metadata retains its compiled physical row layout. Changing its source tag/layout
+identity after preparation requires preparing the conversions again; Kotlin class
+and variant-name overrides are resolved from the current declarations.
+
+Custom JNI sequence converters construct a bulk row policy with
+`JniSequence::bulk(&flat, &element_node)?`. Sequence transport requests and the
+shared sequence composition helpers receive the source Flat explicitly, so adapters
+can resolve declaration facts without embedding them in each element tree.
+
 Each adapter has operations for actual ABI tasks: building a function's
 parameters, laying out a successful result packet, defining one sequence row,
 and choosing a visitor callback's arguments. Those operations inspect the tree

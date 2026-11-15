@@ -72,6 +72,8 @@ pub struct KotlinContext<'a> {
     pub package: &'a str,
     /// Configured classes indexed by [`prebindgen_flat::type_key`].
     pub classes: &'a BTreeMap<String, KotlinClass>,
+    /// Canonical source declarations and JNI type/field metadata, borrowed from Flat.
+    pub source_types: &'a BTreeMap<String, prebindgen_flat::TypeInfo<JniType, JniField>>,
     /// Variable holding the native output array.
     pub result: &'a str,
     /// Caught delivery exception to which rollback failures are attached.
@@ -971,7 +973,7 @@ pub(crate) fn output_kotlin_scoped(
                 JniSequence::TypedBuffered => {
                     crate::sequence::output_list(element, context, scope, true)?
                 }
-                JniSequence::Bulk => crate::bulk::output_list(element, context, scope)?,
+                JniSequence::Bulk(_) => crate::bulk::output_list(element, context, scope)?,
                 JniSequence::Callback => {
                     return Err(
                         "callback sequence requires function-level callback delivery".into(),
@@ -1090,6 +1092,7 @@ mod tests {
         let context = KotlinContext {
             package: "example",
             classes: &classes,
+            source_types: &BTreeMap::new(),
             result: "native_values",
             failure: "delivery_error",
             cleanup_failure: None,

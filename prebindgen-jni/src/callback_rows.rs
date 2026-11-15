@@ -30,7 +30,7 @@ pub(crate) fn cleanup(
                 ..
             } => rows(child).map(|_| true),
             WireNode::Chain {
-                meta: JniChain::Bulk(_) | JniChain::Sequence(JniSequence::Bulk),
+                meta: JniChain::Bulk(_) | JniChain::Sequence(JniSequence::Bulk(_)),
                 child,
                 ..
             } => rows(child),

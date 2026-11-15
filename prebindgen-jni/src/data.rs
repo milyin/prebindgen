@@ -134,8 +134,7 @@ pub struct JniField {
 #[derive(Clone, Debug)]
 pub struct JniDataGroup {
     pub(crate) root: String,
-    pub(crate) class_name: String,
-    pub(crate) property_types: Vec<String>,
+    pub(crate) ty: Rc<syn::Type>,
     pub(crate) condition: String,
 }
 
@@ -645,35 +644,31 @@ fn field_name(field: &prebindgen_flat::Field<JniField>) -> String {
     field.name.to_string().trim_start_matches("r#").into()
 }
 
-impl Class {
-    pub(super) fn mark(
-        &self,
-        layout: &mut prebindgen_conversions::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
-        root: String,
-        condition: String,
-        property_types: Vec<String>,
-    ) -> Result<()> {
-        group::retire_niches(layout, None)?;
-        let mut nodes = std::mem::take(layout);
-        let prebindgen_conversions::WireNode::Branch {
-            meta: JniBranch::Group(metadata),
-            ..
-        } = &mut nodes
-        else {
-            return Err("record compiler must produce one field collection".into());
-        };
-        if !matches!(metadata, JniGroup::Fields(None)) {
-            return Err("record annotation requires a field collection".into());
-        }
-        *metadata = JniGroup::Fields(Some(JniDataGroup {
-            root,
-            class_name: self.fqn(),
-            property_types,
-            condition,
-        }));
-        *layout = nodes;
-        Ok(())
+pub(super) fn mark(
+    layout: &mut prebindgen_conversions::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
+    root: String,
+    condition: String,
+    ty: &syn::Type,
+) -> Result<()> {
+    group::retire_niches(layout, None)?;
+    let mut nodes = std::mem::take(layout);
+    let prebindgen_conversions::WireNode::Branch {
+        meta: JniBranch::Group(metadata),
+        ..
+    } = &mut nodes
+    else {
+        return Err("record compiler must produce one field collection".into());
+    };
+    if !matches!(metadata, JniGroup::Fields(None)) {
+        return Err("record annotation requires a field collection".into());
     }
+    *metadata = JniGroup::Fields(Some(JniDataGroup {
+        root,
+        ty: Rc::new(ty.clone()),
+        condition,
+    }));
+    *layout = nodes;
+    Ok(())
 }
 
 type FieldNode<'a> = (
@@ -756,12 +751,37 @@ pub(crate) fn check_property_output(expected: &str, results: &[String]) -> Resul
     }
 }
 
+pub(crate) fn record_fields<'a>(
+    nodes: &'a [kotlin::JniNode],
+    source: &prebindgen_flat::Record<JniField>,
+) -> Result<Vec<FieldNode<'a>>> {
+    let fields = fields(nodes)?;
+    if fields.len() != source.fields.len()
+        || fields
+            .iter()
+            .zip(&source.fields)
+            .any(|((name, _), field)| *name != &field.name)
+    {
+        return Err("record occurrence differs from its source fields".into());
+    }
+    Ok(fields)
+}
+
 pub(crate) fn input_kotlin(
     nodes: &[kotlin::JniNode],
     d: &JniDataGroup,
     context: &KotlinContext<'_>,
     active: &str,
 ) -> Result<KotlinInput> {
+    let declaration = crate::metadata::source_type(context.source_types, &d.ty)?;
+    let class_name = declaration
+        .metadata
+        .class
+        .as_ref()
+        .filter(|class| matches!(class.representation, ClassRepresentation::Data { .. }))
+        .ok_or("record conversion requires a declared data class")?
+        .fqn();
+    let record = crate::metadata::source_record(context.source_types, &d.ty)?;
     let inner = nodes
         .iter()
         .flat_map(kotlin::leaf_wires)
@@ -772,17 +792,15 @@ pub(crate) fn input_kotlin(
     out.parameters.push(format!(
         "{}: {}{}",
         d.root,
-        d.class_name,
+        class_name,
         if active == "true" { "" } else { "?" }
     ));
-    let fields = fields(nodes)?;
-    if fields.len() != d.property_types.len() {
-        return Err("incomplete Kotlin record property layout".into());
-    }
-    for ((name, node), expected) in fields.iter().zip(&d.property_types) {
+    let fields = record_fields(nodes, record)?;
+    for ((name, node), expected) in fields.iter().zip(&record.fields) {
+        let expected = &expected.metadata.kotlin_type;
         let child = kotlin::input_kotlin_when(node, context, active)?;
         check_property_input(expected, &child.parameters)
-            .map_err(|error| format!("{}.{name}: {error}", d.class_name))?;
+            .map_err(|error| format!("{}.{name}: {error}", class_name))?;
     }
     if c.parameters.len() != fields.len() {
         return Err("incomplete data-class input occurrence".into());
@@ -890,21 +908,28 @@ pub(crate) fn output_kotlin(
     context: &KotlinContext<'_>,
     owners: Option<&str>,
 ) -> Result<KotlinOutput> {
+    let declaration = crate::metadata::source_type(context.source_types, &d.ty)?;
+    let class_name = declaration
+        .metadata
+        .class
+        .as_ref()
+        .filter(|class| matches!(class.representation, ClassRepresentation::Data { .. }))
+        .ok_or("record conversion requires a declared data class")?
+        .fqn();
+    let record = crate::metadata::source_record(context.source_types, &d.ty)?;
     let mut c = kotlin::output_components(nodes, context, owners)?;
-    if c.delivered.len() != fields(nodes)?.len() {
+    let fields = record_fields(nodes, record)?;
+    if c.delivered.len() != fields.len() {
         return Err("incomplete data-class output occurrence".into());
     }
-    let fields = fields(nodes)?;
-    if fields.len() != d.property_types.len() {
-        return Err("incomplete Kotlin record property layout".into());
-    }
-    for ((name, node), expected) in fields.iter().zip(&d.property_types) {
+    for ((name, node), expected) in fields.iter().zip(&record.fields) {
+        let expected = &expected.metadata.kotlin_type;
         let child = kotlin::output_kotlin_scoped(node, context, owners)?;
         check_property_output(expected, &child.result_types)
-            .map_err(|error| format!("{}.{name}: {error}", d.class_name))?;
+            .map_err(|error| format!("{}.{name}: {error}", class_name))?;
     }
-    c.delivered = vec![format!("{}({})", d.class_name, c.delivered.join(", "))];
-    c.result_types = vec![d.class_name.clone()];
+    c.delivered = vec![format!("{}({})", class_name, c.delivered.join(", "))];
+    c.result_types = vec![class_name.clone()];
     c.result_names = vec![None];
     Ok(c)
 }
@@ -1059,8 +1084,7 @@ mod group_tests {
             controls: vec![],
             meta: JniBranch::Group(JniGroup::Fields(Some(JniDataGroup {
                 root: root.into(),
-                class_name: "example.Empty".into(),
-                property_types: vec![],
+                ty: Rc::new(syn::parse_quote!(crate::Empty)),
                 condition: "true".into(),
             }))),
             children: Vec::new(),
@@ -1118,17 +1142,33 @@ mod group_tests {
             controls: vec![],
             meta: JniBranch::Group(JniGroup::Fields(Some(JniDataGroup {
                 root: "point".into(),
-                class_name: "example.Point".into(),
-                property_types: vec!["kotlin.Int".into()],
+                ty: Rc::new(syn::parse_quote!(crate::Point)),
                 condition: "true".into(),
             }))),
             children: vec![std::mem::take(&mut field)],
         };
         crate::group::validate_layout(&field).unwrap();
+        let items = syn::parse_file("pub struct Point { pub r#type:i32 }pub struct Empty {}")
+            .unwrap()
+            .items;
+        let flat = JniGen::builder()
+            .flat(JniBindings::parse(items.into_iter().map(|i| (i, Default::default()))).unwrap())
+            .set_package_prefix("example")
+            .package(package!().class(data_class!(Point)))
+            .configured()
+            .unwrap();
+        let mut types = flat.types;
+        // Zero-field records are only exercised by this direct wire-contract test.
+        types.get_mut("Empty").unwrap().metadata.class = Some(Rc::new(Class {
+            pkg: "example".into(),
+            name: "Empty".into(),
+            representation: ClassRepresentation::Data { has_handles: false },
+        }));
         let classes = BTreeMap::new();
         let context = KotlinContext {
             package: "example",
             classes: &classes,
+            source_types: &types,
             result: "result",
             failure: "failure",
             cleanup_failure: None,

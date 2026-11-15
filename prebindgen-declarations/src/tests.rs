@@ -1980,6 +1980,7 @@ fn nested_output_completion_channels_are_rejected_without_losing_unit_errors() {
         .unwrap_err()
         .contains("outermost"));
         assert!(sequence::output(
+            &parse(""),
             &TEST_CODEC,
             &syn::parse_quote!(Vec<i32>),
             &Extra::default(),

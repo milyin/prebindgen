@@ -118,3 +118,34 @@ pub type JniBinding<I = JniInputConverter, O = JniOutputConverter> =
         O,
         JniFunction,
     >;
+
+// Borrow the actual Flat type table, independent of its export converter types.
+pub(crate) type JniTypes = BTreeMap<String, prebindgen_flat::TypeInfo<JniType, data::JniField>>;
+
+pub(crate) fn source_type<'a>(
+    types: &'a JniTypes,
+    ty: &syn::Type,
+) -> Result<&'a prebindgen_flat::TypeInfo<JniType, data::JniField>> {
+    types
+        .values()
+        .find(|entry| prebindgen_flat::same_type(&entry.ty, ty))
+        .ok_or_else(|| format!("unregistered JNI source type `{}`", type_key(ty)))
+}
+pub(crate) fn source_record<'a>(
+    types: &'a JniTypes,
+    ty: &syn::Type,
+) -> Result<&'a prebindgen_flat::Record<data::JniField>> {
+    match &source_type(types, ty)?.definition {
+        prebindgen_flat::TypeDefinition::Record(record) => Ok(record),
+        _ => Err(format!("`{}` is not a source record", type_key(ty))),
+    }
+}
+pub(crate) fn source_enum<'a>(
+    types: &'a JniTypes,
+    ty: &syn::Type,
+) -> Result<&'a prebindgen_flat::PayloadEnum<(), data::JniField>> {
+    match &source_type(types, ty)?.definition {
+        prebindgen_flat::TypeDefinition::PayloadEnum(enumeration) => Ok(enumeration),
+        _ => Err(format!("`{}` is not a source payload enum", type_key(ty))),
+    }
+}

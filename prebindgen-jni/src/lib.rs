@@ -839,24 +839,24 @@ impl Codec for JniCodec {
     }
     fn bulk_input(
         &self,
-        _: &JniBindings,
+        flat: &JniBindings,
         _: &syn::Type,
         _: &(),
         w: syn::Ident,
         child: JniInputPlan<JniWire>,
         active: &prebindgen_declarations::Condition,
     ) -> Result<JniInputPlan<JniWire>> {
-        bulk::input(w, child, active)
+        bulk::input(w, child, active, &flat.types)
     }
     fn bulk_output(
         &self,
-        _: &JniBindings,
+        flat: &JniBindings,
         _: &syn::Type,
         _: &(),
         w: syn::Ident,
         child: JniOutputPlan<JniWire>,
     ) -> Result<JniOutputPlan<JniWire>> {
-        bulk::output(w, child)
+        bulk::output(w, child, &flat.types)
     }
 
     type Schema = JniSchema;
@@ -918,6 +918,7 @@ impl Codec for JniCodec {
             return Err("borrowed collection inputs cannot consume elements; declare an element constructor using borrowed inputs, or use Vec<T>".into());
         }
         let SequenceInputRequest {
+            flat,
             extra: _,
             view: _,
             wire,
@@ -928,7 +929,7 @@ impl Codec for JniCodec {
             representation,
         } = request;
         if representation == Representation::Bulk {
-            bulk::sequence_input(wire, length, index, element, active)
+            bulk::sequence_input(wire, length, index, element, active, &flat.types)
         } else {
             sequence::input(wire, length, index, element, active)
         }
@@ -938,6 +939,7 @@ impl Codec for JniCodec {
         request: SequenceOutputRequest<'_, Self>,
     ) -> Result<prebindgen_declarations::SequenceOutput<JniWire, JniChain>> {
         let SequenceOutputRequest {
+            flat,
             extra: _,
             wire,
             length,
@@ -953,7 +955,7 @@ impl Codec for JniCodec {
                     "bulk collection delivery cannot also use per-element callbacks".into(),
                 );
             }
-            bulk::sequence_output(wire, length, index, element, values)
+            bulk::sequence_output(wire, length, index, element, values, &flat.types)
         } else {
             match delivery {
                 prebindgen_declarations::SequenceDelivery::Auto
@@ -1269,18 +1271,13 @@ impl Codec for JniCodec {
             return Err("foreign record inputs are unsupported by this codec".into());
         }
 
-        Self::source_record(flat, ty)?
-            .ok_or("missing data-class representation")?
-            .mark(
-                &mut plan.node,
-                wire.to_string(),
-                kotlin_condition(active),
-                flat.record(ty)?
-                    .fields
-                    .iter()
-                    .map(|f| f.metadata.kotlin_type.clone())
-                    .collect(),
-            )
+        Self::source_record(flat, ty)?.ok_or("missing data-class representation")?;
+        data::mark(
+            &mut plan.node,
+            wire.to_string(),
+            kotlin_condition(active),
+            ty,
+        )
     }
     fn output_record_metadata(
         &self,
@@ -1294,18 +1291,13 @@ impl Codec for JniCodec {
             return Err("foreign record outputs are unsupported by this codec".into());
         }
 
-        Self::source_record(flat, ty)?
-            .ok_or("missing data-class representation")?
-            .mark(
-                &mut plan.outcomes.success,
-                wire.to_string(),
-                "true".into(),
-                flat.record(ty)?
-                    .fields
-                    .iter()
-                    .map(|f| f.metadata.kotlin_type.clone())
-                    .collect(),
-            )
+        Self::source_record(flat, ty)?.ok_or("missing data-class representation")?;
+        data::mark(
+            &mut plan.outcomes.success,
+            wire.to_string(),
+            "true".into(),
+            ty,
+        )
     }
 
     fn supports_bulk(&self, _: Direction) -> bool {
@@ -1875,6 +1867,7 @@ pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
         &KotlinContext {
             package: prefix,
             classes: &kotlin_classes,
+            source_types: &flat.types,
             result: "result",
             failure: "failure",
             cleanup_failure: None,
@@ -1908,6 +1901,7 @@ pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
         let kotlin_context = KotlinContext {
             package: prefix,
             classes: &kotlin_classes,
+            source_types: &flat.types,
             result: "result",
             failure: "failure",
             cleanup_failure: None,
@@ -2582,3 +2576,6 @@ fn test_export<'a>(
         .find(|f| f.name == name)
         .expect("prepared export")
 }
+
+#[cfg(test)]
+mod source_facts_tests;

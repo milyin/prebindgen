@@ -621,7 +621,8 @@ impl CallbackReturn {
             return Ok(None);
         }
         let prefix = &self.package;
-        let collect = returned_handle_cleanup(self.input.input_node(), value, prefix, &mut 0)?;
+        let collect =
+            returned_handle_cleanup(self.input.input_node(), value, prefix, &mut 0, context)?;
         Ok(Some(format!("val returnedOwners = kotlin.collections.ArrayList<{prefix}.NativeHandle>(); val returnedHandles = kotlin.collections.ArrayList<{prefix}.NativeHandle>(); {collect}\nval released = kotlin.collections.HashSet<Long>(); for (owner in returnedOwners) {{ if (owner.isClosed) continue; try {{ if (released.add(owner.address)) owner.close() else owner.markConsumed() }} catch (cleanup: Throwable) {{ if (failure !== cleanup) failure.addSuppressed(cleanup) }} }}; for (handle in returnedHandles) {{ if (handle.address in released) handle.markConsumed() }}")))
     }
     // Fixed addresses and cached native buffers permit a Drop guard. JVM row
@@ -794,6 +795,7 @@ fn returned_handle_cleanup(
     value: &str,
     prefix: &str,
     next: &mut usize,
+    context: &KotlinContext<'_>,
 ) -> Result<String> {
     if !crate::kotlin::input_handles(node, false) {
         return Ok(String::new());
@@ -812,41 +814,47 @@ fn returned_handle_cleanup(
             child,
             ..
         } => {
-            let body = returned_handle_cleanup(child, &local, prefix, next)?;
+            let body = returned_handle_cleanup(child, &local, prefix, next, context)?;
             format!("({value} as? Iterable<*>)?.forEach {{ {local} -> {body} }}\n")
         }
-        WireNode::Chain { child, .. } => returned_handle_cleanup(child, value, prefix, next)?,
+        WireNode::Chain { child, .. } => {
+            returned_handle_cleanup(child, value, prefix, next, context)?
+        }
         WireNode::Branch {
             meta: JniBranch::Enum(group),
             children,
             ..
         } => {
             let class = group
-                .class_name
-                .as_ref()
+                .class(context.source_types)?
                 .ok_or("expanded enum callback result must expose one value")?;
+            let source = crate::metadata::source_enum(context.source_types, &group.ty)?;
+            if source.variants.len() != children.len() {
+                return Err("enum occurrence differs from its source variants".into());
+            }
+            let names = source
+                .variants
+                .iter()
+                .map(|v| v.name.to_string().trim_start_matches("r#").to_owned())
+                .collect::<Vec<_>>();
+            let classes = crate::sealed::variant_names(class, &names)?;
+            let class = class.fqn();
             let mut arms = String::new();
             for (index, child) in children.iter().enumerate() {
-                let WireNode::Branch {
-                    children: fields, ..
-                } = child
-                else {
-                    return Err("expected enum fields".into());
-                };
+                let fields = crate::sealed::variant_fields(child, &source.variants[index])?;
                 let mut body = String::new();
-                for (field_index, (_, node)) in crate::data::fields(fields)?.iter().enumerate() {
-                    let property = kotlin_identifier(&group.fields[index][field_index]);
+                for (field_index, (_, node)) in fields.iter().enumerate() {
+                    let property =
+                        kotlin_identifier(&source.variants[index].fields[field_index].property());
                     body.push_str(&returned_handle_cleanup(
                         node,
                         &format!("{local}.{property}"),
                         prefix,
                         next,
+                        context,
                     )?);
                 }
-                arms.push_str(&format!(
-                    "is {class}.{} -> {{ {body} }}\n",
-                    group.classes[index]
-                ));
+                arms.push_str(&format!("is {class}.{} -> {{ {body} }}\n", classes[index]));
             }
             format!("when(val {local}={value}) {{ {arms} else -> {{}} }}\n")
         }
@@ -856,22 +864,32 @@ fn returned_handle_cleanup(
             ..
         } => {
             let mut body = String::new();
-            for (field, child) in crate::data::fields(children)? {
+            let record = crate::metadata::source_record(context.source_types, &data.ty)?;
+            for (field, child) in crate::data::record_fields(children, record)? {
                 let expr = format!(
                     "{local}.{}",
                     kotlin_identifier(field.to_string().trim_start_matches("r#"))
                 );
-                body.push_str(&returned_handle_cleanup(child, &expr, prefix, next)?);
+                body.push_str(&returned_handle_cleanup(
+                    child, &expr, prefix, next, context,
+                )?);
             }
             format!(
                 "({value} as? {})?.let {{ {local} -> {body} }}\n",
-                data.class_name
+                crate::metadata::source_type(context.source_types, &data.ty)?
+                    .metadata
+                    .class
+                    .as_ref()
+                    .ok_or("missing record class")?
+                    .fqn()
             )
         }
         WireNode::Branch { children, .. } => {
             let mut body = String::new();
             for child in children {
-                body.push_str(&returned_handle_cleanup(child, value, prefix, next)?);
+                body.push_str(&returned_handle_cleanup(
+                    child, value, prefix, next, context,
+                )?);
             }
             body
         }
@@ -962,6 +980,7 @@ pub(crate) fn files<I: KotlinInputConversion, O: KotlinOutputConversion>(
         let context = KotlinContext {
             package: &flat.metadata.package,
             classes,
+            source_types: &flat.types,
             result: "parts",
             failure: "failure",
             cleanup_failure: None,
