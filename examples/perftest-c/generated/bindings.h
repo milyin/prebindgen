@@ -1157,6 +1157,7 @@ int64_t perftest_canonical_live(void);
 int64_t perftest_canonical_millis_borrow(int64_t p0_w4);
 int64_t perftest_canonical_millis_callback(perftest_callback_4f90a51a652b13b2 p0_callback);
 int64_t perftest_canonical_millis_echo(int64_t p0_w3);
+int32_t perftest_canonical_millis_echo_i32(int32_t p0_w3);
 int64_t perftest_canonical_millis_from_token(const perftest_canonical_token * p0_w3);
 int32_t perftest_canonical_millis_local(int32_t p0_w3);
 void perftest_canonical_millis_notify(perftest_callback_a97639874330f1a4 p0_callback);

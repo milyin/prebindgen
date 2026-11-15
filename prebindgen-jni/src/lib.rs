@@ -1,8 +1,8 @@
-//! Generate Rust/JNI wrappers and Kotlin bindings from conversion slots.
+//! Generate Rust/JNI and Kotlin from exports attached to source functions.
 //! Supported declarations include `package!`, `ptr_class!`, `data_class!`, `fun!`,
 //! expansion declarations, retained `impl Fn` inputs, `.name()`, source selection,
 //! package prefix and native initialization.
-//! Declaration processing fills occurrence slots before wrappers are generated.
+//! Declaration processing prepares each export's converters before wrappers are generated.
 #![warn(missing_docs)]
 
 use prebindgen_conversions::{Conversion, OutputConversion, WireKind};
@@ -76,7 +76,7 @@ pub use kotlin::{
 /// Defaults retain [`JniInputConverter`] and [`JniOutputConverter`] containers. Their `new`
 /// constructors accept independent implementations of the same conversion
 /// contracts, including per-function overrides in a builder's configure hook.
-/// `Flat<JniSchema<MyInput, MyOutput>>` also supports concrete occurrence types;
+/// `Flat<JniSchema<MyInput, MyOutput>>` selects concrete export argument/result converters;
 /// JNI declaration metadata and wire representations remain adapter-specific.
 ///
 /// Use [`JniCodec`] when binding conversions. Rust rejects a C codec because its

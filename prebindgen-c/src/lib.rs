@@ -1,4 +1,4 @@
-//! Generate Rust wrappers and C declarations from conversion slots.
+//! Generate Rust wrappers and C declarations from exports attached to source functions.
 #![warn(missing_docs)]
 use prebindgen_conversions::value::Value;
 pub use prebindgen_conversions::Access;

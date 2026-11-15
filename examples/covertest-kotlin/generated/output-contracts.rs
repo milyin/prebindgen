@@ -668,7 +668,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_outputcontracts_JNINa
                 ::core::result::Result::Ok(value) => value,
                 ::core::result::Result::Err(ret_w1) => {
                     return Err({
-                        __pb_jni_error_i64_typed_7b82463b61f2de72(
+                        __pb_jni_error_duration_result_local_c64b5b1058c5c0d0(
                             &mut jni_environment,
                             ret_w1,
                             &mut domain_output,

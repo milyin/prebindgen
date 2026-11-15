@@ -39,8 +39,9 @@ pub(crate) fn nodes<I: KotlinInputConversion, O: KotlinOutputConversion>(
 }
 
 /// Metadata schema for a Kotlin/JNI binding model.
-/// `InConverter` and `OutConverter` select occurrence converter types while declaration metadata keeps
-/// the JNI representation. Defaults also accept custom converters through their
+/// `InConverter` and `OutConverter` select the converters stored in each export.
+/// Source parameter/return attachments are unit; type metadata keeps the JNI
+/// representation. Default containers also accept custom converters through their
 /// owned containers. No schema value is needed to construct Flat.
 pub struct JniSchema<InConverter = JniInputConverter, OutConverter = JniOutputConverter>(
     std::marker::PhantomData<fn() -> (InConverter, OutConverter)>,

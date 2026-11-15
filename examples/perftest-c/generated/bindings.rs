@@ -7,6 +7,18 @@ fn __pb_owned_owned_string_view(value: &String) -> &[u8] {
     value.as_bytes()
 }
 #[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_owned_vec_char_ae6d41c8646359d5_len(value: &Vec<char>) -> usize {
+    value.len()
+}
+#[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_owned_vec_i64_8f793c725f29723e_len(value: &Vec<i64>) -> usize {
+    value.len()
+}
+#[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_owned_vec_i64_8f793c725f29723e_view(value: &Vec<i64>) -> &[i64] {
+    value.as_slice()
+}
+#[allow(dead_code, clippy::ptr_arg)]
 fn __pb_owned_owned_vec_option_i64_33d2f0297e3115f7_len(
     value: &Vec<Option<i64>>,
 ) -> usize {
@@ -25,56 +37,8 @@ fn __pb_owned_owned_vec_option_perftest_flat_fixedcleanuprecord_b5cc62725b548e0e
     value.len()
 }
 #[allow(dead_code, clippy::ptr_arg)]
-fn __pb_owned_owned_vec_string_3292bf5148c953ec_len(value: &Vec<String>) -> usize {
-    value.len()
-}
-#[allow(dead_code, clippy::ptr_arg)]
-fn __pb_owned_owned_vec_vec_i64_44fcce9e083e0432_len(value: &Vec<Vec<i64>>) -> usize {
-    value.len()
-}
-#[allow(dead_code, clippy::ptr_arg)]
-fn __pb_owned_owned_vec_vec_perftest_flat_callbackrow_addaf24d06e04a05_len(
-    value: &Vec<Vec<perftest_flat::CallbackRow>>,
-) -> usize {
-    value.len()
-}
-#[allow(dead_code, clippy::ptr_arg)]
-fn __pb_owned_owned_vec_vec_perftest_flat_fixedcleanuprecord_017e4e0f3b039b33_len(
-    value: &Vec<Vec<perftest_flat::FixedCleanupRecord>>,
-) -> usize {
-    value.len()
-}
-#[allow(dead_code, clippy::ptr_arg)]
-fn __pb_owned_owned_vec_vec_perftest_flat_ownedresource_bc62184754e77cad_len(
-    value: &Vec<Vec<perftest_flat::OwnedResource>>,
-) -> usize {
-    value.len()
-}
-#[allow(dead_code, clippy::ptr_arg)]
-fn __pb_owned_owned_vec_vec_u8_3f5fd420367502d4_len(value: &Vec<Vec<u8>>) -> usize {
-    value.len()
-}
-#[allow(dead_code, clippy::ptr_arg)]
-fn __pb_owned_owned_vec_char_ae6d41c8646359d5_len(value: &Vec<char>) -> usize {
-    value.len()
-}
-#[allow(dead_code, clippy::ptr_arg)]
-fn __pb_owned_owned_vec_i64_8f793c725f29723e_len(value: &Vec<i64>) -> usize {
-    value.len()
-}
-#[allow(dead_code, clippy::ptr_arg)]
-fn __pb_owned_owned_vec_i64_8f793c725f29723e_view(value: &Vec<i64>) -> &[i64] {
-    value.as_slice()
-}
-#[allow(dead_code, clippy::ptr_arg)]
 fn __pb_owned_owned_vec_perftest_flat_bufferinputrow_f62bf6f2ce9e50d2_len(
     value: &Vec<perftest_flat::BufferInputRow>,
-) -> usize {
-    value.len()
-}
-#[allow(dead_code, clippy::ptr_arg)]
-fn __pb_owned_owned_vec_perftest_flat_cpanicoutput_9ef10ee1d35ade9d_len(
-    value: &Vec<perftest_flat::CPanicOutput>,
 ) -> usize {
     value.len()
 }
@@ -105,6 +69,12 @@ fn __pb_owned_owned_vec_perftest_flat_canonmillis_663d3173bfe07b79_len(
 #[allow(dead_code, clippy::ptr_arg)]
 fn __pb_owned_owned_vec_perftest_flat_collectionitem_4a0f28a20d000853_len(
     value: &Vec<perftest_flat::CollectionItem>,
+) -> usize {
+    value.len()
+}
+#[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_owned_vec_perftest_flat_cpanicoutput_9ef10ee1d35ade9d_len(
+    value: &Vec<perftest_flat::CPanicOutput>,
 ) -> usize {
     value.len()
 }
@@ -157,6 +127,10 @@ fn __pb_owned_owned_vec_perftest_flat_wireownedevent_ea3c9cf89ff2a45e_len(
     value.len()
 }
 #[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_owned_vec_string_3292bf5148c953ec_len(value: &Vec<String>) -> usize {
+    value.len()
+}
+#[allow(dead_code, clippy::ptr_arg)]
 fn __pb_owned_owned_vec_u8_672e72343c1b4cb4_len(value: &Vec<u8>) -> usize {
     value.len()
 }
@@ -175,6 +149,32 @@ fn __pb_owned_owned_vec_usize_4efcb9bb80acdd15_len(value: &Vec<usize>) -> usize 
 #[allow(dead_code, clippy::ptr_arg)]
 fn __pb_owned_owned_vec_usize_4efcb9bb80acdd15_view(value: &Vec<usize>) -> &[usize] {
     value.as_slice()
+}
+#[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_owned_vec_vec_i64_44fcce9e083e0432_len(value: &Vec<Vec<i64>>) -> usize {
+    value.len()
+}
+#[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_owned_vec_vec_perftest_flat_callbackrow_addaf24d06e04a05_len(
+    value: &Vec<Vec<perftest_flat::CallbackRow>>,
+) -> usize {
+    value.len()
+}
+#[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_owned_vec_vec_perftest_flat_fixedcleanuprecord_017e4e0f3b039b33_len(
+    value: &Vec<Vec<perftest_flat::FixedCleanupRecord>>,
+) -> usize {
+    value.len()
+}
+#[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_owned_vec_vec_perftest_flat_ownedresource_bc62184754e77cad_len(
+    value: &Vec<Vec<perftest_flat::OwnedResource>>,
+) -> usize {
+    value.len()
+}
+#[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_owned_vec_vec_u8_3f5fd420367502d4_len(value: &Vec<Vec<u8>>) -> usize {
+    value.len()
 }
 #[allow(dead_code)]
 struct __PbOutputOwner<T: ?Sized>(*mut T);
@@ -12526,6 +12526,55 @@ pub unsafe extern "C" fn perftest_canonical_millis_echo(p0_w3: i64) -> i64 {
             let ret_w1 = perftest_flat::canonical_millis_value(&ret_w0);
             let ret_w2 = ret_w1;
             let result = perftest_canonical_millis_echo_result {
+                v0: ret_w2,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_canonical_millis_echo_i32_result {
+    pub v0: i32,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::let_and_return,
+    clippy::needless_range_loop,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_canonical_millis_echo_i32(p0_w3: i32) -> i32 {
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_canonical_millis_echo_i32_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w2: i32 = ::core::convert::Into::into(p0_w3);
+            let p0_w1_repr = p0_w2;
+            let p0_w1: perftest_flat::CanonMillis = <i32 as ::core::convert::Into<
+                perftest_flat::CanonMillis,
+            >>::into(p0_w1_repr);
+            let __prebindgen_argument_0 = p0_w1;
+            let source_value = perftest_flat::canonical_millis_echo(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = source_value;
+            let ret_w1 = <perftest_flat::CanonMillis as ::core::convert::Into<
+                i32,
+            >>::into(ret_w0);
+            let ret_w2 = ret_w1;
+            let result = perftest_canonical_millis_echo_i32_result {
                 v0: ret_w2,
             };
             std::ptr::write(output, result);
