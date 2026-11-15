@@ -38,7 +38,9 @@ mod layouts;
 pub use layouts::{OpaqueLayout, OpaqueLayouts};
 mod bindings;
 mod metadata;
-pub use metadata::{CBinding, CEnum, CFunction, CFunctionData, CModule, CSchema, CType};
+pub use metadata::{
+    CBinding, CEnum, CFunction, CFunctionData, CModule, CRepresentation, CSchema, CType,
+};
 mod borrowed;
 mod enums;
 mod errors;
@@ -633,7 +635,7 @@ impl Codec for CCodec {
                 || flat
                     .type_info(ty)
                     .ok()
-                    .is_some_and(|t| t.metadata.enumeration.is_some()))
+                    .is_some_and(|t| t.metadata.enumeration().is_some()))
         {
             return Ok(None);
         }
@@ -697,7 +699,7 @@ impl Codec for CCodec {
         if !flat
             .type_info(ty)
             .ok()
-            .is_some_and(|t| t.metadata.pointer.is_some() && t.metadata.enumeration.is_none())
+            .is_some_and(|t| t.metadata.pointer().is_some())
         {
             return Ok(None);
         }
@@ -1421,14 +1423,13 @@ impl Cbindgen {
             }
             flat.guards.extend(mapping.guards());
             let info = flat.type_info_mut(&ty)?;
-            if info
-                .metadata
-                .enumeration
-                .replace(std::rc::Rc::new(CEnum { name, mapping }))
-                .is_some()
-            {
-                return Err("duplicate C enum source type".into());
+            if info.metadata.representation.is_some() {
+                return Err("duplicate C enum source type or conflicting representation".into());
             }
+            info.metadata.representation = Some(CRepresentation::Enum(std::rc::Rc::new(CEnum {
+                name,
+                mapping,
+            })));
         }
         for (name, ty) in self.tagged {
             prebindgen_declarations::ident(&name)?;
@@ -1437,9 +1438,11 @@ impl Cbindgen {
             }
             let ty = flat.resolve_type(&ty)?;
             flat.payload_enum(&ty)?;
-            if flat.type_metadata_mut(&ty)?.tagged.replace(name).is_some() {
-                return Err("duplicate C tagged enum declaration".into());
+            let info = flat.type_metadata_mut(&ty)?;
+            if info.representation.is_some() {
+                return Err("duplicate or conflicting C tagged enum declaration".into());
             }
+            info.representation = Some(CRepresentation::Tagged(name));
         }
         let mut error_names = std::collections::BTreeSet::new();
         for (order, (name, ty)) in self.errors.into_iter().enumerate() {
@@ -1472,15 +1475,13 @@ impl Cbindgen {
             let ty = flat.resolve_type(&ty)?;
             owned::validate_type(&ty)?;
             let info = flat.type_metadata_mut(&ty)?;
-            if info.owned.is_some() || info.enumeration.is_some() || info.tagged.is_some() {
+            if info.representation.is_some() {
                 return Err(
-                    "a source type must select only one of opaque_ptr, opaque_owned_struct and tagged_union".into(),
+                    "duplicate or conflicting C opaque source type; select only one representation"
+                        .into(),
                 );
             }
-            if info.pointer.replace(name).is_some() {
-                return Err("duplicate C opaque source type".into());
-            }
-            info.pointer_order = order;
+            info.representation = Some(CRepresentation::Pointer { name, order });
         }
         for (name, ty, layout, empty) in self.owned {
             prebindgen_declarations::ident(&name)?;
@@ -1500,20 +1501,19 @@ impl Cbindgen {
                 quote!(<#ty as ::core::default::Default>::default())
             };
             let info = flat.type_metadata_mut(&ty)?;
-            if info.pointer.is_some()
-                || info.owned.is_some()
-                || info.enumeration.is_some()
-                || info.tagged.is_some()
-            {
+            if info.representation.is_some() {
                 return Err("duplicate or conflicting C owning representation".into());
             }
-            info.owned = Some(std::rc::Rc::new(COwned {
-                name,
-                ty,
-                layout,
-                empty,
-                explicit: true,
-            }));
+            info.representation = Some(CRepresentation::Owned {
+                owner: std::rc::Rc::new(COwned {
+                    name,
+                    ty,
+                    layout,
+                    empty,
+                    explicit: true,
+                }),
+                target_layout: None,
+            });
         }
         prebindgen_declarations::prepare_value_conversions(
             &mut flat,
@@ -1553,14 +1553,17 @@ impl Cbindgen {
         }
         for ty in automatic.into_values() {
             let info = flat.type_metadata_mut(&ty)?;
-            if info.owned.is_none() && info.pointer.is_none() {
-                info.owned = Some(std::rc::Rc::new(COwned {
-                    name: owned::auto_name(&ty),
-                    ty: ty.clone(),
-                    layout: layouts::builtin(&ty),
-                    empty: quote!(<#ty as ::core::default::Default>::default()),
-                    explicit: false,
-                }));
+            if info.representation.is_none() {
+                info.representation = Some(CRepresentation::Owned {
+                    owner: std::rc::Rc::new(COwned {
+                        name: owned::auto_name(&ty),
+                        ty: ty.clone(),
+                        layout: layouts::builtin(&ty),
+                        empty: quote!(<#ty as ::core::default::Default>::default()),
+                        explicit: false,
+                    }),
+                    target_layout: None,
+                });
             }
         }
         owned::accessors(&mut flat)?;
@@ -1678,7 +1681,7 @@ fn c_ty<F, V, R, E, P>(
             let name = pointers
                 .values()
                 .find(|t| prebindgen_flat::same_type(&t.ty, &p.ty))
-                .and_then(|t| t.metadata.pointer.as_ref())
+                .and_then(|t| t.metadata.pointer())
                 .expect("validated pointer declaration");
             let qualifier = if p.access == Access::Shared {
                 "const "
@@ -1737,7 +1740,7 @@ fn validate_wire_declaration<F, V, R, E, P>(
     }
     if let CWire::Owned { owner, .. } = &wire.kind {
         if !pointers.values().any(|t| {
-            t.metadata.owned.as_ref().is_some_and(|o| {
+            t.metadata.owned().is_some_and(|o| {
                 o.name == owner.name
                     && o.layout == owner.layout
                     && prebindgen_flat::same_type(&o.ty, &owner.ty)
@@ -1747,10 +1750,9 @@ fn validate_wire_declaration<F, V, R, E, P>(
         }
     }
     if let CWire::Pointer { pointer, .. } = &wire.kind {
-        if !pointers
-            .values()
-            .any(|t| t.metadata.pointer.is_some() && prebindgen_flat::same_type(&t.ty, &pointer.ty))
-        {
+        if !pointers.values().any(|t| {
+            t.metadata.pointer().is_some() && prebindgen_flat::same_type(&t.ty, &pointer.ty)
+        }) {
             return Err(format!(
                 "declare a C opaque pointer for `{}`",
                 prebindgen_flat::type_key(&pointer.ty)
@@ -1840,7 +1842,7 @@ where
     let enums = flat
         .types
         .values()
-        .filter_map(|t| t.metadata.enumeration.as_deref())
+        .filter_map(|t| t.metadata.enumeration().map(std::rc::Rc::as_ref))
         .map(|e| (&e.name, e.mapping.as_ref()))
         .collect::<Vec<_>>();
     let mut error_entries = flat
@@ -1861,11 +1863,9 @@ where
     let mut pointer_entries = flat
         .types
         .values()
-        .filter_map(|t| {
-            t.metadata
-                .pointer
-                .as_ref()
-                .map(|name| (t.metadata.pointer_order, name, &t.ty))
+        .filter_map(|t| match &t.metadata.representation {
+            Some(CRepresentation::Pointer { name, order }) => Some((*order, name, &t.ty)),
+            _ => None,
         })
         .collect::<Vec<_>>();
     pointer_entries.sort_by_key(|(order, _, _)| *order);
@@ -1897,10 +1897,7 @@ where
             }
         }
     }
-    for name in pointers
-        .values()
-        .filter_map(|t| t.metadata.pointer.as_ref())
-    {
+    for name in pointers.values().filter_map(|t| t.metadata.pointer()) {
         prebindgen_declarations::ident(name)?;
         if !symbols.insert(format!("{prefix}_{name}")) {
             return Err("C enum and pointer names collide".into());
@@ -2115,7 +2112,7 @@ where
     }
     for owner in pointers
         .values()
-        .filter_map(|t| t.metadata.owned.as_ref())
+        .filter_map(|t| t.metadata.owned())
         .filter(|owner| owned::std_owner(&owner.ty))
     {
         if let Some((ty, _)) = prebindgen_flat::sequence_parts(&owner.ty) {
@@ -2171,9 +2168,13 @@ The pointer must be null or a live allocation of the declared type returned by t
         "typedef struct {{ const uint8_t *data; size_t len; }} {prefix}_buffer_view;\n/* Exclusive borrowed bytes; never free or consume. Keep the owner alive, and do not access it or overlapping storage until the view's last use. */\ntypedef struct {{ uint8_t *data; size_t len; }} {prefix}_buffer_view_mut;\n"
     ));
     for info in flat.types.values() {
-        if let Some(owner) = &info.metadata.owned {
+        if let Some(CRepresentation::Owned {
+            owner,
+            target_layout,
+        }) = &info.metadata.representation
+        {
             prebindgen_declarations::ident(&owner.name)?;
-            let layout = info.metadata.target_layout.ok_or_else(|| {
+            let layout = target_layout.ok_or_else(|| {
                 format!(
                     "opaque owner `{}` has no prepared target layout",
                     owner.name
@@ -3541,7 +3542,10 @@ mod generation_tests {
         let mut flat = error_model("pub type Item=String;pub fn inspect(value:&Item)->i64{}");
         flat.type_metadata_mut(&syn::parse_quote!(Item))
             .unwrap()
-            .pointer = Some("item".into());
+            .representation = Some(CRepresentation::Pointer {
+            name: "item".into(),
+            order: 0,
+        });
         bindings::install(
             &mut flat,
             fun!(inspect),
@@ -4039,6 +4043,46 @@ mod generation_tests {
     }
 
     #[test]
+    fn extending_flat_rejects_conflicting_c_representations_in_either_order() {
+        for pointer_first in [false, true] {
+            let flat = error_model("pub enum E { A, B }");
+            let first = if pointer_first {
+                Cbindgen::new(flat).opaque_ptr("handle", syn::parse_quote!(E))
+            } else {
+                Cbindgen::new(flat).enum_type("code", syn::parse_quote!(E))
+            }
+            .configured()
+            .unwrap();
+            let next = if pointer_first {
+                Cbindgen::new(first).enum_type("code", syn::parse_quote!(E))
+            } else {
+                Cbindgen::new(first).opaque_ptr("handle", syn::parse_quote!(E))
+            };
+            assert!(next.configured().err().unwrap().contains("conflicting"));
+        }
+        let flat = error_model("pub struct Row { pub value: i64 }");
+        let configured = Cbindgen::new(flat)
+            .opaque_ptr("row", syn::parse_quote!(Row))
+            .configured()
+            .unwrap();
+        assert!(matches!(
+            configured
+                .type_info(&syn::parse_quote!(crate::Row))
+                .unwrap()
+                .definition,
+            prebindgen_flat::TypeDefinition::Record(_)
+        ));
+        assert!(matches!(
+            configured
+                .type_info(&syn::parse_quote!(crate::Row))
+                .unwrap()
+                .metadata
+                .representation,
+            Some(CRepresentation::Pointer { .. })
+        ));
+    }
+
+    #[test]
     fn public_emission_rejects_invalid_c_type_names_without_panicking() {
         let mut prepared = Cbindgen::new(error_model("pub type Handle=String;pub enum E{A,B}"))
             .opaque_ptr("handle", syn::parse_quote!(Handle))
@@ -4049,20 +4093,27 @@ mod generation_tests {
             .type_info_mut(&syn::parse_quote!(crate::Handle))
             .unwrap()
             .metadata
-            .pointer = Some("bad-name".into());
+            .representation = Some(CRepresentation::Pointer {
+            name: "bad-name".into(),
+            order: 0,
+        });
         assert!(generate(&prepared).is_err());
         prepared
             .type_info_mut(&syn::parse_quote!(crate::Handle))
             .unwrap()
             .metadata
-            .pointer = Some("handle".into());
-        let enumeration = prepared
+            .representation = Some(CRepresentation::Pointer {
+            name: "handle".into(),
+            order: 0,
+        });
+        let Some(CRepresentation::Enum(enumeration)) = &mut prepared
             .type_info_mut(&syn::parse_quote!(crate::E))
             .unwrap()
             .metadata
-            .enumeration
-            .as_mut()
-            .unwrap();
+            .representation
+        else {
+            panic!("expected enum representation")
+        };
         std::rc::Rc::make_mut(enumeration).name = "bad-name".into();
         assert!(generate(&prepared).is_err());
     }
@@ -4113,7 +4164,7 @@ mod generation_tests {
             .type_info(&syn::parse_quote!(crate::E))
             .unwrap()
             .metadata
-            .enumeration
+            .enumeration()
             .is_some());
         let first = generate(&prepared).unwrap();
         let second = generate(&prepared.clone()).unwrap();

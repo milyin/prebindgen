@@ -1335,9 +1335,9 @@ impl CSourceResolver {
                 .payload_enum_by_key(&prebindgen_flat::type_key(ty))
                 .is_some()
                 && !flat.type_info(ty).ok().is_some_and(|t| {
-                    t.metadata.tagged.is_some()
-                        || t.metadata.pointer.is_some()
-                        || t.metadata.owned.is_some()
+                    t.metadata.tagged().is_some()
+                        || t.metadata.pointer().is_some()
+                        || t.metadata.owned().is_some()
                 })
             {
                 return Err(format!(
@@ -1348,7 +1348,7 @@ impl CSourceResolver {
             if flat
                 .type_info(ty)
                 .ok()
-                .is_some_and(|t| t.metadata.tagged.is_some())
+                .is_some_and(|t| t.metadata.tagged().is_some())
             {
                 let e = flat.payload_enum(ty)?;
                 return Ok(Some(crate::CInputConfig::enum_variants(
@@ -1392,9 +1392,9 @@ impl CSourceResolver {
                 .payload_enum_by_key(&prebindgen_flat::type_key(ty))
                 .is_some()
                 && !flat.type_info(ty).ok().is_some_and(|t| {
-                    t.metadata.tagged.is_some()
-                        || t.metadata.pointer.is_some()
-                        || t.metadata.owned.is_some()
+                    t.metadata.tagged().is_some()
+                        || t.metadata.pointer().is_some()
+                        || t.metadata.owned().is_some()
                 })
             {
                 return Err(format!(
@@ -1405,7 +1405,7 @@ impl CSourceResolver {
             if flat
                 .type_info(ty)
                 .ok()
-                .is_some_and(|t| t.metadata.tagged.is_some())
+                .is_some_and(|t| t.metadata.tagged().is_some())
             {
                 let e = flat.payload_enum(ty)?;
                 return Ok(Some(crate::COutputConfig::enum_variants(

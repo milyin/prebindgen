@@ -144,7 +144,7 @@ pub(crate) fn prepare(
     loop {
         let before = used.len();
         for info in flat.types.values() {
-            if let Some(owner) = &info.metadata.owned {
+            if let Some(owner) = info.metadata.owned() {
                 if used.contains(&owner.name) || owner.explicit {
                     if let Some((element, _)) = prebindgen_flat::sequence_parts(&owner.ty) {
                         if let Some(child) = owned::declaration(flat, element) {
@@ -161,16 +161,19 @@ pub(crate) fn prepare(
     for info in flat.types.values_mut() {
         if info
             .metadata
-            .owned
-            .as_ref()
+            .owned()
             .is_some_and(|o| !o.explicit && !used.contains(&o.name))
         {
-            info.metadata.owned = None;
+            info.metadata.representation = None;
         }
     }
     for info in flat.types.values_mut() {
-        info.metadata.target_layout = None;
-        if let Some(owner) = &info.metadata.owned {
+        if let Some(CRepresentation::Owned {
+            owner,
+            target_layout,
+        }) = &mut info.metadata.representation
+        {
+            *target_layout = None;
             let key = owner.layout.key.clone().unwrap_or_else(|| {
                 if owned::std_owner(&owner.ty) {
                     if prebindgen_flat::type_key(&owner.ty) == "String" {
@@ -201,7 +204,7 @@ pub(crate) fn prepare(
                 })?
             };
             layout.validate()?;
-            info.metadata.target_layout = Some(layout);
+            *target_layout = Some(layout);
         }
     }
     Ok(())
@@ -231,12 +234,12 @@ mod tests {
     fn layouts(flat: &CBindings) -> std::collections::BTreeMap<String, StorageLayout> {
         flat.types
             .values()
-            .filter_map(|t| {
-                t.metadata
-                    .owned
-                    .as_ref()
-                    .zip(t.metadata.target_layout)
-                    .map(|(o, l)| (o.name.clone(), l))
+            .filter_map(|t| match &t.metadata.representation {
+                Some(CRepresentation::Owned {
+                    owner,
+                    target_layout: Some(layout),
+                }) => Some((owner.name.clone(), *layout)),
+                _ => None,
             })
             .collect()
     }

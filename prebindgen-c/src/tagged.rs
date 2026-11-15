@@ -48,7 +48,7 @@ pub(crate) fn encoding(request: EnumVariants<'_, CCodec>) -> Result<EnumEncoding
             .flat
             .type_info(request.ty)
             .ok()
-            .and_then(|t| t.metadata.tagged.as_ref())
+            .and_then(|t| t.metadata.tagged())
             .is_none()
     {
         return Err(format!(
@@ -164,8 +164,8 @@ pub(crate) fn shape<S: prebindgen_flat::Schema<Module = CModule, Type = CType>>(
     let name = flat
         .type_info(ty)?
         .metadata
-        .tagged
-        .clone()
+        .tagged()
+        .cloned()
         .ok_or("missing C tagged declaration")?;
     let rust = format_ident!("__PbEnum_{}_{}", flat.metadata.prefix, name);
     let WireNode::Branch { children, .. } = node else {
@@ -557,7 +557,7 @@ pub(crate) fn emit<S: prebindgen_flat::Schema<Module = CModule, Type = CType>>(
                             &flat
                                 .types
                                 .values()
-                                .filter_map(|t| t.metadata.enumeration.as_ref())
+                                .filter_map(|t| t.metadata.enumeration())
                                 .map(|e| (&e.name, e.mapping.as_ref()))
                                 .collect::<Vec<_>>(),
                         )?;

@@ -47,23 +47,63 @@ pub struct CFunction {
 /// C representation information belonging to one named Rust type.
 #[derive(Clone, Debug, Default)]
 pub struct CType {
-    pub(crate) target_layout: Option<crate::layouts::StorageLayout>,
     /// Input/output defaults stored on this type, including callback signatures.
     pub defaults:
         prebindgen_declarations::DeclTypeDefaults<crate::CInputConfig, crate::COutputConfig>,
     /// Canonical value conversions selected for this source type.
     pub conversion: prebindgen_conversions::ValueConversions,
-    /// Ordinary tagged carrier of a source payload enum.
-    pub tagged: Option<String>,
-    /// Unprefixed opaque C typedef name, when this type has a handle representation.
-    pub pointer: Option<String>,
-    /// Inline owning representation, when configured or selected for Vec/String outputs.
-    pub owned: Option<Rc<COwned>>,
-    pub(crate) pointer_order: usize,
+    /// Selected foreign representation, independent of the Rust definition kind.
+    pub representation: Option<CRepresentation>,
     pub(crate) error_order: usize,
-    /// Checked fieldless-enum declaration shared by all occurrences.
-    pub enumeration: Option<Rc<CEnum>>,
     pub(crate) error: Option<Rc<errors::ErrorBinding>>,
+}
+/// Mutually exclusive C representations of one Rust type.
+#[derive(Clone, Debug)]
+pub enum CRepresentation {
+    /// An opaque pointer and its typed destructor.
+    Pointer {
+        /// Unprefixed C typedef name.
+        name: String,
+        /// Declaration order used for stable emission.
+        order: usize,
+    },
+    /// Inline owning storage, including its measured target layout once prepared.
+    Owned {
+        /// Rust value, storage recipe and accessors.
+        owner: Rc<COwned>,
+        /// Target size/alignment, filled during preparation.
+        target_layout: Option<prebindgen_reprc::SizeAlign>,
+    },
+    /// A checked fieldless enum.
+    Enum(Rc<CEnum>),
+    /// A tagged carrier of a payload enum, identified by its C typedef name.
+    Tagged(String),
+}
+impl CType {
+    pub(crate) fn pointer(&self) -> Option<&String> {
+        match &self.representation {
+            Some(CRepresentation::Pointer { name, .. }) => Some(name),
+            _ => None,
+        }
+    }
+    pub(crate) fn owned(&self) -> Option<&Rc<COwned>> {
+        match &self.representation {
+            Some(CRepresentation::Owned { owner, .. }) => Some(owner),
+            _ => None,
+        }
+    }
+    pub(crate) fn enumeration(&self) -> Option<&Rc<CEnum>> {
+        match &self.representation {
+            Some(CRepresentation::Enum(e)) => Some(e),
+            _ => None,
+        }
+    }
+    pub(crate) fn tagged(&self) -> Option<&String> {
+        match &self.representation {
+            Some(CRepresentation::Tagged(name)) => Some(name),
+            _ => None,
+        }
+    }
 }
 /// One checked C enum declaration.
 #[derive(Clone, Debug)]

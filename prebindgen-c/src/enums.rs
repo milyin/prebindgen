@@ -18,8 +18,7 @@ impl CCodec {
         flat.type_info(ty)
             .ok()?
             .metadata
-            .enumeration
-            .as_ref()
+            .enumeration()
             .map(|e| (e.name.as_str(), &e.mapping))
     }
     pub(super) fn enum_wire(name: &str, mapping: &std::rc::Rc<EnumMapping>) -> CWire {
@@ -47,10 +46,11 @@ mod tests {
         let ty = model.resolve_type(&syn::parse_quote!(E)).unwrap();
         let mapping = std::rc::Rc::new(EnumMapping::new(model.enums().next().unwrap()).unwrap());
         for name in ["first", "updated"] {
-            model.type_metadata_mut(&ty).unwrap().enumeration = Some(std::rc::Rc::new(CEnum {
-                name: name.into(),
-                mapping: mapping.clone(),
-            }));
+            model.type_metadata_mut(&ty).unwrap().representation =
+                Some(CRepresentation::Enum(std::rc::Rc::new(CEnum {
+                    name: name.into(),
+                    mapping: mapping.clone(),
+                })));
             let output = codec
                 .output_leaf(prebindgen_declarations::OutputLeaf::new(
                     &model,
@@ -116,7 +116,7 @@ mod tests {
             .build()
             .err()
             .unwrap()
-            .contains("only one of opaque_ptr, opaque_owned_struct and tagged_union"));
+            .contains("select only one representation"));
     }
     #[test]
     fn enum_symbols_cannot_shadow_runtime_or_generated_result_types() {
@@ -162,10 +162,10 @@ mod tests {
             model
                 .type_metadata_mut(&syn::parse_quote!(E))
                 .unwrap()
-                .enumeration = Some(std::rc::Rc::new(CEnum {
+                .representation = Some(CRepresentation::Enum(std::rc::Rc::new(CEnum {
                 name: "code".into(),
                 mapping: mapping.clone(),
-            }));
+            })));
             crate::bind_input(
                 &mut model,
                 &codec,

@@ -35,12 +35,12 @@ pub(crate) fn referent(ty: &syn::Type) -> &syn::Type {
     }
 }
 pub(crate) fn declaration(flat: &CBindings, ty: &syn::Type) -> Option<Rc<COwned>> {
-    flat.type_info(referent(ty)).ok()?.metadata.owned.clone()
+    flat.type_info(referent(ty)).ok()?.metadata.owned().cloned()
 }
 pub(crate) fn pointer_declared(flat: &CBindings, ty: &syn::Type) -> bool {
     flat.type_info(referent(ty))
         .ok()
-        .is_some_and(|t| t.metadata.pointer.is_some())
+        .is_some_and(|t| t.metadata.pointer().is_some())
 }
 pub(crate) fn native_input(flat: &CBindings, ty: &syn::Type) -> bool {
     pointer_declared(flat, ty) || declaration(flat, ty).is_some_and(|o| o.explicit)
@@ -304,7 +304,7 @@ pub(crate) fn accessors(flat: &mut CBindings) -> Result<()> {
     let owners: Vec<_> = flat
         .types
         .values()
-        .filter_map(|t| t.metadata.owned.clone())
+        .filter_map(|t| t.metadata.owned().cloned())
         .collect();
     for owner in owners {
         if !std_owner(&owner.ty) {
@@ -441,9 +441,8 @@ pub(crate) fn emit_accessors<R, E, P>(
             .find(|t| prebindgen_flat::same_type(&t.ty, element))
             .and_then(|t| {
                 t.metadata
-                    .pointer
-                    .as_ref()
-                    .or_else(|| t.metadata.owned.as_ref().map(|o| &o.name))
+                    .pointer()
+                    .or_else(|| t.metadata.owned().map(|o| &o.name))
             });
         let c_element = if let Some(name) = declared {
             format!("{prefix}_{name}")

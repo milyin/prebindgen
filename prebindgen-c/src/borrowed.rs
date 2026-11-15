@@ -18,9 +18,9 @@ pub(crate) fn primitive<R, E, P>(
     let primitive = Primitive::from_type(ty).filter(|p| compatible(*p))?;
     if types.values().any(|info| {
         Primitive::from_type(&info.ty) == Some(primitive)
-            && (info.metadata.pointer.is_some()
-                || info.metadata.owned.is_some()
-                || info.metadata.enumeration.is_some())
+            && (info.metadata.pointer().is_some()
+                || info.metadata.owned().is_some()
+                || info.metadata.enumeration().is_some())
     }) {
         return None;
     }
