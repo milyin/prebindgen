@@ -16,7 +16,7 @@
 <a href=#16 id=16 data-nosnippet>16</a>}
 <a href=#17 id=17 data-nosnippet>17</a><span class="kw">impl </span>EnumMapping {
 <a href=#18 id=18 data-nosnippet>18</a>    <span class="doccomment">/// Preserve the source discriminants in a checked `i32` mapping.
-<a href=#19 id=19 data-nosnippet>19</a>    </span><span class="kw">pub fn </span>new&lt;M&gt;(source: <span class="kw-2">&amp;</span>prebindgen_flat::FieldlessEnum&lt;M&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+<a href=#19 id=19 data-nosnippet>19</a>    </span><span class="kw">pub fn </span>new&lt;V, M&gt;(source: <span class="kw-2">&amp;</span>prebindgen_flat::FieldlessEnum&lt;V, M&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
 <a href=#20 id=20 data-nosnippet>20</a>        <span class="kw">fn </span>integer(e: <span class="kw-2">&amp;</span>syn::Expr) -&gt; <span class="prelude-ty">Result</span>&lt;i128&gt; {
 <a href=#21 id=21 data-nosnippet>21</a>            <span class="kw">match </span>e {
 <a href=#22 id=22 data-nosnippet>22</a>                syn::Expr::Lit(syn::ExprLit {
@@ -123,7 +123,7 @@
 <a href=#123 id=123 data-nosnippet>123</a>
 <a href=#124 id=124 data-nosnippet>124</a><span class="doccomment">/// Prepare checked enum decoding with the supplied boundary carrier.
 <a href=#125 id=125 data-nosnippet>125</a>/// References borrow the decoded local; mutable references are unsupported.
-<a href=#126 id=126 data-nosnippet>126</a></span><span class="kw">pub fn </span>enum_input&lt;W: prebindgen_flat::WireKind, C, N, B&gt;(
+<a href=#126 id=126 data-nosnippet>126</a></span><span class="kw">pub fn </span>enum_input&lt;W: prebindgen_conversions::WireKind, C, N, B&gt;(
 <a href=#127 id=127 data-nosnippet>127</a>    mapping: <span class="kw-2">&amp;</span>EnumMapping,
 <a href=#128 id=128 data-nosnippet>128</a>    ty: <span class="kw-2">&amp;</span>Type,
 <a href=#129 id=129 data-nosnippet>129</a>    wire: syn::Ident,
@@ -150,7 +150,7 @@
 <a href=#150 id=150 data-nosnippet>150</a>        (<span class="macro">quote!</span>(), <span class="macro">quote!</span>(<span class="kw">let </span>#var=#decode;), <span class="macro">quote!</span>(#var))
 <a href=#151 id=151 data-nosnippet>151</a>    };
 <a href=#152 id=152 data-nosnippet>152</a>    <span class="kw">let </span><span class="kw-2">mut </span>plan = InputPlan::new(
-<a href=#153 id=153 data-nosnippet>153</a>        prebindgen_flat::WireNode::Leaf(<span class="macro">vec!</span>[Wire { name: wire, kind }]),
+<a href=#153 id=153 data-nosnippet>153</a>        prebindgen_conversions::WireNode::Leaf(<span class="macro">vec!</span>[Wire { name: wire, kind }]),
 <a href=#154 id=154 data-nosnippet>154</a>        code,
 <a href=#155 id=155 data-nosnippet>155</a>        value,
 <a href=#156 id=156 data-nosnippet>156</a>    );
@@ -159,7 +159,7 @@
 <a href=#159 id=159 data-nosnippet>159</a>    <span class="prelude-val">Ok</span>(plan)
 <a href=#160 id=160 data-nosnippet>160</a>}
 <a href=#161 id=161 data-nosnippet>161</a><span class="doccomment">/// Prepare enum output by matching a borrow, without requiring `Copy` or `Clone`.
-<a href=#162 id=162 data-nosnippet>162</a></span><span class="kw">pub fn </span>enum_output&lt;W: prebindgen_flat::WireKind, C, N, B&gt;(
+<a href=#162 id=162 data-nosnippet>162</a></span><span class="kw">pub fn </span>enum_output&lt;W: prebindgen_conversions::WireKind, C, N, B&gt;(
 <a href=#163 id=163 data-nosnippet>163</a>    mapping: <span class="kw-2">&amp;</span>EnumMapping,
 <a href=#164 id=164 data-nosnippet>164</a>    wire: syn::Ident,
 <a href=#165 id=165 data-nosnippet>165</a>    value: TokenStream,
@@ -170,8 +170,8 @@
 <a href=#170 id=170 data-nosnippet>170</a>        fallible: <span class="bool-val">false</span>,
 <a href=#171 id=171 data-nosnippet>171</a>        context: Default::default(),
 <a href=#172 id=172 data-nosnippet>172</a>        delivery: Default::default(),
-<a href=#173 id=173 data-nosnippet>173</a>        outcomes: prebindgen_flat::Outcomes {
-<a href=#174 id=174 data-nosnippet>174</a>            success: prebindgen_flat::WireNode::Leaf(<span class="macro">vec!</span>[Wire {
+<a href=#173 id=173 data-nosnippet>173</a>        outcomes: prebindgen_conversions::Outcomes {
+<a href=#174 id=174 data-nosnippet>174</a>            success: prebindgen_conversions::WireNode::Leaf(<span class="macro">vec!</span>[Wire {
 <a href=#175 id=175 data-nosnippet>175</a>                name: wire.clone(),
 <a href=#176 id=176 data-nosnippet>176</a>                kind,
 <a href=#177 id=177 data-nosnippet>177</a>            }]),
@@ -195,38 +195,39 @@
 <a href=#195 id=195 data-nosnippet>195</a>                .into_iter()
 <a href=#196 id=196 data-nosnippet>196</a>                .map(|i| (i, Default::default())),
 <a href=#197 id=197 data-nosnippet>197</a>        )<span class="question-mark">?</span>;
-<a href=#198 id=198 data-nosnippet>198</a>        EnumMapping::new(flat.enums.values().next().unwrap())
-<a href=#199 id=199 data-nosnippet>199</a>    }
-<a href=#200 id=200 data-nosnippet>200</a>    <span class="attr">#[test]
-<a href=#201 id=201 data-nosnippet>201</a>    </span><span class="kw">fn </span>discriminants_preserve_negative_hex_parenthesized_and_implicit_values() {
-<a href=#202 id=202 data-nosnippet>202</a>        <span class="kw">let </span>m =
-<a href=#203 id=203 data-nosnippet>203</a>            mapping(<span class="string">"pub enum E { A = -2, B, C = (0x10), D, Min = -2147483648, Max = 2147483647 }"</span>)
-<a href=#204 id=204 data-nosnippet>204</a>                .unwrap();
-<a href=#205 id=205 data-nosnippet>205</a>        <span class="macro">assert_eq!</span>(
-<a href=#206 id=206 data-nosnippet>206</a>            m.variants.iter().map(|(<span class="kw">_</span>, n)| <span class="kw-2">*</span>n).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;(),
-<a href=#207 id=207 data-nosnippet>207</a>            [-<span class="number">2</span>, -<span class="number">1</span>, <span class="number">16</span>, <span class="number">17</span>, i32::MIN, i32::MAX]
-<a href=#208 id=208 data-nosnippet>208</a>        );
-<a href=#209 id=209 data-nosnippet>209</a>        <span class="macro">assert_eq!</span>(m.initial_niche(), <span class="prelude-val">Some</span>(-<span class="number">3</span>));
-<a href=#210 id=210 data-nosnippet>210</a>        <span class="macro">assert_eq!</span>(m.unused_at_or_below(<span class="number">17</span>), <span class="prelude-val">Some</span>(<span class="number">15</span>));
-<a href=#211 id=211 data-nosnippet>211</a>        <span class="macro">assert!</span>(!m.is_niche(-<span class="number">1</span>));
-<a href=#212 id=212 data-nosnippet>212</a>        <span class="macro">assert!</span>(!m.is_niche(i64::MAX));
-<a href=#213 id=213 data-nosnippet>213</a>        <span class="macro">assert!</span>(m.is_niche(<span class="number">0</span>));
-<a href=#214 id=214 data-nosnippet>214</a>        <span class="macro">assert_eq!</span>(m.unused_at_or_below(i32::MIN), <span class="prelude-val">None</span>);
-<a href=#215 id=215 data-nosnippet>215</a>    }
-<a href=#216 id=216 data-nosnippet>216</a>    <span class="attr">#[test]
-<a href=#217 id=217 data-nosnippet>217</a>    </span><span class="kw">fn </span>invalid_and_unresolved_discriminants_fail_instead_of_guessing() {
-<a href=#218 id=218 data-nosnippet>218</a>        <span class="kw">for </span>(source, message) <span class="kw">in </span>[
-<a href=#219 id=219 data-nosnippet>219</a>            (<span class="string">"pub enum E { A = 2147483648 }"</span>, <span class="string">"does not fit"</span>),
-<a href=#220 id=220 data-nosnippet>220</a>            (<span class="string">"pub enum E { A = -2147483649 }"</span>, <span class="string">"does not fit"</span>),
-<a href=#221 id=221 data-nosnippet>221</a>            (<span class="string">"pub enum E { A = 2147483647, B }"</span>, <span class="string">"overflows"</span>),
-<a href=#222 id=222 data-nosnippet>222</a>            (<span class="string">"pub enum E { A = 1, B = 1 }"</span>, <span class="string">"duplicate"</span>),
-<a href=#223 id=223 data-nosnippet>223</a>            (<span class="string">"pub enum E { A = SOME_CONST }"</span>, <span class="string">"integer literals"</span>),
-<a href=#224 id=224 data-nosnippet>224</a>            (<span class="string">"pub enum E { A = 1 &lt;&lt; 3 }"</span>, <span class="string">"integer literals"</span>),
-<a href=#225 id=225 data-nosnippet>225</a>        ] {
-<a href=#226 id=226 data-nosnippet>226</a>            <span class="macro">assert!</span>(mapping(source).unwrap_err().contains(message), <span class="string">"{source}"</span>);
-<a href=#227 id=227 data-nosnippet>227</a>        }
-<a href=#228 id=228 data-nosnippet>228</a>        <span class="kw">let </span>m = mapping(<span class="string">"pub enum E { A = 2147483647, B = 0 }"</span>).unwrap();
-<a href=#229 id=229 data-nosnippet>229</a>        <span class="macro">assert_eq!</span>(m.variants[<span class="number">1</span>].<span class="number">1</span>, <span class="number">0</span>);
-<a href=#230 id=230 data-nosnippet>230</a>    }
-<a href=#231 id=231 data-nosnippet>231</a>}
+<a href=#198 id=198 data-nosnippet>198</a>        <span class="kw">let </span>mapping = EnumMapping::new(flat.enums().next().unwrap());
+<a href=#199 id=199 data-nosnippet>199</a>        mapping
+<a href=#200 id=200 data-nosnippet>200</a>    }
+<a href=#201 id=201 data-nosnippet>201</a>    <span class="attr">#[test]
+<a href=#202 id=202 data-nosnippet>202</a>    </span><span class="kw">fn </span>discriminants_preserve_negative_hex_parenthesized_and_implicit_values() {
+<a href=#203 id=203 data-nosnippet>203</a>        <span class="kw">let </span>m =
+<a href=#204 id=204 data-nosnippet>204</a>            mapping(<span class="string">"pub enum E { A = -2, B, C = (0x10), D, Min = -2147483648, Max = 2147483647 }"</span>)
+<a href=#205 id=205 data-nosnippet>205</a>                .unwrap();
+<a href=#206 id=206 data-nosnippet>206</a>        <span class="macro">assert_eq!</span>(
+<a href=#207 id=207 data-nosnippet>207</a>            m.variants.iter().map(|(<span class="kw">_</span>, n)| <span class="kw-2">*</span>n).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;(),
+<a href=#208 id=208 data-nosnippet>208</a>            [-<span class="number">2</span>, -<span class="number">1</span>, <span class="number">16</span>, <span class="number">17</span>, i32::MIN, i32::MAX]
+<a href=#209 id=209 data-nosnippet>209</a>        );
+<a href=#210 id=210 data-nosnippet>210</a>        <span class="macro">assert_eq!</span>(m.initial_niche(), <span class="prelude-val">Some</span>(-<span class="number">3</span>));
+<a href=#211 id=211 data-nosnippet>211</a>        <span class="macro">assert_eq!</span>(m.unused_at_or_below(<span class="number">17</span>), <span class="prelude-val">Some</span>(<span class="number">15</span>));
+<a href=#212 id=212 data-nosnippet>212</a>        <span class="macro">assert!</span>(!m.is_niche(-<span class="number">1</span>));
+<a href=#213 id=213 data-nosnippet>213</a>        <span class="macro">assert!</span>(!m.is_niche(i64::MAX));
+<a href=#214 id=214 data-nosnippet>214</a>        <span class="macro">assert!</span>(m.is_niche(<span class="number">0</span>));
+<a href=#215 id=215 data-nosnippet>215</a>        <span class="macro">assert_eq!</span>(m.unused_at_or_below(i32::MIN), <span class="prelude-val">None</span>);
+<a href=#216 id=216 data-nosnippet>216</a>    }
+<a href=#217 id=217 data-nosnippet>217</a>    <span class="attr">#[test]
+<a href=#218 id=218 data-nosnippet>218</a>    </span><span class="kw">fn </span>invalid_and_unresolved_discriminants_fail_instead_of_guessing() {
+<a href=#219 id=219 data-nosnippet>219</a>        <span class="kw">for </span>(source, message) <span class="kw">in </span>[
+<a href=#220 id=220 data-nosnippet>220</a>            (<span class="string">"pub enum E { A = 2147483648 }"</span>, <span class="string">"does not fit"</span>),
+<a href=#221 id=221 data-nosnippet>221</a>            (<span class="string">"pub enum E { A = -2147483649 }"</span>, <span class="string">"does not fit"</span>),
+<a href=#222 id=222 data-nosnippet>222</a>            (<span class="string">"pub enum E { A = 2147483647, B }"</span>, <span class="string">"overflows"</span>),
+<a href=#223 id=223 data-nosnippet>223</a>            (<span class="string">"pub enum E { A = 1, B = 1 }"</span>, <span class="string">"duplicate"</span>),
+<a href=#224 id=224 data-nosnippet>224</a>            (<span class="string">"pub enum E { A = SOME_CONST }"</span>, <span class="string">"integer literals"</span>),
+<a href=#225 id=225 data-nosnippet>225</a>            (<span class="string">"pub enum E { A = 1 &lt;&lt; 3 }"</span>, <span class="string">"integer literals"</span>),
+<a href=#226 id=226 data-nosnippet>226</a>        ] {
+<a href=#227 id=227 data-nosnippet>227</a>            <span class="macro">assert!</span>(mapping(source).unwrap_err().contains(message), <span class="string">"{source}"</span>);
+<a href=#228 id=228 data-nosnippet>228</a>        }
+<a href=#229 id=229 data-nosnippet>229</a>        <span class="kw">let </span>m = mapping(<span class="string">"pub enum E { A = 2147483647, B = 0 }"</span>).unwrap();
+<a href=#230 id=230 data-nosnippet>230</a>        <span class="macro">assert_eq!</span>(m.variants[<span class="number">1</span>].<span class="number">1</span>, <span class="number">0</span>);
+<a href=#231 id=231 data-nosnippet>231</a>    }
+<a href=#232 id=232 data-nosnippet>232</a>}
 </code></pre></div></section></main></body></html>

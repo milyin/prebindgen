@@ -84,7 +84,7 @@
 <a href=#84 id=84 data-nosnippet>84</a>        context: Default::default(),
 <a href=#85 id=85 data-nosnippet>85</a>        delivery: Default::default(),
 <a href=#86 id=86 data-nosnippet>86</a>        commit: TokenStream::new(),
-<a href=#87 id=87 data-nosnippet>87</a>        outcomes: prebindgen_flat::Outcomes {
+<a href=#87 id=87 data-nosnippet>87</a>        outcomes: prebindgen_conversions::Outcomes {
 <a href=#88 id=88 data-nosnippet>88</a>            success: WireNode::Branch {
 <a href=#89 id=89 data-nosnippet>89</a>                controls: <span class="macro">vec!</span>[],
 <a href=#90 id=90 data-nosnippet>90</a>                children: <span class="macro">vec!</span>[],
@@ -104,7 +104,7 @@
 <a href=#104 id=104 data-nosnippet>104</a>            <span class="kw-2">&amp;mut </span>child.outcomes.success,
 <a href=#105 id=105 data-nosnippet>105</a>            ComponentSegment::Field(name.to_string()),
 <a href=#106 id=106 data-nosnippet>106</a>        );
-<a href=#107 id=107 data-nosnippet>107</a>        child.outcomes.success = prebindgen_flat::WireNode::Branch {
+<a href=#107 id=107 data-nosnippet>107</a>        child.outcomes.success = prebindgen_conversions::WireNode::Branch {
 <a href=#108 id=108 data-nosnippet>108</a>            controls: <span class="macro">vec!</span>[],
 <a href=#109 id=109 data-nosnippet>109</a>            meta: codec.group(GroupKind::Field(<span class="kw-2">&amp;</span>(name)))<span class="question-mark">?</span>,
 <a href=#110 id=110 data-nosnippet>110</a>            children: <span class="macro">vec!</span>[std::mem::take(<span class="kw-2">&amp;mut </span>child.outcomes.success)],
@@ -142,7 +142,7 @@
 <a href=#142 id=142 data-nosnippet>142</a>        context: Default::default(),
 <a href=#143 id=143 data-nosnippet>143</a>        delivery: Default::default(),
 <a href=#144 id=144 data-nosnippet>144</a>        commit: TokenStream::new(),
-<a href=#145 id=145 data-nosnippet>145</a>        outcomes: prebindgen_flat::Outcomes {
+<a href=#145 id=145 data-nosnippet>145</a>        outcomes: prebindgen_conversions::Outcomes {
 <a href=#146 id=146 data-nosnippet>146</a>            success: WireNode::Branch {
 <a href=#147 id=147 data-nosnippet>147</a>                controls: <span class="macro">vec!</span>[],
 <a href=#148 id=148 data-nosnippet>148</a>                children: <span class="macro">vec!</span>[],
@@ -162,7 +162,7 @@
 <a href=#162 id=162 data-nosnippet>162</a>            <span class="kw-2">&amp;mut </span>child.outcomes.success,
 <a href=#163 id=163 data-nosnippet>163</a>            ComponentSegment::Field(name.to_string()),
 <a href=#164 id=164 data-nosnippet>164</a>        );
-<a href=#165 id=165 data-nosnippet>165</a>        child.outcomes.success = prebindgen_flat::WireNode::Branch {
+<a href=#165 id=165 data-nosnippet>165</a>        child.outcomes.success = prebindgen_conversions::WireNode::Branch {
 <a href=#166 id=166 data-nosnippet>166</a>            controls: <span class="macro">vec!</span>[],
 <a href=#167 id=167 data-nosnippet>167</a>            meta: codec.group(GroupKind::Field(<span class="kw-2">&amp;</span>(name)))<span class="question-mark">?</span>,
 <a href=#168 id=168 data-nosnippet>168</a>            children: <span class="macro">vec!</span>[std::mem::take(<span class="kw-2">&amp;mut </span>child.outcomes.success)],

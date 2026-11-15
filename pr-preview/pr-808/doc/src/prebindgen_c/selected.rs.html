@@ -2,7 +2,7 @@
 <a href=#2 id=2 data-nosnippet>2</a>//! during generation. These predicates also preserve original optional presence
 <a href=#3 id=3 data-nosnippet>3</a>//! while an input carrier's pointer slots are emptied by ownership transfers.
 <a href=#4 id=4 data-nosnippet>4</a></span><span class="kw">use super</span>::<span class="kw-2">*</span>;
-<a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>prebindgen_flat::WireNode;
+<a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>prebindgen_conversions::WireNode;
 <a href=#6 id=6 data-nosnippet>6</a>
 <a href=#7 id=7 data-nosnippet>7</a><span class="attr">#[derive(Clone)]
 <a href=#8 id=8 data-nosnippet>8</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">enum </span>Test {
@@ -33,7 +33,7 @@
 <a href=#33 id=33 data-nosnippet>33</a>        .unwrap_or_else(|| <span class="macro">quote!</span>(<span class="bool-val">true</span>))
 <a href=#34 id=34 data-nosnippet>34</a>}
 <a href=#35 id=35 data-nosnippet>35</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>values(
-<a href=#36 id=36 data-nosnippet>36</a>    node: <span class="kw-2">&amp;</span>prebindgen_flat::WireNode&lt;CWire, CChain, CBranch&gt;,
+<a href=#36 id=36 data-nosnippet>36</a>    node: <span class="kw-2">&amp;</span>prebindgen_conversions::WireNode&lt;CWire, CChain, CBranch&gt;,
 <a href=#37 id=37 data-nosnippet>37</a>) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;(<span class="kw-2">&amp;</span>Wire, Vec&lt;Test&gt;)&gt;&gt; {
 <a href=#38 id=38 data-nosnippet>38</a>    <span class="kw">fn </span>visit&lt;<span class="lifetime">'a</span>&gt;(
 <a href=#39 id=39 data-nosnippet>39</a>        node: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>WireNode&lt;CWire, CChain, CBranch&gt;,

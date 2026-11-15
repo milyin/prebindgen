@@ -173,7 +173,7 @@
 <a href=#173 id=173 data-nosnippet>173</a>    </span><span class="kw">pub </span>direction: Direction,
 <a href=#174 id=174 data-nosnippet>174</a>}
 <a href=#175 id=175 data-nosnippet>175</a><span class="doccomment">/// Presence encoding selected by one optional preparation operation.
-<a href=#176 id=176 data-nosnippet>176</a></span><span class="kw">pub enum </span>Presence&lt;W: prebindgen_flat::WireKind&gt; {
+<a href=#176 id=176 data-nosnippet>176</a></span><span class="kw">pub enum </span>Presence&lt;W: prebindgen_conversions::WireKind&gt; {
 <a href=#177 id=177 data-nosnippet>177</a>    <span class="doccomment">/// One i32-compatible 0/1 control, named by the requested presence binding.
 <a href=#178 id=178 data-nosnippet>178</a>    </span>Flag(Wire&lt;W&gt;),
 <a href=#179 id=179 data-nosnippet>179</a>    <span class="doccomment">/// No added wire. Input requires a total, side-effect-free boolean test;

@@ -4,8 +4,8 @@
 <a href=#4 id=4 data-nosnippet>4</a>//! the conversion around the adapter's own decode and encode expressions.
 <a href=#5 id=5 data-nosnippet>5</a></span><span class="kw">use </span>prebindgen_flat::{type_key, Primitive, <span class="prelude-ty">Result</span>};
 <a href=#6 id=6 data-nosnippet>6</a>
-<a href=#7 id=7 data-nosnippet>7</a><span class="kw">use crate</span>::{InputPlan, OutputPlan};
-<a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>prebindgen_flat::Wire;
+<a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span><span class="kw">crate</span>::Wire;
+<a href=#8 id=8 data-nosnippet>8</a><span class="kw">use crate</span>::{InputPlan, OutputPlan};
 <a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>proc_macro2::TokenStream;
 <a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>quote::quote;
 <a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span>syn::Type;
@@ -73,10 +73,10 @@
 <a href=#73 id=73 data-nosnippet>73</a>///     &amp;syn::parse_quote!(&amp;str), syn::parse_quote!(raw), syn::parse_quote!(text),
 <a href=#74 id=74 data-nosnippet>74</a>///     quote::quote!(read(raw)?), syn::parse_quote!(&amp;str),
 <a href=#75 id=75 data-nosnippet>75</a>/// )?;
-<a href=#76 id=76 data-nosnippet>76</a>/// assert_eq!(prebindgen_flat::type_key(&amp;prebindgen_flat::wire_definitions(std::iter::once(&amp;input.node)).next().unwrap().rust_type()), "&amp; str");
+<a href=#76 id=76 data-nosnippet>76</a>/// assert_eq!(prebindgen_flat::type_key(&amp;prebindgen_conversions::wire_definitions(std::iter::once(&amp;input.node)).next().unwrap().rust_type()), "&amp; str");
 <a href=#77 id=77 data-nosnippet>77</a>/// # Ok::&lt;(), Box&lt;dyn std::error::Error&gt;&gt;(())
 <a href=#78 id=78 data-nosnippet>78</a>/// ```
-<a href=#79 id=79 data-nosnippet>79</a></span><span class="kw">pub fn </span>input&lt;W: prebindgen_flat::WireKind, C, N, B&gt;(
+<a href=#79 id=79 data-nosnippet>79</a></span><span class="kw">pub fn </span>input&lt;W: <span class="kw">crate</span>::WireKind, C, N, B&gt;(
 <a href=#80 id=80 data-nosnippet>80</a>    ty: <span class="kw-2">&amp;</span>Type,
 <a href=#81 id=81 data-nosnippet>81</a>    wire: syn::Ident,
 <a href=#82 id=82 data-nosnippet>82</a>    var: syn::Ident,
@@ -113,7 +113,7 @@
 <a href=#113 id=113 data-nosnippet>113</a>        ),
 <a href=#114 id=114 data-nosnippet>114</a>    };
 <a href=#115 id=115 data-nosnippet>115</a>    <span class="kw">let </span><span class="kw-2">mut </span>plan = InputPlan::new(
-<a href=#116 id=116 data-nosnippet>116</a>        prebindgen_flat::WireNode::Leaf(<span class="macro">vec!</span>[Wire { name: wire, kind }]),
+<a href=#116 id=116 data-nosnippet>116</a>        <span class="kw">crate</span>::WireNode::Leaf(<span class="macro">vec!</span>[Wire { name: wire, kind }]),
 <a href=#117 id=117 data-nosnippet>117</a>        code,
 <a href=#118 id=118 data-nosnippet>118</a>        value,
 <a href=#119 id=119 data-nosnippet>119</a>    );
@@ -139,7 +139,7 @@
 <a href=#139 id=139 data-nosnippet>139</a>/// * `encode` — maps a Rust expression of the owned value to the expression
 <a href=#140 id=140 data-nosnippet>140</a>///   delivered on the wire.
 <a href=#141 id=141 data-nosnippet>141</a>/// * `kind` — the adapter's [`Wire::kind`] for the wire.
-<a href=#142 id=142 data-nosnippet>142</a></span><span class="kw">pub fn </span>output&lt;W: prebindgen_flat::WireKind, C, N, B&gt;(
+<a href=#142 id=142 data-nosnippet>142</a></span><span class="kw">pub fn </span>output&lt;W: <span class="kw">crate</span>::WireKind, C, N, B&gt;(
 <a href=#143 id=143 data-nosnippet>143</a>    ty: <span class="kw-2">&amp;</span>Type,
 <a href=#144 id=144 data-nosnippet>144</a>    wire: syn::Ident,
 <a href=#145 id=145 data-nosnippet>145</a>    value: TokenStream,
@@ -166,8 +166,8 @@
 <a href=#166 id=166 data-nosnippet>166</a>        fallible: <span class="bool-val">true</span>,
 <a href=#167 id=167 data-nosnippet>167</a>        context: Default::default(),
 <a href=#168 id=168 data-nosnippet>168</a>        delivery: Default::default(),
-<a href=#169 id=169 data-nosnippet>169</a>        outcomes: prebindgen_flat::Outcomes {
-<a href=#170 id=170 data-nosnippet>170</a>            success: prebindgen_flat::WireNode::Leaf(<span class="macro">vec!</span>[Wire {
+<a href=#169 id=169 data-nosnippet>169</a>        outcomes: <span class="kw">crate</span>::Outcomes {
+<a href=#170 id=170 data-nosnippet>170</a>            success: <span class="kw">crate</span>::WireNode::Leaf(<span class="macro">vec!</span>[Wire {
 <a href=#171 id=171 data-nosnippet>171</a>                name: wire.clone(),
 <a href=#172 id=172 data-nosnippet>172</a>                kind,
 <a href=#173 id=173 data-nosnippet>173</a>            }]),

@@ -2,7 +2,7 @@
 <a href=#2 id=2 data-nosnippet>2</a>//! no runtime ownership registry or row-by-row plan is required.
 <a href=#3 id=3 data-nosnippet>3</a></span><span class="kw">use super</span>::<span class="kw-2">*</span>;
 <a href=#4 id=4 data-nosnippet>4</a><span class="kw">use </span><span class="kw">crate</span>::kotlin::JniNode;
-<a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>prebindgen_flat::WireNode;
+<a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>prebindgen_conversions::WireNode;
 <a href=#6 id=6 data-nosnippet>6</a>
 <a href=#7 id=7 data-nosnippet>7</a><span class="attr">#[derive(Clone, Debug)]
 <a href=#8 id=8 data-nosnippet>8</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">enum </span>Test {
@@ -54,7 +54,7 @@
 <a href=#54 id=54 data-nosnippet>54</a>            indices: <span class="kw-2">&amp;</span>BTreeMap&lt;String, usize&gt;,
 <a href=#55 id=55 data-nosnippet>55</a>            out: <span class="kw-2">&amp;mut </span>[Vec&lt;Test&gt;],
 <a href=#56 id=56 data-nosnippet>56</a>        ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#57 id=57 data-nosnippet>57</a>            <span class="kw">let </span>set = |wires: <span class="kw-2">&amp;</span>[prebindgen_flat::Wire&lt;JniWire&gt;], out: <span class="kw-2">&amp;mut </span>[Vec&lt;Test&gt;]| {
+<a href=#57 id=57 data-nosnippet>57</a>            <span class="kw">let </span>set = |wires: <span class="kw-2">&amp;</span>[prebindgen_conversions::Wire&lt;JniWire&gt;], out: <span class="kw-2">&amp;mut </span>[Vec&lt;Test&gt;]| {
 <a href=#58 id=58 data-nosnippet>58</a>                <span class="kw">for </span>w <span class="kw">in </span>wires {
 <a href=#59 id=59 data-nosnippet>59</a>                    out[indices[<span class="kw-2">&amp;</span>w.name.to_string()]] = path.to_vec();
 <a href=#60 id=60 data-nosnippet>60</a>                }

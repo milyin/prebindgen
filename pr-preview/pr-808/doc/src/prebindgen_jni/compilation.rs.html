@@ -53,14 +53,14 @@
 <a href=#53 id=53 data-nosnippet>53</a>                operation: JniOutputUnary::Convert { conversion, .. },
 <a href=#54 id=54 data-nosnippet>54</a>                ..
 <a href=#55 id=55 data-nosnippet>55</a>            } =&gt; <span class="kw">match </span><span class="kw-2">&amp;</span>conversion.source {
-<a href=#56 id=56 data-nosnippet>56</a>                prebindgen_flat::ValueSource::Function(name) =&gt; {
+<a href=#56 id=56 data-nosnippet>56</a>                prebindgen_conversions::ValueSource::Function(name) =&gt; {
 <a href=#57 id=57 data-nosnippet>57</a>                    flat.function(name).is_ok_and(|f| {
 <a href=#58 id=58 data-nosnippet>58</a>                        f.params
 <a href=#59 id=59 data-nosnippet>59</a>                            .first()
 <a href=#60 id=60 data-nosnippet>60</a>                            .is_some_and(|p| !<span class="macro">matches!</span>(p.ty.ty, Type::Reference(<span class="kw">_</span>)))
 <a href=#61 id=61 data-nosnippet>61</a>                    })
 <a href=#62 id=62 data-nosnippet>62</a>                }
-<a href=#63 id=63 data-nosnippet>63</a>                prebindgen_flat::ValueSource::Into { .. } =&gt; <span class="bool-val">true</span>,
+<a href=#63 id=63 data-nosnippet>63</a>                prebindgen_conversions::ValueSource::Into { .. } =&gt; <span class="bool-val">true</span>,
 <a href=#64 id=64 data-nosnippet>64</a>            },
 <a href=#65 id=65 data-nosnippet>65</a>            JniOutput::Unary {
 <a href=#66 id=66 data-nosnippet>66</a>                operation: JniOutputUnary::Sequence { mode, .. },
