@@ -54,57 +54,68 @@
 <a href=#54 id=54 data-nosnippet>54</a>    <span class="kw">type </span>Type = JniType;
 <a href=#55 id=55 data-nosnippet>55</a>    <span class="kw">type </span>Field = data::JniField;
 <a href=#56 id=56 data-nosnippet>56</a>    <span class="kw">type </span>Variant = ();
-<a href=#57 id=57 data-nosnippet>57</a>}
-<a href=#58 id=58 data-nosnippet>58</a><span class="doccomment">/// Settings shared by the generated Kotlin/JNI module.
-<a href=#59 id=59 data-nosnippet>59</a></span><span class="attr">#[derive(Clone, Debug, Default)]
-<a href=#60 id=60 data-nosnippet>60</a></span><span class="kw">pub struct </span>JniModule {
-<a href=#61 id=61 data-nosnippet>61</a>    <span class="doccomment">/// Root Kotlin package containing JNINative and shared infrastructure.
-<a href=#62 id=62 data-nosnippet>62</a>    </span><span class="kw">pub </span>package: String,
-<a href=#63 id=63 data-nosnippet>63</a>    <span class="doccomment">/// Kotlin initialization statements in JNINative.
-<a href=#64 id=64 data-nosnippet>64</a>    </span><span class="kw">pub </span>native_init: String,
-<a href=#65 id=65 data-nosnippet>65</a>    <span class="doccomment">/// Use bulk for materialized collection outputs with automatic transport.
-<a href=#66 id=66 data-nosnippet>66</a>    </span><span class="kw">pub </span>bulk_collection_outputs: bool,
-<a href=#67 id=67 data-nosnippet>67</a>}
-<a href=#68 id=68 data-nosnippet>68</a><span class="doccomment">/// Export and placement decisions belonging to one function.
-<a href=#69 id=69 data-nosnippet>69</a></span><span class="attr">#[derive(Clone, Debug, Default)]
-<a href=#70 id=70 data-nosnippet>70</a></span><span class="kw">pub struct </span>JniFunction {
-<a href=#71 id=71 data-nosnippet>71</a>    <span class="doccomment">/// This export delivers a returned sequence through a visitor/folder.
-<a href=#72 id=72 data-nosnippet>72</a>    </span><span class="kw">pub </span>callback_return: bool,
-<a href=#73 id=73 data-nosnippet>73</a>    <span class="doccomment">/// Fully qualified destination package.
-<a href=#74 id=74 data-nosnippet>74</a>    </span><span class="kw">pub </span>package: String,
-<a href=#75 id=75 data-nosnippet>75</a>    <span class="doccomment">/// Destination function name.
-<a href=#76 id=76 data-nosnippet>76</a>    </span><span class="kw">pub </span>name: String,
-<a href=#77 id=77 data-nosnippet>77</a>    <span class="doccomment">/// Declaration order used when rendering functions.
-<a href=#78 id=78 data-nosnippet>78</a>    </span><span class="kw">pub </span>order: usize,
-<a href=#79 id=79 data-nosnippet>79</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) error: <span class="prelude-ty">Option</span>&lt;Rc&lt;errors::ErrorBinding&gt;&gt;,
-<a href=#80 id=80 data-nosnippet>80</a>}
-<a href=#81 id=81 data-nosnippet>81</a><span class="doccomment">/// Kotlin/JNI declaration information shared by occurrences of a Rust type.
-<a href=#82 id=82 data-nosnippet>82</a></span><span class="attr">#[derive(Clone, Debug, Default)]
-<a href=#83 id=83 data-nosnippet>83</a></span><span class="kw">pub struct </span>JniType {
-<a href=#84 id=84 data-nosnippet>84</a>    <span class="doccomment">/// Standalone callback interface attached to its canonical callback type.
-<a href=#85 id=85 data-nosnippet>85</a>    /// Configured selects this type's input default; later stages retain its recipe/converter.
-<a href=#86 id=86 data-nosnippet>86</a>    </span><span class="kw">pub </span>callback:
-<a href=#87 id=87 data-nosnippet>87</a>        <span class="prelude-ty">Option</span>&lt;prebindgen_conversions::BindingState&lt;(), <span class="kw">crate</span>::JniInput, <span class="kw">crate</span>::JniInputConverter&gt;&gt;,
-<a href=#88 id=88 data-nosnippet>88</a>    <span class="doccomment">/// Input/output defaults stored on this type, including callback signatures.
-<a href=#89 id=89 data-nosnippet>89</a>    </span><span class="kw">pub </span>defaults:
-<a href=#90 id=90 data-nosnippet>90</a>        prebindgen_declarations::DeclTypeDefaults&lt;<span class="kw">crate</span>::JniInputConfig, <span class="kw">crate</span>::JniOutputConfig&gt;,
-<a href=#91 id=91 data-nosnippet>91</a>    <span class="doccomment">/// Canonical value conversions selected for this source type.
-<a href=#92 id=92 data-nosnippet>92</a>    </span><span class="kw">pub </span>conversion: prebindgen_conversions::ValueConversions,
-<a href=#93 id=93 data-nosnippet>93</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) class: <span class="prelude-ty">Option</span>&lt;Rc&lt;Class&gt;&gt;,
-<a href=#94 id=94 data-nosnippet>94</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) enumeration: <span class="prelude-ty">Option</span>&lt;Rc&lt;JniEnum&gt;&gt;,
-<a href=#95 id=95 data-nosnippet>95</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) errors: BTreeMap&lt;bool, Rc&lt;errors::ErrorBinding&gt;&gt;,
-<a href=#96 id=96 data-nosnippet>96</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) error_class: <span class="prelude-ty">Option</span>&lt;String&gt;,
-<a href=#97 id=97 data-nosnippet>97</a>}
-<a href=#98 id=98 data-nosnippet>98</a>
-<a href=#99 id=99 data-nosnippet>99</a><span class="doccomment">/// One JNI export attached to its original source function.
-<a href=#100 id=100 data-nosnippet>100</a></span><span class="kw">pub type </span>JniBinding&lt;I = JniInputConverter, O = JniOutputConverter&gt; =
-<a href=#101 id=101 data-nosnippet>101</a>    prebindgen_declarations::DeclBinding&lt;
-<a href=#102 id=102 data-nosnippet>102</a>        <span class="kw">crate</span>::JniInputConfig,
-<a href=#103 id=103 data-nosnippet>103</a>        <span class="kw">crate</span>::JniOutputConfig,
-<a href=#104 id=104 data-nosnippet>104</a>        <span class="kw">crate</span>::JniInput,
-<a href=#105 id=105 data-nosnippet>105</a>        <span class="kw">crate</span>::JniOutput,
-<a href=#106 id=106 data-nosnippet>106</a>        I,
-<a href=#107 id=107 data-nosnippet>107</a>        O,
-<a href=#108 id=108 data-nosnippet>108</a>        JniFunction,
-<a href=#109 id=109 data-nosnippet>109</a>    &gt;;
+<a href=#57 id=57 data-nosnippet>57</a>    <span class="kw">type </span>Record = ();
+<a href=#58 id=58 data-nosnippet>58</a>    <span class="kw">type </span>Enum = ();
+<a href=#59 id=59 data-nosnippet>59</a>    <span class="kw">type </span>PayloadEnum = ();
+<a href=#60 id=60 data-nosnippet>60</a>}
+<a href=#61 id=61 data-nosnippet>61</a><span class="doccomment">/// Settings shared by the generated Kotlin/JNI module.
+<a href=#62 id=62 data-nosnippet>62</a></span><span class="attr">#[derive(Clone, Debug, Default)]
+<a href=#63 id=63 data-nosnippet>63</a></span><span class="kw">pub struct </span>JniModule {
+<a href=#64 id=64 data-nosnippet>64</a>    <span class="doccomment">/// Root Kotlin package containing JNINative and shared infrastructure.
+<a href=#65 id=65 data-nosnippet>65</a>    </span><span class="kw">pub </span>package: String,
+<a href=#66 id=66 data-nosnippet>66</a>    <span class="doccomment">/// Kotlin initialization statements in JNINative.
+<a href=#67 id=67 data-nosnippet>67</a>    </span><span class="kw">pub </span>native_init: String,
+<a href=#68 id=68 data-nosnippet>68</a>    <span class="doccomment">/// Use bulk for materialized collection outputs with automatic transport.
+<a href=#69 id=69 data-nosnippet>69</a>    </span><span class="kw">pub </span>bulk_collection_outputs: bool,
+<a href=#70 id=70 data-nosnippet>70</a>}
+<a href=#71 id=71 data-nosnippet>71</a><span class="doccomment">/// Export and placement decisions belonging to one function.
+<a href=#72 id=72 data-nosnippet>72</a></span><span class="attr">#[derive(Clone, Debug, Default)]
+<a href=#73 id=73 data-nosnippet>73</a></span><span class="kw">pub struct </span>JniFunction {
+<a href=#74 id=74 data-nosnippet>74</a>    <span class="doccomment">/// This export delivers a returned sequence through a visitor/folder.
+<a href=#75 id=75 data-nosnippet>75</a>    </span><span class="kw">pub </span>callback_return: bool,
+<a href=#76 id=76 data-nosnippet>76</a>    <span class="doccomment">/// Fully qualified destination package.
+<a href=#77 id=77 data-nosnippet>77</a>    </span><span class="kw">pub </span>package: String,
+<a href=#78 id=78 data-nosnippet>78</a>    <span class="doccomment">/// Destination function name.
+<a href=#79 id=79 data-nosnippet>79</a>    </span><span class="kw">pub </span>name: String,
+<a href=#80 id=80 data-nosnippet>80</a>    <span class="doccomment">/// Declaration order used when rendering functions.
+<a href=#81 id=81 data-nosnippet>81</a>    </span><span class="kw">pub </span>order: usize,
+<a href=#82 id=82 data-nosnippet>82</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) error: <span class="prelude-ty">Option</span>&lt;Rc&lt;errors::ErrorBinding&gt;&gt;,
+<a href=#83 id=83 data-nosnippet>83</a>}
+<a href=#84 id=84 data-nosnippet>84</a><span class="doccomment">/// Kotlin/JNI declaration information shared by occurrences of a Rust type.
+<a href=#85 id=85 data-nosnippet>85</a></span><span class="attr">#[derive(Clone, Debug, Default)]
+<a href=#86 id=86 data-nosnippet>86</a></span><span class="kw">pub struct </span>JniType {
+<a href=#87 id=87 data-nosnippet>87</a>    <span class="doccomment">/// Standalone callback interface attached to its canonical callback type.
+<a href=#88 id=88 data-nosnippet>88</a>    /// Configured selects this type's input default; later stages retain its recipe/converter.
+<a href=#89 id=89 data-nosnippet>89</a>    </span><span class="kw">pub </span>callback:
+<a href=#90 id=90 data-nosnippet>90</a>        <span class="prelude-ty">Option</span>&lt;prebindgen_conversions::BindingState&lt;(), <span class="kw">crate</span>::JniInput, <span class="kw">crate</span>::JniInputConverter&gt;&gt;,
+<a href=#91 id=91 data-nosnippet>91</a>    <span class="doccomment">/// Input/output defaults stored on this type, including callback signatures.
+<a href=#92 id=92 data-nosnippet>92</a>    </span><span class="kw">pub </span>defaults:
+<a href=#93 id=93 data-nosnippet>93</a>        prebindgen_declarations::DeclTypeDefaults&lt;<span class="kw">crate</span>::JniInputConfig, <span class="kw">crate</span>::JniOutputConfig&gt;,
+<a href=#94 id=94 data-nosnippet>94</a>    <span class="doccomment">/// Canonical value conversions selected for this source type.
+<a href=#95 id=95 data-nosnippet>95</a>    </span><span class="kw">pub </span>conversion: prebindgen_conversions::ValueConversions,
+<a href=#96 id=96 data-nosnippet>96</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) class: <span class="prelude-ty">Option</span>&lt;Rc&lt;Class&gt;&gt;,
+<a href=#97 id=97 data-nosnippet>97</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) errors: BTreeMap&lt;bool, Rc&lt;errors::ErrorBinding&gt;&gt;,
+<a href=#98 id=98 data-nosnippet>98</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) error_class: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#99 id=99 data-nosnippet>99</a>}
+<a href=#100 id=100 data-nosnippet>100</a>
+<a href=#101 id=101 data-nosnippet>101</a><span class="kw">impl </span>JniType {
+<a href=#102 id=102 data-nosnippet>102</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>enumeration(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Rc&lt;JniEnum&gt;&gt; {
+<a href=#103 id=103 data-nosnippet>103</a>        <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.class.as_ref()<span class="question-mark">?</span>.representation {
+<a href=#104 id=104 data-nosnippet>104</a>            ClassRepresentation::Enum(enumeration) =&gt; <span class="prelude-val">Some</span>(enumeration),
+<a href=#105 id=105 data-nosnippet>105</a>            <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
+<a href=#106 id=106 data-nosnippet>106</a>        }
+<a href=#107 id=107 data-nosnippet>107</a>    }
+<a href=#108 id=108 data-nosnippet>108</a>}
+<a href=#109 id=109 data-nosnippet>109</a>
+<a href=#110 id=110 data-nosnippet>110</a><span class="doccomment">/// One JNI export attached to its original source function.
+<a href=#111 id=111 data-nosnippet>111</a></span><span class="kw">pub type </span>JniBinding&lt;I = JniInputConverter, O = JniOutputConverter&gt; =
+<a href=#112 id=112 data-nosnippet>112</a>    prebindgen_declarations::DeclBinding&lt;
+<a href=#113 id=113 data-nosnippet>113</a>        <span class="kw">crate</span>::JniInputConfig,
+<a href=#114 id=114 data-nosnippet>114</a>        <span class="kw">crate</span>::JniOutputConfig,
+<a href=#115 id=115 data-nosnippet>115</a>        <span class="kw">crate</span>::JniInput,
+<a href=#116 id=116 data-nosnippet>116</a>        <span class="kw">crate</span>::JniOutput,
+<a href=#117 id=117 data-nosnippet>117</a>        I,
+<a href=#118 id=118 data-nosnippet>118</a>        O,
+<a href=#119 id=119 data-nosnippet>119</a>        JniFunction,
+<a href=#120 id=120 data-nosnippet>120</a>    &gt;;
 </code></pre></div></section></main></body></html>

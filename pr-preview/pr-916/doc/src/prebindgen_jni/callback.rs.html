@@ -190,7 +190,7 @@
 <a href=#190 id=190 data-nosnippet>190</a>                        </span>.metadata
 <a href=#191 id=191 data-nosnippet>191</a>                        .class
 <a href=#192 id=192 data-nosnippet>192</a>                        .as_ref()
-<a href=#193 id=193 data-nosnippet>193</a>                        .is_some_and(|class| class.gc_managed)
+<a href=#193 id=193 data-nosnippet>193</a>                        .is_some_and(|class| class.gc_managed())
 <a href=#194 id=194 data-nosnippet>194</a>                {
 <a href=#195 id=195 data-nosnippet>195</a>                    <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"callback return constructors cannot borrow gc-managed handles: the raw return protocol does not retain the Kotlin owner during Rust construction; move the handle or leave its class explicitly managed"</span>.into());
 <a href=#196 id=196 data-nosnippet>196</a>                }

@@ -1415,7 +1415,7 @@
 <a href=#1415 id=1415 data-nosnippet>1415</a>                .type_info(ty)
 <a href=#1416 id=1416 data-nosnippet>1416</a>                .ok()
 <a href=#1417 id=1417 data-nosnippet>1417</a>                .and_then(|t| t.metadata.class.as_ref())
-<a href=#1418 id=1418 data-nosnippet>1418</a>                .is_some_and(|c| c.kind == ClassKind::Sealed)
+<a href=#1418 id=1418 data-nosnippet>1418</a>                .is_some_and(|c| <span class="macro">matches!</span>(c.representation, ClassRepresentation::Sealed { .. }))
 <a href=#1419 id=1419 data-nosnippet>1419</a>            {
 <a href=#1420 id=1420 data-nosnippet>1420</a>                <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(JniInputConfig::enum_variants(
 <a href=#1421 id=1421 data-nosnippet>1421</a>                    flat.payload_enum(ty)<span class="question-mark">?
@@ -1429,7 +1429,7 @@
 <a href=#1429 id=1429 data-nosnippet>1429</a>            <span class="kw">let </span><span class="prelude-val">Some</span>(record) = JniCodec::source_record(flat, ty)<span class="question-mark">? </span><span class="kw">else </span>{
 <a href=#1430 id=1430 data-nosnippet>1430</a>                <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
 <a href=#1431 id=1431 data-nosnippet>1431</a>            };
-<a href=#1432 id=1432 data-nosnippet>1432</a>            <span class="kw">if </span>record.has_handles {
+<a href=#1432 id=1432 data-nosnippet>1432</a>            <span class="kw">if </span>record.has_handles() {
 <a href=#1433 id=1433 data-nosnippet>1433</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format!</span>(
 <a href=#1434 id=1434 data-nosnippet>1434</a>                    <span class="string">"data class `{}` contains handles and cannot be passed into Rust as a record"</span>,
 <a href=#1435 id=1435 data-nosnippet>1435</a>                    record.fqn()
@@ -1484,7 +1484,7 @@
 <a href=#1484 id=1484 data-nosnippet>1484</a>                .type_info(ty)
 <a href=#1485 id=1485 data-nosnippet>1485</a>                .ok()
 <a href=#1486 id=1486 data-nosnippet>1486</a>                .and_then(|t| t.metadata.class.as_ref())
-<a href=#1487 id=1487 data-nosnippet>1487</a>                .is_some_and(|c| c.kind == ClassKind::Sealed)
+<a href=#1487 id=1487 data-nosnippet>1487</a>                .is_some_and(|c| <span class="macro">matches!</span>(c.representation, ClassRepresentation::Sealed { .. }))
 <a href=#1488 id=1488 data-nosnippet>1488</a>            {
 <a href=#1489 id=1489 data-nosnippet>1489</a>                <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(JniOutputConfig::enum_variants(
 <a href=#1490 id=1490 data-nosnippet>1490</a>                    flat.payload_enum(ty)<span class="question-mark">?
