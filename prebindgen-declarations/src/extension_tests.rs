@@ -304,8 +304,8 @@ fn canonical_conversion_preparation_preserves_nonclone_adapter_settings() {
     struct ConversionSettings(String);
     struct CanonicalSchema;
     impl prebindgen_flat::Schema for CanonicalSchema {
-        type Parameter = ();
-        type Return = ();
+        type Parameter = Option<()>;
+        type Return = Option<()>;
         type Module = ();
         type Function = ();
         type Type = prebindgen_conversions::ValueConversions;
@@ -405,6 +405,9 @@ fn cloning_builders_does_not_require_clonable_function_declarations() {
 
 struct ArrowCodec;
 impl Codec for ArrowCodec {
+    type Input = crate::CodecInputPlan<Self>;
+    type Output = crate::CodecOutputPlan<Self>;
+
     type InOps = Incoming;
     type OutOps = Outgoing;
     type CompileState = ();

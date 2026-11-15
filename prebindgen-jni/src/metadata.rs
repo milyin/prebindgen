@@ -44,8 +44,8 @@ pub struct JniSchema<InConverter = JniInputConverter, OutConverter = JniOutputCo
     std::marker::PhantomData<fn() -> (InConverter, OutConverter)>,
 );
 impl<InConverter, OutConverter> prebindgen_flat::Schema for JniSchema<InConverter, OutConverter> {
-    type Parameter = InConverter;
-    type Return = OutConverter;
+    type Parameter = Option<InConverter>;
+    type Return = Option<OutConverter>;
     type Module = JniModule;
     type Function = Option<JniFunction>;
     type Type = JniType;

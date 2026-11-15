@@ -70,8 +70,8 @@ impl KotlinOutputConversion for IndependentOutput {
 // Keep all adapter metadata identical; vary only the occurrence converter types.
 struct IndependentSchema<I, O>(std::marker::PhantomData<(I, O)>);
 impl<I, O> Schema for IndependentSchema<I, O> {
-    type Parameter = I;
-    type Return = O;
+    type Parameter = Option<I>;
+    type Return = Option<O>;
     type Module = <JniSchema as Schema>::Module;
     type Function = <JniSchema as Schema>::Function;
     type Type = <JniSchema as Schema>::Type;

@@ -84,6 +84,9 @@ fn wire(kind: Kind, ty: &Type, extra: &Extra) -> TestWire {
 }
 #[allow(clippy::type_complexity)] // Keep the test codec metadata roles visible.
 impl Codec for TestCodec {
+    type Input = crate::CodecInputPlan<Self>;
+    type Output = crate::CodecOutputPlan<Self>;
+
     test_operations!();
     type Schema = prebindgen_conversions::PlanSchema<TestWire, (), TestGroup, TestGroup>;
     fn binding_failure_layout(
@@ -908,6 +911,9 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
     struct FinalizingCodec;
 
     impl Codec for FinalizingCodec {
+        type Input = crate::CodecInputPlan<Self>;
+        type Output = crate::CodecOutputPlan<Self>;
+
         test_operations!();
         type Schema = prebindgen_conversions::PlanSchema<TestWire, (), TestGroup, TestGroup>;
 
@@ -1919,7 +1925,7 @@ struct TestPacketValue<'a> {
     wire: &'a Wire<TestWire>,
 }
 fn test_return_packet<'a>(
-    f: &'a prebindgen_flat::Function<InputPlan<TestWire>, OutputPlan<TestWire>>,
+    f: &'a prebindgen_flat::Function<Option<InputPlan<TestWire>>, Option<OutputPlan<TestWire>>>,
     _context: &(),
     _source: &syn::Ident,
 ) -> Result<std::vec::IntoIter<TestPacketValue<'a>>> {
@@ -1934,7 +1940,7 @@ fn test_return_packet<'a>(
     .map(Vec::into_iter)
 }
 fn test_parameter_names(
-    f: &prebindgen_flat::Function<InputPlan<TestWire>, OutputPlan<TestWire>>,
+    f: &prebindgen_flat::Function<Option<InputPlan<TestWire>>, Option<OutputPlan<TestWire>>>,
 ) -> Vec<syn::Ident> {
     f.input_conversions()
         .unwrap()

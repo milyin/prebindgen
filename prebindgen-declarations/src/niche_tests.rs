@@ -59,6 +59,9 @@ impl DomainAbi {
 }
 struct DomainCodec;
 impl Codec for DomainCodec {
+    type Input = crate::CodecInputPlan<Self>;
+    type Output = crate::CodecOutputPlan<Self>;
+
     test_operations!();
     type Schema = prebindgen_conversions::PlanSchema<Domain, (), DomainGroup, DomainGroup>;
     type Chain = DomainGroup;

@@ -4,6 +4,9 @@ use prebindgen_conversions::{staged::emit_call, value};
 
 struct Scalars;
 impl Codec for Scalars {
+    type Input = crate::CodecInputPlan<Self>;
+    type Output = crate::CodecOutputPlan<Self>;
+
     test_operations!();
     type Schema = prebindgen_conversions::PlanSchema<Type>;
     type Wire = Type;
@@ -284,6 +287,9 @@ struct Probe(
     std::cell::Cell<bool>,
 );
 impl Codec for Probe {
+    type Input = crate::CodecInputPlan<Self>;
+    type Output = crate::CodecOutputPlan<Self>;
+
     test_operations!();
     type Schema = <Scalars as Codec>::Schema;
     type Wire = Type;
@@ -399,6 +405,9 @@ fn input_context_preserves_all_dispatch_cases_and_callback_roles() {
 
 struct MalformedOptional(u8);
 impl Codec for MalformedOptional {
+    type Input = crate::CodecInputPlan<Self>;
+    type Output = crate::CodecOutputPlan<Self>;
+
     test_operations!();
     type Schema = <Scalars as Codec>::Schema;
     type Wire = Type;
@@ -619,6 +628,9 @@ impl OutputOps for ArithmeticOutputs {
 }
 struct Arithmetic;
 impl Codec for Arithmetic {
+    type Input = crate::CodecInputPlan<Self>;
+    type Output = crate::CodecOutputPlan<Self>;
+
     fn finish_output(&self, plan: &mut CodecOutputPlan<Self>, _: &()) -> Result<()> {
         plan.delivery.result = plan.values[0].1.clone();
         Ok(())

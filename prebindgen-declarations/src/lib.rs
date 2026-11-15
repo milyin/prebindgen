@@ -181,7 +181,7 @@ pub fn compile_input<C: Codec>(
     parameter: &str,
     recipe: &ResolvedInput<C>,
     extra: &C::Extra,
-) -> Result<<C::Schema as Schema>::Parameter> {
+) -> Result<C::Input> {
     let f = flat.function(function)?;
     let index = f
         .params
@@ -213,7 +213,7 @@ pub fn compile_output<C: Codec>(
     function: &str,
     recipe: &ResolvedOutput<C>,
     extra: &C::Extra,
-) -> Result<<C::Schema as Schema>::Return> {
+) -> Result<C::Output> {
     compile_output_value(flat, codec, &flat.function(function)?.ret.ty, recipe, extra)
 }
 
@@ -226,7 +226,7 @@ pub fn compile_output_value<C: Codec>(
     ty: &Type,
     recipe: &ResolvedOutput<C>,
     extra: &C::Extra,
-) -> Result<<C::Schema as Schema>::Return> {
+) -> Result<C::Output> {
     compile_output_at(flat, codec, ty, recipe, extra, OutputPosition::Return)
 }
 
@@ -238,7 +238,7 @@ pub fn compile_input_value<C: Codec>(
     ty: &Type,
     recipe: &ResolvedInput<C>,
     extra: &C::Extra,
-) -> Result<<C::Schema as Schema>::Parameter> {
+) -> Result<C::Input> {
     let mut plan = Compiler::new(flat, codec, "value".into()).input(
         ty,
         recipe,
@@ -260,7 +260,7 @@ pub fn compile_callback_return<C: Codec>(
     ty: &Type,
     recipe: &ResolvedInput<C>,
     extra: &C::Extra,
-) -> Result<<C::Schema as Schema>::Parameter> {
+) -> Result<C::Input> {
     let compiler = Compiler {
         input_role: std::cell::Cell::new(InputRole::CallbackResult),
         ..Compiler::new(flat, codec, "callback_return".into())
@@ -284,7 +284,7 @@ pub fn compile_callback_argument<C: Codec>(
     index: usize,
     borrowed: bool,
     extra: &C::Extra,
-) -> Result<<C::Schema as Schema>::Return> {
+) -> Result<C::Output> {
     compile_output_at(
         flat,
         codec,
@@ -307,7 +307,7 @@ fn compile_output_at<C: Codec>(
     recipe: &ResolvedOutput<C>,
     extra: &C::Extra,
     position: OutputPosition,
-) -> Result<<C::Schema as Schema>::Return> {
+) -> Result<C::Output> {
     let value = prebindgen_conversions::source_result_expr();
     let mut plan = match position {
         OutputPosition::Return => Compiler::new(flat, codec, "ret".into())

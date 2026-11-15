@@ -5,8 +5,8 @@ struct TestInput(u8);
 struct TestOutput(u32);
 struct TestSchema;
 impl Schema for TestSchema {
-    type Parameter = TestInput;
-    type Return = TestOutput;
+    type Parameter = Option<TestInput>;
+    type Return = Option<TestOutput>;
     type Module = ();
     type Function = ();
     type Type = ();
@@ -371,8 +371,8 @@ fn filling_fixed_schema_slots_preserves_metadata_on_each_source_owner() {
     // The schema marker itself deliberately implements neither Clone nor Debug.
     struct OwnerSchema;
     impl Schema for OwnerSchema {
-        type Parameter = u8;
-        type Return = u16;
+        type Parameter = Option<u8>;
+        type Return = Option<u16>;
         type Module = String;
         type Function = String;
         type Type = String;

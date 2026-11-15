@@ -16,8 +16,8 @@ pub enum ResolvedSlot<T, P> {
 /// Schema with resolved input/output trees and the adapter's source metadata.
 pub struct ResolvedSchema<C: Codec>(std::marker::PhantomData<C>);
 impl<C: Codec> Schema for ResolvedSchema<C> {
-    type Parameter = ResolvedSlot<ResolvedInput<C>, <C::Schema as Schema>::Parameter>;
-    type Return = ResolvedSlot<ResolvedOutput<C>, <C::Schema as Schema>::Return>;
+    type Parameter = Option<ResolvedSlot<ResolvedInput<C>, C::Input>>;
+    type Return = Option<ResolvedSlot<ResolvedOutput<C>, C::Output>>;
     type Module = ResolvedModule<C>;
     type Function = <C::Schema as Schema>::Function;
     type Type = <C::Schema as Schema>::Type;
@@ -62,53 +62,16 @@ pub struct FunctionRecipe<InTree, OutTree> {
 /// Compile a resolved Flat without any external configuration or default registry.
 /// Source metadata and custom converters are moved into the result unchanged.
 pub fn compile_resolved<C: Codec>(flat: Flat<ResolvedSchema<C>>) -> Result<Flat<C::Schema>> {
-    let (codec, extra) = flat
-        .metadata
+    let mut stage = CompileAttachments::<C> {
+        compilation: None,
+        inputs: Vec::new(),
+        recipes: Vec::new(),
+    };
+    let mut result = flat.try_map_attachments(&mut stage)?;
+    let (codec, extra) = stage
         .compilation
         .ok_or("resolved Flat has no compilation policy")?;
-    let mut recipes = Vec::new();
-    let functions = flat
-        .functions
-        .into_iter()
-        .map(|(name, function)| {
-            let mut inputs = Vec::with_capacity(function.params.len());
-            let params = function
-                .params
-                .into_iter()
-                .map(|p| {
-                    let (tree, slot) = separate(p.ty.slot);
-                    inputs.push(tree);
-                    Param {
-                        name: p.name,
-                        ty: TypeUse { ty: p.ty.ty, slot },
-                    }
-                })
-                .collect();
-            let (output, slot) = separate(function.ret.slot);
-            recipes.push((name.clone(), FunctionRecipe { inputs, output }));
-            (
-                name,
-                Function {
-                    metadata: function.metadata,
-                    name: function.name,
-                    path: function.path,
-                    location: function.location,
-                    params,
-                    ret: TypeUse {
-                        ty: function.ret.ty,
-                        slot,
-                    },
-                },
-            )
-        })
-        .collect();
-    let mut result = Flat {
-        metadata: flat.metadata.source,
-        functions,
-
-        types: flat.types,
-        guards: flat.guards,
-    };
+    let recipes = stage.recipes;
     codec.compile_declarations(&mut result, &extra)?;
     for (name, recipe) in recipes {
         compile_function(&mut result, &codec, &name, recipe, &extra)
@@ -116,6 +79,80 @@ pub fn compile_resolved<C: Codec>(flat: Flat<ResolvedSchema<C>>) -> Result<Flat<
     }
     Ok(result)
 }
+struct CompileAttachments<C: Codec> {
+    compilation: Option<(C, C::Extra)>,
+    inputs: Vec<Option<ResolvedInput<C>>>,
+    recipes: Vec<(String, FunctionRecipe<ResolvedInput<C>, ResolvedOutput<C>>)>,
+}
+impl<C: Codec> prebindgen_flat::MapAttachments<ResolvedSchema<C>, C::Schema>
+    for CompileAttachments<C>
+{
+    fn module(&mut self, data: ResolvedModule<C>) -> Result<<C::Schema as Schema>::Module> {
+        self.compilation = data.compilation;
+        Ok(data.source)
+    }
+    fn function(
+        &mut self,
+        _: &syn::Ident,
+        _: &syn::Path,
+        data: <C::Schema as Schema>::Function,
+    ) -> Result<<C::Schema as Schema>::Function> {
+        Ok(data)
+    }
+    fn parameter(
+        &mut self,
+        _: &syn::Ident,
+        _: &syn::Ident,
+        _: &Type,
+        data: Option<ResolvedSlot<ResolvedInput<C>, C::Input>>,
+    ) -> Result<Option<C::Input>> {
+        let (tree, slot) = separate(data);
+        self.inputs.push(tree);
+        Ok(slot)
+    }
+    fn returned(
+        &mut self,
+        function: &syn::Ident,
+        _: &Type,
+        data: Option<ResolvedSlot<ResolvedOutput<C>, C::Output>>,
+    ) -> Result<Option<C::Output>> {
+        let (output, slot) = separate(data);
+        self.recipes.push((
+            function.to_string(),
+            FunctionRecipe {
+                inputs: std::mem::take(&mut self.inputs),
+                output,
+            },
+        ));
+        Ok(slot)
+    }
+    fn ty(
+        &mut self,
+        _: &Type,
+        data: <C::Schema as Schema>::Type,
+    ) -> Result<<C::Schema as Schema>::Type> {
+        Ok(data)
+    }
+    fn field(
+        &mut self,
+        _: &Type,
+        _: Option<&syn::Ident>,
+        _: &syn::Member,
+        _: &Type,
+        data: <C::Schema as Schema>::Field,
+    ) -> Result<<C::Schema as Schema>::Field> {
+        Ok(data)
+    }
+    fn variant(
+        &mut self,
+        _: &Type,
+        _: &syn::Ident,
+        data: <C::Schema as Schema>::Variant,
+    ) -> Result<<C::Schema as Schema>::Variant> {
+        Ok(data)
+    }
+}
+
 fn separate<T, P>(slot: Option<ResolvedSlot<T, P>>) -> (Option<T>, Option<P>) {
     match slot {
         Some(ResolvedSlot::Tree(tree)) => (Some(tree), None),

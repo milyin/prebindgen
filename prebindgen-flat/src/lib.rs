@@ -9,6 +9,8 @@ use quote::ToTokens;
 use std::collections::{BTreeMap, BTreeSet};
 use syn::{visit_mut::VisitMut, Type};
 
+mod map;
+pub use map::MapAttachments;
 mod payload;
 pub use payload::{PayloadEnum, PayloadField, PayloadVariant, VariantStyle};
 
@@ -29,9 +31,9 @@ pub type Result<T> = std::result::Result<T, String>;
 /// supports source-only inspection.
 pub trait Schema {
     /// Converter or other consumer data attached to one function parameter.
-    type Parameter;
+    type Parameter: Default;
     /// Converter or other consumer data attached to one function result.
-    type Return;
+    type Return: Default;
     /// Settings and generated infrastructure belonging to the binding module.
     type Module: Default;
     /// Export decisions, names and placement for a source function.
@@ -44,8 +46,8 @@ pub trait Schema {
     type Variant: Default;
 }
 impl Schema for () {
-    type Parameter = ();
-    type Return = ();
+    type Parameter = Option<()>;
+    type Return = Option<()>;
     type Module = ();
     type Function = ();
     type Type = ();
@@ -110,9 +112,9 @@ pub struct Function<I, O, M = ()> {
     /// Qualified path used to call the source function from generated Rust.
     pub path: syn::Path,
     /// Parameters in call order.
-    pub params: Vec<Param<Option<I>>>,
+    pub params: Vec<Param<I>>,
     /// Result occurrence; an omitted Rust return type becomes `()`.
-    pub ret: TypeUse<Option<O>>,
+    pub ret: TypeUse<O>,
     /// Origin recorded by source capture, for diagnostics and qualification.
     pub location: SourceLocation,
 }
@@ -155,7 +157,7 @@ pub struct EnumVariant<M = ()> {
 
 /// Source structure with independently configured input and output conversions.
 ///
-/// Every parameter carries `Option<M::Parameter>`; every result carries `Option<M::Return>`.
+/// Every parameter carries `M::Parameter`; every result carries `M::Return`.
 /// Record fields describe source structure. Slot payloads belong to the consumer;
 /// the source model does not interpret that data. Source-only inspection uses `Flat<()>` with empty slots.
 ///
@@ -168,7 +170,7 @@ pub struct EnumVariant<M = ()> {
 /// let items = syn::parse_file("pub fn add(x: i64, y: i64) -> i64 { x + y }")?.items;
 /// let flat = Flat::<()>::parse(
 ///     items.into_iter().map(|item| (item, Default::default())))?;
-/// assert!(flat.function("add")?.params[0].ty.slot.is_none());
+/// assert_eq!(flat.function("add")?.params[0].ty.slot, None);
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub struct Flat<M: Schema = ()> {
@@ -427,7 +429,7 @@ impl<M: Schema> Flat<M> {
                             name: id.ident,
                             ty: TypeUse {
                                 ty: flat.resolve_parameter_type(&p.ty)?,
-                                slot: None,
+                                slot: Default::default(),
                             },
                         });
                     }
@@ -437,7 +439,7 @@ impl<M: Schema> Flat<M> {
                     };
                     let ret = TypeUse {
                         ty: flat.resolve_type(&ret)?,
-                        slot: None,
+                        slot: Default::default(),
                     };
                     flat.functions.insert(
                         name.to_string(),
@@ -838,8 +840,8 @@ impl<M: Schema> Flat<M> {
     ///   slot; returns the new slot.
     pub fn map_slots(
         self,
-        mut input: impl FnMut(&Type, Option<M::Parameter>) -> Result<Option<M::Parameter>>,
-        mut output: impl FnMut(&Type, Option<M::Return>) -> Result<Option<M::Return>>,
+        mut input: impl FnMut(&Type, M::Parameter) -> Result<M::Parameter>,
+        mut output: impl FnMut(&Type, M::Return) -> Result<M::Return>,
     ) -> Result<Self> {
         let mut functions = BTreeMap::new();
         for (name, fun) in self.functions {

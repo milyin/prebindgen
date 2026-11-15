@@ -376,7 +376,7 @@ pub(crate) fn function_parameters<
     O: prebindgen_conversions::Conversion,
     M,
 >(
-    f: &prebindgen_flat::Function<I, O, M>,
+    f: &prebindgen_flat::Function<Option<I>, Option<O>, M>,
 ) -> Result<std::vec::IntoIter<&Wire<JniWire>>> {
     let mut out = vec![];
     for input in f.input_conversions()? {

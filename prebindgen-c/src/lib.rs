@@ -105,6 +105,9 @@ fn explicit_copy_error(ty: &syn::Type) -> String {
     format!("borrowed opaque C output `{}` requires an explicit owning copy; select field_self_cloned(), or expose a source reference for a non-owning view", prebindgen_flat::type_key(ty))
 }
 impl Codec for CCodec {
+    type Input = CInputConverter;
+    type Output = COutputConverter;
+
     type InOps = operations::CInputOps;
     type OutOps = operations::COutputOps;
     type CompileState = compilation::CCompileState;
@@ -1825,7 +1828,7 @@ fn validate_wire_declaration<F, V>(
 
 /// Emit C/Rust bindings using only the prepared Flat model.
 /// No builder, codec cache or separate declaration table is needed.
-pub fn generate<S>(flat: &Flat<S>) -> Result<CGeneration>
+pub fn generate<I, O, S>(flat: &Flat<S>) -> Result<CGeneration>
 where
     S: prebindgen_flat::Schema<
         Module = CModule,
@@ -1833,14 +1836,16 @@ where
         Type = CType,
         Field = (),
         Variant = (),
+        Parameter = Option<I>,
+        Return = Option<O>,
     >,
-    S::Parameter: for<'a> prebindgen_conversions::InputConversion<
+    I: for<'a> prebindgen_conversions::InputConversion<
         Wire = CWire,
         Chain = CChain,
         Branch = CBranch,
         SlotFragment<'a> = prebindgen_conversions::InputFragment<'a, CContext>,
     >,
-    S::Return: for<'a> prebindgen_conversions::OutputConversion<
+    O: for<'a> prebindgen_conversions::OutputConversion<
         Wire = CWire,
         Chain = CChain,
         Branch = CBranch,
@@ -2568,7 +2573,7 @@ fn pointer_owns_value(pointer: &syn::Type, returned: &syn::Type) -> bool {
         && prebindgen_flat::same_type(pointer, ty)
 }
 fn validate_return_loans<I, O, M>(
-    function: &prebindgen_flat::Function<I, O, M>,
+    function: &prebindgen_flat::Function<Option<I>, Option<O>, M>,
     output: &prebindgen_conversions::WireNode<CWire, CChain, CBranch>,
 ) -> Result<()>
 where
@@ -4212,8 +4217,8 @@ mod generation_tests {
         }
         struct CountedSchema;
         impl prebindgen_flat::Schema for CountedSchema {
-            type Parameter = CInputPlan<CWire>;
-            type Return = CountedOutput;
+            type Parameter = Option<CInputPlan<CWire>>;
+            type Return = Option<CountedOutput>;
             type Module = CModule;
             type Function = Option<CFunction>;
             type Type = CType;

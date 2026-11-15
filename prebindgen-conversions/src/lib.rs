@@ -32,8 +32,8 @@ pub struct PlanSchema<WireType, Context = (), Chain = (), Branch = ()>(
 impl<WireType: crate::WireKind, Context, Chain, Branch> prebindgen_flat::Schema
     for PlanSchema<WireType, Context, Chain, Branch>
 {
-    type Parameter = InputPlan<WireType, Context, Chain, Branch>;
-    type Return = OutputPlan<WireType, Context, Chain, Branch>;
+    type Parameter = Option<InputPlan<WireType, Context, Chain, Branch>>;
+    type Return = Option<OutputPlan<WireType, Context, Chain, Branch>>;
     type Module = ();
     type Function = ();
     type Type = ();

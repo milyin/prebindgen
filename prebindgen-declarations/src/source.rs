@@ -26,7 +26,16 @@ impl<I, O> Default for DeclDefaults<I, O> {
 
 /// Resolve function occurrences, preserving explicitly prepared slots unless overridden.
 /// The caller supplies input defaults and its policy for the complete function result.
-pub fn resolve_function<M: Schema, I, O, RI, RO, E>(
+pub fn resolve_function<
+    P,
+    R,
+    M: Schema<Parameter = Option<P>, Return = Option<R>>,
+    I,
+    O,
+    RI,
+    RO,
+    E,
+>(
     flat: &Flat<M>,
     decl: &DeclFunction<I, O, E>,
     mut input: impl FnMut(&Type, Option<&I>) -> Result<RI>,
@@ -907,7 +916,14 @@ pub fn validate_error_mapper<M: Schema>(flat: &Flat<M>, error: &Type, name: &str
     Ok(())
 }
 /// Clone a source binding for another sequence delivery policy, retaining existing input slots.
-pub fn callback_variant<M: Schema, I: Clone, O: Clone, E: Clone>(
+pub fn callback_variant<
+    P,
+    R,
+    M: Schema<Parameter = Option<P>, Return = Option<R>>,
+    I: Clone,
+    O: Clone,
+    E: Clone,
+>(
     flat: &mut Flat<M>,
     decl: &DeclFunction<I, O, E>,
     name: &str,

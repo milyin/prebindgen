@@ -144,7 +144,7 @@ impl<W: WireKind, C: TemplateContext + 'static, N, B> OutputPlan<W, C, N, B> {
 /// Adapters establish their boundary receipt before entering this expression.
 /// Other generators may compose their own request protocols outside Flat.
 pub fn emit_call<I, O, C: TemplateContext + 'static, M>(
-    function: &Function<I, O, M>,
+    function: &Function<Option<I>, Option<O>, M>,
     context: &C,
     source: &syn::Ident,
     result_type: &syn::Type,

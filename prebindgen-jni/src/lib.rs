@@ -788,6 +788,9 @@ impl JniCodec {
     }
 }
 impl Codec for JniCodec {
+    type Input = JniInputConverter;
+    type Output = JniOutputConverter;
+
     type InOps = operations::JniInputOps;
     type OutOps = operations::JniOutputOps;
     type CompileState = compilation::JniCompileState;

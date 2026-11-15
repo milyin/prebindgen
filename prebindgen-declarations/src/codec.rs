@@ -79,10 +79,11 @@ pub trait Codec {
     }
 
     /// Fixed converter and declaration metadata types, selected before parsing.
-    type Schema: Schema<
-        Parameter: prebindgen_conversions::InputConversion + From<CodecInputPlan<Self>>,
-        Return: prebindgen_conversions::OutputConversion + From<CodecOutputPlan<Self>>,
-    >;
+    type Schema: Schema<Parameter = Option<Self::Input>, Return = Option<Self::Output>>;
+    /// Prepared conversion for a function parameter.
+    type Input: prebindgen_conversions::InputConversion + From<CodecInputPlan<Self>>;
+    /// Prepared conversion for a function return.
+    type Output: prebindgen_conversions::OutputConversion + From<CodecOutputPlan<Self>>;
     /// Complete description of one foreign wire value.
     type Wire: prebindgen_conversions::WireKind + Clone + std::fmt::Debug;
     /// Names supplied by the language's Rust wrapper emitter.

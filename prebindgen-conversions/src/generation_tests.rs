@@ -801,7 +801,7 @@ fn test_return_packet<
     I: crate::Conversion,
     C: crate::TemplateContext + 'static,
 >(
-    f: &'a prebindgen_flat::Function<I, OutputPlan<W, C>>,
+    f: &'a prebindgen_flat::Function<Option<I>, Option<OutputPlan<W, C>>>,
     context: &C,
     source: &syn::Ident,
 ) -> prebindgen_flat::Result<std::vec::IntoIter<TestPacketValue<'a, W>>> {
@@ -821,7 +821,7 @@ fn test_return_packet<
     .map(Vec::into_iter)
 }
 fn test_parameters<I: crate::InputConversion, O: crate::Conversion>(
-    f: &prebindgen_flat::Function<I, O>,
+    f: &prebindgen_flat::Function<Option<I>, Option<O>>,
 ) -> prebindgen_flat::Result<std::vec::IntoIter<&Wire<I::Wire>>> {
     Ok(f.input_conversions()?
         .into_iter()
@@ -830,7 +830,7 @@ fn test_parameters<I: crate::InputConversion, O: crate::Conversion>(
         .into_iter())
 }
 fn test_parameter_names<I: crate::InputConversion, O: crate::Conversion>(
-    f: &prebindgen_flat::Function<I, O>,
+    f: &prebindgen_flat::Function<Option<I>, Option<O>>,
 ) -> Vec<syn::Ident> {
     test_parameters(f)
         .map(|wires| wires.map(|w| w.name.clone()).collect())

@@ -126,6 +126,9 @@ struct CodecImpl {
     row_only_leaf: bool,
 }
 impl Codec for CodecImpl {
+    type Input = crate::CodecInputPlan<Self>;
+    type Output = crate::CodecOutputPlan<Self>;
+
     test_operations!();
     type Schema = prebindgen_conversions::PlanSchema<Type, (), PacketChain, Metadata>;
     type Wire = Type;

@@ -72,7 +72,11 @@ impl<W: WireKind> Wire<W> {
 /// Functions with entirely empty slots remain source-only helpers. This check
 /// neither builds conversions nor changes the model. Adapters call it before
 /// writing wrappers. It does not validate code fragments supplied directly by callers.
-pub fn validate_bindings<M: prebindgen_flat::Schema>(
+pub fn validate_bindings<
+    I,
+    O,
+    M: prebindgen_flat::Schema<Parameter = Option<I>, Return = Option<O>>,
+>(
     flat: &prebindgen_flat::Flat<M>,
 ) -> Result<()> {
     for f in flat.functions.values() {
@@ -260,7 +264,7 @@ pub trait FunctionConversions<I: Conversion, O: Conversion> {
         I::Wire: 'a;
 }
 impl<I: Conversion, O: Conversion, M> FunctionConversions<I, O>
-    for prebindgen_flat::Function<I, O, M>
+    for prebindgen_flat::Function<Option<I>, Option<O>, M>
 {
     /// Filled input slots, preserving source parameter order and grouping.
     fn input_conversions(&self) -> Result<Vec<&I>> {
