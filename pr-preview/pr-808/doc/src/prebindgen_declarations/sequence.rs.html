@@ -7,10 +7,10 @@
 <a href=#7 id=7 data-nosnippet>7</a>
 <a href=#8 id=8 data-nosnippet>8</a><span class="doccomment">/// Adapter-supplied array input transport. Element conversion remains shared.
 <a href=#9 id=9 data-nosnippet>9</a></span><span class="kw">pub struct </span>SequenceInput&lt;W: prebindgen_conversions::WireKind, G&gt; {
-<a href=#10 id=10 data-nosnippet>10</a>    <span class="doccomment">/// Adapter policy for interpreting `controls`; must not own wire descriptors.
+<a href=#10 id=10 data-nosnippet>10</a>    <span class="doccomment">/// Adapter policy for interpreting `wires`; must not own wire descriptors.
 <a href=#11 id=11 data-nosnippet>11</a>    </span><span class="kw">pub </span>metadata: G,
 <a href=#12 id=12 data-nosnippet>12</a>    <span class="doccomment">/// Supporting boundary values, stored on the resulting sequence node.
-<a href=#13 id=13 data-nosnippet>13</a>    </span><span class="kw">pub </span>controls: Vec&lt;Wire&lt;W&gt;&gt;,
+<a href=#13 id=13 data-nosnippet>13</a>    </span><span class="kw">pub </span>wires: Vec&lt;Wire&lt;W&gt;&gt;,
 <a href=#14 id=14 data-nosnippet>14</a>    <span class="doccomment">/// Validate the outer input values and make the supplied length identifier
 <a href=#15 id=15 data-nosnippet>15</a>    /// available, either as a boundary parameter or a local binding.
 <a href=#16 id=16 data-nosnippet>16</a>    </span><span class="kw">pub </span>open: TokenStream,
@@ -39,7 +39,7 @@
 <a href=#39 id=39 data-nosnippet>39</a>    <span class="doccomment">/// Adapter delivery policy; must not own wire descriptors or child trees.
 <a href=#40 id=40 data-nosnippet>40</a>    </span><span class="kw">pub </span>metadata: G,
 <a href=#41 id=41 data-nosnippet>41</a>    <span class="doccomment">/// Supporting boundary values, stored on the resulting sequence node.
-<a href=#42 id=42 data-nosnippet>42</a>    </span><span class="kw">pub </span>controls: Vec&lt;Wire&lt;W&gt;&gt;,
+<a href=#42 id=42 data-nosnippet>42</a>    </span><span class="kw">pub </span>wires: Vec&lt;Wire&lt;W&gt;&gt;,
 <a href=#43 id=43 data-nosnippet>43</a>    <span class="doccomment">/// Initialize delivery state, with the supplied element count available.
 <a href=#44 id=44 data-nosnippet>44</a>    </span><span class="kw">pub </span>begin: TokenStream,
 <a href=#45 id=45 data-nosnippet>45</a>    <span class="doccomment">/// Per-row setup before element conversion.
@@ -252,8 +252,8 @@
 <a href=#252 id=252 data-nosnippet>252</a>            }
 <a href=#253 id=253 data-nosnippet>253</a>    };
 <a href=#254 id=254 data-nosnippet>254</a>    <span class="kw">let </span><span class="kw-2">mut </span>plan = InputPlan::new(
-<a href=#255 id=255 data-nosnippet>255</a>        WireNode::Chain {
-<a href=#256 id=256 data-nosnippet>256</a>            controls: transport.controls,
+<a href=#255 id=255 data-nosnippet>255</a>        WireNode::Container {
+<a href=#256 id=256 data-nosnippet>256</a>            wires: transport.wires,
 <a href=#257 id=257 data-nosnippet>257</a>            child: Box::new(child.node),
 <a href=#258 id=258 data-nosnippet>258</a>            meta: transport.metadata,
 <a href=#259 id=259 data-nosnippet>259</a>        },
@@ -365,7 +365,7 @@
 <a href=#365 id=365 data-nosnippet>365</a>        commit_each,
 <a href=#366 id=366 data-nosnippet>366</a>        fallible,
 <a href=#367 id=367 data-nosnippet>367</a>        metadata,
-<a href=#368 id=368 data-nosnippet>368</a>        controls,
+<a href=#368 id=368 data-nosnippet>368</a>        wires,
 <a href=#369 id=369 data-nosnippet>369</a>        begin,
 <a href=#370 id=370 data-nosnippet>370</a>        enter,
 <a href=#371 id=371 data-nosnippet>371</a>        store,
@@ -412,8 +412,8 @@
 <a href=#412 id=412 data-nosnippet>412</a>        context: Default::default(),
 <a href=#413 id=413 data-nosnippet>413</a>        delivery: Default::default(),
 <a href=#414 id=414 data-nosnippet>414</a>        outcomes: prebindgen_conversions::Outcomes {
-<a href=#415 id=415 data-nosnippet>415</a>            success: WireNode::Chain {
-<a href=#416 id=416 data-nosnippet>416</a>                controls,
+<a href=#415 id=415 data-nosnippet>415</a>            success: WireNode::Container {
+<a href=#416 id=416 data-nosnippet>416</a>                wires,
 <a href=#417 id=417 data-nosnippet>417</a>                child: Box::new(child.outcomes.success),
 <a href=#418 id=418 data-nosnippet>418</a>                meta: metadata,
 <a href=#419 id=419 data-nosnippet>419</a>            },

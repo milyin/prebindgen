@@ -70,7 +70,7 @@
 <a href=#70 id=70 data-nosnippet>70</a>/// ```
 <a href=#71 id=71 data-nosnippet>71</a>/// use prebindgen_conversions::{boxed};
 <a href=#72 id=72 data-nosnippet>72</a>/// use prebindgen_conversions::Access;
-<a href=#73 id=73 data-nosnippet>73</a>/// let input = boxed::input::&lt;syn::Type, (), (), ()&gt;(
+<a href=#73 id=73 data-nosnippet>73</a>/// let input = boxed::input::&lt;syn::Type, (), (), (), (), ()&gt;(
 <a href=#74 id=74 data-nosnippet>74</a>///     &amp;boxed::Storage::Direct, &amp;syn::parse_quote!(&amp;Counter),
 <a href=#75 id=75 data-nosnippet>75</a>///     syn::parse_quote!(raw), syn::parse_quote!(counter),
 <a href=#76 id=76 data-nosnippet>76</a>///     |boxed| {
@@ -81,13 +81,13 @@
 <a href=#81 id=81 data-nosnippet>81</a>/// assert_eq!(prebindgen_flat::type_key(&amp;prebindgen_conversions::wire_definitions(std::iter::once(&amp;input.node)).next().unwrap().rust_type()), "* const Counter");
 <a href=#82 id=82 data-nosnippet>82</a>/// # Ok::&lt;(), Box&lt;dyn std::error::Error&gt;&gt;(())
 <a href=#83 id=83 data-nosnippet>83</a>/// ```
-<a href=#84 id=84 data-nosnippet>84</a></span><span class="kw">pub fn </span>input&lt;W: <span class="kw">crate</span>::WireKind, C, N, B&gt;(
+<a href=#84 id=84 data-nosnippet>84</a></span><span class="kw">pub fn </span>input&lt;W: <span class="kw">crate</span>::WireKind, C, N, B, A, T&gt;(
 <a href=#85 id=85 data-nosnippet>85</a>    storage: <span class="kw-2">&amp;</span>Storage,
 <a href=#86 id=86 data-nosnippet>86</a>    ty: <span class="kw-2">&amp;</span>syn::Type,
 <a href=#87 id=87 data-nosnippet>87</a>    wire: syn::Ident,
 <a href=#88 id=88 data-nosnippet>88</a>    var: syn::Ident,
 <a href=#89 id=89 data-nosnippet>89</a>    wire_kind: <span class="kw">impl </span>FnOnce(BoxedWire) -&gt; W,
-<a href=#90 id=90 data-nosnippet>90</a>) -&gt; <span class="prelude-ty">Result</span>&lt;InputPlan&lt;W, C, N, B&gt;&gt; {
+<a href=#90 id=90 data-nosnippet>90</a>) -&gt; <span class="prelude-ty">Result</span>&lt;InputPlan&lt;W, C, N, B, A, T&gt;&gt; {
 <a href=#91 id=91 data-nosnippet>91</a>    <span class="kw">if </span>prebindgen_flat::callback_signature(ty)<span class="question-mark">?</span>.is_some() {
 <a href=#92 id=92 data-nosnippet>92</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"source callback parameters require adapter callback preparation"</span>.into());
 <a href=#93 id=93 data-nosnippet>93</a>    }
@@ -153,14 +153,14 @@
 <a href=#153 id=153 data-nosnippet>153</a>/// * `borrowed` — `true` when `value` is a shared reference to `ty`; the generated
 <a href=#154 id=154 data-nosnippet>154</a>///   code then boxes a clone, which requires `ty: Clone`. `false` moves the value.
 <a href=#155 id=155 data-nosnippet>155</a>/// * `wire_kind` — builds [`Wire::kind`] from the source type and access mode.
-<a href=#156 id=156 data-nosnippet>156</a></span><span class="kw">pub fn </span>output&lt;W: <span class="kw">crate</span>::WireKind, C, N, B&gt;(
+<a href=#156 id=156 data-nosnippet>156</a></span><span class="kw">pub fn </span>output&lt;W: <span class="kw">crate</span>::WireKind, C, N, B, A, T&gt;(
 <a href=#157 id=157 data-nosnippet>157</a>    storage: <span class="kw-2">&amp;</span>Storage,
 <a href=#158 id=158 data-nosnippet>158</a>    ty: <span class="kw-2">&amp;</span>syn::Type,
 <a href=#159 id=159 data-nosnippet>159</a>    wire: syn::Ident,
 <a href=#160 id=160 data-nosnippet>160</a>    value: TokenStream,
 <a href=#161 id=161 data-nosnippet>161</a>    borrowed: bool,
 <a href=#162 id=162 data-nosnippet>162</a>    wire_kind: <span class="kw">impl </span>FnOnce(BoxedWire) -&gt; W,
-<a href=#163 id=163 data-nosnippet>163</a>) -&gt; <span class="prelude-ty">Result</span>&lt;OutputPlan&lt;W, C, N, B&gt;&gt; {
+<a href=#163 id=163 data-nosnippet>163</a>) -&gt; <span class="prelude-ty">Result</span>&lt;OutputPlan&lt;W, C, N, B, A, T&gt;&gt; {
 <a href=#164 id=164 data-nosnippet>164</a>    <span class="kw">if </span><span class="macro">matches!</span>(ty, syn::Type::Reference(<span class="kw">_</span>)) {
 <a href=#165 id=165 data-nosnippet>165</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"borrowed pointer outputs are outside this subset"</span>.into());
 <a href=#166 id=166 data-nosnippet>166</a>    }

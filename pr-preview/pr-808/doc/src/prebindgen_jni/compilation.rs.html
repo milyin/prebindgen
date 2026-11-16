@@ -741,7 +741,7 @@
 <a href=#741 id=741 data-nosnippet>741</a>                    <span class="kw">let </span><span class="kw-2">mut </span>p = <span class="self">self</span>.with_temporary_receiver(!borrowed &amp;&amp; !consuming, || {
 <a href=#742 id=742 data-nosnippet>742</a>                        <span class="self">self</span>.output(ty, child, extra, arg, borrowed || !consuming)
 <a href=#743 id=743 data-nosnippet>743</a>                    })<span class="question-mark">?</span>;
-<a href=#744 id=744 data-nosnippet>744</a>                    <span class="self">self</span>.prefix(<span class="kw-2">&amp;mut </span>p.outcomes.success, ComponentSegment::View(index));
+<a href=#744 id=744 data-nosnippet>744</a>                    <span class="self">self</span>.prefix_output(<span class="kw-2">&amp;mut </span>p.outcomes.success, ComponentSegment::View(index));
 <a href=#745 id=745 data-nosnippet>745</a>                    bodies.push((consuming, std::mem::take(<span class="kw-2">&amp;mut </span>p.statements)));
 <a href=#746 id=746 data-nosnippet>746</a>                    append(<span class="kw-2">&amp;mut </span>out, p)<span class="question-mark">?</span>;
 <a href=#747 id=747 data-nosnippet>747</a>                }

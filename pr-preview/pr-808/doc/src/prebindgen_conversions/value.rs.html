@@ -69,20 +69,20 @@
 <a href=#69 id=69 data-nosnippet>69</a>/// ```
 <a href=#70 id=70 data-nosnippet>70</a>/// use prebindgen_conversions::{value};
 <a href=#71 id=71 data-nosnippet>71</a>/// use quote::quote;
-<a href=#72 id=72 data-nosnippet>72</a>/// let input = value::input::&lt;syn::Type, (), (), ()&gt;(
+<a href=#72 id=72 data-nosnippet>72</a>/// let input = value::input::&lt;syn::Type, (), (), (), (), ()&gt;(
 <a href=#73 id=73 data-nosnippet>73</a>///     &amp;syn::parse_quote!(&amp;str), syn::parse_quote!(raw), syn::parse_quote!(text),
 <a href=#74 id=74 data-nosnippet>74</a>///     quote::quote!(read(raw)?), syn::parse_quote!(&amp;str),
 <a href=#75 id=75 data-nosnippet>75</a>/// )?;
 <a href=#76 id=76 data-nosnippet>76</a>/// assert_eq!(prebindgen_flat::type_key(&amp;prebindgen_conversions::wire_definitions(std::iter::once(&amp;input.node)).next().unwrap().rust_type()), "&amp; str");
 <a href=#77 id=77 data-nosnippet>77</a>/// # Ok::&lt;(), Box&lt;dyn std::error::Error&gt;&gt;(())
 <a href=#78 id=78 data-nosnippet>78</a>/// ```
-<a href=#79 id=79 data-nosnippet>79</a></span><span class="kw">pub fn </span>input&lt;W: <span class="kw">crate</span>::WireKind, C, N, B&gt;(
+<a href=#79 id=79 data-nosnippet>79</a></span><span class="kw">pub fn </span>input&lt;W: <span class="kw">crate</span>::WireKind, C, N, B, A, T&gt;(
 <a href=#80 id=80 data-nosnippet>80</a>    ty: <span class="kw-2">&amp;</span>Type,
 <a href=#81 id=81 data-nosnippet>81</a>    wire: syn::Ident,
 <a href=#82 id=82 data-nosnippet>82</a>    var: syn::Ident,
 <a href=#83 id=83 data-nosnippet>83</a>    decode: TokenStream,
 <a href=#84 id=84 data-nosnippet>84</a>    kind: W,
-<a href=#85 id=85 data-nosnippet>85</a>) -&gt; <span class="prelude-ty">Result</span>&lt;InputPlan&lt;W, C, N, B&gt;&gt; {
+<a href=#85 id=85 data-nosnippet>85</a>) -&gt; <span class="prelude-ty">Result</span>&lt;InputPlan&lt;W, C, N, B, A, T&gt;&gt; {
 <a href=#86 id=86 data-nosnippet>86</a>    <span class="kw">if </span>Value::of(ty).is_none() {
 <a href=#87 id=87 data-nosnippet>87</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format!</span>(<span class="string">"`{}` is not a value type"</span>, type_key(ty)));
 <a href=#88 id=88 data-nosnippet>88</a>    }
@@ -139,14 +139,14 @@
 <a href=#139 id=139 data-nosnippet>139</a>/// * `encode` — maps a Rust expression of the owned value to the expression
 <a href=#140 id=140 data-nosnippet>140</a>///   delivered on the wire.
 <a href=#141 id=141 data-nosnippet>141</a>/// * `kind` — the adapter's [`Wire::kind`] for the wire.
-<a href=#142 id=142 data-nosnippet>142</a></span><span class="kw">pub fn </span>output&lt;W: <span class="kw">crate</span>::WireKind, C, N, B&gt;(
+<a href=#142 id=142 data-nosnippet>142</a></span><span class="kw">pub fn </span>output&lt;W: <span class="kw">crate</span>::WireKind, C, N, B, A, T&gt;(
 <a href=#143 id=143 data-nosnippet>143</a>    ty: <span class="kw-2">&amp;</span>Type,
 <a href=#144 id=144 data-nosnippet>144</a>    wire: syn::Ident,
 <a href=#145 id=145 data-nosnippet>145</a>    value: TokenStream,
 <a href=#146 id=146 data-nosnippet>146</a>    borrowed: bool,
 <a href=#147 id=147 data-nosnippet>147</a>    encode: <span class="kw">impl </span>FnOnce(TokenStream) -&gt; TokenStream,
 <a href=#148 id=148 data-nosnippet>148</a>    kind: W,
-<a href=#149 id=149 data-nosnippet>149</a>) -&gt; <span class="prelude-ty">Result</span>&lt;OutputPlan&lt;W, C, N, B&gt;&gt; {
+<a href=#149 id=149 data-nosnippet>149</a>) -&gt; <span class="prelude-ty">Result</span>&lt;OutputPlan&lt;W, C, N, B, A, T&gt;&gt; {
 <a href=#150 id=150 data-nosnippet>150</a>    <span class="kw">let </span><span class="prelude-val">Some</span>(class) = Value::of(ty).filter(|<span class="kw">_</span>| !<span class="macro">matches!</span>(ty, Type::Reference(<span class="kw">_</span>))) <span class="kw">else </span>{
 <a href=#151 id=151 data-nosnippet>151</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format!</span>(<span class="string">"`{}` is not an owned value type"</span>, type_key(ty)));
 <a href=#152 id=152 data-nosnippet>152</a>    };

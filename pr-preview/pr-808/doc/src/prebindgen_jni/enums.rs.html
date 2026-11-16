@@ -134,7 +134,7 @@
 <a href=#134 id=134 data-nosnippet>134</a>        <span class="self">self</span>.member(<span class="string">"fromWire"</span>)
 <a href=#135 id=135 data-nosnippet>135</a>    }
 <a href=#136 id=136 data-nosnippet>136</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>wire(<span class="self">self</span>: <span class="kw-2">&amp;</span>std::rc::Rc&lt;<span class="self">Self</span>&gt;) -&gt; JniWire {
-<a href=#137 id=137 data-nosnippet>137</a>        JniWire::Enum {
+<a href=#137 id=137 data-nosnippet>137</a>        JniWire::REnumTag {
 <a href=#138 id=138 data-nosnippet>138</a>            enum_type: <span class="self">self</span>.clone(),
 <a href=#139 id=139 data-nosnippet>139</a>            next_integer_niche: <span class="self">self</span>.mapping.initial_niche(),
 <a href=#140 id=140 data-nosnippet>140</a>        }
