@@ -766,10 +766,10 @@
 <a href=#766 id=766 data-nosnippet>766</a>        } =&gt; <span class="kw">crate</span>::sealed::input(children, controls, group, context, active),
 <a href=#767 id=767 data-nosnippet>767</a>        JniNode::Leaf(wires) =&gt; input_leaves(<span class="kw-2">&amp;</span>wires.iter().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;(), context, active),
 <a href=#768 id=768 data-nosnippet>768</a>        JniNode::Chain {
-<a href=#769 id=769 data-nosnippet>769</a>            meta: JniChain::Bulk(record),
+<a href=#769 id=769 data-nosnippet>769</a>            meta: JniChain::Bulk(<span class="kw">_</span>),
 <a href=#770 id=770 data-nosnippet>770</a>            controls,
 <a href=#771 id=771 data-nosnippet>771</a>            child,
-<a href=#772 id=772 data-nosnippet>772</a>        } =&gt; <span class="kw">crate</span>::bulk::input_kotlin(record, controls, child, context, active),
+<a href=#772 id=772 data-nosnippet>772</a>        } =&gt; <span class="kw">crate</span>::bulk::input_kotlin(controls, child, context, active),
 <a href=#773 id=773 data-nosnippet>773</a>        JniNode::Branch {
 <a href=#774 id=774 data-nosnippet>774</a>            meta: JniBranch::Alternatives,
 <a href=#775 id=775 data-nosnippet>775</a>            children: elements,
@@ -928,10 +928,10 @@
 <a href=#928 id=928 data-nosnippet>928</a>        } =&gt; <span class="kw">crate</span>::sealed::output(children, controls, group, context, owners),
 <a href=#929 id=929 data-nosnippet>929</a>        JniNode::Leaf(wires) =&gt; output_leaves(<span class="kw-2">&amp;</span>wires.iter().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;(), context, owners),
 <a href=#930 id=930 data-nosnippet>930</a>        JniNode::Chain {
-<a href=#931 id=931 data-nosnippet>931</a>            meta: JniChain::Bulk(record),
+<a href=#931 id=931 data-nosnippet>931</a>            meta: JniChain::Bulk(<span class="kw">_</span>),
 <a href=#932 id=932 data-nosnippet>932</a>            child,
 <a href=#933 id=933 data-nosnippet>933</a>            ..
-<a href=#934 id=934 data-nosnippet>934</a>        } =&gt; <span class="kw">crate</span>::bulk::output_kotlin(record, child, context, owners),
+<a href=#934 id=934 data-nosnippet>934</a>        } =&gt; <span class="kw">crate</span>::bulk::output_kotlin(child, context, owners),
 <a href=#935 id=935 data-nosnippet>935</a>        JniNode::Branch {
 <a href=#936 id=936 data-nosnippet>936</a>            meta: JniBranch::Alternatives,
 <a href=#937 id=937 data-nosnippet>937</a>            ..
