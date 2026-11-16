@@ -93,8 +93,8 @@ fn field_names(layout: &COutputWireNode) -> Vec<String> {
     } = layout
     {
         for node in children.as_slice() {
-            if let WireNode::Chain {
-                meta: COutputWireChain::Field(name),
+            if let WireNode::Annotation {
+                meta: COutputWireAnnotation::Field(name),
                 ..
             } = node
             {
@@ -310,6 +310,8 @@ pub(crate) fn emit<R, E, P>(
 pub(crate) fn result_function<
     Chain: group::ChainMetadata,
     Branch: group::BranchMetadata,
+    Annotation: group::AnnotationMetadata,
+    Container: group::ContainerMetadata,
     R,
     E,
     P,
@@ -317,7 +319,7 @@ pub(crate) fn result_function<
     source_name: &syn::Ident,
     error_ty: &syn::Type,
     outputs: &[&Wire],
-    function_output_layout: &CWireNode<Chain, Branch>,
+    function_output_layout: &CWireNode<Chain, Branch, Annotation, Container>,
     mut params: Vec<TokenStream>,
     mut cparams: Vec<String>,
     body: &TokenStream,

@@ -72,6 +72,8 @@ impl Conversion for JniInputConverter {
     type Wire = JniWire;
     type Chain = JniInputWireChain;
     type Branch = JniInputWireBranch;
+    type Annotation = JniInputWireAnnotation;
+    type Container = JniInputWireContainer;
     type SlotFragment<'a> = InputFragment<'a, JniContext>;
     fn code_fragment_slot(
         &self,
@@ -205,6 +207,8 @@ impl Conversion for JniOutputConverter {
     type Wire = JniWire;
     type Chain = JniOutputWireChain;
     type Branch = JniOutputWireBranch;
+    type Annotation = JniOutputWireAnnotation;
+    type Container = JniOutputWireContainer;
     type SlotFragment<'a> = OutputFragment<'a, JniContext>;
     fn code_fragment_slot(
         &self,

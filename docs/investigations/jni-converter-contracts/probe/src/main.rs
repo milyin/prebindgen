@@ -18,6 +18,8 @@ impl Conversion for IndependentInput {
     type Wire = JniWire;
     type Chain = JniInputWireChain;
     type Branch = JniInputWireBranch;
+    type Annotation = prebindgen_jni::JniInputWireAnnotation;
+    type Container = prebindgen_jni::JniInputWireContainer;
     type SlotFragment<'a> = InputFragment<'a, JniContext>;
 
     fn code_fragment_slot(
@@ -29,7 +31,7 @@ impl Conversion for IndependentInput {
     }
 }
 impl InputConversion for IndependentInput {
-    fn input_node(&self) -> &prebindgen_conversions::WireNode<JniWire, JniInputWireChain, JniInputWireBranch> {
+    fn input_node(&self) -> &prebindgen_conversions::WireNode<JniWire, JniInputWireChain, JniInputWireBranch, prebindgen_jni::JniInputWireAnnotation, prebindgen_jni::JniInputWireContainer> {
         self.0.input_node()
     }
 }
@@ -44,6 +46,8 @@ impl Conversion for IndependentOutput {
     type Wire = JniWire;
     type Chain = JniOutputWireChain;
     type Branch = JniOutputWireBranch;
+    type Annotation = prebindgen_jni::JniOutputWireAnnotation;
+    type Container = prebindgen_jni::JniOutputWireContainer;
     type SlotFragment<'a> = OutputFragment<'a, JniContext>;
 
     fn code_fragment_slot(
@@ -57,7 +61,7 @@ impl Conversion for IndependentOutput {
 impl OutputConversion for IndependentOutput {
     fn output_outcomes(
         &self,
-    ) -> &prebindgen_conversions::Outcomes<prebindgen_conversions::WireNode<JniWire, JniOutputWireChain, JniOutputWireBranch>> {
+    ) -> &prebindgen_conversions::Outcomes<prebindgen_conversions::WireNode<JniWire, JniOutputWireChain, JniOutputWireBranch, prebindgen_jni::JniOutputWireAnnotation, prebindgen_jni::JniOutputWireContainer>> {
         self.0.output_outcomes()
     }
 }

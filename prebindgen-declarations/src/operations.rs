@@ -147,13 +147,13 @@ impl<'a, C: Codec + ?Sized> OutputLeaf<'a, C> {
 }
 
 /// Meaning of an ordered child list in the adapter's wire tree.
-/// Single-child annotations, such as field names, use the codec's chain hooks.
+/// Single-child annotations, such as field names, use the codec's annotation hooks.
 #[derive(Clone, Copy, Debug)]
 pub enum GroupKind {
     /// Ordered constructor arguments or combined output observations.
     Values,
     /// Source fields in declaration order, including unit's empty group.
-    /// Each child is a field chain containing that field's conversion subtree.
+    /// Each child is a field annotation containing that field's conversion subtree.
     Fields,
 }
 
@@ -162,7 +162,8 @@ pub struct Optional<'a, C: Codec + ?Sized, V: prebindgen_conversions::Conversion
     /// Borrowed occurrence configuration.
     pub extra: &'a C::Extra,
     /// Temporary payload tree; its native scope determines available discriminators.
-    pub payload: &'a mut WireNode<V::Wire, V::Chain, V::Branch>,
+    #[allow(clippy::type_complexity)] // Keep the converter-selected shape types explicit.
+    pub payload: &'a mut WireNode<V::Wire, V::Chain, V::Branch, V::Annotation, V::Container>,
     /// Requested normalized 0/1 presence binding.
     pub presence: syn::Ident,
 }
@@ -214,7 +215,8 @@ pub struct EnumVariants<'a, C: Codec + ?Sized, V: prebindgen_conversions::Conver
     /// Tag wire; the adapter can reserve its remaining domain for options.
     pub selector: &'a mut Wire<V::Wire>,
     /// One active-arm description per source variant.
-    pub arms: &'a mut [WireNode<V::Wire, V::Chain, V::Branch>],
+    #[allow(clippy::type_complexity)] // Keep the converter-selected shape types explicit.
+    pub arms: &'a mut [WireNode<V::Wire, V::Chain, V::Branch, V::Annotation, V::Container>],
     /// Ordinary enum value or explicitly expanded fields.
     pub form: EnumForm,
 }

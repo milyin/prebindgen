@@ -10,24 +10,26 @@ enum TestGroup {
 struct TestAbi;
 impl TestAbi {
     fn wires(
-        node: &WireNode<TestWire, TestGroup, TestGroup>,
+        node: &WireNode<TestWire, TestGroup, TestGroup, TestGroup, ()>,
     ) -> std::vec::IntoIter<&Wire<TestWire>> {
         prebindgen_conversions::wire_definitions(std::iter::once(node))
             .collect::<Vec<_>>()
             .into_iter()
     }
     fn wires_mut(
-        node: &mut WireNode<TestWire, TestGroup, TestGroup>,
+        node: &mut WireNode<TestWire, TestGroup, TestGroup, TestGroup, ()>,
     ) -> std::vec::IntoIter<&mut Wire<TestWire>> {
         prebindgen_conversions::wire_definitions_mut(std::iter::once(node))
             .collect::<Vec<_>>()
             .into_iter()
     }
-    fn validate(node: &WireNode<TestWire, TestGroup, TestGroup>) -> Result<()> {
-        fn check(node: &WireNode<TestWire, TestGroup, TestGroup>) -> Result<()> {
+    fn validate(node: &WireNode<TestWire, TestGroup, TestGroup, TestGroup, ()>) -> Result<()> {
+        fn check(node: &WireNode<TestWire, TestGroup, TestGroup, TestGroup, ()>) -> Result<()> {
             match node {
                 WireNode::Leaf(_) => {}
-                WireNode::Chain { child, .. } => check(child)?,
+                WireNode::Annotation { child, .. }
+                | WireNode::Chain { child, .. }
+                | WireNode::Container { child, .. } => check(child)?,
                 WireNode::Branch { meta, children, .. } => {
                     if matches!(meta, TestGroup::Maybe) && children.is_empty() {
                         return Err("selection has no alternatives".into());
@@ -43,9 +45,9 @@ impl TestAbi {
         prebindgen_conversions::validate_wire_names(Self::wires(node))
     }
 }
-type TestBindings<W> = super::PlanBindings<W, (), TestGroup, TestGroup>;
-type InputPlan<W> = prebindgen_conversions::InputPlan<W, (), TestGroup, TestGroup>;
-type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, (), TestGroup, TestGroup>;
+type TestBindings<W> = super::PlanBindings<W, (), TestGroup, TestGroup, TestGroup, ()>;
+type InputPlan<W> = prebindgen_conversions::InputPlan<W, (), TestGroup, TestGroup, TestGroup, ()>;
+type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, (), TestGroup, TestGroup, TestGroup, ()>;
 use prebindgen_conversions::validate_bindings;
 use prebindgen_conversions::value::{self, Value};
 struct TestCodec;
@@ -84,15 +86,18 @@ fn wire(kind: Kind, ty: &Type, extra: &Extra) -> TestWire {
 }
 #[allow(clippy::type_complexity)] // Keep the test codec metadata roles visible.
 impl Codec for TestCodec {
-    type Input = prebindgen_conversions::InputPlan<TestWire, (), TestGroup, TestGroup>;
-    type Output = prebindgen_conversions::OutputPlan<TestWire, (), TestGroup, TestGroup>;
+    type Input =
+        prebindgen_conversions::InputPlan<TestWire, (), TestGroup, TestGroup, TestGroup, ()>;
+    type Output =
+        prebindgen_conversions::OutputPlan<TestWire, (), TestGroup, TestGroup, TestGroup, ()>;
 
     test_operations!();
-    type Schema = prebindgen_conversions::PlanSchema<TestWire, (), TestGroup, TestGroup>;
+    type Schema =
+        prebindgen_conversions::PlanSchema<TestWire, (), TestGroup, TestGroup, TestGroup, ()>;
     fn binding_failure_layout(
         &self,
         extra: &Extra,
-    ) -> Result<Option<WireNode<TestWire, TestGroup, TestGroup>>> {
+    ) -> Result<Option<WireNode<TestWire, TestGroup, TestGroup, TestGroup, ()>>> {
         Ok(
             (extra.name == "malformed_binding_failure").then(|| WireNode::Branch {
                 controls: vec![],
@@ -129,7 +134,13 @@ impl Codec for TestCodec {
     }
     fn prefix_input(
         &self,
-        layout: &mut prebindgen_conversions::WireNode<TestWire, TestGroup, TestGroup>,
+        layout: &mut prebindgen_conversions::WireNode<
+            TestWire,
+            TestGroup,
+            TestGroup,
+            TestGroup,
+            (),
+        >,
         segment: ComponentSegment,
     ) {
         for w in TestAbi::wires_mut(layout) {
@@ -138,7 +149,13 @@ impl Codec for TestCodec {
     }
     fn prefix_output(
         &self,
-        layout: &mut prebindgen_conversions::WireNode<TestWire, TestGroup, TestGroup>,
+        layout: &mut prebindgen_conversions::WireNode<
+            TestWire,
+            TestGroup,
+            TestGroup,
+            TestGroup,
+            (),
+        >,
         segment: ComponentSegment,
     ) {
         for w in TestAbi::wires_mut(layout) {
@@ -897,7 +914,13 @@ fn nested_recipes_use_only_the_callers_extra() {
     )
     .unwrap();
     let f = flat.function("foo").unwrap();
-    let foreign = |wires: &prebindgen_conversions::WireNode<TestWire, TestGroup, TestGroup>| {
+    let foreign = |wires: &prebindgen_conversions::WireNode<
+        TestWire,
+        TestGroup,
+        TestGroup,
+        TestGroup,
+        (),
+    >| {
         prebindgen_conversions::wire_definitions(std::iter::once(wires))
             .filter_map(|w| match &w.kind.kind {
                 Kind::Token => Some((w.kind.name, w.kind.ty.clone())),
@@ -979,11 +1002,14 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
     struct FinalizingCodec;
 
     impl Codec for FinalizingCodec {
-        type Input = prebindgen_conversions::InputPlan<TestWire, (), TestGroup, TestGroup>;
-        type Output = prebindgen_conversions::OutputPlan<TestWire, (), TestGroup, TestGroup>;
+        type Input =
+            prebindgen_conversions::InputPlan<TestWire, (), TestGroup, TestGroup, TestGroup, ()>;
+        type Output =
+            prebindgen_conversions::OutputPlan<TestWire, (), TestGroup, TestGroup, TestGroup, ()>;
 
         test_operations!();
-        type Schema = prebindgen_conversions::PlanSchema<TestWire, (), TestGroup, TestGroup>;
+        type Schema =
+            prebindgen_conversions::PlanSchema<TestWire, (), TestGroup, TestGroup, TestGroup, ()>;
 
         fn validate_input(&self, plan: &CodecInputPlan<Self>) -> Result<()> {
             TestAbi::validate(&plan.node)
@@ -1003,7 +1029,13 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
         }
         fn prefix_input(
             &self,
-            layout: &mut prebindgen_conversions::WireNode<TestWire, TestGroup, TestGroup>,
+            layout: &mut prebindgen_conversions::WireNode<
+                TestWire,
+                TestGroup,
+                TestGroup,
+                TestGroup,
+                (),
+            >,
             segment: ComponentSegment,
         ) {
             for w in TestAbi::wires_mut(layout) {
@@ -1012,7 +1044,13 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
         }
         fn prefix_output(
             &self,
-            layout: &mut prebindgen_conversions::WireNode<TestWire, TestGroup, TestGroup>,
+            layout: &mut prebindgen_conversions::WireNode<
+                TestWire,
+                TestGroup,
+                TestGroup,
+                TestGroup,
+                (),
+            >,
             segment: ComponentSegment,
         ) {
             for w in TestAbi::wires_mut(layout) {
@@ -1669,7 +1707,9 @@ fn field_groups_preserve_empty_and_multiwire_fields_in_both_directions() {
         &Extra::default(),
     )
     .unwrap();
-    fn check(layout: &prebindgen_conversions::WireNode<TestWire, TestGroup, TestGroup>) {
+    fn check(
+        layout: &prebindgen_conversions::WireNode<TestWire, TestGroup, TestGroup, TestGroup, ()>,
+    ) {
         assert_eq!(
             prebindgen_conversions::wire_definitions(std::iter::once(layout)).count(),
             4
@@ -1687,7 +1727,7 @@ fn field_groups_preserve_empty_and_multiwire_fields_in_both_directions() {
         let mut names = Vec::new();
         let mut widths = Vec::new();
         for node in children.as_slice() {
-            let WireNode::Chain { meta: metadata, .. } = node else {
+            let WireNode::Annotation { meta: metadata, .. } = node else {
                 panic!()
             };
             let TestGroup::Member(name) = metadata else {

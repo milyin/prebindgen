@@ -274,10 +274,13 @@ time; generated calls gain no dispatch or allocations from this refactoring.
 ## Leaf and wire helpers
 
 Besides its operation vocabularies and compilation state, a codec selects
-`Schema`, `Wire`, `Context`, `Extra`, `Chain` and `Branch`. `Schema` fixes the
+`Schema`, `Context`, `Extra` and prepared converters. Those converters select
+`Wire`, `Chain`, `Branch`, `Annotation` and `Container`. `Schema` fixes the
 converters and declaration metadata; `Wire` describes one boundary value.
 `Context` supplies Rust emission bindings, and `Extra` supplies occurrence
-settings. `Chain` and `Branch` describe wire parents without duplicating children.
+settings. Parent metadata describes children without duplicating their trees.
+Annotations preserve a child boundary, chains/branches add controls, and containers
+replace the child boundary with their own `wires`.
 
 The existing physical-conversion hooks remain available to the reusable helpers:
 
@@ -287,8 +290,8 @@ The existing physical-conversion hooks remain available to the reusable helpers:
 | `output_leaf(OutputLeaf)` | Prepare boundary values from a Rust source expression. |
 | `output_consumes(flat, ty, extra)` | Report whether the leaf moves its source. |
 | `input_group(GroupKind)` / `output_group(GroupKind)` | Describe an ordered child list: values or source fields. |
-| `input_field(name)` / `output_field(name)` | Return chain metadata labeling one source field's conversion subtree. |
-| `output_named(name)` | Return chain metadata naming one output projection subtree; unsupported by default. |
+| `input_field(name)` / `output_field(name)` | Return annotation metadata labeling one source field's conversion subtree. |
+| `output_named(name)` | Return annotation metadata naming one output projection subtree; unsupported by default. |
 
 Optional features reject unsupported work by default. All interpretation and
 composition happens during generation, not during an FFI call.

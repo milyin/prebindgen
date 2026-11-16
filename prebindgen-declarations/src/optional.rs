@@ -145,8 +145,8 @@ fn validate_encoding<W: prebindgen_conversions::WireKind, M>(
     }
     Ok(())
 }
-fn mark<W: prebindgen_conversions::WireKind, C, B>(
-    tree: &mut WireNode<W, C, B>,
+fn mark<W: prebindgen_conversions::WireKind, C, B, A, T>(
+    tree: &mut WireNode<W, C, B, A, T>,
     encoding: OptionalEncoding<W, C>,
 ) {
     let controls = match encoding.presence {

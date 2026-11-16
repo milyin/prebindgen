@@ -62,10 +62,14 @@ fn expression(code: TokenStream) -> Result<TokenStream> {
     Ok(code)
 }
 
-impl<W: WireKind, C: TemplateContext + 'static, N, B> Conversion for InputPlan<W, C, N, B> {
+impl<W: WireKind, C: TemplateContext + 'static, N, B, A, T> Conversion
+    for InputPlan<W, C, N, B, A, T>
+{
     type Wire = W;
     type Chain = N;
     type Branch = B;
+    type Annotation = A;
+    type Container = T;
     type SlotFragment<'a> = InputFragment<'a, C>;
     fn code_fragment_slot(
         &self,
@@ -75,7 +79,7 @@ impl<W: WireKind, C: TemplateContext + 'static, N, B> Conversion for InputPlan<W
         self.emit_code(request, &self.code)
     }
 }
-impl<W: WireKind, C: TemplateContext + 'static, N, B> InputPlan<W, C, N, B> {
+impl<W: WireKind, C: TemplateContext + 'static, N, B, A, T> InputPlan<W, C, N, B, A, T> {
     /// Emit the complete conversion using caller-specialized carrier reads.
     pub fn emit_code(
         &self,
@@ -89,10 +93,14 @@ impl<W: WireKind, C: TemplateContext + 'static, N, B> InputPlan<W, C, N, B> {
         expression(scope(storage, body)?)
     }
 }
-impl<W: WireKind, C: TemplateContext + 'static, N, B> Conversion for OutputPlan<W, C, N, B> {
+impl<W: WireKind, C: TemplateContext + 'static, N, B, A, T> Conversion
+    for OutputPlan<W, C, N, B, A, T>
+{
     type Wire = W;
     type Chain = N;
     type Branch = B;
+    type Annotation = A;
+    type Container = T;
     type SlotFragment<'a> = OutputFragment<'a, C>;
 
     fn code_fragment_slot(
@@ -103,7 +111,7 @@ impl<W: WireKind, C: TemplateContext + 'static, N, B> Conversion for OutputPlan<
         self.emit_with_delivery(mode, &self.delivery)
     }
 }
-impl<W: WireKind, C: TemplateContext + 'static, N, B> OutputPlan<W, C, N, B> {
+impl<W: WireKind, C: TemplateContext + 'static, N, B, A, T> OutputPlan<W, C, N, B, A, T> {
     /// Emit the output phases with an explicitly selected delivery protocol.
     /// Preparation and ownership commit still use this plan's original storage.
     pub fn emit_with_delivery(
@@ -290,17 +298,17 @@ fn reserve(code: &TokenStream, used: &mut std::collections::BTreeSet<String>) {
     }
 }
 
-impl<W: WireKind, C: TemplateContext + 'static, N, B> crate::InputConversion
-    for InputPlan<W, C, N, B>
+impl<W: WireKind, C: TemplateContext + 'static, N, B, A, T> crate::InputConversion
+    for InputPlan<W, C, N, B, A, T>
 {
-    fn input_node(&self) -> &crate::WireNode<W, N, B> {
+    fn input_node(&self) -> &crate::WireNode<W, N, B, A, T> {
         &self.node
     }
 }
-impl<W: WireKind, C: TemplateContext + 'static, N, B> crate::OutputConversion
-    for OutputPlan<W, C, N, B>
+impl<W: WireKind, C: TemplateContext + 'static, N, B, A, T> crate::OutputConversion
+    for OutputPlan<W, C, N, B, A, T>
 {
-    fn output_outcomes(&self) -> &crate::Outcomes<crate::WireNode<W, N, B>> {
+    fn output_outcomes(&self) -> &crate::Outcomes<crate::WireNode<W, N, B, A, T>> {
         &self.outcomes
     }
 }

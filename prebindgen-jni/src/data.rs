@@ -144,7 +144,7 @@ pub struct JniInputKDataClass {
 }
 /// Reconstruct one Kotlin data-class output from its field conversion children.
 /// Also used for arguments delivered to a retained callback, which leave Rust.
-/// An enclosing [`JniOutputWireChain::KParamName`] supplies an explicit output label.
+/// An enclosing [`JniOutputWireAnnotation::KParamName`] supplies an explicit output label.
 #[derive(Clone, Debug)]
 pub struct JniOutputKDataClass {
     /// Canonical Rust record in Flat, providing the fields and Kotlin class.
@@ -660,8 +660,13 @@ fn field_name(field: &prebindgen_flat::Field<JniField>) -> String {
     field.name.to_string().trim_start_matches("r#").into()
 }
 
-pub(super) fn mark<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
-    layout: &mut JniWireNode<Chain, Branch>,
+pub(super) fn mark<
+    Chain: group::ChainMetadata,
+    Branch: group::BranchMetadata,
+    Annotation: group::AnnotationMetadata,
+    Container: group::ContainerMetadata,
+>(
+    layout: &mut JniWireNode<Chain, Branch, Annotation, Container>,
     record: Branch,
 ) -> Result<()> {
     group::retire_niches(layout, None)?;
@@ -675,10 +680,15 @@ pub(super) fn mark<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
     Ok(())
 }
 
-pub(crate) fn field<Chain: group::ChainMetadata, Branch>(
-    node: &JniWireNode<Chain, Branch>,
+pub(crate) fn field<
+    Chain: group::ChainMetadata,
+    Branch,
+    Annotation: group::AnnotationMetadata,
+    Container: group::ContainerMetadata,
+>(
+    node: &JniWireNode<Chain, Branch, Annotation, Container>,
 ) -> Result<&syn::Ident> {
-    if let prebindgen_conversions::WireNode::Chain { meta, .. } = node {
+    if let prebindgen_conversions::WireNode::Annotation { meta, .. } = node {
         if let Some(name) = meta.field() {
             return Ok(name);
         }
@@ -750,10 +760,23 @@ pub(crate) fn check_property_output(expected: &str, results: &[String]) -> Resul
 }
 
 #[allow(clippy::type_complexity)] // Borrow each canonical field with its directional conversion subtree.
-pub(crate) fn record_fields<'a, Chain: group::ChainMetadata, Branch>(
-    nodes: &'a [JniWireNode<Chain, Branch>],
+pub(crate) fn record_fields<
+    'a,
+    Chain: group::ChainMetadata,
+    Branch,
+    Annotation: group::AnnotationMetadata,
+    Container: group::ContainerMetadata,
+>(
+    nodes: &'a [JniWireNode<Chain, Branch, Annotation, Container>],
     source: &'a Record<JniField>,
-) -> Result<impl Iterator<Item = Result<(&'a Field<JniField>, &'a JniWireNode<Chain, Branch>)>>> {
+) -> Result<
+    impl Iterator<
+        Item = Result<(
+            &'a Field<JniField>,
+            &'a JniWireNode<Chain, Branch, Annotation, Container>,
+        )>,
+    >,
+> {
     if nodes.len() != source.fields.len() {
         return Err("record occurrence differs from its source fields".into());
     }
@@ -1156,7 +1179,7 @@ mod group_tests {
         };
         // Repeated source records have no Kotlin input binding to collide with
         // one another or with the output presence binding.
-        let output = WireNode::Branch {
+        let output: JniOutputWireNode = WireNode::Branch {
             controls: vec![],
             meta: JniOutputWireBranch::KValues,
             children: vec![record.clone(), optional, record],
@@ -1186,9 +1209,8 @@ mod group_tests {
         assert!(crate::group::validate_layout(&node)
             .unwrap_err()
             .contains("named field children"));
-        let field = WireNode::Chain {
-            meta: JniInputWireChain::RField(syn::parse_quote!(value)),
-            controls: vec![],
+        let field = WireNode::Annotation {
+            meta: JniInputWireAnnotation::RField(syn::parse_quote!(value)),
             child: Box::new(leaf),
         };
         let WireNode::Branch { children, .. } = &mut node else {
@@ -1200,7 +1222,7 @@ mod group_tests {
             panic!()
         };
         let mut duplicate = field;
-        let WireNode::Chain { child, .. } = &mut duplicate else {
+        let WireNode::Annotation { child, .. } = &mut duplicate else {
             panic!()
         };
         let WireNode::Leaf(wires) = child.as_mut() else {
@@ -1224,16 +1246,15 @@ mod group_tests {
             .package(package!().class(data_class!(Point)))
             .configured()
             .unwrap();
-        fn field<Chain, Branch>(
-            named: impl FnOnce(syn::Ident) -> Chain,
+        fn field<Chain, Branch, Annotation, Container>(
+            named: impl FnOnce(syn::Ident) -> Annotation,
             record: Branch,
-        ) -> JniWireNode<Chain, Branch> {
+        ) -> JniWireNode<Chain, Branch, Annotation, Container> {
             let mut field = prebindgen_conversions::WireNode::Leaf(vec![Wire {
                 name: syn::parse_quote!(incoming),
                 kind: JniWire::scalar(Primitive::I32),
             }]);
-            field = prebindgen_conversions::WireNode::Chain {
-                controls: vec![],
+            field = prebindgen_conversions::WireNode::Annotation {
                 meta: named(syn::parse_quote!(r#type)),
                 child: Box::new(std::mem::take(&mut field)),
             };
@@ -1244,8 +1265,13 @@ mod group_tests {
             };
             field
         }
-        crate::group::validate_layout(&field::<JniInputWireChain, JniInputWireBranch>(
-            JniInputWireChain::RField,
+        crate::group::validate_layout(&field::<
+            JniInputWireChain,
+            JniInputWireBranch,
+            JniInputWireAnnotation,
+            JniInputWireContainer,
+        >(
+            JniInputWireAnnotation::RField,
             JniInputWireBranch::KDataClass(JniInputKDataClass {
                 k_name: "point".into(),
                 r_type: flat.type_ref(&syn::parse_quote!(Point)).unwrap(),
@@ -1276,8 +1302,8 @@ mod group_tests {
             cleanup_failure: None,
             output_prefix: "output",
         };
-        let input_record = field(
-            JniInputWireChain::RField,
+        let input_record: JniInputWireNode = field(
+            JniInputWireAnnotation::RField,
             JniInputWireBranch::KDataClass(JniInputKDataClass {
                 k_name: "point".into(),
                 r_type: point.clone(),
@@ -1293,17 +1319,16 @@ mod group_tests {
             assert_eq!(input.parameters, ["point: example.Point?"]);
             assert!(input.arguments[0].starts_with(&format!("if ({active})")));
         }
-        let output_record = field(
-            JniOutputWireChain::RField,
+        let output_record: JniOutputWireNode = field(
+            JniOutputWireAnnotation::RField,
             JniOutputWireBranch::KDataClass(JniOutputKDataClass { r_type: point }),
         );
         let output = kotlin::output_kotlin(&output_record, &context).unwrap();
         assert_eq!(output.result_types, ["example.Point"]);
         assert_eq!(output.result_names, [None]);
         assert!(output.delivered[0].contains("example.Point(result[0]"));
-        let named = WireNode::Chain {
-            controls: vec![],
-            meta: JniOutputWireChain::KParamName("location".into()),
+        let named = WireNode::Annotation {
+            meta: JniOutputWireAnnotation::KParamName("location".into()),
             child: Box::new(output_record),
         };
         let output = kotlin::output_kotlin(&named, &context).unwrap();

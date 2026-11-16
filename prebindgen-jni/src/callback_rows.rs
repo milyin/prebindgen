@@ -24,15 +24,15 @@ pub(crate) fn cleanup(
         }
         match node {
             WireNode::Leaf(_) => false,
-            WireNode::Chain {
-                meta: JniInputWireChain::KList,
+            WireNode::Container {
+                meta: JniInputWireContainer::KList,
                 ..
             } => true,
-            WireNode::Chain {
-                meta: JniInputWireChain::BulkFrame,
+            WireNode::Container {
+                meta: JniInputWireContainer::BulkFrame,
                 ..
             } => false,
-            WireNode::Chain { child, .. } => rows(child),
+            WireNode::Annotation { child, .. } | WireNode::Chain { child, .. } => rows(child),
             WireNode::Branch { children, .. } => children.iter().any(rows),
         }
     }
@@ -139,9 +139,9 @@ fn receive(
             }
             code
         }
-        WireNode::Chain {
-            meta: JniInputWireChain::KList,
-            controls,
+        WireNode::Container {
+            meta: JniInputWireContainer::KList,
+            wires: controls,
             child,
         } => {
             let carrier = &controls[0].name;
@@ -168,9 +168,9 @@ fn receive(
             });
             field(context, row, fields, carrier, scan)?
         }
-        WireNode::Chain {
-            meta: JniInputWireChain::BulkFrame,
-            controls,
+        WireNode::Container {
+            meta: JniInputWireContainer::BulkFrame,
+            wires: controls,
             child,
         } => {
             let carrier = &controls[0].name;
@@ -226,8 +226,8 @@ fn receive(
             }
             field(context, row, fields, selector, code)?
         }
-        WireNode::Chain {
-            meta: JniInputWireChain::RField(_) | JniInputWireChain::RParam(_),
+        WireNode::Annotation {
+            meta: JniInputWireAnnotation::RField(_) | JniInputWireAnnotation::RParam(_),
             child,
             ..
         } => receive(child, context, row, fields, types)?,

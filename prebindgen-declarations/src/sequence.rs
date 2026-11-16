@@ -7,10 +7,10 @@ use quote::ToTokens;
 
 /// Adapter-supplied array input transport. Element conversion remains shared.
 pub struct SequenceInput<W: prebindgen_conversions::WireKind, G> {
-    /// Adapter policy for interpreting `controls`; must not own wire descriptors.
+    /// Adapter policy for interpreting `wires`; must not own wire descriptors.
     pub metadata: G,
     /// Supporting boundary values, stored on the resulting sequence node.
-    pub controls: Vec<Wire<W>>,
+    pub wires: Vec<Wire<W>>,
     /// Validate the outer input values and make the supplied length identifier
     /// available, either as a boundary parameter or a local binding.
     pub open: TokenStream,
@@ -39,7 +39,7 @@ pub struct SequenceOutput<W: prebindgen_conversions::WireKind, G> {
     /// Adapter delivery policy; must not own wire descriptors or child trees.
     pub metadata: G,
     /// Supporting boundary values, stored on the resulting sequence node.
-    pub controls: Vec<Wire<W>>,
+    pub wires: Vec<Wire<W>>,
     /// Initialize delivery state, with the supplied element count available.
     pub begin: TokenStream,
     /// Per-row setup before element conversion.
@@ -252,8 +252,8 @@ pub fn input<C: Codec>(
             }
     };
     let mut plan = InputPlan::new(
-        WireNode::Chain {
-            controls: transport.controls,
+        WireNode::Container {
+            wires: transport.wires,
             child: Box::new(child.node),
             meta: transport.metadata,
         },
@@ -365,7 +365,7 @@ pub fn output<C: Codec>(
         commit_each,
         fallible,
         metadata,
-        controls,
+        wires,
         begin,
         enter,
         store,
@@ -412,8 +412,8 @@ pub fn output<C: Codec>(
         context: Default::default(),
         delivery: Default::default(),
         outcomes: prebindgen_conversions::Outcomes {
-            success: WireNode::Chain {
-                controls,
+            success: WireNode::Container {
+                wires,
                 child: Box::new(child.outcomes.success),
                 meta: metadata,
             },

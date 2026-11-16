@@ -70,7 +70,7 @@ impl Storage {
 /// ```
 /// use prebindgen_conversions::{boxed};
 /// use prebindgen_conversions::Access;
-/// let input = boxed::input::<syn::Type, (), (), ()>(
+/// let input = boxed::input::<syn::Type, (), (), (), (), ()>(
 ///     &boxed::Storage::Direct, &syn::parse_quote!(&Counter),
 ///     syn::parse_quote!(raw), syn::parse_quote!(counter),
 ///     |boxed| {
@@ -81,13 +81,13 @@ impl Storage {
 /// assert_eq!(prebindgen_flat::type_key(&prebindgen_conversions::wire_definitions(std::iter::once(&input.node)).next().unwrap().rust_type()), "* const Counter");
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
-pub fn input<W: crate::WireKind, C, N, B>(
+pub fn input<W: crate::WireKind, C, N, B, A, T>(
     storage: &Storage,
     ty: &syn::Type,
     wire: syn::Ident,
     var: syn::Ident,
     wire_kind: impl FnOnce(BoxedWire) -> W,
-) -> Result<InputPlan<W, C, N, B>> {
+) -> Result<InputPlan<W, C, N, B, A, T>> {
     if prebindgen_flat::callback_signature(ty)?.is_some() {
         return Err("source callback parameters require adapter callback preparation".into());
     }
@@ -153,14 +153,14 @@ pub fn input<W: crate::WireKind, C, N, B>(
 /// * `borrowed` — `true` when `value` is a shared reference to `ty`; the generated
 ///   code then boxes a clone, which requires `ty: Clone`. `false` moves the value.
 /// * `wire_kind` — builds [`Wire::kind`] from the source type and access mode.
-pub fn output<W: crate::WireKind, C, N, B>(
+pub fn output<W: crate::WireKind, C, N, B, A, T>(
     storage: &Storage,
     ty: &syn::Type,
     wire: syn::Ident,
     value: TokenStream,
     borrowed: bool,
     wire_kind: impl FnOnce(BoxedWire) -> W,
-) -> Result<OutputPlan<W, C, N, B>> {
+) -> Result<OutputPlan<W, C, N, B, A, T>> {
     if matches!(ty, syn::Type::Reference(_)) {
         return Err("borrowed pointer outputs are outside this subset".into());
     }

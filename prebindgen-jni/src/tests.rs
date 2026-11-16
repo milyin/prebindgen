@@ -969,8 +969,13 @@ fn optional_unannotated_fields_keep_outer_presence_in_both_directions() {
 #[test]
 fn reference_and_presence_flag_niches_keep_nested_wire_counts_bounded() {
     use prebindgen_conversions::WireNode;
-    fn reservations<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
-        layout: &JniWireNode<Chain, Branch>,
+    fn reservations<
+        Chain: group::ChainMetadata,
+        Branch: group::BranchMetadata,
+        Annotation: group::AnnotationMetadata,
+        Container: group::ContainerMetadata,
+    >(
+        layout: &JniWireNode<Chain, Branch, Annotation, Container>,
     ) -> Vec<Option<JniNiche>> {
         let mut result = vec![];
         match layout {
@@ -2856,8 +2861,8 @@ fn automatic_bulk_collection_outputs_keep_inputs_and_direct_buffers_ordinary() {
     let input = model.function("echo").unwrap().input_conversions().unwrap()[0];
     assert!(matches!(
         input.input_node(),
-        prebindgen_conversions::WireNode::Chain {
-            meta: JniInputWireChain::KList,
+        prebindgen_conversions::WireNode::Container {
+            meta: JniInputWireContainer::KList,
             ..
         }
     ));
@@ -3370,7 +3375,7 @@ fn callback_element_is_bulk(model: &JniBindings, function: &str) -> bool {
     let output = test_export(model, function).ret.slot;
     let (_, element, delivery) =
         sequence::return_sequence(&output.output_outcomes().success).unwrap();
-    assert!(matches!(delivery, JniOutputWireChain::KCallbackRows));
+    assert!(matches!(delivery, JniOutputWireContainer::KCallbackRows));
     let fields = group::callback_parameters(element).collect::<Vec<_>>();
     matches!(fields.as_slice(), [wire] if matches!(wire.kind, JniWire::KBulkBytes { .. }))
 }
@@ -3572,7 +3577,7 @@ fn resolved_callback_elements_can_keep_optional_presence_outside_a_bulk_frame() 
     // The optional uses a null frame, so presence stays outside its payload
     // without adding a separate discriminator argument.
     assert!(
-        matches!(element, prebindgen_conversions::WireNode::Chain {meta:JniOutputWireChain::ROption(_),child,..} if matches!(child.as_ref(),prebindgen_conversions::WireNode::Chain {meta:JniOutputWireChain::BulkFrame,..}))
+        matches!(element, prebindgen_conversions::WireNode::Chain {meta:JniOutputWireChain::ROption(_),child,..} if matches!(child.as_ref(),prebindgen_conversions::WireNode::Container {meta:JniOutputWireContainer::BulkFrame,..}))
     );
     assert_eq!(fields.len(), 1);
     assert_eq!(
@@ -3806,7 +3811,7 @@ fn ordinary_output_rows_respect_jvm_constructor_slot_limit() {
         )
         .unwrap();
         assert!(
-            matches!(output.metadata, JniOutputWireChain::KList(actual) if actual == if typed { JniRowEncoding::RowClass } else { JniRowEncoding::ObjectArray })
+            matches!(output.metadata, JniOutputWireContainer::KList(actual) if actual == if typed { JniRowEncoding::RowClass } else { JniRowEncoding::ObjectArray })
         );
         assert_eq!(output.store.to_string().contains("construct"), typed);
         assert_eq!(output.store.to_string().contains("valueOf"), !typed);
@@ -3815,8 +3820,8 @@ fn ordinary_output_rows_respect_jvm_constructor_slot_limit() {
 
 #[test]
 fn legacy_buffered_schema_keeps_array_decoder_and_input_only_skips_registration() {
-    let node = prebindgen_conversions::WireNode::Chain {
-        controls: vec![prebindgen_conversions::Wire {
+    let node = prebindgen_conversions::WireNode::Container {
+        wires: vec![prebindgen_conversions::Wire {
             name: syn::parse_quote!(rows),
             kind: JniWire::KRowArray {
                 condition: "true".into(),
@@ -3829,7 +3834,7 @@ fn legacy_buffered_schema_keeps_array_decoder_and_input_only_skips_registration(
                 kind: JniWire::scalar(Primitive::I64),
             },
         ])),
-        meta: JniOutputWireChain::KList(JniRowEncoding::ObjectArray),
+        meta: JniOutputWireContainer::KList(JniRowEncoding::ObjectArray),
     };
     let context = KotlinContext {
         package: "test",

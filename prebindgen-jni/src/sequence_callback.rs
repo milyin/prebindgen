@@ -7,7 +7,7 @@ pub(crate) fn transport(
     length: syn::Ident,
     element: &JniOutputWireNode,
     values: &[(syn::Ident, TokenStream)],
-) -> Result<SequenceOutput<JniWire, crate::JniOutputWireChain>> {
+) -> Result<SequenceOutput<JniWire, crate::JniOutputWireContainer>> {
     let env = prebindgen_conversions::template_parameter("environment");
     let method = format_ident!("{wire}_callback_method");
     let class = format_ident!("{wire}_callback_class");
@@ -51,7 +51,7 @@ pub(crate) fn transport(
     };
     let commit_element = prebindgen_conversions::template_parameter("commit_element");
     Ok(SequenceOutput {
-        controls: vec![prebindgen_conversions::Wire {
+        wires: vec![prebindgen_conversions::Wire {
             name: wire.clone(),
             // Zero means present, even when no rows arrived. The enclosing
             // option reserves -1; both values use cached boxes in packet mode.
@@ -59,7 +59,7 @@ pub(crate) fn transport(
         }],
         commit_each: true,
         fallible: true,
-        metadata: JniOutputWireChain::KCallbackRows,
+        metadata: JniOutputWireContainer::KCallbackRows,
         begin: quote! {
             // Every accepted row belongs to the Kotlin collector, including
             // when a later row fails. Publish this before any row can arrive.
@@ -96,8 +96,13 @@ pub(crate) fn transport(
 /// immutable record avoids primitive boxes and generic row arrays without
 /// copying wide rows when the collector grows. Logical projections can share
 /// the same physical JVM record type.
-pub(crate) fn capture<Chain: group::ChainMetadata, Branch>(
-    element: &JniWireNode<Chain, Branch>,
+pub(crate) fn capture<
+    Chain: group::ChainMetadata,
+    Branch,
+    Annotation: group::AnnotationMetadata,
+    Container: group::ContainerMetadata,
+>(
+    element: &JniWireNode<Chain, Branch, Annotation, Container>,
     names: &mut names::Names,
 ) -> Result<(String, String)> {
     let fields = crate::group::callback_parameters(element).collect::<Vec<_>>();
@@ -160,16 +165,23 @@ pub(crate) fn fold<O: KotlinOutputConversion>(
     // Lexical row cleanup keeps partially constructed wrappers in scope. Only
     // dynamic nested collections need the shared owner journal; fixed fields
     // can use their existing locals without allocating a journal or a lambda.
-    fn nested_owners<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
-        node: &JniWireNode<Chain, Branch>,
+    fn nested_owners<
+        Chain: group::ChainMetadata,
+        Branch: group::BranchMetadata,
+        Annotation: group::AnnotationMetadata,
+        Container: group::ContainerMetadata,
+    >(
+        node: &JniWireNode<Chain, Branch, Annotation, Container>,
     ) -> bool {
         match node {
-            prebindgen_conversions::WireNode::Chain {
+            prebindgen_conversions::WireNode::Container {
                 meta: encoding,
                 child,
                 ..
             } if (encoding.is_sequence()) => kotlin::has_handles(child, false),
-            prebindgen_conversions::WireNode::Chain { child, .. } => nested_owners(child),
+            prebindgen_conversions::WireNode::Annotation { child, .. }
+            | prebindgen_conversions::WireNode::Chain { child, .. }
+            | prebindgen_conversions::WireNode::Container { child, .. } => nested_owners(child),
             prebindgen_conversions::WireNode::Branch { children, .. } => {
                 children.iter().any(nested_owners)
             }

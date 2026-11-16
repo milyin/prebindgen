@@ -32,11 +32,22 @@ pub(crate) fn condition(
         .reduce(|a, b| quote!((#a)&&(#b)))
         .unwrap_or_else(|| quote!(true))
 }
-pub(crate) fn values<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
-    node: &CWireNode<Chain, Branch>,
+pub(crate) fn values<
+    Chain: group::ChainMetadata,
+    Branch: group::BranchMetadata,
+    Annotation: group::AnnotationMetadata,
+    Container: group::ContainerMetadata,
+>(
+    node: &CWireNode<Chain, Branch, Annotation, Container>,
 ) -> Result<Vec<(&Wire, Vec<Test>)>> {
-    fn visit<'a, Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
-        node: &'a CWireNode<Chain, Branch>,
+    fn visit<
+        'a,
+        Chain: group::ChainMetadata,
+        Branch: group::BranchMetadata,
+        Annotation: group::AnnotationMetadata,
+        Container: group::ContainerMetadata,
+    >(
+        node: &'a CWireNode<Chain, Branch, Annotation, Container>,
         path: &[Test],
         out: &mut Vec<(&'a Wire, Vec<Test>)>,
     ) -> Result<()> {
@@ -53,29 +64,24 @@ pub(crate) fn values<Chain: group::ChainMetadata, Branch: group::BranchMetadata>
         };
         match node {
             WireNode::Leaf(wires) => add(wires),
+            WireNode::Annotation { child, .. } => visit(child, path, out)?,
+            WireNode::Container { wires, .. } => add(wires),
             WireNode::Chain {
                 meta: encoding,
                 controls,
                 child,
             } => {
                 add(controls);
-                if !encoding.is_scope_boundary() {
-                    if let Some(optional) = encoding.optional() {
-                        let mut next = path.to_vec();
-                        let name = optional.discriminator().clone();
-                        next.push(
-                            optional
-                                .niche()
-                                .map(|n| Test::Niche(name.clone(), n.clone()))
-                                .unwrap_or(Test::Arm(name, 1)),
-                        );
-                        visit(child, &next, out)?;
-                    } else if encoding.field().is_some() {
-                        visit(child, path, out)?;
-                    } else {
-                        return Err("unsupported selection chain metadata".into());
-                    }
-                }
+                let optional = encoding.optional().expect("optional chain");
+                let mut next = path.to_vec();
+                let name = optional.discriminator().clone();
+                next.push(
+                    optional
+                        .niche()
+                        .map(|n| Test::Niche(name.clone(), n.clone()))
+                        .unwrap_or(Test::Arm(name, 1)),
+                );
+                visit(child, &next, out)?;
             }
 
             WireNode::Branch {

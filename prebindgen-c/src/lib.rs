@@ -49,7 +49,8 @@ mod selected;
 mod sequence;
 use group::validate_layout;
 pub use group::{
-    CInputWireBranch, CInputWireChain, COptional, COutputWireBranch, COutputWireChain,
+    CInputWireAnnotation, CInputWireBranch, CInputWireChain, CInputWireContainer, COptional,
+    COutputWireAnnotation, COutputWireBranch, COutputWireChain, COutputWireContainer,
 };
 use prebindgen_conversions::Wire as GenericWire;
 use prebindgen_declarations::{
@@ -69,16 +70,39 @@ pub use emission::CContext;
 /// let output: COutputWireNode = prebindgen_conversions::WireNode::Leaf(vec![]);
 /// accept_input(output);
 /// ```
-pub type CInputWireNode =
-    prebindgen_conversions::WireNode<CWire, CInputWireChain, CInputWireBranch>;
-type CInputPlan<WireType> =
-    prebindgen_conversions::InputPlan<WireType, CContext, CInputWireChain, CInputWireBranch>;
+pub type CInputWireNode = prebindgen_conversions::WireNode<
+    CWire,
+    CInputWireChain,
+    CInputWireBranch,
+    CInputWireAnnotation,
+    CInputWireContainer,
+>;
+type CInputPlan<WireType> = prebindgen_conversions::InputPlan<
+    WireType,
+    CContext,
+    CInputWireChain,
+    CInputWireBranch,
+    CInputWireAnnotation,
+    CInputWireContainer,
+>;
 /// Prepared output tree exposed by output converters.
-pub type COutputWireNode =
-    prebindgen_conversions::WireNode<CWire, COutputWireChain, COutputWireBranch>;
-type COutputPlan<WireType> =
-    prebindgen_conversions::OutputPlan<WireType, CContext, COutputWireChain, COutputWireBranch>;
-type CWireNode<Chain, Branch> = prebindgen_conversions::WireNode<CWire, Chain, Branch>;
+pub type COutputWireNode = prebindgen_conversions::WireNode<
+    CWire,
+    COutputWireChain,
+    COutputWireBranch,
+    COutputWireAnnotation,
+    COutputWireContainer,
+>;
+type COutputPlan<WireType> = prebindgen_conversions::OutputPlan<
+    WireType,
+    CContext,
+    COutputWireChain,
+    COutputWireBranch,
+    COutputWireAnnotation,
+    COutputWireContainer,
+>;
+type CWireNode<Chain, Branch, Annotation, Container> =
+    prebindgen_conversions::WireNode<CWire, Chain, Branch, Annotation, Container>;
 /// Prepared C parameter conversion.
 pub type CInputConverter = CInputPlan<CWire>;
 /// Prepared C result conversion.
@@ -240,7 +264,7 @@ impl Codec for CCodec {
     fn sequence_input(
         &self,
         request: SequenceInputRequest<'_, Self>,
-    ) -> Result<prebindgen_declarations::SequenceInput<CWire, CInputWireChain>> {
+    ) -> Result<prebindgen_declarations::SequenceInput<CWire, CInputWireContainer>> {
         if !request.view.is_owned() && takes_input_owners(request.element) {
             return Err("borrowed collection inputs cannot consume elements; declare an element constructor using borrowed inputs, or use Vec<T>".into());
         }
@@ -263,7 +287,7 @@ impl Codec for CCodec {
     fn sequence_output(
         &self,
         request: SequenceOutputRequest<'_, Self>,
-    ) -> Result<prebindgen_declarations::SequenceOutput<CWire, COutputWireChain>> {
+    ) -> Result<prebindgen_declarations::SequenceOutput<CWire, COutputWireContainer>> {
         let SequenceOutputRequest {
             flat: _,
             extra: _,
@@ -813,11 +837,11 @@ impl Codec for CCodec {
             GroupKind::Fields => COutputWireBranch::Fields,
         })
     }
-    fn input_field(&self, name: &syn::Ident) -> Result<CInputWireChain> {
-        Ok(CInputWireChain::Field(name.clone()))
+    fn input_field(&self, name: &syn::Ident) -> Result<CInputWireAnnotation> {
+        Ok(CInputWireAnnotation::Field(name.clone()))
     }
-    fn output_field(&self, name: &syn::Ident) -> Result<COutputWireChain> {
-        Ok(COutputWireChain::Field(name.clone()))
+    fn output_field(&self, name: &syn::Ident) -> Result<COutputWireAnnotation> {
+        Ok(COutputWireAnnotation::Field(name.clone()))
     }
     fn input_optional(
         &self,
@@ -1865,12 +1889,16 @@ where
         Wire = CWire,
         Chain = CInputWireChain,
         Branch = CInputWireBranch,
+        Annotation = CInputWireAnnotation,
+        Container = CInputWireContainer,
         SlotFragment<'a> = prebindgen_conversions::InputFragment<'a, CContext>,
     >,
     O: for<'a> prebindgen_conversions::OutputConversion<
         Wire = CWire,
         Chain = COutputWireChain,
         Branch = COutputWireBranch,
+        Annotation = COutputWireAnnotation,
+        Container = COutputWireContainer,
         SlotFragment<'a> = prebindgen_conversions::OutputFragment<'a, CContext>,
     >,
 {
@@ -2606,7 +2634,13 @@ fn validate_return_loans<I, O, M>(
     output: &COutputWireNode,
 ) -> Result<()>
 where
-    I: InputConversion<Wire = CWire, Chain = CInputWireChain, Branch = CInputWireBranch>,
+    I: InputConversion<
+        Wire = CWire,
+        Chain = CInputWireChain,
+        Branch = CInputWireBranch,
+        Annotation = CInputWireAnnotation,
+        Container = CInputWireContainer,
+    >,
 {
     if !borrowed::has_loans(output) {
         return Ok(());
@@ -2705,15 +2739,25 @@ where
     Ok(())
 }
 
-fn describe_groups<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
-    layout: &CWireNode<Chain, Branch>,
+fn describe_groups<
+    Chain: group::ChainMetadata,
+    Branch: group::BranchMetadata,
+    Annotation: group::AnnotationMetadata,
+    Container: group::ContainerMetadata,
+>(
+    layout: &CWireNode<Chain, Branch, Annotation, Container>,
     wires: &[&Wire],
     output: bool,
     next_label: &mut usize,
     root: &str,
 ) -> String {
-    fn visit<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
-        node: &CWireNode<Chain, Branch>,
+    fn visit<
+        Chain: group::ChainMetadata,
+        Branch: group::BranchMetadata,
+        Annotation: group::AnnotationMetadata,
+        Container: group::ContainerMetadata,
+    >(
+        node: &CWireNode<Chain, Branch, Annotation, Container>,
         names: &std::collections::BTreeMap<String, String>,
         parents: &mut Vec<String>,
         out: &mut String,
@@ -2722,7 +2766,7 @@ fn describe_groups<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
     ) {
         if matches!(
             node,
-            prebindgen_conversions::WireNode::Chain {
+            prebindgen_conversions::WireNode::Container {
                 meta,
                 ..
             } if meta.tagged().is_some()
@@ -2741,8 +2785,8 @@ fn describe_groups<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
                 }
             }
         }
-        if let prebindgen_conversions::WireNode::Chain {
-            controls,
+        if let prebindgen_conversions::WireNode::Container {
+            wires: controls,
             child: element,
             meta: encoding,
             ..
@@ -2798,7 +2842,7 @@ fn describe_groups<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
                 parents.pop();
             }
         }
-        if let prebindgen_conversions::WireNode::Chain {
+        if let prebindgen_conversions::WireNode::Annotation {
             meta: metadata,
             child,
             ..
@@ -4270,6 +4314,8 @@ mod generation_tests {
             type Wire = CWire;
             type Chain = COutputWireChain;
             type Branch = COutputWireBranch;
+            type Annotation = COutputWireAnnotation;
+            type Container = COutputWireContainer;
             type SlotFragment<'a> = prebindgen_conversions::OutputFragment<'a, CContext>;
 
             fn code_fragment_slot(

@@ -146,8 +146,13 @@ fn field_name(property: &syn::Ident, index: usize, count: usize) -> Result<syn::
     })
 }
 #[allow(clippy::type_complexity)]
-fn arm_fields<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
-    node: &CWireNode<Chain, Branch>,
+fn arm_fields<
+    Chain: group::ChainMetadata,
+    Branch: group::BranchMetadata,
+    Annotation: group::AnnotationMetadata,
+    Container: group::ContainerMetadata,
+>(
+    node: &CWireNode<Chain, Branch, Annotation, Container>,
 ) -> Result<Vec<(&syn::Ident, Vec<&Wire>)>> {
     let WireNode::Branch { children, .. } = node else {
         return Err("enum payload requires field groups".into());
@@ -155,7 +160,7 @@ fn arm_fields<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
     children
         .iter()
         .map(|node| {
-            let WireNode::Chain { meta, .. } = node else {
+            let WireNode::Annotation { meta, .. } = node else {
                 return Err("enum payload requires named source fields".into());
             };
             let Some(name) = meta.field() else {
@@ -168,11 +173,13 @@ fn arm_fields<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
 pub(crate) fn shape<
     Chain: group::ChainMetadata,
     Branch: group::BranchMetadata,
+    Annotation: group::AnnotationMetadata,
+    Container: group::ContainerMetadata,
     S: prebindgen_flat::Schema<Module = CModule, Type = CType>,
 >(
     flat: &Flat<S>,
     ty: &syn::Type,
-    node: &CWireNode<Chain, Branch>,
+    node: &CWireNode<Chain, Branch, Annotation, Container>,
 ) -> Result<(Rc<CTagged>, prebindgen_reprc::TaggedUnion)> {
     let name = flat
         .type_info(ty)?
@@ -214,7 +221,14 @@ pub(crate) fn shape<
     ))
 }
 
-fn stored_wires<Chain: group::ChainMetadata, Branch>(node: &CWireNode<Chain, Branch>) -> Vec<Wire> {
+fn stored_wires<
+    Chain: group::ChainMetadata,
+    Branch,
+    Annotation: group::AnnotationMetadata,
+    Container: group::ContainerMetadata,
+>(
+    node: &CWireNode<Chain, Branch, Annotation, Container>,
+) -> Vec<Wire> {
     group::values(node)
         .map(|w| {
             let mut w = w.clone();
@@ -231,8 +245,13 @@ fn stored_wires<Chain: group::ChainMetadata, Branch>(node: &CWireNode<Chain, Bra
         })
         .collect()
 }
-fn slots<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
-    node: &CWireNode<Chain, Branch>,
+fn slots<
+    Chain: group::ChainMetadata,
+    Branch: group::BranchMetadata,
+    Annotation: group::AnnotationMetadata,
+    Container: group::ContainerMetadata,
+>(
+    node: &CWireNode<Chain, Branch, Annotation, Container>,
     layout: &prebindgen_reprc::TaggedUnion,
     base: TokenStream,
 ) -> Result<BTreeMap<String, TokenStream>> {
@@ -337,8 +356,8 @@ pub(crate) fn input(
     let mutability = by_value.then(|| quote!(#[allow(unused_mut)] let mut #wire=#wire;));
     let code = plan.code;
     plan.code = quote!({#mutability #bind #code});
-    plan.node = WireNode::Chain {
-        controls: vec![SourceWire {
+    plan.node = WireNode::Container {
+        wires: vec![SourceWire {
             name: wire,
             kind: CWire::Tagged {
                 value: value.clone(),
@@ -346,7 +365,7 @@ pub(crate) fn input(
             },
         }],
         child: Box::new(plan.node),
-        meta: CInputWireChain::Tagged(value),
+        meta: CInputWireContainer::Tagged(value),
     };
     Ok(plan)
 }
@@ -401,8 +420,8 @@ pub(crate) fn output(
     let packed = format_ident!("{wire}_carrier_value");
     plan.statements.extend(quote!(let #packed=match #tag {#(#cases,)*_=>unsafe{::core::hint::unreachable_unchecked()}};));
     plan.values = vec![(wire.clone(), quote!(#packed))];
-    plan.outcomes.success = WireNode::Chain {
-        controls: vec![SourceWire {
+    plan.outcomes.success = WireNode::Container {
+        wires: vec![SourceWire {
             name: wire,
             kind: CWire::Tagged {
                 value: value.clone(),
@@ -410,7 +429,7 @@ pub(crate) fn output(
             },
         }],
         child: Box::new(plan.outcomes.success),
-        meta: COutputWireChain::Tagged(value),
+        meta: COutputWireContainer::Tagged(value),
     };
     Ok(plan)
 }
@@ -419,10 +438,12 @@ pub(crate) fn output(
 pub(crate) fn emit<
     Chain: group::ChainMetadata,
     Branch: group::BranchMetadata,
+    Annotation: group::AnnotationMetadata,
+    Container: group::ContainerMetadata,
     S: prebindgen_flat::Schema<Module = CModule, Type = CType>,
 >(
     flat: &Flat<S>,
-    node: &CWireNode<Chain, Branch>,
+    node: &CWireNode<Chain, Branch, Annotation, Container>,
     seen: &mut BTreeMap<String, String>,
     symbols: &mut std::collections::BTreeSet<String>,
     tokens: &mut TokenStream,
@@ -474,7 +495,10 @@ pub(crate) fn emit<
                 emit(flat, child, seen, symbols, tokens, header)?;
             }
         }
-        WireNode::Chain { child, meta, .. } => {
+        WireNode::Annotation { child, .. } | WireNode::Chain { child, .. } => {
+            emit(flat, child, seen, symbols, tokens, header)?
+        }
+        WireNode::Container { child, meta, .. } => {
             emit(flat, child, seen, symbols, tokens, header)?;
             let Some(value) = meta.tagged() else {
                 return Ok(());

@@ -825,15 +825,17 @@ fn returned_handle_cleanup(
             );
             format!("({value} as? {prefix}.NativeHandle)?.let {{ {local} -> returnedHandles.add({local}); {} }}\n",if owned{format!("returnedOwners.add({local})")}else{String::new()})
         }
-        WireNode::Chain {
-            meta: crate::JniInputWireChain::KList,
+        WireNode::Container {
+            meta: crate::JniInputWireContainer::KList,
             child,
             ..
         } => {
             let body = returned_handle_cleanup(child, &local, prefix, next, context)?;
             format!("({value} as? Iterable<*>)?.forEach {{ {local} -> {body} }}\n")
         }
-        WireNode::Chain { child, .. } => {
+        WireNode::Annotation { child, .. }
+        | WireNode::Chain { child, .. }
+        | WireNode::Container { child, .. } => {
             returned_handle_cleanup(child, value, prefix, next, context)?
         }
         WireNode::Branch {
@@ -917,7 +919,7 @@ fn receive_native_return_owners(
     types: &crate::metadata::JniTypes,
 ) -> Result<TokenStream> {
     Ok(match node {
-        WireNode::Chain { meta: JniInputWireChain::BulkFrame, controls, child } => crate::bulk::cleanup_cached(controls, child, types)?,
+        WireNode::Container { meta: JniInputWireContainer::BulkFrame, wires: controls, child } => crate::bulk::cleanup_cached(controls, child, types)?,
         WireNode::Leaf(fields) => fields.iter().filter_map(|field| {
             if let JniWire::RHandle { handle, .. } = &field.kind {
                 if handle.access == Access::Move {
@@ -933,11 +935,11 @@ fn receive_native_return_owners(
             let present=optional.is_present(child)?;
             quote!(if #present { #scan })
         }
-        WireNode::Chain { meta: JniInputWireChain::KList, .. } => {
+        WireNode::Container { meta: JniInputWireContainer::KList, .. } => {
             if kotlin::has_handles(node, true) { return Err("callback ownership cleanup requires buffered ordinary rows or an enclosing bulk frame".into()); }
             quote!()
         }
-        WireNode::Chain { meta: JniInputWireChain::RField(_) | JniInputWireChain::RParam(_), child, .. } => receive_native_return_owners(child, types)?,
+        WireNode::Annotation { meta: JniInputWireAnnotation::RField(_) | JniInputWireAnnotation::RParam(_), child, .. } => receive_native_return_owners(child, types)?,
         WireNode::Branch { meta: JniInputWireBranch::RChoices | JniInputWireBranch::KSealed(_) | JniInputWireBranch::KEnumParams { .. }, controls, children } => {
             let selector=&controls[0].name;
             let scans=children.iter().enumerate().map(|(i,child)| {

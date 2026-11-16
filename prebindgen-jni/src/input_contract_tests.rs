@@ -18,6 +18,8 @@ impl Conversion for ExternalInput {
     type Wire = JniWire;
     type Chain = JniInputWireChain;
     type Branch = JniInputWireBranch;
+    type Annotation = JniInputWireAnnotation;
+    type Container = JniInputWireContainer;
     type SlotFragment<'a> = InputFragment<'a, JniContext>;
 
     fn code_fragment_slot(

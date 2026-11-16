@@ -151,8 +151,8 @@ pub(crate) fn input_sequence(
     ))
 }
 /// A loan anywhere in a packet, including fields inside converted rows.
-pub(crate) fn has_loans<Chain, Branch: group::BranchMetadata>(
-    node: &CWireNode<Chain, Branch>,
+pub(crate) fn has_loans<Chain, Branch, Annotation, Container>(
+    node: &CWireNode<Chain, Branch, Annotation, Container>,
 ) -> bool {
     prebindgen_conversions::wire_definitions(std::iter::once(node)).any(|wire| {
         matches!(
@@ -167,8 +167,13 @@ pub(crate) fn has_loans<Chain, Branch: group::BranchMetadata>(
         ) || matches!(&wire.kind, CWire::Pointer {pointer,..} if pointer.access != Access::Move)
     })
 }
-pub(crate) fn collect<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
-    node: &CWireNode<Chain, Branch>,
+pub(crate) fn collect<
+    Chain: group::ChainMetadata,
+    Branch: group::BranchMetadata,
+    Annotation: group::AnnotationMetadata,
+    Container: group::ContainerMetadata,
+>(
+    node: &CWireNode<Chain, Branch, Annotation, Container>,
     out: &mut BTreeMap<String, Primitive>,
 ) {
     for wire in prebindgen_conversions::wire_definitions(std::iter::once(node)) {
@@ -484,8 +489,8 @@ mod tests {
     }
     #[test]
     fn loans_inside_rows_are_not_hidden_by_the_owning_container() {
-        let node: COutputWireNode = prebindgen_conversions::WireNode::Chain {
-            controls: vec![Wire {
+        let node: COutputWireNode = prebindgen_conversions::WireNode::Container {
+            wires: vec![Wire {
                 name: syn::parse_quote!(rows),
                 kind: CWire::Rows,
             }],
@@ -495,7 +500,7 @@ mod tests {
                     element: Primitive::I64,
                 },
             }])),
-            meta: COutputWireChain::Sequence(CSequence::Buffered),
+            meta: COutputWireContainer::Sequence(CSequence::Buffered),
         };
         assert!(has_loans(&node));
     }

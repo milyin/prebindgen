@@ -23,7 +23,9 @@ pub(crate) fn key(handle: &BoxedWire) -> (String, u8) {
 }
 /// Local groups in one prepared carrier. The same order is used by its writer,
 /// patch walk, and the enclosing Kotlin call; no runtime type lookup is needed.
-pub(crate) fn kinds<Chain, Branch>(node: &JniWireNode<Chain, Branch>) -> Vec<BoxedWire> {
+pub(crate) fn kinds<Chain, Branch, Annotation, Container>(
+    node: &JniWireNode<Chain, Branch, Annotation, Container>,
+) -> Vec<BoxedWire> {
     let mut kinds = BTreeMap::new();
     for wire in prebindgen_conversions::wire_definitions(std::iter::once(node)) {
         if let JniWire::RHandle { handle, .. } = &wire.kind {
@@ -54,31 +56,18 @@ pub(crate) fn carrier_inputs(node: &JniInputWireNode, state: &str) -> Vec<Kotlin
         })
         .collect()
 }
-fn controlled_child<'a>(
+fn container_child<'a>(
     node: &'a JniInputWireNode,
     name: &syn::Ident,
 ) -> Option<&'a JniInputWireNode> {
     match node {
-        WireNode::Chain {
-            controls, child, ..
-        } => {
-            if controls.iter().any(|w| w.name == *name) {
-                Some(child)
-            } else if matches!(
-                node,
-                WireNode::Chain {
-                    meta: JniInputWireChain::KList | JniInputWireChain::BulkFrame,
-                    ..
-                }
-            ) {
-                None // Child rows are a different name scope.
-            } else {
-                controlled_child(child, name)
-            }
+        WireNode::Annotation { child, .. } | WireNode::Chain { child, .. } => {
+            container_child(child, name)
         }
-        WireNode::Branch { children, .. } => {
-            children.iter().find_map(|n| controlled_child(n, name))
+        WireNode::Container { wires, child, .. } => {
+            wires.iter().any(|w| w.name == *name).then_some(child)
         }
+        WireNode::Branch { children, .. } => children.iter().find_map(|n| container_child(n, name)),
         _ => None,
     }
 }
@@ -95,7 +84,7 @@ pub(crate) fn column_groups(node: &JniInputWireNode) -> Result<String> {
                 wire.kind,
                 JniWire::KRowArray { .. } | JniWire::KBulkBytes { .. }
             ) {
-                let child = controlled_child(node, &wire.name).ok_or_else(|| {
+                let child = container_child(node, &wire.name).ok_or_else(|| {
                     format!(
                         "missing prepared child for handle-group column `{}`",
                         wire.name
@@ -129,13 +118,13 @@ pub(crate) fn column_groups(node: &JniInputWireNode) -> Result<String> {
 pub(crate) fn require_preflight<I: KotlinInputConversion>(input: &I) -> Result<()> {
     fn prepared(node: &JniInputWireNode) -> bool {
         match node {
-            WireNode::Chain {
-                meta: JniInputWireChain::BulkFrame,
+            WireNode::Container {
+                meta: JniInputWireContainer::BulkFrame,
                 ..
             } => true,
-            WireNode::Chain {
-                meta: JniInputWireChain::KList,
-                controls,
+            WireNode::Container {
+                meta: JniInputWireContainer::KList,
+                wires: controls,
                 ..
             } if controls
                 .iter()
@@ -143,7 +132,9 @@ pub(crate) fn require_preflight<I: KotlinInputConversion>(input: &I) -> Result<(
             {
                 false
             }
-            WireNode::Chain { child, .. } => prepared(child),
+            WireNode::Annotation { child, .. }
+            | WireNode::Chain { child, .. }
+            | WireNode::Container { child, .. } => prepared(child),
             WireNode::Branch { children, .. } => children.iter().all(prepared),
             WireNode::Leaf(_) => true,
         }
@@ -159,8 +150,8 @@ pub(crate) fn require_preflight<I: KotlinInputConversion>(input: &I) -> Result<(
 fn complete_handle_inputs(node: &JniInputWireNode, input: &mut KotlinInput) -> Result<()> {
     fn sources(node: &JniInputWireNode, expected: &mut BTreeMap<(String, u8, bool), usize>) {
         match node {
-            WireNode::Chain {
-                meta: JniInputWireChain::BulkFrame | JniInputWireChain::KList,
+            WireNode::Container {
+                meta: JniInputWireContainer::BulkFrame | JniInputWireContainer::KList,
                 child,
                 ..
             } => {
@@ -169,7 +160,9 @@ fn complete_handle_inputs(node: &JniInputWireNode, input: &mut KotlinInput) -> R
                     *expected.entry((ty, access, true)).or_default() += 1;
                 }
             }
-            WireNode::Chain { child, .. } => sources(child, expected),
+            WireNode::Annotation { child, .. } | WireNode::Chain { child, .. } => {
+                sources(child, expected)
+            }
             WireNode::Branch { children, .. } => {
                 for child in children {
                     sources(child, expected);
@@ -412,9 +405,9 @@ mod tests {
             meta: JniInputWireBranch::KValues,
             children: vec![
                 WireNode::Leaf(vec![handle("first", syn::parse_quote!(A))]),
-                WireNode::Chain {
-                    controls: vec![rows()],
-                    meta: JniInputWireChain::KList,
+                WireNode::Container {
+                    wires: vec![rows()],
+                    meta: JniInputWireContainer::KList,
                     child: Box::new(WireNode::Leaf(vec![
                         handle("a", syn::parse_quote!(A)),
                         handle("b", syn::parse_quote!(B)),

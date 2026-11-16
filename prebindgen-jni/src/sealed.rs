@@ -170,11 +170,22 @@ pub(crate) fn encoding<
 // Source field identities and order come from the canonical variant. Occurrence
 // nodes only describe conversions of those fields.
 #[allow(clippy::type_complexity)] // Borrow each canonical field with its directional conversion subtree.
-pub(crate) fn variant_fields<'a, Chain: group::ChainMetadata, Branch>(
-    node: &'a JniWireNode<Chain, Branch>,
+pub(crate) fn variant_fields<
+    'a,
+    Chain: group::ChainMetadata,
+    Branch,
+    Annotation: group::AnnotationMetadata,
+    Container: group::ContainerMetadata,
+>(
+    node: &'a JniWireNode<Chain, Branch, Annotation, Container>,
     source: &'a PayloadVariant<(), JniField>,
 ) -> Result<
-    impl Iterator<Item = Result<(&'a PayloadField<JniField>, &'a JniWireNode<Chain, Branch>)>>,
+    impl Iterator<
+        Item = Result<(
+            &'a PayloadField<JniField>,
+            &'a JniWireNode<Chain, Branch, Annotation, Container>,
+        )>,
+    >,
 > {
     let WireNode::Branch { children, .. } = node else {
         return Err("enum arm must group fields".into());
@@ -528,8 +539,8 @@ fn expanded_names(
     {
         return Ok(kotlin::output_kotlin_scoped(node, context, owners)?.result_names);
     }
-    if let WireNode::Chain {
-        meta: JniOutputWireChain::RField(field),
+    if let WireNode::Annotation {
+        meta: JniOutputWireAnnotation::RField(field),
         child,
         ..
     } = node
@@ -728,8 +739,13 @@ pub(crate) fn emit_tags<I: KotlinInputConversion, O: KotlinOutputConversion>(
     native: &mut String,
     files: &mut BTreeMap<String, String>,
 ) -> Result<()> {
-    fn visit<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
-        node: &JniWireNode<Chain, Branch>,
+    fn visit<
+        Chain: group::ChainMetadata,
+        Branch: group::BranchMetadata,
+        Annotation: group::AnnotationMetadata,
+        Container: group::ContainerMetadata,
+    >(
+        node: &JniWireNode<Chain, Branch, Annotation, Container>,
         package: &str,
         by_package: &mut BTreeMap<String, BTreeSet<TypeRef>>,
     ) -> Result<()> {
@@ -750,7 +766,9 @@ pub(crate) fn emit_tags<I: KotlinInputConversion, O: KotlinOutputConversion>(
                     }
                 }
             }
-            WireNode::Chain { child, .. } => visit(child, package, by_package)?,
+            WireNode::Annotation { child, .. }
+            | WireNode::Chain { child, .. }
+            | WireNode::Container { child, .. } => visit(child, package, by_package)?,
             WireNode::Branch { meta, children, .. } => {
                 if let Some(e) = meta.r_enum() {
                     by_package

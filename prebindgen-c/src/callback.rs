@@ -23,8 +23,13 @@ pub(crate) struct Argument {
 }
 
 // Stable wire semantics, without spans, generated local names or recipe Debug.
-fn schema<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
-    node: &CWireNode<Chain, Branch>,
+fn schema<
+    Chain: group::ChainMetadata,
+    Branch: group::BranchMetadata,
+    Annotation: group::AnnotationMetadata,
+    Container: group::ContainerMetadata,
+>(
+    node: &CWireNode<Chain, Branch, Annotation, Container>,
     out: &mut String,
 ) {
     fn access(value: Access) -> &'static str {
@@ -73,35 +78,36 @@ fn schema<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
             out.push('L');
             fields(wires, out);
         }
-        WireNode::Chain {
-            controls,
-            child,
-            meta,
-        } => {
-            if meta.field().is_some() {
-                // Field annotations previously used a one-child group. Keep
-                // the structural key stable across the arity correction.
-                out.push_str("G[");
-                fields(controls, out);
-                schema(child, out);
-                out.push(']');
-                return;
-            }
+        WireNode::Annotation { child, .. } => {
+            out.push_str("G[");
+            schema(child, out);
+            out.push(']');
+        }
+        WireNode::Container { wires, child, meta } => {
             out.push('(');
             if meta.sequence().is_some() {
                 out.push('S');
             } else if let Some(value) = meta.tagged() {
                 out.push('E');
                 out.push_str(&value.name);
-            } else if let Some(optional) = meta.optional() {
-                out.push('O');
-                match optional.niche() {
-                    Some(CNiche::Null) => out.push('N'),
-                    Some(CNiche::Integer(n)) => out.push_str(&format!("I{n};")),
-                    None => out.push('F'),
-                }
             }
-
+            fields(wires, out);
+            schema(child, out);
+            out.push(')');
+        }
+        WireNode::Chain {
+            controls,
+            child,
+            meta,
+        } => {
+            out.push('(');
+            let optional = meta.optional().expect("optional chain");
+            out.push('O');
+            match optional.niche() {
+                Some(CNiche::Null) => out.push('N'),
+                Some(CNiche::Integer(n)) => out.push_str(&format!("I{n};")),
+                None => out.push('F'),
+            }
             fields(controls, out);
             schema(child, out);
             out.push(')');
@@ -537,7 +543,7 @@ fn receive_return_owners(
                 None
             })
             .collect(),
-        WireNode::Chain {meta:CInputWireChain::Tagged(value),controls,..}=>{
+        WireNode::Container {meta:CInputWireContainer::Tagged(value),wires: controls,..}=>{
             if !value.owned {TokenStream::new()}else{
                 let name=&controls[0].name;let native=&value.rust;let drop=&value.destructor;
                 let pointer=locations.get(&name.to_string()).cloned().unwrap_or_else(||quote!(::core::ptr::addr_of!(#name)));
@@ -561,9 +567,9 @@ fn receive_return_owners(
                 .unwrap_or_else(|| quote!(#name==1));
             quote!(if #present {#scan})
         }
-        WireNode::Chain {
-            meta: CInputWireChain::Sequence,
-            controls,
+        WireNode::Container {
+            meta: CInputWireContainer::Sequence,
+            wires: controls,
             child,
         } => {
             let carrier = &controls[0].name;
@@ -580,7 +586,7 @@ fn receive_return_owners(
             // The ordinal counts owned fields across rows and nested collections.
             quote!(#[allow(clippy::explicit_counter_loop)] for index in 0..#carrier.len {#(#reads)* #scan})
         }
-        WireNode::Chain { meta: CInputWireChain::Field(_), child, .. } => receive_return_owners(child, context, locations)?,
+        WireNode::Annotation { meta: CInputWireAnnotation::Field(_), child, .. } => receive_return_owners(child, context, locations)?,
         WireNode::Branch {
             meta: CInputWireBranch::Alternatives | CInputWireBranch::Enum(_),
             controls,

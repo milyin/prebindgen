@@ -44,8 +44,11 @@ fn prepared() -> (JniBindings, JniOutputPlan<JniWire>) {
 }
 fn prefer_jvm_rows(node: &mut JniOutputWireNode) {
     match node {
-        WireNode::Chain { meta, child, .. } => {
-            if let JniOutputWireChain::KList(delivery) = meta {
+        WireNode::Annotation { child, .. } | WireNode::Chain { child, .. } => {
+            prefer_jvm_rows(child)
+        }
+        WireNode::Container { meta, child, .. } => {
+            if let JniOutputWireContainer::KList(delivery) = meta {
                 *delivery = JniRowEncoding::RowClass;
             }
             prefer_jvm_rows(child);
@@ -84,8 +87,8 @@ fn one_bulk_scope_controls_nested_rows_and_overrides_ordinary_jvm_preferences() 
 fn complete_boundaries_reject_native_rows_without_a_scope_and_object_rows_inside_it() {
     let (_, plan) = prepared();
     let mut root = plan.outcomes.success;
-    let WireNode::Chain {
-        meta: JniOutputWireChain::BulkFrame,
+    let WireNode::Container {
+        meta: JniOutputWireContainer::BulkFrame,
         child,
         ..
     } = &mut root
@@ -97,10 +100,10 @@ fn complete_boundaries_reject_native_rows_without_a_scope_and_object_rows_inside
     assert!(group::validate_layout(child)
         .unwrap_err()
         .contains("incompatible"));
-    let WireNode::Chain { controls, .. } = child.as_mut() else {
+    let WireNode::Container { wires, .. } = child.as_mut() else {
         panic!()
     };
-    controls[0].kind = JniWire::KRowArray {
+    wires[0].kind = JniWire::KRowArray {
         condition: "true".into(),
         null_niche_available: true,
     };
@@ -155,7 +158,7 @@ fn native_row_compatibility_distinguishes_enum_unions_from_selector_fields() {
         }])
     };
     let rows = |meta: JniInputWireBranch| {
-        let element = WireNode::Branch {
+        let element: JniInputWireNode = WireNode::Branch {
             meta,
             controls: vec![prebindgen_conversions::Wire {
                 name: syn::parse_quote!(tag),
@@ -165,17 +168,17 @@ fn native_row_compatibility_distinguishes_enum_unions_from_selector_fields() {
         };
         // Derive each layout independently. Neither wire tree retains one.
         let layout = bulk::record(&element, &model.types).unwrap();
-        let node = WireNode::Chain {
-            meta: JniInputWireChain::BulkFrame,
-            controls: vec![prebindgen_conversions::Wire {
+        let node = WireNode::Container {
+            meta: JniInputWireContainer::BulkFrame,
+            wires: vec![prebindgen_conversions::Wire {
                 name: syn::parse_quote!(frame),
                 kind: JniWire::KBulkBytes {
                     null_niche_available: false,
                 },
             }],
-            child: Box::new(WireNode::Chain {
-                meta: JniInputWireChain::KList,
-                controls: vec![prebindgen_conversions::Wire {
+            child: Box::new(WireNode::Container {
+                meta: JniInputWireContainer::KList,
+                wires: vec![prebindgen_conversions::Wire {
                     name: syn::parse_quote!(rows),
                     kind: JniWire::FrameRowRange {
                         condition: "true".into(),

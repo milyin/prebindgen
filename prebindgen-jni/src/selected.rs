@@ -40,8 +40,13 @@ pub(crate) struct Selection {
     kinds: Vec<JniWire>,
 }
 impl Selection {
-    pub(crate) fn new<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
-        node: &JniWireNode<Chain, Branch>,
+    pub(crate) fn new<
+        Chain: group::ChainMetadata,
+        Branch: group::BranchMetadata,
+        Annotation: group::AnnotationMetadata,
+        Container: group::ContainerMetadata,
+    >(
+        node: &JniWireNode<Chain, Branch, Annotation, Container>,
     ) -> Result<Self> {
         let wires = group::row_fields(node).collect::<Vec<_>>();
         let indices = wires
@@ -50,8 +55,13 @@ impl Selection {
             .map(|(i, w)| (w.name.to_string(), i))
             .collect::<BTreeMap<_, _>>();
         let mut tests = vec![vec![]; wires.len()];
-        fn visit<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
-            node: &JniWireNode<Chain, Branch>,
+        fn visit<
+            Chain: group::ChainMetadata,
+            Branch: group::BranchMetadata,
+            Annotation: group::AnnotationMetadata,
+            Container: group::ContainerMetadata,
+        >(
+            node: &JniWireNode<Chain, Branch, Annotation, Container>,
             path: &[Test],
             indices: &BTreeMap<String, usize>,
             out: &mut [Vec<Test>],
@@ -63,29 +73,21 @@ impl Selection {
             };
             match node {
                 WireNode::Leaf(wires) => set(wires, out),
+                WireNode::Annotation { child, .. } => visit(child, path, indices, out)?,
+                WireNode::Container { wires, .. } => set(wires, out),
                 WireNode::Chain {
                     meta: encoding,
                     controls,
                     child,
                 } => {
                     set(controls, out);
-                    if !encoding.is_scope_boundary() {
-                        if let Some(optional) = encoding.optional() {
-                            let mut next = path.to_vec();
-                            let donor = indices[&optional.discriminator().to_string()];
-                            next.push(Test::Present(donor, optional.niche().cloned()));
-                            visit(child, &next, indices, out)?;
-                            // The discriminator must be readable before testing presence.
-                            out[donor].retain(|t| !matches!(t,Test::Present(i,_) if *i==donor));
-                        } else if encoding.field().is_some()
-                            || encoding.argument_name().is_some()
-                            || encoding.output_name().is_some()
-                        {
-                            visit(child, path, indices, out)?;
-                        } else {
-                            return Err("unsupported selection chain metadata".into());
-                        }
-                    }
+                    let optional = encoding.optional().expect("optional chain");
+                    let mut next = path.to_vec();
+                    let donor = indices[&optional.discriminator().to_string()];
+                    next.push(Test::Present(donor, optional.niche().cloned()));
+                    visit(child, &next, indices, out)?;
+                    // The discriminator must be readable before testing presence.
+                    out[donor].retain(|t| !matches!(t,Test::Present(i,_) if *i==donor));
                 }
 
                 WireNode::Branch {

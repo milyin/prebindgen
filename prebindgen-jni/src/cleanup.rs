@@ -48,23 +48,25 @@ struct CarrierChild<'a> {
 
 fn carrier_child<'a>(node: &'a JniOutputWireNode, name: &syn::Ident) -> Option<CarrierChild<'a>> {
     match node {
-        WireNode::Chain {
-            meta: JniOutputWireChain::KList(sequence),
-            controls,
+        WireNode::Container {
+            meta: JniOutputWireContainer::KList(sequence),
+            wires: controls,
             child,
         } if controls.iter().any(|w| &w.name == name) => Some(CarrierChild {
             node: child,
             row_encoding: Some(*sequence),
         }),
-        WireNode::Chain {
-            meta: JniOutputWireChain::BulkFrame,
-            controls,
+        WireNode::Container {
+            meta: JniOutputWireContainer::BulkFrame,
+            wires: controls,
             child,
         } if controls.iter().any(|w| &w.name == name) => Some(CarrierChild {
             node: child,
             row_encoding: None,
         }),
-        WireNode::Chain { child, .. } => carrier_child(child, name),
+        WireNode::Annotation { child, .. }
+        | WireNode::Chain { child, .. }
+        | WireNode::Container { child, .. } => carrier_child(child, name),
         WireNode::Branch { children, .. } => {
             children.iter().find_map(|child| carrier_child(child, name))
         }
@@ -401,13 +403,13 @@ impl Helpers {
     }
     fn visit(&mut self, node: &JniOutputWireNode, bulk: bool, types: &JniTypes) -> Result<()> {
         match node {
-            WireNode::Chain {
-                meta: JniOutputWireChain::BulkFrame,
+            WireNode::Container {
+                meta: JniOutputWireContainer::BulkFrame,
                 child,
                 ..
             } => self.visit(child, true, types)?,
-            WireNode::Chain {
-                meta: JniOutputWireChain::KList(sequence),
+            WireNode::Container {
+                meta: JniOutputWireContainer::KList(sequence),
                 child,
                 ..
             } => {
@@ -428,7 +430,9 @@ impl Helpers {
 
                 self.visit(child, bulk, types)?;
             }
-            WireNode::Chain { child, .. } => self.visit(child, bulk, types)?,
+            WireNode::Annotation { child, .. }
+            | WireNode::Chain { child, .. }
+            | WireNode::Container { child, .. } => self.visit(child, bulk, types)?,
             WireNode::Branch { children, .. } => {
                 for child in children {
                     self.visit(child, bulk, types)?;

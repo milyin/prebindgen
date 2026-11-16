@@ -3,36 +3,48 @@ use super::*;
 
 use prebindgen_conversions::WireNode;
 
-pub(crate) fn supported<Chain: group::ChainMetadata, Branch>(
-    element: &JniWireNode<Chain, Branch>,
+pub(crate) fn supported<
+    Chain: group::ChainMetadata,
+    Branch,
+    Annotation: group::AnnotationMetadata,
+    Container: group::ContainerMetadata,
+>(
+    element: &JniWireNode<Chain, Branch, Annotation, Container>,
 ) -> bool {
     group::row_fields(element)
         .map(|w| w.kind.parameter_slots())
         .sum::<usize>()
         <= 254
 }
-pub(crate) fn cache<Chain: group::ChainMetadata, Branch>(
-    element: &JniWireNode<Chain, Branch>,
+pub(crate) fn cache<
+    Chain: group::ChainMetadata,
+    Branch,
+    Annotation: group::AnnotationMetadata,
+    Container: group::ContainerMetadata,
+>(
+    element: &JniWireNode<Chain, Branch, Annotation, Container>,
 ) -> Result<syn::Ident> {
     let (name, _) = sequence_callback::capture(element, &mut names::Names::default())?;
     Ok(format_ident!("__pb_row_type_{name}"))
 }
 fn visit<'a>(node: &'a JniOutputWireNode, rows: &mut Vec<&'a JniOutputWireNode>, bulk: bool) {
     match node {
-        WireNode::Chain {
-            meta: JniOutputWireChain::BulkFrame,
+        WireNode::Container {
+            meta: JniOutputWireContainer::BulkFrame,
             child,
             ..
         } => visit(child, rows, true),
-        WireNode::Chain {
-            meta: JniOutputWireChain::KList(JniRowEncoding::RowClass),
+        WireNode::Container {
+            meta: JniOutputWireContainer::KList(JniRowEncoding::RowClass),
             child,
             ..
         } if !bulk => {
             rows.push(child);
             visit(child, rows, bulk);
         }
-        WireNode::Chain { child, .. } => visit(child, rows, bulk),
+        WireNode::Annotation { child, .. }
+        | WireNode::Chain { child, .. }
+        | WireNode::Container { child, .. } => visit(child, rows, bulk),
         WireNode::Branch { children, .. } => {
             for child in children {
                 visit(child, rows, bulk)

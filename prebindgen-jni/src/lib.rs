@@ -40,7 +40,9 @@ mod returns;
 mod scalar;
 pub use data::{DeclJniClass, DeclJniDataClass, JniField, JniInputKDataClass, JniOutputKDataClass};
 pub use group::{
-    JniInputWireBranch, JniInputWireChain, JniOutputWireBranch, JniOutputWireChain, JniPresence,
+    JniInputWireAnnotation, JniInputWireBranch, JniInputWireChain, JniInputWireContainer,
+    JniOutputWireAnnotation, JniOutputWireBranch, JniOutputWireChain, JniOutputWireContainer,
+    JniPresence,
 };
 use prebindgen_conversions::boxed::BoxedWire;
 use prebindgen_conversions::value::Value;
@@ -70,20 +72,39 @@ pub use emission::JniContext;
 /// let output: JniOutputWireNode = prebindgen_conversions::WireNode::Leaf(vec![]);
 /// accept_input(output);
 /// ```
-pub type JniInputWireNode =
-    prebindgen_conversions::WireNode<JniWire, JniInputWireChain, JniInputWireBranch>;
-type JniInputPlan<WireType> =
-    prebindgen_conversions::InputPlan<WireType, JniContext, JniInputWireChain, JniInputWireBranch>;
+pub type JniInputWireNode = prebindgen_conversions::WireNode<
+    JniWire,
+    JniInputWireChain,
+    JniInputWireBranch,
+    JniInputWireAnnotation,
+    JniInputWireContainer,
+>;
+type JniInputPlan<WireType> = prebindgen_conversions::InputPlan<
+    WireType,
+    JniContext,
+    JniInputWireChain,
+    JniInputWireBranch,
+    JniInputWireAnnotation,
+    JniInputWireContainer,
+>;
 /// Prepared output tree exposed by output converters.
-pub type JniOutputWireNode =
-    prebindgen_conversions::WireNode<JniWire, JniOutputWireChain, JniOutputWireBranch>;
+pub type JniOutputWireNode = prebindgen_conversions::WireNode<
+    JniWire,
+    JniOutputWireChain,
+    JniOutputWireBranch,
+    JniOutputWireAnnotation,
+    JniOutputWireContainer,
+>;
 type JniOutputPlan<WireType> = prebindgen_conversions::OutputPlan<
     WireType,
     JniContext,
     JniOutputWireChain,
     JniOutputWireBranch,
+    JniOutputWireAnnotation,
+    JniOutputWireContainer,
 >;
-type JniWireNode<Chain, Branch> = prebindgen_conversions::WireNode<JniWire, Chain, Branch>;
+type JniWireNode<Chain, Branch, Annotation, Container> =
+    prebindgen_conversions::WireNode<JniWire, Chain, Branch, Annotation, Container>;
 mod converters;
 pub use converters::{JniInputConverter, JniOutputConverter};
 mod kotlin;
@@ -914,9 +935,8 @@ impl Codec for JniCodec {
         segment: prebindgen_declarations::ComponentSegment,
     ) {
         if let prebindgen_declarations::ComponentSegment::Argument(name) = segment {
-            *node = prebindgen_conversions::WireNode::Chain {
-                controls: vec![],
-                meta: JniInputWireChain::RParam(name),
+            *node = prebindgen_conversions::WireNode::Annotation {
+                meta: JniInputWireAnnotation::RParam(name),
                 child: Box::new(std::mem::take(node)),
             };
         }
@@ -959,7 +979,7 @@ impl Codec for JniCodec {
     fn sequence_input(
         &self,
         request: SequenceInputRequest<'_, Self>,
-    ) -> Result<prebindgen_declarations::SequenceInput<JniWire, JniInputWireChain>> {
+    ) -> Result<prebindgen_declarations::SequenceInput<JniWire, JniInputWireContainer>> {
         if !request.view.is_owned() && takes_input_owners(request.element) {
             return Err("borrowed collection inputs cannot consume elements; declare an element constructor using borrowed inputs, or use Vec<T>".into());
         }
@@ -983,7 +1003,7 @@ impl Codec for JniCodec {
     fn sequence_output(
         &self,
         request: SequenceOutputRequest<'_, Self>,
-    ) -> Result<prebindgen_declarations::SequenceOutput<JniWire, JniOutputWireChain>> {
+    ) -> Result<prebindgen_declarations::SequenceOutput<JniWire, JniOutputWireContainer>> {
         let SequenceOutputRequest {
             flat,
             extra: _,
@@ -1365,15 +1385,15 @@ impl Codec for JniCodec {
             GroupKind::Fields => JniOutputWireBranch::RFields,
         })
     }
-    fn input_field(&self, name: &syn::Ident) -> Result<JniInputWireChain> {
-        Ok(JniInputWireChain::RField(name.clone()))
+    fn input_field(&self, name: &syn::Ident) -> Result<JniInputWireAnnotation> {
+        Ok(JniInputWireAnnotation::RField(name.clone()))
     }
-    fn output_field(&self, name: &syn::Ident) -> Result<JniOutputWireChain> {
-        Ok(JniOutputWireChain::RField(name.clone()))
+    fn output_field(&self, name: &syn::Ident) -> Result<JniOutputWireAnnotation> {
+        Ok(JniOutputWireAnnotation::RField(name.clone()))
     }
-    fn output_named(&self, name: &str) -> Result<JniOutputWireChain> {
+    fn output_named(&self, name: &str) -> Result<JniOutputWireAnnotation> {
         validate_name(name)?;
-        Ok(JniOutputWireChain::KParamName(name.into()))
+        Ok(JniOutputWireAnnotation::KParamName(name.into()))
     }
     fn input_optional(
         &self,

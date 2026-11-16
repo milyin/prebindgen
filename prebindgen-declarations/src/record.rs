@@ -31,8 +31,7 @@ pub fn record_input<C: Codec>(
         storage.extend(std::mem::take(&mut child.storage));
         let target = format_ident!("{var}_field_{index}");
         values.push(quote!(#name:#target));
-        child.node = WireNode::Chain {
-            controls: vec![],
+        child.node = WireNode::Annotation {
             meta: codec.input_field(&name)?,
             child: Box::new(std::mem::take(&mut child.node)),
         };
@@ -57,7 +56,7 @@ pub fn record_input<C: Codec>(
 }
 
 /// Observe a named Rust record through shared field references, evaluating it once.
-/// Field chain hooks preserve field boundaries as in [`record_input`].
+/// Field annotation hooks preserve field boundaries as in [`record_input`].
 ///
 /// The caller validates the field count and types against the source record.
 /// `fields` supplies source field names in declaration order. `convert` receives
@@ -104,8 +103,7 @@ pub fn record_output<C: Codec>(
             &mut child.outcomes.success,
             ComponentSegment::Field(name.to_string()),
         );
-        child.outcomes.success = WireNode::Chain {
-            controls: vec![],
+        child.outcomes.success = WireNode::Annotation {
             meta: codec.output_field(&name)?,
             child: Box::new(std::mem::take(&mut child.outcomes.success)),
         };
@@ -162,8 +160,7 @@ pub fn record_output_owned<C: Codec>(
             &mut child.outcomes.success,
             ComponentSegment::Field(name.to_string()),
         );
-        child.outcomes.success = WireNode::Chain {
-            controls: vec![],
+        child.outcomes.success = WireNode::Annotation {
             meta: codec.output_field(&name)?,
             child: Box::new(std::mem::take(&mut child.outcomes.success)),
         };

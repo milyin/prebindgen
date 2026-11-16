@@ -74,6 +74,8 @@ impl JniContext {
             crate::JniWire,
             crate::JniInputWireChain,
             crate::JniInputWireBranch,
+            crate::JniInputWireAnnotation,
+            crate::JniInputWireContainer,
         >,
     ) -> Result<TokenStream> {
         crate::bulk::cached_reads(validation, node)
@@ -88,6 +90,8 @@ impl JniContext {
                 crate::JniWire,
                 crate::JniOutputWireChain,
                 crate::JniOutputWireBranch,
+                crate::JniOutputWireAnnotation,
+                crate::JniOutputWireContainer,
             >,
         >,
         values: &[(syn::Ident, TokenStream)],

@@ -1,6 +1,6 @@
 //! Array row transport and Kotlin list conversion; schemas live in sequence nodes.
 use super::*;
-use crate::group::ChainMetadata;
+use crate::group::ContainerMetadata;
 use crate::kotlin::{input_kotlin, KotlinBinding, KotlinContext, KotlinInput, KotlinOutput};
 use prebindgen_declarations::{Condition, SequenceInput, SequenceOutput};
 
@@ -22,7 +22,7 @@ pub(crate) fn input(
     index: syn::Ident,
     element: &JniInputWireNode,
     active: &Condition,
-) -> Result<SequenceInput<JniWire, crate::JniInputWireChain>> {
+) -> Result<SequenceInput<JniWire, crate::JniInputWireContainer>> {
     let env = prebindgen_conversions::template_parameter("environment");
     let row = format_ident!("{wire}_row");
     let count = crate::group::row_fields(element).len();
@@ -44,14 +44,14 @@ pub(crate) fn input(
         ));
     }
     Ok(SequenceInput {
-        controls: vec![prebindgen_conversions::Wire {
+        wires: vec![prebindgen_conversions::Wire {
             name: wire.clone(),
             kind: JniWire::KRowArray {
                 condition: kotlin_condition(active),
                 null_niche_available: true,
             },
         }],
-        metadata: JniInputWireChain::KList,
+        metadata: JniInputWireContainer::KList,
         open: quote! {if #wire.is_null(){return Err("null collection".into());}let #length=#env.get_array_length(&#wire).map_err(|e|e.to_string())? as usize;},
         bind,
         validation_values,
@@ -65,7 +65,7 @@ pub(crate) fn output(
     element: &JniOutputWireNode,
     values: &[(syn::Ident, TokenStream)],
     types: &crate::metadata::JniTypes,
-) -> Result<SequenceOutput<JniWire, crate::JniOutputWireChain>> {
+) -> Result<SequenceOutput<JniWire, crate::JniOutputWireContainer>> {
     let env = prebindgen_conversions::template_parameter("environment");
     let row = format_ident!("{wire}_row");
     let count = crate::group::row_fields(element).len();
@@ -142,7 +142,7 @@ pub(crate) fn output(
     };
     let commit_element = prebindgen_conversions::template_parameter("commit_element");
     Ok(SequenceOutput {
-        controls: vec![prebindgen_conversions::Wire {
+        wires: vec![prebindgen_conversions::Wire {
             name: wire.clone(),
             kind: JniWire::KRowArray {
                 condition: ("true").into(),
@@ -151,7 +151,7 @@ pub(crate) fn output(
         }],
         commit_each: true,
         fallible: true,
-        metadata: JniOutputWireChain::KList(if typed {
+        metadata: JniOutputWireContainer::KList(if typed {
             JniRowEncoding::RowClass
         } else {
             JniRowEncoding::ObjectArray
@@ -341,7 +341,7 @@ pub(crate) fn return_sequence(
 ) -> Option<(
     &prebindgen_conversions::Wire<JniWire>,
     &JniOutputWireNode,
-    &JniOutputWireChain,
+    &JniOutputWireContainer,
 )> {
     outer_sequences(layout)
         .into_iter()
@@ -367,7 +367,7 @@ pub(crate) fn callback_delivery(node: &JniOutputWireNode) -> Result<bool> {
     let sequences = outer_sequences(node);
     if !sequences
         .iter()
-        .any(|(_, _, metadata)| matches!(metadata, JniOutputWireChain::KCallbackRows))
+        .any(|(_, _, metadata)| matches!(metadata, JniOutputWireContainer::KCallbackRows))
     {
         return Ok(false);
     }
@@ -406,8 +406,8 @@ pub(crate) fn callback_optional(node: &JniOutputWireNode) -> Result<bool> {
             }
             Ok(optional)
         }
-        WireNode::Chain {
-            meta: JniOutputWireChain::RField(_) | JniOutputWireChain::KParamName(_),
+        WireNode::Annotation {
+            meta: JniOutputWireAnnotation::RField(_) | JniOutputWireAnnotation::KParamName(_),
             child,
             ..
         } => callback_optional(child),
@@ -416,12 +416,19 @@ pub(crate) fn callback_optional(node: &JniOutputWireNode) -> Result<bool> {
 }
 
 /// Function sequence callbacks are not available in parameters, error channels or rows.
-pub(crate) fn validate_buffered<Chain: group::ChainMetadata, Branch>(
-    node: &JniWireNode<Chain, Branch>,
+pub(crate) fn validate_buffered<
+    Chain: group::ChainMetadata,
+    Branch,
+    Annotation: group::AnnotationMetadata,
+    Container: group::ContainerMetadata,
+>(
+    node: &JniWireNode<Chain, Branch, Annotation, Container>,
 ) -> Result<()> {
     match node {
         prebindgen_conversions::WireNode::Leaf(_) => {}
-        prebindgen_conversions::WireNode::Chain { meta, child, .. } => {
+        prebindgen_conversions::WireNode::Annotation { child, .. }
+        | prebindgen_conversions::WireNode::Chain { child, .. } => validate_buffered(child)?,
+        prebindgen_conversions::WireNode::Container { meta, child, .. } => {
             if meta.is_callback_rows() {
                 return Err(
                     "callback sequence is only supported as the function's successful return"
@@ -446,24 +453,26 @@ fn outer_sequences(
 ) -> Vec<(
     &JniOutputWireNode,
     &[prebindgen_conversions::Wire<JniWire>],
-    &JniOutputWireChain,
+    &JniOutputWireContainer,
 )> {
     fn visit<'a>(
         node: &'a JniOutputWireNode,
         out: &mut Vec<(
             &'a JniOutputWireNode,
             &'a [prebindgen_conversions::Wire<JniWire>],
-            &'a JniOutputWireChain,
+            &'a JniOutputWireContainer,
         )>,
     ) {
         use prebindgen_conversions::WireNode;
         match node {
-            WireNode::Chain {
+            WireNode::Container {
                 meta,
                 child,
-                controls,
+                wires: controls,
             } if meta.is_sequence() => out.push((child, controls, meta)),
-            WireNode::Chain { child, .. } => visit(child, out),
+            WireNode::Annotation { child, .. }
+            | WireNode::Chain { child, .. }
+            | WireNode::Container { child, .. } => visit(child, out),
             WireNode::Branch { children, .. } => {
                 for child in children {
                     visit(child, out)
@@ -488,20 +497,20 @@ mod delivery_tests {
         }])
     }
     fn sequence(
-        delivery: JniOutputWireChain,
+        delivery: JniOutputWireContainer,
         name: &str,
         element: JniOutputWireNode,
     ) -> JniOutputWireNode {
         let kind = match delivery {
-            JniOutputWireChain::KCallbackRows => JniWire::selector(),
-            JniOutputWireChain::KList(_) => JniWire::KRowArray {
+            JniOutputWireContainer::KCallbackRows => JniWire::selector(),
+            JniOutputWireContainer::KList(_) => JniWire::KRowArray {
                 condition: "true".into(),
                 null_niche_available: true,
             },
             _ => panic!("expected collection metadata"),
         };
-        WireNode::Chain {
-            controls: vec![prebindgen_conversions::Wire {
+        WireNode::Container {
+            wires: vec![prebindgen_conversions::Wire {
                 name: syn::parse_str(name).unwrap(),
                 kind,
             }],
@@ -511,20 +520,20 @@ mod delivery_tests {
     }
     #[test]
     fn delivery_is_explicit_and_callback_scope_is_checked() {
-        let visitor = sequence(JniOutputWireChain::KCallbackRows, "visitor", leaf());
+        let visitor = sequence(JniOutputWireContainer::KCallbackRows, "visitor", leaf());
         assert!(callback_delivery(&visitor).unwrap());
         assert!(validate_buffered(&visitor)
             .unwrap_err()
             .contains("successful return"));
         let packed = sequence(
-            JniOutputWireChain::KList(JniRowEncoding::ObjectArray),
+            JniOutputWireContainer::KList(JniRowEncoding::ObjectArray),
             "rows",
             leaf(),
         );
         assert!(!callback_delivery(&packed).unwrap());
         validate_buffered(&packed).unwrap();
         let nested = sequence(
-            JniOutputWireChain::KList(JniRowEncoding::ObjectArray),
+            JniOutputWireContainer::KList(JniRowEncoding::ObjectArray),
             "rows",
             visitor.clone(),
         );

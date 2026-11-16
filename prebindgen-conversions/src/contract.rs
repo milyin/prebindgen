@@ -165,6 +165,8 @@ pub fn rust_source(tokens: TokenStream) -> Result<String> {
 ///     type Wire = Carrier;
 ///     type Chain = ();
 ///     type Branch = ();
+///     type Annotation = ();
+///     type Container = ();
 ///     type SlotFragment<'a> = SlotRequest<'a>;
 ///     fn code_fragment_slot(&self, mode: SlotRequest<'_>, expected: &Type)
 ///         -> Result<TokenStream>
@@ -213,6 +215,10 @@ pub trait Conversion {
     type Chain;
     /// Adapter metadata for parents with an ordered list of child descriptions.
     type Branch;
+    /// Adapter metadata annotating one child's representation without adding wires.
+    type Annotation;
+    /// Adapter metadata replacing the child's boundary with its own wire bundle.
+    type Container;
     /// Requests concerning the whole slot.
     type SlotFragment<'a>;
     /// Emit an expression for the whole slot.
@@ -227,7 +233,9 @@ pub trait Conversion {
 #[allow(clippy::type_complexity)] // Each parent variant has independently typed metadata.
 pub trait InputConversion: Conversion {
     /// Description of the parameter value, independent of its native placement.
-    fn input_node(&self) -> &crate::WireNode<Self::Wire, Self::Chain, Self::Branch>;
+    fn input_node(
+        &self,
+    ) -> &crate::WireNode<Self::Wire, Self::Chain, Self::Branch, Self::Annotation, Self::Container>;
 }
 /// Conversion attached to a function return, including its completion channels.
 #[allow(clippy::type_complexity)] // Keep completion channels and value metadata explicit.
@@ -235,7 +243,9 @@ pub trait OutputConversion: Conversion {
     /// Success and declared errors; outcomes cannot be children of a value node.
     fn output_outcomes(
         &self,
-    ) -> &crate::Outcomes<crate::WireNode<Self::Wire, Self::Chain, Self::Branch>>;
+    ) -> &crate::Outcomes<
+        crate::WireNode<Self::Wire, Self::Chain, Self::Branch, Self::Annotation, Self::Container>,
+    >;
 }
 
 /// Bind an emitted expression to a caller-selected name and expected Rust type.

@@ -374,9 +374,8 @@ impl<C: Codec> Compiler<'_, C> {
     ) -> Result<CodecOutputPlan<C>> {
         {
             let mut plan = self.output_named(ty, output, extra, value, borrowed, wire_name)?;
-            plan.outcomes.success = WireNode::Chain {
+            plan.outcomes.success = WireNode::Annotation {
                 meta: self.codec.output_named(name)?,
-                controls: vec![],
                 child: Box::new(plan.outcomes.success),
             };
             Ok(plan)
@@ -813,8 +812,7 @@ impl<C: Codec> Compiler<'_, C> {
                 if arm.fields.len() != 1 || field.key() != "0" {
                     self.prefix_input(&mut child.node, ComponentSegment::Field(field.property()));
                 }
-                child.node = WireNode::Chain {
-                    controls: vec![],
+                child.node = WireNode::Annotation {
                     child: Box::new(child.node),
                     meta: self.codec.input_field(&name)?,
                 };
@@ -983,8 +981,7 @@ impl<C: Codec> Compiler<'_, C> {
                         ComponentSegment::Field(field.property()),
                     );
                 }
-                field_plan.outcomes.success = WireNode::Chain {
-                    controls: vec![],
+                field_plan.outcomes.success = WireNode::Annotation {
                     child: Box::new(field_plan.outcomes.success),
                     meta: self.codec.output_field(&name)?,
                 };

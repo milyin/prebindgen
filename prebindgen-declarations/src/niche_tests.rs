@@ -1,7 +1,9 @@
 //! Executable conformance tests for codecs with domains unrelated to C or JNI.
 use super::*;
-type InputPlan<W> = prebindgen_conversions::InputPlan<W, (), DomainGroup, DomainGroup>;
-type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, (), DomainGroup, DomainGroup>;
+type InputPlan<W> =
+    prebindgen_conversions::InputPlan<W, (), DomainGroup, DomainGroup, DomainGroup, ()>;
+type OutputPlan<W> =
+    prebindgen_conversions::OutputPlan<W, (), DomainGroup, DomainGroup, DomainGroup, ()>;
 use prebindgen_conversions::WireKind;
 
 // This is intentionally not an enum of primitive sentinel kinds. An adapter may
@@ -40,30 +42,33 @@ impl std::ops::Deref for DomainGroup {
 struct DomainAbi;
 impl DomainAbi {
     fn wires(
-        node: &WireNode<Domain, DomainGroup, DomainGroup>,
+        node: &WireNode<Domain, DomainGroup, DomainGroup, DomainGroup, ()>,
     ) -> std::vec::IntoIter<&Wire<Domain>> {
         prebindgen_conversions::wire_definitions(std::iter::once(node))
             .collect::<Vec<_>>()
             .into_iter()
     }
     fn wires_mut(
-        node: &mut WireNode<Domain, DomainGroup, DomainGroup>,
+        node: &mut WireNode<Domain, DomainGroup, DomainGroup, DomainGroup, ()>,
     ) -> std::vec::IntoIter<&mut Wire<Domain>> {
         prebindgen_conversions::wire_definitions_mut(std::iter::once(node))
             .collect::<Vec<_>>()
             .into_iter()
     }
-    fn validate(node: &WireNode<Domain, DomainGroup, DomainGroup>) -> Result<()> {
+    fn validate(node: &WireNode<Domain, DomainGroup, DomainGroup, DomainGroup, ()>) -> Result<()> {
         prebindgen_conversions::validate_wire_names(Self::wires(node))
     }
 }
 struct DomainCodec;
 impl Codec for DomainCodec {
-    type Input = prebindgen_conversions::InputPlan<Domain, (), DomainGroup, DomainGroup>;
-    type Output = prebindgen_conversions::OutputPlan<Domain, (), DomainGroup, DomainGroup>;
+    type Input =
+        prebindgen_conversions::InputPlan<Domain, (), DomainGroup, DomainGroup, DomainGroup, ()>;
+    type Output =
+        prebindgen_conversions::OutputPlan<Domain, (), DomainGroup, DomainGroup, DomainGroup, ()>;
 
     test_operations!();
-    type Schema = prebindgen_conversions::PlanSchema<Domain, (), DomainGroup, DomainGroup>;
+    type Schema =
+        prebindgen_conversions::PlanSchema<Domain, (), DomainGroup, DomainGroup, DomainGroup, ()>;
 
     fn validate_input(&self, plan: &CodecInputPlan<Self>) -> Result<()> {
         DomainAbi::validate(&plan.node)

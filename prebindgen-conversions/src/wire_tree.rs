@@ -3,16 +3,25 @@ use crate::{Wire, WireKind};
 
 /// A value's wire definitions arranged as terminal bundles and parent nodes.
 ///
-/// `C` describes a parent with exactly one child; `B` describes a parent with an
-/// ordered child list. Adapters decide what those descriptions mean: for example,
-/// optional and sequence encodings can share the chain shape, while field
-/// collections and alternatives can share the branch shape. The tree imposes no delivery policy.
-/// Classify nodes by child subtrees, not by the number of resulting wire values:
-/// a field or projection name annotates one subtree and therefore belongs in `C`.
-/// An ordered collection of fields or constructor alternatives belongs in `B`.
-/// Every wire belongs to a leaf or a parent's `controls`. Metadata may contain
-/// policies, annotations and references to those wires, but no wire descriptors.
-/// Controls belong to the parent occurrence, outside its child payloads.
+/// Each node shape has independent adapter metadata: `Annotation`, `Chain`,
+/// `Branch` and `Container`. An annotation preserves its
+/// child's boundary. A chain adds controls to one child's boundary; a branch adds
+/// controls to its ordered children's boundaries. A container exposes only its
+/// own wires, and interprets its child internally. A leaf exposes its wire bundle.
+///
+/// Metadata describes how the adapter interprets children; it must not retain
+/// wire descriptors or duplicate subtrees. Naming belongs to annotations, options
+/// can use chains, fields/alternatives can use branches, and lists/packed frames
+/// can use containers. All-definition traversal includes container internals;
+/// boundary traversal stops at each container.
+///
+/// Annotations cannot declare control wires:
+/// ```compile_fail
+/// use prebindgen_conversions::WireNode;
+/// let node: WireNode<syn::Type> = WireNode::Annotation {
+///     controls: vec![], meta: (), child: Box::default(),
+/// };
+/// ```
 ///
 /// Chain and branch metadata cannot be interchanged:
 /// ```compile_fail,E0308
@@ -32,29 +41,47 @@ use crate::{Wire, WireKind};
 /// };
 /// ```
 #[derive(Clone, Debug)]
-pub enum WireNode<W: WireKind, C = (), B = ()> {
+pub enum WireNode<W: WireKind, Chain = (), Branch = (), Annotation = (), Container = ()> {
     /// A terminal bundle of values; an empty bundle carries no wires.
     Leaf(Vec<Wire<W>>),
-    /// One child description, interpreted according to adapter metadata.
+    /// Describe one subtree without adding wires or changing its boundary.
+    Annotation {
+        /// Adapter description such as a Rust field or Kotlin parameter name.
+        meta: Annotation,
+        /// The annotated representation, unchanged at this boundary.
+        child: Box<WireNode<W, Chain, Branch, Annotation, Container>>,
+    },
+    /// Expose only this node's wires at its enclosing boundary.
+    /// The child describes an internal representation interpreted by the container,
+    /// such as one repeated list element or the contents of a packed frame.
+    Container {
+        /// Adapter policy for packing, repeating or delivering the child.
+        meta: Container,
+        /// Internal representation; its wires do not appear at the enclosing boundary.
+        child: Box<WireNode<W, Chain, Branch, Annotation, Container>>,
+        /// The complete representation exposed at the enclosing boundary.
+        wires: Vec<Wire<W>>,
+    },
+    /// Add supporting controls while interpreting one child at the same boundary.
     Chain {
         /// Adapter policy or annotations for this parent.
-        meta: C,
+        meta: Chain,
         /// Exactly one child description; runtime occurrence count is adapter-defined.
-        child: Box<WireNode<W, C, B>>,
+        child: Box<WireNode<W, Chain, Branch, Annotation, Container>>,
         /// Supporting wire definitions outside the child payload.
         controls: Vec<Wire<W>>,
     },
     /// Ordered child descriptions, interpreted according to adapter metadata.
     Branch {
         /// Adapter policy or annotations for this parent.
-        meta: B,
+        meta: Branch,
         /// Ordered child descriptions. Metadata determines whether an empty list is valid.
-        children: Vec<WireNode<W, C, B>>,
+        children: Vec<WireNode<W, Chain, Branch, Annotation, Container>>,
         /// Supporting wire definitions outside the child payloads.
         controls: Vec<Wire<W>>,
     },
 }
-impl<W: WireKind, C, B> Default for WireNode<W, C, B> {
+impl<W: WireKind, C, B, A, T> Default for WireNode<W, C, B, A, T> {
     fn default() -> Self {
         Self::Leaf(vec![])
     }
@@ -82,11 +109,24 @@ impl<N: Default> Default for Outcomes<N> {
 
 /// Visit all wire definitions, controls before children, without interpreting metadata.
 /// Each child description is visited once, regardless of runtime repetition or selection.
-pub fn wire_definitions<'a, W: WireKind + 'a, C: 'a, B: 'a>(
-    nodes: impl IntoIterator<Item = &'a WireNode<W, C, B>>,
+pub fn wire_definitions<'a, W: WireKind + 'a, C: 'a, B: 'a, A: 'a, T: 'a>(
+    nodes: impl IntoIterator<Item = &'a WireNode<W, C, B, A, T>>,
 ) -> impl std::iter::FusedIterator<Item = &'a Wire<W>> {
-    enum Frame<'a, W: WireKind, C, B> {
-        Nodes(std::slice::Iter<'a, WireNode<W, C, B>>),
+    definitions(nodes, true)
+}
+/// Visit only wires exposed at this boundary, stopping at container wires.
+/// Annotations are transparent; chain/branch controls precede their child wires.
+pub fn boundary_wires<'a, W: WireKind + 'a, C: 'a, B: 'a, A: 'a, T: 'a>(
+    nodes: impl IntoIterator<Item = &'a WireNode<W, C, B, A, T>>,
+) -> impl std::iter::FusedIterator<Item = &'a Wire<W>> {
+    definitions(nodes, false)
+}
+fn definitions<'a, W: WireKind + 'a, C: 'a, B: 'a, A: 'a, T: 'a>(
+    nodes: impl IntoIterator<Item = &'a WireNode<W, C, B, A, T>>,
+    descend_containers: bool,
+) -> impl std::iter::FusedIterator<Item = &'a Wire<W>> {
+    enum Frame<'a, W: WireKind, C, B, A, T> {
+        Nodes(std::slice::Iter<'a, WireNode<W, C, B, A, T>>),
         Wires(std::slice::Iter<'a, Wire<W>>),
     }
     let mut roots = nodes.into_iter().fuse();
@@ -112,6 +152,15 @@ pub fn wire_definitions<'a, W: WireKind + 'a, C: 'a, B: 'a>(
         };
         match node {
             WireNode::Leaf(w) => stack.push(Frame::Wires(w.iter())),
+            WireNode::Annotation { child, .. } => {
+                stack.push(Frame::Nodes(std::slice::from_ref(child.as_ref()).iter()))
+            }
+            WireNode::Container { wires, child, .. } => {
+                if descend_containers {
+                    stack.push(Frame::Nodes(std::slice::from_ref(child.as_ref()).iter()));
+                }
+                stack.push(Frame::Wires(wires.iter()));
+            }
             WireNode::Chain {
                 controls, child, ..
             } => {
@@ -130,11 +179,24 @@ pub fn wire_definitions<'a, W: WireKind + 'a, C: 'a, B: 'a>(
 }
 /// Mutably visit every definition without requiring cloneable wires or metadata.
 /// Traversal order matches [`wire_definitions`].
-pub fn wire_definitions_mut<'a, W: WireKind + 'a, C: 'a, B: 'a>(
-    nodes: impl IntoIterator<Item = &'a mut WireNode<W, C, B>>,
+pub fn wire_definitions_mut<'a, W: WireKind + 'a, C: 'a, B: 'a, A: 'a, T: 'a>(
+    nodes: impl IntoIterator<Item = &'a mut WireNode<W, C, B, A, T>>,
 ) -> impl std::iter::FusedIterator<Item = &'a mut Wire<W>> {
-    enum Frame<'a, W: WireKind, C, B> {
-        Nodes(std::slice::IterMut<'a, WireNode<W, C, B>>),
+    definitions_mut(nodes, true)
+}
+/// Visit only wires exposed at this boundary, stopping at container wires.
+/// Annotations are transparent; chain/branch controls precede their child wires.
+pub fn boundary_wires_mut<'a, W: WireKind + 'a, C: 'a, B: 'a, A: 'a, T: 'a>(
+    nodes: impl IntoIterator<Item = &'a mut WireNode<W, C, B, A, T>>,
+) -> impl std::iter::FusedIterator<Item = &'a mut Wire<W>> {
+    definitions_mut(nodes, false)
+}
+fn definitions_mut<'a, W: WireKind + 'a, C: 'a, B: 'a, A: 'a, T: 'a>(
+    nodes: impl IntoIterator<Item = &'a mut WireNode<W, C, B, A, T>>,
+    descend_containers: bool,
+) -> impl std::iter::FusedIterator<Item = &'a mut Wire<W>> {
+    enum Frame<'a, W: WireKind, C, B, A, T> {
+        Nodes(std::slice::IterMut<'a, WireNode<W, C, B, A, T>>),
         Wires(std::slice::IterMut<'a, Wire<W>>),
     }
     let mut roots = nodes.into_iter().fuse();
@@ -160,6 +222,17 @@ pub fn wire_definitions_mut<'a, W: WireKind + 'a, C: 'a, B: 'a>(
         };
         match node {
             WireNode::Leaf(w) => stack.push(Frame::Wires(w.iter_mut())),
+            WireNode::Annotation { child, .. } => stack.push(Frame::Nodes(
+                std::slice::from_mut(child.as_mut()).iter_mut(),
+            )),
+            WireNode::Container { wires, child, .. } => {
+                if descend_containers {
+                    stack.push(Frame::Nodes(
+                        std::slice::from_mut(child.as_mut()).iter_mut(),
+                    ));
+                }
+                stack.push(Frame::Wires(wires.iter_mut()));
+            }
             WireNode::Chain {
                 controls, child, ..
             } => {
@@ -179,8 +252,9 @@ pub fn wire_definitions_mut<'a, W: WireKind + 'a, C: 'a, B: 'a>(
     .fuse()
 }
 /// Address relative to selected roots. The first index selects a root. At any
-/// parent, `[0, i]` selects control `i` and `[1, i]` selects child `i`; a chain
-/// has only child zero. At a leaf, one final index selects a wire in its bundle.
+/// parent, `[0, i]` selects control or container wire `i`, and `[1, i]` selects child `i`; a chain
+/// or container has only child zero. An annotation has only the `[1, 0]` route.
+/// At a leaf, one final index selects a wire in its bundle.
 /// Select the output channel before traversal. Rebuild paths after structural
 /// edits or changing the selected roots.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -189,15 +263,15 @@ pub struct WirePath(pub Vec<usize>);
 pub struct WireEntry<'a, W: WireKind> {
     /// Address within the selected roots.
     pub path: WirePath,
-    /// Definition in a leaf or parent controls.
+    /// Definition in a leaf, chain/branch controls, or container wires.
     pub wire: &'a Wire<W>,
 }
 /// Visit all wire definitions with paths, in [`wire_definitions`] order.
-pub fn wire_definitions_with_paths<'a, W: WireKind + 'a, C: 'a, B: 'a>(
-    nodes: impl IntoIterator<Item = &'a WireNode<W, C, B>>,
+pub fn wire_definitions_with_paths<'a, W: WireKind + 'a, C: 'a, B: 'a, A: 'a, T: 'a>(
+    nodes: impl IntoIterator<Item = &'a WireNode<W, C, B, A, T>>,
 ) -> impl std::iter::FusedIterator<Item = WireEntry<'a, W>> {
-    fn visit<'a, W: WireKind, C, B>(
-        node: &'a WireNode<W, C, B>,
+    fn visit<'a, W: WireKind, C, B, A, T>(
+        node: &'a WireNode<W, C, B, A, T>,
         path: &mut Vec<usize>,
         out: &mut Vec<WireEntry<'a, W>>,
     ) {
@@ -213,8 +287,14 @@ pub fn wire_definitions_with_paths<'a, W: WireKind + 'a, C: 'a, B: 'a>(
                 }
                 return;
             }
+            WireNode::Annotation { child, .. } => (&[][..], std::slice::from_ref(child.as_ref())),
             WireNode::Chain {
                 controls, child, ..
+            }
+            | WireNode::Container {
+                wires: controls,
+                child,
+                ..
             } => (controls.as_slice(), std::slice::from_ref(child.as_ref())),
             WireNode::Branch {
                 controls, children, ..
@@ -241,19 +321,25 @@ pub fn wire_definitions_with_paths<'a, W: WireKind + 'a, C: 'a, B: 'a>(
     out.into_iter()
 }
 /// Resolve a path for the same roots and output channel used when producing it.
-pub fn wire_at_path<'a, W: WireKind + 'a, C: 'a, B: 'a>(
-    nodes: impl IntoIterator<Item = &'a WireNode<W, C, B>>,
+pub fn wire_at_path<'a, W: WireKind + 'a, C: 'a, B: 'a, A: 'a, T: 'a>(
+    nodes: impl IntoIterator<Item = &'a WireNode<W, C, B, A, T>>,
     path: &WirePath,
 ) -> Option<&'a Wire<W>> {
-    fn get<'a, W: WireKind, C, B>(
-        node: &'a WireNode<W, C, B>,
+    fn get<'a, W: WireKind, C, B, A, T>(
+        node: &'a WireNode<W, C, B, A, T>,
         path: &[usize],
     ) -> Option<&'a Wire<W>> {
         let (&index, rest) = path.split_first()?;
         let (controls, children) = match node {
             WireNode::Leaf(wires) => return rest.is_empty().then(|| wires.get(index)).flatten(),
+            WireNode::Annotation { child, .. } => (&[][..], std::slice::from_ref(child.as_ref())),
             WireNode::Chain {
                 controls, child, ..
+            }
+            | WireNode::Container {
+                wires: controls,
+                child,
+                ..
             } => (controls.as_slice(), std::slice::from_ref(child.as_ref())),
             WireNode::Branch {
                 controls, children, ..
@@ -530,5 +616,98 @@ mod tests {
             wire_at_path(std::iter::once(&node), &entries[0].path).unwrap()
         ));
         assert!(wire_at_path(std::iter::once(&node), &WirePath(vec![0, 1, 0, 0])).is_none());
+    }
+    #[test]
+    fn annotations_preserve_boundaries_and_containers_hide_internal_wires() {
+        // Shape-specific metadata has unrelated types; no wrapper enum is needed.
+        type Node = WireNode<syn::Type, (), (), String, usize>;
+        let mut nodes: [Node; 1] = [WireNode::Annotation {
+            meta: "packets".into(),
+            child: Box::new(WireNode::Container {
+                meta: 1,
+                wires: vec![wire("rows")],
+                child: Box::new(WireNode::Branch {
+                    meta: (),
+                    controls: vec![wire("tag")],
+                    children: vec![
+                        leaf_for_shapes("x"),
+                        WireNode::Container {
+                            meta: 2,
+                            wires: vec![wire("nested_rows")],
+                            child: Box::new(leaf_for_shapes("nested_value")),
+                        },
+                    ],
+                }),
+            }),
+        }];
+        assert_eq!(
+            boundary_wires(nodes.iter())
+                .map(|w| w.name.to_string())
+                .collect::<Vec<_>>(),
+            ["rows"]
+        );
+        assert_eq!(
+            wire_definitions(nodes.iter())
+                .map(|w| w.name.to_string())
+                .collect::<Vec<_>>(),
+            ["rows", "tag", "x", "nested_rows", "nested_value"]
+        );
+        for entry in wire_definitions_with_paths(nodes.iter()) {
+            assert!(std::ptr::eq(
+                entry.wire,
+                wire_at_path(nodes.iter(), &entry.path).unwrap()
+            ));
+        }
+        // An annotation owns no controls or wires. Its only child is at [1, 0].
+        assert!(wire_at_path(nodes.iter(), &WirePath(vec![0, 0, 0])).is_none());
+        assert_eq!(
+            wire_at_path(nodes.iter(), &WirePath(vec![0, 1, 0, 0, 0]))
+                .unwrap()
+                .name,
+            "rows"
+        );
+        for wire in boundary_wires_mut(nodes.iter_mut()) {
+            wire.kind = syn::parse_quote!(u8);
+        }
+        assert_eq!(
+            wire_definitions(nodes.iter())
+                .map(|w| prebindgen_flat::type_key(&w.kind))
+                .collect::<Vec<_>>(),
+            ["u8", "i64", "i64", "i64", "i64"]
+        );
+        let WireNode::Annotation { child, .. } = &nodes[0] else {
+            panic!()
+        };
+        let WireNode::Container { child, .. } = child.as_ref() else {
+            panic!()
+        };
+        assert_eq!(
+            boundary_wires(std::iter::once(child.as_ref()))
+                .map(|w| w.name.to_string())
+                .collect::<Vec<_>>(),
+            ["tag", "x", "nested_rows"]
+        );
+        fn leaf_for_shapes(name: &str) -> Node {
+            WireNode::Leaf(vec![wire(name)])
+        }
+    }
+    #[test]
+    fn empty_container_boundary_still_hides_nonempty_internal_representation() {
+        let mut node: WireNode<syn::Type> = WireNode::Container {
+            meta: (),
+            wires: vec![],
+            child: Box::new(leaf("internal")),
+        };
+        assert!(boundary_wires(std::iter::once(&node)).next().is_none());
+        assert!(boundary_wires_mut(std::iter::once(&mut node))
+            .next()
+            .is_none());
+        assert_eq!(
+            wire_definitions(std::iter::once(&node))
+                .next()
+                .unwrap()
+                .name,
+            "internal"
+        );
     }
 }

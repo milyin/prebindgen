@@ -114,14 +114,22 @@ mod component;
 pub use component::{ComponentPath, ComponentSegment};
 
 /// Input preparation plan, including the codec's composition metadata.
-pub type CodecInputPlan<C> =
-    InputPlan<CodecInputWire<C>, <C as Codec>::Context, CodecInputChain<C>, CodecInputBranch<C>>;
+pub type CodecInputPlan<C> = InputPlan<
+    CodecInputWire<C>,
+    <C as Codec>::Context,
+    CodecInputChain<C>,
+    CodecInputBranch<C>,
+    CodecInputAnnotation<C>,
+    CodecInputContainer<C>,
+>;
 /// Output preparation plan, including only output composition metadata.
 pub type CodecOutputPlan<C> = OutputPlan<
     CodecOutputWire<C>,
     <C as Codec>::Context,
     CodecOutputChain<C>,
     CodecOutputBranch<C>,
+    CodecOutputAnnotation<C>,
+    CodecOutputContainer<C>,
 >;
 
 /// How a sequence return reaches the foreign caller.
@@ -169,8 +177,16 @@ pub use operations::*;
 /// }
 /// ```
 /// Nor can a recipe be stored in a slot:
-pub type PlanBindings<WireType, Context = (), Chain = (), Branch = ()> =
-    Flat<prebindgen_conversions::PlanSchema<WireType, Context, Chain, Branch>>;
+pub type PlanBindings<
+    WireType,
+    Context = (),
+    Chain = (),
+    Branch = (),
+    Annotation = (),
+    Container = (),
+> = Flat<
+    prebindgen_conversions::PlanSchema<WireType, Context, Chain, Branch, Annotation, Container>,
+>;
 
 /// Compile a resolved description for one named source parameter.
 /// The model keeps its fixed schema; this returns a converter without modifying its slot.
@@ -453,8 +469,8 @@ fn mutable_reference(ty: &Type) -> bool {
     matches!(ty, Type::Reference(r) if r.mutability.is_some())
         || option_inner(ty).is_some_and(mutable_reference)
 }
-fn validate_nested_output<W: prebindgen_conversions::WireKind, C, N, B>(
-    plan: &OutputPlan<W, C, N, B>,
+fn validate_nested_output<W: prebindgen_conversions::WireKind, C, N, B, A, T>(
+    plan: &OutputPlan<W, C, N, B, A, T>,
 ) -> Result<()> {
     if plan.outcomes.source_error.is_some() || plan.outcomes.binding_failure.is_some() {
         return Err("completion channels belong to the outermost output conversion".into());
@@ -462,9 +478,9 @@ fn validate_nested_output<W: prebindgen_conversions::WireKind, C, N, B>(
     Ok(())
 }
 /// Append one output view while preserving its preparation and ownership commit.
-pub fn append<W: prebindgen_conversions::WireKind, C, N, B>(
-    to: &mut OutputPlan<W, C, N, B>,
-    from: OutputPlan<W, C, N, B>,
+pub fn append<W: prebindgen_conversions::WireKind, C, N, B, A, T>(
+    to: &mut OutputPlan<W, C, N, B, A, T>,
+    from: OutputPlan<W, C, N, B, A, T>,
 ) -> Result<()> {
     if !from.delivery.statements.is_empty()
         || from.delivery.result.to_string() != quote!(()).to_string()

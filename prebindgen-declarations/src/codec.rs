@@ -85,12 +85,16 @@ pub trait Codec {
             Wire: Clone + std::fmt::Debug,
             Chain: Clone,
             Branch: Clone,
+            Annotation: Clone,
+            Container: Clone,
         > + From<CodecInputPlan<Self>>;
     /// Prepared conversion for a function return.
     type Output: prebindgen_conversions::OutputConversion<
             Wire: Clone + std::fmt::Debug,
             Chain: Clone,
             Branch: Clone,
+            Annotation: Clone,
+            Container: Clone,
         > + From<CodecOutputPlan<Self>>;
     /// Names supplied by the language's Rust wrapper emitter.
     type Context: prebindgen_conversions::TemplateContext + 'static;
@@ -120,12 +124,12 @@ pub trait Codec {
     fn output_group(&self, kind: GroupKind) -> Result<CodecOutputBranch<Self>>;
     /// Label the single subtree decoding a source field. The identifier names
     /// that field (or an enum tuple field's generated property), not a wire.
-    fn input_field(&self, name: &syn::Ident) -> Result<CodecInputChain<Self>>;
+    fn input_field(&self, name: &syn::Ident) -> Result<CodecInputAnnotation<Self>>;
     /// Label the single subtree encoding a source field.
-    fn output_field(&self, name: &syn::Ident) -> Result<CodecOutputChain<Self>>;
+    fn output_field(&self, name: &syn::Ident) -> Result<CodecOutputAnnotation<Self>>;
     /// Name one output projection subtree, which may produce several wire values.
     /// Adapters without named output views reject this operation.
-    fn output_named(&self, _name: &str) -> Result<CodecOutputChain<Self>> {
+    fn output_named(&self, _name: &str) -> Result<CodecOutputAnnotation<Self>> {
         Err("named output views are unsupported".into())
     }
     /// Explicit opt-in to bulk conversion for this direction. JNI dispatch and
@@ -204,14 +208,14 @@ pub trait Codec {
     fn sequence_input(
         &self,
         _request: SequenceInputRequest<'_, Self>,
-    ) -> Result<SequenceInput<CodecInputWire<Self>, CodecInputChain<Self>>> {
+    ) -> Result<SequenceInput<CodecInputWire<Self>, CodecInputContainer<Self>>> {
         Err("collections are unsupported by this codec".into())
     }
     /// Choose ordinary/bulk output storage and the explicit element delivery.
     fn sequence_output(
         &self,
         _request: SequenceOutputRequest<'_, Self>,
-    ) -> Result<SequenceOutput<CodecOutputWire<Self>, CodecOutputChain<Self>>> {
+    ) -> Result<SequenceOutput<CodecOutputWire<Self>, CodecOutputContainer<Self>>> {
         Err("collections are unsupported by this codec".into())
     }
     /// Prepare matching source-error wires and propagation. The default preserves
@@ -340,7 +344,7 @@ pub trait Codec {
     }
 
     /// Prepend a semantic source path to one prepared occurrence. Override when
-    /// node controls carry paths, or element definitions have a separate
+    /// wire definitions carry paths, or elements have a separate
     /// path context. Codecs without source-path metadata need no implementation.
     fn prefix_input(&self, _layout: &mut CodecInputNode<Self>, _segment: ComponentSegment) {}
     /// Attach a source component path to an output tree.

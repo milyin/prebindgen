@@ -18,13 +18,19 @@ impl WireKind for OutgoingWire {
 }
 #[derive(Clone, Debug)]
 enum IncomingChain {
-    Field,
     Optional,
 }
 #[derive(Clone, Debug)]
-enum OutgoingChain {
+enum IncomingAnnotation {
     Field,
+}
+#[derive(Clone, Debug)]
+enum OutgoingChain {
     Optional,
+}
+#[derive(Clone, Debug)]
+enum OutgoingAnnotation {
+    Field,
 }
 #[derive(Clone, Debug)]
 struct IncomingGroup;
@@ -32,8 +38,9 @@ struct IncomingGroup;
 struct OutgoingGroup;
 struct Directional;
 impl Codec for Directional {
-    type Input = InputPlan<IncomingWire, (), IncomingChain, IncomingGroup>;
-    type Output = OutputPlan<OutgoingWire, (), OutgoingChain, OutgoingGroup>;
+    type Input = InputPlan<IncomingWire, (), IncomingChain, IncomingGroup, IncomingAnnotation, ()>;
+    type Output =
+        OutputPlan<OutgoingWire, (), OutgoingChain, OutgoingGroup, OutgoingAnnotation, ()>;
     // Source attachments are independent of the converters' wire types.
     type Schema = prebindgen_conversions::PlanSchema<Type>;
     type Context = ();
@@ -69,11 +76,11 @@ impl Codec for Directional {
     fn output_group(&self, _: GroupKind) -> Result<OutgoingGroup> {
         Ok(OutgoingGroup)
     }
-    fn input_field(&self, _name: &syn::Ident) -> Result<IncomingChain> {
-        Ok(IncomingChain::Field)
+    fn input_field(&self, _name: &syn::Ident) -> Result<IncomingAnnotation> {
+        Ok(IncomingAnnotation::Field)
     }
-    fn output_field(&self, _name: &syn::Ident) -> Result<OutgoingChain> {
-        Ok(OutgoingChain::Field)
+    fn output_field(&self, _name: &syn::Ident) -> Result<OutgoingAnnotation> {
+        Ok(OutgoingAnnotation::Field)
     }
     fn input_optional(
         &self,
@@ -145,15 +152,17 @@ fn shared_compiler_accepts_unrelated_input_and_output_tree_families() {
     };
     let incoming = compile_input(&flat, &Directional, "exchange", "p", &input, &()).unwrap();
     let outgoing = compile_output(&flat, &Directional, "exchange", &output, &()).unwrap();
-    let _: &WireNode<IncomingWire, IncomingChain, IncomingGroup> = &incoming.node;
-    let _: &WireNode<OutgoingWire, OutgoingChain, OutgoingGroup> = &outgoing.outcomes.success;
+    let _: &WireNode<IncomingWire, IncomingChain, IncomingGroup, IncomingAnnotation, ()> =
+        &incoming.node;
+    let _: &WireNode<OutgoingWire, OutgoingChain, OutgoingGroup, OutgoingAnnotation, ()> =
+        &outgoing.outcomes.success;
     let WireNode::Branch { children, .. } = &incoming.node else {
         panic!("record input must group fields")
     };
     assert!(children.iter().all(|n| matches!(
         n,
-        WireNode::Chain {
-            meta: IncomingChain::Field,
+        WireNode::Annotation {
+            meta: IncomingAnnotation::Field,
             ..
         }
     )));
@@ -162,8 +171,8 @@ fn shared_compiler_accepts_unrelated_input_and_output_tree_families() {
     };
     assert!(children.iter().all(|n| matches!(
         n,
-        WireNode::Chain {
-            meta: OutgoingChain::Field,
+        WireNode::Annotation {
+            meta: OutgoingAnnotation::Field,
             ..
         }
     )));
