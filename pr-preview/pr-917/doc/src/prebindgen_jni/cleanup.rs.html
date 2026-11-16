@@ -57,7 +57,7 @@
 <a href=#57 id=57 data-nosnippet>57</a>            sequence: <span class="prelude-val">Some</span>(sequence),
 <a href=#58 id=58 data-nosnippet>58</a>        }),
 <a href=#59 id=59 data-nosnippet>59</a>        WireNode::Chain {
-<a href=#60 id=60 data-nosnippet>60</a>            meta: JniChain::Bulk(<span class="kw">_</span>),
+<a href=#60 id=60 data-nosnippet>60</a>            meta: JniChain::Bulk,
 <a href=#61 id=61 data-nosnippet>61</a>            controls,
 <a href=#62 id=62 data-nosnippet>62</a>            child,
 <a href=#63 id=63 data-nosnippet>63</a>        } <span class="kw">if </span>controls.iter().any(|w| <span class="kw-2">&amp;</span>w.name == name) =&gt; <span class="prelude-val">Some</span>(CarrierChild {
@@ -381,7 +381,7 @@
 <a href=#381 id=381 data-nosnippet>381</a>    <span class="kw">fn </span>visit(<span class="kw-2">&amp;mut </span><span class="self">self</span>, node: <span class="kw-2">&amp;</span>JniNode, input: bool, bulk: bool, types: <span class="kw-2">&amp;</span>JniTypes) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#382 id=382 data-nosnippet>382</a>        <span class="kw">match </span>node {
 <a href=#383 id=383 data-nosnippet>383</a>            WireNode::Chain {
-<a href=#384 id=384 data-nosnippet>384</a>                meta: JniChain::Bulk(<span class="kw">_</span>),
+<a href=#384 id=384 data-nosnippet>384</a>                meta: JniChain::Bulk,
 <a href=#385 id=385 data-nosnippet>385</a>                child,
 <a href=#386 id=386 data-nosnippet>386</a>                ..
 <a href=#387 id=387 data-nosnippet>387</a>            } =&gt; <span class="self">self</span>.visit(child, input, <span class="bool-val">true</span>, types)<span class="question-mark">?</span>,
