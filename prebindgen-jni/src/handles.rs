@@ -26,7 +26,7 @@ pub(crate) fn key(handle: &BoxedWire) -> (String, u8) {
 pub(crate) fn kinds<Chain, Branch>(node: &JniWireNode<Chain, Branch>) -> Vec<BoxedWire> {
     let mut kinds = BTreeMap::new();
     for wire in prebindgen_conversions::wire_definitions(std::iter::once(node)) {
-        if let JniWire::Handle { handle, .. } = &wire.kind {
+        if let JniWire::RHandle { handle, .. } = &wire.kind {
             kinds
                 .entry(key(handle))
                 .or_insert_with(|| (**handle).clone());
@@ -67,7 +67,7 @@ fn controlled_child<'a>(
             } else if matches!(
                 node,
                 WireNode::Chain {
-                    meta: JniInputWireChain::Sequence | JniInputWireChain::Bulk,
+                    meta: JniInputWireChain::KList | JniInputWireChain::BulkFrame,
                     ..
                 }
             ) {
@@ -89,9 +89,12 @@ pub(crate) fn column_groups(node: &JniInputWireNode) -> Result<String> {
     }
     let columns = crate::group::row_fields(node)
         .map(|wire| {
-            let local = if let JniWire::Handle { handle, .. } = &wire.kind {
+            let local = if let JniWire::RHandle { handle, .. } = &wire.kind {
                 vec![(**handle).clone()]
-            } else if matches!(wire.kind, JniWire::Rows { .. } | JniWire::BulkBuffer { .. }) {
+            } else if matches!(
+                wire.kind,
+                JniWire::KRowArray { .. } | JniWire::KBulkBytes { .. }
+            ) {
                 let child = controlled_child(node, &wire.name).ok_or_else(|| {
                     format!(
                         "missing prepared child for handle-group column `{}`",
@@ -127,16 +130,16 @@ pub(crate) fn require_preflight<I: KotlinInputConversion>(input: &I) -> Result<(
     fn prepared(node: &JniInputWireNode) -> bool {
         match node {
             WireNode::Chain {
-                meta: JniInputWireChain::Bulk,
+                meta: JniInputWireChain::BulkFrame,
                 ..
             } => true,
             WireNode::Chain {
-                meta: JniInputWireChain::Sequence,
+                meta: JniInputWireChain::KList,
                 controls,
                 ..
             } if controls
                 .iter()
-                .any(|wire| matches!(wire.kind, JniWire::NativeRows { .. })) =>
+                .any(|wire| matches!(wire.kind, JniWire::FrameRowRange { .. })) =>
             {
                 false
             }
@@ -157,7 +160,7 @@ fn complete_handle_inputs(node: &JniInputWireNode, input: &mut KotlinInput) -> R
     fn sources(node: &JniInputWireNode, expected: &mut BTreeMap<(String, u8, bool), usize>) {
         match node {
             WireNode::Chain {
-                meta: JniInputWireChain::Bulk | JniInputWireChain::Sequence,
+                meta: JniInputWireChain::BulkFrame | JniInputWireChain::KList,
                 child,
                 ..
             } => {
@@ -174,7 +177,7 @@ fn complete_handle_inputs(node: &JniInputWireNode, input: &mut KotlinInput) -> R
             }
             WireNode::Leaf(wires) => {
                 for wire in wires {
-                    if let JniWire::Handle { handle, .. } = &wire.kind {
+                    if let JniWire::RHandle { handle, .. } = &wire.kind {
                         let (ty, access) = key(handle);
                         *expected.entry((ty, access, false)).or_default() += 1;
                     }
@@ -396,7 +399,7 @@ mod tests {
     fn rows() -> Wire<JniWire> {
         Wire {
             name: syn::parse_quote!(rows),
-            kind: JniWire::Rows {
+            kind: JniWire::KRowArray {
                 condition: "true".into(),
                 null_niche_available: true,
             },
@@ -406,12 +409,12 @@ mod tests {
     fn nested_column_groups_cover_every_child_allocation_class() {
         let node: JniInputWireNode = WireNode::Branch {
             controls: vec![],
-            meta: JniInputWireBranch::Values,
+            meta: JniInputWireBranch::KValues,
             children: vec![
                 WireNode::Leaf(vec![handle("first", syn::parse_quote!(A))]),
                 WireNode::Chain {
                     controls: vec![rows()],
-                    meta: JniInputWireChain::Sequence,
+                    meta: JniInputWireChain::KList,
                     child: Box::new(WireNode::Leaf(vec![
                         handle("a", syn::parse_quote!(A)),
                         handle("b", syn::parse_quote!(B)),
@@ -430,7 +433,7 @@ mod tests {
             rows(),
             Wire {
                 name: syn::parse_quote!(buffer),
-                kind: JniWire::BulkBuffer {
+                kind: JniWire::KBulkBytes {
                     null_niche_available: true,
                 },
             },

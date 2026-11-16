@@ -13,56 +13,55 @@ pub use transport::JniArgument;
 #[derive(Clone, Debug)]
 pub enum JniWire {
     /// One complete bulk frame in a byte array. Input length is a separate control.
-    BulkBuffer {
+    KBulkBytes {
         /// Whether null is available for an enclosing option.
         null_niche_available: bool,
     },
-    /// Native byte/text view inside a bulk frame; never a JNI reference.
-    NativeBuffer {
-        /// Whether the payload is validated UTF-8 text.
-        text: bool,
-    },
+    /// Native byte range inside a packed frame; never a JNI reference.
+    FrameBytes,
+    /// Native UTF-8 range inside a packed frame; never a JNI string reference.
+    FrameUtf8,
     /// Compiled offset/count descriptor for rows in the enclosing bulk scope.
-    NativeRows {
+    FrameRowRange {
         /// Kotlin expression selecting these rows.
         condition: String,
     },
     /// Fixed-width big-endian bytes for a native 128-bit scalar.
-    Native128 {
+    FrameInt128 {
         /// Kotlin expression selecting the active input alternative.
         condition: String,
         /// Signed or unsigned 128-bit source primitive.
         primitive: Primitive,
     },
-    /// A retained callback object with its independently prepared argument boundary.
-    Callback {
-        /// Signature and output conversions used when Rust invokes this callback.
+    /// A retained Kotlin callback object with independently prepared arguments and result.
+    KCallback {
+        /// Signature, output argument conversions and input result conversion.
         callback: std::rc::Rc<crate::JniCallback>,
     },
     /// One JNI object-array carrier for buffered sequence rows. The sequence
     /// container owns the element layout.
-    Rows {
+    KRowArray {
         /// Kotlin expression selecting this array's active input alternative.
         condition: String,
         /// Whether a null array remains available to an enclosing option.
         null_niche_available: bool,
     },
     /// A fieldless Rust enum carried as a checked JVM `int`.
-    Enum {
+    REnumTag {
         /// Valid source variants and generated Kotlin class information.
         enum_type: std::rc::Rc<JniEnum>,
         /// Next unused integer representation, or `None` when unavailable.
         next_integer_niche: Option<i32>,
     },
     /// A primitive in its JVM carrier.
-    Scalar {
+    RScalar {
         /// Source primitive that determines the Rust/JVM conversion.
         primitive: Primitive,
         /// Next excluded integer representation, or `None` when unavailable.
         next_integer_niche: Option<i64>,
     },
     /// A boxed allocation address in a `long`, owned by a Kotlin handle class.
-    Handle {
+    RHandle {
         /// Allocation type and access mode.
         handle: Box<BoxedWire>,
         /// Kotlin condition under which the handle is active.
@@ -71,17 +70,17 @@ pub enum JniWire {
         null_niche_available: bool,
     },
     /// A non-null `java.lang.String` when present.
-    Text {
+    KString {
         /// Whether a null reference is still available to an enclosing option.
         null_niche_available: bool,
     },
     /// A non-null `byte[]` when present, including an empty array.
-    Bytes {
+    KByteArray {
         /// Whether a null reference is still available to an enclosing option.
         null_niche_available: bool,
     },
     /// An `int` selector with nonnegative valid tags (including 0/1 presence flags).
-    Selector {
+    SelectorTag {
         /// Next unused negative tag, or `None` when unavailable.
         /// Positive unused tags are not advertised because arm counts vary.
         next_integer_niche: Option<i32>,
@@ -90,33 +89,33 @@ pub enum JniWire {
 impl JniWire {
     /// Describe a string with its null-reference niche initially available.
     pub fn text() -> Self {
-        Self::Text {
+        Self::KString {
             null_niche_available: true,
         }
     }
     /// Describe bytes with their null-reference niche initially available.
     pub fn bytes() -> Self {
-        Self::Bytes {
+        Self::KByteArray {
             null_niche_available: true,
         }
     }
     /// Describe nonnegative selector tags with negative niches starting at -1.
     pub fn selector() -> Self {
-        Self::Selector {
+        Self::SelectorTag {
             next_integer_niche: Some(-1),
         }
     }
     /// Initialize a scalar's niche availability from its primitive domain.
     pub fn scalar(primitive: Primitive) -> Self {
         let next_integer_niche = integer_niche_min(primitive).map(|_| -1);
-        Self::Scalar {
+        Self::RScalar {
             primitive,
             next_integer_niche,
         }
     }
     /// Describe a handle with its null niche initially available.
     pub fn handle(handle: BoxedWire, condition: impl Into<String>) -> Self {
-        Self::Handle {
+        Self::RHandle {
             handle: Box::new(handle),
             condition: condition.into(),
             null_niche_available: true,
@@ -126,33 +125,34 @@ impl JniWire {
     /// This reads stored state rather than recomputing the initial niche.
     pub fn available_niche(&self) -> Option<JniNiche> {
         match self {
-            Self::Callback { .. }
-            | Self::NativeBuffer { .. }
-            | Self::NativeRows { .. }
-            | Self::Native128 { .. } => None,
-            Self::Scalar {
+            Self::KCallback { .. }
+            | Self::FrameBytes
+            | Self::FrameUtf8
+            | Self::FrameRowRange { .. }
+            | Self::FrameInt128 { .. } => None,
+            Self::RScalar {
                 next_integer_niche, ..
             } => next_integer_niche.map(JniNiche::Integer),
-            Self::Handle {
+            Self::RHandle {
                 null_niche_available: true,
                 ..
             }
-            | Self::BulkBuffer {
+            | Self::KBulkBytes {
                 null_niche_available: true,
                 ..
             }
-            | Self::Rows {
+            | Self::KRowArray {
                 null_niche_available: true,
                 ..
             }
-            | Self::Text {
+            | Self::KString {
                 null_niche_available: true,
             }
-            | Self::Bytes {
+            | Self::KByteArray {
                 null_niche_available: true,
             } => Some(JniNiche::Null),
-            Self::Selector { next_integer_niche }
-            | Self::Enum {
+            Self::SelectorTag { next_integer_niche }
+            | Self::REnumTag {
                 next_integer_niche, ..
             } => next_integer_niche.map(|n| JniNiche::Integer(n.into())),
             _ => None,
@@ -164,35 +164,35 @@ impl JniWire {
     pub fn set_niche(&mut self, niche: Option<JniNiche>) -> Result<()> {
         match (self, niche) {
             (
-                Self::Scalar {
+                Self::RScalar {
                     primitive,
                     next_integer_niche,
                 },
                 Some(JniNiche::Integer(n)),
             ) if is_integer_niche(*primitive, n) => *next_integer_niche = Some(n),
             (
-                Self::Handle {
+                Self::RHandle {
                     null_niche_available,
                     ..
                 }
-                | Self::BulkBuffer {
+                | Self::KBulkBytes {
                     null_niche_available,
                     ..
                 }
-                | Self::Rows {
+                | Self::KRowArray {
                     null_niche_available,
                     ..
                 }
-                | Self::Text {
+                | Self::KString {
                     null_niche_available,
                 }
-                | Self::Bytes {
+                | Self::KByteArray {
                     null_niche_available,
                 },
                 Some(JniNiche::Null),
             ) => *null_niche_available = true,
             (
-                Self::Enum {
+                Self::REnumTag {
                     enum_type,
                     next_integer_niche,
                 },
@@ -200,7 +200,7 @@ impl JniWire {
             ) if enum_type.mapping.is_niche(n) => {
                 *next_integer_niche = Some(n as i32);
             }
-            (Self::Selector { next_integer_niche }, Some(JniNiche::Integer(n)))
+            (Self::SelectorTag { next_integer_niche }, Some(JniNiche::Integer(n)))
                 if n < 0 && i32::try_from(n).is_ok() =>
             {
                 *next_integer_niche = Some(n as i32)
@@ -217,33 +217,34 @@ impl JniWire {
     /// Disable niche availability, including for conditionally active payloads.
     pub fn clear_niche(&mut self) {
         match self {
-            Self::Callback { .. }
-            | Self::NativeBuffer { .. }
-            | Self::NativeRows { .. }
-            | Self::Native128 { .. } => {}
-            Self::Scalar {
+            Self::KCallback { .. }
+            | Self::FrameBytes
+            | Self::FrameUtf8
+            | Self::FrameRowRange { .. }
+            | Self::FrameInt128 { .. } => {}
+            Self::RScalar {
                 next_integer_niche, ..
             } => *next_integer_niche = None,
-            Self::Handle {
+            Self::RHandle {
                 null_niche_available,
                 ..
             }
-            | Self::BulkBuffer {
+            | Self::KBulkBytes {
                 null_niche_available,
                 ..
             }
-            | Self::Rows {
+            | Self::KRowArray {
                 null_niche_available,
                 ..
             }
-            | Self::Text {
+            | Self::KString {
                 null_niche_available,
             }
-            | Self::Bytes {
+            | Self::KByteArray {
                 null_niche_available,
             } => *null_niche_available = false,
-            Self::Selector { next_integer_niche }
-            | Self::Enum {
+            Self::SelectorTag { next_integer_niche }
+            | Self::REnumTag {
                 next_integer_niche, ..
             } => *next_integer_niche = None,
         }
@@ -252,25 +253,25 @@ impl JniWire {
     // been cleared. Validate compatibility independently of the current state.
     pub(crate) fn validate_niche(&self, niche: &JniNiche) -> Result<()> {
         match (self, niche) {
-            (Self::Scalar { primitive, .. }, JniNiche::Integer(n))
+            (Self::RScalar { primitive, .. }, JniNiche::Integer(n))
                 if is_integer_niche(*primitive, *n) =>
             {
                 Ok(())
             }
             (
-                Self::Handle { .. }
-                | Self::BulkBuffer { .. }
-                | Self::Rows { .. }
-                | Self::Text { .. }
-                | Self::Bytes { .. },
+                Self::RHandle { .. }
+                | Self::KBulkBytes { .. }
+                | Self::KRowArray { .. }
+                | Self::KString { .. }
+                | Self::KByteArray { .. },
                 JniNiche::Null,
             ) => Ok(()),
-            (Self::Enum { enum_type, .. }, JniNiche::Integer(n))
+            (Self::REnumTag { enum_type, .. }, JniNiche::Integer(n))
                 if enum_type.mapping.is_niche(*n) =>
             {
                 Ok(())
             }
-            (Self::Selector { .. }, JniNiche::Integer(n))
+            (Self::SelectorTag { .. }, JniNiche::Integer(n))
                 if *n < 0 && i32::try_from(*n).is_ok() =>
             {
                 Ok(())
@@ -279,7 +280,7 @@ impl JniWire {
         }
     }
     pub(crate) fn validate(&self) -> Result<()> {
-        if let Self::Enum { enum_type, .. } = self {
+        if let Self::REnumTag { enum_type, .. } = self {
             enum_type.validate()?;
         }
         match self.available_niche() {
@@ -400,7 +401,7 @@ mod tests {
         wire.clear_niche();
         assert!(wire.available_niche().is_none());
         wire.validate_niche(&JniNiche::Integer(-1)).unwrap();
-        assert!(JniWire::Selector {
+        assert!(JniWire::SelectorTag {
             next_integer_niche: Some(0)
         }
         .validate()
@@ -448,7 +449,7 @@ mod tests {
         wire.clear_niche();
         wire.set_niche(None).unwrap();
         assert!(wire.available_niche().is_none());
-        let JniWire::Handle {
+        let JniWire::RHandle {
             handle,
             condition,
             null_niche_available,
@@ -463,7 +464,7 @@ mod tests {
     }
     #[test]
     fn direct_enum_construction_is_checked_before_emission() {
-        let wire = JniWire::Scalar {
+        let wire = JniWire::RScalar {
             primitive: Primitive::I64,
             next_integer_niche: Some(-1),
         };

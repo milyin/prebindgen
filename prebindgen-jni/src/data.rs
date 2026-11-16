@@ -136,19 +136,19 @@ pub struct JniField {
 /// Also used for a retained callback's return value, which enters Rust.
 /// Enclosing optional and selector nodes supply activation during Kotlin traversal.
 #[derive(Clone, Debug)]
-pub struct JniInputRecord {
-    /// Name of the Kotlin input binding used to read this value's properties.
-    pub(crate) root: String,
-    /// Canonical Flat record providing the fields and declared Kotlin class.
-    pub(crate) source: TypeRef,
+pub struct JniInputKDataClass {
+    /// Kotlin parameter/local name used to read this value's properties.
+    pub(crate) k_name: String,
+    /// Canonical Rust record in Flat, providing the fields and Kotlin class.
+    pub(crate) r_type: TypeRef,
 }
 /// Reconstruct one Kotlin data-class output from its field conversion children.
 /// Also used for arguments delivered to a retained callback, which leave Rust.
-/// An enclosing [`JniOutputWireChain::Named`] supplies an explicit output label.
+/// An enclosing [`JniOutputWireChain::KParamName`] supplies an explicit output label.
 #[derive(Clone, Debug)]
-pub struct JniOutputRecord {
-    /// Canonical Flat record providing the fields and declared Kotlin class.
-    pub(crate) source: TypeRef,
+pub struct JniOutputKDataClass {
+    /// Canonical Rust record in Flat, providing the fields and Kotlin class.
+    pub(crate) r_type: TypeRef,
 }
 
 // Resolve the Rust type describing one public value, independently of boundary
@@ -767,11 +767,11 @@ pub(crate) fn record_fields<'a, Chain: group::ChainMetadata, Branch>(
 
 pub(crate) fn input_kotlin(
     nodes: &[JniInputWireNode],
-    d: &JniInputRecord,
+    d: &JniInputKDataClass,
     context: &KotlinContext<'_>,
     active: &str,
 ) -> Result<KotlinInput> {
-    let (record, class) = crate::metadata::source_data_class(context.source_types, &d.source)?;
+    let (record, class) = crate::metadata::source_data_class(context.source_types, &d.r_type)?;
     let class_name = class.fqn();
     let inner = nodes
         .iter()
@@ -800,7 +800,7 @@ pub(crate) fn input_kotlin(
     c.prepare_arguments(nodes.iter().any(|n| kotlin::has_handles(n, false)))?;
     out.parameters.push(format!(
         "{}: {}{}",
-        d.root,
+        d.k_name,
         class_name,
         if active == "true" { "" } else { "?" }
     ));
@@ -811,9 +811,9 @@ pub(crate) fn input_kotlin(
     for (index, (p, field)) in c.parameters.iter().zip(&record.fields).enumerate() {
         let name = p.split_once(": ").unwrap().0;
         let receiver = if active == "true" {
-            d.root.clone()
+            d.k_name.clone()
         } else {
-            format!("requireNotNull({})", d.root)
+            format!("requireNotNull({})", d.k_name)
         };
         let expr = format!(
             "{receiver}.{}",
@@ -823,7 +823,7 @@ pub(crate) fn input_kotlin(
         // handle values then describe the same input, even for handwritten
         // property getters. Primitive locals stay unboxed in inactive arms.
         let expr = if snapshot_fields {
-            let local = format!("__pb_{}_field{index}", d.root);
+            let local = format!("__pb_{}_field{index}", d.k_name);
             let ty = p.split_once(": ").unwrap().1;
             let primitive = match ty.trim_start_matches("kotlin.") {
                 "Boolean" => Some("false"),
@@ -888,7 +888,7 @@ pub(crate) fn input_kotlin(
         out.prepared_arguments.push(if active == "true" {
             a
         } else {
-            let absent = if matches!(inner[j].kind, JniWire::Handle { .. }) {
+            let absent = if matches!(inner[j].kind, JniWire::RHandle { .. }) {
                 "null".into()
             } else {
                 optional::default_kt(&inner[j].kind, None)
@@ -905,11 +905,11 @@ pub(crate) fn input_kotlin(
 }
 pub(crate) fn output_kotlin(
     nodes: &[JniOutputWireNode],
-    d: &JniOutputRecord,
+    d: &JniOutputKDataClass,
     context: &KotlinContext<'_>,
     owners: Option<&str>,
 ) -> Result<KotlinOutput> {
-    let (record, class) = crate::metadata::source_data_class(context.source_types, &d.source)?;
+    let (record, class) = crate::metadata::source_data_class(context.source_types, &d.r_type)?;
     let class_name = class.fqn();
     let mut fields = record_fields(nodes, record)?;
     let mut c = kotlin::output_components_checked(nodes, context, owners, |child| {
@@ -1023,7 +1023,9 @@ mod group_tests {
                 prebindgen_conversions::wire_definitions(std::iter::once(&output.outcomes.success))
                     .next()
                     .unwrap();
-            assert!(matches!(&wire.kind,JniWire::Enum{enum_type,..} if enum_type.class_name==name));
+            assert!(
+                matches!(&wire.kind,JniWire::REnumTag{enum_type,..} if enum_type.class_name==name)
+            );
         }
     }
     #[test]
@@ -1074,9 +1076,9 @@ mod group_tests {
     fn record(root: &str, source: TypeRef) -> JniInputWireNode {
         WireNode::Branch {
             controls: vec![],
-            meta: JniInputWireBranch::Record(JniInputRecord {
-                root: root.into(),
-                source,
+            meta: JniInputWireBranch::KDataClass(JniInputKDataClass {
+                k_name: root.into(),
+                r_type: source,
             }),
             children: Vec::new(),
         }
@@ -1098,17 +1100,17 @@ mod group_tests {
                 name: syn::parse_quote!(flag),
                 kind: JniWire::selector(),
             }],
-            meta: JniInputWireChain::Optional(JniOptional::Flag(syn::parse_quote!(flag))),
+            meta: JniInputWireChain::ROption(JniPresence::Flag(syn::parse_quote!(flag))),
             child: Box::default(),
         };
         let mut combined = WireNode::Branch {
             controls: vec![],
-            meta: JniInputWireBranch::Values,
+            meta: JniInputWireBranch::KValues,
             children: vec![optional, record("value")],
         };
         crate::group::validate_layout(&combined).unwrap();
         let WireNode::Branch {
-            meta: JniInputWireBranch::Values,
+            meta: JniInputWireBranch::KValues,
             children: elements,
             ..
         } = &mut combined
@@ -1121,7 +1123,7 @@ mod group_tests {
             .contains("duplicate Kotlin group binding `flag`"));
         let duplicates = WireNode::Branch {
             controls: vec![],
-            meta: JniInputWireBranch::Values,
+            meta: JniInputWireBranch::KValues,
             children: vec![record("value"), record("value")],
         };
         assert!(crate::group::validate_layout(&duplicates)
@@ -1139,8 +1141,8 @@ mod group_tests {
         .unwrap();
         let record = WireNode::Branch {
             controls: vec![],
-            meta: JniOutputWireBranch::Record(JniOutputRecord {
-                source: flat.type_ref(&syn::parse_quote!(Empty)).unwrap(),
+            meta: JniOutputWireBranch::KDataClass(JniOutputKDataClass {
+                r_type: flat.type_ref(&syn::parse_quote!(Empty)).unwrap(),
             }),
             children: vec![],
         };
@@ -1149,14 +1151,14 @@ mod group_tests {
                 name: syn::parse_quote!(flag),
                 kind: JniWire::selector(),
             }],
-            meta: JniOutputWireChain::Optional(JniOptional::Flag(syn::parse_quote!(flag))),
+            meta: JniOutputWireChain::ROption(JniPresence::Flag(syn::parse_quote!(flag))),
             child: Box::default(),
         };
         // Repeated source records have no Kotlin input binding to collide with
         // one another or with the output presence binding.
         let output = WireNode::Branch {
             controls: vec![],
-            meta: JniOutputWireBranch::Values,
+            meta: JniOutputWireBranch::KValues,
             children: vec![record.clone(), optional, record],
         };
         crate::group::validate_layout(&output).unwrap();
@@ -1185,7 +1187,7 @@ mod group_tests {
             .unwrap_err()
             .contains("named field children"));
         let field = WireNode::Chain {
-            meta: JniInputWireChain::Field(syn::parse_quote!(value)),
+            meta: JniInputWireChain::RField(syn::parse_quote!(value)),
             controls: vec![],
             child: Box::new(leaf),
         };
@@ -1243,18 +1245,18 @@ mod group_tests {
             field
         }
         crate::group::validate_layout(&field::<JniInputWireChain, JniInputWireBranch>(
-            JniInputWireChain::Field,
-            JniInputWireBranch::Record(JniInputRecord {
-                root: "point".into(),
-                source: flat.type_ref(&syn::parse_quote!(Point)).unwrap(),
+            JniInputWireChain::RField,
+            JniInputWireBranch::KDataClass(JniInputKDataClass {
+                k_name: "point".into(),
+                r_type: flat.type_ref(&syn::parse_quote!(Point)).unwrap(),
             }),
         ))
         .unwrap();
         let empty: JniOutputWireNode = WireNode::Branch {
             controls: vec![],
             children: vec![],
-            meta: JniOutputWireBranch::Record(JniOutputRecord {
-                source: flat.type_ref(&syn::parse_quote!(Empty)).unwrap(),
+            meta: JniOutputWireBranch::KDataClass(JniOutputKDataClass {
+                r_type: flat.type_ref(&syn::parse_quote!(Empty)).unwrap(),
             }),
         };
         let point = flat.type_ref(&syn::parse_quote!(Point)).unwrap();
@@ -1275,10 +1277,10 @@ mod group_tests {
             output_prefix: "output",
         };
         let input_record = field(
-            JniInputWireChain::Field,
-            JniInputWireBranch::Record(JniInputRecord {
-                root: "point".into(),
-                source: point.clone(),
+            JniInputWireChain::RField,
+            JniInputWireBranch::KDataClass(JniInputKDataClass {
+                k_name: "point".into(),
+                r_type: point.clone(),
             }),
         );
         let input = kotlin::input_kotlin(&input_record, &context).unwrap();
@@ -1292,8 +1294,8 @@ mod group_tests {
             assert!(input.arguments[0].starts_with(&format!("if ({active})")));
         }
         let output_record = field(
-            JniOutputWireChain::Field,
-            JniOutputWireBranch::Record(JniOutputRecord { source: point }),
+            JniOutputWireChain::RField,
+            JniOutputWireBranch::KDataClass(JniOutputKDataClass { r_type: point }),
         );
         let output = kotlin::output_kotlin(&output_record, &context).unwrap();
         assert_eq!(output.result_types, ["example.Point"]);
@@ -1301,7 +1303,7 @@ mod group_tests {
         assert!(output.delivered[0].contains("example.Point(result[0]"));
         let named = WireNode::Chain {
             controls: vec![],
-            meta: JniOutputWireChain::Named("location".into()),
+            meta: JniOutputWireChain::KParamName("location".into()),
             child: Box::new(output_record),
         };
         let output = kotlin::output_kotlin(&named, &context).unwrap();

@@ -421,7 +421,7 @@ pub(crate) fn input_leaves(
     for w in wires {
         let n = &w.name;
         let (kt, arg) = match &w.kind {
-            JniWire::Callback { callback } => {
+            JniWire::KCallback { callback } => {
                 let adapter = callback.adapter(&n.to_string(), context, conditional)?;
                 (
                     format!("{}{}", callback.fqn(), if conditional { "?" } else { "" }),
@@ -432,8 +432,8 @@ pub(crate) fn input_leaves(
                     },
                 )
             }
-            JniWire::Native128 { primitive: p, .. }
-            | JniWire::Scalar {
+            JniWire::FrameInt128 { primitive: p, .. }
+            | JniWire::RScalar {
                 primitive: p @ (Primitive::I128 | Primitive::U128),
                 ..
             } => {
@@ -457,8 +457,8 @@ pub(crate) fn input_leaves(
                     encoded,
                 )
             }
-            JniWire::Scalar { primitive: p, .. } => scalar::input(*p, &n.to_string()),
-            JniWire::Enum { enum_type, .. } => {
+            JniWire::RScalar { primitive: p, .. } => scalar::input(*p, &n.to_string()),
+            JniWire::REnumTag { enum_type, .. } => {
                 let member = enum_type.value_member();
                 (
                     format!(
@@ -473,7 +473,7 @@ pub(crate) fn input_leaves(
                     },
                 )
             }
-            JniWire::Handle {
+            JniWire::RHandle {
                 handle, condition, ..
             } => {
                 let value = if conditional {
@@ -519,13 +519,17 @@ pub(crate) fn input_leaves(
                     },
                 )
             }
-            JniWire::NativeRows { .. } | JniWire::Rows { .. } => {
+            JniWire::FrameRowRange { .. } | JniWire::KRowArray { .. } => {
                 return Err("array carrier requires a sequence node".into())
             }
-            JniWire::NativeBuffer { text, .. } => (
+            JniWire::FrameUtf8 | JniWire::FrameBytes => (
                 format!(
                     "{}{}",
-                    if *text { "String" } else { "ByteArray" },
+                    if matches!(w.kind, JniWire::FrameUtf8) {
+                        "String"
+                    } else {
+                        "ByteArray"
+                    },
                     if conditional { "?" } else { "" }
                 ),
                 n.to_string(),
@@ -540,10 +544,10 @@ pub(crate) fn input_leaves(
             ),
         };
         prepared_arguments.push(match &w.kind {
-            JniWire::Handle { condition, .. } if condition != "true" => {
+            JniWire::RHandle { condition, .. } if condition != "true" => {
                 format!("if ({condition}) {n} else null")
             }
-            JniWire::Handle { .. } => n.to_string(),
+            JniWire::RHandle { .. } => n.to_string(),
             _ => arg.clone(),
         });
         kt_params.push(format!("{n}: {kt}"));
@@ -616,25 +620,25 @@ pub(crate) fn output_leaves(
     let mut result_types = Vec::new();
     for (i, w) in wires.iter().enumerate() {
         let (kt, decode) = match &w.kind {
-            JniWire::Callback { .. } => return Err("callback objects are input-only".into()),
-            JniWire::Native128 { primitive: p, .. } | JniWire::Scalar { primitive: p, .. } => {
+            JniWire::KCallback { .. } => return Err("callback objects are input-only".into()),
+            JniWire::FrameInt128 { primitive: p, .. } | JniWire::RScalar { primitive: p, .. } => {
                 scalar::output_kotlin(*p, i, result)
             }
-            JniWire::Handle { handle, .. } => {
+            JniWire::RHandle { handle, .. } => {
                 let c = context.class_name(&handle.ty)?;
                 (c.clone(), format!("{c}({result}[{i}] as Long)"))
             }
-            JniWire::NativeBuffer { text: true } | JniWire::Text { .. } => {
+            JniWire::FrameUtf8 | JniWire::KString { .. } => {
                 ("String".into(), format!("{result}[{i}] as String"))
             }
-            JniWire::NativeBuffer { text: false }
-            | JniWire::BulkBuffer { .. }
-            | JniWire::Bytes { .. } => ("ByteArray".into(), format!("{result}[{i}] as ByteArray")),
-            JniWire::NativeRows { .. } | JniWire::Rows { .. } => {
+            JniWire::FrameBytes | JniWire::KBulkBytes { .. } | JniWire::KByteArray { .. } => {
+                ("ByteArray".into(), format!("{result}[{i}] as ByteArray"))
+            }
+            JniWire::FrameRowRange { .. } | JniWire::KRowArray { .. } => {
                 return Err("array carrier requires a sequence node".into())
             }
-            JniWire::Selector { .. } => ("Int".into(), format!("{result}[{i}] as Int")),
-            JniWire::Enum { enum_type, .. } => (
+            JniWire::SelectorTag { .. } => ("Int".into(), format!("{result}[{i}] as Int")),
+            JniWire::REnumTag { enum_type, .. } => (
                 enum_type.class_name.clone(),
                 format!(
                     "{}.{}({result}[{i}] as Int)",
@@ -650,7 +654,7 @@ pub(crate) fn output_leaves(
     let mut materialize = String::new();
     let mut cleanup = String::new();
     for (i, w) in wires.iter().enumerate() {
-        if let JniWire::Handle { handle, .. } = &w.kind {
+        if let JniWire::RHandle { handle, .. } = &w.kind {
             let c = context.class_name(&handle.ty)?;
             output_locals.push_str(&format!("        var {output}{i}: {c}? = null\n"));
             let value = if let Some(owners) = owners {
@@ -730,9 +734,9 @@ pub(crate) fn has_handles<Chain, Branch>(
     owned_only: bool,
 ) -> bool {
     match node {
-        prebindgen_conversions::WireNode::Leaf(wires) => wires.iter().any(|w|matches!(&w.kind,JniWire::Handle{handle,..} if !owned_only || handle.access == Access::Move)),
+        prebindgen_conversions::WireNode::Leaf(wires) => wires.iter().any(|w|matches!(&w.kind,JniWire::RHandle{handle,..} if !owned_only || handle.access == Access::Move)),
         prebindgen_conversions::WireNode::Chain { child, .. } => has_handles(child, owned_only),
-        prebindgen_conversions::WireNode::Branch { controls, children, .. } => controls.iter().any(|w|matches!(&w.kind,JniWire::Handle{handle,..} if !owned_only || handle.access == Access::Move)) || children.iter().any(|n|has_handles(n,owned_only)),
+        prebindgen_conversions::WireNode::Branch { controls, children, .. } => controls.iter().any(|w|matches!(&w.kind,JniWire::RHandle{handle,..} if !owned_only || handle.access == Access::Move)) || children.iter().any(|n|has_handles(n,owned_only)),
     }
 }
 
@@ -752,20 +756,32 @@ pub(crate) fn input_kotlin_when(
 ) -> Result<KotlinInput> {
     let mut out = match node {
         prebindgen_conversions::WireNode::Branch {
-            meta: JniInputWireBranch::Enum(group),
+            meta: JniInputWireBranch::KSealed(group),
             children,
             controls,
-        } => crate::sealed::input(children, controls, group, context, active),
+        } => crate::sealed::input(
+            children,
+            controls,
+            &group.r_type,
+            Some(&group.k_name),
+            context,
+            active,
+        ),
+        prebindgen_conversions::WireNode::Branch {
+            meta: JniInputWireBranch::KEnumParams { r_type },
+            children,
+            controls,
+        } => crate::sealed::input(children, controls, r_type, None, context, active),
         prebindgen_conversions::WireNode::Leaf(wires) => {
             input_leaves(&wires.iter().collect::<Vec<_>>(), context, active)
         }
         prebindgen_conversions::WireNode::Chain {
-            meta: JniInputWireChain::Bulk,
+            meta: JniInputWireChain::BulkFrame,
             controls,
             child,
         } => crate::bulk::input_kotlin(controls, child, context, active),
         prebindgen_conversions::WireNode::Branch {
-            meta: JniInputWireBranch::Alternatives,
+            meta: JniInputWireBranch::RChoices,
             children: elements,
             controls,
             ..
@@ -801,7 +817,7 @@ pub(crate) fn input_kotlin_when(
         prebindgen_conversions::WireNode::Chain {
             controls,
             child: element,
-            meta: JniInputWireChain::Sequence,
+            meta: JniInputWireChain::KList,
             ..
         } => {
             let [carrier] = controls.as_slice() else {
@@ -811,16 +827,16 @@ pub(crate) fn input_kotlin_when(
         }
         prebindgen_conversions::WireNode::Chain {
             child: element,
-            meta: JniInputWireChain::Optional(metadata),
+            meta: JniInputWireChain::ROption(metadata),
             ..
         } => optional::input_kotlin(element, metadata, context, active),
         prebindgen_conversions::WireNode::Branch {
-            meta: JniInputWireBranch::Record(record),
+            meta: JniInputWireBranch::KDataClass(record),
             children,
             ..
         } => data::input_kotlin(children, record, context, active),
         prebindgen_conversions::WireNode::Chain {
-            meta: JniInputWireChain::Argument(name),
+            meta: JniInputWireChain::RParam(name),
             child,
             ..
         } => {
@@ -831,7 +847,7 @@ pub(crate) fn input_kotlin_when(
             Ok(out)
         }
         prebindgen_conversions::WireNode::Chain {
-            meta: JniInputWireChain::Field(name),
+            meta: JniInputWireChain::RField(name),
             child,
             ..
         } => {
@@ -927,43 +943,47 @@ pub(crate) fn output_kotlin_scoped(
 ) -> Result<KotlinOutput> {
     match node {
         prebindgen_conversions::WireNode::Branch {
-            meta: JniOutputWireBranch::Enum(group),
+            meta: JniOutputWireBranch::KSealed(group),
             children,
             controls,
-        } => crate::sealed::output(children, controls, group, context, owners),
+        } => crate::sealed::output(
+            children,
+            controls,
+            &group.r_type,
+            Some(crate::sealed::class(context.source_types, &group.r_type)?),
+            context,
+            owners,
+        ),
+        prebindgen_conversions::WireNode::Branch {
+            meta: JniOutputWireBranch::KEnumParams { r_type },
+            children,
+            controls,
+        } => crate::sealed::output(children, controls, r_type, None, context, owners),
         prebindgen_conversions::WireNode::Leaf(wires) => {
             output_leaves(&wires.iter().collect::<Vec<_>>(), context, owners)
         }
         prebindgen_conversions::WireNode::Chain {
-            meta: JniOutputWireChain::Bulk,
+            meta: JniOutputWireChain::BulkFrame,
             child,
             ..
         } => crate::bulk::output_kotlin(child, context, owners),
         prebindgen_conversions::WireNode::Chain {
             child: element,
-            meta: JniOutputWireChain::Sequence(metadata),
+            meta: JniOutputWireChain::KList(metadata),
             ..
         } => {
             let name = format!("{}owners", context.output_prefix);
             let root = owners.is_none() && has_handles(element, false);
             let scope = if root { Some(name.as_str()) } else { owners };
             let mut output = if context.bulk {
-                if *metadata == JniSequence::Callback {
-                    return Err("bulk scopes cannot enclose callback sequence delivery".into());
-                }
                 crate::bulk::output_list(element, context, scope)?
             } else {
                 match *metadata {
-                    JniSequence::Buffered => {
+                    JniRowEncoding::ObjectArray => {
                         crate::sequence::output_list(element, context, scope, false)?
                     }
-                    JniSequence::TypedBuffered => {
+                    JniRowEncoding::RowClass => {
                         crate::sequence::output_list(element, context, scope, true)?
-                    }
-                    JniSequence::Callback => {
-                        return Err(
-                            "callback sequence requires function-level callback delivery".into(),
-                        )
                     }
                 }
             };
@@ -990,16 +1010,20 @@ pub(crate) fn output_kotlin_scoped(
         }
         prebindgen_conversions::WireNode::Chain {
             child: element,
-            meta: JniOutputWireChain::Optional(metadata),
+            meta: JniOutputWireChain::ROption(metadata),
             ..
         } => optional::output_kotlin(element, metadata, context, owners),
+        prebindgen_conversions::WireNode::Chain {
+            meta: JniOutputWireChain::KCallbackRows,
+            ..
+        } => Err("callback sequence requires function-level callback delivery".into()),
         prebindgen_conversions::WireNode::Branch {
-            meta: JniOutputWireBranch::Record(record),
+            meta: JniOutputWireBranch::KDataClass(record),
             children,
             ..
         } => data::output_kotlin(children, record, context, owners),
         prebindgen_conversions::WireNode::Chain {
-            meta: JniOutputWireChain::Named(name),
+            meta: JniOutputWireChain::KParamName(name),
             child,
             ..
         } => {
@@ -1016,7 +1040,7 @@ pub(crate) fn output_kotlin_scoped(
             Ok(out)
         }
         prebindgen_conversions::WireNode::Chain {
-            meta: JniOutputWireChain::Field(_),
+            meta: JniOutputWireChain::RField(_),
             child,
             ..
         } => output_components(std::slice::from_ref(child), context, owners),
@@ -1120,7 +1144,7 @@ mod tests {
                 &prebindgen_declarations::Condition::default(),
             ))
             .unwrap();
-        let JniWire::Handle { condition, .. } =
+        let JniWire::RHandle { condition, .. } =
             &mut prebindgen_conversions::wire_definitions_mut(std::iter::once(&mut plan.node))
                 .next()
                 .expect("logical wire index out of range")

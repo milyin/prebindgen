@@ -33,8 +33,8 @@ pub(crate) fn package_roots<I: KotlinInputConversion, O: KotlinOutputConversion>
     let nodes = crate::metadata::nodes(flat)?;
     for wire in nodes.into_iter().flat_map(metadata::BoundaryNode::wires) {
         match &wire.kind {
-            JniWire::Callback { callback } => names.push(callback.fqn()),
-            JniWire::Enum { enum_type, .. } => names.push(enum_type.class_name.clone()),
+            JniWire::KCallback { callback } => names.push(callback.fqn()),
+            JniWire::REnumTag { enum_type, .. } => names.push(enum_type.class_name.clone()),
             _ => {}
         }
     }

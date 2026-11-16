@@ -1,17 +1,20 @@
 //! Nullable JNI occurrence metadata and emission.
 use super::*;
 pub(crate) fn absent(w: &JniWire, niche: Option<&JniNiche>, input: bool) -> Result<TokenStream> {
-    if matches!(w, JniWire::NativeBuffer { .. } | JniWire::NativeRows { .. }) {
+    if matches!(
+        w,
+        JniWire::FrameBytes | JniWire::FrameUtf8 | JniWire::FrameRowRange { .. }
+    ) {
         return Ok(quote!(None));
     }
-    if matches!(w, JniWire::Native128 { .. }) {
+    if matches!(w, JniWire::FrameInt128 { .. }) {
         return Ok(quote!([0u8; 16]));
     }
     // Prepared text/bytes already are JVM references. Null means absent;
     // an empty buffer is a non-null JVM object, with no Rust Option wrapper.
     if matches!(
         w,
-        JniWire::Text { .. } | JniWire::Bytes { .. } | JniWire::BulkBuffer { .. }
+        JniWire::KString { .. } | JniWire::KByteArray { .. } | JniWire::KBulkBytes { .. }
     ) {
         return Ok(if input {
             quote!(Default::default())
@@ -19,29 +22,29 @@ pub(crate) fn absent(w: &JniWire, niche: Option<&JniNiche>, input: bool) -> Resu
             quote!(::prebindgen_jni_runtime::jni::objects::JObject::null())
         });
     }
-    if matches!(w, JniWire::Rows { .. }) {
+    if matches!(w, JniWire::KRowArray { .. }) {
         return Ok(if input {
             quote!(Default::default())
         } else {
             quote!(None)
         });
     }
-    if !input && matches!(w, JniWire::Handle { .. }) {
+    if !input && matches!(w, JniWire::RHandle { .. }) {
         return Ok(quote!(std::ptr::null_mut()));
     }
     if let Some(n) = niche {
         return Ok(n.integer_value());
     }
     Ok(match w {
-        JniWire::Scalar {
+        JniWire::RScalar {
             primitive: Primitive::F32 | Primitive::F64,
             ..
         } => quote!(0.0),
-        JniWire::Scalar {
+        JniWire::RScalar {
             primitive: Primitive::I128 | Primitive::U128,
             ..
         } if !input => quote!([0u8; 16]),
-        JniWire::Scalar {
+        JniWire::RScalar {
             primitive: Primitive::I128 | Primitive::U128,
             ..
         } => {
@@ -54,10 +57,10 @@ pub(crate) fn default_kt(w: &JniWire, niche: Option<&JniNiche>) -> String {
     if matches!(niche, Some(JniNiche::Null))
         && matches!(
             w,
-            JniWire::Rows { .. }
-                | JniWire::Text { .. }
-                | JniWire::Bytes { .. }
-                | JniWire::BulkBuffer { .. }
+            JniWire::KRowArray { .. }
+                | JniWire::KString { .. }
+                | JniWire::KByteArray { .. }
+                | JniWire::KBulkBytes { .. }
         )
     {
         return "null".into();
@@ -93,7 +96,7 @@ pub(crate) fn replace(s: &str, from: &str, to: &str) -> String {
 }
 pub(crate) fn input_kotlin(
     nodes: &JniInputWireNode,
-    o: &JniOptional,
+    o: &JniPresence,
     context: &KotlinContext<'_>,
     active: &str,
 ) -> Result<KotlinInput> {
@@ -186,7 +189,7 @@ pub(crate) fn input_kotlin(
         *a = a.replace(&format!("{} == 1", root), "true");
         *a = replace(a, root, "1");
     }
-    if matches!(o, JniOptional::Flag(_)) {
+    if matches!(o, JniPresence::Flag(_)) {
         out.arguments.push(tag.clone());
         out.prepared_arguments.push(tag);
     }
@@ -195,7 +198,7 @@ pub(crate) fn input_kotlin(
         let default = default_kt(&inner[j].kind, niche);
         let a = match niche {
             Some(JniNiche::Integer(_)) => format!("run {{ val value = {a}; require(value != {default}) {{ \"invalid option payload\" }}; value }}"),
-            Some(JniNiche::Null) if matches!(inner[j].kind, JniWire::Rows { .. } | JniWire::Text { .. } | JniWire::Bytes { .. } | JniWire::BulkBuffer { .. }) => {
+            Some(JniNiche::Null) if matches!(inner[j].kind, JniWire::KRowArray { .. } | JniWire::KString { .. } | JniWire::KByteArray { .. } | JniWire::KBulkBytes { .. }) => {
                 // An explicit presence parameter must not silently become None
                 // when a nullable raw reference is passed for its discriminator.
                 format!("requireNotNull({a}) {{ \"invalid option payload\" }}")
@@ -205,11 +208,11 @@ pub(crate) fn input_kotlin(
         out.arguments
             .push(format!("if ({presence}) {a} else {default}"));
     }
-    let offset = usize::from(matches!(o, JniOptional::Flag(_)));
+    let offset = usize::from(matches!(o, JniPresence::Flag(_)));
     for (j, a) in c.prepared_arguments.into_iter().enumerate() {
         if !matches!(
             inner[j].kind,
-            JniWire::Handle { .. } | JniWire::Rows { .. } | JniWire::BulkBuffer { .. }
+            JniWire::RHandle { .. } | JniWire::KRowArray { .. } | JniWire::KBulkBytes { .. }
         ) {
             out.prepared_arguments
                 .push(out.arguments[j + offset].clone());
@@ -220,7 +223,7 @@ pub(crate) fn input_kotlin(
             .is_some_and(|_| inner[j].name == *o.discriminator())
             && matches!(
                 inner[j].kind,
-                JniWire::Handle { .. } | JniWire::Rows { .. } | JniWire::BulkBuffer { .. }
+                JniWire::RHandle { .. } | JniWire::KRowArray { .. } | JniWire::KBulkBytes { .. }
             ) {
             format!("requireNotNull({a}) {{ \"invalid option payload\" }}")
         } else {
@@ -274,12 +277,12 @@ pub(crate) fn input_kotlin(
 }
 pub(crate) fn output_kotlin(
     nodes: &JniOutputWireNode,
-    o: &JniOptional,
+    o: &JniPresence,
     context: &KotlinContext<'_>,
     owners: Option<&str>,
 ) -> Result<KotlinOutput> {
     let wires = kotlin::leaf_wires(nodes);
-    let flag = usize::from(matches!(o, JniOptional::Flag(_)));
+    let flag = usize::from(matches!(o, JniPresence::Flag(_)));
     let p = if let Some(n) = o.niche() {
         let i = wires
             .iter()
@@ -335,10 +338,10 @@ impl JniNiche {
             Self::Null
                 if matches!(
                     wire,
-                    JniWire::Rows { .. }
-                        | JniWire::Text { .. }
-                        | JniWire::Bytes { .. }
-                        | JniWire::BulkBuffer { .. }
+                    JniWire::KRowArray { .. }
+                        | JniWire::KString { .. }
+                        | JniWire::KByteArray { .. }
+                        | JniWire::KBulkBytes { .. }
                 ) =>
             {
                 quote!(!#value.is_null())
@@ -364,7 +367,7 @@ pub(crate) fn remaining(wire: &JniWire, niche: &JniNiche) -> Option<JniNiche> {
     let JniNiche::Integer(n) = niche else {
         return None;
     };
-    if let JniWire::Enum { enum_type, .. } = wire {
+    if let JniWire::REnumTag { enum_type, .. } = wire {
         return i32::try_from(*n)
             .ok()?
             .checked_sub(1)

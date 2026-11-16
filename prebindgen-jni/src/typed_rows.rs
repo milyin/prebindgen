@@ -20,12 +20,12 @@ pub(crate) fn cache<Chain: group::ChainMetadata, Branch>(
 fn visit<'a>(node: &'a JniOutputWireNode, rows: &mut Vec<&'a JniOutputWireNode>, bulk: bool) {
     match node {
         WireNode::Chain {
-            meta: JniOutputWireChain::Bulk,
+            meta: JniOutputWireChain::BulkFrame,
             child,
             ..
         } => visit(child, rows, true),
         WireNode::Chain {
-            meta: JniOutputWireChain::Sequence(JniSequence::TypedBuffered),
+            meta: JniOutputWireChain::KList(JniRowEncoding::RowClass),
             child,
             ..
         } if !bulk => {
@@ -40,7 +40,7 @@ fn visit<'a>(node: &'a JniOutputWireNode, rows: &mut Vec<&'a JniOutputWireNode>,
         }
         WireNode::Leaf(wires) => {
             for wire in wires {
-                if let JniWire::Callback { callback } = &wire.kind {
+                if let JniWire::KCallback { callback } = &wire.kind {
                     for root in callback.bulk_nodes() {
                         visit_boundary(root, rows);
                     }
@@ -54,7 +54,7 @@ fn visit_boundary<'a>(root: metadata::BoundaryNode<'a>, rows: &mut Vec<&'a JniOu
         metadata::BoundaryNode::Output(node) => visit(node, rows, false),
         metadata::BoundaryNode::Input(node) => {
             for wire in prebindgen_conversions::wire_definitions(std::iter::once(node)) {
-                if let JniWire::Callback { callback } = &wire.kind {
+                if let JniWire::KCallback { callback } = &wire.kind {
                     for root in callback.bulk_nodes() {
                         visit_boundary(root, rows);
                     }

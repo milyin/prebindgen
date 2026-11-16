@@ -282,7 +282,7 @@ fn callback(flat: &JniBindings, name: &str) -> JniCallback {
     let input = flat.function(name).unwrap().input_conversions().unwrap()[0];
     prebindgen_conversions::wire_definitions(std::iter::once(input.input_node()))
         .find_map(|wire| {
-            if let JniWire::Callback { callback } = &wire.kind {
+            if let JniWire::KCallback { callback } = &wire.kind {
                 Some(callback.as_ref().clone())
             } else {
                 None

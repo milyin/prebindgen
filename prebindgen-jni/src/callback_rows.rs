@@ -25,11 +25,11 @@ pub(crate) fn cleanup(
         match node {
             WireNode::Leaf(_) => false,
             WireNode::Chain {
-                meta: JniInputWireChain::Sequence,
+                meta: JniInputWireChain::KList,
                 ..
             } => true,
             WireNode::Chain {
-                meta: JniInputWireChain::Bulk,
+                meta: JniInputWireChain::BulkFrame,
                 ..
             } => false,
             WireNode::Chain { child, .. } => rows(child),
@@ -127,7 +127,7 @@ fn receive(
         WireNode::Leaf(wires) => {
             let mut code = TokenStream::new();
             for wire in wires {
-                if let JniWire::Handle { handle, .. } = &wire.kind {
+                if let JniWire::RHandle { handle, .. } = &wire.kind {
                     if handle.access == Access::Move {
                         let name = &wire.name;
                         let ty = &handle.ty;
@@ -140,7 +140,7 @@ fn receive(
             code
         }
         WireNode::Chain {
-            meta: JniInputWireChain::Sequence,
+            meta: JniInputWireChain::KList,
             controls,
             child,
         } => {
@@ -169,7 +169,7 @@ fn receive(
             field(context, row, fields, carrier, scan)?
         }
         WireNode::Chain {
-            meta: JniInputWireChain::Bulk,
+            meta: JniInputWireChain::BulkFrame,
             controls,
             child,
         } => {
@@ -197,7 +197,7 @@ fn receive(
             )?
         }
         WireNode::Chain {
-            meta: JniInputWireChain::Optional(optional),
+            meta: JniInputWireChain::ROption(optional),
             child,
             ..
         } => {
@@ -210,7 +210,10 @@ fn receive(
             field(context, row, fields, name, quote!(if #present { #scan }))?
         }
         WireNode::Branch {
-            meta: JniInputWireBranch::Alternatives | JniInputWireBranch::Enum(_),
+            meta:
+                JniInputWireBranch::RChoices
+                | JniInputWireBranch::KSealed(_)
+                | JniInputWireBranch::KEnumParams { .. },
             controls,
             children,
         } => {
@@ -224,7 +227,7 @@ fn receive(
             field(context, row, fields, selector, code)?
         }
         WireNode::Chain {
-            meta: JniInputWireChain::Field(_) | JniInputWireChain::Argument(_),
+            meta: JniInputWireChain::RField(_) | JniInputWireChain::RParam(_),
             child,
             ..
         } => receive(child, context, row, fields, types)?,

@@ -43,26 +43,26 @@ struct Row {
 
 struct CarrierChild<'a> {
     node: &'a JniOutputWireNode,
-    sequence: Option<&'a JniSequence>,
+    row_encoding: Option<JniRowEncoding>,
 }
 
 fn carrier_child<'a>(node: &'a JniOutputWireNode, name: &syn::Ident) -> Option<CarrierChild<'a>> {
     match node {
         WireNode::Chain {
-            meta: JniOutputWireChain::Sequence(sequence),
+            meta: JniOutputWireChain::KList(sequence),
             controls,
             child,
         } if controls.iter().any(|w| &w.name == name) => Some(CarrierChild {
             node: child,
-            sequence: Some(sequence),
+            row_encoding: Some(*sequence),
         }),
         WireNode::Chain {
-            meta: JniOutputWireChain::Bulk,
+            meta: JniOutputWireChain::BulkFrame,
             controls,
             child,
         } if controls.iter().any(|w| &w.name == name) => Some(CarrierChild {
             node: child,
-            sequence: None,
+            row_encoding: None,
         }),
         WireNode::Chain { child, .. } => carrier_child(child, name),
         WireNode::Branch { children, .. } => {
@@ -101,7 +101,7 @@ impl Row {
             // need no destruction. No occurrence-local wire names enter the key.
             parts.push(wire.kind.jvm_descriptor().into());
             let field = match &wire.kind {
-                JniWire::Handle { handle, .. } => {
+                JniWire::RHandle { handle, .. } => {
                     if handle.access != Access::Move {
                         return Err("output cleanup requires owned handle allocations".into());
                     }
@@ -109,14 +109,16 @@ impl Row {
                     labels.push(names::type_label(&handle.ty));
                     Field::Handle(Box::new(handle.ty.clone()))
                 }
-                JniWire::Rows { .. } | JniWire::NativeRows { .. } => {
+                JniWire::KRowArray { .. } | JniWire::FrameRowRange { .. } => {
                     if matches!(
                         (&wire.kind, carrier),
-                        (JniWire::Rows { .. }, Carrier::Native | Carrier::NativeJni)
-                            | (
-                                JniWire::NativeRows { .. },
-                                Carrier::Objects | Carrier::TypedObjects
-                            )
+                        (
+                            JniWire::KRowArray { .. },
+                            Carrier::Native | Carrier::NativeJni
+                        ) | (
+                            JniWire::FrameRowRange { .. },
+                            Carrier::Objects | Carrier::TypedObjects
+                        )
                     ) {
                         return Err("collection cleanup carrier differs from its row layout".into());
                     }
@@ -125,8 +127,8 @@ impl Row {
                     let child_carrier =
                         if matches!(carrier, Carrier::Objects | Carrier::TypedObjects) {
                             if child
-                                .sequence
-                                .is_some_and(|s| *s == JniSequence::TypedBuffered)
+                                .row_encoding
+                                .is_some_and(|s| s == JniRowEncoding::RowClass)
                             {
                                 Carrier::TypedObjects
                             } else {
@@ -143,7 +145,7 @@ impl Row {
                     labels.push("Rows".into());
                     Field::Rows(Box::new(row))
                 }
-                JniWire::BulkBuffer { .. } => {
+                JniWire::KBulkBytes { .. } => {
                     if !matches!(carrier, Carrier::Objects | Carrier::TypedObjects) {
                         return Err("a JVM bulk frame cannot be a native row field".into());
                     }
@@ -157,14 +159,15 @@ impl Row {
                     labels.push("Frame".into());
                     Field::Frame(Box::new(row))
                 }
-                JniWire::Scalar { .. }
-                | JniWire::Enum { .. }
-                | JniWire::Selector { .. }
-                | JniWire::Text { .. }
-                | JniWire::Bytes { .. }
-                | JniWire::NativeBuffer { .. }
-                | JniWire::Native128 { .. } => continue,
-                JniWire::Callback { .. } => {
+                JniWire::RScalar { .. }
+                | JniWire::REnumTag { .. }
+                | JniWire::SelectorTag { .. }
+                | JniWire::KString { .. }
+                | JniWire::KByteArray { .. }
+                | JniWire::FrameBytes
+                | JniWire::FrameUtf8
+                | JniWire::FrameInt128 { .. } => continue,
+                JniWire::KCallback { .. } => {
                     return Err("callback objects cannot own output row resources".into())
                 }
             };
@@ -386,7 +389,7 @@ impl Helpers {
             metadata::BoundaryNode::Output(node) => self.visit(node, false, types),
             metadata::BoundaryNode::Input(node) => {
                 for wire in prebindgen_conversions::wire_definitions(std::iter::once(node)) {
-                    if let JniWire::Callback { callback } = &wire.kind {
+                    if let JniWire::KCallback { callback } = &wire.kind {
                         for root in callback.bulk_nodes() {
                             self.visit_boundary(root, types)?;
                         }
@@ -399,12 +402,12 @@ impl Helpers {
     fn visit(&mut self, node: &JniOutputWireNode, bulk: bool, types: &JniTypes) -> Result<()> {
         match node {
             WireNode::Chain {
-                meta: JniOutputWireChain::Bulk,
+                meta: JniOutputWireChain::BulkFrame,
                 child,
                 ..
             } => self.visit(child, true, types)?,
             WireNode::Chain {
-                meta: JniOutputWireChain::Sequence(sequence),
+                meta: JniOutputWireChain::KList(sequence),
                 child,
                 ..
             } => {
@@ -412,9 +415,8 @@ impl Helpers {
                     Some(Carrier::Native)
                 } else {
                     match *sequence {
-                        JniSequence::Buffered => Some(Carrier::Objects),
-                        JniSequence::TypedBuffered => Some(Carrier::TypedObjects),
-                        JniSequence::Callback => None,
+                        JniRowEncoding::ObjectArray => Some(Carrier::Objects),
+                        JniRowEncoding::RowClass => Some(Carrier::TypedObjects),
                     }
                 };
                 if let Some(carrier) = carrier {
@@ -434,7 +436,7 @@ impl Helpers {
             }
             WireNode::Leaf(wires) => {
                 for wire in wires {
-                    if let JniWire::Callback { callback } = &wire.kind {
+                    if let JniWire::KCallback { callback } = &wire.kind {
                         for root in callback.bulk_nodes() {
                             self.visit_boundary(root, types)?;
                         }

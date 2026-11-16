@@ -3,8 +3,7 @@ use super::*;
 use prebindgen_declarations::{EnumEncoding, EnumForm};
 
 use prebindgen_conversions::{InputConversion, Wire, WireNode};
-use prebindgen_flat::{PayloadEnum, PayloadField, PayloadVariant, TypeDefinition, TypeRef};
-use std::rc::Rc;
+use prebindgen_flat::{PayloadEnum, PayloadField, PayloadVariant, TypeRef};
 
 /// Declare a Kotlin sealed interface for a Rust payload enum or concrete Result.
 #[derive(Clone)]
@@ -40,44 +39,31 @@ impl DeclJniSealedClass {
 #[macro_export]
 macro_rules! sealed_class {($($ty:tt)+)=>{$crate::DeclJniSealedClass::new($crate::__type(stringify!($($ty)+)))};}
 
-/// Prepared enum grouping in an occurrence's wire tree.
+/// One Kotlin sealed input whose selected variant becomes a Rust enum value.
 #[derive(Clone, Debug)]
-pub struct JniEnumGroup {
+pub struct JniInputKSealed {
     /// Flat-issued source type reference, also identifying the tag mapping.
-    pub source: TypeRef,
-    /// Expose one sealed-class value rather than expanded tag/field parameters.
-    pub value: bool,
+    pub r_type: TypeRef,
     /// Public Kotlin input binding.
-    pub root: String,
+    pub k_name: String,
 }
-impl JniEnumGroup {
-    pub(crate) fn declaration<'a>(
-        &self,
-        types: &'a crate::metadata::JniTypes,
-    ) -> Result<(&'a PayloadEnum<(), JniField>, Option<&'a Class>)> {
-        let source = crate::metadata::source_type(types, &self.source)?;
-        let TypeDefinition::PayloadEnum(enumeration) = &source.definition else {
-            return Err(format!(
-                "`{}` is not a source payload enum",
-                type_key(&source.ty)
-            ));
-        };
-        let class = if self.value {
-            Some(
-                source
-                    .metadata
-                    .class
-                    .as_deref()
-                    .filter(|class| {
-                        matches!(class.representation, ClassRepresentation::Sealed { .. })
-                    })
-                    .ok_or("ordinary payload enum requires a declared sealed class")?,
-            )
-        } else {
-            None
-        };
-        Ok((enumeration, class))
-    }
+/// One Kotlin sealed output reconstructed from the active Rust enum variant.
+#[derive(Clone, Debug)]
+pub struct JniOutputKSealed {
+    /// Canonical Rust enum in Flat, also identifying its tag mapping.
+    pub r_type: TypeRef,
+}
+pub(crate) fn class<'a>(
+    types: &'a crate::metadata::JniTypes,
+    r_type: &TypeRef,
+) -> Result<&'a Class> {
+    crate::metadata::source_enum(types, r_type)?;
+    crate::metadata::source_type(types, r_type)?
+        .metadata
+        .class
+        .as_deref()
+        .filter(|class| matches!(class.representation, ClassRepresentation::Sealed { .. }))
+        .ok_or_else(|| "ordinary payload enum requires a declared sealed class".into())
 }
 pub(crate) fn variant_name(class: &Class, variant: &syn::Ident) -> String {
     let source = variant.to_string();
@@ -126,7 +112,7 @@ pub(crate) fn encoding<
 >(
     request: prebindgen_declarations::EnumVariants<'_, JniCodec, V>,
     direction: prebindgen_declarations::Direction,
-    wrap: impl FnOnce(Rc<JniEnumGroup>) -> Branch,
+    wrap: impl FnOnce(TypeRef, EnumForm) -> Branch,
 ) -> Result<EnumEncoding<Branch>> {
     let source = request.flat.payload_enum(request.ty)?;
     let class = request
@@ -176,17 +162,7 @@ pub(crate) fn encoding<
         vec![]
     };
     Ok(EnumEncoding {
-        metadata: wrap(Rc::new(JniEnumGroup {
-            source: request.flat.type_ref(request.ty)?,
-            value: grouped,
-            root: request
-                .selector
-                .name
-                .to_string()
-                .strip_suffix("_tag")
-                .expect("enum selector suffix")
-                .into(),
-        })),
+        metadata: wrap(request.flat.type_ref(request.ty)?, request.form),
         inactive,
     })
 }
@@ -227,11 +203,15 @@ pub(crate) fn variant_fields<'a, Chain: group::ChainMetadata, Branch>(
 pub(crate) fn input(
     nodes: &[JniInputWireNode],
     controls: &[Wire<JniWire>],
-    meta: &JniEnumGroup,
+    r_type: &TypeRef,
+    k_name: Option<&str>,
     context: &KotlinContext<'_>,
     active: &str,
 ) -> Result<KotlinInput> {
-    let (source, declaration) = meta.declaration(context.source_types)?;
+    let source = crate::metadata::source_enum(context.source_types, r_type)?;
+    let declaration = k_name
+        .map(|_| class(context.source_types, r_type))
+        .transpose()?;
     if source.variants.len() != nodes.len() {
         return Err("enum occurrence differs from its source variants".into());
     }
@@ -243,7 +223,7 @@ pub(crate) fn input(
         let tree = WireNode::Branch {
             controls: controls.to_vec(),
             children: nodes.to_vec(),
-            meta: JniInputWireBranch::Alternatives,
+            meta: JniInputWireBranch::RChoices,
         };
         let mut out = kotlin::input_kotlin_when(&tree, context, active)?;
         for path in &mut out.parameter_paths {
@@ -262,7 +242,7 @@ pub(crate) fn input(
         return Ok(out);
     }
     let class = class_name.as_ref().unwrap();
-    let root = &meta.root;
+    let root = k_name.expect("KSealed input binding");
     let tag_name = tag.name.to_string();
     let cases = source
         .variants
@@ -354,11 +334,12 @@ fn replace_input(input: &mut KotlinInput, old: &str, new: &str) {
 pub(crate) fn output(
     nodes: &[JniOutputWireNode],
     controls: &[Wire<JniWire>],
-    meta: &JniEnumGroup,
+    r_type: &TypeRef,
+    declaration: Option<&Class>,
     context: &KotlinContext<'_>,
     owners: Option<&str>,
 ) -> Result<KotlinOutput> {
-    let (source, declaration) = meta.declaration(context.source_types)?;
+    let source = crate::metadata::source_enum(context.source_types, r_type)?;
     if source.variants.len() != nodes.len() {
         return Err("enum occurrence differs from its source variants".into());
     }
@@ -538,14 +519,17 @@ fn expanded_names(
     owners: Option<&str>,
 ) -> Result<Vec<Option<String>>> {
     if let WireNode::Branch {
-        meta: JniOutputWireBranch::Record(_) | JniOutputWireBranch::Enum(_),
+        meta:
+            JniOutputWireBranch::KDataClass(_)
+            | JniOutputWireBranch::KSealed(_)
+            | JniOutputWireBranch::KEnumParams { .. },
         ..
     } = node
     {
         return Ok(kotlin::output_kotlin_scoped(node, context, owners)?.result_names);
     }
     if let WireNode::Chain {
-        meta: JniOutputWireChain::Field(field),
+        meta: JniOutputWireChain::RField(field),
         child,
         ..
     } = node
@@ -752,7 +736,7 @@ pub(crate) fn emit_tags<I: KotlinInputConversion, O: KotlinOutputConversion>(
         match node {
             WireNode::Leaf(wires) => {
                 for wire in wires {
-                    if let JniWire::Callback { callback } = &wire.kind {
+                    if let JniWire::KCallback { callback } = &wire.kind {
                         for root in callback.bulk_nodes() {
                             match root {
                                 metadata::BoundaryNode::Input(node) => {
@@ -768,11 +752,11 @@ pub(crate) fn emit_tags<I: KotlinInputConversion, O: KotlinOutputConversion>(
             }
             WireNode::Chain { child, .. } => visit(child, package, by_package)?,
             WireNode::Branch { meta, children, .. } => {
-                if let Some(e) = meta.enumeration() {
+                if let Some(e) = meta.r_enum() {
                     by_package
                         .entry(package.into())
                         .or_default()
-                        .insert(e.source.clone());
+                        .insert(e.clone());
                 }
                 for child in children {
                     visit(child, package, by_package)?;

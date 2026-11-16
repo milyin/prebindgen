@@ -1415,7 +1415,7 @@ fn logical_outcomes_keep_typed_errors_and_match_both_jni_sequence_deliveries() {
             .next()
             .unwrap()
             .kind,
-        JniWire::Scalar {
+        JniWire::RScalar {
             primitive: Primitive::I64,
             ..
         }
@@ -1425,7 +1425,7 @@ fn logical_outcomes_keep_typed_errors_and_match_both_jni_sequence_deliveries() {
             .nth(1)
             .unwrap()
             .kind,
-        JniWire::Text { .. }
+        JniWire::KString { .. }
     ));
     assert_eq!(
         prebindgen_conversions::wire_definitions(std::iter::once(binding_failure)).count(),
@@ -2817,7 +2817,7 @@ fn type_derived_bulk_runtime_names_are_also_reserved() {
 fn bulk_result(model: &JniBindings, name: &str) -> bool {
     let output = test_export(model, name).ret.slot;
     group::result_packet_fields(&output.output_outcomes().success)
-        .any(|wire| matches!(wire.kind, JniWire::BulkBuffer { .. }))
+        .any(|wire| matches!(wire.kind, JniWire::KBulkBytes { .. }))
 }
 
 #[test]
@@ -2857,7 +2857,7 @@ fn automatic_bulk_collection_outputs_keep_inputs_and_direct_buffers_ordinary() {
     assert!(matches!(
         input.input_node(),
         prebindgen_conversions::WireNode::Chain {
-            meta: JniInputWireChain::Sequence,
+            meta: JniInputWireChain::KList,
             ..
         }
     ));
@@ -3005,8 +3005,8 @@ fn expanded_result_uses_bulk_for_automatic_collection_without_packing_string_sib
     let plan = model.function("make").unwrap().output_conversion().unwrap();
     let fields = group::result_packet_fields(&plan.output_outcomes().success).collect::<Vec<_>>();
     assert_eq!(fields.len(), 2);
-    assert!(matches!(fields[0].kind, JniWire::BulkBuffer { .. }));
-    assert!(matches!(fields[1].kind, JniWire::Text { .. }));
+    assert!(matches!(fields[0].kind, JniWire::KBulkBytes { .. }));
+    assert!(matches!(fields[1].kind, JniWire::KString { .. }));
 }
 
 #[test]
@@ -3370,9 +3370,9 @@ fn callback_element_is_bulk(model: &JniBindings, function: &str) -> bool {
     let output = test_export(model, function).ret.slot;
     let (_, element, delivery) =
         sequence::return_sequence(&output.output_outcomes().success).unwrap();
-    assert!(matches!(delivery, JniSequence::Callback));
+    assert!(matches!(delivery, JniOutputWireChain::KCallbackRows));
     let fields = group::callback_parameters(element).collect::<Vec<_>>();
-    matches!(fields.as_slice(), [wire] if matches!(wire.kind, JniWire::BulkBuffer { .. }))
+    matches!(fields.as_slice(), [wire] if matches!(wire.kind, JniWire::KBulkBytes { .. }))
 }
 
 #[test]
@@ -3572,13 +3572,13 @@ fn resolved_callback_elements_can_keep_optional_presence_outside_a_bulk_frame() 
     // The optional uses a null frame, so presence stays outside its payload
     // without adding a separate discriminator argument.
     assert!(
-        matches!(element, prebindgen_conversions::WireNode::Chain {meta:JniOutputWireChain::Optional(_),child,..} if matches!(child.as_ref(),prebindgen_conversions::WireNode::Chain {meta:JniOutputWireChain::Bulk,..}))
+        matches!(element, prebindgen_conversions::WireNode::Chain {meta:JniOutputWireChain::ROption(_),child,..} if matches!(child.as_ref(),prebindgen_conversions::WireNode::Chain {meta:JniOutputWireChain::BulkFrame,..}))
     );
     assert_eq!(fields.len(), 1);
     assert_eq!(
         fields
             .iter()
-            .filter(|w| matches!(w.kind, JniWire::BulkBuffer { .. }))
+            .filter(|w| matches!(w.kind, JniWire::KBulkBytes { .. }))
             .count(),
         1
     );
@@ -3806,7 +3806,7 @@ fn ordinary_output_rows_respect_jvm_constructor_slot_limit() {
         )
         .unwrap();
         assert!(
-            matches!(output.metadata, JniOutputWireChain::Sequence(actual) if actual == if typed { JniSequence::TypedBuffered } else { JniSequence::Buffered })
+            matches!(output.metadata, JniOutputWireChain::KList(actual) if actual == if typed { JniRowEncoding::RowClass } else { JniRowEncoding::ObjectArray })
         );
         assert_eq!(output.store.to_string().contains("construct"), typed);
         assert_eq!(output.store.to_string().contains("valueOf"), !typed);
@@ -3818,7 +3818,7 @@ fn legacy_buffered_schema_keeps_array_decoder_and_input_only_skips_registration(
     let node = prebindgen_conversions::WireNode::Chain {
         controls: vec![prebindgen_conversions::Wire {
             name: syn::parse_quote!(rows),
-            kind: JniWire::Rows {
+            kind: JniWire::KRowArray {
                 condition: "true".into(),
                 null_niche_available: true,
             },
@@ -3829,7 +3829,7 @@ fn legacy_buffered_schema_keeps_array_decoder_and_input_only_skips_registration(
                 kind: JniWire::scalar(Primitive::I64),
             },
         ])),
-        meta: JniOutputWireChain::Sequence(JniSequence::Buffered),
+        meta: JniOutputWireChain::KList(JniRowEncoding::ObjectArray),
     };
     let context = KotlinContext {
         package: "test",

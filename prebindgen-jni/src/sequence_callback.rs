@@ -59,7 +59,7 @@ pub(crate) fn transport(
         }],
         commit_each: true,
         fallible: true,
-        metadata: JniOutputWireChain::Sequence(JniSequence::Callback),
+        metadata: JniOutputWireChain::KCallbackRows,
         begin: quote! {
             // Every accepted row belongs to the Kotlin collector, including
             // when a later row fails. Publish this before any row can arrive.
@@ -168,7 +168,7 @@ pub(crate) fn fold<O: KotlinOutputConversion>(
                 meta: encoding,
                 child,
                 ..
-            } if (encoding.sequence().is_some()) => kotlin::has_handles(child, false),
+            } if (encoding.is_sequence()) => kotlin::has_handles(child, false),
             prebindgen_conversions::WireNode::Chain { child, .. } => nested_owners(child),
             prebindgen_conversions::WireNode::Branch { children, .. } => {
                 children.iter().any(nested_owners)

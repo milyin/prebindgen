@@ -121,7 +121,7 @@ The adapters already describe native type and access in their wire kinds:
 
 - [`CWire::Pointer` and `CWire::Owned`](https://github.com/milyin/prebindgen/blob/e78f4fd24ffaf85ccb342980f7dc33c377d39c34/prebindgen-c/src/wire.rs) carry
   pointer/inline-owner type, access and storage representation.
-- [`JniWire::Handle`](https://github.com/milyin/prebindgen/blob/e78f4fd24ffaf85ccb342980f7dc33c377d39c34/prebindgen-jni/src/wire.rs) carries boxed allocation
+- [`JniWire::RHandle`](https://github.com/milyin/prebindgen/blob/e78f4fd24ffaf85ccb342980f7dc33c377d39c34/prebindgen-jni/src/wire.rs) carries boxed allocation
   type, access and active condition.
 - C's [incoming callback leaf](https://github.com/milyin/prebindgen/blob/e78f4fd24ffaf85ccb342980f7dc33c377d39c34/prebindgen-c/src/callback.rs#L232)
   has an empty `resources` list but increments the consumed count when adopting

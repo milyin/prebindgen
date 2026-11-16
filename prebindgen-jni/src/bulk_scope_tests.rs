@@ -45,8 +45,8 @@ fn prepared() -> (JniBindings, JniOutputPlan<JniWire>) {
 fn prefer_jvm_rows(node: &mut JniOutputWireNode) {
     match node {
         WireNode::Chain { meta, child, .. } => {
-            if let JniOutputWireChain::Sequence(delivery) = meta {
-                *delivery = JniSequence::TypedBuffered;
+            if let JniOutputWireChain::KList(delivery) = meta {
+                *delivery = JniRowEncoding::RowClass;
             }
             prefer_jvm_rows(child);
         }
@@ -60,7 +60,7 @@ fn one_bulk_scope_controls_nested_rows_and_overrides_ordinary_jvm_preferences() 
     let (mut model, mut plan) = prepared();
     assert_eq!(
         prebindgen_conversions::wire_definitions(std::iter::once(&plan.outcomes.success))
-            .filter(|wire| matches!(wire.kind, JniWire::NativeRows { .. }))
+            .filter(|wire| matches!(wire.kind, JniWire::FrameRowRange { .. }))
             .count(),
         2
     );
@@ -85,7 +85,7 @@ fn complete_boundaries_reject_native_rows_without_a_scope_and_object_rows_inside
     let (_, plan) = prepared();
     let mut root = plan.outcomes.success;
     let WireNode::Chain {
-        meta: JniOutputWireChain::Bulk,
+        meta: JniOutputWireChain::BulkFrame,
         child,
         ..
     } = &mut root
@@ -100,7 +100,7 @@ fn complete_boundaries_reject_native_rows_without_a_scope_and_object_rows_inside
     let WireNode::Chain { controls, .. } = child.as_mut() else {
         panic!()
     };
-    controls[0].kind = JniWire::Rows {
+    controls[0].kind = JniWire::KRowArray {
         condition: "true".into(),
         null_niche_available: true,
     };
@@ -126,8 +126,10 @@ fn bulk_scope_does_not_leak_to_the_next_function_parameter() {
     let call = model.function("mixed").unwrap().metadata[0].call().unwrap();
     let packed = group::argument_parameters(call.inputs[0].input_node()).collect::<Vec<_>>();
     let ordinary = group::argument_parameters(call.inputs[1].input_node()).collect::<Vec<_>>();
-    assert!(matches!(packed[0].kind, JniWire::BulkBuffer { .. }));
-    assert!(matches!(ordinary.as_slice(), [wire] if matches!(wire.kind, JniWire::Rows { .. })));
+    assert!(matches!(packed[0].kind, JniWire::KBulkBytes { .. }));
+    assert!(
+        matches!(ordinary.as_slice(), [wire] if matches!(wire.kind, JniWire::KRowArray { .. }))
+    );
     generate(&model).unwrap();
 }
 
@@ -164,18 +166,18 @@ fn native_row_compatibility_distinguishes_enum_unions_from_selector_fields() {
         // Derive each layout independently. Neither wire tree retains one.
         let layout = bulk::record(&element, &model.types).unwrap();
         let node = WireNode::Chain {
-            meta: JniInputWireChain::Bulk,
+            meta: JniInputWireChain::BulkFrame,
             controls: vec![prebindgen_conversions::Wire {
                 name: syn::parse_quote!(frame),
-                kind: JniWire::BulkBuffer {
+                kind: JniWire::KBulkBytes {
                     null_niche_available: false,
                 },
             }],
             child: Box::new(WireNode::Chain {
-                meta: JniInputWireChain::Sequence,
+                meta: JniInputWireChain::KList,
                 controls: vec![prebindgen_conversions::Wire {
                     name: syn::parse_quote!(rows),
-                    kind: JniWire::NativeRows {
+                    kind: JniWire::FrameRowRange {
                         condition: "true".into(),
                     },
                 }],
@@ -185,14 +187,8 @@ fn native_row_compatibility_distinguishes_enum_unions_from_selector_fields() {
         group::validate_layout(&node).unwrap();
         (node, layout)
     };
-    let (enumeration, enum_layout) = rows(JniInputWireBranch::Enum(std::rc::Rc::new(
-        crate::sealed::JniEnumGroup {
-            source,
-            value: false,
-            root: "event".into(),
-        },
-    )));
-    let (selector, selector_layout) = rows(JniInputWireBranch::Alternatives);
+    let (enumeration, enum_layout) = rows(JniInputWireBranch::KEnumParams { r_type: source });
+    let (selector, selector_layout) = rows(JniInputWireBranch::RChoices);
     assert_ne!(enum_layout.key, selector_layout.key);
     assert!(enum_layout.definitions.to_string().contains("union"));
     assert!(!selector_layout.definitions.to_string().contains("union"));

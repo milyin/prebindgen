@@ -201,7 +201,7 @@ pub fn generate() -> Result<JniGen> {
     let node = original.input_node();
     let callback = prebindgen_conversions::wire_definitions(std::iter::once(node))
         .find_map(|wire| {
-            if let JniWire::Callback { callback } = &wire.kind {
+            if let JniWire::KCallback { callback } = &wire.kind {
                 Some(callback.clone())
             } else {
                 None

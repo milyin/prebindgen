@@ -660,9 +660,10 @@ local binding/grouping policy. Class names, variant/field names and Kotlin
 property types are read from the canonical Flat declarations during emission.
 `KotlinContext::source_types` borrows that actual type table, including for custom
 converters. Handle conversions use this same table; there is no separate
-`KotlinClass` registry. Record and enum fields are validated as their conversions
-are emitted, without retaining property tables or emitting a field again just to
-check its type. Bulk frame and row layouts are temporary values derived from the
+`KotlinClass` registry. Record and enum fields are validated against their declared
+property types during emission, before activation guards can widen temporary
+values to nullable types. No duplicate property tables are retained. Bulk frame
+and row layouts are temporary values derived from the
 wire subtree and canonical source types when preparing Rust code, emitting
 Kotlin, measuring target layouts or building cleanup helpers. No layout
 descriptors are retained in the wire tree.
@@ -670,19 +671,20 @@ Changing the referenced source tags or wire layout after preparation requires
 preparing the conversions again; Kotlin class
 and variant-name overrides are resolved from the current declarations.
 
-`Bulk` on either directional JNI chain establishes packed encoding for its entire child tree during
-Rust preparation and Kotlin interpretation. Sequences inherit this scope: their
-`JniSequence` metadata selects materialized or callback delivery, with an optional
-ordinary-JVM typed-row preference. There is no sequence-level bulk policy.
-Under bulk, materialized sequences use offset/count ranges and contiguous native
-rows; nested collections share the enclosing frame. Callback delivery can wrap a
-bulk element, but a bulk frame cannot enclose a callback-delivered sequence.
+`BulkFrame` on either directional JNI chain establishes packed encoding for its
+entire child tree during Rust preparation and Kotlin interpretation. Input
+`KList` reads buffered elements. Output `KList(JniRowEncoding)` materializes a
+Kotlin list; `KCallbackRows` delivers elements through the generated Kotlin row
+callback. `JniRowEncoding::ObjectArray` and `RowClass` choose ordinary JVM row
+objects. Under `BulkFrame`, lists instead use offset/count ranges and contiguous
+native rows; nested collections share the enclosing frame. Callback delivery can
+wrap a bulk element, but a bulk frame cannot enclose callback-delivered rows.
 
 Custom Kotlin conversion contexts start with `KotlinContext::bulk = false` at a
-call/callback boundary; the enclosing Bulk interpreter sets it for descendants.
+call/callback boundary; the enclosing BulkFrame interpreter sets it for descendants.
 Custom native sequence compilers describe ranges with
-`JniWire::NativeRows { condition }`; stride and field offsets are derived from
-the sequence child. `Bulk` is a unit variant in both directions: activation follows the
+`JniWire::FrameRowRange { condition }`; stride and field offsets are derived from
+the sequence child. `BulkFrame` is a unit variant in both directions: activation follows the
 enclosing optional and selector branches. Callback results cache every selected
 frame before source construction and retain the existing result-level cleanup
 guard, so a constructor failure also reclaims owners in later unread frames. `JniCallback::into_input(&flat, wire, target)` receives
@@ -691,7 +693,7 @@ Sequence transport requests and shared sequence
 helpers receive the source Flat explicitly, so adapters can resolve declarations
 without embedding them in each element tree. Fragment validation permits an
 unattached enclosing scope; complete boundary validation requires a matching
-physical encoding under the actual Bulk nodes.
+physical encoding under the actual BulkFrame nodes.
 
 Prepared input and output trees have different types. A function parameter uses
 `JniInputWireNode` or `CInputWireNode`; its result uses `JniOutputWireNode` or
@@ -703,39 +705,44 @@ Prepared metadata describes the operation performed on its children directly.
 A chain has exactly one child subtree; a branch has an ordered child list.
 The shape counts subtrees, rather than the physical values produced by them.
 
-| Variant | Shape | Meaning |
+JNI metadata uses `R` for Rust identities/types and `K` for Kotlin values/API
+names. These names belong to adapter metadata; `WireNode::{Leaf, Chain, Branch}`
+remains universal.
+
+| JNI variant | Shape | Meaning |
 | --- | --- | --- |
-| `Values` | Branch | Convert all ordered components, such as constructor arguments or combined output views. |
-| `Fields` | Branch | Convert source fields in declaration order; each child is a `Field` chain. |
-| `Field(name)` | Chain | Label one field's conversion subtree, which may produce zero, one or several wires. |
-| `JniInputWireBranch::Record(record)` / `JniOutputWireBranch::Record(record)` | Branch | Decompose or reconstruct one Kotlin data-class value using its child field conversions. |
-| `JniInputWireChain::Argument(name)` | Chain | Preserve the parameter path of one source argument. |
-| `JniOutputWireChain::Named(name)` | Chain | Give a delivered Kotlin output view an explicit name. |
-| `CInputWireBranch::Alternatives` / `JniInputWireBranch::Alternatives` | Branch | Select one constructor alternative. |
-| `Enum(...)` | Branch | Convert the selected source enum variant. |
-| `Optional(...)` | Chain | Convert the child payload when present; encode absence with a flag or niche. |
-| `Sequence` / `Sequence(...)` | Chain | Repeat the child element conversion for the collection's rows. |
-| JNI `Bulk` | Chain | Pack or unpack the child subtree in one native C-representation frame. |
-| C `Tagged(...)` | Chain | Pack or unpack the child enum subtree through a tagged C carrier. |
+| `KValues` | Branch | Combine the children's Kotlin values in order. |
+| `RFields` | Branch | Convert Rust struct or enum-variant fields in declaration order; each child is an `RField` chain. |
+| `RField(name)` | Chain | Identify one Rust field's conversion subtree, which may produce several wires. |
+| `KDataClass(...)` | Branch | Read or reconstruct one Kotlin data-class value through its field children. |
+| Input `RParam(name)` | Chain | Preserve the identity of one Rust parameter in Kotlin parameter paths. |
+| Output `KParamName(name)` | Chain | Supply one base name for Kotlin callback/build/fold params; several results derive numbered names. |
+| Input `RChoices` | Branch | Select one conversion producing a Rust value, including constructor and identity alternatives. |
+| `KSealed(...)` | Branch | Read or reconstruct one Kotlin sealed value. |
+| `KEnumParams { r_type }` | Branch | Convert an enum through separate Kotlin tag/payload params. |
+| `ROption(...)` | Chain | Convert zero or one Rust value with a presence flag or payload niche. |
+| Input `KList` / output `KList(JniRowEncoding)` | Chain | Decode or materialize buffered Kotlin list elements. |
+| Output `KCallbackRows` | Chain | Deliver elements through the generated row callback; user build/fold code runs after JNI returns. |
+| `BulkFrame` | Chain | Pack or unpack the child subtree in one native C-representation frame. |
 
 The input/output chain and branch types are separate enums. Reading a definition
-shows every operation supported in that direction: JNI input chains retain argument
-paths, input branches provide constructor alternatives, and JNI output chains name projections.
-There are no direction capability parameters or placeholder payloads. Input chains
-use a unit `Sequence` variant for buffered rows; output chains use
-`Sequence(CSequence)` / `Sequence(JniSequence)` to select delivery.
+shows every supported operation without capability parameters or placeholder
+payloads. C retains its own `Values`, `Fields`, `Field`, `Alternatives`, `Enum`,
+`Optional`, `Sequence` and `Tagged` metadata; these JNI names do not change C or
+the shared structural tree.
 
-Record metadata is directional too: `JniInputRecord` retains its Kotlin input
-binding and source `TypeRef`; enclosing tree nodes supply activation during
-Kotlin traversal. `JniOutputRecord` retains
-only the source `TypeRef` needed for reconstruction; `Named` supplies an output label.
-Private algorithms reuse structural traversal and the relevant
-metadata queries without copying trees into a common representation. Helpers
-specific to an input or output operation accept its concrete tree type.
+`JniInputKDataClass` retains `k_name` (the Kotlin parameter/local name) and
+`r_type` (the canonical Rust `TypeRef`). `JniOutputKDataClass` needs only `r_type`;
+`KParamName` names delivered params. `JniInputKSealed` and `JniOutputKSealed` use
+the same directional field convention. `KEnumParams` needs no Kotlin object name
+or representation boolean. Enclosing nodes supply activation during traversal.
+Private algorithms borrow canonical type references and inspect the concrete
+metadata without copying trees into a common representation.
 
-Optional encodings retain separate types because their helpers operate specifically
-on presence encodings. `JniOptional`, `COptional` and enum metadata
-are reusable in both directions.
+`JniPresence` describes the shared flag/niche encoding of `ROption`. Its bindings
+are used in both directions. `JniRowEncoding` describes JVM list rows only:
+`ObjectArray` stores boxed fields, and `RowClass` uses generated immutable row
+objects. `BulkFrame` selects native rows independently of that preference.
 
 Each adapter has operations for actual ABI tasks: building a function's
 parameters, laying out a successful result packet, defining one sequence row,
@@ -2304,18 +2311,16 @@ Sequence operations
 return `SequenceInput<W, C>` or `SequenceOutput<W, C>`, with separate `controls`
 and metadata fields. Metadata must not retain wire descriptors.
 
-- `CSequence` / `JniSequence` are output delivery policies (`Buffered` or `Callback`;
-  JNI also supports `TypedBuffered`). Input sequences have no delivery choice.
-  The sequence node's controls contain the actual row buffer, delivered-element
-  count or JNI presence marker. Callback signatures, cleanup and Kotlin folds
-  read the policy and controls from that node.
-- `COptional` / `JniOptional` are `Flag(binding)` or `Niche`. A flag references
-  one tree-owned integer control; a niche references a payload binding and its
-  reserved absent representation. The wire kind retains remaining niche state.
-- `CInputWireBranch::Alternatives` / `JniInputWireBranch::Alternatives` identify a choice between
-  child arms. The selector is an ordinary control wire, validated against the
-  adapter's tag representation.
-  Its remaining niche state is stored on that same wire.
+- C `Sequence(CSequence)` selects buffered or callback delivery. JNI inputs use
+  `KList`; JNI outputs use `KList(JniRowEncoding)` or `KCallbackRows`. Controls
+  carry the actual buffer, count or presence marker. Callbacks, cleanup and Kotlin
+  folds read the concrete metadata and controls from that node.
+- `COptional` / `JniPresence` describe `Flag(binding)` or `Niche`: a flag references
+  one tree-owned control, while a niche reserves an absent representation in a
+  payload wire. The wire kind retains remaining niche availability.
+- C `Alternatives` / JNI `RChoices` select one conversion arm. JNI `KSealed` and
+  `KEnumParams` select source enum variants. Their selector controls retain their
+  own remaining niche state.
 
 `wire_definitions` and `wire_definitions_mut` visit every terminal and control
 wire once, including all alternative arms and one schema per repeated element.

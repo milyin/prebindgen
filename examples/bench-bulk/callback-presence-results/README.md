@@ -15,7 +15,7 @@ rows still use their configured transport. Direct source callbacks are unchanged
 Custom or wide signatures that require the existing outer result packet retain
 that packet. Its collection status is a boxed 0 or -1 through Integer.valueOf,
 which uses the JVM small-integer cache; no separate marker array is allocated.
-Low-level code manually constructing a JniSequence::Callback wire tree must now
+Low-level code manually constructing a JniOutputWireChain::KCallbackRows wire tree must now
 use a Selector control instead of Rows. Regenerate native and Kotlin artifacts
 together, as for any generated JNI signature change.
 
