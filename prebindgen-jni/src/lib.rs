@@ -38,7 +38,7 @@ pub use optional::JniNiche;
 mod group;
 mod returns;
 mod scalar;
-pub use data::{DeclJniClass, DeclJniDataClass, JniDataGroup, JniField};
+pub use data::{DeclJniClass, DeclJniDataClass, JniField, JniInputRecord, JniOutputRecord};
 pub use group::{
     JniInputWireBranch, JniInputWireChain, JniOptional, JniOutputWireBranch, JniOutputWireChain,
 };
@@ -1301,17 +1301,18 @@ impl Codec for JniCodec {
         Self::source_record(flat, ty)?.ok_or("missing data-class representation")?;
         data::mark(
             &mut plan.node,
-            wire.to_string(),
-            kotlin_condition(active),
-            flat.type_ref(ty)?,
-            JniInputWireBranch::Record,
+            JniInputWireBranch::Record(JniInputRecord {
+                root: wire.to_string(),
+                condition: kotlin_condition(active),
+                source: flat.type_ref(ty)?,
+            }),
         )
     }
     fn output_record_metadata(
         &self,
         flat: &prebindgen_flat::Flat<Self::Schema>,
         ty: &syn::Type,
-        wire: &syn::Ident,
+        _wire: &syn::Ident,
         plan: &mut JniOutputPlan<JniWire>,
         _: &(),
     ) -> Result<()> {
@@ -1322,10 +1323,9 @@ impl Codec for JniCodec {
         Self::source_record(flat, ty)?.ok_or("missing data-class representation")?;
         data::mark(
             &mut plan.outcomes.success,
-            wire.to_string(),
-            "true".into(),
-            flat.type_ref(ty)?,
-            JniOutputWireBranch::Record,
+            JniOutputWireBranch::Record(JniOutputRecord {
+                source: flat.type_ref(ty)?,
+            }),
         )
     }
 

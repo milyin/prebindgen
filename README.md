@@ -725,13 +725,15 @@ There are no direction capability parameters or placeholder payloads. Input chai
 use a unit `Sequence` variant for buffered rows; output chains use
 `Sequence(CSequence)` / `Sequence(JniSequence)` to select delivery.
 
-Shared record, enum and optional payload metadata describes the same facts in
-both directions. Private algorithms reuse structural traversal and the relevant
+Record metadata is directional too: `JniInputRecord` retains its Kotlin input
+binding, source `TypeRef` and activation condition. `JniOutputRecord` retains
+only the source `TypeRef` needed for reconstruction; `Named` supplies an output label.
+Private algorithms reuse structural traversal and the relevant
 metadata queries without copying trees into a common representation. Helpers
 specific to an input or output operation accept its concrete tree type.
 
 Optional encodings retain separate types because their helpers operate specifically
-on presence encodings. `JniOptional`, `COptional`, record metadata and enum metadata
+on presence encodings. `JniOptional`, `COptional` and enum metadata
 are reusable in both directions.
 
 Each adapter has operations for actual ABI tasks: building a function's

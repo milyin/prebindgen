@@ -705,7 +705,7 @@ pub(crate) fn has_optional<Chain: group::ChainMetadata, Branch: group::BranchMet
             !meta.is_scope_boundary() && (meta.optional().is_some() || has_optional(child))
         }
         prebindgen_conversions::WireNode::Branch { meta, children, .. } => {
-            meta.record().is_none() && children.iter().any(has_optional)
+            !meta.is_record() && children.iter().any(has_optional)
         }
     }
 }

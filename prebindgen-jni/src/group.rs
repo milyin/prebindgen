@@ -78,7 +78,7 @@ pub enum JniInputWireBranch {
     /// Accept one Kotlin data-class value and extract its properties before JNI.
     /// Children are Field chains in source order, as for Fields. Metadata identifies
     /// the canonical source type and Kotlin binding; no native carrier is added.
-    Record(JniDataGroup),
+    Record(JniInputRecord),
     /// Use the integer selector in controls to decode exactly one constructor arm.
     /// The nonempty child list is in selector order; inactive arms are not consumed.
     /// Constructors may produce the same source variant; this is not a source enum.
@@ -106,7 +106,8 @@ pub enum JniOutputWireBranch {
     /// Reconstruct one Kotlin data-class value from the Field children in source
     /// order. Metadata identifies the canonical type; reconstruction happens on
     /// Kotlin's side without adding a native object carrier or wire scope.
-    Record(JniDataGroup),
+    /// Output labels belong to Named chains; no input binding is needed here.
+    Record(JniOutputRecord),
     /// Encode the active source enum variant. The control tag selects a child
     /// payload in wire-tag order. Metadata chooses a sealed Kotlin value or
     /// expanded tag/fields; inactive children contribute their absent wire values.
@@ -196,23 +197,27 @@ impl ChainMetadata for JniOutputWireChain {
 }
 pub(crate) trait BranchMetadata {
     fn is_fields(&self) -> bool;
-    fn record(&self) -> Option<&JniDataGroup>;
+    fn is_record(&self) -> bool;
+    fn record_binding(&self) -> Option<&str>;
     fn enumeration(&self) -> Option<&std::rc::Rc<crate::sealed::JniEnumGroup>>;
     fn is_alternatives(&self) -> bool;
     fn selects_arm(&self) -> bool {
         self.is_alternatives() || self.enumeration().is_some()
     }
     fn is_field_collection(&self) -> bool {
-        self.is_fields() || self.record().is_some()
+        self.is_fields() || self.is_record()
     }
 }
 impl BranchMetadata for JniInputWireBranch {
     fn is_fields(&self) -> bool {
         matches!(self, Self::Fields)
     }
-    fn record(&self) -> Option<&JniDataGroup> {
+    fn is_record(&self) -> bool {
+        matches!(self, Self::Record(_))
+    }
+    fn record_binding(&self) -> Option<&str> {
         if let Self::Record(value) = self {
-            Some(value)
+            Some(&value.root)
         } else {
             None
         }
@@ -232,12 +237,11 @@ impl BranchMetadata for JniOutputWireBranch {
     fn is_fields(&self) -> bool {
         matches!(self, Self::Fields)
     }
-    fn record(&self) -> Option<&JniDataGroup> {
-        if let Self::Record(value) = self {
-            Some(value)
-        } else {
-            None
-        }
+    fn is_record(&self) -> bool {
+        matches!(self, Self::Record(_))
+    }
+    fn record_binding(&self) -> Option<&str> {
+        None
     }
     fn enumeration(&self) -> Option<&std::rc::Rc<crate::sealed::JniEnumGroup>> {
         if let Self::Enum(value) = self {
@@ -615,9 +619,9 @@ fn validate_scope<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
                 if !controls.is_empty() {
                     return Err("group metadata does not support control wires".into());
                 }
-                if let Some(record) = metadata.record() {
-                    if !bindings.insert(record.root.clone()) {
-                        return Err(format!("duplicate Kotlin group binding `{}`", record.root));
+                if let Some(binding) = metadata.record_binding() {
+                    if !bindings.insert(binding.into()) {
+                        return Err(format!("duplicate Kotlin group binding `{binding}`"));
                     }
                 }
                 if metadata.is_field_collection() {
