@@ -1472,7 +1472,7 @@ fn logical_outcomes_keep_typed_errors_and_match_both_jni_sequence_deliveries() {
 }
 
 #[test]
-fn manual_jni_plans_share_one_tree_through_flat_and_configure() {
+fn manual_jni_plans_share_one_tree_through_flat_and_configuration_hooks() {
     fn install(model: &mut JniBindings, binding_failure: bool) -> Result<()> {
         let mut input = JniCodec::raw().input_leaf(prebindgen_declarations::InputLeaf::new(
             &JniBindings::parse([]).unwrap(),
@@ -1566,7 +1566,7 @@ fn manual_jni_plans_share_one_tree_through_flat_and_configure() {
             .set_package_prefix("test")
             .package(package!().fun(fun!(echo)));
         if configure {
-            builder = builder.configure(|flat| install(flat, true));
+            builder = builder.on_configure(|flat| install(flat, true));
         }
         let generated = builder.build().unwrap();
         assert!(generated.kotlin["test/Functions.kt"].contains("`value`: Long"));
@@ -1574,7 +1574,7 @@ fn manual_jni_plans_share_one_tree_through_flat_and_configure() {
     let builder = JniGen::builder()
         .flat(flat("pub fn echo(value:i64)->i64{}"))
         .set_package_prefix("test")
-        .configure(|flat| install(flat, false))
+        .on_configure(|flat| install(flat, false))
         .package(package!().fun(fun!(echo)));
     assert!(fail(builder).contains("binding-failure schema"));
 }
@@ -1731,7 +1731,7 @@ fn preparation_uses_module_placement_and_error_selection_from_flat() {
                 .fun(fun!(rows).callback_return_only())
                 .fun(fun!(mapped).on_error(fun!(message))),
         )
-        .configure(|flat| {
+        .on_configure(|flat| {
             assert_eq!(flat.metadata.package, "initial");
             assert_eq!(flat.function("rows")?.metadata[0].metadata.name, "rowsFold");
             flat.metadata.package = "canonical".into();
@@ -1778,7 +1778,7 @@ fn error_exception_policy_is_available_in_flat_before_preparation() {
         .set_package_prefix("test")
         .error_class(syn::parse_quote!(E), "java.lang.IllegalStateException")
         .package(package!().fun(fun!(f).on_error(fun!(message))))
-        .configure(|flat| {
+        .on_configure(|flat| {
             let ty = flat.resolve_type(&syn::parse_quote!(E))?;
             let metadata = flat.type_metadata_mut(&ty)?;
             assert_eq!(
@@ -1808,7 +1808,7 @@ fn configured_function_names_are_validated_from_flat() {
         .flat(flat("pub fn first()->i64{}pub fn second()->i64{}"))
         .set_package_prefix("test")
         .package(package!().fun(fun!(first)).fun(fun!(second)))
-        .configure(|flat| {
+        .on_configure(|flat| {
             flat.function_mut("second")?.metadata[0].metadata.name = "first".into();
             Ok(())
         })
@@ -1887,7 +1887,7 @@ fn removing_exports_in_configuration_and_invalid_package_edits() {
             .flat(flat(source))
             .set_package_prefix("test")
             .package(package!().fun(fun!(f).callback_return()))
-            .configure(|flat| {
+            .on_configure(|flat| {
                 flat.function_mut("f")?.metadata.clear();
                 Ok(())
             })
@@ -1903,7 +1903,7 @@ fn removing_exports_in_configuration_and_invalid_package_edits() {
         .flat(flat("pub fn f()->i64{}"))
         .set_package_prefix("test")
         .package(package!().fun(fun!(f)))
-        .configure(|flat| {
+        .on_configure(|flat| {
             flat.metadata.package = "bad package".into();
             Ok(())
         })
@@ -4593,7 +4593,7 @@ fn stage_transitions_need_only_the_configured_flat() {
         .flat(flat("pub fn send(value:i64)->Result<i64,i64>{}"))
         .set_package_prefix("test")
         .package(package!().fun(fun!(send)))
-        .configured()
+        .configure()
         .unwrap();
     assert!(generate(&configured).is_err());
     let resolved = crate::resolve(configured).unwrap();
@@ -4788,7 +4788,7 @@ fn standalone_callback_preparation_is_owned_by_its_source_type() {
         .flat(source)
         .set_package_prefix("test")
         .package(package!("callbacks").class(callback!(impl Fn(i64) -> i64).name("NumberCallback")))
-        .configured()
+        .configure()
         .unwrap();
     let ty = configured
         .resolve_parameter_type(&syn::parse_quote!(impl Fn(i64) -> i64))
@@ -4835,7 +4835,7 @@ fn standalone_callback_and_defaults_use_one_normalized_type_owner() {
             .flat(flat("pub fn accept(cb:impl Fn(i64)+Send+Sync+'static){}"))
             .set_package_prefix("test")
             .package(package!().class(DeclJniCallback::new(declaration).name("Notice")))
-            .configured()
+            .configure()
             .unwrap();
         let owners = configured
             .types

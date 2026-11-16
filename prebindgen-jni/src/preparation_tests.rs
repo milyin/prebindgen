@@ -34,7 +34,7 @@ fn class_only_models_resolve_before_compilation_or_emission() {
     ] {
         let configured = builder(source)
             .package(package!().class(declaration))
-            .configured()
+            .configure()
             .unwrap();
         assert!(configured.functions.is_empty());
         let ty = configured
@@ -106,7 +106,7 @@ fn class_only_models_resolve_before_compilation_or_emission() {
 fn standalone_callback_default_must_resolve_to_a_callback() {
     let mut configured = builder("pub fn accept(cb:impl Fn(i64)){}")
         .package(package!().class(callback!(impl Fn(i64)).name("Handler")))
-        .configured()
+        .configure()
         .unwrap();
     let ty = prebindgen_declarations::callback::input_type(
         &configured,
@@ -128,7 +128,7 @@ fn standalone_callback_default_must_resolve_to_a_callback() {
 fn resolution_reads_source_fields_after_configuration() {
     let mut configured = builder("pub struct Row { pub number:i64 }")
         .package(package!().class(data_class!(Row)))
-        .configured()
+        .configure()
         .unwrap();
     let ty = configured.resolve_type(&syn::parse_quote!(Row)).unwrap();
     let key = type_key(&ty);
@@ -166,7 +166,7 @@ fn class_representation_errors_belong_to_resolution() {
     ] {
         let configured = builder(source)
             .package(package!().class(declaration))
-            .configured()
+            .configure()
             .unwrap();
         let error = resolve(configured).err().unwrap();
         assert!(error.contains(expected), "{error}");
@@ -181,7 +181,7 @@ fn nested_class_ownership_is_resolved_before_function_recipes() {
             .class(data_class!(Child))
             .class(ptr_class!(Handle))
             .fun(fun!(send)))
-        .configured()
+        .configure()
         .unwrap();
     let error = resolve(configured).err().unwrap();
     assert!(
@@ -198,7 +198,7 @@ fn standalone_callback_recipes_wait_for_class_resolution() {
             .class(data_class!(Row))
             .class(enum_class!(Code))
             .class(sealed_class!(Event)))
-        .configured()
+        .configure()
         .unwrap();
     let callback = configured
         .resolve_parameter_type(&syn::parse_quote!(impl Fn(Row) -> Event))

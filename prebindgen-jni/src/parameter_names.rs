@@ -482,7 +482,7 @@ mod tests {
             "pub struct Row{pub value:i64}pub fn call(foreign:i64,callback:impl Fn(Row))->Row{}";
         let output = builder(source)
             .set_package_prefix("foreign")
-            .configure(|flat| {
+            .on_configure(|flat| {
                 flat.metadata.package = "native".into();
                 Ok(())
             })

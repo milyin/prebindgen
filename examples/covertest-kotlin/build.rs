@@ -1269,7 +1269,7 @@ fn main() {
             .fun(fun!(output_cleanup_nested_bulk).callback_return().expand_return(expand_return!(OutputCleanupRow).field_self_into().bulk()))
             .fun(fun!(output_cleanup_callback).expand_param("callback",callback!(impl Fn(Vec<Option<Vec<OutputCleanupRow>>>)).name("OutputCleanupCallback").expand_param(0, expand_return!(Vec<Option<Vec<OutputCleanupRow>>>).field_self())))
             .fun(fun!(output_cleanup_callback_bulk).expand_param("callback",callback!(impl Fn(Vec<Option<Vec<OutputCleanupRow>>>)).name("OutputCleanupBulkCallback").expand_param(0,expand_return!(OutputCleanupRow).field_self_into().bulk()))))
-        .configure(|flat| {
+        .on_configure(|flat| {
 
 use prebindgen_conversions::{OutputConversion, Outcomes, WireNode};
             // Compile a mixed prepared tree directly: declaration defaults
@@ -2551,7 +2551,7 @@ use prebindgen_conversions::{OutputConversion, Outcomes, WireNode};
                     ),
                 ),
         )
-        .configured()
+        .configure()
         .expect("configure supported declarations");
     let point = configured
         .resolve_type(&syn::parse_quote!(ParameterPoint))
@@ -2623,7 +2623,7 @@ use prebindgen_conversions::{OutputConversion, Outcomes, WireNode};
         .source(perftest_flat::PREBINDGEN_OUT_DIR)
         .set_package_prefix("com.prebindgen.paramnames")
         .set_jni_native_init("io.prebindgen.covertest.NativeLibrary.ensureLoaded()")
-        .configure(|flat| {
+        .on_configure(|flat| {
             flat.metadata.package = "org.prebindgen.paramnames".into();
             Ok(())
         })

@@ -117,7 +117,7 @@ pub use kotlin::{
 ///
 /// Defaults retain [`JniInputConverter`] and [`JniOutputConverter`] containers. Their `new`
 /// constructors accept independent implementations of the same conversion
-/// contracts, including per-function overrides in a builder's configure hook.
+/// contracts, including per-function overrides in [`JniGenBuilder::on_configure`] callbacks.
 /// `Flat<JniSchema<MyInput, MyOutput>>` selects concrete export argument/result converters;
 /// JNI declaration metadata and wire representations remain adapter-specific.
 ///
@@ -295,7 +295,7 @@ impl JniGen {
         JniGenBuilder::default()
     }
 }
-type Configure = Box<dyn FnOnce(&mut JniBindings) -> Result<()>>;
+type ConfigureHook = Box<dyn FnOnce(&mut JniBindings) -> Result<()>>;
 /// Collect declarations before resolving a JNI/Kotlin binding.
 ///
 /// Supply exactly one of [`Self::source`], [`Self::items`] or [`Self::flat`], plus
@@ -303,7 +303,7 @@ type Configure = Box<dyn FnOnce(&mut JniBindings) -> Result<()>>;
 /// configuration callbacks run in registration order before declarations fill slots.
 #[derive(Default)]
 pub struct JniGenBuilder {
-    configure: Vec<Configure>,
+    configure_hooks: Vec<ConfigureHook>,
     flat: Option<JniBindings>,
     source: Option<std::path::PathBuf>,
     items: Option<Vec<(syn::Item, prebindgen::SourceLocation)>>,
@@ -333,7 +333,7 @@ impl JniGenBuilder {
         self.bulk_collection_outputs = Some(enabled);
         self
     }
-    /// Adjust the selected flat model before declaration defaults are applied.
+    /// Register a callback to adjust Flat while [`Self::configure`] applies declarations.
     ///
     /// `f` receives the model and may attach converters to it.
     ///
@@ -360,7 +360,7 @@ impl JniGenBuilder {
     /// )?;
     /// let generated = JniGen::builder().flat(flat)
     ///     .set_package_prefix("example")
-    ///     .configure(|flat| {
+    ///     .on_configure(|flat| {
     ///         bind_input(flat, &JniCodec::raw(), "echo", "x", &JniInputConfig::Leaf(prebindgen_jni::JniInputLeafOp::Value), &())?;
     ///         bind_output(flat, &JniCodec::raw(), "echo", &JniOutputConfig::Leaf(prebindgen_jni::JniOutputLeafOp::Value), &())
     ///     })
@@ -369,8 +369,11 @@ impl JniGenBuilder {
     /// syn::parse_file(&generated.rust)?;
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
-    pub fn configure(mut self, f: impl FnOnce(&mut JniBindings) -> Result<()> + 'static) -> Self {
-        self.configure.push(Box::new(f));
+    pub fn on_configure(
+        mut self,
+        f: impl FnOnce(&mut JniBindings) -> Result<()> + 'static,
+    ) -> Self {
+        self.configure_hooks.push(Box::new(f));
         self
     }
     /// Append captured items, each paired with its source location.
@@ -488,7 +491,7 @@ impl JniGenBuilder {
     /// Canonical type names and value-conversion declarations are normalized here.
     /// Class properties, enum mappings and call recipes are resolved by [`resolve`];
     /// converters are built by [`compile`]. This model is not ready for emission.
-    pub fn configured(mut self) -> Result<JniBindings> {
+    pub fn configure(mut self) -> Result<JniBindings> {
         for package in &self.packages {
             let namespace = if package.name.is_empty() {
                 self.prefix.clone()
@@ -632,8 +635,8 @@ impl JniGenBuilder {
                 return Err("duplicate exception class for source error type".into());
             }
         }
-        for configure in self.configure {
-            configure(&mut flat)?;
+        for hook in self.configure_hooks {
+            hook(&mut flat)?;
         }
         callback_sources.extend(
             flat.functions
@@ -677,7 +680,7 @@ impl JniGenBuilder {
     }
     /// Apply declarations, then resolve and compile every export using only Flat.
     pub fn prepare(self) -> Result<JniBindings> {
-        prepare(self.configured()?)
+        prepare(self.configure()?)
     }
     /// Prepare a complete Flat model, then emit its Rust/JNI and Kotlin bindings.
     pub fn build(self) -> Result<JniGen> {

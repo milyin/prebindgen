@@ -457,7 +457,7 @@ properties inside a data class. Borrowed projections clone strings and byte
 vectors; owned projections move them. The shared helpers `record_output` and
 `record_output_owned` implement the respective access modes. `Option` fields are
 supported; fixed-size array fields remain unsupported. The low-level `JniCodec::raw()` ignores data-class declarations: it binds records
-as handles. Using it in `configure()` for a type declared only as a data class
+as handles. Using it in an `on_configure(...)` callback for a type declared only as a data class
 therefore fails with a missing handle-class error unless an explicit expansion
 replaces that slot. Use data-class declarations for automatic value-record conversion.
 
@@ -471,7 +471,7 @@ settings remain commented out in the example manifests.
 Builders prepare one binding model, then emit from that model:
 
 ```text
-Source + declarations -> builder.configured(): Flat<CSchema> or Flat<JniSchema>
+Source + declarations -> builder.configure(): Flat<CSchema> or Flat<JniSchema>
        -> adapter::resolve(flat): resolved call recipes on each export
        -> adapter::compile(flat): prepared converters on each export
        -> generate(&flat): Rust and C/Kotlin
@@ -539,10 +539,12 @@ than inferring it from generated wire names. Both stages
 read source facts from the same `Flat`; the instruction trees reference declarations
 rather than copying records or signatures.
 
-`Cbindgen::configured()` and `JniGenBuilder::configured()` return the model after
+`Cbindgen::configure()` and `JniGenBuilder::configure()` return the model after
 source selection and declaration ingestion. It owns the complete configuration;
 the builder can be dropped. Adapter `resolve(flat)` and `compile(flat)` each consume
 that model, and return the same schema with binding states advanced.
+`JniGenBuilder::on_configure(f)` registers a callback for editing Flat during
+configuration; `configure()` executes the registered callbacks and returns Flat.
 For JNI, configuration normalizes source identities, canonical value conversions
 and defaults. `resolve` first determines Kotlin class properties, nested handle
 ownership and enum mappings, then resolves callback and function recipes using

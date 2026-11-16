@@ -123,7 +123,7 @@ fn main() -> Result<()> {
                 .map(|item| (item, Default::default())),
         )
         .set_package_prefix("probe")
-        .configure(|flat| {
+        .on_configure(|flat| {
             let ty = flat.function("echo")?.params[0].ty.ty.clone();
             let mut plan = prebindgen_jni::JniCodec::raw().input_leaf(
                 prebindgen_declarations::InputLeaf::new(
