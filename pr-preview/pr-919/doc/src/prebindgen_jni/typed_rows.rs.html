@@ -3,16 +3,16 @@
 <a href=#3 id=3 data-nosnippet>3</a>
 <a href=#4 id=4 data-nosnippet>4</a><span class="kw">use </span>prebindgen_conversions::WireNode;
 <a href=#5 id=5 data-nosnippet>5</a>
-<a href=#6 id=6 data-nosnippet>6</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>supported&lt;Sq: <span class="kw">crate</span>::sequence::RowEncoding, In, Out&gt;(
-<a href=#7 id=7 data-nosnippet>7</a>    element: <span class="kw-2">&amp;</span>JniWireNode&lt;Sq, In, Out&gt;,
+<a href=#6 id=6 data-nosnippet>6</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>supported&lt;Chain: group::ChainMetadata, Branch&gt;(
+<a href=#7 id=7 data-nosnippet>7</a>    element: <span class="kw-2">&amp;</span>JniWireNode&lt;Chain, Branch&gt;,
 <a href=#8 id=8 data-nosnippet>8</a>) -&gt; bool {
 <a href=#9 id=9 data-nosnippet>9</a>    group::row_fields(element)
 <a href=#10 id=10 data-nosnippet>10</a>        .map(|w| w.kind.parameter_slots())
 <a href=#11 id=11 data-nosnippet>11</a>        .sum::&lt;usize&gt;()
 <a href=#12 id=12 data-nosnippet>12</a>        &lt;= <span class="number">254
 <a href=#13 id=13 data-nosnippet>13</a></span>}
-<a href=#14 id=14 data-nosnippet>14</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>cache&lt;Sq: <span class="kw">crate</span>::sequence::RowEncoding, In, Out&gt;(
-<a href=#15 id=15 data-nosnippet>15</a>    element: <span class="kw-2">&amp;</span>JniWireNode&lt;Sq, In, Out&gt;,
+<a href=#14 id=14 data-nosnippet>14</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>cache&lt;Chain: group::ChainMetadata, Branch&gt;(
+<a href=#15 id=15 data-nosnippet>15</a>    element: <span class="kw-2">&amp;</span>JniWireNode&lt;Chain, Branch&gt;,
 <a href=#16 id=16 data-nosnippet>16</a>) -&gt; <span class="prelude-ty">Result</span>&lt;syn::Ident&gt; {
 <a href=#17 id=17 data-nosnippet>17</a>    <span class="kw">let </span>(name, <span class="kw">_</span>) = sequence_callback::capture(element, <span class="kw-2">&amp;mut </span>names::Names::default())<span class="question-mark">?</span>;
 <a href=#18 id=18 data-nosnippet>18</a>    <span class="prelude-val">Ok</span>(<span class="macro">format_ident!</span>(<span class="string">"__pb_row_type_{name}"</span>))
@@ -20,12 +20,12 @@
 <a href=#20 id=20 data-nosnippet>20</a><span class="kw">fn </span>visit&lt;<span class="lifetime">'a</span>&gt;(node: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>JniOutputWireNode, rows: <span class="kw-2">&amp;mut </span>Vec&lt;<span class="kw-2">&amp;</span><span class="lifetime">'a </span>JniOutputWireNode&gt;, bulk: bool) {
 <a href=#21 id=21 data-nosnippet>21</a>    <span class="kw">match </span>node {
 <a href=#22 id=22 data-nosnippet>22</a>        WireNode::Chain {
-<a href=#23 id=23 data-nosnippet>23</a>            meta: JniWireChain::Bulk,
+<a href=#23 id=23 data-nosnippet>23</a>            meta: JniOutputWireChain::Bulk,
 <a href=#24 id=24 data-nosnippet>24</a>            child,
 <a href=#25 id=25 data-nosnippet>25</a>            ..
 <a href=#26 id=26 data-nosnippet>26</a>        } =&gt; visit(child, rows, <span class="bool-val">true</span>),
 <a href=#27 id=27 data-nosnippet>27</a>        WireNode::Chain {
-<a href=#28 id=28 data-nosnippet>28</a>            meta: JniWireChain::Sequence(JniSequence::TypedBuffered),
+<a href=#28 id=28 data-nosnippet>28</a>            meta: JniOutputWireChain::Sequence(JniSequence::TypedBuffered),
 <a href=#29 id=29 data-nosnippet>29</a>            child,
 <a href=#30 id=30 data-nosnippet>30</a>            ..
 <a href=#31 id=31 data-nosnippet>31</a>        } <span class="kw">if </span>!bulk =&gt; {

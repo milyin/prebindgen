@@ -32,14 +32,14 @@
 <a href=#32 id=32 data-nosnippet>32</a>        .reduce(|a, b| <span class="macro">quote!</span>((#a)&amp;&amp;(#b)))
 <a href=#33 id=33 data-nosnippet>33</a>        .unwrap_or_else(|| <span class="macro">quote!</span>(<span class="bool-val">true</span>))
 <a href=#34 id=34 data-nosnippet>34</a>}
-<a href=#35 id=35 data-nosnippet>35</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>values&lt;Sq: <span class="kw">crate</span>::sequence::RowEncoding, In&gt;(
-<a href=#36 id=36 data-nosnippet>36</a>    node: <span class="kw-2">&amp;</span>CWireNode&lt;Sq, In&gt;,
+<a href=#35 id=35 data-nosnippet>35</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>values&lt;Chain: group::ChainMetadata, Branch: group::BranchMetadata&gt;(
+<a href=#36 id=36 data-nosnippet>36</a>    node: <span class="kw-2">&amp;</span>CWireNode&lt;Chain, Branch&gt;,
 <a href=#37 id=37 data-nosnippet>37</a>) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;(<span class="kw-2">&amp;</span>Wire, Vec&lt;Test&gt;)&gt;&gt; {
-<a href=#38 id=38 data-nosnippet>38</a>    <span class="kw">fn </span>visit&lt;<span class="lifetime">'a</span>, Sq: <span class="kw">crate</span>::sequence::RowEncoding, In&gt;(
-<a href=#39 id=39 data-nosnippet>39</a>        node: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>CWireNode&lt;Sq, In&gt;,
+<a href=#38 id=38 data-nosnippet>38</a>    <span class="kw">fn </span>visit&lt;<span class="lifetime">'a</span>, Chain: group::ChainMetadata, Branch: group::BranchMetadata&gt;(
+<a href=#39 id=39 data-nosnippet>39</a>        node: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>CWireNode&lt;Chain, Branch&gt;,
 <a href=#40 id=40 data-nosnippet>40</a>        path: <span class="kw-2">&amp;</span>[Test],
 <a href=#41 id=41 data-nosnippet>41</a>        out: <span class="kw-2">&amp;mut </span>Vec&lt;(<span class="kw-2">&amp;</span><span class="lifetime">'a </span>Wire, Vec&lt;Test&gt;)&gt;,
-<a href=#42 id=42 data-nosnippet>42</a>    ) {
+<a href=#42 id=42 data-nosnippet>42</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#43 id=43 data-nosnippet>43</a>        <span class="kw">let </span><span class="kw-2">mut </span>add = |wires: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>[Wire]| {
 <a href=#44 id=44 data-nosnippet>44</a>            <span class="kw">for </span>wire <span class="kw">in </span>wires {
 <a href=#45 id=45 data-nosnippet>45</a>                out.push((
@@ -54,78 +54,81 @@
 <a href=#54 id=54 data-nosnippet>54</a>        <span class="kw">match </span>node {
 <a href=#55 id=55 data-nosnippet>55</a>            WireNode::Leaf(wires) =&gt; add(wires),
 <a href=#56 id=56 data-nosnippet>56</a>            WireNode::Chain {
-<a href=#57 id=57 data-nosnippet>57</a>                meta: CWireChain::Sequence(<span class="kw">_</span>) | CWireChain::Tagged(<span class="kw">_</span>),
+<a href=#57 id=57 data-nosnippet>57</a>                meta: encoding,
 <a href=#58 id=58 data-nosnippet>58</a>                controls,
-<a href=#59 id=59 data-nosnippet>59</a>                ..
-<a href=#60 id=60 data-nosnippet>60</a>            } =&gt; add(controls),
-<a href=#61 id=61 data-nosnippet>61</a>            WireNode::Chain {
-<a href=#62 id=62 data-nosnippet>62</a>                meta: CWireChain::Optional(optional),
-<a href=#63 id=63 data-nosnippet>63</a>                child,
-<a href=#64 id=64 data-nosnippet>64</a>                controls,
-<a href=#65 id=65 data-nosnippet>65</a>            } =&gt; {
-<a href=#66 id=66 data-nosnippet>66</a>                add(controls);
-<a href=#67 id=67 data-nosnippet>67</a>                <span class="kw">let </span><span class="kw-2">mut </span>next = path.to_vec();
-<a href=#68 id=68 data-nosnippet>68</a>                <span class="kw">let </span>name = optional.discriminator().clone();
-<a href=#69 id=69 data-nosnippet>69</a>                next.push(
-<a href=#70 id=70 data-nosnippet>70</a>                    optional
-<a href=#71 id=71 data-nosnippet>71</a>                        .niche()
-<a href=#72 id=72 data-nosnippet>72</a>                        .map(|n| Test::Niche(name.clone(), n.clone()))
-<a href=#73 id=73 data-nosnippet>73</a>                        .unwrap_or(Test::Arm(name, <span class="number">1</span>)),
-<a href=#74 id=74 data-nosnippet>74</a>                );
-<a href=#75 id=75 data-nosnippet>75</a>                visit(child, <span class="kw-2">&amp;</span>next, out);
-<a href=#76 id=76 data-nosnippet>76</a>            }
-<a href=#77 id=77 data-nosnippet>77</a>            WireNode::Branch {
-<a href=#78 id=78 data-nosnippet>78</a>                meta,
-<a href=#79 id=79 data-nosnippet>79</a>                children,
-<a href=#80 id=80 data-nosnippet>80</a>                controls,
-<a href=#81 id=81 data-nosnippet>81</a>            } =&gt; {
-<a href=#82 id=82 data-nosnippet>82</a>                add(controls);
-<a href=#83 id=83 data-nosnippet>83</a>                <span class="kw">for </span>(i, child) <span class="kw">in </span>children.iter().enumerate() {
-<a href=#84 id=84 data-nosnippet>84</a>                    <span class="kw">let </span><span class="kw-2">mut </span>next = path.to_vec();
-<a href=#85 id=85 data-nosnippet>85</a>                    <span class="kw">if </span><span class="macro">matches!</span>(meta, CWireBranch::Enum(<span class="kw">_</span>) | CWireBranch::Alternatives(<span class="kw">_</span>)) {
-<a href=#86 id=86 data-nosnippet>86</a>                        next.push(Test::Arm(controls[<span class="number">0</span>].name.clone(), i <span class="kw">as </span>i32));
-<a href=#87 id=87 data-nosnippet>87</a>                    }
-<a href=#88 id=88 data-nosnippet>88</a>                    visit(child, <span class="kw-2">&amp;</span>next, out);
-<a href=#89 id=89 data-nosnippet>89</a>                }
-<a href=#90 id=90 data-nosnippet>90</a>            }
-<a href=#91 id=91 data-nosnippet>91</a>        }
-<a href=#92 id=92 data-nosnippet>92</a>    }
-<a href=#93 id=93 data-nosnippet>93</a>    <span class="kw">let </span><span class="kw-2">mut </span>values = <span class="macro">vec!</span>[];
-<a href=#94 id=94 data-nosnippet>94</a>    visit(node, <span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;mut </span>values);
-<a href=#95 id=95 data-nosnippet>95</a>    <span class="kw">let </span>indices = values
-<a href=#96 id=96 data-nosnippet>96</a>        .iter()
-<a href=#97 id=97 data-nosnippet>97</a>        .enumerate()
-<a href=#98 id=98 data-nosnippet>98</a>        .map(|(i, (w, <span class="kw">_</span>))| (w.name.to_string(), i))
-<a href=#99 id=99 data-nosnippet>99</a>        .collect::&lt;std::collections::BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;();
-<a href=#100 id=100 data-nosnippet>100</a>    <span class="kw">fn </span>add(
-<a href=#101 id=101 data-nosnippet>101</a>        i: usize,
-<a href=#102 id=102 data-nosnippet>102</a>        values: <span class="kw-2">&amp;</span>[(<span class="kw-2">&amp;</span>Wire, Vec&lt;Test&gt;)],
-<a href=#103 id=103 data-nosnippet>103</a>        indices: <span class="kw-2">&amp;</span>std::collections::BTreeMap&lt;String, usize&gt;,
-<a href=#104 id=104 data-nosnippet>104</a>        state: <span class="kw-2">&amp;mut </span>[u8],
-<a href=#105 id=105 data-nosnippet>105</a>        order: <span class="kw-2">&amp;mut </span>Vec&lt;usize&gt;,
-<a href=#106 id=106 data-nosnippet>106</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#107 id=107 data-nosnippet>107</a>        <span class="kw">if </span>state[i] == <span class="number">2 </span>{
-<a href=#108 id=108 data-nosnippet>108</a>            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
-<a href=#109 id=109 data-nosnippet>109</a>        }
-<a href=#110 id=110 data-nosnippet>110</a>        <span class="kw">if </span>state[i] == <span class="number">1 </span>{
-<a href=#111 id=111 data-nosnippet>111</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"cyclic C field discriminator"</span>.into());
+<a href=#59 id=59 data-nosnippet>59</a>                child,
+<a href=#60 id=60 data-nosnippet>60</a>            } =&gt; {
+<a href=#61 id=61 data-nosnippet>61</a>                add(controls);
+<a href=#62 id=62 data-nosnippet>62</a>                <span class="kw">if </span>!encoding.is_scope_boundary() {
+<a href=#63 id=63 data-nosnippet>63</a>                    <span class="kw">let </span>optional = encoding
+<a href=#64 id=64 data-nosnippet>64</a>                        .optional()
+<a href=#65 id=65 data-nosnippet>65</a>                        .ok_or(<span class="string">"unsupported selection chain metadata"</span>)<span class="question-mark">?</span>;
+<a href=#66 id=66 data-nosnippet>66</a>
+<a href=#67 id=67 data-nosnippet>67</a>                    <span class="kw">let </span><span class="kw-2">mut </span>next = path.to_vec();
+<a href=#68 id=68 data-nosnippet>68</a>                    <span class="kw">let </span>name = optional.discriminator().clone();
+<a href=#69 id=69 data-nosnippet>69</a>                    next.push(
+<a href=#70 id=70 data-nosnippet>70</a>                        optional
+<a href=#71 id=71 data-nosnippet>71</a>                            .niche()
+<a href=#72 id=72 data-nosnippet>72</a>                            .map(|n| Test::Niche(name.clone(), n.clone()))
+<a href=#73 id=73 data-nosnippet>73</a>                            .unwrap_or(Test::Arm(name, <span class="number">1</span>)),
+<a href=#74 id=74 data-nosnippet>74</a>                    );
+<a href=#75 id=75 data-nosnippet>75</a>                    visit(child, <span class="kw-2">&amp;</span>next, out)<span class="question-mark">?</span>;
+<a href=#76 id=76 data-nosnippet>76</a>                }
+<a href=#77 id=77 data-nosnippet>77</a>            }
+<a href=#78 id=78 data-nosnippet>78</a>
+<a href=#79 id=79 data-nosnippet>79</a>            WireNode::Branch {
+<a href=#80 id=80 data-nosnippet>80</a>                meta,
+<a href=#81 id=81 data-nosnippet>81</a>                children,
+<a href=#82 id=82 data-nosnippet>82</a>                controls,
+<a href=#83 id=83 data-nosnippet>83</a>            } =&gt; {
+<a href=#84 id=84 data-nosnippet>84</a>                add(controls);
+<a href=#85 id=85 data-nosnippet>85</a>                <span class="kw">for </span>(i, child) <span class="kw">in </span>children.iter().enumerate() {
+<a href=#86 id=86 data-nosnippet>86</a>                    <span class="kw">let </span><span class="kw-2">mut </span>next = path.to_vec();
+<a href=#87 id=87 data-nosnippet>87</a>                    <span class="kw">if </span>meta.selects_arm() {
+<a href=#88 id=88 data-nosnippet>88</a>                        next.push(Test::Arm(controls[<span class="number">0</span>].name.clone(), i <span class="kw">as </span>i32));
+<a href=#89 id=89 data-nosnippet>89</a>                    }
+<a href=#90 id=90 data-nosnippet>90</a>                    visit(child, <span class="kw-2">&amp;</span>next, out)<span class="question-mark">?</span>;
+<a href=#91 id=91 data-nosnippet>91</a>                }
+<a href=#92 id=92 data-nosnippet>92</a>            }
+<a href=#93 id=93 data-nosnippet>93</a>        }
+<a href=#94 id=94 data-nosnippet>94</a>        <span class="prelude-val">Ok</span>(())
+<a href=#95 id=95 data-nosnippet>95</a>    }
+<a href=#96 id=96 data-nosnippet>96</a>    <span class="kw">let </span><span class="kw-2">mut </span>values = <span class="macro">vec!</span>[];
+<a href=#97 id=97 data-nosnippet>97</a>    visit(node, <span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;mut </span>values)<span class="question-mark">?</span>;
+<a href=#98 id=98 data-nosnippet>98</a>    <span class="kw">let </span>indices = values
+<a href=#99 id=99 data-nosnippet>99</a>        .iter()
+<a href=#100 id=100 data-nosnippet>100</a>        .enumerate()
+<a href=#101 id=101 data-nosnippet>101</a>        .map(|(i, (w, <span class="kw">_</span>))| (w.name.to_string(), i))
+<a href=#102 id=102 data-nosnippet>102</a>        .collect::&lt;std::collections::BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;();
+<a href=#103 id=103 data-nosnippet>103</a>    <span class="kw">fn </span>add(
+<a href=#104 id=104 data-nosnippet>104</a>        i: usize,
+<a href=#105 id=105 data-nosnippet>105</a>        values: <span class="kw-2">&amp;</span>[(<span class="kw-2">&amp;</span>Wire, Vec&lt;Test&gt;)],
+<a href=#106 id=106 data-nosnippet>106</a>        indices: <span class="kw-2">&amp;</span>std::collections::BTreeMap&lt;String, usize&gt;,
+<a href=#107 id=107 data-nosnippet>107</a>        state: <span class="kw-2">&amp;mut </span>[u8],
+<a href=#108 id=108 data-nosnippet>108</a>        order: <span class="kw-2">&amp;mut </span>Vec&lt;usize&gt;,
+<a href=#109 id=109 data-nosnippet>109</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#110 id=110 data-nosnippet>110</a>        <span class="kw">if </span>state[i] == <span class="number">2 </span>{
+<a href=#111 id=111 data-nosnippet>111</a>            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
 <a href=#112 id=112 data-nosnippet>112</a>        }
-<a href=#113 id=113 data-nosnippet>113</a>        state[i] = <span class="number">1</span>;
-<a href=#114 id=114 data-nosnippet>114</a>        <span class="kw">for </span>test <span class="kw">in </span><span class="kw-2">&amp;</span>values[i].<span class="number">1 </span>{
-<a href=#115 id=115 data-nosnippet>115</a>            <span class="kw">let </span>dependency = indices
-<a href=#116 id=116 data-nosnippet>116</a>                .get(<span class="kw-2">&amp;</span>test.name().to_string())
-<a href=#117 id=117 data-nosnippet>117</a>                .ok_or(<span class="string">"C discriminator outside its carrier"</span>)<span class="question-mark">?</span>;
-<a href=#118 id=118 data-nosnippet>118</a>            add(<span class="kw-2">*</span>dependency, values, indices, state, order)<span class="question-mark">?</span>;
-<a href=#119 id=119 data-nosnippet>119</a>        }
-<a href=#120 id=120 data-nosnippet>120</a>        state[i] = <span class="number">2</span>;
-<a href=#121 id=121 data-nosnippet>121</a>        order.push(i);
-<a href=#122 id=122 data-nosnippet>122</a>        <span class="prelude-val">Ok</span>(())
-<a href=#123 id=123 data-nosnippet>123</a>    }
-<a href=#124 id=124 data-nosnippet>124</a>    <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="macro">vec!</span>[<span class="number">0</span>; values.len()];
-<a href=#125 id=125 data-nosnippet>125</a>    <span class="kw">let </span><span class="kw-2">mut </span>order = <span class="macro">vec!</span>[];
-<a href=#126 id=126 data-nosnippet>126</a>    <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..values.len() {
-<a href=#127 id=127 data-nosnippet>127</a>        add(i, <span class="kw-2">&amp;</span>values, <span class="kw-2">&amp;</span>indices, <span class="kw-2">&amp;mut </span>state, <span class="kw-2">&amp;mut </span>order)<span class="question-mark">?</span>;
-<a href=#128 id=128 data-nosnippet>128</a>    }
-<a href=#129 id=129 data-nosnippet>129</a>    <span class="prelude-val">Ok</span>(order.into_iter().map(|i| values[i].clone()).collect())
-<a href=#130 id=130 data-nosnippet>130</a>}
+<a href=#113 id=113 data-nosnippet>113</a>        <span class="kw">if </span>state[i] == <span class="number">1 </span>{
+<a href=#114 id=114 data-nosnippet>114</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"cyclic C field discriminator"</span>.into());
+<a href=#115 id=115 data-nosnippet>115</a>        }
+<a href=#116 id=116 data-nosnippet>116</a>        state[i] = <span class="number">1</span>;
+<a href=#117 id=117 data-nosnippet>117</a>        <span class="kw">for </span>test <span class="kw">in </span><span class="kw-2">&amp;</span>values[i].<span class="number">1 </span>{
+<a href=#118 id=118 data-nosnippet>118</a>            <span class="kw">let </span>dependency = indices
+<a href=#119 id=119 data-nosnippet>119</a>                .get(<span class="kw-2">&amp;</span>test.name().to_string())
+<a href=#120 id=120 data-nosnippet>120</a>                .ok_or(<span class="string">"C discriminator outside its carrier"</span>)<span class="question-mark">?</span>;
+<a href=#121 id=121 data-nosnippet>121</a>            add(<span class="kw-2">*</span>dependency, values, indices, state, order)<span class="question-mark">?</span>;
+<a href=#122 id=122 data-nosnippet>122</a>        }
+<a href=#123 id=123 data-nosnippet>123</a>        state[i] = <span class="number">2</span>;
+<a href=#124 id=124 data-nosnippet>124</a>        order.push(i);
+<a href=#125 id=125 data-nosnippet>125</a>        <span class="prelude-val">Ok</span>(())
+<a href=#126 id=126 data-nosnippet>126</a>    }
+<a href=#127 id=127 data-nosnippet>127</a>    <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="macro">vec!</span>[<span class="number">0</span>; values.len()];
+<a href=#128 id=128 data-nosnippet>128</a>    <span class="kw">let </span><span class="kw-2">mut </span>order = <span class="macro">vec!</span>[];
+<a href=#129 id=129 data-nosnippet>129</a>    <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..values.len() {
+<a href=#130 id=130 data-nosnippet>130</a>        add(i, <span class="kw-2">&amp;</span>values, <span class="kw-2">&amp;</span>indices, <span class="kw-2">&amp;mut </span>state, <span class="kw-2">&amp;mut </span>order)<span class="question-mark">?</span>;
+<a href=#131 id=131 data-nosnippet>131</a>    }
+<a href=#132 id=132 data-nosnippet>132</a>    <span class="prelude-val">Ok</span>(order.into_iter().map(|i| values[i].clone()).collect())
+<a href=#133 id=133 data-nosnippet>133</a>}
 </code></pre></div></section></main></body></html>

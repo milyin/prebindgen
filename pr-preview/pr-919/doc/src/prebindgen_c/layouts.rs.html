@@ -50,8 +50,8 @@
 <a href=#50 id=50 data-nosnippet>50</a>        .chain(plan.outcomes.source_error.iter())
 <a href=#51 id=51 data-nosnippet>51</a>        .chain(plan.outcomes.binding_failure.iter())
 <a href=#52 id=52 data-nosnippet>52</a>}
-<a href=#53 id=53 data-nosnippet>53</a><span class="kw">fn </span>used_node&lt;Sq: <span class="kw">crate</span>::sequence::RowEncoding, In&gt;(
-<a href=#54 id=54 data-nosnippet>54</a>    node: <span class="kw-2">&amp;</span>CWireNode&lt;Sq, In&gt;,
+<a href=#53 id=53 data-nosnippet>53</a><span class="kw">fn </span>used_node&lt;Chain: group::ChainMetadata, Branch: group::BranchMetadata&gt;(
+<a href=#54 id=54 data-nosnippet>54</a>    node: <span class="kw-2">&amp;</span>CWireNode&lt;Chain, Branch&gt;,
 <a href=#55 id=55 data-nosnippet>55</a>    names: <span class="kw-2">&amp;mut </span>BTreeSet&lt;String&gt;,
 <a href=#56 id=56 data-nosnippet>56</a>) {
 <a href=#57 id=57 data-nosnippet>57</a>    <span class="kw">for </span>wire <span class="kw">in </span>prebindgen_conversions::wire_definitions(std::iter::once(node)) {

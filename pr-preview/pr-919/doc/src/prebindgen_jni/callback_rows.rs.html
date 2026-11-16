@@ -25,7 +25,7 @@
 <a href=#25 id=25 data-nosnippet>25</a>        <span class="kw">match </span>node {
 <a href=#26 id=26 data-nosnippet>26</a>            WireNode::Leaf(<span class="kw">_</span>) =&gt; <span class="bool-val">false</span>,
 <a href=#27 id=27 data-nosnippet>27</a>            WireNode::Chain {
-<a href=#28 id=28 data-nosnippet>28</a>                meta: JniInputWireChain::Sequence(()),
+<a href=#28 id=28 data-nosnippet>28</a>                meta: JniInputWireChain::Sequence,
 <a href=#29 id=29 data-nosnippet>29</a>                ..
 <a href=#30 id=30 data-nosnippet>30</a>            } =&gt; <span class="bool-val">true</span>,
 <a href=#31 id=31 data-nosnippet>31</a>            WireNode::Chain {
@@ -140,7 +140,7 @@
 <a href=#140 id=140 data-nosnippet>140</a>            code
 <a href=#141 id=141 data-nosnippet>141</a>        }
 <a href=#142 id=142 data-nosnippet>142</a>        WireNode::Chain {
-<a href=#143 id=143 data-nosnippet>143</a>            meta: JniInputWireChain::Sequence(()),
+<a href=#143 id=143 data-nosnippet>143</a>            meta: JniInputWireChain::Sequence,
 <a href=#144 id=144 data-nosnippet>144</a>            controls,
 <a href=#145 id=145 data-nosnippet>145</a>            child,
 <a href=#146 id=146 data-nosnippet>146</a>        } =&gt; {
@@ -210,7 +210,7 @@
 <a href=#210 id=210 data-nosnippet>210</a>            field(context, row, fields, name, <span class="macro">quote!</span>(<span class="kw">if </span>#present { #scan }))<span class="question-mark">?
 <a href=#211 id=211 data-nosnippet>211</a>        </span>}
 <a href=#212 id=212 data-nosnippet>212</a>        WireNode::Branch {
-<a href=#213 id=213 data-nosnippet>213</a>            meta: JniInputWireBranch::Alternatives(<span class="kw">_</span>) | JniInputWireBranch::Enum(<span class="kw">_</span>),
+<a href=#213 id=213 data-nosnippet>213</a>            meta: JniInputWireBranch::Alternatives | JniInputWireBranch::Enum(<span class="kw">_</span>),
 <a href=#214 id=214 data-nosnippet>214</a>            controls,
 <a href=#215 id=215 data-nosnippet>215</a>            children,
 <a href=#216 id=216 data-nosnippet>216</a>        } =&gt; {

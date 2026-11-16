@@ -83,18 +83,18 @@
 <a href=#83 id=83 data-nosnippet>83</a>    <span class="prelude-val">Ok</span>(())
 <a href=#84 id=84 data-nosnippet>84</a>}
 <a href=#85 id=85 data-nosnippet>85</a>
-<a href=#86 id=86 data-nosnippet>86</a><span class="kw">fn </span>field_names&lt;Sq: <span class="kw">crate</span>::sequence::RowEncoding, In&gt;(layout: <span class="kw-2">&amp;</span>CWireNode&lt;Sq, In&gt;) -&gt; Vec&lt;String&gt; {
+<a href=#86 id=86 data-nosnippet>86</a><span class="kw">fn </span>field_names(layout: <span class="kw-2">&amp;</span>COutputWireNode) -&gt; Vec&lt;String&gt; {
 <a href=#87 id=87 data-nosnippet>87</a>    <span class="kw">use </span>prebindgen_conversions::WireNode;
 <a href=#88 id=88 data-nosnippet>88</a>    <span class="kw">let </span><span class="kw-2">mut </span>names = Vec::new();
 <a href=#89 id=89 data-nosnippet>89</a>    <span class="kw">if let </span>WireNode::Branch {
-<a href=#90 id=90 data-nosnippet>90</a>        meta: CWireBranch::Fields,
+<a href=#90 id=90 data-nosnippet>90</a>        meta: COutputWireBranch::Fields,
 <a href=#91 id=91 data-nosnippet>91</a>        children,
 <a href=#92 id=92 data-nosnippet>92</a>        ..
 <a href=#93 id=93 data-nosnippet>93</a>    } = layout
 <a href=#94 id=94 data-nosnippet>94</a>    {
 <a href=#95 id=95 data-nosnippet>95</a>        <span class="kw">for </span>node <span class="kw">in </span>children.as_slice() {
 <a href=#96 id=96 data-nosnippet>96</a>            <span class="kw">if let </span>WireNode::Branch {
-<a href=#97 id=97 data-nosnippet>97</a>                meta: CWireBranch::Field(name),
+<a href=#97 id=97 data-nosnippet>97</a>                meta: COutputWireBranch::Field(name),
 <a href=#98 id=98 data-nosnippet>98</a>                ..
 <a href=#99 id=99 data-nosnippet>99</a>            } = node
 <a href=#100 id=100 data-nosnippet>100</a>            {
@@ -307,165 +307,171 @@
 <a href=#307 id=307 data-nosnippet>307</a>}
 <a href=#308 id=308 data-nosnippet>308</a>
 <a href=#309 id=309 data-nosnippet>309</a><span class="attr">#[allow(clippy::too_many_arguments)]
-<a href=#310 id=310 data-nosnippet>310</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>result_function&lt;Sq: <span class="kw">crate</span>::sequence::RowEncoding, In, R, E, P&gt;(
-<a href=#311 id=311 data-nosnippet>311</a>    source_name: <span class="kw-2">&amp;</span>syn::Ident,
-<a href=#312 id=312 data-nosnippet>312</a>    error_ty: <span class="kw-2">&amp;</span>syn::Type,
-<a href=#313 id=313 data-nosnippet>313</a>    outputs: <span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span>Wire],
-<a href=#314 id=314 data-nosnippet>314</a>    function_output_layout: <span class="kw-2">&amp;</span>CWireNode&lt;Sq, In&gt;,
-<a href=#315 id=315 data-nosnippet>315</a>    <span class="kw-2">mut </span>params: Vec&lt;TokenStream&gt;,
-<a href=#316 id=316 data-nosnippet>316</a>    <span class="kw-2">mut </span>cparams: Vec&lt;String&gt;,
-<a href=#317 id=317 data-nosnippet>317</a>    body: <span class="kw-2">&amp;</span>TokenStream,
-<a href=#318 id=318 data-nosnippet>318</a>    context: <span class="kw-2">&amp;</span>CContext,
-<a href=#319 id=319 data-nosnippet>319</a>    prefix: <span class="kw-2">&amp;</span>str,
-<a href=#320 id=320 data-nosnippet>320</a>    pointers: <span class="kw-2">&amp;</span>std::collections::BTreeMap&lt;
-<a href=#321 id=321 data-nosnippet>321</a>        String,
-<a href=#322 id=322 data-nosnippet>322</a>        prebindgen_flat::TypeInfo&lt;CType, (), (), R, E, P&gt;,
-<a href=#323 id=323 data-nosnippet>323</a>    &gt;,
-<a href=#324 id=324 data-nosnippet>324</a>    errors: <span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span>ErrorBinding],
-<a href=#325 id=325 data-nosnippet>325</a>    consumes: bool,
-<a href=#326 id=326 data-nosnippet>326</a>    comments: <span class="kw-2">&amp;</span>str,
-<a href=#327 id=327 data-nosnippet>327</a>    tokens: <span class="kw-2">&amp;mut </span>TokenStream,
-<a href=#328 id=328 data-nosnippet>328</a>    header: <span class="kw-2">&amp;mut </span>String,
-<a href=#329 id=329 data-nosnippet>329</a>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#330 id=330 data-nosnippet>330</a>    <span class="kw">let </span>name = <span class="macro">format_ident!</span>(<span class="string">"{prefix}_{source_name}"</span>);
-<a href=#331 id=331 data-nosnippet>331</a>    <span class="kw">let </span>internal = <span class="kw-2">&amp;</span>context.output_type;
-<a href=#332 id=332 data-nosnippet>332</a>    <span class="kw">let </span>out = <span class="kw-2">&amp;</span>context.output_pointer;
-<a href=#333 id=333 data-nosnippet>333</a>    <span class="kw">let </span>accepted = <span class="kw-2">&amp;</span>context.acknowledgement;
-<a href=#334 id=334 data-nosnippet>334</a>    <span class="kw">let </span>error = <span class="kw-2">&amp;</span>context.error_pointer;
-<a href=#335 id=335 data-nosnippet>335</a>    <span class="kw">let </span>reported = <span class="kw-2">&amp;</span>context.error_reported;
-<a href=#336 id=336 data-nosnippet>336</a>    <span class="kw">let </span>typed = errors
-<a href=#337 id=337 data-nosnippet>337</a>        .iter()
-<a href=#338 id=338 data-nosnippet>338</a>        .find(|e| prebindgen_flat::type_key(<span class="kw-2">&amp;</span>e.ty) == prebindgen_flat::type_key(error_ty));
-<a href=#339 id=339 data-nosnippet>339</a>    <span class="kw">let </span>(rust_error, c_error, report_binding) = <span class="kw">if let </span><span class="prelude-val">Some</span>(typed) = typed {
-<a href=#340 id=340 data-nosnippet>340</a>        <span class="kw">let </span>rust = <span class="macro">format_ident!</span>(<span class="string">"__PbError_{}"</span>, typed.name);
-<a href=#341 id=341 data-nosnippet>341</a>        <span class="kw">let </span>report = helper(<span class="kw-2">&amp;</span>typed.name);
-<a href=#342 id=342 data-nosnippet>342</a>        <span class="kw">let </span><span class="kw-2">mut </span>empty_fields = <span class="kw">crate</span>::group::result_packet_fields(<span class="kw-2">&amp;</span>typed.plan()<span class="question-mark">?</span>.outcomes.success)
-<a href=#343 id=343 data-nosnippet>343</a>            .enumerate()
-<a href=#344 id=344 data-nosnippet>344</a>            .map(|(i, wire)| {
-<a href=#345 id=345 data-nosnippet>345</a>                <span class="kw">let </span>field = <span class="macro">format_ident!</span>(<span class="string">"v{i}"</span>);
-<a href=#346 id=346 data-nosnippet>346</a>                <span class="kw">let </span>value = context.render(<span class="kw-2">&amp;</span>wire::absent_output_value(<span class="kw-2">&amp;</span>wire.kind, <span class="prelude-val">None</span>)<span class="question-mark">?</span>)<span class="question-mark">?</span>;
-<a href=#347 id=347 data-nosnippet>347</a>                <span class="prelude-val">Ok</span>(<span class="macro">quote!</span>(#field:#value))
-<a href=#348 id=348 data-nosnippet>348</a>            })
-<a href=#349 id=349 data-nosnippet>349</a>            .collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;&gt;()<span class="question-mark">?</span>;
-<a href=#350 id=350 data-nosnippet>350</a>        <span class="kw">if </span>empty_fields.is_empty() {
-<a href=#351 id=351 data-nosnippet>351</a>            empty_fields.push(<span class="macro">quote!</span>(unused:<span class="number">0</span>));
-<a href=#352 id=352 data-nosnippet>352</a>        }
-<a href=#353 id=353 data-nosnippet>353</a>        (
-<a href=#354 id=354 data-nosnippet>354</a>            <span class="macro">quote!</span>(#rust),
-<a href=#355 id=355 data-nosnippet>355</a>            <span class="macro">format!</span>(<span class="string">"{prefix}_{}"</span>, typed.name),
-<a href=#356 id=356 data-nosnippet>356</a>            <span class="macro">quote!</span> {
-<a href=#357 id=357 data-nosnippet>357</a>                <span class="kw">let </span><span class="kw-2">mut </span>delivered=<span class="bool-val">false</span>;
-<a href=#358 id=358 data-nosnippet>358</a>                <span class="kw">if </span>::prebindgen_runtime::boundary(|| <span class="kw">unsafe </span>{#report(&lt;#error_ty <span class="kw">as </span>From&lt;String&gt;&gt;::from(message),#error,<span class="kw-2">&amp;mut </span>delivered)}).is_err() &amp;&amp; !delivered {
-<a href=#359 id=359 data-nosnippet>359</a>                <span class="comment">// Native owners need real empty Rust values, not zero bytes.
-<a href=#360 id=360 data-nosnippet>360</a>                </span>std::ptr::write(#error,#rust{#(#empty_fields),<span class="kw-2">*</span>});
-<a href=#361 id=361 data-nosnippet>361</a>            }
-<a href=#362 id=362 data-nosnippet>362</a>            },
-<a href=#363 id=363 data-nosnippet>363</a>        )
-<a href=#364 id=364 data-nosnippet>364</a>    } <span class="kw">else </span>{
-<a href=#365 id=365 data-nosnippet>365</a>        (
-<a href=#366 id=366 data-nosnippet>366</a>            <span class="macro">quote!</span>(<span class="kw-2">*mut </span>std::ffi::c_char),
-<a href=#367 id=367 data-nosnippet>367</a>            <span class="string">"char *"</span>.into(),
-<a href=#368 id=368 data-nosnippet>368</a>            <span class="macro">quote!</span>(<span class="kw">unsafe </span>{__pb_report_message(message,#error)};),
+<a href=#310 id=310 data-nosnippet>310</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>result_function&lt;
+<a href=#311 id=311 data-nosnippet>311</a>    Chain: group::ChainMetadata,
+<a href=#312 id=312 data-nosnippet>312</a>    Branch: group::BranchMetadata,
+<a href=#313 id=313 data-nosnippet>313</a>    R,
+<a href=#314 id=314 data-nosnippet>314</a>    E,
+<a href=#315 id=315 data-nosnippet>315</a>    P,
+<a href=#316 id=316 data-nosnippet>316</a>&gt;(
+<a href=#317 id=317 data-nosnippet>317</a>    source_name: <span class="kw-2">&amp;</span>syn::Ident,
+<a href=#318 id=318 data-nosnippet>318</a>    error_ty: <span class="kw-2">&amp;</span>syn::Type,
+<a href=#319 id=319 data-nosnippet>319</a>    outputs: <span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span>Wire],
+<a href=#320 id=320 data-nosnippet>320</a>    function_output_layout: <span class="kw-2">&amp;</span>CWireNode&lt;Chain, Branch&gt;,
+<a href=#321 id=321 data-nosnippet>321</a>    <span class="kw-2">mut </span>params: Vec&lt;TokenStream&gt;,
+<a href=#322 id=322 data-nosnippet>322</a>    <span class="kw-2">mut </span>cparams: Vec&lt;String&gt;,
+<a href=#323 id=323 data-nosnippet>323</a>    body: <span class="kw-2">&amp;</span>TokenStream,
+<a href=#324 id=324 data-nosnippet>324</a>    context: <span class="kw-2">&amp;</span>CContext,
+<a href=#325 id=325 data-nosnippet>325</a>    prefix: <span class="kw-2">&amp;</span>str,
+<a href=#326 id=326 data-nosnippet>326</a>    pointers: <span class="kw-2">&amp;</span>std::collections::BTreeMap&lt;
+<a href=#327 id=327 data-nosnippet>327</a>        String,
+<a href=#328 id=328 data-nosnippet>328</a>        prebindgen_flat::TypeInfo&lt;CType, (), (), R, E, P&gt;,
+<a href=#329 id=329 data-nosnippet>329</a>    &gt;,
+<a href=#330 id=330 data-nosnippet>330</a>    errors: <span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span>ErrorBinding],
+<a href=#331 id=331 data-nosnippet>331</a>    consumes: bool,
+<a href=#332 id=332 data-nosnippet>332</a>    comments: <span class="kw-2">&amp;</span>str,
+<a href=#333 id=333 data-nosnippet>333</a>    tokens: <span class="kw-2">&amp;mut </span>TokenStream,
+<a href=#334 id=334 data-nosnippet>334</a>    header: <span class="kw-2">&amp;mut </span>String,
+<a href=#335 id=335 data-nosnippet>335</a>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#336 id=336 data-nosnippet>336</a>    <span class="kw">let </span>name = <span class="macro">format_ident!</span>(<span class="string">"{prefix}_{source_name}"</span>);
+<a href=#337 id=337 data-nosnippet>337</a>    <span class="kw">let </span>internal = <span class="kw-2">&amp;</span>context.output_type;
+<a href=#338 id=338 data-nosnippet>338</a>    <span class="kw">let </span>out = <span class="kw-2">&amp;</span>context.output_pointer;
+<a href=#339 id=339 data-nosnippet>339</a>    <span class="kw">let </span>accepted = <span class="kw-2">&amp;</span>context.acknowledgement;
+<a href=#340 id=340 data-nosnippet>340</a>    <span class="kw">let </span>error = <span class="kw-2">&amp;</span>context.error_pointer;
+<a href=#341 id=341 data-nosnippet>341</a>    <span class="kw">let </span>reported = <span class="kw-2">&amp;</span>context.error_reported;
+<a href=#342 id=342 data-nosnippet>342</a>    <span class="kw">let </span>typed = errors
+<a href=#343 id=343 data-nosnippet>343</a>        .iter()
+<a href=#344 id=344 data-nosnippet>344</a>        .find(|e| prebindgen_flat::type_key(<span class="kw-2">&amp;</span>e.ty) == prebindgen_flat::type_key(error_ty));
+<a href=#345 id=345 data-nosnippet>345</a>    <span class="kw">let </span>(rust_error, c_error, report_binding) = <span class="kw">if let </span><span class="prelude-val">Some</span>(typed) = typed {
+<a href=#346 id=346 data-nosnippet>346</a>        <span class="kw">let </span>rust = <span class="macro">format_ident!</span>(<span class="string">"__PbError_{}"</span>, typed.name);
+<a href=#347 id=347 data-nosnippet>347</a>        <span class="kw">let </span>report = helper(<span class="kw-2">&amp;</span>typed.name);
+<a href=#348 id=348 data-nosnippet>348</a>        <span class="kw">let </span><span class="kw-2">mut </span>empty_fields = <span class="kw">crate</span>::group::result_packet_fields(<span class="kw-2">&amp;</span>typed.plan()<span class="question-mark">?</span>.outcomes.success)
+<a href=#349 id=349 data-nosnippet>349</a>            .enumerate()
+<a href=#350 id=350 data-nosnippet>350</a>            .map(|(i, wire)| {
+<a href=#351 id=351 data-nosnippet>351</a>                <span class="kw">let </span>field = <span class="macro">format_ident!</span>(<span class="string">"v{i}"</span>);
+<a href=#352 id=352 data-nosnippet>352</a>                <span class="kw">let </span>value = context.render(<span class="kw-2">&amp;</span>wire::absent_output_value(<span class="kw-2">&amp;</span>wire.kind, <span class="prelude-val">None</span>)<span class="question-mark">?</span>)<span class="question-mark">?</span>;
+<a href=#353 id=353 data-nosnippet>353</a>                <span class="prelude-val">Ok</span>(<span class="macro">quote!</span>(#field:#value))
+<a href=#354 id=354 data-nosnippet>354</a>            })
+<a href=#355 id=355 data-nosnippet>355</a>            .collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;&gt;()<span class="question-mark">?</span>;
+<a href=#356 id=356 data-nosnippet>356</a>        <span class="kw">if </span>empty_fields.is_empty() {
+<a href=#357 id=357 data-nosnippet>357</a>            empty_fields.push(<span class="macro">quote!</span>(unused:<span class="number">0</span>));
+<a href=#358 id=358 data-nosnippet>358</a>        }
+<a href=#359 id=359 data-nosnippet>359</a>        (
+<a href=#360 id=360 data-nosnippet>360</a>            <span class="macro">quote!</span>(#rust),
+<a href=#361 id=361 data-nosnippet>361</a>            <span class="macro">format!</span>(<span class="string">"{prefix}_{}"</span>, typed.name),
+<a href=#362 id=362 data-nosnippet>362</a>            <span class="macro">quote!</span> {
+<a href=#363 id=363 data-nosnippet>363</a>                <span class="kw">let </span><span class="kw-2">mut </span>delivered=<span class="bool-val">false</span>;
+<a href=#364 id=364 data-nosnippet>364</a>                <span class="kw">if </span>::prebindgen_runtime::boundary(|| <span class="kw">unsafe </span>{#report(&lt;#error_ty <span class="kw">as </span>From&lt;String&gt;&gt;::from(message),#error,<span class="kw-2">&amp;mut </span>delivered)}).is_err() &amp;&amp; !delivered {
+<a href=#365 id=365 data-nosnippet>365</a>                <span class="comment">// Native owners need real empty Rust values, not zero bytes.
+<a href=#366 id=366 data-nosnippet>366</a>                </span>std::ptr::write(#error,#rust{#(#empty_fields),<span class="kw-2">*</span>});
+<a href=#367 id=367 data-nosnippet>367</a>            }
+<a href=#368 id=368 data-nosnippet>368</a>            },
 <a href=#369 id=369 data-nosnippet>369</a>        )
-<a href=#370 id=370 data-nosnippet>370</a>    };
-<a href=#371 id=371 data-nosnippet>371</a>    <span class="kw">let </span>niche = outputs
-<a href=#372 id=372 data-nosnippet>372</a>        .iter()
-<a href=#373 id=373 data-nosnippet>373</a>        .enumerate()
-<a href=#374 id=374 data-nosnippet>374</a>        .find_map(|(i, w)| w.kind.available_niche().map(|n| (i, n)));
-<a href=#375 id=375 data-nosnippet>375</a>    <span class="kw">let </span>return_position = niche.as_ref().map(|(i, <span class="kw">_</span>)| <span class="kw-2">*</span>i);
-<a href=#376 id=376 data-nosnippet>376</a>    <span class="kw">let </span>(rust_return, c_return, failure, success) = <span class="kw">if let </span><span class="prelude-val">Some</span>((i, niche)) = <span class="kw-2">&amp;</span>niche {
-<a href=#377 id=377 data-nosnippet>377</a>        <span class="kw">let </span>wire = outputs[<span class="kw-2">*</span>i];
-<a href=#378 id=378 data-nosnippet>378</a>        <span class="kw">let </span>ty = wire.rust_type();
-<a href=#379 id=379 data-nosnippet>379</a>        <span class="kw">let </span>field = <span class="macro">format_ident!</span>(<span class="string">"v{i}"</span>);
-<a href=#380 id=380 data-nosnippet>380</a>        <span class="kw">let </span>failure = wire::absent_output_value(<span class="kw-2">&amp;</span>wire.kind, <span class="prelude-val">Some</span>(niche))<span class="question-mark">?</span>;
-<a href=#381 id=381 data-nosnippet>381</a>        (
-<a href=#382 id=382 data-nosnippet>382</a>            <span class="macro">quote!</span>(#ty),
-<a href=#383 id=383 data-nosnippet>383</a>            c_ty(wire, prefix, pointers, context),
-<a href=#384 id=384 data-nosnippet>384</a>            failure,
-<a href=#385 id=385 data-nosnippet>385</a>            <span class="macro">quote!</span>(value.#field),
-<a href=#386 id=386 data-nosnippet>386</a>        )
-<a href=#387 id=387 data-nosnippet>387</a>    } <span class="kw">else </span>{
-<a href=#388 id=388 data-nosnippet>388</a>        (<span class="macro">quote!</span>(bool), <span class="string">"bool"</span>.into(), <span class="macro">quote!</span>(<span class="bool-val">false</span>), <span class="macro">quote!</span>(<span class="bool-val">true</span>))
-<a href=#389 id=389 data-nosnippet>389</a>    };
-<a href=#390 id=390 data-nosnippet>390</a>    <span class="kw">let </span><span class="kw-2">mut </span>writes = TokenStream::new();
-<a href=#391 id=391 data-nosnippet>391</a>    <span class="kw">let </span><span class="kw-2">mut </span>display = Vec::new();
-<a href=#392 id=392 data-nosnippet>392</a>    <span class="kw">for </span>(i, wire) <span class="kw">in </span>outputs.iter().enumerate() {
-<a href=#393 id=393 data-nosnippet>393</a>        <span class="kw">if </span>return_position == <span class="prelude-val">Some</span>(i) {
-<a href=#394 id=394 data-nosnippet>394</a>            display.push(<span class="string">"the return value"</span>.to_owned());
-<a href=#395 id=395 data-nosnippet>395</a>            <span class="kw">continue</span>;
-<a href=#396 id=396 data-nosnippet>396</a>        }
-<a href=#397 id=397 data-nosnippet>397</a>        <span class="kw">let </span>id = <span class="macro">format_ident!</span>(<span class="string">"out{i}"</span>);
-<a href=#398 id=398 data-nosnippet>398</a>        <span class="kw">let </span>field = <span class="macro">format_ident!</span>(<span class="string">"v{i}"</span>);
-<a href=#399 id=399 data-nosnippet>399</a>        <span class="kw">let </span>ty = wire.rust_type();
-<a href=#400 id=400 data-nosnippet>400</a>        params.push(<span class="macro">quote!</span>(#id:<span class="kw-2">*mut </span>#ty));
-<a href=#401 id=401 data-nosnippet>401</a>        cparams.push(<span class="macro">format!</span>(<span class="string">"{} *{id}"</span>, c_ty(wire, prefix, pointers, context)));
-<a href=#402 id=402 data-nosnippet>402</a>        writes.extend(<span class="macro">quote!</span>(std::ptr::write(#id,value.#field);));
-<a href=#403 id=403 data-nosnippet>403</a>        display.push(<span class="macro">format!</span>(<span class="string">"*{id}"</span>));
-<a href=#404 id=404 data-nosnippet>404</a>    }
-<a href=#405 id=405 data-nosnippet>405</a>    <span class="kw">let </span>acknowledgement = <span class="kw">if </span>consumes {
-<a href=#406 id=406 data-nosnippet>406</a>        params.push(<span class="macro">quote!</span>(ownership:<span class="kw-2">*mut </span>usize));
-<a href=#407 id=407 data-nosnippet>407</a>        cparams.push(<span class="string">"size_t *ownership"</span>.into());
-<a href=#408 id=408 data-nosnippet>408</a>        <span class="macro">quote!</span>(std::ptr::write(ownership,#accepted.get());)
-<a href=#409 id=409 data-nosnippet>409</a>    } <span class="kw">else </span>{
-<a href=#410 id=410 data-nosnippet>410</a>        <span class="macro">quote!</span>()
-<a href=#411 id=411 data-nosnippet>411</a>    };
-<a href=#412 id=412 data-nosnippet>412</a>    params.push(<span class="macro">quote!</span>(#error:<span class="kw-2">*mut </span>#rust_error));
-<a href=#413 id=413 data-nosnippet>413</a>    cparams.push(<span class="macro">format!</span>(<span class="string">"{c_error} *{error}"</span>));
-<a href=#414 id=414 data-nosnippet>414</a>    <span class="kw">let </span><span class="kw-2">mut </span>comments = comments.to_owned();
-<a href=#415 id=415 data-nosnippet>415</a>    <span class="kw">for </span>(i, path) <span class="kw">in </span>display.iter().enumerate().rev() {
-<a href=#416 id=416 data-nosnippet>416</a>        comments = comments.replace(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"output-&gt;v{i}"</span>), path);
-<a href=#417 id=417 data-nosnippet>417</a>    }
-<a href=#418 id=418 data-nosnippet>418</a>    header.push_str(<span class="kw-2">&amp;</span>comments);
-<a href=#419 id=419 data-nosnippet>419</a>    <span class="kw">if let </span><span class="prelude-val">Some</span>((i, niche)) = <span class="kw-2">&amp;</span>niche {
-<a href=#420 id=420 data-nosnippet>420</a>        <span class="kw">let </span>absent = <span class="kw">match </span>niche {
-<a href=#421 id=421 data-nosnippet>421</a>            CNiche::Null =&gt; <span class="string">"NULL"</span>.to_owned(),
-<a href=#422 id=422 data-nosnippet>422</a>            CNiche::Integer(value) =&gt; value.to_string(),
-<a href=#423 id=423 data-nosnippet>423</a>        };
-<a href=#424 id=424 data-nosnippet>424</a>        header.push_str(<span class="kw-2">&amp;</span><span class="macro">format!</span>(
-<a href=#425 id=425 data-nosnippet>425</a>            <span class="string">"/* Result: success field v{i} is returned directly; {absent} means failure. */\n"
-<a href=#426 id=426 data-nosnippet>426</a>        </span>));
-<a href=#427 id=427 data-nosnippet>427</a>    } <span class="kw">else </span>{
-<a href=#428 id=428 data-nosnippet>428</a>        header.push_str(<span class="string">"/* Result: true = success; false = failure. Success outputs are unchanged on failure. */\n"</span>);
-<a href=#429 id=429 data-nosnippet>429</a>    }
-<a href=#430 id=430 data-nosnippet>430</a>    <span class="kw">if </span>consumes {
-<a href=#431 id=431 data-nosnippet>431</a>        header.push_str(<span class="string">"/* ownership is required: the count of owned wire values consumed in argument/row/field order, including on failure. Consumed allocations and all their aliases must not be reused or destroyed. */\n"</span>);
-<a href=#432 id=432 data-nosnippet>432</a>    }
-<a href=#433 id=433 data-nosnippet>433</a>    header.push_str(<span class="string">"/* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */\n"</span>);
-<a href=#434 id=434 data-nosnippet>434</a>    header.push_str(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"{c_return} {name}({});\n"</span>, cparams.join(<span class="string">", "</span>)));
-<a href=#435 id=435 data-nosnippet>435</a>    <span class="kw">let </span>rollback = sequence::release(
-<a href=#436 id=436 data-nosnippet>436</a>        function_output_layout,
-<a href=#437 id=437 data-nosnippet>437</a>        <span class="kw-2">&amp;</span>outputs
-<a href=#438 id=438 data-nosnippet>438</a>            .iter()
-<a href=#439 id=439 data-nosnippet>439</a>            .enumerate()
-<a href=#440 id=440 data-nosnippet>440</a>            .map(|(i, wire)| {
-<a href=#441 id=441 data-nosnippet>441</a>                <span class="kw">let </span>field = <span class="macro">format_ident!</span>(<span class="string">"v{i}"</span>);
-<a href=#442 id=442 data-nosnippet>442</a>                (<span class="kw-2">*</span>wire, <span class="macro">quote!</span>(value.#field))
-<a href=#443 id=443 data-nosnippet>443</a>            })
-<a href=#444 id=444 data-nosnippet>444</a>            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;(),
-<a href=#445 id=445 data-nosnippet>445</a>        context,
-<a href=#446 id=446 data-nosnippet>446</a>        <span class="bool-val">true</span>,
-<a href=#447 id=447 data-nosnippet>447</a>    );
-<a href=#448 id=448 data-nosnippet>448</a>    <span class="kw">let </span>incoming_counter = consumes.then(|| <span class="macro">quote!</span>(<span class="kw">let </span>#accepted=::core::cell::Cell::new(<span class="number">0usize</span>);));
-<a href=#449 id=449 data-nosnippet>449</a>    tokens.extend(<span class="macro">quote!</span> {
-<a href=#450 id=450 data-nosnippet>450</a>        <span class="attr">#[doc=<span class="string">"# Safety\nSuccess, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations."</span>]
-<a href=#451 id=451 data-nosnippet>451</a>        #[allow(clippy::let_and_return,clippy::needless_range_loop,clippy::needless_borrow,clippy::let_unit_value,clippy::unnecessary_cast,clippy::useless_conversion)]
-<a href=#452 id=452 data-nosnippet>452</a>        #[no_mangle]</span><span class="kw">pub unsafe extern </span><span class="string">"C" </span><span class="kw">fn </span>#name(#(#params),<span class="kw-2">*</span>)-&gt;#rust_return {
-<a href=#453 id=453 data-nosnippet>453</a>            #incoming_counter
-<a href=#454 id=454 data-nosnippet>454</a>            <span class="attr">#[allow(unused_mut)]</span><span class="kw">let </span><span class="kw-2">mut </span>#reported=<span class="bool-val">false</span>;
-<a href=#455 id=455 data-nosnippet>455</a>            <span class="kw">let </span><span class="kw-2">mut </span>success_committed=<span class="bool-val">false</span>;
-<a href=#456 id=456 data-nosnippet>456</a>            <span class="kw">let </span><span class="kw-2">mut </span>storage=std::mem::MaybeUninit::&lt;#internal&gt;::uninit();
-<a href=#457 id=457 data-nosnippet>457</a>            <span class="kw">let </span>#out=storage.as_mut_ptr();
-<a href=#458 id=458 data-nosnippet>458</a>            <span class="kw">let </span>outcome=::prebindgen_runtime::boundary(|| {  #body});
-<a href=#459 id=459 data-nosnippet>459</a>            #acknowledgement
-<a href=#460 id=460 data-nosnippet>460</a>            <span class="kw">match </span>outcome {
-<a href=#461 id=461 data-nosnippet>461</a>                <span class="prelude-val">Ok</span>(())=&gt;{<span class="kw">let </span>value=storage.assume_init();#writes #success}
-<a href=#462 id=462 data-nosnippet>462</a>                <span class="prelude-val">Err</span>(message)=&gt;{
-<a href=#463 id=463 data-nosnippet>463</a>                    <span class="kw">if </span>success_committed {<span class="kw">let </span>value=storage.assume_init();#rollback}
-<a href=#464 id=464 data-nosnippet>464</a>                    <span class="kw">if </span>!#reported &amp;&amp; !#error.is_null(){#report_binding}#failure
-<a href=#465 id=465 data-nosnippet>465</a>                }
-<a href=#466 id=466 data-nosnippet>466</a>            }
-<a href=#467 id=467 data-nosnippet>467</a>        }
-<a href=#468 id=468 data-nosnippet>468</a>    });
-<a href=#469 id=469 data-nosnippet>469</a>    <span class="prelude-val">Ok</span>(())
-<a href=#470 id=470 data-nosnippet>470</a>}
+<a href=#370 id=370 data-nosnippet>370</a>    } <span class="kw">else </span>{
+<a href=#371 id=371 data-nosnippet>371</a>        (
+<a href=#372 id=372 data-nosnippet>372</a>            <span class="macro">quote!</span>(<span class="kw-2">*mut </span>std::ffi::c_char),
+<a href=#373 id=373 data-nosnippet>373</a>            <span class="string">"char *"</span>.into(),
+<a href=#374 id=374 data-nosnippet>374</a>            <span class="macro">quote!</span>(<span class="kw">unsafe </span>{__pb_report_message(message,#error)};),
+<a href=#375 id=375 data-nosnippet>375</a>        )
+<a href=#376 id=376 data-nosnippet>376</a>    };
+<a href=#377 id=377 data-nosnippet>377</a>    <span class="kw">let </span>niche = outputs
+<a href=#378 id=378 data-nosnippet>378</a>        .iter()
+<a href=#379 id=379 data-nosnippet>379</a>        .enumerate()
+<a href=#380 id=380 data-nosnippet>380</a>        .find_map(|(i, w)| w.kind.available_niche().map(|n| (i, n)));
+<a href=#381 id=381 data-nosnippet>381</a>    <span class="kw">let </span>return_position = niche.as_ref().map(|(i, <span class="kw">_</span>)| <span class="kw-2">*</span>i);
+<a href=#382 id=382 data-nosnippet>382</a>    <span class="kw">let </span>(rust_return, c_return, failure, success) = <span class="kw">if let </span><span class="prelude-val">Some</span>((i, niche)) = <span class="kw-2">&amp;</span>niche {
+<a href=#383 id=383 data-nosnippet>383</a>        <span class="kw">let </span>wire = outputs[<span class="kw-2">*</span>i];
+<a href=#384 id=384 data-nosnippet>384</a>        <span class="kw">let </span>ty = wire.rust_type();
+<a href=#385 id=385 data-nosnippet>385</a>        <span class="kw">let </span>field = <span class="macro">format_ident!</span>(<span class="string">"v{i}"</span>);
+<a href=#386 id=386 data-nosnippet>386</a>        <span class="kw">let </span>failure = wire::absent_output_value(<span class="kw-2">&amp;</span>wire.kind, <span class="prelude-val">Some</span>(niche))<span class="question-mark">?</span>;
+<a href=#387 id=387 data-nosnippet>387</a>        (
+<a href=#388 id=388 data-nosnippet>388</a>            <span class="macro">quote!</span>(#ty),
+<a href=#389 id=389 data-nosnippet>389</a>            c_ty(wire, prefix, pointers, context),
+<a href=#390 id=390 data-nosnippet>390</a>            failure,
+<a href=#391 id=391 data-nosnippet>391</a>            <span class="macro">quote!</span>(value.#field),
+<a href=#392 id=392 data-nosnippet>392</a>        )
+<a href=#393 id=393 data-nosnippet>393</a>    } <span class="kw">else </span>{
+<a href=#394 id=394 data-nosnippet>394</a>        (<span class="macro">quote!</span>(bool), <span class="string">"bool"</span>.into(), <span class="macro">quote!</span>(<span class="bool-val">false</span>), <span class="macro">quote!</span>(<span class="bool-val">true</span>))
+<a href=#395 id=395 data-nosnippet>395</a>    };
+<a href=#396 id=396 data-nosnippet>396</a>    <span class="kw">let </span><span class="kw-2">mut </span>writes = TokenStream::new();
+<a href=#397 id=397 data-nosnippet>397</a>    <span class="kw">let </span><span class="kw-2">mut </span>display = Vec::new();
+<a href=#398 id=398 data-nosnippet>398</a>    <span class="kw">for </span>(i, wire) <span class="kw">in </span>outputs.iter().enumerate() {
+<a href=#399 id=399 data-nosnippet>399</a>        <span class="kw">if </span>return_position == <span class="prelude-val">Some</span>(i) {
+<a href=#400 id=400 data-nosnippet>400</a>            display.push(<span class="string">"the return value"</span>.to_owned());
+<a href=#401 id=401 data-nosnippet>401</a>            <span class="kw">continue</span>;
+<a href=#402 id=402 data-nosnippet>402</a>        }
+<a href=#403 id=403 data-nosnippet>403</a>        <span class="kw">let </span>id = <span class="macro">format_ident!</span>(<span class="string">"out{i}"</span>);
+<a href=#404 id=404 data-nosnippet>404</a>        <span class="kw">let </span>field = <span class="macro">format_ident!</span>(<span class="string">"v{i}"</span>);
+<a href=#405 id=405 data-nosnippet>405</a>        <span class="kw">let </span>ty = wire.rust_type();
+<a href=#406 id=406 data-nosnippet>406</a>        params.push(<span class="macro">quote!</span>(#id:<span class="kw-2">*mut </span>#ty));
+<a href=#407 id=407 data-nosnippet>407</a>        cparams.push(<span class="macro">format!</span>(<span class="string">"{} *{id}"</span>, c_ty(wire, prefix, pointers, context)));
+<a href=#408 id=408 data-nosnippet>408</a>        writes.extend(<span class="macro">quote!</span>(std::ptr::write(#id,value.#field);));
+<a href=#409 id=409 data-nosnippet>409</a>        display.push(<span class="macro">format!</span>(<span class="string">"*{id}"</span>));
+<a href=#410 id=410 data-nosnippet>410</a>    }
+<a href=#411 id=411 data-nosnippet>411</a>    <span class="kw">let </span>acknowledgement = <span class="kw">if </span>consumes {
+<a href=#412 id=412 data-nosnippet>412</a>        params.push(<span class="macro">quote!</span>(ownership:<span class="kw-2">*mut </span>usize));
+<a href=#413 id=413 data-nosnippet>413</a>        cparams.push(<span class="string">"size_t *ownership"</span>.into());
+<a href=#414 id=414 data-nosnippet>414</a>        <span class="macro">quote!</span>(std::ptr::write(ownership,#accepted.get());)
+<a href=#415 id=415 data-nosnippet>415</a>    } <span class="kw">else </span>{
+<a href=#416 id=416 data-nosnippet>416</a>        <span class="macro">quote!</span>()
+<a href=#417 id=417 data-nosnippet>417</a>    };
+<a href=#418 id=418 data-nosnippet>418</a>    params.push(<span class="macro">quote!</span>(#error:<span class="kw-2">*mut </span>#rust_error));
+<a href=#419 id=419 data-nosnippet>419</a>    cparams.push(<span class="macro">format!</span>(<span class="string">"{c_error} *{error}"</span>));
+<a href=#420 id=420 data-nosnippet>420</a>    <span class="kw">let </span><span class="kw-2">mut </span>comments = comments.to_owned();
+<a href=#421 id=421 data-nosnippet>421</a>    <span class="kw">for </span>(i, path) <span class="kw">in </span>display.iter().enumerate().rev() {
+<a href=#422 id=422 data-nosnippet>422</a>        comments = comments.replace(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"output-&gt;v{i}"</span>), path);
+<a href=#423 id=423 data-nosnippet>423</a>    }
+<a href=#424 id=424 data-nosnippet>424</a>    header.push_str(<span class="kw-2">&amp;</span>comments);
+<a href=#425 id=425 data-nosnippet>425</a>    <span class="kw">if let </span><span class="prelude-val">Some</span>((i, niche)) = <span class="kw-2">&amp;</span>niche {
+<a href=#426 id=426 data-nosnippet>426</a>        <span class="kw">let </span>absent = <span class="kw">match </span>niche {
+<a href=#427 id=427 data-nosnippet>427</a>            CNiche::Null =&gt; <span class="string">"NULL"</span>.to_owned(),
+<a href=#428 id=428 data-nosnippet>428</a>            CNiche::Integer(value) =&gt; value.to_string(),
+<a href=#429 id=429 data-nosnippet>429</a>        };
+<a href=#430 id=430 data-nosnippet>430</a>        header.push_str(<span class="kw-2">&amp;</span><span class="macro">format!</span>(
+<a href=#431 id=431 data-nosnippet>431</a>            <span class="string">"/* Result: success field v{i} is returned directly; {absent} means failure. */\n"
+<a href=#432 id=432 data-nosnippet>432</a>        </span>));
+<a href=#433 id=433 data-nosnippet>433</a>    } <span class="kw">else </span>{
+<a href=#434 id=434 data-nosnippet>434</a>        header.push_str(<span class="string">"/* Result: true = success; false = failure. Success outputs are unchanged on failure. */\n"</span>);
+<a href=#435 id=435 data-nosnippet>435</a>    }
+<a href=#436 id=436 data-nosnippet>436</a>    <span class="kw">if </span>consumes {
+<a href=#437 id=437 data-nosnippet>437</a>        header.push_str(<span class="string">"/* ownership is required: the count of owned wire values consumed in argument/row/field order, including on failure. Consumed allocations and all their aliases must not be reused or destroyed. */\n"</span>);
+<a href=#438 id=438 data-nosnippet>438</a>    }
+<a href=#439 id=439 data-nosnippet>439</a>    header.push_str(<span class="string">"/* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */\n"</span>);
+<a href=#440 id=440 data-nosnippet>440</a>    header.push_str(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"{c_return} {name}({});\n"</span>, cparams.join(<span class="string">", "</span>)));
+<a href=#441 id=441 data-nosnippet>441</a>    <span class="kw">let </span>rollback = sequence::release(
+<a href=#442 id=442 data-nosnippet>442</a>        function_output_layout,
+<a href=#443 id=443 data-nosnippet>443</a>        <span class="kw-2">&amp;</span>outputs
+<a href=#444 id=444 data-nosnippet>444</a>            .iter()
+<a href=#445 id=445 data-nosnippet>445</a>            .enumerate()
+<a href=#446 id=446 data-nosnippet>446</a>            .map(|(i, wire)| {
+<a href=#447 id=447 data-nosnippet>447</a>                <span class="kw">let </span>field = <span class="macro">format_ident!</span>(<span class="string">"v{i}"</span>);
+<a href=#448 id=448 data-nosnippet>448</a>                (<span class="kw-2">*</span>wire, <span class="macro">quote!</span>(value.#field))
+<a href=#449 id=449 data-nosnippet>449</a>            })
+<a href=#450 id=450 data-nosnippet>450</a>            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;(),
+<a href=#451 id=451 data-nosnippet>451</a>        context,
+<a href=#452 id=452 data-nosnippet>452</a>        <span class="bool-val">true</span>,
+<a href=#453 id=453 data-nosnippet>453</a>    );
+<a href=#454 id=454 data-nosnippet>454</a>    <span class="kw">let </span>incoming_counter = consumes.then(|| <span class="macro">quote!</span>(<span class="kw">let </span>#accepted=::core::cell::Cell::new(<span class="number">0usize</span>);));
+<a href=#455 id=455 data-nosnippet>455</a>    tokens.extend(<span class="macro">quote!</span> {
+<a href=#456 id=456 data-nosnippet>456</a>        <span class="attr">#[doc=<span class="string">"# Safety\nSuccess, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract. Collection rows and descriptors must remain live and unchanged for the whole call, including source constructor invocations."</span>]
+<a href=#457 id=457 data-nosnippet>457</a>        #[allow(clippy::let_and_return,clippy::needless_range_loop,clippy::needless_borrow,clippy::let_unit_value,clippy::unnecessary_cast,clippy::useless_conversion)]
+<a href=#458 id=458 data-nosnippet>458</a>        #[no_mangle]</span><span class="kw">pub unsafe extern </span><span class="string">"C" </span><span class="kw">fn </span>#name(#(#params),<span class="kw-2">*</span>)-&gt;#rust_return {
+<a href=#459 id=459 data-nosnippet>459</a>            #incoming_counter
+<a href=#460 id=460 data-nosnippet>460</a>            <span class="attr">#[allow(unused_mut)]</span><span class="kw">let </span><span class="kw-2">mut </span>#reported=<span class="bool-val">false</span>;
+<a href=#461 id=461 data-nosnippet>461</a>            <span class="kw">let </span><span class="kw-2">mut </span>success_committed=<span class="bool-val">false</span>;
+<a href=#462 id=462 data-nosnippet>462</a>            <span class="kw">let </span><span class="kw-2">mut </span>storage=std::mem::MaybeUninit::&lt;#internal&gt;::uninit();
+<a href=#463 id=463 data-nosnippet>463</a>            <span class="kw">let </span>#out=storage.as_mut_ptr();
+<a href=#464 id=464 data-nosnippet>464</a>            <span class="kw">let </span>outcome=::prebindgen_runtime::boundary(|| {  #body});
+<a href=#465 id=465 data-nosnippet>465</a>            #acknowledgement
+<a href=#466 id=466 data-nosnippet>466</a>            <span class="kw">match </span>outcome {
+<a href=#467 id=467 data-nosnippet>467</a>                <span class="prelude-val">Ok</span>(())=&gt;{<span class="kw">let </span>value=storage.assume_init();#writes #success}
+<a href=#468 id=468 data-nosnippet>468</a>                <span class="prelude-val">Err</span>(message)=&gt;{
+<a href=#469 id=469 data-nosnippet>469</a>                    <span class="kw">if </span>success_committed {<span class="kw">let </span>value=storage.assume_init();#rollback}
+<a href=#470 id=470 data-nosnippet>470</a>                    <span class="kw">if </span>!#reported &amp;&amp; !#error.is_null(){#report_binding}#failure
+<a href=#471 id=471 data-nosnippet>471</a>                }
+<a href=#472 id=472 data-nosnippet>472</a>            }
+<a href=#473 id=473 data-nosnippet>473</a>        }
+<a href=#474 id=474 data-nosnippet>474</a>    });
+<a href=#475 id=475 data-nosnippet>475</a>    <span class="prelude-val">Ok</span>(())
+<a href=#476 id=476 data-nosnippet>476</a>}
 </code></pre></div></section></main></body></html>

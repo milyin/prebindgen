@@ -59,7 +59,7 @@
 <a href=#59 id=59 data-nosnippet>59</a>        }],
 <a href=#60 id=60 data-nosnippet>60</a>        commit_each: <span class="bool-val">true</span>,
 <a href=#61 id=61 data-nosnippet>61</a>        fallible: <span class="bool-val">true</span>,
-<a href=#62 id=62 data-nosnippet>62</a>        metadata: JniWireChain::Sequence(JniSequence::Callback),
+<a href=#62 id=62 data-nosnippet>62</a>        metadata: JniOutputWireChain::Sequence(JniSequence::Callback),
 <a href=#63 id=63 data-nosnippet>63</a>        begin: <span class="macro">quote!</span> {
 <a href=#64 id=64 data-nosnippet>64</a>            <span class="comment">// Every accepted row belongs to the Kotlin collector, including
 <a href=#65 id=65 data-nosnippet>65</a>            // when a later row fails. Publish this before any row can arrive.
@@ -96,8 +96,8 @@
 <a href=#96 id=96 data-nosnippet>96</a>/// immutable record avoids primitive boxes and generic row arrays without
 <a href=#97 id=97 data-nosnippet>97</a>/// copying wide rows when the collector grows. Logical projections can share
 <a href=#98 id=98 data-nosnippet>98</a>/// the same physical JVM record type.
-<a href=#99 id=99 data-nosnippet>99</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>capture&lt;Sq: <span class="kw">crate</span>::sequence::RowEncoding, In, Out&gt;(
-<a href=#100 id=100 data-nosnippet>100</a>    element: <span class="kw-2">&amp;</span>JniWireNode&lt;Sq, In, Out&gt;,
+<a href=#99 id=99 data-nosnippet>99</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>capture&lt;Chain: group::ChainMetadata, Branch&gt;(
+<a href=#100 id=100 data-nosnippet>100</a>    element: <span class="kw-2">&amp;</span>JniWireNode&lt;Chain, Branch&gt;,
 <a href=#101 id=101 data-nosnippet>101</a>    names: <span class="kw-2">&amp;mut </span>names::Names,
 <a href=#102 id=102 data-nosnippet>102</a>) -&gt; <span class="prelude-ty">Result</span>&lt;(String, String)&gt; {
 <a href=#103 id=103 data-nosnippet>103</a>    <span class="kw">let </span>fields = <span class="kw">crate</span>::group::callback_parameters(element).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
@@ -160,15 +160,15 @@
 <a href=#160 id=160 data-nosnippet>160</a>    <span class="comment">// Lexical row cleanup keeps partially constructed wrappers in scope. Only
 <a href=#161 id=161 data-nosnippet>161</a>    // dynamic nested collections need the shared owner journal; fixed fields
 <a href=#162 id=162 data-nosnippet>162</a>    // can use their existing locals without allocating a journal or a lambda.
-<a href=#163 id=163 data-nosnippet>163</a>    </span><span class="kw">fn </span>nested_owners&lt;Sq: <span class="kw">crate</span>::sequence::RowEncoding, In, Out&gt;(
-<a href=#164 id=164 data-nosnippet>164</a>        node: <span class="kw-2">&amp;</span>JniWireNode&lt;Sq, In, Out&gt;,
+<a href=#163 id=163 data-nosnippet>163</a>    </span><span class="kw">fn </span>nested_owners&lt;Chain: group::ChainMetadata, Branch: group::BranchMetadata&gt;(
+<a href=#164 id=164 data-nosnippet>164</a>        node: <span class="kw-2">&amp;</span>JniWireNode&lt;Chain, Branch&gt;,
 <a href=#165 id=165 data-nosnippet>165</a>    ) -&gt; bool {
 <a href=#166 id=166 data-nosnippet>166</a>        <span class="kw">match </span>node {
 <a href=#167 id=167 data-nosnippet>167</a>            prebindgen_conversions::WireNode::Chain {
-<a href=#168 id=168 data-nosnippet>168</a>                meta: JniWireChain::Sequence(<span class="kw">_</span>),
+<a href=#168 id=168 data-nosnippet>168</a>                meta: encoding,
 <a href=#169 id=169 data-nosnippet>169</a>                child,
 <a href=#170 id=170 data-nosnippet>170</a>                ..
-<a href=#171 id=171 data-nosnippet>171</a>            } =&gt; kotlin::has_handles(child, <span class="bool-val">false</span>),
+<a href=#171 id=171 data-nosnippet>171</a>            } <span class="kw">if </span>(encoding.sequence().is_some()) =&gt; kotlin::has_handles(child, <span class="bool-val">false</span>),
 <a href=#172 id=172 data-nosnippet>172</a>            prebindgen_conversions::WireNode::Chain { child, .. } =&gt; nested_owners(child),
 <a href=#173 id=173 data-nosnippet>173</a>            prebindgen_conversions::WireNode::Branch { children, .. } =&gt; {
 <a href=#174 id=174 data-nosnippet>174</a>                children.iter().any(nested_owners)
