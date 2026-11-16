@@ -38,7 +38,7 @@
 <a href=#38 id=38 data-nosnippet>38</a><span class="kw">mod </span>group;
 <a href=#39 id=39 data-nosnippet>39</a><span class="kw">mod </span>returns;
 <a href=#40 id=40 data-nosnippet>40</a><span class="kw">mod </span>scalar;
-<a href=#41 id=41 data-nosnippet>41</a><span class="kw">pub use </span>data::{DeclJniClass, DeclJniDataClass, JniDataGroup, JniField};
+<a href=#41 id=41 data-nosnippet>41</a><span class="kw">pub use </span>data::{DeclJniClass, DeclJniDataClass, JniField, JniInputRecord, JniOutputRecord};
 <a href=#42 id=42 data-nosnippet>42</a><span class="kw">pub use </span>group::{
 <a href=#43 id=43 data-nosnippet>43</a>    JniInputWireBranch, JniInputWireChain, JniOptional, JniOutputWireBranch, JniOutputWireChain,
 <a href=#44 id=44 data-nosnippet>44</a>};
@@ -1301,31 +1301,31 @@
 <a href=#1301 id=1301 data-nosnippet>1301</a>        <span class="self">Self</span>::source_record(flat, ty)<span class="question-mark">?</span>.ok_or(<span class="string">"missing data-class representation"</span>)<span class="question-mark">?</span>;
 <a href=#1302 id=1302 data-nosnippet>1302</a>        data::mark(
 <a href=#1303 id=1303 data-nosnippet>1303</a>            <span class="kw-2">&amp;mut </span>plan.node,
-<a href=#1304 id=1304 data-nosnippet>1304</a>            wire.to_string(),
-<a href=#1305 id=1305 data-nosnippet>1305</a>            kotlin_condition(active),
-<a href=#1306 id=1306 data-nosnippet>1306</a>            flat.type_ref(ty)<span class="question-mark">?</span>,
-<a href=#1307 id=1307 data-nosnippet>1307</a>            JniInputWireBranch::Record,
-<a href=#1308 id=1308 data-nosnippet>1308</a>        )
-<a href=#1309 id=1309 data-nosnippet>1309</a>    }
-<a href=#1310 id=1310 data-nosnippet>1310</a>    <span class="kw">fn </span>output_record_metadata(
-<a href=#1311 id=1311 data-nosnippet>1311</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#1312 id=1312 data-nosnippet>1312</a>        flat: <span class="kw-2">&amp;</span>prebindgen_flat::Flat&lt;<span class="self">Self</span>::Schema&gt;,
-<a href=#1313 id=1313 data-nosnippet>1313</a>        ty: <span class="kw-2">&amp;</span>syn::Type,
-<a href=#1314 id=1314 data-nosnippet>1314</a>        wire: <span class="kw-2">&amp;</span>syn::Ident,
-<a href=#1315 id=1315 data-nosnippet>1315</a>        plan: <span class="kw-2">&amp;mut </span>JniOutputPlan&lt;JniWire&gt;,
-<a href=#1316 id=1316 data-nosnippet>1316</a>        <span class="kw">_</span>: <span class="kw-2">&amp;</span>(),
-<a href=#1317 id=1317 data-nosnippet>1317</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#1318 id=1318 data-nosnippet>1318</a>        <span class="kw">if </span>!<span class="self">self</span>.declared {
-<a href=#1319 id=1319 data-nosnippet>1319</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"foreign record outputs are unsupported by this codec"</span>.into());
-<a href=#1320 id=1320 data-nosnippet>1320</a>        }
-<a href=#1321 id=1321 data-nosnippet>1321</a>
-<a href=#1322 id=1322 data-nosnippet>1322</a>        <span class="self">Self</span>::source_record(flat, ty)<span class="question-mark">?</span>.ok_or(<span class="string">"missing data-class representation"</span>)<span class="question-mark">?</span>;
-<a href=#1323 id=1323 data-nosnippet>1323</a>        data::mark(
-<a href=#1324 id=1324 data-nosnippet>1324</a>            <span class="kw-2">&amp;mut </span>plan.outcomes.success,
-<a href=#1325 id=1325 data-nosnippet>1325</a>            wire.to_string(),
-<a href=#1326 id=1326 data-nosnippet>1326</a>            <span class="string">"true"</span>.into(),
-<a href=#1327 id=1327 data-nosnippet>1327</a>            flat.type_ref(ty)<span class="question-mark">?</span>,
-<a href=#1328 id=1328 data-nosnippet>1328</a>            JniOutputWireBranch::Record,
+<a href=#1304 id=1304 data-nosnippet>1304</a>            JniInputWireBranch::Record(JniInputRecord {
+<a href=#1305 id=1305 data-nosnippet>1305</a>                root: wire.to_string(),
+<a href=#1306 id=1306 data-nosnippet>1306</a>                condition: kotlin_condition(active),
+<a href=#1307 id=1307 data-nosnippet>1307</a>                source: flat.type_ref(ty)<span class="question-mark">?</span>,
+<a href=#1308 id=1308 data-nosnippet>1308</a>            }),
+<a href=#1309 id=1309 data-nosnippet>1309</a>        )
+<a href=#1310 id=1310 data-nosnippet>1310</a>    }
+<a href=#1311 id=1311 data-nosnippet>1311</a>    <span class="kw">fn </span>output_record_metadata(
+<a href=#1312 id=1312 data-nosnippet>1312</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#1313 id=1313 data-nosnippet>1313</a>        flat: <span class="kw-2">&amp;</span>prebindgen_flat::Flat&lt;<span class="self">Self</span>::Schema&gt;,
+<a href=#1314 id=1314 data-nosnippet>1314</a>        ty: <span class="kw-2">&amp;</span>syn::Type,
+<a href=#1315 id=1315 data-nosnippet>1315</a>        _wire: <span class="kw-2">&amp;</span>syn::Ident,
+<a href=#1316 id=1316 data-nosnippet>1316</a>        plan: <span class="kw-2">&amp;mut </span>JniOutputPlan&lt;JniWire&gt;,
+<a href=#1317 id=1317 data-nosnippet>1317</a>        <span class="kw">_</span>: <span class="kw-2">&amp;</span>(),
+<a href=#1318 id=1318 data-nosnippet>1318</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#1319 id=1319 data-nosnippet>1319</a>        <span class="kw">if </span>!<span class="self">self</span>.declared {
+<a href=#1320 id=1320 data-nosnippet>1320</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"foreign record outputs are unsupported by this codec"</span>.into());
+<a href=#1321 id=1321 data-nosnippet>1321</a>        }
+<a href=#1322 id=1322 data-nosnippet>1322</a>
+<a href=#1323 id=1323 data-nosnippet>1323</a>        <span class="self">Self</span>::source_record(flat, ty)<span class="question-mark">?</span>.ok_or(<span class="string">"missing data-class representation"</span>)<span class="question-mark">?</span>;
+<a href=#1324 id=1324 data-nosnippet>1324</a>        data::mark(
+<a href=#1325 id=1325 data-nosnippet>1325</a>            <span class="kw-2">&amp;mut </span>plan.outcomes.success,
+<a href=#1326 id=1326 data-nosnippet>1326</a>            JniOutputWireBranch::Record(JniOutputRecord {
+<a href=#1327 id=1327 data-nosnippet>1327</a>                source: flat.type_ref(ty)<span class="question-mark">?</span>,
+<a href=#1328 id=1328 data-nosnippet>1328</a>            }),
 <a href=#1329 id=1329 data-nosnippet>1329</a>        )
 <a href=#1330 id=1330 data-nosnippet>1330</a>    }
 <a href=#1331 id=1331 data-nosnippet>1331</a>

@@ -705,7 +705,7 @@
 <a href=#705 id=705 data-nosnippet>705</a>            !meta.is_scope_boundary() &amp;&amp; (meta.optional().is_some() || has_optional(child))
 <a href=#706 id=706 data-nosnippet>706</a>        }
 <a href=#707 id=707 data-nosnippet>707</a>        prebindgen_conversions::WireNode::Branch { meta, children, .. } =&gt; {
-<a href=#708 id=708 data-nosnippet>708</a>            meta.record().is_none() &amp;&amp; children.iter().any(has_optional)
+<a href=#708 id=708 data-nosnippet>708</a>            !meta.is_record() &amp;&amp; children.iter().any(has_optional)
 <a href=#709 id=709 data-nosnippet>709</a>        }
 <a href=#710 id=710 data-nosnippet>710</a>    }
 <a href=#711 id=711 data-nosnippet>711</a>}
