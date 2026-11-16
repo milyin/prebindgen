@@ -195,8 +195,9 @@ fn value_type(
     Ok((ty, false))
 }
 
-/// Complete class and enum declarations already attached to their source types.
-pub(crate) fn prepare(flat: &mut JniBindings) -> Result<()> {
+/// Resolve public properties, ownership and enum mappings on their source owners.
+/// Run before resolving calls, which use these semantic representation facts.
+pub(crate) fn resolve_declarations(flat: &mut JniBindings) -> Result<()> {
     fn element(
         flat: &mut JniBindings,
         ty: &syn::Type,
@@ -233,7 +234,10 @@ pub(crate) fn prepare(flat: &mut JniBindings) -> Result<()> {
         {
             let handles = if matches!(
                 class.representation,
-                ClassRepresentation::Data { .. } | ClassRepresentation::Sealed { .. }
+                ClassRepresentation::ConfiguredData
+                    | ClassRepresentation::Data { .. }
+                    | ClassRepresentation::ConfiguredSealed { .. }
+                    | ClassRepresentation::Sealed { .. }
             ) {
                 resolve(flat, &type_key(ty), stack, resolved)?
             } else {
@@ -278,7 +282,10 @@ pub(crate) fn prepare(flat: &mut JniBindings) -> Result<()> {
             .class
             .as_ref()
             .unwrap();
-        let sealed = matches!(class.representation, ClassRepresentation::Sealed { .. });
+        let sealed = matches!(
+            class.representation,
+            ClassRepresentation::ConfiguredSealed { .. } | ClassRepresentation::Sealed { .. }
+        );
         let mut starts = BTreeSet::new();
         let source_fields = if sealed {
             let source = flat
@@ -396,7 +403,10 @@ pub(crate) fn prepare(flat: &mut JniBindings) -> Result<()> {
             {
                 if matches!(
                     child.representation,
-                    ClassRepresentation::Data { .. } | ClassRepresentation::Sealed { .. }
+                    ClassRepresentation::ConfiguredData
+                        | ClassRepresentation::Data { .. }
+                        | ClassRepresentation::ConfiguredSealed { .. }
+                        | ClassRepresentation::Sealed { .. }
                 ) {
                     has_handles |= resolve(flat, &field_key, stack, resolved)?;
                 } else if !matches!(
@@ -465,13 +475,18 @@ pub(crate) fn prepare(flat: &mut JniBindings) -> Result<()> {
         }
         let ty = syn::parse_str::<syn::Type>(key).map_err(|e| e.to_string())?;
         let class = flat.type_metadata_mut(&ty)?.class.as_mut().unwrap();
-        match &mut Rc::make_mut(class).representation {
-            ClassRepresentation::Data { has_handles: value }
-            | ClassRepresentation::Sealed {
-                has_handles: value, ..
-            } => *value = has_handles,
+        let representation = &mut Rc::make_mut(class).representation;
+        *representation = match representation {
+            ClassRepresentation::ConfiguredData | ClassRepresentation::Data { .. } => {
+                ClassRepresentation::Data { has_handles }
+            }
+            ClassRepresentation::ConfiguredSealed { variant_names }
+            | ClassRepresentation::Sealed { variant_names, .. } => ClassRepresentation::Sealed {
+                variant_names: variant_names.clone(),
+                has_handles,
+            },
             _ => return Err("record analysis requires a data or sealed representation".into()),
-        }
+        };
         resolved.insert(key.into());
         Ok(has_handles)
     }
@@ -494,7 +509,10 @@ pub(crate) fn prepare(flat: &mut JniBindings) -> Result<()> {
             .clone();
         if matches!(
             class.representation,
-            ClassRepresentation::Data { .. } | ClassRepresentation::Sealed { .. }
+            ClassRepresentation::ConfiguredData
+                | ClassRepresentation::Data { .. }
+                | ClassRepresentation::ConfiguredSealed { .. }
+                | ClassRepresentation::Sealed { .. }
         ) {
             resolve(flat, &key, &mut Vec::new(), &mut resolved)?;
         }
@@ -507,6 +525,27 @@ pub(crate) fn prepare(flat: &mut JniBindings) -> Result<()> {
             let info = flat.type_metadata_mut(&ty)?;
             Rc::make_mut(info.class.as_mut().unwrap()).representation =
                 ClassRepresentation::Enum(enumeration);
+        }
+    }
+    Ok(())
+}
+
+/// Class-only models have no function binding whose readiness could guard them.
+pub(crate) fn validate_resolved<I, O>(flat: &Flat<JniSchema<I, O>>) -> Result<()> {
+    for source in flat.types.values() {
+        if let Some(class) = &source.metadata.class {
+            if matches!(
+                class.representation,
+                ClassRepresentation::ConfiguredData
+                    | ClassRepresentation::ConfiguredEnum { .. }
+                    | ClassRepresentation::ConfiguredSealed { .. }
+            ) {
+                return Err(format!(
+                    "JNI class `{}` for `{}` is unresolved; call resolve before compilation or generation",
+                    class.fqn(),
+                    type_key(&source.ty)
+                ));
+            }
         }
     }
     Ok(())
@@ -960,7 +999,7 @@ mod group_tests {
                 .representation,
             ClassRepresentation::ConfiguredEnum { .. }
         ));
-        prepare(&mut flat).unwrap();
+        resolve_declarations(&mut flat).unwrap();
         let mapping = flat
             .type_info(&ty)
             .unwrap()
@@ -980,7 +1019,7 @@ mod group_tests {
             ClassRepresentation::Enum(_)
         ));
         let guards = flat.guards.len();
-        prepare(&mut flat).unwrap();
+        resolve_declarations(&mut flat).unwrap();
         assert!(Rc::ptr_eq(
             &mapping,
             flat.type_info(&ty).unwrap().metadata.enumeration().unwrap()
@@ -1049,7 +1088,7 @@ mod group_tests {
             name: "Record".into(),
             representation: ClassRepresentation::Data { has_handles: false },
         }));
-        prepare(&mut flat).unwrap();
+        resolve_declarations(&mut flat).unwrap();
         let codec = JniCodec::declared();
         let defaults = crate::JniSourceResolver::new(&mut flat, vec![], vec![], vec![]).unwrap();
         let request = JniOutputConfig::Unary {
@@ -1232,7 +1271,7 @@ mod group_tests {
             .flat(JniBindings::parse(items.into_iter().map(|i| (i, Default::default()))).unwrap())
             .set_package_prefix("example")
             .package(package!().class(data_class!(Point)))
-            .configured()
+            .prepare()
             .unwrap();
         fn field<Chain, Branch, Annotation, Container>(
             named: impl FnOnce(syn::Ident) -> Annotation,

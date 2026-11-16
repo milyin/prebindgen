@@ -543,6 +543,13 @@ rather than copying records or signatures.
 source selection and declaration ingestion. It owns the complete configuration;
 the builder can be dropped. Adapter `resolve(flat)` and `compile(flat)` each consume
 that model, and return the same schema with binding states advanced.
+For JNI, configuration normalizes source identities, canonical value conversions
+and defaults. `resolve` first determines Kotlin class properties, nested handle
+ownership and enum mappings, then resolves callback and function recipes using
+those declarations. `compile` builds their Rust/JNI converters. Unresolved class
+declarations are rejected by compilation and emission even in a class-only model;
+a resolved class itself has no converter to compile. Field metadata stays on its
+source record/variant throughout these stages.
 `Cbindgen::prepare()` and `JniGenBuilder::prepare()` combine these steps and return the prepared
 `Flat`. The public `prebindgen_c::generate(&flat)` and
 `prebindgen_jni::generate(&flat)` read all settings, type declarations, function

@@ -2525,7 +2525,7 @@ use prebindgen_conversions::{OutputConversion, Outcomes, WireNode};
 
     */
     let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
-    let mut prepared = binding
+    let configured = binding
         .package(
             package!("scopedinputs")
                 .fun(fun!(scoped_input_new))
@@ -2551,8 +2551,26 @@ use prebindgen_conversions::{OutputConversion, Outcomes, WireNode};
                     ),
                 ),
         )
-        .prepare()
-        .expect("prepare supported declarations");
+        .configured()
+        .expect("configure supported declarations");
+    let point = configured
+        .resolve_type(&syn::parse_quote!(ParameterPoint))
+        .unwrap();
+    assert!(configured
+        .record(&point)
+        .unwrap()
+        .fields
+        .iter()
+        .all(|field| { field.metadata.kotlin_type.is_empty() }));
+    let resolved =
+        prebindgen_jni::resolve(configured).expect("resolve class and call declarations");
+    assert!(resolved
+        .record(&point)
+        .unwrap()
+        .fields
+        .iter()
+        .all(|field| { field.metadata.kotlin_type == "kotlin.Long" }));
+    let mut prepared = prebindgen_jni::compile(resolved).expect("compile supported declarations");
     assert_eq!(
         prepared
             .function("canonical_millis_echo")

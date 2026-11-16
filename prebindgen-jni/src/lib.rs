@@ -18,6 +18,8 @@ mod metadata;
 pub use metadata::{JniBinding, JniFunction, JniModule, JniSchema, JniType};
 mod data;
 mod enums;
+#[cfg(test)]
+mod preparation_tests;
 mod sealed;
 mod selected;
 pub use sealed::DeclJniSealedClass;
@@ -481,12 +483,11 @@ impl JniGenBuilder {
         self.packages.push(package);
         self
     }
-    /// Resolve declarations and return a complete Flat binding model for emission.
+    /// Select source items and attach declarations to a self-contained Flat model.
     ///
-    /// Rejects ambiguous source selection, invalid or duplicate names, unsupported
-    /// recipes, undeclared handle types and signatures exceeding JVM parameter limits.
-    /// Layout, Rust trait bounds and injected Kotlin syntax are checked by the
-    /// respective compilers when consuming the generated output.
+    /// Canonical type names and value-conversion declarations are normalized here.
+    /// Class properties, enum mappings and call recipes are resolved by [`resolve`];
+    /// converters are built by [`compile`]. This model is not ready for emission.
     pub fn configured(mut self) -> Result<JniBindings> {
         for package in &self.packages {
             let namespace = if package.name.is_empty() {
@@ -557,7 +558,7 @@ impl JniGenBuilder {
             validate_package(&pkg)?;
             for c in p.classes {
                 if let DeclJniClass::Callback(declaration) = c {
-                    callback_types.push(declaration.ty);
+                    callback_types.push((declaration.ty, declaration.foreign));
                     continue;
                 }
                 let ty = flat.resolve_type(c.ty())?;
@@ -586,13 +587,12 @@ impl JniGenBuilder {
                         DeclJniClass::Ptr(c) => ClassRepresentation::Handle {
                             gc_managed: c.gc_managed,
                         },
-                        DeclJniClass::Data(_) => ClassRepresentation::Data { has_handles: false },
+                        DeclJniClass::Data(_) => ClassRepresentation::ConfiguredData,
                         DeclJniClass::Enum(c) => ClassRepresentation::ConfiguredEnum {
                             variant_names: c.variant_names,
                         },
-                        DeclJniClass::Sealed(c) => ClassRepresentation::Sealed {
+                        DeclJniClass::Sealed(c) => ClassRepresentation::ConfiguredSealed {
                             variant_names: c.variant_names,
-                            has_handles: false,
                         },
                         DeclJniClass::Callback(_) => unreachable!(),
                     },
@@ -632,7 +632,6 @@ impl JniGenBuilder {
                 return Err("duplicate exception class for source error type".into());
             }
         }
-        let codec = JniCodec::declared();
         for configure in self.configure {
             configure(&mut flat)?;
         }
@@ -651,30 +650,13 @@ impl JniGenBuilder {
             |t| &t.conversion,
             |t| &mut t.conversion,
         )?;
-        data::prepare(&mut flat)?;
-        let defaults = crate::JniSourceResolver::new(
-            &mut flat,
-            self.inputs,
-            self.outputs,
-            self.error_mappers,
-        )?;
-        for ty in callback_types {
-            let recipe =
-                defaults.resolve_input(&flat, &codec, &ty, &JniInputConfig::auto(), &())?;
-            let operations::JniInput::Arrow {
-                operation: configuration,
-                ..
-            } = &recipe
-            else {
-                return Err("callback declaration requires a callback conversion".into());
-            };
-            callback::validate_source_occurrence(
-                &flat,
-                configuration.bound_callback(),
-                &callback_sources,
-            )?;
-            flat.type_metadata_mut(&configuration.bound_callback().ty)?
-                .callback = Some(prebindgen_conversions::BindingState::Configured(()));
+        crate::JniSourceResolver::new(&mut flat, self.inputs, self.outputs, self.error_mappers)?;
+        for (ty, name) in callback_types {
+            let ty = flat.resolve_parameter_type(&ty)?;
+            let ty = prebindgen_declarations::callback::input_type(&flat, &ty)?;
+            callback::validate_source_occurrence(&flat, &ty, name.as_deref(), &callback_sources)?;
+            flat.type_metadata_mut(&ty)?.callback =
+                Some(prebindgen_conversions::BindingState::Configured(()));
         }
 
         for source in flat.functions.values_mut() {
@@ -708,6 +690,9 @@ pub(crate) enum ClassRepresentation {
     Handle {
         gc_managed: bool,
     },
+    /// A data-class declaration whose properties have not been resolved.
+    ConfiguredData,
+    /// Resolved properties live on the source record's fields.
     Data {
         has_handles: bool,
     },
@@ -715,6 +700,11 @@ pub(crate) enum ClassRepresentation {
         variant_names: Vec<(String, String)>,
     },
     Enum(std::rc::Rc<JniEnum>),
+    /// A sealed-class declaration whose variants/properties await resolution.
+    ConfiguredSealed {
+        variant_names: Vec<(String, String)>,
+    },
+    /// Resolved properties live on the source enum's variant fields.
     Sealed {
         variant_names: Vec<(String, String)>,
         has_handles: bool,
@@ -802,6 +792,12 @@ impl JniCodec {
     pub const fn declared() -> Self {
         Self { declared: true }
     }
+    fn require_resolved_classes(&self, flat: &JniBindings) -> Result<()> {
+        if self.declared {
+            data::validate_resolved(flat)?;
+        }
+        Ok(())
+    }
 }
 impl Codec for JniCodec {
     type Input = JniInputConverter;
@@ -820,6 +816,7 @@ impl Codec for JniCodec {
         active: &prebindgen_declarations::Condition,
         names: Option<(&syn::Ident, &syn::Ident)>,
     ) -> Result<prebindgen_declarations::CodecInputPlan<Self>> {
+        self.require_resolved_classes(cx.flat)?;
         compilation::JniCompiler { cx }.input_named(ty, tree, extra, active, names)
     }
     fn compile_output_tree(
@@ -832,6 +829,7 @@ impl Codec for JniCodec {
         borrowed: bool,
         wire: Option<&syn::Ident>,
     ) -> Result<prebindgen_declarations::CodecOutputPlan<Self>> {
+        self.require_resolved_classes(cx.flat)?;
         compilation::JniCompiler { cx }.output_named(ty, tree, extra, value, borrowed, wire)
     }
     fn compile_output_root(
@@ -844,6 +842,7 @@ impl Codec for JniCodec {
         borrowed: bool,
         reference_return: bool,
     ) -> Result<prebindgen_declarations::CodecOutputPlan<Self>> {
+        self.require_resolved_classes(cx.flat)?;
         compilation::JniCompiler { cx }.output_root(
             ty,
             tree,
@@ -862,10 +861,12 @@ impl Codec for JniCodec {
         value: TokenStream,
         borrowed: bool,
     ) -> Result<prebindgen_declarations::CodecOutputPlan<Self>> {
+        self.require_resolved_classes(cx.flat)?;
         compilation::JniCompiler { cx }.output_return(ty, tree, extra, value, borrowed)
     }
 
     fn compile_declarations(&self, flat: &mut JniBindings, _: &()) -> Result<()> {
+        self.require_resolved_classes(flat)?;
         errors::compile(flat, self)?;
         callback::compile_declarations(flat, self)?;
         Ok(())
@@ -1783,10 +1784,12 @@ fn symbol(pkg: &str, method: &str) -> syn::Ident {
     )
 }
 
-/// Resolve every configured export using only source and configuration attached to Flat.
-/// Source errors are associated before call recipes are resolved.
+/// Resolve class properties and enum mappings, then callback and export recipes.
+/// Every stage reads source and configuration attached to Flat. Classes are
+/// resolved first because call recipes depend on their representation and ownership.
 pub fn resolve(mut flat: JniBindings) -> Result<JniBindings> {
     validate_declaration_names(&flat)?;
+    data::resolve_declarations(&mut flat)?;
     let resolver = JniSourceResolver::default();
     let codec = JniCodec::declared();
     errors::resolve(&mut flat, &codec, &resolver)?;
@@ -1817,6 +1820,7 @@ pub fn prepare(flat: JniBindings) -> Result<JniBindings> {
 pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
     flat: &Flat<JniSchema<I, O>>,
 ) -> Result<JniGen> {
+    data::validate_resolved(flat)?;
     let prefix = &flat.metadata.package;
     validate_package(prefix)?;
     let mut functions = bindings::views(flat)?;
@@ -1862,10 +1866,7 @@ pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
                     sealed::render(flat, class, &t.ty)?,
                 );
             }
-            if matches!(
-                class.representation,
-                ClassRepresentation::ConfiguredEnum { .. } | ClassRepresentation::Enum(_)
-            ) {
+            if matches!(class.representation, ClassRepresentation::Enum(_)) {
                 files.insert(
                     format!("{}/{}.kt", class.pkg.replace('.', "/"), class.name),
                     t.metadata

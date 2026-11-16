@@ -1832,7 +1832,7 @@ fn completing_flat_again_preserves_prepared_enum_overrides() {
         .unwrap();
     let before = generate(&prepared).unwrap();
     let guard_count = prepared.guards.len();
-    data::prepare(&mut prepared).unwrap();
+    data::resolve_declarations(&mut prepared).unwrap();
     let after = generate(&prepared).unwrap();
     assert_eq!(before.rust, after.rust);
     assert_eq!(before.kotlin, after.kotlin);
