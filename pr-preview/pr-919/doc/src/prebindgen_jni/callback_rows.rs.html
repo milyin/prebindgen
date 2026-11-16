@@ -223,13 +223,18 @@
 <a href=#223 id=223 data-nosnippet>223</a>            }
 <a href=#224 id=224 data-nosnippet>224</a>            field(context, row, fields, selector, code)<span class="question-mark">?
 <a href=#225 id=225 data-nosnippet>225</a>        </span>}
-<a href=#226 id=226 data-nosnippet>226</a>        WireNode::Branch { children, .. } =&gt; {
-<a href=#227 id=227 data-nosnippet>227</a>            <span class="kw">let </span><span class="kw-2">mut </span>code = TokenStream::new();
-<a href=#228 id=228 data-nosnippet>228</a>            <span class="kw">for </span>child <span class="kw">in </span>children {
-<a href=#229 id=229 data-nosnippet>229</a>                code.extend(receive(child, context, row, fields, types)<span class="question-mark">?</span>);
-<a href=#230 id=230 data-nosnippet>230</a>            }
-<a href=#231 id=231 data-nosnippet>231</a>            code
-<a href=#232 id=232 data-nosnippet>232</a>        }
-<a href=#233 id=233 data-nosnippet>233</a>    })
-<a href=#234 id=234 data-nosnippet>234</a>}
+<a href=#226 id=226 data-nosnippet>226</a>        WireNode::Chain {
+<a href=#227 id=227 data-nosnippet>227</a>            meta: JniInputWireChain::Field(<span class="kw">_</span>) | JniInputWireChain::Argument(<span class="kw">_</span>),
+<a href=#228 id=228 data-nosnippet>228</a>            child,
+<a href=#229 id=229 data-nosnippet>229</a>            ..
+<a href=#230 id=230 data-nosnippet>230</a>        } =&gt; receive(child, context, row, fields, types)<span class="question-mark">?</span>,
+<a href=#231 id=231 data-nosnippet>231</a>        WireNode::Branch { children, .. } =&gt; {
+<a href=#232 id=232 data-nosnippet>232</a>            <span class="kw">let </span><span class="kw-2">mut </span>code = TokenStream::new();
+<a href=#233 id=233 data-nosnippet>233</a>            <span class="kw">for </span>child <span class="kw">in </span>children {
+<a href=#234 id=234 data-nosnippet>234</a>                code.extend(receive(child, context, row, fields, types)<span class="question-mark">?</span>);
+<a href=#235 id=235 data-nosnippet>235</a>            }
+<a href=#236 id=236 data-nosnippet>236</a>            code
+<a href=#237 id=237 data-nosnippet>237</a>        }
+<a href=#238 id=238 data-nosnippet>238</a>    })
+<a href=#239 id=239 data-nosnippet>239</a>}
 </code></pre></div></section></main></body></html>

@@ -155,7 +155,7 @@
 <a href=#155 id=155 data-nosnippet>155</a>    children
 <a href=#156 id=156 data-nosnippet>156</a>        .iter()
 <a href=#157 id=157 data-nosnippet>157</a>        .map(|node| {
-<a href=#158 id=158 data-nosnippet>158</a>            <span class="kw">let </span>WireNode::Branch { meta, .. } = node <span class="kw">else </span>{
+<a href=#158 id=158 data-nosnippet>158</a>            <span class="kw">let </span>WireNode::Chain { meta, .. } = node <span class="kw">else </span>{
 <a href=#159 id=159 data-nosnippet>159</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"enum payload requires named source fields"</span>.into());
 <a href=#160 id=160 data-nosnippet>160</a>            };
 <a href=#161 id=161 data-nosnippet>161</a>            <span class="kw">let </span><span class="prelude-val">Some</span>(name) = meta.field() <span class="kw">else </span>{

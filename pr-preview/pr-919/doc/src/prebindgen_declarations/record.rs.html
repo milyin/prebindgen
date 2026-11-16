@@ -31,10 +31,10 @@
 <a href=#31 id=31 data-nosnippet>31</a>        storage.extend(std::mem::take(<span class="kw-2">&amp;mut </span>child.storage));
 <a href=#32 id=32 data-nosnippet>32</a>        <span class="kw">let </span>target = <span class="macro">format_ident!</span>(<span class="string">"{var}_field_{index}"</span>);
 <a href=#33 id=33 data-nosnippet>33</a>        values.push(<span class="macro">quote!</span>(#name:#target));
-<a href=#34 id=34 data-nosnippet>34</a>        child.node = WireNode::Branch {
+<a href=#34 id=34 data-nosnippet>34</a>        child.node = WireNode::Chain {
 <a href=#35 id=35 data-nosnippet>35</a>            controls: <span class="macro">vec!</span>[],
-<a href=#36 id=36 data-nosnippet>36</a>            meta: codec.input_group(GroupKind::Field(<span class="kw-2">&amp;</span>name))<span class="question-mark">?</span>,
-<a href=#37 id=37 data-nosnippet>37</a>            children: <span class="macro">vec!</span>[std::mem::take(<span class="kw-2">&amp;mut </span>child.node)],
+<a href=#36 id=36 data-nosnippet>36</a>            meta: codec.input_field(<span class="kw-2">&amp;</span>name)<span class="question-mark">?</span>,
+<a href=#37 id=37 data-nosnippet>37</a>            child: Box::new(std::mem::take(<span class="kw-2">&amp;mut </span>child.node)),
 <a href=#38 id=38 data-nosnippet>38</a>        };
 <a href=#39 id=39 data-nosnippet>39</a>        plans.push((target, child));
 <a href=#40 id=40 data-nosnippet>40</a>    }
@@ -57,7 +57,7 @@
 <a href=#57 id=57 data-nosnippet>57</a>}
 <a href=#58 id=58 data-nosnippet>58</a>
 <a href=#59 id=59 data-nosnippet>59</a><span class="doccomment">/// Observe a named Rust record through shared field references, evaluating it once.
-<a href=#60 id=60 data-nosnippet>60</a>/// Group hooks preserve field boundaries as in [`record_input`].
+<a href=#60 id=60 data-nosnippet>60</a>/// Field chain hooks preserve field boundaries as in [`record_input`].
 <a href=#61 id=61 data-nosnippet>61</a>///
 <a href=#62 id=62 data-nosnippet>62</a>/// The caller validates the field count and types against the source record.
 <a href=#63 id=63 data-nosnippet>63</a>/// `fields` supplies source field names in declaration order. `convert` receives
@@ -104,10 +104,10 @@
 <a href=#104 id=104 data-nosnippet>104</a>            <span class="kw-2">&amp;mut </span>child.outcomes.success,
 <a href=#105 id=105 data-nosnippet>105</a>            ComponentSegment::Field(name.to_string()),
 <a href=#106 id=106 data-nosnippet>106</a>        );
-<a href=#107 id=107 data-nosnippet>107</a>        child.outcomes.success = prebindgen_conversions::WireNode::Branch {
+<a href=#107 id=107 data-nosnippet>107</a>        child.outcomes.success = WireNode::Chain {
 <a href=#108 id=108 data-nosnippet>108</a>            controls: <span class="macro">vec!</span>[],
-<a href=#109 id=109 data-nosnippet>109</a>            meta: codec.output_group(GroupKind::Field(<span class="kw-2">&amp;</span>(name)))<span class="question-mark">?</span>,
-<a href=#110 id=110 data-nosnippet>110</a>            children: <span class="macro">vec!</span>[std::mem::take(<span class="kw-2">&amp;mut </span>child.outcomes.success)],
+<a href=#109 id=109 data-nosnippet>109</a>            meta: codec.output_field(<span class="kw-2">&amp;</span>name)<span class="question-mark">?</span>,
+<a href=#110 id=110 data-nosnippet>110</a>            child: Box::new(std::mem::take(<span class="kw-2">&amp;mut </span>child.outcomes.success)),
 <a href=#111 id=111 data-nosnippet>111</a>        };
 <a href=#112 id=112 data-nosnippet>112</a>        append(<span class="kw-2">&amp;mut </span>out, child)<span class="question-mark">?</span>;
 <a href=#113 id=113 data-nosnippet>113</a>    }
@@ -162,10 +162,10 @@
 <a href=#162 id=162 data-nosnippet>162</a>            <span class="kw-2">&amp;mut </span>child.outcomes.success,
 <a href=#163 id=163 data-nosnippet>163</a>            ComponentSegment::Field(name.to_string()),
 <a href=#164 id=164 data-nosnippet>164</a>        );
-<a href=#165 id=165 data-nosnippet>165</a>        child.outcomes.success = prebindgen_conversions::WireNode::Branch {
+<a href=#165 id=165 data-nosnippet>165</a>        child.outcomes.success = WireNode::Chain {
 <a href=#166 id=166 data-nosnippet>166</a>            controls: <span class="macro">vec!</span>[],
-<a href=#167 id=167 data-nosnippet>167</a>            meta: codec.output_group(GroupKind::Field(<span class="kw-2">&amp;</span>(name)))<span class="question-mark">?</span>,
-<a href=#168 id=168 data-nosnippet>168</a>            children: <span class="macro">vec!</span>[std::mem::take(<span class="kw-2">&amp;mut </span>child.outcomes.success)],
+<a href=#167 id=167 data-nosnippet>167</a>            meta: codec.output_field(<span class="kw-2">&amp;</span>name)<span class="question-mark">?</span>,
+<a href=#168 id=168 data-nosnippet>168</a>            child: Box::new(std::mem::take(<span class="kw-2">&amp;mut </span>child.outcomes.success)),
 <a href=#169 id=169 data-nosnippet>169</a>        };
 <a href=#170 id=170 data-nosnippet>170</a>        append(<span class="kw-2">&amp;mut </span>out, child)<span class="question-mark">?</span>;
 <a href=#171 id=171 data-nosnippet>171</a>    }
