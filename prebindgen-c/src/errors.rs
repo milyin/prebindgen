@@ -83,18 +83,18 @@ pub(crate) fn compile(flat: &mut CBindings, codec: &CCodec) -> Result<()> {
     Ok(())
 }
 
-fn field_names<Sq: crate::sequence::RowEncoding, In>(layout: &CWireNode<Sq, In>) -> Vec<String> {
+fn field_names(layout: &COutputWireNode) -> Vec<String> {
     use prebindgen_conversions::WireNode;
     let mut names = Vec::new();
     if let WireNode::Branch {
-        meta: CWireBranch::Fields,
+        meta: COutputWireBranch::Fields,
         children,
         ..
     } = layout
     {
         for node in children.as_slice() {
             if let WireNode::Branch {
-                meta: CWireBranch::Field(name),
+                meta: COutputWireBranch::Field(name),
                 ..
             } = node
             {
@@ -307,11 +307,17 @@ pub(crate) fn emit<R, E, P>(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn result_function<Sq: crate::sequence::RowEncoding, In, R, E, P>(
+pub(crate) fn result_function<
+    Chain: group::ChainMetadata,
+    Branch: group::BranchMetadata,
+    R,
+    E,
+    P,
+>(
     source_name: &syn::Ident,
     error_ty: &syn::Type,
     outputs: &[&Wire],
-    function_output_layout: &CWireNode<Sq, In>,
+    function_output_layout: &CWireNode<Chain, Branch>,
     mut params: Vec<TokenStream>,
     mut cparams: Vec<String>,
     body: &TokenStream,

@@ -39,7 +39,9 @@ mod group;
 mod returns;
 mod scalar;
 pub use data::{DeclJniClass, DeclJniDataClass, JniDataGroup, JniField};
-pub use group::{JniOptional, JniWireBranch, JniWireChain};
+pub use group::{
+    JniInputWireBranch, JniInputWireChain, JniOptional, JniOutputWireBranch, JniOutputWireChain,
+};
 use prebindgen_conversions::boxed::BoxedWire;
 use prebindgen_conversions::value::Value;
 use prebindgen_flat::Primitive;
@@ -59,22 +61,6 @@ mod handles;
 mod names;
 mod parameter_names;
 pub use emission::JniContext;
-/// Prepared input sequence/optional encoding.
-///
-/// Output delivery is unavailable on inputs:
-/// ```compile_fail
-/// use prebindgen_jni::{JniInputWireChain, JniSequence};
-/// let input: JniInputWireChain = JniInputWireChain::Sequence(JniSequence::Callback);
-/// ```
-pub type JniInputWireChain = JniWireChain<()>;
-/// Prepared input structural operations. Opposite-direction operations are uninhabited.
-///
-/// Named output views are unavailable on inputs:
-/// ```compile_fail
-/// use prebindgen_jni::JniInputWireBranch;
-/// let input: JniInputWireBranch = JniInputWireBranch::Named("view".into(), ());
-/// ```
-pub type JniInputWireBranch = JniWireBranch<(), std::convert::Infallible>;
 /// Prepared input tree exposed by input converters.
 ///
 /// Input and output trees cannot be swapped:
@@ -88,16 +74,6 @@ pub type JniInputWireNode =
     prebindgen_conversions::WireNode<JniWire, JniInputWireChain, JniInputWireBranch>;
 type JniInputPlan<WireType> =
     prebindgen_conversions::InputPlan<WireType, JniContext, JniInputWireChain, JniInputWireBranch>;
-/// Prepared output sequence/optional encoding.
-pub type JniOutputWireChain = JniWireChain<JniSequence>;
-/// Prepared output structural operations. Opposite-direction operations are uninhabited.
-///
-/// Constructor alternatives are unavailable on outputs:
-/// ```compile_fail
-/// use prebindgen_jni::JniOutputWireBranch;
-/// let output: JniOutputWireBranch = JniOutputWireBranch::Alternatives(());
-/// ```
-pub type JniOutputWireBranch = JniWireBranch<std::convert::Infallible, ()>;
 /// Prepared output tree exposed by output converters.
 pub type JniOutputWireNode =
     prebindgen_conversions::WireNode<JniWire, JniOutputWireChain, JniOutputWireBranch>;
@@ -107,8 +83,7 @@ type JniOutputPlan<WireType> = prebindgen_conversions::OutputPlan<
     JniOutputWireChain,
     JniOutputWireBranch,
 >;
-type JniWireNode<Sq, In, Out> =
-    prebindgen_conversions::WireNode<JniWire, JniWireChain<Sq>, JniWireBranch<In, Out>>;
+type JniWireNode<Chain, Branch> = prebindgen_conversions::WireNode<JniWire, Chain, Branch>;
 mod converters;
 pub use converters::{JniInputConverter, JniOutputConverter};
 mod kotlin;
@@ -880,13 +855,13 @@ impl Codec for JniCodec {
         &self,
         request: prebindgen_declarations::InputEnumVariants<'_, Self>,
     ) -> Result<prebindgen_declarations::EnumEncoding<JniInputWireBranch>> {
-        sealed::encoding(request, Direction::Input)
+        sealed::encoding(request, Direction::Input, JniInputWireBranch::Enum)
     }
     fn output_enum_variants(
         &self,
         request: prebindgen_declarations::OutputEnumVariants<'_, Self>,
     ) -> Result<prebindgen_declarations::EnumEncoding<JniOutputWireBranch>> {
-        sealed::encoding(request, Direction::Output)
+        sealed::encoding(request, Direction::Output, JniOutputWireBranch::Enum)
     }
     fn bulk_input(
         &self,
@@ -919,7 +894,7 @@ impl Codec for JniCodec {
         if let prebindgen_declarations::ComponentSegment::Argument(name) = segment {
             *node = prebindgen_conversions::WireNode::Branch {
                 controls: vec![],
-                meta: JniInputWireBranch::Argument(name, ()),
+                meta: JniInputWireBranch::Argument(name),
                 children: vec![std::mem::take(node)],
             };
         }
@@ -1329,6 +1304,7 @@ impl Codec for JniCodec {
             wire.to_string(),
             kotlin_condition(active),
             flat.type_ref(ty)?,
+            JniInputWireBranch::Record,
         )
     }
     fn output_record_metadata(
@@ -1349,6 +1325,7 @@ impl Codec for JniCodec {
             wire.to_string(),
             "true".into(),
             flat.type_ref(ty)?,
+            JniOutputWireBranch::Record,
         )
     }
 
@@ -1370,7 +1347,7 @@ impl Codec for JniCodec {
             GroupKind::Field(name) => JniOutputWireBranch::Field(name.clone()),
             GroupKind::NamedOutput(name) => {
                 validate_name(name)?;
-                JniOutputWireBranch::Named(name.into(), ())
+                JniOutputWireBranch::Named(name.into())
             }
         })
     }
@@ -1378,20 +1355,20 @@ impl Codec for JniCodec {
         &self,
         request: InputOptional<'_, Self>,
     ) -> Result<OptionalEncoding<JniWire, JniInputWireChain>> {
-        group::prepare_optional(request, Direction::Input)
+        group::prepare_optional(request, Direction::Input, JniInputWireChain::Optional)
     }
     fn output_optional(
         &self,
         request: OutputOptional<'_, Self>,
     ) -> Result<OptionalEncoding<JniWire, JniOutputWireChain>> {
-        group::prepare_optional(request, Direction::Output)
+        group::prepare_optional(request, Direction::Output, JniOutputWireChain::Optional)
     }
     fn alternatives(&self, request: Alternatives<'_, Self>) -> Result<JniInputWireBranch> {
         group::validate_selector(request.selector)?;
         for arm in request.arms {
             group::retire_niches(arm, None)?;
         }
-        Ok(JniInputWireBranch::Alternatives(()))
+        Ok(JniInputWireBranch::Alternatives)
     }
     fn source_error(&self, request: SourceError<'_, Self>) -> Result<SourceErrorPlan<Self>> {
         if !self.declared {
@@ -1924,8 +1901,8 @@ pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
         let outcomes = f.output_conversion()?.output_outcomes();
         let logical = &outcomes.success;
         if let (Some(declared), Some(error)) = (&outcomes.source_error, error) {
-            if group::error_wire_shape(declared)
-                != group::error_wire_shape(&error.output()?.output_outcomes().success)
+            if group::error_wire_shape(declared)?
+                != group::error_wire_shape(&error.output()?.output_outcomes().success)?
             {
                 return Err(format!(
                     "`{source}`: domain-error converter differs from the declared error wires"

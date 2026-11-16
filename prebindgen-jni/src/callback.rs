@@ -826,7 +826,7 @@ fn returned_handle_cleanup(
             format!("({value} as? {prefix}.NativeHandle)?.let {{ {local} -> returnedHandles.add({local}); {} }}\n",if owned{format!("returnedOwners.add({local})")}else{String::new()})
         }
         WireNode::Chain {
-            meta: crate::JniWireChain::Sequence(_),
+            meta: crate::JniInputWireChain::Sequence,
             child,
             ..
         } => {
@@ -837,7 +837,7 @@ fn returned_handle_cleanup(
             returned_handle_cleanup(child, value, prefix, next, context)?
         }
         WireNode::Branch {
-            meta: JniWireBranch::Enum(group),
+            meta: JniInputWireBranch::Enum(group),
             children,
             ..
         } => {
@@ -869,7 +869,7 @@ fn returned_handle_cleanup(
             format!("when(val {local}={value}) {{ {arms} else -> {{}} }}\n")
         }
         WireNode::Branch {
-            meta: crate::JniWireBranch::Record(data),
+            meta: crate::JniInputWireBranch::Record(data),
             children,
             ..
         } => {
@@ -917,7 +917,7 @@ fn receive_native_return_owners(
     types: &crate::metadata::JniTypes,
 ) -> Result<TokenStream> {
     Ok(match node {
-        WireNode::Chain { meta: JniWireChain::Bulk, controls, child } => crate::bulk::cleanup_cached(controls, child, types)?,
+        WireNode::Chain { meta: JniInputWireChain::Bulk, controls, child } => crate::bulk::cleanup_cached(controls, child, types)?,
         WireNode::Leaf(fields) => fields.iter().filter_map(|field| {
             if let JniWire::Handle { handle, .. } = &field.kind {
                 if handle.access == Access::Move {
@@ -927,17 +927,17 @@ fn receive_native_return_owners(
             }
             None
         }).collect(),
-        WireNode::Chain { meta: JniWireChain::Optional(optional), child, .. } => {
+        WireNode::Chain { meta: JniInputWireChain::Optional(optional), child, .. } => {
             let scan=receive_native_return_owners(child, types)?;
             if scan.is_empty() { return Ok(scan); }
             let present=optional.is_present(child)?;
             quote!(if #present { #scan })
         }
-        WireNode::Chain { meta: JniWireChain::Sequence(_), .. } => {
+        WireNode::Chain { meta: JniInputWireChain::Sequence, .. } => {
             if kotlin::has_handles(node, true) { return Err("callback ownership cleanup requires buffered ordinary rows or an enclosing bulk frame".into()); }
             quote!()
         }
-        WireNode::Branch { meta: JniWireBranch::Alternatives(_) | JniWireBranch::Enum(_), controls, children } => {
+        WireNode::Branch { meta: JniInputWireBranch::Alternatives | JniInputWireBranch::Enum(_), controls, children } => {
             let selector=&controls[0].name;
             let scans=children.iter().enumerate().map(|(i,child)| {
                 let scan=receive_native_return_owners(child, types)?; if scan.is_empty(){return Ok(TokenStream::new());} let i=i as i32;

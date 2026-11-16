@@ -151,7 +151,9 @@ pub(crate) fn input_sequence(
     ))
 }
 /// A loan anywhere in a packet, including fields inside converted rows.
-pub(crate) fn has_loans<Sq: crate::sequence::RowEncoding, In>(node: &CWireNode<Sq, In>) -> bool {
+pub(crate) fn has_loans<Chain, Branch: group::BranchMetadata>(
+    node: &CWireNode<Chain, Branch>,
+) -> bool {
     prebindgen_conversions::wire_definitions(std::iter::once(node)).any(|wire| {
         matches!(
             wire.kind,
@@ -165,8 +167,8 @@ pub(crate) fn has_loans<Sq: crate::sequence::RowEncoding, In>(node: &CWireNode<S
         ) || matches!(&wire.kind, CWire::Pointer {pointer,..} if pointer.access != Access::Move)
     })
 }
-pub(crate) fn collect<Sq: crate::sequence::RowEncoding, In>(
-    node: &CWireNode<Sq, In>,
+pub(crate) fn collect<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
+    node: &CWireNode<Chain, Branch>,
     out: &mut BTreeMap<String, Primitive>,
 ) {
     for wire in prebindgen_conversions::wire_definitions(std::iter::once(node)) {

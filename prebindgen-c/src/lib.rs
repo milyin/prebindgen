@@ -48,7 +48,9 @@ mod group;
 mod selected;
 mod sequence;
 use group::validate_layout;
-pub use group::{COptional, CWireBranch, CWireChain};
+pub use group::{
+    CInputWireBranch, CInputWireChain, COptional, COutputWireBranch, COutputWireChain,
+};
 use prebindgen_conversions::Wire as GenericWire;
 use prebindgen_declarations::{
     Alternatives, Codec, Direction, GroupKind, InputLeaf, InputOptional, InputRole,
@@ -58,16 +60,6 @@ use prebindgen_declarations::{
 pub use sequence::CSequence;
 mod emission;
 pub use emission::CContext;
-/// Prepared input sequence/optional encoding.
-///
-/// Output delivery is unavailable on inputs:
-/// ```compile_fail
-/// use prebindgen_c::{CInputWireChain, CSequence};
-/// let input: CInputWireChain = CInputWireChain::Sequence(CSequence::Callback);
-/// ```
-pub type CInputWireChain = CWireChain<()>;
-/// Prepared input structural operations. Opposite-direction operations are uninhabited.
-pub type CInputWireBranch = CWireBranch<()>;
 /// Prepared input tree exposed by input converters.
 ///
 /// Input and output trees cannot be swapped:
@@ -81,22 +73,12 @@ pub type CInputWireNode =
     prebindgen_conversions::WireNode<CWire, CInputWireChain, CInputWireBranch>;
 type CInputPlan<WireType> =
     prebindgen_conversions::InputPlan<WireType, CContext, CInputWireChain, CInputWireBranch>;
-/// Prepared output sequence/optional encoding.
-pub type COutputWireChain = CWireChain<CSequence>;
-/// Prepared output structural operations. Opposite-direction operations are uninhabited.
-///
-/// Constructor alternatives are unavailable on outputs:
-/// ```compile_fail
-/// use prebindgen_c::COutputWireBranch;
-/// let output: COutputWireBranch = COutputWireBranch::Alternatives(());
-/// ```
-pub type COutputWireBranch = CWireBranch<std::convert::Infallible>;
 /// Prepared output tree exposed by output converters.
 pub type COutputWireNode =
     prebindgen_conversions::WireNode<CWire, COutputWireChain, COutputWireBranch>;
 type COutputPlan<WireType> =
     prebindgen_conversions::OutputPlan<WireType, CContext, COutputWireChain, COutputWireBranch>;
-type CWireNode<Sq, In> = prebindgen_conversions::WireNode<CWire, CWireChain<Sq>, CWireBranch<In>>;
+type CWireNode<Chain, Branch> = prebindgen_conversions::WireNode<CWire, Chain, Branch>;
 /// Prepared C parameter conversion.
 pub type CInputConverter = CInputPlan<CWire>;
 /// Prepared C result conversion.
@@ -325,13 +307,13 @@ impl Codec for CCodec {
         &self,
         request: prebindgen_declarations::InputEnumVariants<'_, Self>,
     ) -> Result<prebindgen_declarations::EnumEncoding<CInputWireBranch>> {
-        tagged::encoding(request, Direction::Input)
+        tagged::encoding(request, Direction::Input, CInputWireBranch::Enum)
     }
     fn output_enum_variants(
         &self,
         request: prebindgen_declarations::OutputEnumVariants<'_, Self>,
     ) -> Result<prebindgen_declarations::EnumEncoding<COutputWireBranch>> {
-        tagged::encoding(request, Direction::Output)
+        tagged::encoding(request, Direction::Output, COutputWireBranch::Enum)
     }
     fn input_enum(
         &self,
@@ -843,20 +825,20 @@ impl Codec for CCodec {
         &self,
         request: InputOptional<'_, Self>,
     ) -> Result<OptionalEncoding<CWire, CInputWireChain>> {
-        group::prepare_optional(request, Direction::Input)
+        group::prepare_optional(request, Direction::Input, CInputWireChain::Optional)
     }
     fn output_optional(
         &self,
         request: OutputOptional<'_, Self>,
     ) -> Result<OptionalEncoding<CWire, COutputWireChain>> {
-        group::prepare_optional(request, Direction::Output)
+        group::prepare_optional(request, Direction::Output, COutputWireChain::Optional)
     }
     fn alternatives(&self, request: Alternatives<'_, Self>) -> Result<CInputWireBranch> {
         group::validate_selector(request.selector)?;
         for arm in request.arms {
             group::retire_niches(arm, None)?;
         }
-        Ok(CInputWireBranch::Alternatives(()))
+        Ok(CInputWireBranch::Alternatives)
     }
     fn source_error(&self, request: SourceError<'_, Self>) -> Result<SourceErrorPlan<Self>> {
         if self.declared {
@@ -2655,7 +2637,7 @@ where
         if let (
             Some(inner),
             prebindgen_conversions::WireNode::Chain {
-                meta: CWireChain::Optional(_),
+                meta: CInputWireChain::Optional(_),
                 child,
                 ..
             },
@@ -2725,15 +2707,15 @@ where
     Ok(())
 }
 
-fn describe_groups<Sq: crate::sequence::RowEncoding, In>(
-    layout: &CWireNode<Sq, In>,
+fn describe_groups<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
+    layout: &CWireNode<Chain, Branch>,
     wires: &[&Wire],
     output: bool,
     next_label: &mut usize,
     root: &str,
 ) -> String {
-    fn visit<Sq: crate::sequence::RowEncoding, In>(
-        node: &CWireNode<Sq, In>,
+    fn visit<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
+        node: &CWireNode<Chain, Branch>,
         names: &std::collections::BTreeMap<String, String>,
         parents: &mut Vec<String>,
         out: &mut String,
@@ -2743,102 +2725,110 @@ fn describe_groups<Sq: crate::sequence::RowEncoding, In>(
         if matches!(
             node,
             prebindgen_conversions::WireNode::Chain {
-                meta: CWireChain::Tagged(_),
+                meta,
                 ..
-            }
+            } if meta.tagged().is_some()
         ) {
             return;
         }
         if let prebindgen_conversions::WireNode::Branch {
-            meta: CWireBranch::Alternatives(_),
+            meta: branch,
             children: alternatives,
             ..
         } = node
         {
-            for arm in alternatives {
-                visit(arm, names, parents, out, next_label, field_path);
+            if branch.is_alternatives() {
+                for arm in alternatives {
+                    visit(arm, names, parents, out, next_label, field_path);
+                }
             }
         }
         if let prebindgen_conversions::WireNode::Chain {
             controls,
             child: element,
-            meta: CWireChain::Sequence(metadata),
+            meta: encoding,
             ..
         } = node
         {
-            let [carrier] = controls.as_slice() else {
-                return;
-            };
-            let path = field_path.join(".");
-            if metadata.delivery() == CSequence::Buffered {
-                out.push_str(&format!("/* Collection {path}: {} carries rows of {} ABI fields; element-owned fields are released separately from row storage. */\n",carrier.name,crate::group::row_fields(element).len()));
-            } else {
-                out.push_str(&format!("/* Callback sequence {path}: {} reports the delivered element count; the visitor receives {} fields per element. */\n",carrier.name,crate::group::row_fields(element).len()));
-            }
-            let row_names = crate::group::row_fields(element)
-                .enumerate()
-                .map(|(i, w)| (w.name.to_string(), format!("row.v{i}")))
-                .collect();
-            let original = field_path.last().cloned();
-            if let Some(last) = field_path.last_mut() {
-                last.push_str("[]");
-            }
-            visit(element, &row_names, parents, out, next_label, field_path);
-            if let (Some(last), Some(original)) = (field_path.last_mut(), original) {
-                *last = original;
+            if let Some(metadata) = encoding.sequence() {
+                let [carrier] = controls.as_slice() else {
+                    return;
+                };
+                let path = field_path.join(".");
+                if metadata == CSequence::Buffered {
+                    out.push_str(&format!("/* Collection {path}: {} carries rows of {} ABI fields; element-owned fields are released separately from row storage. */\n",carrier.name,crate::group::row_fields(element).len()));
+                } else {
+                    out.push_str(&format!("/* Callback sequence {path}: {} reports the delivered element count; the visitor receives {} fields per element. */\n",carrier.name,crate::group::row_fields(element).len()));
+                }
+                let row_names = crate::group::row_fields(element)
+                    .enumerate()
+                    .map(|(i, w)| (w.name.to_string(), format!("row.v{i}")))
+                    .collect();
+                let original = field_path.last().cloned();
+                if let Some(last) = field_path.last_mut() {
+                    last.push_str("[]");
+                }
+                visit(element, &row_names, parents, out, next_label, field_path);
+                if let (Some(last), Some(original)) = (field_path.last_mut(), original) {
+                    *last = original;
+                }
             }
         }
         if let prebindgen_conversions::WireNode::Chain {
             child: element,
-            meta: CWireChain::Optional(g),
+            meta: encoding,
             ..
         } = node
         {
-            let label = format!("option{}", *next_label);
-            *next_label += 1;
-            let discriminator = &names[&g.discriminator().to_string()];
-            let rule = match g.niche() {
+            if let Some(g) = encoding.optional() {
+                let label = format!("option{}", *next_label);
+                *next_label += 1;
+                let discriminator = &names[&g.discriminator().to_string()];
+                let rule = match g.niche() {
                     None => format!("{discriminator}: 0 = None, 1 = Some; other active flags are errors"),
                     Some(CNiche::Null) => format!("{discriminator} == NULL means None; non-null means Some"),
                     Some(CNiche::Integer(n)) => format!("{discriminator} == {n} means None; other values encode Some and must be valid payloads"),
                 };
-            let parent = if parents.is_empty() {
-                String::new()
-            } else {
-                format!("; only when {} is present", parents.join(" and "))
-            };
-            out.push_str(&format!("/* Option {}: {rule}{parent}. */\n", label));
-            parents.push(label);
-            visit(element, names, parents, out, next_label, field_path);
-            parents.pop();
+                let parent = if parents.is_empty() {
+                    String::new()
+                } else {
+                    format!("; only when {} is present", parents.join(" and "))
+                };
+                out.push_str(&format!("/* Option {}: {rule}{parent}. */\n", label));
+                parents.push(label);
+                visit(element, names, parents, out, next_label, field_path);
+                parents.pop();
+            }
         }
         if let prebindgen_conversions::WireNode::Branch {
-            meta: metadata @ (CWireBranch::Values | CWireBranch::Fields | CWireBranch::Field(_)),
+            meta: metadata,
             children,
             ..
         } = node
         {
-            if let CWireBranch::Field(name) = metadata {
-                field_path.push(name.to_string().trim_start_matches("r#").into());
-                let values = crate::group::record_fields(node)
-                    .map(|w| names[&w.name.to_string()].clone())
-                    .collect::<Vec<_>>();
-                let values = if values.is_empty() {
-                    "no boundary values".into()
+            if metadata.is_values() || metadata.is_fields() || metadata.field().is_some() {
+                if let Some(name) = metadata.field() {
+                    field_path.push(name.to_string().trim_start_matches("r#").into());
+                    let values = crate::group::record_fields(node)
+                        .map(|w| names[&w.name.to_string()].clone())
+                        .collect::<Vec<_>>();
+                    let values = if values.is_empty() {
+                        "no boundary values".into()
+                    } else {
+                        values.join(", ")
+                    };
+                    out.push_str(&format!(
+                        "/* Field {}: {values}. */\n",
+                        field_path.join(".")
+                    ));
+                    for child in children {
+                        visit(child, names, parents, out, next_label, field_path);
+                    }
+                    field_path.pop();
                 } else {
-                    values.join(", ")
-                };
-                out.push_str(&format!(
-                    "/* Field {}: {values}. */\n",
-                    field_path.join(".")
-                ));
-                for child in children {
-                    visit(child, names, parents, out, next_label, field_path);
-                }
-                field_path.pop();
-            } else {
-                for child in children {
-                    visit(child, names, parents, out, next_label, field_path);
+                    for child in children {
+                        visit(child, names, parents, out, next_label, field_path);
+                    }
                 }
             }
         }
@@ -4077,7 +4067,7 @@ mod generation_tests {
                 4
             );
             let prebindgen_conversions::WireNode::Chain {
-                meta: CWireChain::Optional(outer_metadata),
+                meta: CInputWireChain::Optional(outer_metadata),
                 ..
             } = &plan.node
             else {

@@ -50,8 +50,8 @@ fn nodes(plan: &COutputPlan<CWire>) -> impl Iterator<Item = &COutputWireNode> {
         .chain(plan.outcomes.source_error.iter())
         .chain(plan.outcomes.binding_failure.iter())
 }
-fn used_node<Sq: crate::sequence::RowEncoding, In>(
-    node: &CWireNode<Sq, In>,
+fn used_node<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
+    node: &CWireNode<Chain, Branch>,
     names: &mut BTreeSet<String>,
 ) {
     for wire in prebindgen_conversions::wire_definitions(std::iter::once(node)) {

@@ -13,20 +13,6 @@ pub enum CSequence {
     Callback,
 }
 
-pub(crate) trait RowEncoding: Clone + std::fmt::Debug {
-    fn delivery(&self) -> CSequence;
-}
-impl RowEncoding for () {
-    fn delivery(&self) -> CSequence {
-        CSequence::Buffered
-    }
-}
-impl RowEncoding for CSequence {
-    fn delivery(&self) -> CSequence {
-        *self
-    }
-}
-
 pub(crate) fn decode_buffer(value: Value, wire: &syn::Ident) -> TokenStream {
     let read = prebindgen_conversions::template_parameter("read_buffer");
     match value {
@@ -59,7 +45,7 @@ pub(crate) fn input(
             name: wire.clone(),
             kind: CWire::Rows,
         }],
-        metadata: CInputWireChain::Sequence(()),
+        metadata: CInputWireChain::Sequence,
         open: quote!(let #length=#wire.len;let #data=#wire.data as *const #row;),
         bind,
         validation_values: values,
@@ -127,11 +113,11 @@ pub(crate) fn output(
 #[allow(clippy::type_complexity)] // Pair each sequence carrier with its element tree.
 /// Visit every sequence, including callback elements that need C declaration checks.
 /// Nested schemas precede their parents so generated row types can refer to them.
-pub(crate) fn schemas<'a, Sq: crate::sequence::RowEncoding, In>(
-    node: &'a CWireNode<Sq, In>,
+pub(crate) fn schemas<'a, Chain: group::ChainMetadata, Branch>(
+    node: &'a CWireNode<Chain, Branch>,
     out: &mut Vec<(
         &'a prebindgen_conversions::Wire<CWire>,
-        &'a CWireNode<Sq, In>,
+        &'a CWireNode<Chain, Branch>,
         CSequence,
     )>,
 ) {
@@ -145,19 +131,15 @@ pub(crate) fn schemas<'a, Sq: crate::sequence::RowEncoding, In>(
             }
         }
         WireNode::Chain {
-            meta: CWireChain::Optional(_) | CWireChain::Tagged(_),
-            child: element,
-            ..
-        } => schemas(element, out),
-        WireNode::Chain {
+            meta,
+            child,
             controls,
-            child: element,
-            meta: CWireChain::Sequence(metadata),
-            ..
         } => {
-            schemas(element, out);
-            if let [carrier] = controls.as_slice() {
-                out.push((carrier, element, metadata.delivery()));
+            schemas(child, out);
+            if let Some(delivery) = meta.sequence() {
+                if let [carrier] = controls.as_slice() {
+                    out.push((carrier, child, delivery));
+                }
             }
         }
     }
@@ -225,7 +207,7 @@ pub(crate) fn emit_schemas<R, E, P>(
     header: &mut String,
 ) -> Result<()> {
     for (carrier, element, metadata) in schemas {
-        if metadata.delivery() != CSequence::Buffered {
+        if metadata != CSequence::Buffered {
             continue;
         }
         let row = &context.row_types[&carrier.name.to_string()];
@@ -279,8 +261,8 @@ pub(crate) fn emit_schemas<R, E, P>(
 }
 
 /// Reclaim a committed output that will not reach its caller, including nested rows.
-pub(crate) fn release<Sq: crate::sequence::RowEncoding, In>(
-    layout: &CWireNode<Sq, In>,
+pub(crate) fn release<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
+    layout: &CWireNode<Chain, Branch>,
     fields: &[(&Wire, TokenStream)],
     context: &CContext,
     catch_panics: bool,
@@ -299,8 +281,8 @@ pub(crate) fn release<Sq: crate::sequence::RowEncoding, In>(
 
 // The same schema destruction is used before delivery (row-type placeholders)
 // and after delivery (resolved wrapper context), including nested collections.
-pub(crate) fn release_fields<Sq: crate::sequence::RowEncoding, In>(
-    layout: &CWireNode<Sq, In>,
+pub(crate) fn release_fields<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
+    layout: &CWireNode<Chain, Branch>,
     fields: &[(&Wire, TokenStream)],
     conditions: &[(&Wire, TokenStream)],
     row_type: &impl Fn(&Wire) -> TokenStream,
@@ -395,7 +377,7 @@ pub(crate) fn callback_shape(node: &COutputWireNode) -> bool {
         WireNode::Chain {
             meta: COutputWireChain::Sequence(metadata),
             ..
-        } => metadata.delivery() == CSequence::Callback,
+        } => *metadata == CSequence::Callback,
         WireNode::Chain {
             child: element,
             meta: COutputWireChain::Optional(metadata),
@@ -447,7 +429,7 @@ pub(crate) fn callback_delivery(node: &COutputWireNode) -> Result<bool> {
     let sequences = outer_sequences(node);
     if !sequences
         .iter()
-        .any(|(_, _, metadata)| metadata.delivery() == CSequence::Callback)
+        .any(|(_, _, metadata)| *metadata == CSequence::Callback)
     {
         return Ok(false);
     }
@@ -459,34 +441,23 @@ pub(crate) fn callback_delivery(node: &COutputWireNode) -> Result<bool> {
 }
 
 /// Function sequence callbacks are not available in parameters, error channels or rows.
-pub(crate) fn validate_buffered<Sq: crate::sequence::RowEncoding, In>(
-    node: &CWireNode<Sq, In>,
+pub(crate) fn validate_buffered<Chain: group::ChainMetadata, Branch>(
+    node: &CWireNode<Chain, Branch>,
 ) -> Result<()> {
     match node {
         prebindgen_conversions::WireNode::Leaf(_) => {}
-        prebindgen_conversions::WireNode::Chain {
-            child: element,
-            meta: CWireChain::Sequence(metadata),
-            ..
-        } => {
-            if metadata.delivery() == CSequence::Callback {
+        prebindgen_conversions::WireNode::Chain { meta, child, .. } => {
+            if meta.sequence() == Some(CSequence::Callback) {
                 return Err(
                     "callback sequence is only supported as the function's successful return"
                         .into(),
                 );
             }
-            validate_buffered(element)?;
+            validate_buffered(child)?;
         }
-        prebindgen_conversions::WireNode::Chain {
-            meta: CWireChain::Optional(_) | CWireChain::Tagged(_),
-            child: element,
-            ..
-        } => validate_buffered(element)?,
-        prebindgen_conversions::WireNode::Branch {
-            children: elements, ..
-        } => {
-            for element in elements {
-                validate_buffered(element)?;
+        prebindgen_conversions::WireNode::Branch { children, .. } => {
+            for child in children {
+                validate_buffered(child)?;
             }
         }
     }
@@ -513,7 +484,7 @@ fn outer_sequences(
         use prebindgen_conversions::WireNode;
         match node {
             WireNode::Chain {
-                meta: CWireChain::Sequence(meta),
+                meta: COutputWireChain::Sequence(meta),
                 child,
                 controls,
             } => out.push((child, controls, *meta)),
@@ -532,8 +503,8 @@ fn outer_sequences(
 }
 
 // A carrier is a scope boundary. Its own destructor interprets its children.
-fn release_condition<Sq: crate::sequence::RowEncoding, In>(
-    node: &CWireNode<Sq, In>,
+fn release_condition<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
+    node: &CWireNode<Chain, Branch>,
     target: &syn::Ident,
     fields: &[(&Wire, TokenStream)],
 ) -> Option<TokenStream> {
@@ -559,15 +530,18 @@ fn release_condition<Sq: crate::sequence::RowEncoding, In>(
     }
     match node {
         WireNode::Leaf(_) => None,
+        WireNode::Chain { meta: encoding, .. }
+            if (encoding.sequence().is_some() || encoding.tagged().is_some()) =>
+        {
+            None
+        }
         WireNode::Chain {
-            meta: CWireChain::Sequence(_) | CWireChain::Tagged(_),
-            ..
-        } => None,
-        WireNode::Chain {
-            meta: CWireChain::Optional(optional),
+            meta: encoding,
             child,
             ..
-        } => {
+        } if (encoding.optional().is_some()) => {
+            let optional = encoding.optional().expect("matched metadata");
+
             let child = release_condition(child, target, fields)?;
             let discriminator = value(optional.discriminator())?;
             let present = optional
@@ -577,10 +551,10 @@ fn release_condition<Sq: crate::sequence::RowEncoding, In>(
             Some(enclose(present, child))
         }
         WireNode::Branch {
-            meta: CWireBranch::Enum(_) | CWireBranch::Alternatives(_),
+            meta: encoding,
             controls,
             children,
-        } => {
+        } if (encoding.enumeration().is_some() || encoding.is_alternatives()) => {
             let tag = value(&controls[0].name)?;
             children.iter().enumerate().find_map(|(i, child)| {
                 let child = release_condition(child, target, fields)?;
@@ -588,6 +562,7 @@ fn release_condition<Sq: crate::sequence::RowEncoding, In>(
                 Some(enclose(quote!((#tag)==#i), child))
             })
         }
+        WireNode::Chain { .. } => panic!("unsupported C cleanup chain metadata"),
         WireNode::Branch { children, .. } => children
             .iter()
             .find_map(|child| release_condition(child, target, fields)),

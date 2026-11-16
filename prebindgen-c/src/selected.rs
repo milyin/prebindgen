@@ -32,14 +32,14 @@ pub(crate) fn condition(
         .reduce(|a, b| quote!((#a)&&(#b)))
         .unwrap_or_else(|| quote!(true))
 }
-pub(crate) fn values<Sq: crate::sequence::RowEncoding, In>(
-    node: &CWireNode<Sq, In>,
+pub(crate) fn values<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
+    node: &CWireNode<Chain, Branch>,
 ) -> Result<Vec<(&Wire, Vec<Test>)>> {
-    fn visit<'a, Sq: crate::sequence::RowEncoding, In>(
-        node: &'a CWireNode<Sq, In>,
+    fn visit<'a, Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
+        node: &'a CWireNode<Chain, Branch>,
         path: &[Test],
         out: &mut Vec<(&'a Wire, Vec<Test>)>,
-    ) {
+    ) -> Result<()> {
         let mut add = |wires: &'a [Wire]| {
             for wire in wires {
                 out.push((
@@ -54,26 +54,28 @@ pub(crate) fn values<Sq: crate::sequence::RowEncoding, In>(
         match node {
             WireNode::Leaf(wires) => add(wires),
             WireNode::Chain {
-                meta: CWireChain::Sequence(_) | CWireChain::Tagged(_),
+                meta: encoding,
                 controls,
-                ..
-            } => add(controls),
-            WireNode::Chain {
-                meta: CWireChain::Optional(optional),
                 child,
-                controls,
             } => {
                 add(controls);
-                let mut next = path.to_vec();
-                let name = optional.discriminator().clone();
-                next.push(
-                    optional
-                        .niche()
-                        .map(|n| Test::Niche(name.clone(), n.clone()))
-                        .unwrap_or(Test::Arm(name, 1)),
-                );
-                visit(child, &next, out);
+                if !encoding.is_scope_boundary() {
+                    let optional = encoding
+                        .optional()
+                        .ok_or("unsupported selection chain metadata")?;
+
+                    let mut next = path.to_vec();
+                    let name = optional.discriminator().clone();
+                    next.push(
+                        optional
+                            .niche()
+                            .map(|n| Test::Niche(name.clone(), n.clone()))
+                            .unwrap_or(Test::Arm(name, 1)),
+                    );
+                    visit(child, &next, out)?;
+                }
             }
+
             WireNode::Branch {
                 meta,
                 children,
@@ -82,16 +84,17 @@ pub(crate) fn values<Sq: crate::sequence::RowEncoding, In>(
                 add(controls);
                 for (i, child) in children.iter().enumerate() {
                     let mut next = path.to_vec();
-                    if matches!(meta, CWireBranch::Enum(_) | CWireBranch::Alternatives(_)) {
+                    if meta.selects_arm() {
                         next.push(Test::Arm(controls[0].name.clone(), i as i32));
                     }
-                    visit(child, &next, out);
+                    visit(child, &next, out)?;
                 }
             }
         }
+        Ok(())
     }
     let mut values = vec![];
-    visit(node, &[], &mut values);
+    visit(node, &[], &mut values)?;
     let indices = values
         .iter()
         .enumerate()

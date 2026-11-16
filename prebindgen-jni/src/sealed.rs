@@ -120,18 +120,14 @@ fn validate_variants(class: &Class, source: &PayloadEnum<(), JniField>) -> Resul
 }
 
 pub(crate) fn encoding<
-    Sq: crate::sequence::RowEncoding,
-    In,
-    Out,
-    V: prebindgen_conversions::Conversion<
-        Wire = JniWire,
-        Chain = JniWireChain<Sq>,
-        Branch = JniWireBranch<In, Out>,
-    >,
+    Chain: group::ChainMetadata,
+    Branch,
+    V: prebindgen_conversions::Conversion<Wire = JniWire, Chain = Chain, Branch = Branch>,
 >(
     request: prebindgen_declarations::EnumVariants<'_, JniCodec, V>,
     direction: prebindgen_declarations::Direction,
-) -> Result<EnumEncoding<JniWireBranch<In, Out>>> {
+    wrap: impl FnOnce(Rc<JniEnumGroup>) -> Branch,
+) -> Result<EnumEncoding<Branch>> {
     let source = request.flat.payload_enum(request.ty)?;
     let class = request
         .flat
@@ -180,7 +176,7 @@ pub(crate) fn encoding<
         vec![]
     };
     Ok(EnumEncoding {
-        metadata: JniWireBranch::Enum(Rc::new(JniEnumGroup {
+        metadata: wrap(Rc::new(JniEnumGroup {
             source: request.flat.type_ref(request.ty)?,
             value: grouped,
             root: request
@@ -198,11 +194,12 @@ pub(crate) fn encoding<
 // Source field identities and order come from the canonical variant. Occurrence
 // nodes only describe conversions of those fields.
 #[allow(clippy::type_complexity)] // Borrow each canonical field with its directional conversion subtree.
-pub(crate) fn variant_fields<'a, Sq: crate::sequence::RowEncoding, In, Out>(
-    node: &'a JniWireNode<Sq, In, Out>,
+pub(crate) fn variant_fields<'a, Chain, Branch: group::BranchMetadata>(
+    node: &'a JniWireNode<Chain, Branch>,
     source: &'a PayloadVariant<(), JniField>,
-) -> Result<impl Iterator<Item = Result<(&'a PayloadField<JniField>, &'a JniWireNode<Sq, In, Out>)>>>
-{
+) -> Result<
+    impl Iterator<Item = Result<(&'a PayloadField<JniField>, &'a JniWireNode<Chain, Branch>)>>,
+> {
     let WireNode::Branch { children, .. } = node else {
         return Err("enum arm must group fields".into());
     };
@@ -246,7 +243,7 @@ pub(crate) fn input(
         let tree = WireNode::Branch {
             controls: controls.to_vec(),
             children: nodes.to_vec(),
-            meta: JniInputWireBranch::Alternatives(()),
+            meta: JniInputWireBranch::Alternatives,
         };
         let mut out = kotlin::input_kotlin_when(&tree, context, active)?;
         for path in &mut out.parameter_paths {
@@ -541,7 +538,7 @@ fn expanded_names(
     owners: Option<&str>,
 ) -> Result<Vec<Option<String>>> {
     if let WireNode::Branch {
-        meta: JniWireBranch::Record(_) | JniWireBranch::Enum(_),
+        meta: JniOutputWireBranch::Record(_) | JniOutputWireBranch::Enum(_),
         ..
     } = node
     {
@@ -555,7 +552,7 @@ fn expanded_names(
             .into_iter()
             .flatten()
             .collect::<Vec<_>>();
-        if let JniWireBranch::Field(field) = meta {
+        if let JniOutputWireBranch::Field(field) = meta {
             let field = field.to_string();
             let tuple = field
                 .strip_prefix('v')
@@ -742,8 +739,8 @@ pub(crate) fn emit_tags<I: KotlinInputConversion, O: KotlinOutputConversion>(
     native: &mut String,
     files: &mut BTreeMap<String, String>,
 ) -> Result<()> {
-    fn visit<Sq: crate::sequence::RowEncoding, In, Out>(
-        node: &JniWireNode<Sq, In, Out>,
+    fn visit<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
+        node: &JniWireNode<Chain, Branch>,
         package: &str,
         by_package: &mut BTreeMap<String, BTreeSet<TypeRef>>,
     ) -> Result<()> {
@@ -766,7 +763,7 @@ pub(crate) fn emit_tags<I: KotlinInputConversion, O: KotlinOutputConversion>(
             }
             WireNode::Chain { child, .. } => visit(child, package, by_package)?,
             WireNode::Branch { meta, children, .. } => {
-                if let JniWireBranch::Enum(e) = meta {
+                if let Some(e) = meta.enumeration() {
                     by_package
                         .entry(package.into())
                         .or_default()

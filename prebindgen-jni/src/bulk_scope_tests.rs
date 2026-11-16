@@ -66,11 +66,14 @@ fn one_bulk_scope_controls_nested_rows_and_overrides_ordinary_jvm_preferences() 
     );
     bindings::set_output(&mut model, "rows", plan.clone().into()).unwrap();
     let original = generate(&model).unwrap();
-    let shape = group::error_wire_shape(&plan.outcomes.success);
+    let shape = group::error_wire_shape(&plan.outcomes.success).unwrap();
     // Changing an ordinary JVM preference must not add JVM row classes or alter
     // decoding, cleanup or native code inside the inherited bulk scope.
     prefer_jvm_rows(&mut plan.outcomes.success);
-    assert_eq!(shape, group::error_wire_shape(&plan.outcomes.success));
+    assert_eq!(
+        shape,
+        group::error_wire_shape(&plan.outcomes.success).unwrap()
+    );
     bindings::set_output(&mut model, "rows", plan.into()).unwrap();
     let changed = generate(&model).unwrap();
     assert_eq!(original.rust, changed.rust);
@@ -82,7 +85,7 @@ fn complete_boundaries_reject_native_rows_without_a_scope_and_object_rows_inside
     let (_, plan) = prepared();
     let mut root = plan.outcomes.success;
     let WireNode::Chain {
-        meta: JniWireChain::Bulk,
+        meta: JniOutputWireChain::Bulk,
         child,
         ..
     } = &mut root
@@ -161,7 +164,7 @@ fn native_row_compatibility_distinguishes_enum_unions_from_selector_fields() {
         // Derive each layout independently. Neither wire tree retains one.
         let layout = bulk::record(&element, &model.types).unwrap();
         let node = WireNode::Chain {
-            meta: JniWireChain::Bulk,
+            meta: JniInputWireChain::Bulk,
             controls: vec![prebindgen_conversions::Wire {
                 name: syn::parse_quote!(frame),
                 kind: JniWire::BulkBuffer {
@@ -169,7 +172,7 @@ fn native_row_compatibility_distinguishes_enum_unions_from_selector_fields() {
                 },
             }],
             child: Box::new(WireNode::Chain {
-                meta: JniInputWireChain::Sequence(()),
+                meta: JniInputWireChain::Sequence,
                 controls: vec![prebindgen_conversions::Wire {
                     name: syn::parse_quote!(rows),
                     kind: JniWire::NativeRows {
@@ -182,19 +185,19 @@ fn native_row_compatibility_distinguishes_enum_unions_from_selector_fields() {
         group::validate_layout(&node).unwrap();
         (node, layout)
     };
-    let (enumeration, enum_layout) = rows(JniWireBranch::Enum(std::rc::Rc::new(
+    let (enumeration, enum_layout) = rows(JniInputWireBranch::Enum(std::rc::Rc::new(
         crate::sealed::JniEnumGroup {
             source,
             value: false,
             root: "event".into(),
         },
     )));
-    let (selector, selector_layout) = rows(JniWireBranch::Alternatives(()));
+    let (selector, selector_layout) = rows(JniInputWireBranch::Alternatives);
     assert_ne!(enum_layout.key, selector_layout.key);
     assert!(enum_layout.definitions.to_string().contains("union"));
     assert!(!selector_layout.definitions.to_string().contains("union"));
     assert_ne!(
-        group::error_wire_shape(&enumeration),
-        group::error_wire_shape(&selector)
+        group::error_wire_shape(&enumeration).unwrap(),
+        group::error_wire_shape(&selector).unwrap()
     );
 }

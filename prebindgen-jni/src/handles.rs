@@ -23,9 +23,7 @@ pub(crate) fn key(handle: &BoxedWire) -> (String, u8) {
 }
 /// Local groups in one prepared carrier. The same order is used by its writer,
 /// patch walk, and the enclosing Kotlin call; no runtime type lookup is needed.
-pub(crate) fn kinds<Sq: crate::sequence::RowEncoding, In, Out>(
-    node: &JniWireNode<Sq, In, Out>,
-) -> Vec<BoxedWire> {
+pub(crate) fn kinds<Chain, Branch>(node: &JniWireNode<Chain, Branch>) -> Vec<BoxedWire> {
     let mut kinds = BTreeMap::new();
     for wire in prebindgen_conversions::wire_definitions(std::iter::once(node)) {
         if let JniWire::Handle { handle, .. } = &wire.kind {
@@ -36,10 +34,7 @@ pub(crate) fn kinds<Sq: crate::sequence::RowEncoding, In, Out>(
     }
     kinds.into_values().collect()
 }
-pub(crate) fn carrier_inputs<Sq: crate::sequence::RowEncoding, In, Out>(
-    node: &JniWireNode<Sq, In, Out>,
-    state: &str,
-) -> Vec<KotlinHandleInput> {
+pub(crate) fn carrier_inputs(node: &JniInputWireNode, state: &str) -> Vec<KotlinHandleInput> {
     let kinds = kinds(node);
     let count = kinds.len();
     kinds
@@ -59,10 +54,10 @@ pub(crate) fn carrier_inputs<Sq: crate::sequence::RowEncoding, In, Out>(
         })
         .collect()
 }
-fn controlled_child<'a, Sq: crate::sequence::RowEncoding, In, Out>(
-    node: &'a JniWireNode<Sq, In, Out>,
+fn controlled_child<'a>(
+    node: &'a JniInputWireNode,
     name: &syn::Ident,
-) -> Option<&'a JniWireNode<Sq, In, Out>> {
+) -> Option<&'a JniInputWireNode> {
     match node {
         WireNode::Chain {
             controls, child, ..
@@ -72,7 +67,7 @@ fn controlled_child<'a, Sq: crate::sequence::RowEncoding, In, Out>(
             } else if matches!(
                 node,
                 WireNode::Chain {
-                    meta: JniWireChain::Sequence(_) | JniWireChain::Bulk,
+                    meta: JniInputWireChain::Sequence | JniInputWireChain::Bulk,
                     ..
                 }
             ) {
@@ -87,9 +82,7 @@ fn controlled_child<'a, Sq: crate::sequence::RowEncoding, In, Out>(
         _ => None,
     }
 }
-pub(crate) fn column_groups<Sq: crate::sequence::RowEncoding, In, Out>(
-    node: &JniWireNode<Sq, In, Out>,
-) -> Result<String> {
+pub(crate) fn column_groups(node: &JniInputWireNode) -> Result<String> {
     let groups = kinds(node);
     if groups.len() <= 1 {
         return Ok("null".into());
@@ -131,16 +124,14 @@ pub(crate) fn column_groups<Sq: crate::sequence::RowEncoding, In, Out>(
 /// Every native resource must be represented by prepared Kotlin handle wires.
 /// Custom conversions without this information cannot use the generated JNI API.
 pub(crate) fn require_preflight<I: KotlinInputConversion>(input: &I) -> Result<()> {
-    fn prepared<Sq: crate::sequence::RowEncoding, In, Out>(
-        node: &JniWireNode<Sq, In, Out>,
-    ) -> bool {
+    fn prepared(node: &JniInputWireNode) -> bool {
         match node {
             WireNode::Chain {
-                meta: JniWireChain::Bulk,
+                meta: JniInputWireChain::Bulk,
                 ..
             } => true,
             WireNode::Chain {
-                meta: JniWireChain::Sequence(_),
+                meta: JniInputWireChain::Sequence,
                 controls,
                 ..
             } if controls
@@ -162,17 +153,11 @@ pub(crate) fn require_preflight<I: KotlinInputConversion>(input: &I) -> Result<(
 
 /// Check the Kotlin emitter's retained sources against the wire shape. Carriers
 /// combine repeated fields into one list per allocation type and access mode.
-fn complete_handle_inputs<Sq: crate::sequence::RowEncoding, In, Out>(
-    node: &JniWireNode<Sq, In, Out>,
-    input: &mut KotlinInput,
-) -> Result<()> {
-    fn sources<Sq: crate::sequence::RowEncoding, In, Out>(
-        node: &JniWireNode<Sq, In, Out>,
-        expected: &mut BTreeMap<(String, u8, bool), usize>,
-    ) {
+fn complete_handle_inputs(node: &JniInputWireNode, input: &mut KotlinInput) -> Result<()> {
+    fn sources(node: &JniInputWireNode, expected: &mut BTreeMap<(String, u8, bool), usize>) {
         match node {
             WireNode::Chain {
-                meta: JniWireChain::Bulk | JniWireChain::Sequence(_),
+                meta: JniInputWireChain::Bulk | JniInputWireChain::Sequence,
                 child,
                 ..
             } => {
@@ -426,7 +411,7 @@ mod tests {
                 WireNode::Leaf(vec![handle("first", syn::parse_quote!(A))]),
                 WireNode::Chain {
                     controls: vec![rows()],
-                    meta: JniInputWireChain::Sequence(()),
+                    meta: JniInputWireChain::Sequence,
                     child: Box::new(WireNode::Leaf(vec![
                         handle("a", syn::parse_quote!(A)),
                         handle("b", syn::parse_quote!(B)),

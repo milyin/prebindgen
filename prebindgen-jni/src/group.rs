@@ -4,41 +4,220 @@ use super::*;
 use prebindgen_conversions::{Wire, WireNode};
 use syn::ext::IdentExt;
 
-/// Optional and sequence structure shared by the directional wire tree families.
-/// `Sequence` is `()` for inputs and the adapter's delivery policy for outputs.
-/// Use the concrete input/output aliases at converter boundaries.
+/// Decode one nested input from Kotlin/JNI into Rust.
+///
+/// Output delivery cannot be selected on an input:
+/// ```compile_fail
+/// use prebindgen_jni::{JniInputWireChain, JniSequence};
+/// let input = JniInputWireChain::Sequence(JniSequence::Callback);
+/// ```
 #[derive(Clone, Debug)]
-pub enum JniWireChain<Sequence> {
-    /// Zero or one payload occurrence.
+pub enum JniInputWireChain {
+    /// Use a flag or payload niche to decode zero or one Rust value.
     Optional(JniOptional),
-    /// Zero or more element occurrences.
-    Sequence(Sequence),
-    /// Expanded fields grouped into one C-representation bulk frame.
-    /// Activation follows the enclosing optional/selector branches; layout comes from the child.
+    /// Decode buffered object-array rows, or native offset/count ranges inside Bulk.
+    /// The child describes how one row becomes a Rust element.
+    Sequence,
+    /// Decode the child's fields from one packed C-representation byte buffer.
+    /// Sequences inside this scope use native rows; layout is derived from the child.
     Bulk,
 }
-/// Structural operations shared by the directional wire tree families.
-/// Input-only payloads are `()` in inputs and `Infallible` in outputs.
-/// Output-only payloads use the reverse assignment. These payloads occupy no space.
-/// Use the concrete input/output aliases at converter boundaries.
+/// Encode one nested Rust output for Kotlin/JNI delivery.
 #[derive(Clone, Debug)]
-pub enum JniWireBranch<Input, Output> {
-    /// Convert all ordered components, such as constructor arguments or output views.
+pub enum JniOutputWireChain {
+    /// Encode absence with a flag or an excluded payload representation.
+    Optional(JniOptional),
+    /// Buffer rows or deliver each row through a callback, according to this policy.
+    /// The child describes one element; an enclosing Bulk scope selects native rows.
+    Sequence(JniSequence),
+    /// Pack the child's outputs in one C-representation byte buffer.
+    /// Callback-delivered sequences may contain bulk elements but cannot be enclosed here.
+    Bulk,
+}
+/// How Kotlin/JNI input components reconstruct a Rust value.
+///
+/// Input branches have no named output projection:
+/// ```compile_fail
+/// use prebindgen_jni::JniInputWireBranch;
+/// let input = JniInputWireBranch::Named("size".into());
+/// ```
+#[derive(Clone, Debug)]
+pub enum JniInputWireBranch {
+    /// Decode every ordered child, such as the arguments of a Rust constructor.
     Values,
-    /// Components of one source argument, preserving its Kotlin parameter path.
-    Argument(String, Input),
-    /// Deliver an output view under an explicit Kotlin name.
-    Named(String, Output),
-    /// Convert named source fields independently, in declaration order.
+    /// Keep one source argument's name in the exposed Kotlin parameter paths.
+    Argument(String),
+    /// Decode named Rust fields in source declaration order.
     Fields,
-    /// Convert one named source field through its child subtree.
+    /// Decode the child for this named Rust field.
     Field(syn::Ident),
-    /// Decompose or reconstruct one Kotlin data-class value through named child fields.
+    /// Accept one Kotlin data-class value; Kotlin extracts its child fields before JNI.
     Record(JniDataGroup),
-    /// Convert exactly one constructor alternative selected by its incoming tag.
-    Alternatives(Input),
-    /// Convert the selected source enum variant as a sealed value or expanded tag/fields.
+    /// An incoming selector chooses exactly one Rust constructor alternative.
+    /// The selector belongs to the node's controls; children describe the alternatives.
+    Alternatives,
+    /// Decode a sealed Kotlin value or selector and fields into the selected Rust enum variant.
     Enum(std::rc::Rc<crate::sealed::JniEnumGroup>),
+}
+/// How Rust output components become Kotlin values.
+///
+/// Output branches have no constructor alternative operation:
+/// ```compile_fail
+/// use prebindgen_jni::JniOutputWireBranch;
+/// let output = JniOutputWireBranch::Alternatives;
+/// ```
+#[derive(Clone, Debug)]
+pub enum JniOutputWireBranch {
+    /// Deliver every ordered child, such as multiple projections of one Rust value.
+    Values,
+    /// Give this child projection an explicit Kotlin output name.
+    Named(String),
+    /// Project named Rust fields in source declaration order.
+    Fields,
+    /// Encode this named Rust field through its child subtree.
+    Field(syn::Ident),
+    /// Kotlin reconstructs one data-class value from the child outputs.
+    Record(JniDataGroup),
+    /// Encode the selected source enum variant as a sealed Kotlin value or tag/fields.
+    Enum(std::rc::Rc<crate::sealed::JniEnumGroup>),
+}
+
+// Private queries used by shared wire-scope, selection and layout algorithms.
+// The concrete enums above remain the complete input/output operation definitions.
+pub(crate) trait ChainMetadata {
+    fn optional(&self) -> Option<&JniOptional>;
+    fn sequence(&self) -> Option<JniSequence>;
+    fn is_bulk(&self) -> bool;
+    fn is_scope_boundary(&self) -> bool {
+        self.is_bulk() || self.sequence().is_some()
+    }
+}
+impl ChainMetadata for JniInputWireChain {
+    fn optional(&self) -> Option<&JniOptional> {
+        if let Self::Optional(value) = self {
+            Some(value)
+        } else {
+            None
+        }
+    }
+    fn sequence(&self) -> Option<JniSequence> {
+        matches!(self, Self::Sequence).then_some(JniSequence::Buffered)
+    }
+    fn is_bulk(&self) -> bool {
+        matches!(self, Self::Bulk)
+    }
+}
+impl ChainMetadata for JniOutputWireChain {
+    fn optional(&self) -> Option<&JniOptional> {
+        if let Self::Optional(value) = self {
+            Some(value)
+        } else {
+            None
+        }
+    }
+    fn sequence(&self) -> Option<JniSequence> {
+        if let Self::Sequence(value) = self {
+            Some(*value)
+        } else {
+            None
+        }
+    }
+    fn is_bulk(&self) -> bool {
+        matches!(self, Self::Bulk)
+    }
+}
+pub(crate) trait BranchMetadata {
+    fn is_fields(&self) -> bool;
+    fn field(&self) -> Option<&syn::Ident>;
+    fn record(&self) -> Option<&JniDataGroup>;
+    fn enumeration(&self) -> Option<&std::rc::Rc<crate::sealed::JniEnumGroup>>;
+    fn is_alternatives(&self) -> bool;
+    fn argument_name(&self) -> Option<&str>;
+    fn output_name(&self) -> Option<&str>;
+    fn selects_arm(&self) -> bool {
+        self.is_alternatives() || self.enumeration().is_some()
+    }
+    fn is_field_collection(&self) -> bool {
+        self.is_fields() || self.record().is_some()
+    }
+}
+impl BranchMetadata for JniInputWireBranch {
+    fn is_fields(&self) -> bool {
+        matches!(self, Self::Fields)
+    }
+    fn field(&self) -> Option<&syn::Ident> {
+        if let Self::Field(value) = self {
+            Some(value)
+        } else {
+            None
+        }
+    }
+    fn record(&self) -> Option<&JniDataGroup> {
+        if let Self::Record(value) = self {
+            Some(value)
+        } else {
+            None
+        }
+    }
+    fn enumeration(&self) -> Option<&std::rc::Rc<crate::sealed::JniEnumGroup>> {
+        if let Self::Enum(value) = self {
+            Some(value)
+        } else {
+            None
+        }
+    }
+    fn is_alternatives(&self) -> bool {
+        matches!(self, Self::Alternatives)
+    }
+    fn argument_name(&self) -> Option<&str> {
+        if let Self::Argument(value) = self {
+            Some(value)
+        } else {
+            None
+        }
+    }
+    fn output_name(&self) -> Option<&str> {
+        None
+    }
+}
+impl BranchMetadata for JniOutputWireBranch {
+    fn is_fields(&self) -> bool {
+        matches!(self, Self::Fields)
+    }
+    fn field(&self) -> Option<&syn::Ident> {
+        if let Self::Field(value) = self {
+            Some(value)
+        } else {
+            None
+        }
+    }
+    fn record(&self) -> Option<&JniDataGroup> {
+        if let Self::Record(value) = self {
+            Some(value)
+        } else {
+            None
+        }
+    }
+    fn enumeration(&self) -> Option<&std::rc::Rc<crate::sealed::JniEnumGroup>> {
+        if let Self::Enum(value) = self {
+            Some(value)
+        } else {
+            None
+        }
+    }
+    fn is_alternatives(&self) -> bool {
+        false
+    }
+    fn argument_name(&self) -> Option<&str> {
+        None
+    }
+    fn output_name(&self) -> Option<&str> {
+        if let Self::Named(value) = self {
+            Some(value)
+        } else {
+            None
+        }
+    }
 }
 pub(crate) fn validate_selector(wire: &Wire<JniWire>) -> Result<()> {
     if !matches!(wire.kind, JniWire::Selector { .. }) {
@@ -76,9 +255,9 @@ impl JniOptional {
     }
     // Read presence from the actual wire discriminator, including niche encoding.
     // Useful before the input converter has produced its normalized presence local.
-    pub(crate) fn is_present<Sq: crate::sequence::RowEncoding, In, Out>(
+    pub(crate) fn is_present<Chain: group::ChainMetadata, Branch>(
         &self,
-        child: &JniWireNode<Sq, In, Out>,
+        child: &JniWireNode<Chain, Branch>,
     ) -> Result<TokenStream> {
         let name = self.discriminator();
         if let Some(niche) = self.niche() {
@@ -126,28 +305,27 @@ impl JniOptional {
 }
 
 // Definitions in one native scope; sequence element definitions belong to row scopes.
-pub(crate) fn values<Sq: crate::sequence::RowEncoding, In, Out>(
-    node: &JniWireNode<Sq, In, Out>,
+pub(crate) fn values<Chain: group::ChainMetadata, Branch>(
+    node: &JniWireNode<Chain, Branch>,
 ) -> std::vec::IntoIter<&Wire<JniWire>> {
-    fn visit<'a, Sq: crate::sequence::RowEncoding, In, Out>(
-        node: &'a JniWireNode<Sq, In, Out>,
+    fn visit<'a, Chain: group::ChainMetadata, Branch>(
+        node: &'a JniWireNode<Chain, Branch>,
         out: &mut Vec<&'a Wire<JniWire>>,
     ) {
         match node {
             WireNode::Leaf(wires) => out.extend(wires),
             WireNode::Chain {
-                meta: JniWireChain::Sequence(_) | JniWireChain::Bulk,
+                meta,
                 controls,
-                ..
-            } => out.extend(controls),
-            WireNode::Chain {
-                child, controls, ..
+                child,
             } => {
                 out.extend(controls);
-                visit(child, out);
+                if !meta.is_scope_boundary() {
+                    visit(child, out);
+                }
             }
             WireNode::Branch {
-                children, controls, ..
+                controls, children, ..
             } => {
                 out.extend(controls);
                 for child in children {
@@ -160,28 +338,27 @@ pub(crate) fn values<Sq: crate::sequence::RowEncoding, In, Out>(
     visit(node, &mut out);
     out.into_iter()
 }
-pub(crate) fn values_mut<Sq: crate::sequence::RowEncoding, In, Out>(
-    node: &mut JniWireNode<Sq, In, Out>,
+pub(crate) fn values_mut<Chain: group::ChainMetadata, Branch>(
+    node: &mut JniWireNode<Chain, Branch>,
 ) -> std::vec::IntoIter<&mut Wire<JniWire>> {
-    fn visit<'a, Sq: crate::sequence::RowEncoding, In, Out>(
-        node: &'a mut JniWireNode<Sq, In, Out>,
+    fn visit<'a, Chain: group::ChainMetadata, Branch>(
+        node: &'a mut JniWireNode<Chain, Branch>,
         out: &mut Vec<&'a mut Wire<JniWire>>,
     ) {
         match node {
             WireNode::Leaf(wires) => out.extend(wires),
             WireNode::Chain {
-                meta: JniWireChain::Sequence(_) | JniWireChain::Bulk,
+                meta,
                 controls,
-                ..
-            } => out.extend(controls),
-            WireNode::Chain {
-                child, controls, ..
+                child,
             } => {
                 out.extend(controls);
-                visit(child, out);
+                if !meta.is_scope_boundary() {
+                    visit(child, out);
+                }
             }
             WireNode::Branch {
-                children, controls, ..
+                controls, children, ..
             } => {
                 out.extend(controls);
                 for child in children {
@@ -194,26 +371,26 @@ pub(crate) fn values_mut<Sq: crate::sequence::RowEncoding, In, Out>(
     visit(node, &mut out);
     out.into_iter()
 }
-pub(crate) fn validate_layout<Sq: crate::sequence::RowEncoding, In, Out>(
-    node: &JniWireNode<Sq, In, Out>,
+pub(crate) fn validate_layout<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
+    node: &JniWireNode<Chain, Branch>,
 ) -> Result<()> {
     validate_layout_in(node, false)
 }
-pub(crate) fn validate_layout_in<Sq: crate::sequence::RowEncoding, In, Out>(
-    node: &JniWireNode<Sq, In, Out>,
+pub(crate) fn validate_layout_in<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
+    node: &JniWireNode<Chain, Branch>,
     bulk: bool,
 ) -> Result<()> {
     validate_scope(node, Some(bulk))
 }
 // Codec hooks also validate fragments before their enclosing scope is attached.
 // They can check the physical shape, but cannot require a boundary context yet.
-pub(crate) fn validate_fragment<Sq: crate::sequence::RowEncoding, In, Out>(
-    node: &JniWireNode<Sq, In, Out>,
+pub(crate) fn validate_fragment<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
+    node: &JniWireNode<Chain, Branch>,
 ) -> Result<()> {
     validate_scope(node, None)
 }
-fn validate_scope<Sq: crate::sequence::RowEncoding, In, Out>(
-    node: &JniWireNode<Sq, In, Out>,
+fn validate_scope<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
+    node: &JniWireNode<Chain, Branch>,
     bulk: Option<bool>,
 ) -> Result<()> {
     prebindgen_conversions::validate_wire_names(prebindgen_conversions::wire_definitions(
@@ -222,8 +399,8 @@ fn validate_scope<Sq: crate::sequence::RowEncoding, In, Out>(
     for wire in values(node) {
         wire.kind.validate()?;
     }
-    fn visit<Sq: crate::sequence::RowEncoding, In, Out>(
-        node: &JniWireNode<Sq, In, Out>,
+    fn visit<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
+        node: &JniWireNode<Chain, Branch>,
         bindings: &mut std::collections::BTreeSet<String>,
         in_fields: bool,
         reserved: &mut std::collections::BTreeMap<String, Vec<JniNiche>>,
@@ -231,19 +408,110 @@ fn validate_scope<Sq: crate::sequence::RowEncoding, In, Out>(
     ) -> Result<()> {
         match node {
             WireNode::Chain {
-                meta: JniWireChain::Bulk,
-                child,
+                meta: encoding,
                 controls,
+                child,
             } => {
-                if bulk == Some(true) {
-                    return Err(
-                        "nested bulk frames must be lowered into the enclosing bulk scope".into(),
-                    );
+                if encoding.is_bulk() {
+                    if bulk == Some(true) {
+                        return Err(
+                            "nested bulk frames must be lowered into the enclosing bulk scope"
+                                .into(),
+                        );
+                    }
+                    if controls.is_empty()
+                        || !matches!(controls[0].kind, JniWire::BulkBuffer { .. })
+                    {
+                        return Err("bulk scope requires a byte-array carrier".into());
+                    }
+                    visit(child, bindings, in_fields, reserved, Some(true))?;
+                } else if let Some(metadata) = encoding.sequence() {
+                    let element = child;
+                    let [carrier] = controls.as_slice() else {
+                        return Err("sequence requires one carrier control".into());
+                    };
+                    let valid = match metadata {
+                        JniSequence::Buffered | JniSequence::TypedBuffered => match bulk {
+                            Some(true) => matches!(carrier.kind, JniWire::NativeRows { .. }),
+                            Some(false) => matches!(carrier.kind, JniWire::Rows { .. }),
+                            None => matches!(
+                                carrier.kind,
+                                JniWire::Rows { .. } | JniWire::NativeRows { .. }
+                            ),
+                        },
+                        JniSequence::Callback => {
+                            if bulk == Some(true) {
+                                return Err(
+                                    "bulk scopes cannot enclose callback sequence delivery".into(),
+                                );
+                            }
+                            matches!(&carrier.kind, JniWire::Selector { .. })
+                        }
+                    };
+                    if !valid {
+                        return Err(
+                            "sequence carrier control is incompatible with its delivery".into()
+                        );
+                    }
+                    if matches!(carrier.kind, JniWire::Rows { .. })
+                        && metadata == JniSequence::TypedBuffered
+                        && !typed_rows::supported(element)
+                    {
+                        return Err(
+                            "typed output row constructor exceeds 254 JVM parameter slots".into(),
+                        );
+                    }
+                    if values(element).len() == 0 && matches!(carrier.kind, JniWire::Rows { .. }) {
+                        return Err("sequence requires a nonempty element layout".into());
+                    }
+                    crate::sequence::validate_buffered(element)?;
+                    validate_scope(element, bulk)?;
+                } else if let Some(o) = encoding.optional() {
+                    let element = child;
+                    match o {
+                        JniOptional::Flag(presence) => {
+                            let [flag] = controls.as_slice() else {
+                                return Err("flag optional requires one control".into());
+                            };
+                            validate_selector(flag)?;
+                            if &flag.name != presence {
+                                return Err(
+                                    "optional flag reference does not match its control".into()
+                                );
+                            }
+                        }
+                        JniOptional::Niche { .. } if !controls.is_empty() => {
+                            return Err("niche optional must not have controls".into())
+                        }
+                        _ => {}
+                    }
+                    if !bindings.insert(o.presence().to_string()) {
+                        return Err(format!(
+                            "duplicate optional presence binding `{}`",
+                            o.presence()
+                        ));
+                    }
+                    if let Some(niche) = o.niche() {
+                        let wire = crate::group::values(element)
+                            .find(|w| w.name == *o.discriminator())
+                            .ok_or("optional discriminator outside payload")?;
+                        wire.kind.validate_niche(niche)?;
+                        if wire.kind.available_niche().as_ref() == Some(niche) {
+                            return Err(
+                                "available JNI niche is already reserved by an optional node"
+                                    .into(),
+                            );
+                        }
+                        let values = reserved.entry(o.discriminator().to_string()).or_default();
+                        if values.contains(niche) {
+                            return Err("duplicate JNI niche reservation on one wire".into());
+                        }
+                        values.push(niche.clone());
+                    }
+                    visit(element, bindings, false, reserved, bulk)?;
+                } else {
+                    return Err("unsupported chain metadata".into());
                 }
-                if controls.is_empty() || !matches!(controls[0].kind, JniWire::BulkBuffer { .. }) {
-                    return Err("bulk scope requires a byte-array carrier".into());
-                }
-                visit(child, bindings, in_fields, reserved, Some(true))?;
             }
             WireNode::Leaf(wires) => {
                 for w in wires {
@@ -273,11 +541,11 @@ fn validate_scope<Sq: crate::sequence::RowEncoding, In, Out>(
                 }
             }
             WireNode::Branch {
-                meta: JniWireBranch::Alternatives(_) | JniWireBranch::Enum(_),
+                meta: encoding,
                 children: alternatives,
                 controls,
                 ..
-            } => {
+            } if (encoding.is_alternatives() || encoding.enumeration().is_some()) => {
                 if alternatives.is_empty() {
                     return Err("selection has no alternatives".into());
                 }
@@ -290,95 +558,7 @@ fn validate_scope<Sq: crate::sequence::RowEncoding, In, Out>(
                     visit(arm, bindings, false, reserved, bulk)?;
                 }
             }
-            WireNode::Chain {
-                child: element,
-                controls,
-                meta: JniWireChain::Sequence(metadata),
-                ..
-            } => {
-                let [carrier] = controls.as_slice() else {
-                    return Err("sequence requires one carrier control".into());
-                };
-                let valid = match metadata.delivery() {
-                    JniSequence::Buffered | JniSequence::TypedBuffered => match bulk {
-                        Some(true) => matches!(carrier.kind, JniWire::NativeRows { .. }),
-                        Some(false) => matches!(carrier.kind, JniWire::Rows { .. }),
-                        None => matches!(
-                            carrier.kind,
-                            JniWire::Rows { .. } | JniWire::NativeRows { .. }
-                        ),
-                    },
-                    JniSequence::Callback => {
-                        if bulk == Some(true) {
-                            return Err(
-                                "bulk scopes cannot enclose callback sequence delivery".into()
-                            );
-                        }
-                        matches!(&carrier.kind, JniWire::Selector { .. })
-                    }
-                };
-                if !valid {
-                    return Err("sequence carrier control is incompatible with its delivery".into());
-                }
-                if matches!(carrier.kind, JniWire::Rows { .. })
-                    && metadata.delivery() == JniSequence::TypedBuffered
-                    && !typed_rows::supported(element)
-                {
-                    return Err(
-                        "typed output row constructor exceeds 254 JVM parameter slots".into(),
-                    );
-                }
-                if values(element).len() == 0 && matches!(carrier.kind, JniWire::Rows { .. }) {
-                    return Err("sequence requires a nonempty element layout".into());
-                }
-                crate::sequence::validate_buffered(element)?;
-                validate_scope(element, bulk)?;
-            }
-            WireNode::Chain {
-                child: element,
-                meta: JniWireChain::Optional(o),
-                controls,
-                ..
-            } => {
-                match o {
-                    JniOptional::Flag(presence) => {
-                        let [flag] = controls.as_slice() else {
-                            return Err("flag optional requires one control".into());
-                        };
-                        validate_selector(flag)?;
-                        if &flag.name != presence {
-                            return Err("optional flag reference does not match its control".into());
-                        }
-                    }
-                    JniOptional::Niche { .. } if !controls.is_empty() => {
-                        return Err("niche optional must not have controls".into())
-                    }
-                    _ => {}
-                }
-                if !bindings.insert(o.presence().to_string()) {
-                    return Err(format!(
-                        "duplicate optional presence binding `{}`",
-                        o.presence()
-                    ));
-                }
-                if let Some(niche) = o.niche() {
-                    let wire = crate::group::values(element)
-                        .find(|w| w.name == *o.discriminator())
-                        .ok_or("optional discriminator outside payload")?;
-                    wire.kind.validate_niche(niche)?;
-                    if wire.kind.available_niche().as_ref() == Some(niche) {
-                        return Err(
-                            "available JNI niche is already reserved by an optional node".into(),
-                        );
-                    }
-                    let values = reserved.entry(o.discriminator().to_string()).or_default();
-                    if values.contains(niche) {
-                        return Err("duplicate JNI niche reservation on one wire".into());
-                    }
-                    values.push(niche.clone());
-                }
-                visit(element, bindings, false, reserved, bulk)?;
-            }
+
             WireNode::Branch {
                 children,
                 meta: metadata,
@@ -388,43 +568,37 @@ fn validate_scope<Sq: crate::sequence::RowEncoding, In, Out>(
                 if !controls.is_empty() {
                     return Err("group metadata does not support control wires".into());
                 }
-                if let JniWireBranch::Record(record) = metadata {
+                if let Some(record) = metadata.record() {
                     if !bindings.insert(record.root.clone()) {
                         return Err(format!("duplicate Kotlin group binding `{}`", record.root));
                     }
                 }
-                match metadata {
-                    JniWireBranch::Named(name, _) => {
-                        validate_name(name)?;
-                    }
-                    JniWireBranch::Field(_) if !in_fields => {
-                        return Err(
-                            "named field must be a direct child of a field collection".into()
-                        )
-                    }
-                    JniWireBranch::Fields | JniWireBranch::Record(_) => {
-                        let mut fields = std::collections::BTreeSet::new();
-                        for child in children.as_slice() {
-                            let WireNode::Branch {
-                                meta: JniWireBranch::Field(name),
-                                ..
-                            } = child
-                            else {
-                                return Err("field collection requires named field children".into());
-                            };
-                            if !fields.insert(name.unraw().to_string()) {
-                                return Err(format!("duplicate field `{name}`"));
-                            }
+                if let Some(name) = metadata.output_name() {
+                    validate_name(name)?;
+                }
+                if metadata.field().is_some() && !in_fields {
+                    return Err("named field must be a direct child of a field collection".into());
+                }
+                if metadata.is_field_collection() {
+                    let mut fields = std::collections::BTreeSet::new();
+                    for child in children {
+                        let WireNode::Branch { meta, .. } = child else {
+                            return Err("field collection requires named field children".into());
+                        };
+                        let Some(name) = meta.field() else {
+                            return Err("field collection requires named field children".into());
+                        };
+                        if !fields.insert(name.unraw().to_string()) {
+                            return Err(format!("duplicate field `{name}`"));
                         }
                     }
-                    _ => {}
                 }
 
                 for child in children {
                     visit(
                         child,
                         bindings,
-                        matches!(metadata, JniWireBranch::Fields | JniWireBranch::Record(_)),
+                        metadata.is_field_collection(),
                         reserved,
                         bulk,
                     )?;
@@ -443,8 +617,8 @@ fn validate_scope<Sq: crate::sequence::RowEncoding, In, Out>(
 }
 
 /// Native parameters contributed by a source argument.
-pub(crate) fn argument_parameters<Sq: crate::sequence::RowEncoding, In, Out>(
-    node: &JniWireNode<Sq, In, Out>,
+pub(crate) fn argument_parameters<Chain: group::ChainMetadata, Branch>(
+    node: &JniWireNode<Chain, Branch>,
 ) -> std::vec::IntoIter<&Wire<JniWire>> {
     values(node)
 }
@@ -466,46 +640,42 @@ pub(crate) fn function_parameters<
     }
     Ok(out.into_iter())
 }
-pub(crate) fn result_packet_fields<Sq: crate::sequence::RowEncoding, In, Out>(
-    node: &JniWireNode<Sq, In, Out>,
+pub(crate) fn result_packet_fields<Chain: group::ChainMetadata, Branch>(
+    node: &JniWireNode<Chain, Branch>,
 ) -> std::vec::IntoIter<&Wire<JniWire>> {
     values(node)
 }
-pub(crate) fn result_packet<'a, Sq: crate::sequence::RowEncoding, In, Out>(
-    node: &'a JniWireNode<Sq, In, Out>,
+pub(crate) fn result_packet<'a, Chain: group::ChainMetadata, Branch>(
+    node: &'a JniWireNode<Chain, Branch>,
     bindings: &'a [(syn::Ident, TokenStream)],
 ) -> Result<Vec<(&'a Wire<JniWire>, &'a TokenStream)>> {
     prebindgen_conversions::match_output_fields(result_packet_fields(node), bindings)
 }
-pub(crate) fn row_fields<Sq: crate::sequence::RowEncoding, In, Out>(
-    node: &JniWireNode<Sq, In, Out>,
+pub(crate) fn row_fields<Chain: group::ChainMetadata, Branch>(
+    node: &JniWireNode<Chain, Branch>,
 ) -> std::vec::IntoIter<&Wire<JniWire>> {
     values(node)
 }
-pub(crate) fn row_values<'a, Sq: crate::sequence::RowEncoding, In, Out>(
-    node: &'a JniWireNode<Sq, In, Out>,
+pub(crate) fn row_values<'a, Chain: group::ChainMetadata, Branch>(
+    node: &'a JniWireNode<Chain, Branch>,
     bindings: &'a [(syn::Ident, TokenStream)],
 ) -> Result<Vec<(&'a Wire<JniWire>, &'a TokenStream)>> {
     prebindgen_conversions::match_output_fields(row_fields(node), bindings)
 }
-pub(crate) fn callback_parameters<Sq: crate::sequence::RowEncoding, In, Out>(
-    node: &JniWireNode<Sq, In, Out>,
+pub(crate) fn callback_parameters<Chain: group::ChainMetadata, Branch>(
+    node: &JniWireNode<Chain, Branch>,
 ) -> std::vec::IntoIter<&Wire<JniWire>> {
     values(node)
 }
 pub(crate) fn prepare_optional<
-    Sq: crate::sequence::RowEncoding,
-    In,
-    Out,
-    V: prebindgen_conversions::Conversion<
-        Wire = JniWire,
-        Chain = JniWireChain<Sq>,
-        Branch = JniWireBranch<In, Out>,
-    >,
+    Chain: group::ChainMetadata,
+    Branch,
+    V: prebindgen_conversions::Conversion<Wire = JniWire, Chain = Chain, Branch = Branch>,
 >(
     request: prebindgen_declarations::Optional<'_, JniCodec, V>,
     direction: prebindgen_declarations::Direction,
-) -> Result<OptionalEncoding<JniWire, JniWireChain<Sq>>> {
+    wrap: impl FnOnce(JniOptional) -> Chain,
+) -> Result<OptionalEncoding<JniWire, Chain>> {
     let prepared = prebindgen_declarations::prepare_optional_payload(
         values_mut(request.payload),
         direction,
@@ -539,15 +709,15 @@ pub(crate) fn prepare_optional<
         prepared.reservation.map(|r| r.niche),
         &controls,
     )
-    .map(JniWireChain::Optional)?;
+    .map(wrap)?;
     Ok(OptionalEncoding {
         presence,
         metadata,
         absent_values: prepared.absent_values,
     })
 }
-pub(crate) fn retire_niches<Sq: crate::sequence::RowEncoding, In, Out>(
-    node: &mut JniWireNode<Sq, In, Out>,
+pub(crate) fn retire_niches<Chain: group::ChainMetadata, Branch>(
+    node: &mut JniWireNode<Chain, Branch>,
     reservation: Option<&prebindgen_declarations::NicheReservation<JniNiche>>,
 ) -> Result<()> {
     prebindgen_declarations::retire_optional_niches(
@@ -557,8 +727,8 @@ pub(crate) fn retire_niches<Sq: crate::sequence::RowEncoding, In, Out>(
         JniWire::set_niche,
     )
 }
-pub(crate) fn kotlin_result_fields<Sq: crate::sequence::RowEncoding, In, Out>(
-    node: &JniWireNode<Sq, In, Out>,
+pub(crate) fn kotlin_result_fields<Chain: group::ChainMetadata, Branch>(
+    node: &JniWireNode<Chain, Branch>,
 ) -> std::vec::IntoIter<&Wire<JniWire>> {
     values(node)
 }
@@ -660,7 +830,7 @@ mod tests {
             let node: JniInputWireNode = WireNode::Branch {
                 controls: vec![carrier],
                 children: vec![WireNode::default()],
-                meta: JniInputWireBranch::Alternatives(()),
+                meta: JniInputWireBranch::Alternatives,
             };
             validate_layout(&node).unwrap();
             assert_eq!(
@@ -695,7 +865,7 @@ mod tests {
                 },
             }],
             child: Box::new(WireNode::Leaf(vec![leaf("value")])),
-            meta: JniInputWireChain::Sequence(()),
+            meta: JniInputWireChain::Sequence,
         };
         validate_layout(&sequence).unwrap();
         let empty: JniInputWireNode = WireNode::Chain {
@@ -707,7 +877,7 @@ mod tests {
                 },
             }],
             child: Box::new(WireNode::default()),
-            meta: JniInputWireChain::Sequence(()),
+            meta: JniInputWireChain::Sequence,
         };
         assert!(validate_layout(&empty)
             .unwrap_err()
@@ -715,7 +885,7 @@ mod tests {
         let choice: JniInputWireNode = WireNode::Branch {
             controls: vec![selector(syn::parse_quote!(tag))],
             children: vec![WireNode::default()],
-            meta: JniInputWireBranch::Alternatives(()),
+            meta: JniInputWireBranch::Alternatives,
         };
         validate_layout(&choice).unwrap();
     }
@@ -724,13 +894,13 @@ mod tests {
         let mut tree: JniInputWireNode = WireNode::Branch {
             controls: vec![],
             children: vec![WireNode::default()],
-            meta: JniInputWireBranch::Alternatives(()),
+            meta: JniInputWireBranch::Alternatives,
         };
         assert!(validate_layout(&tree)
             .unwrap_err()
             .contains("one selector control"));
         let WireNode::Branch {
-            meta: JniInputWireBranch::Alternatives(()),
+            meta: JniInputWireBranch::Alternatives,
             controls,
             ..
         } = &mut tree
@@ -742,7 +912,7 @@ mod tests {
         let empty_sequence: JniInputWireNode = WireNode::Chain {
             controls: vec![],
             child: Box::new(WireNode::Leaf(vec![leaf("value")])),
-            meta: JniInputWireChain::Sequence(()),
+            meta: JniInputWireChain::Sequence,
         };
         assert!(validate_layout(&empty_sequence)
             .unwrap_err()
@@ -1010,7 +1180,7 @@ mod abi_tests {
                     null_niche_available: true,
                 },
             }],
-            meta: JniInputWireChain::Sequence(()),
+            meta: JniInputWireChain::Sequence,
             child: Box::new(std::mem::take(&mut sequence)),
         };
         let result = prebindgen_conversions::Outcomes {
@@ -1085,7 +1255,7 @@ mod structural_validation_tests {
     #[test]
     fn adapter_rejects_empty_alternatives_and_unsupported_group_controls() {
         let node: JniInputWireNode = WireNode::Branch {
-            meta: JniInputWireBranch::Alternatives(()),
+            meta: JniInputWireBranch::Alternatives,
             children: vec![],
             controls: vec![],
         };
@@ -1109,9 +1279,9 @@ mod structural_validation_tests {
 /// Physical/error decoding shape, ignoring wire names and Kotlin presentation
 /// groups. Nested carriers and optional encodings must agree as well as the
 /// top-level JVM signature, because the latter cannot describe rows in a buffer.
-pub(crate) fn error_wire_shape<Sq: crate::sequence::RowEncoding, In, Out>(
-    node: &JniWireNode<Sq, In, Out>,
-) -> Vec<String> {
+pub(crate) fn error_wire_shape<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
+    node: &JniWireNode<Chain, Branch>,
+) -> Result<Vec<String>> {
     fn wires(wires: &[Wire<JniWire>], out: &mut Vec<String>) {
         for wire in wires {
             let detail = match &wire.kind {
@@ -1133,28 +1303,29 @@ pub(crate) fn error_wire_shape<Sq: crate::sequence::RowEncoding, In, Out>(
             ));
         }
     }
-    fn visit<Sq: crate::sequence::RowEncoding, In, Out>(
-        node: &JniWireNode<Sq, In, Out>,
+    fn visit<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
+        node: &JniWireNode<Chain, Branch>,
         out: &mut Vec<String>,
         bulk: bool,
-    ) {
+    ) -> Result<()> {
         match node {
             WireNode::Leaf(fields) => wires(fields, out),
             WireNode::Branch {
-                meta: meta @ (JniWireBranch::Alternatives(_) | JniWireBranch::Enum(_)),
+                meta,
                 controls,
                 children,
-            } => {
+            } if (meta.is_alternatives() || meta.enumeration().is_some()) => {
                 // Packed enums use a union; selector alternatives store their
                 // fields consecutively. Their JVM carriers alone are identical.
-                out.push(match meta {
-                    JniWireBranch::Enum(group) if bulk => format!("enum:{}[", group.source.key()),
-                    _ => "alternatives[".into(),
+                out.push(if let Some(group) = meta.enumeration().filter(|_| bulk) {
+                    format!("enum:{}[", group.source.key())
+                } else {
+                    "alternatives[".into()
                 });
                 wires(controls, out);
                 for child in children {
                     out.push("arm[".into());
-                    visit(child, out, bulk);
+                    visit(child, out, bulk)?;
                     out.push("]".into());
                 }
                 out.push("]".into());
@@ -1164,7 +1335,7 @@ pub(crate) fn error_wire_shape<Sq: crate::sequence::RowEncoding, In, Out>(
             } => {
                 wires(controls, out);
                 for child in children {
-                    visit(child, out, bulk);
+                    visit(child, out, bulk)?;
                 }
             }
             WireNode::Chain {
@@ -1172,44 +1343,50 @@ pub(crate) fn error_wire_shape<Sq: crate::sequence::RowEncoding, In, Out>(
                 controls,
                 child,
             } => {
-                let label = match meta {
-                    JniWireChain::Optional(JniOptional::Flag(_)) => "optional:flag".into(),
-                    JniWireChain::Optional(JniOptional::Niche { reservation, .. }) => {
-                        let index = prebindgen_conversions::wire_definitions(std::iter::once(
-                            child.as_ref(),
-                        ))
-                        .position(|wire| wire.name == reservation.discriminator);
-                        format!("optional:niche:{:?}:{index:?}", reservation.niche)
-                    }
-                    JniWireChain::Sequence(_) if bulk => "sequence:native-rows".into(),
-                    JniWireChain::Sequence(delivery) => {
-                        format!("sequence:{:?}", delivery.delivery())
-                    }
-                    JniWireChain::Bulk => {
-                        let mut fields = group::row_fields(child)
-                            .map(|w| {
-                                type_key(
-                                    &bulk::field_type(&w.kind).expect("prepared bulk storage type"),
-                                )
-                            })
-                            .collect::<Vec<_>>();
-                        if fields.is_empty() {
-                            fields.push("u8".into());
+                let label = if let Some(optional) = meta.optional() {
+                    match optional {
+                        JniOptional::Flag(_) => "optional:flag".into(),
+                        JniOptional::Niche { reservation, .. } => {
+                            let index = prebindgen_conversions::wire_definitions(std::iter::once(
+                                child.as_ref(),
+                            ))
+                            .position(|wire| wire.name == reservation.discriminator);
+                            format!("optional:niche:{:?}:{index:?}", reservation.niche)
                         }
-                        format!("bulk:{fields:?}")
                     }
+                } else if let Some(delivery) = meta.sequence() {
+                    if bulk {
+                        "sequence:native-rows".into()
+                    } else {
+                        format!("sequence:{delivery:?}")
+                    }
+                } else if meta.is_bulk() {
+                    let mut fields = group::row_fields(child)
+                        .map(|w| {
+                            type_key(
+                                &bulk::field_type(&w.kind).expect("prepared bulk storage type"),
+                            )
+                        })
+                        .collect::<Vec<_>>();
+                    if fields.is_empty() {
+                        fields.push("u8".into());
+                    }
+                    format!("bulk:{fields:?}")
+                } else {
+                    return Err("unsupported JNI wire-chain metadata".into());
                 };
                 out.push(label);
                 out.push("[".into());
                 wires(controls, out);
-                visit(child, out, bulk || matches!(meta, JniWireChain::Bulk));
+                visit(child, out, bulk || meta.is_bulk())?;
                 out.push("]".into());
             }
         }
+        Ok(())
     }
     let mut out = Vec::new();
-    visit(node, &mut out, false);
-    out
+    visit(node, &mut out, false)?;
+    Ok(out)
 }
 
 use prebindgen_conversions::FunctionConversions as _;

@@ -969,16 +969,18 @@ fn optional_unannotated_fields_keep_outer_presence_in_both_directions() {
 #[test]
 fn reference_and_presence_flag_niches_keep_nested_wire_counts_bounded() {
     use prebindgen_conversions::WireNode;
-    fn reservations<Sq: crate::sequence::RowEncoding, In, Out>(
-        layout: &JniWireNode<Sq, In, Out>,
+    fn reservations<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
+        layout: &JniWireNode<Chain, Branch>,
     ) -> Vec<Option<JniNiche>> {
         let mut result = vec![];
         match layout {
             WireNode::Chain {
                 child: element,
-                meta: JniWireChain::Optional(metadata),
+                meta: encoding,
                 ..
-            } => {
+            } if (encoding.optional().is_some()) => {
+                let metadata = encoding.optional().expect("matched metadata");
+
                 result.push(metadata.niche().cloned());
                 result.extend(reservations(element));
             }
@@ -2855,7 +2857,7 @@ fn automatic_bulk_collection_outputs_keep_inputs_and_direct_buffers_ordinary() {
     assert!(matches!(
         input.input_node(),
         prebindgen_conversions::WireNode::Chain {
-            meta: JniInputWireChain::Sequence(()),
+            meta: JniInputWireChain::Sequence,
             ..
         }
     ));
@@ -3570,7 +3572,7 @@ fn resolved_callback_elements_can_keep_optional_presence_outside_a_bulk_frame() 
     // The optional uses a null frame, so presence stays outside its payload
     // without adding a separate discriminator argument.
     assert!(
-        matches!(element, prebindgen_conversions::WireNode::Chain {meta:JniWireChain::Optional(_),child,..} if matches!(child.as_ref(),prebindgen_conversions::WireNode::Chain {meta:JniWireChain::Bulk,..}))
+        matches!(element, prebindgen_conversions::WireNode::Chain {meta:JniOutputWireChain::Optional(_),child,..} if matches!(child.as_ref(),prebindgen_conversions::WireNode::Chain {meta:JniOutputWireChain::Bulk,..}))
     );
     assert_eq!(fields.len(), 1);
     assert_eq!(
@@ -3804,7 +3806,7 @@ fn ordinary_output_rows_respect_jvm_constructor_slot_limit() {
         )
         .unwrap();
         assert!(
-            matches!(output.metadata, JniWireChain::Sequence(actual) if actual == if typed { JniSequence::TypedBuffered } else { JniSequence::Buffered })
+            matches!(output.metadata, JniOutputWireChain::Sequence(actual) if actual == if typed { JniSequence::TypedBuffered } else { JniSequence::Buffered })
         );
         assert_eq!(output.store.to_string().contains("construct"), typed);
         assert_eq!(output.store.to_string().contains("valueOf"), !typed);

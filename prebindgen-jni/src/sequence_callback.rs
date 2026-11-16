@@ -59,7 +59,7 @@ pub(crate) fn transport(
         }],
         commit_each: true,
         fallible: true,
-        metadata: JniWireChain::Sequence(JniSequence::Callback),
+        metadata: JniOutputWireChain::Sequence(JniSequence::Callback),
         begin: quote! {
             // Every accepted row belongs to the Kotlin collector, including
             // when a later row fails. Publish this before any row can arrive.
@@ -96,8 +96,8 @@ pub(crate) fn transport(
 /// immutable record avoids primitive boxes and generic row arrays without
 /// copying wide rows when the collector grows. Logical projections can share
 /// the same physical JVM record type.
-pub(crate) fn capture<Sq: crate::sequence::RowEncoding, In, Out>(
-    element: &JniWireNode<Sq, In, Out>,
+pub(crate) fn capture<Chain: group::ChainMetadata, Branch>(
+    element: &JniWireNode<Chain, Branch>,
     names: &mut names::Names,
 ) -> Result<(String, String)> {
     let fields = crate::group::callback_parameters(element).collect::<Vec<_>>();
@@ -160,15 +160,15 @@ pub(crate) fn fold<O: KotlinOutputConversion>(
     // Lexical row cleanup keeps partially constructed wrappers in scope. Only
     // dynamic nested collections need the shared owner journal; fixed fields
     // can use their existing locals without allocating a journal or a lambda.
-    fn nested_owners<Sq: crate::sequence::RowEncoding, In, Out>(
-        node: &JniWireNode<Sq, In, Out>,
+    fn nested_owners<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
+        node: &JniWireNode<Chain, Branch>,
     ) -> bool {
         match node {
             prebindgen_conversions::WireNode::Chain {
-                meta: JniWireChain::Sequence(_),
+                meta: encoding,
                 child,
                 ..
-            } => kotlin::has_handles(child, false),
+            } if (encoding.sequence().is_some()) => kotlin::has_handles(child, false),
             prebindgen_conversions::WireNode::Chain { child, .. } => nested_owners(child),
             prebindgen_conversions::WireNode::Branch { children, .. } => {
                 children.iter().any(nested_owners)

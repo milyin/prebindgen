@@ -24,8 +24,8 @@ pub(crate) fn field_type(w: &JniWire) -> Result<syn::Type> {
         _=>w.rust_type(),
     })
 }
-pub(crate) fn record<Sq: crate::sequence::RowEncoding, In, Out>(
-    node: &JniWireNode<Sq, In, Out>,
+pub(crate) fn record<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
+    node: &JniWireNode<Chain, Branch>,
     types: &JniTypes,
 ) -> Result<JniBulkRecord> {
     let fields = crate::group::row_fields(node)
@@ -186,7 +186,7 @@ pub(crate) fn input(
         #bind #conversion
     }};
     child.node = WireNode::Chain {
-        meta: JniWireChain::Bulk,
+        meta: JniInputWireChain::Bulk,
         child: Box::new(child.node),
         controls: vec![
             Wire {
@@ -234,7 +234,7 @@ pub(crate) fn output(
         let #wire=::prebindgen_jni_runtime::jni::objects::JObject::from(#env.byte_array_from_slice(#writer.bytes()).map_err(|e|e.to_string())?);
     };
     child.outcomes.success = WireNode::Chain {
-        meta: JniWireChain::Bulk,
+        meta: JniOutputWireChain::Bulk,
         child: Box::new(child.outcomes.success),
         controls: vec![Wire {
             name: wire.clone(),
@@ -290,7 +290,7 @@ pub(crate) fn sequence_input(
                 condition: kotlin_condition(active),
             },
         }],
-        metadata: JniInputWireChain::Sequence(()),
+        metadata: JniInputWireChain::Sequence,
         open: quote!(let(#start,#length)=#reader.rows(#wire,::core::mem::size_of::<#row>())?;),
         bind,
         validation_values: values,
@@ -474,16 +474,18 @@ fn kt_layout(record: &JniBulkRecord, context: &KotlinContext<'_>) -> String {
         prebindgen_reprc::schema_id(&record.key)
     )
 }
-fn sequence_child<'a, Sq: crate::sequence::RowEncoding, In, Out>(
-    node: &'a JniWireNode<Sq, In, Out>,
+fn sequence_child<'a, Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
+    node: &'a JniWireNode<Chain, Branch>,
     name: &syn::Ident,
-) -> Option<&'a JniWireNode<Sq, In, Out>> {
+) -> Option<&'a JniWireNode<Chain, Branch>> {
     match node {
         WireNode::Chain {
-            meta: JniWireChain::Sequence(_),
+            meta: encoding,
             controls,
             child,
-        } if controls.iter().any(|w| &w.name == name) => Some(child),
+        } if (encoding.sequence().is_some()) && (controls.iter().any(|w| &w.name == name)) => {
+            Some(child)
+        }
         WireNode::Chain { child, .. } => sequence_child(child, name),
         WireNode::Branch { children, .. } => children.iter().find_map(|c| sequence_child(c, name)),
         _ => None,
@@ -499,8 +501,8 @@ fn input_writer(layout: &JniBulkRecord) -> String {
 
 /// Recompute handle positions from measured record offsets and packed row ranges.
 /// Only handle-bearing ranges are visited; no source objects are read again.
-fn patch_handles<Sq: crate::sequence::RowEncoding, In, Out>(
-    node: &JniWireNode<Sq, In, Out>,
+fn patch_handles(
+    node: &JniInputWireNode,
     package: &str,
     base: &str,
     next: &mut usize,
@@ -610,20 +612,19 @@ fn patch_handles<Sq: crate::sequence::RowEncoding, In, Out>(
     Ok(code)
 }
 
-fn input_writers<Sq: crate::sequence::RowEncoding, In, Out>(
-    node: &JniWireNode<Sq, In, Out>,
-    input: bool,
+fn input_writers(
+    node: &JniInputWireNode,
     package: &str,
     out: &mut BTreeMap<String, String>,
     types: &JniTypes,
 ) -> Result<()> {
     match node {
         WireNode::Chain {
-            meta: JniWireChain::Bulk,
+            meta: JniInputWireChain::Bulk,
             child,
             ..
         } => {
-            if input && crate::kotlin::has_handles(child, false) {
+            if crate::kotlin::has_handles(child, false) {
                 let layout = record(child, types)?;
                 let name = input_writer(&layout);
                 let kinds = crate::handles::kinds(child);
@@ -644,32 +645,45 @@ fn input_writers<Sq: crate::sequence::RowEncoding, In, Out>(
                     out.insert(name, class);
                 }
             }
-            input_writers(child, input, package, out, types)?;
+            input_writers(child, package, out, types)?;
         }
-        WireNode::Chain { child, .. } => input_writers(child, input, package, out, types)?,
+        WireNode::Chain { child, .. } => input_writers(child, package, out, types)?,
         WireNode::Branch { children, .. } => {
             for child in children {
-                input_writers(child, input, package, out, types)?;
+                input_writers(child, package, out, types)?;
             }
         }
         WireNode::Leaf(wires) => {
             for wire in wires {
                 if let JniWire::Callback { callback } = &wire.kind {
                     for root in callback.bulk_nodes() {
-                        match root {
-                            metadata::BoundaryNode::Input(node) => {
-                                input_writers(node, true, package, out, types)?;
-                            }
-                            metadata::BoundaryNode::Output(node) => {
-                                input_writers(node, false, package, out, types)?;
-                            }
-                        }
+                        input_writers_boundary(root, package, out, types)?;
                     }
                 }
             }
         }
     }
     Ok(())
+}
+fn input_writers_boundary(
+    root: metadata::BoundaryNode<'_>,
+    package: &str,
+    out: &mut BTreeMap<String, String>,
+    types: &JniTypes,
+) -> Result<()> {
+    match root {
+        metadata::BoundaryNode::Input(node) => input_writers(node, package, out, types),
+        metadata::BoundaryNode::Output(node) => {
+            for wire in prebindgen_conversions::wire_definitions(std::iter::once(node)) {
+                if let JniWire::Callback { callback } = &wire.kind {
+                    for root in callback.bulk_nodes() {
+                        input_writers_boundary(root, package, out, types)?;
+                    }
+                }
+            }
+            Ok(())
+        }
+    }
 }
 fn pack(
     node: &JniInputWireNode,
@@ -889,9 +903,9 @@ fn unpack_expression(w: &Wire<JniWire>, reader: &str, at: &str) -> Result<String
         _ => return Err("unsupported bulk Kotlin reader field".into()),
     })
 }
-fn remap<Sq: crate::sequence::RowEncoding, In, Out>(
+fn remap<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
     output: &mut KotlinOutput,
-    node: &JniWireNode<Sq, In, Out>,
+    node: &JniWireNode<Chain, Branch>,
     token: &str,
     reader: &str,
     base: &str,
@@ -1020,26 +1034,26 @@ fn register(record: JniBulkRecord, out: &mut BTreeMap<String, JniBulkRecord>) ->
     }
     Ok(())
 }
-fn records<Sq: crate::sequence::RowEncoding, In, Out>(
-    node: &JniWireNode<Sq, In, Out>,
+fn records<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
+    node: &JniWireNode<Chain, Branch>,
     out: &mut BTreeMap<String, JniBulkRecord>,
     types: &JniTypes,
     bulk: bool,
 ) -> Result<()> {
     match node {
         WireNode::Chain {
-            meta: JniWireChain::Bulk,
+            meta: encoding,
             child,
             ..
-        } => {
+        } if (encoding.is_bulk()) => {
             register(record(child, types)?, out)?;
             records(child, out, types, true)?;
         }
         WireNode::Chain {
-            meta: JniWireChain::Sequence(_),
+            meta: encoding,
             controls,
             child,
-        } => {
+        } if (encoding.sequence().is_some()) => {
             let native = controls
                 .first()
                 .is_some_and(|wire| matches!(wire.kind, JniWire::NativeRows { .. }));
@@ -1093,12 +1107,22 @@ pub(crate) fn emit<I: KotlinInputConversion, O: KotlinOutputConversion>(
             metadata::BoundaryNode::Input(node) => {
                 crate::group::validate_layout(node)?;
                 records(node, &mut catalogue, &flat.types, false)?;
-                input_writers(node, true, prefix, &mut writers, &flat.types)?;
+                input_writers_boundary(
+                    metadata::BoundaryNode::Input(node),
+                    prefix,
+                    &mut writers,
+                    &flat.types,
+                )?;
             }
             metadata::BoundaryNode::Output(node) => {
                 crate::group::validate_layout(node)?;
                 records(node, &mut catalogue, &flat.types, false)?;
-                input_writers(node, false, prefix, &mut writers, &flat.types)?;
+                input_writers_boundary(
+                    metadata::BoundaryNode::Output(node),
+                    prefix,
+                    &mut writers,
+                    &flat.types,
+                )?;
             }
         }
     }
@@ -1180,8 +1204,8 @@ fn row_output(
     Ok(output)
 }
 
-fn schema<Sq: crate::sequence::RowEncoding, In, Out>(
-    node: &JniWireNode<Sq, In, Out>,
+fn schema<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
+    node: &JniWireNode<Chain, Branch>,
     types: &JniTypes,
 ) -> Result<String> {
     let field = |w: &Wire<JniWire>| -> Result<String> {
@@ -1228,59 +1252,61 @@ fn schema<Sq: crate::sequence::RowEncoding, In, Out>(
                 .collect::<Result<Vec<_>>>()?
                 .join(",")
         ),
-        WireNode::Chain {
-            meta: JniWireChain::Sequence(_),
-            child,
-            ..
-        } => format!("sequence({})", schema(child, types)?),
-        WireNode::Chain {
-            meta: JniWireChain::Optional(optional),
-            child,
-            ..
-        } => {
-            let kind = match optional {
-                crate::JniOptional::Flag(_) => "flag".into(),
-                crate::JniOptional::Niche { reservation, .. } => match reservation.niche {
-                    JniNiche::Null => "null".into(),
-                    JniNiche::Integer(n) => format!("niche:{n}"),
-                },
-            };
-            format!("optional:{kind}({})", schema(child, types)?)
+        WireNode::Chain { meta, child, .. } => {
+            if meta.sequence().is_some() {
+                format!("sequence({})", schema(child, types)?)
+            } else if let Some(optional) = meta.optional() {
+                let kind = match optional {
+                    JniOptional::Flag(_) => "flag".into(),
+                    JniOptional::Niche { reservation, .. } => match reservation.niche {
+                        JniNiche::Null => "null".into(),
+                        JniNiche::Integer(n) => format!("niche:{n}"),
+                    },
+                };
+                format!("optional:{kind}({})", schema(child, types)?)
+            } else if meta.is_bulk() {
+                schema(child, types)?
+            } else {
+                return Err("unsupported bulk chain metadata".into());
+            }
         }
-        WireNode::Chain {
-            meta: JniWireChain::Bulk,
-            child,
-            ..
-        } => schema(child, types)?,
         WireNode::Branch {
-            meta: JniWireBranch::Argument(_, _),
+            meta: encoding,
             children,
             controls,
-        } if controls.is_empty() && children.len() == 1 => schema(&children[0], types)?,
+        } if (encoding.argument_name().is_some())
+            && (controls.is_empty() && children.len() == 1) =>
+        {
+            schema(&children[0], types)?
+        }
+
         WireNode::Branch {
             meta,
             children,
             controls,
         } => {
-            let kind = match meta {
-                JniWireBranch::Alternatives(_) => "alternatives".into(),
-                JniWireBranch::Enum(e) => {
-                    let source = crate::metadata::source_enum(types, &e.source)?;
-                    format!(
-                        "enum:{}:{}",
-                        type_key(&source.ty),
-                        source
-                            .variants
-                            .iter()
-                            .map(|v| v.name.to_string().trim_start_matches("r#").to_owned())
-                            .collect::<Vec<_>>()
-                            .join(";")
-                    )
-                }
-                JniWireBranch::Field(name) => format!("field:{name}"),
-                JniWireBranch::Named(name, _) => format!("view:{name}"),
-                JniWireBranch::Fields | JniWireBranch::Record(_) => "fields".into(),
-                _ => "group".into(),
+            let kind = if meta.is_alternatives() {
+                "alternatives".into()
+            } else if let Some(e) = meta.enumeration() {
+                let source = crate::metadata::source_enum(types, &e.source)?;
+                format!(
+                    "enum:{}:{}",
+                    type_key(&source.ty),
+                    source
+                        .variants
+                        .iter()
+                        .map(|v| v.name.to_string().trim_start_matches("r#").to_owned())
+                        .collect::<Vec<_>>()
+                        .join(";")
+                )
+            } else if let Some(name) = meta.field() {
+                format!("field:{name}")
+            } else if let Some(name) = meta.output_name() {
+                format!("view:{name}")
+            } else if meta.is_field_collection() {
+                "fields".into()
+            } else {
+                "group".into()
             };
             format!(
                 "{kind}[{}]({})",
@@ -1307,7 +1333,7 @@ fn callback_roots(node: &JniInputWireNode) -> Vec<&JniInputWireNode> {
             ..
         } => vec![node],
         WireNode::Chain {
-            meta: JniInputWireChain::Sequence(_),
+            meta: JniInputWireChain::Sequence,
             ..
         } => vec![],
         WireNode::Chain { child, .. } => callback_roots(child),
@@ -1332,7 +1358,7 @@ pub(crate) fn callback_cache(node: &JniInputWireNode, context: &JniContext) -> R
     fn cache(node: &JniInputWireNode, env: &syn::Ident) -> Result<TokenStream> {
         Ok(match node {
             WireNode::Chain {
-                meta: JniWireChain::Bulk,
+                meta: JniInputWireChain::Bulk,
                 controls,
                 ..
             } => {
@@ -1344,11 +1370,11 @@ pub(crate) fn callback_cache(node: &JniInputWireNode, context: &JniContext) -> R
             // Ordinary rows introduce new wire bindings; their failure walker
             // reads packed children from the retained JVM result instead.
             WireNode::Chain {
-                meta: JniWireChain::Sequence(_),
+                meta: JniInputWireChain::Sequence,
                 ..
             } => quote!(),
             WireNode::Chain {
-                meta: JniWireChain::Optional(optional),
+                meta: JniInputWireChain::Optional(optional),
                 child,
                 ..
             } => {
@@ -1364,7 +1390,7 @@ pub(crate) fn callback_cache(node: &JniInputWireNode, context: &JniContext) -> R
                 } else { (#(#absent,)*) };)
             }
             WireNode::Branch {
-                meta: JniWireBranch::Alternatives(_) | JniWireBranch::Enum(_),
+                meta: JniInputWireBranch::Alternatives | JniInputWireBranch::Enum(_),
                 controls,
                 children,
             } => {
@@ -1540,7 +1566,7 @@ fn cleanup_native(
             cleanup_attempt(quote!(let #name=#value; if #present { #scan }))
         }
         WireNode::Chain {
-            meta: JniInputWireChain::Sequence(_),
+            meta: JniInputWireChain::Sequence,
             controls,
             child,
         } => {
@@ -1572,7 +1598,7 @@ fn cleanup_native(
         }
         WireNode::Chain { child, .. } => cleanup_native(child, row, layout, base, types)?,
         WireNode::Branch {
-            meta: JniInputWireBranch::Alternatives(_) | JniInputWireBranch::Enum(_),
+            meta: JniInputWireBranch::Alternatives | JniInputWireBranch::Enum(_),
             controls,
             children,
         } => {
@@ -1597,8 +1623,8 @@ fn cleanup_native(
 
 // Preserve ordinary flat records while grouping enum alternatives into target-
 // compiled unions. Offsets stay in logical wire order for both language sides.
-fn physical_record<Sq: crate::sequence::RowEncoding, In, Out>(
-    node: &JniWireNode<Sq, In, Out>,
+fn physical_record<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
+    node: &JniWireNode<Chain, Branch>,
     name: &syn::Ident,
     fields: Vec<(syn::Ident, syn::Type)>,
 ) -> Result<(TokenStream, Vec<TokenStream>)> {
@@ -1606,8 +1632,8 @@ fn physical_record<Sq: crate::sequence::RowEncoding, In, Out>(
         Wire(usize),
         Enum(usize, Vec<Vec<Piece>>),
     }
-    fn pieces<Sq: crate::sequence::RowEncoding, In, Out>(
-        node: &JniWireNode<Sq, In, Out>,
+    fn pieces<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
+        node: &JniWireNode<Chain, Branch>,
         next: &mut usize,
     ) -> Vec<Piece> {
         let mut take = |n: usize| {
@@ -1619,9 +1645,9 @@ fn physical_record<Sq: crate::sequence::RowEncoding, In, Out>(
             WireNode::Leaf(w) => take(w.len()),
             WireNode::Chain {
                 controls,
-                meta: JniWireChain::Sequence(_) | JniWireChain::Bulk,
+                meta: encoding,
                 ..
-            } => take(controls.len()),
+            } if (encoding.sequence().is_some() || encoding.is_bulk()) => take(controls.len()),
             WireNode::Chain {
                 controls, child, ..
             } => {
@@ -1632,8 +1658,8 @@ fn physical_record<Sq: crate::sequence::RowEncoding, In, Out>(
             WireNode::Branch {
                 controls,
                 children,
-                meta: JniWireBranch::Enum(_),
-            } => {
+                meta: encoding,
+            } if (encoding.enumeration().is_some()) => {
                 debug_assert_eq!(controls.len(), 1);
                 let tag = *next;
                 *next += 1;

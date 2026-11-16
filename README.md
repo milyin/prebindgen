@@ -706,19 +706,22 @@ Branch metadata describes the operation performed on its children directly:
 | `Values` | Convert all ordered components, such as constructor arguments or combined output views. |
 | `Fields` / `Field(name)` | Convert named source fields independently, preserving field identity and order. |
 | `JniInputWireBranch::Record(record)` / `JniOutputWireBranch::Record(record)` | Decompose or reconstruct one Kotlin data-class value using its child field conversions. |
-| `JniInputWireBranch::Argument(name, ())` | Preserve the parameter path of one source argument. |
-| `JniOutputWireBranch::Named(name, ())` | Give a delivered Kotlin output view an explicit name. |
-| `CInputWireBranch::Alternatives(())` / `JniInputWireBranch::Alternatives(())` | Select one constructor alternative. |
+| `JniInputWireBranch::Argument(name)` | Preserve the parameter path of one source argument. |
+| `JniOutputWireBranch::Named(name)` | Give a delivered Kotlin output view an explicit name. |
+| `CInputWireBranch::Alternatives` / `JniInputWireBranch::Alternatives` | Select one constructor alternative. |
 | `Enum(...)` | Convert the selected source enum variant. |
 
-The directional aliases specialize `CWireBranch<Input>` /
-`JniWireBranch<Input, Output>` with `()` for permitted operations and `Infallible`
-for opposite-direction operations. Those zero-sized payloads make invalid nodes
-impossible to construct. Likewise, input chains use `Sequence(())`, whereas output
-chains carry `CSequence` / `JniSequence` delivery policies, including callbacks.
-These families share structural walkers privately without converting either tree
-to another representation. Custom converters expose their directional node type;
-there is no shared unrestricted input/output node alias.
+The input/output chain and branch types are separate enums. Reading a definition
+shows every operation supported in that direction: input branches provide argument
+paths and constructor alternatives; output branches provide named projections.
+There are no direction capability parameters or placeholder payloads. Input chains
+use a unit `Sequence` variant for buffered rows; output chains use
+`Sequence(CSequence)` / `Sequence(JniSequence)` to select delivery.
+
+Shared record, enum and optional payload metadata describes the same facts in
+both directions. Private algorithms reuse structural traversal and the relevant
+metadata queries without copying trees into a common representation. Helpers
+specific to an input or output operation accept its concrete tree type.
 
 Optional encodings retain separate types because their helpers operate specifically
 on presence encodings. `JniOptional`, `COptional`, record metadata and enum metadata
@@ -2294,7 +2297,7 @@ and metadata fields. Metadata must not retain wire descriptors.
 - `COptional` / `JniOptional` are `Flag(binding)` or `Niche`. A flag references
   one tree-owned integer control; a niche references a payload binding and its
   reserved absent representation. The wire kind retains remaining niche state.
-- `CInputWireBranch::Alternatives(())` / `JniInputWireBranch::Alternatives(())` identify a choice between
+- `CInputWireBranch::Alternatives` / `JniInputWireBranch::Alternatives` identify a choice between
   child arms. The selector is an ordinary control wire, validated against the
   adapter's tag representation.
   Its remaining niche state is stored on that same wire.

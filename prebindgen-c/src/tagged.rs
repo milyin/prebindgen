@@ -42,17 +42,14 @@ fn is_owner(w: &CWire) -> bool {
 }
 
 pub(crate) fn encoding<
-    Sq: crate::sequence::RowEncoding,
-    In,
-    V: prebindgen_conversions::Conversion<
-        Wire = CWire,
-        Chain = CWireChain<Sq>,
-        Branch = CWireBranch<In>,
-    >,
+    Chain: group::ChainMetadata,
+    Branch,
+    V: prebindgen_conversions::Conversion<Wire = CWire, Chain = Chain, Branch = Branch>,
 >(
     request: prebindgen_declarations::EnumVariants<'_, CCodec, V>,
     direction: prebindgen_declarations::Direction,
-) -> Result<EnumEncoding<CWireBranch<In>>> {
+    wrap: impl FnOnce(Rc<CEnumGroup>) -> Branch,
+) -> Result<EnumEncoding<Branch>> {
     let source = request.flat.payload_enum(request.ty)?;
     if request.form == EnumForm::Value
         && request
@@ -98,7 +95,7 @@ pub(crate) fn encoding<
         vec![]
     };
     Ok(EnumEncoding {
-        metadata: CWireBranch::Enum(Rc::new(CEnumGroup {
+        metadata: wrap(Rc::new(CEnumGroup {
             ty: request.ty.clone(),
             variants: source.variants.iter().map(|v| v.name.to_string()).collect(),
         })),
@@ -149,8 +146,8 @@ fn field_name(property: &syn::Ident, index: usize, count: usize) -> Result<syn::
     })
 }
 #[allow(clippy::type_complexity)]
-fn arm_fields<Sq: crate::sequence::RowEncoding, In>(
-    node: &CWireNode<Sq, In>,
+fn arm_fields<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
+    node: &CWireNode<Chain, Branch>,
 ) -> Result<Vec<(&syn::Ident, Vec<&Wire>)>> {
     let WireNode::Branch { children, .. } = node else {
         return Err("enum payload requires field groups".into());
@@ -158,11 +155,10 @@ fn arm_fields<Sq: crate::sequence::RowEncoding, In>(
     children
         .iter()
         .map(|node| {
-            let WireNode::Branch {
-                meta: CWireBranch::Field(name),
-                ..
-            } = node
-            else {
+            let WireNode::Branch { meta, .. } = node else {
+                return Err("enum payload requires named source fields".into());
+            };
+            let Some(name) = meta.field() else {
                 return Err("enum payload requires named source fields".into());
             };
             Ok((name, group::values(node).collect()))
@@ -170,13 +166,13 @@ fn arm_fields<Sq: crate::sequence::RowEncoding, In>(
         .collect()
 }
 pub(crate) fn shape<
-    Sq: crate::sequence::RowEncoding,
-    In,
+    Chain: group::ChainMetadata,
+    Branch: group::BranchMetadata,
     S: prebindgen_flat::Schema<Module = CModule, Type = CType>,
 >(
     flat: &Flat<S>,
     ty: &syn::Type,
-    node: &CWireNode<Sq, In>,
+    node: &CWireNode<Chain, Branch>,
 ) -> Result<(Rc<CTagged>, prebindgen_reprc::TaggedUnion)> {
     let name = flat
         .type_info(ty)?
@@ -218,7 +214,7 @@ pub(crate) fn shape<
     ))
 }
 
-fn stored_wires<Sq: crate::sequence::RowEncoding, In>(node: &CWireNode<Sq, In>) -> Vec<Wire> {
+fn stored_wires<Chain: group::ChainMetadata, Branch>(node: &CWireNode<Chain, Branch>) -> Vec<Wire> {
     group::values(node)
         .map(|w| {
             let mut w = w.clone();
@@ -235,8 +231,8 @@ fn stored_wires<Sq: crate::sequence::RowEncoding, In>(node: &CWireNode<Sq, In>) 
         })
         .collect()
 }
-fn slots<Sq: crate::sequence::RowEncoding, In>(
-    node: &CWireNode<Sq, In>,
+fn slots<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
+    node: &CWireNode<Chain, Branch>,
     layout: &prebindgen_reprc::TaggedUnion,
     base: TokenStream,
 ) -> Result<BTreeMap<String, TokenStream>> {
@@ -350,7 +346,7 @@ pub(crate) fn input(
             },
         }],
         child: Box::new(plan.node),
-        meta: CWireChain::Tagged(value),
+        meta: CInputWireChain::Tagged(value),
     };
     Ok(plan)
 }
@@ -414,19 +410,19 @@ pub(crate) fn output(
             },
         }],
         child: Box::new(plan.outcomes.success),
-        meta: CWireChain::Tagged(value),
+        meta: COutputWireChain::Tagged(value),
     };
     Ok(plan)
 }
 
 /// Emit each converted carrier once, after its nested dependencies.
 pub(crate) fn emit<
-    Sq: crate::sequence::RowEncoding,
-    In,
+    Chain: group::ChainMetadata,
+    Branch: group::BranchMetadata,
     S: prebindgen_flat::Schema<Module = CModule, Type = CType>,
 >(
     flat: &Flat<S>,
-    node: &CWireNode<Sq, In>,
+    node: &CWireNode<Chain, Branch>,
     seen: &mut BTreeMap<String, String>,
     symbols: &mut std::collections::BTreeSet<String>,
     tokens: &mut TokenStream,
@@ -453,7 +449,7 @@ pub(crate) fn emit<
             }
         }
         WireNode::Branch { children, meta, .. } => {
-            if let CWireBranch::Enum(source) = meta {
+            if let Some(source) = meta.enumeration() {
                 let key = format!("tags:{}", type_key(&source.ty));
                 if let std::collections::btree_map::Entry::Vacant(entry) = seen.entry(key) {
                     entry.insert(String::new());
@@ -480,15 +476,13 @@ pub(crate) fn emit<
         }
         WireNode::Chain { child, meta, .. } => {
             emit(flat, child, seen, symbols, tokens, header)?;
-            let CWireChain::Tagged(value) = meta else {
+            let Some(value) = meta.tagged() else {
                 return Ok(());
             };
-            let WireNode::Branch {
-                meta: CWireBranch::Enum(source),
-                children,
-                ..
-            } = child.as_ref()
-            else {
+            let WireNode::Branch { meta, children, .. } = child.as_ref() else {
+                return Err("tagged carrier needs source variants".into());
+            };
+            let Some(source) = meta.enumeration() else {
                 return Err("tagged carrier needs source variants".into());
             };
             let (_, layout) = shape(flat, &source.ty, child)?;

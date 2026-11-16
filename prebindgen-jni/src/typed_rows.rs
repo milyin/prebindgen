@@ -3,16 +3,16 @@ use super::*;
 
 use prebindgen_conversions::WireNode;
 
-pub(crate) fn supported<Sq: crate::sequence::RowEncoding, In, Out>(
-    element: &JniWireNode<Sq, In, Out>,
+pub(crate) fn supported<Chain: group::ChainMetadata, Branch>(
+    element: &JniWireNode<Chain, Branch>,
 ) -> bool {
     group::row_fields(element)
         .map(|w| w.kind.parameter_slots())
         .sum::<usize>()
         <= 254
 }
-pub(crate) fn cache<Sq: crate::sequence::RowEncoding, In, Out>(
-    element: &JniWireNode<Sq, In, Out>,
+pub(crate) fn cache<Chain: group::ChainMetadata, Branch>(
+    element: &JniWireNode<Chain, Branch>,
 ) -> Result<syn::Ident> {
     let (name, _) = sequence_callback::capture(element, &mut names::Names::default())?;
     Ok(format_ident!("__pb_row_type_{name}"))
@@ -20,12 +20,12 @@ pub(crate) fn cache<Sq: crate::sequence::RowEncoding, In, Out>(
 fn visit<'a>(node: &'a JniOutputWireNode, rows: &mut Vec<&'a JniOutputWireNode>, bulk: bool) {
     match node {
         WireNode::Chain {
-            meta: JniWireChain::Bulk,
+            meta: JniOutputWireChain::Bulk,
             child,
             ..
         } => visit(child, rows, true),
         WireNode::Chain {
-            meta: JniWireChain::Sequence(JniSequence::TypedBuffered),
+            meta: JniOutputWireChain::Sequence(JniSequence::TypedBuffered),
             child,
             ..
         } if !bulk => {

@@ -60,7 +60,7 @@ pub struct KotlinContext<'a> {
     pub package: &'a str,
     /// Canonical source declarations and JNI type/field metadata, borrowed from Flat.
     pub source_types: &'a BTreeMap<String, prebindgen_flat::TypeInfo<JniType, JniField>>,
-    /// Inherited packed encoding, set by an enclosing JniWireChain::Bulk while
+    /// Inherited packed encoding, set by an enclosing input/output Bulk chain while
     /// interpreting its descendants. Start ordinary call/callback boundaries false.
     pub bulk: bool,
     /// Variable holding the native output array.
@@ -691,30 +691,21 @@ pub(crate) fn record_cleanup_failure(context: &KotlinContext<'_>, error: &str) -
     }
 }
 
-pub(crate) fn leaf_wires<Sq: crate::sequence::RowEncoding, In, Out>(
-    node: &JniWireNode<Sq, In, Out>,
+pub(crate) fn leaf_wires<Chain: group::ChainMetadata, Branch>(
+    node: &JniWireNode<Chain, Branch>,
 ) -> Vec<&Wire<JniWire>> {
     crate::group::kotlin_result_fields(node).collect()
 }
-pub(crate) fn has_optional<Sq: crate::sequence::RowEncoding, In, Out>(
-    node: &JniWireNode<Sq, In, Out>,
+pub(crate) fn has_optional<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
+    node: &JniWireNode<Chain, Branch>,
 ) -> bool {
     match node {
-        prebindgen_conversions::WireNode::Leaf(_)
-        | prebindgen_conversions::WireNode::Chain {
-            meta: JniWireChain::Sequence(_) | JniWireChain::Bulk,
-            ..
+        prebindgen_conversions::WireNode::Leaf(_) => false,
+        prebindgen_conversions::WireNode::Chain { meta, child, .. } => {
+            !meta.is_scope_boundary() && (meta.optional().is_some() || has_optional(child))
         }
-        | prebindgen_conversions::WireNode::Branch {
-            meta: JniWireBranch::Record(_),
-            ..
-        } => false,
-        prebindgen_conversions::WireNode::Chain {
-            meta: JniWireChain::Optional(_),
-            ..
-        } => true,
-        prebindgen_conversions::WireNode::Branch { children, .. } => {
-            children.iter().any(has_optional)
+        prebindgen_conversions::WireNode::Branch { meta, children, .. } => {
+            meta.record().is_none() && children.iter().any(has_optional)
         }
     }
 }
@@ -734,8 +725,8 @@ pub(crate) fn lock_list(locks: &[String], groups: &[String]) -> String {
     out
 }
 
-pub(crate) fn has_handles<Sq: crate::sequence::RowEncoding, In, Out>(
-    node: &JniWireNode<Sq, In, Out>,
+pub(crate) fn has_handles<Chain, Branch>(
+    node: &JniWireNode<Chain, Branch>,
     owned_only: bool,
 ) -> bool {
     match node {
@@ -774,7 +765,7 @@ pub(crate) fn input_kotlin_when(
             child,
         } => crate::bulk::input_kotlin(controls, child, context, active),
         prebindgen_conversions::WireNode::Branch {
-            meta: JniInputWireBranch::Alternatives(_),
+            meta: JniInputWireBranch::Alternatives,
             children: elements,
             controls,
             ..
@@ -810,7 +801,7 @@ pub(crate) fn input_kotlin_when(
         prebindgen_conversions::WireNode::Chain {
             controls,
             child: element,
-            meta: JniInputWireChain::Sequence(()),
+            meta: JniInputWireChain::Sequence,
             ..
         } => {
             let [carrier] = controls.as_slice() else {
@@ -829,7 +820,7 @@ pub(crate) fn input_kotlin_when(
             ..
         } => data::input_kotlin(children, record, context, active),
         prebindgen_conversions::WireNode::Branch {
-            meta: JniInputWireBranch::Argument(name, _),
+            meta: JniInputWireBranch::Argument(name),
             children,
             ..
         } => {
@@ -948,10 +939,6 @@ pub(crate) fn output_kotlin_scoped(
             child,
             ..
         } => crate::bulk::output_kotlin(child, context, owners),
-        prebindgen_conversions::WireNode::Branch {
-            meta: JniOutputWireBranch::Alternatives(never),
-            ..
-        } => match *never {},
         prebindgen_conversions::WireNode::Chain {
             child: element,
             meta: JniOutputWireChain::Sequence(metadata),
@@ -1012,7 +999,7 @@ pub(crate) fn output_kotlin_scoped(
             ..
         } => data::output_kotlin(children, record, context, owners),
         prebindgen_conversions::WireNode::Branch {
-            meta: JniOutputWireBranch::Named(name, _),
+            meta: JniOutputWireBranch::Named(name),
             children,
             ..
         } => {

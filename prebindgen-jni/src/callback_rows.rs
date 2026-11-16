@@ -25,7 +25,7 @@ pub(crate) fn cleanup(
         match node {
             WireNode::Leaf(_) => false,
             WireNode::Chain {
-                meta: JniInputWireChain::Sequence(()),
+                meta: JniInputWireChain::Sequence,
                 ..
             } => true,
             WireNode::Chain {
@@ -140,7 +140,7 @@ fn receive(
             code
         }
         WireNode::Chain {
-            meta: JniInputWireChain::Sequence(()),
+            meta: JniInputWireChain::Sequence,
             controls,
             child,
         } => {
@@ -210,7 +210,7 @@ fn receive(
             field(context, row, fields, name, quote!(if #present { #scan }))?
         }
         WireNode::Branch {
-            meta: JniInputWireBranch::Alternatives(_) | JniInputWireBranch::Enum(_),
+            meta: JniInputWireBranch::Alternatives | JniInputWireBranch::Enum(_),
             controls,
             children,
         } => {

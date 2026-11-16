@@ -23,7 +23,10 @@ pub(crate) struct Argument {
 }
 
 // Stable wire semantics, without spans, generated local names or recipe Debug.
-fn schema<Sq: crate::sequence::RowEncoding, In>(node: &CWireNode<Sq, In>, out: &mut String) {
+fn schema<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
+    node: &CWireNode<Chain, Branch>,
+    out: &mut String,
+) {
     fn access(value: Access) -> &'static str {
         match value {
             Access::Move => "owned",
@@ -76,21 +79,20 @@ fn schema<Sq: crate::sequence::RowEncoding, In>(node: &CWireNode<Sq, In>, out: &
             meta,
         } => {
             out.push('(');
-            match meta {
-                CWireChain::Sequence(_) => out.push('S'),
-                CWireChain::Tagged(value) => {
-                    out.push('E');
-                    out.push_str(&value.name);
-                }
-                CWireChain::Optional(optional) => {
-                    out.push('O');
-                    match optional.niche() {
-                        Some(CNiche::Null) => out.push('N'),
-                        Some(CNiche::Integer(n)) => out.push_str(&format!("I{n};")),
-                        None => out.push('F'),
-                    }
+            if meta.sequence().is_some() {
+                out.push('S');
+            } else if let Some(value) = meta.tagged() {
+                out.push('E');
+                out.push_str(&value.name);
+            } else if let Some(optional) = meta.optional() {
+                out.push('O');
+                match optional.niche() {
+                    Some(CNiche::Null) => out.push('N'),
+                    Some(CNiche::Integer(n)) => out.push_str(&format!("I{n};")),
+                    None => out.push('F'),
                 }
             }
+
             fields(controls, out);
             schema(child, out);
             out.push(')');
@@ -100,11 +102,7 @@ fn schema<Sq: crate::sequence::RowEncoding, In>(node: &CWireNode<Sq, In>, out: &
             children,
             meta,
         } => {
-            out.push(if matches!(meta, CWireBranch::Alternatives(_)) {
-                'A'
-            } else {
-                'G'
-            });
+            out.push(if meta.is_alternatives() { 'A' } else { 'G' });
             out.push('[');
             fields(controls, out);
             for child in children {
@@ -555,7 +553,7 @@ fn receive_return_owners(
             quote!(if #present {#scan})
         }
         WireNode::Chain {
-            meta: CInputWireChain::Sequence(_),
+            meta: CInputWireChain::Sequence,
             controls,
             child,
         } => {
@@ -574,7 +572,7 @@ fn receive_return_owners(
             quote!(#[allow(clippy::explicit_counter_loop)] for index in 0..#carrier.len {#(#reads)* #scan})
         }
         WireNode::Branch {
-            meta: CInputWireBranch::Alternatives(_) | CInputWireBranch::Enum(_),
+            meta: CInputWireBranch::Alternatives | CInputWireBranch::Enum(_),
             controls,
             children,
         } => {

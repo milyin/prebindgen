@@ -3,7 +3,7 @@ use super::*;
 use crate::kotlin::{input_kotlin, KotlinBinding, KotlinContext, KotlinInput, KotlinOutput};
 use prebindgen_declarations::{Condition, SequenceInput, SequenceOutput};
 
-/// Materialization or callback delivery of a logical sequence.
+/// How Rust output sequences are delivered to Kotlin/JNI.
 /// The enclosing bulk scope selects native row encoding independently.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum JniSequence {
@@ -16,20 +16,6 @@ pub enum JniSequence {
     /// Deliver each row through the function's sequence callback. Bulk may wrap
     /// its element conversion, but cannot enclose the callback sequence itself.
     Callback,
-}
-
-pub(crate) trait RowEncoding: Clone + std::fmt::Debug {
-    fn delivery(&self) -> JniSequence;
-}
-impl RowEncoding for () {
-    fn delivery(&self) -> JniSequence {
-        JniSequence::Buffered
-    }
-}
-impl RowEncoding for JniSequence {
-    fn delivery(&self) -> JniSequence {
-        *self
-    }
 }
 
 pub(crate) fn input(
@@ -67,7 +53,7 @@ pub(crate) fn input(
                 null_niche_available: true,
             },
         }],
-        metadata: JniInputWireChain::Sequence(()),
+        metadata: JniInputWireChain::Sequence,
         open: quote! {if #wire.is_null(){return Err("null collection".into());}let #length=#env.get_array_length(&#wire).map_err(|e|e.to_string())? as usize;},
         bind,
         validation_values,
@@ -383,7 +369,7 @@ pub(crate) fn callback_delivery(node: &JniOutputWireNode) -> Result<bool> {
     let sequences = outer_sequences(node);
     if !sequences
         .iter()
-        .any(|(_, _, metadata)| metadata.delivery() == JniSequence::Callback)
+        .any(|(_, _, metadata)| **metadata == JniSequence::Callback)
     {
         return Ok(false);
     }
@@ -398,13 +384,11 @@ pub(crate) fn callback_delivery(node: &JniOutputWireNode) -> Result<bool> {
 /// A fold's nullable accumulator can represent one absent collection, not
 /// distinguish None from Some(None). Integer niches must not silently enable
 /// that previously unsupported shape. Options inside rows are independent.
-pub(crate) fn callback_optional<Sq: crate::sequence::RowEncoding, In, Out>(
-    node: &JniWireNode<Sq, In, Out>,
-) -> Result<bool> {
+pub(crate) fn callback_optional(node: &JniOutputWireNode) -> Result<bool> {
     use prebindgen_conversions::WireNode;
     match node {
         WireNode::Chain {
-            meta: JniWireChain::Optional(_),
+            meta: JniOutputWireChain::Optional(_),
             child,
             ..
         } => {
@@ -414,7 +398,7 @@ pub(crate) fn callback_optional<Sq: crate::sequence::RowEncoding, In, Out>(
             Ok(true)
         }
         WireNode::Branch {
-            meta: JniWireBranch::Alternatives(_) | JniWireBranch::Enum(_),
+            meta: JniOutputWireBranch::Enum(_),
             ..
         } => Ok(false),
         WireNode::Branch { children, .. } => {
@@ -429,34 +413,23 @@ pub(crate) fn callback_optional<Sq: crate::sequence::RowEncoding, In, Out>(
 }
 
 /// Function sequence callbacks are not available in parameters, error channels or rows.
-pub(crate) fn validate_buffered<Sq: crate::sequence::RowEncoding, In, Out>(
-    node: &JniWireNode<Sq, In, Out>,
+pub(crate) fn validate_buffered<Chain: group::ChainMetadata, Branch>(
+    node: &JniWireNode<Chain, Branch>,
 ) -> Result<()> {
     match node {
         prebindgen_conversions::WireNode::Leaf(_) => {}
-        prebindgen_conversions::WireNode::Chain {
-            child: element,
-            meta: JniWireChain::Sequence(metadata),
-            ..
-        } => {
-            if metadata.delivery() == JniSequence::Callback {
+        prebindgen_conversions::WireNode::Chain { meta, child, .. } => {
+            if meta.sequence() == Some(JniSequence::Callback) {
                 return Err(
                     "callback sequence is only supported as the function's successful return"
                         .into(),
                 );
             }
-            validate_buffered(element)?;
+            validate_buffered(child)?;
         }
-        prebindgen_conversions::WireNode::Chain {
-            meta: JniWireChain::Optional(_) | JniWireChain::Bulk,
-            child: element,
-            ..
-        } => validate_buffered(element)?,
-        prebindgen_conversions::WireNode::Branch {
-            children: elements, ..
-        } => {
-            for element in elements {
-                validate_buffered(element)?;
+        prebindgen_conversions::WireNode::Branch { children, .. } => {
+            for child in children {
+                validate_buffered(child)?;
             }
         }
     }
@@ -483,7 +456,7 @@ fn outer_sequences(
         use prebindgen_conversions::WireNode;
         match node {
             WireNode::Chain {
-                meta: JniWireChain::Sequence(meta),
+                meta: JniOutputWireChain::Sequence(meta),
                 child,
                 controls,
             } => out.push((child, controls, meta)),
