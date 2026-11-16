@@ -1491,21 +1491,17 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1callback_1batches_
                                         &(callback_result_rows),
                                         1usize,
                                     )?;
-                                    let callback_return_w1_cached_bytes = if true {
-                                        ::prebindgen_jni_runtime::bulk::input(
-                                            &mut callback_environment,
-                                            &callback_return_w1,
-                                            callback_return_w1_length,
-                                        )?
-                                    } else {
-                                        Vec::new()
-                                    };
+                                    let callback_return_w1_cached_bytes = ::prebindgen_jni_runtime::bulk::input(
+                                        &mut callback_environment,
+                                        &callback_return_w1,
+                                        callback_return_w1_length,
+                                    )?;
                                     let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
                                     {
                                         let mut callback_return_owners = ::prebindgen_runtime::CallbackReturnAllocations::tracking(
                                             __prebindgen_input_consumed,
                                         );
-                                        if true {
+                                        {
                                             let callback_return_w1_cleanup_reader = ::prebindgen_jni_runtime::bulk::Reader::new(
                                                 &callback_return_w1_cached_bytes,
                                             );
@@ -3992,21 +3988,17 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1callback_1owned_1r
                                         &(callback_result_rows),
                                         1usize,
                                     )?;
-                                    let callback_return_w1_cached_bytes = if true {
-                                        ::prebindgen_jni_runtime::bulk::input(
-                                            &mut callback_environment,
-                                            &callback_return_w1,
-                                            callback_return_w1_length,
-                                        )?
-                                    } else {
-                                        Vec::new()
-                                    };
+                                    let callback_return_w1_cached_bytes = ::prebindgen_jni_runtime::bulk::input(
+                                        &mut callback_environment,
+                                        &callback_return_w1,
+                                        callback_return_w1_length,
+                                    )?;
                                     let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
                                     {
                                         let mut callback_return_owners = ::prebindgen_runtime::CallbackReturnAllocations::tracking(
                                             __prebindgen_input_consumed,
                                         );
-                                        if true {
+                                        {
                                             let callback_return_w1_cleanup_reader = ::prebindgen_jni_runtime::bulk::Reader::new(
                                                 &callback_return_w1_cached_bytes,
                                             );
@@ -4382,21 +4374,17 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1callback_1owned_1r
                                         &(callback_result_rows),
                                         1usize,
                                     )?;
-                                    let callback_return_w1_cached_bytes = if true {
-                                        ::prebindgen_jni_runtime::bulk::input(
-                                            &mut callback_environment,
-                                            &callback_return_w1,
-                                            callback_return_w1_length,
-                                        )?
-                                    } else {
-                                        Vec::new()
-                                    };
+                                    let callback_return_w1_cached_bytes = ::prebindgen_jni_runtime::bulk::input(
+                                        &mut callback_environment,
+                                        &callback_return_w1,
+                                        callback_return_w1_length,
+                                    )?;
                                     let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
                                     {
                                         let mut callback_return_owners = ::prebindgen_runtime::CallbackReturnAllocations::tracking(
                                             __prebindgen_input_consumed,
                                         );
-                                        if true {
+                                        {
                                             let callback_return_w1_cleanup_reader = ::prebindgen_jni_runtime::bulk::Reader::new(
                                                 &callback_return_w1_cached_bytes,
                                             );
@@ -5287,21 +5275,17 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1callback_1nested_1
                                         &(callback_result_rows),
                                         1usize,
                                     )?;
-                                    let callback_return_w1_cached_bytes = if true {
-                                        ::prebindgen_jni_runtime::bulk::input(
-                                            &mut callback_environment,
-                                            &callback_return_w1,
-                                            callback_return_w1_length,
-                                        )?
-                                    } else {
-                                        Vec::new()
-                                    };
+                                    let callback_return_w1_cached_bytes = ::prebindgen_jni_runtime::bulk::input(
+                                        &mut callback_environment,
+                                        &callback_return_w1,
+                                        callback_return_w1_length,
+                                    )?;
                                     let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
                                     {
                                         let mut callback_return_owners = ::prebindgen_runtime::CallbackReturnAllocations::tracking(
                                             __prebindgen_input_consumed,
                                         );
-                                        if true {
+                                        {
                                             let callback_return_w1_cleanup_reader = ::prebindgen_jni_runtime::bulk::Reader::new(
                                                 &callback_return_w1_cached_bytes,
                                             );
@@ -6607,15 +6591,11 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1row_1return_1handl
                                     &(callback_result_rows),
                                     1usize,
                                 )?;
-                                let callback_return_w1_cached_bytes = if true {
-                                    ::prebindgen_jni_runtime::bulk::input(
-                                        &mut callback_environment,
-                                        &callback_return_w1,
-                                        callback_return_w1_length,
-                                    )?
-                                } else {
-                                    Vec::new()
-                                };
+                                let callback_return_w1_cached_bytes = ::prebindgen_jni_runtime::bulk::input(
+                                    &mut callback_environment,
+                                    &callback_return_w1,
+                                    callback_return_w1_length,
+                                )?;
                                 #[allow(clippy::needless_late_init)]
                                 let callback_return_w1_bytes;
                                 #[allow(clippy::redundant_closure_call)]
@@ -6915,15 +6895,11 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1wide_1row_1return_
                                     &(callback_result_rows),
                                     1usize,
                                 )?;
-                                let callback_return_w1_cached_bytes = if true {
-                                    ::prebindgen_jni_runtime::bulk::input(
-                                        &mut callback_environment,
-                                        &callback_return_w1,
-                                        callback_return_w1_length,
-                                    )?
-                                } else {
-                                    Vec::new()
-                                };
+                                let callback_return_w1_cached_bytes = ::prebindgen_jni_runtime::bulk::input(
+                                    &mut callback_environment,
+                                    &callback_return_w1,
+                                    callback_return_w1_length,
+                                )?;
                                 #[allow(clippy::needless_late_init)]
                                 let callback_return_w1_bytes;
                                 #[allow(clippy::redundant_closure_call)]
