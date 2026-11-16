@@ -48,7 +48,7 @@ mod group;
 mod selected;
 mod sequence;
 use group::validate_layout;
-pub use group::{CBranch, CChain, CGroup, COptional};
+pub use group::{CBranch, CChain, COptional};
 use prebindgen_conversions::Wire as GenericWire;
 use prebindgen_declarations::{
     Alternatives, Codec, GroupKind, InputLeaf, InputRole, Optional, OptionalEncoding, OutputLeaf,
@@ -783,14 +783,14 @@ impl Codec for CCodec {
     }
 
     fn group(&self, kind: GroupKind<'_>) -> Result<CBranch> {
-        Ok(CBranch::Group(match kind {
-            GroupKind::Values => CGroup::Values,
-            GroupKind::Fields => CGroup::Fields,
-            GroupKind::Field(name) => CGroup::Field(name.clone()),
+        Ok(match kind {
+            GroupKind::Values => CBranch::Values,
+            GroupKind::Fields => CBranch::Fields,
+            GroupKind::Field(name) => CBranch::Field(name.clone()),
             GroupKind::NamedOutput(_) => {
                 return Err("named output views are unsupported by this codec".into())
             }
-        }))
+        })
     }
     fn optional(&self, request: Optional<'_, Self>) -> Result<OptionalEncoding<Self>> {
         group::prepare_optional(request)
@@ -2762,12 +2762,12 @@ fn describe_groups(
             parents.pop();
         }
         if let prebindgen_conversions::WireNode::Branch {
-            meta: CBranch::Group(metadata),
+            meta: metadata @ (CBranch::Values | CBranch::Fields | CBranch::Field(_)),
             children,
             ..
         } = node
         {
-            if let CGroup::Field(name) = metadata {
+            if let CBranch::Field(name) = metadata {
                 field_path.push(name.to_string().trim_start_matches("r#").into());
                 let values = crate::group::record_fields(node)
                     .map(|w| names[&w.name.to_string()].clone())

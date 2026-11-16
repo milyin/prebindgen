@@ -403,7 +403,7 @@ mod tests {
     fn nested_column_groups_cover_every_child_allocation_class() {
         let node = WireNode::Branch {
             controls: vec![],
-            meta: JniBranch::Group(JniGroup::Values),
+            meta: JniBranch::Values,
             children: vec![
                 WireNode::Leaf(vec![handle("first", syn::parse_quote!(A))]),
                 WireNode::Chain {

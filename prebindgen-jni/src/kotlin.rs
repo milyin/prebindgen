@@ -702,25 +702,16 @@ pub(crate) fn has_optional(node: &JniNode) -> bool {
         | JniNode::Chain {
             meta: JniChain::Sequence(_) | JniChain::Bulk,
             ..
+        }
+        | JniNode::Branch {
+            meta: JniBranch::Record(_),
+            ..
         } => false,
         JniNode::Chain {
             meta: JniChain::Optional(_),
             ..
         } => true,
-        JniNode::Branch {
-            meta: JniBranch::Alternatives | JniBranch::Enum(_),
-            children: elements,
-            ..
-        } => elements.iter().any(has_optional),
-        JniNode::Branch {
-            meta: JniBranch::Group(JniGroup::Fields(Some(_))),
-            ..
-        } => false,
-        JniNode::Branch {
-            meta: JniBranch::Group(_),
-            children: elements,
-            ..
-        } => elements.iter().any(has_optional),
+        JniNode::Branch { children, .. } => children.iter().any(has_optional),
     }
 }
 pub(crate) fn lock_list(locks: &[String], groups: &[String]) -> String {
@@ -821,27 +812,33 @@ pub(crate) fn input_kotlin_when(
             ..
         } => optional::input_kotlin(element, metadata, context, active),
         JniNode::Branch {
-            children: elements,
-            meta: JniBranch::Group(metadata),
+            meta: JniBranch::Record(record),
+            children,
             ..
-        } => match metadata {
-            JniGroup::Fields(Some(d)) => data::input_kotlin(elements, d, context, active),
-            JniGroup::Argument(name) => {
-                let mut out = input_components_when(elements, context, active)?;
-                for path in &mut out.parameter_paths {
-                    path.prepend(ComponentSegment::Argument(name.clone()));
-                }
-                Ok(out)
+        } => data::input_kotlin(children, record, context, active),
+        JniNode::Branch {
+            meta: JniBranch::Argument(name),
+            children,
+            ..
+        } => {
+            let mut out = input_components_when(children, context, active)?;
+            for path in &mut out.parameter_paths {
+                path.prepend(ComponentSegment::Argument(name.clone()));
             }
-            JniGroup::Field(name) => {
-                let mut out = input_components_when(elements, context, active)?;
-                for path in &mut out.parameter_paths {
-                    path.prepend(ComponentSegment::Field(name.to_string()));
-                }
-                Ok(out)
+            Ok(out)
+        }
+        JniNode::Branch {
+            meta: JniBranch::Field(name),
+            children,
+            ..
+        } => {
+            let mut out = input_components_when(children, context, active)?;
+            for path in &mut out.parameter_paths {
+                path.prepend(ComponentSegment::Field(name.to_string()));
             }
-            _ => input_components_when(elements, context, active),
-        },
+            Ok(out)
+        }
+        JniNode::Branch { children, .. } => input_components_when(children, context, active),
     }?;
     out.complete_parameter_paths()?;
     Ok(out)
@@ -991,26 +988,28 @@ pub(crate) fn output_kotlin_scoped(
             ..
         } => optional::output_kotlin(element, metadata, context, owners),
         JniNode::Branch {
-            children: elements,
-            meta: JniBranch::Group(metadata),
+            meta: JniBranch::Record(record),
+            children,
             ..
-        } => match metadata {
-            JniGroup::Fields(Some(d)) => data::output_kotlin(elements, d, context, owners),
-            JniGroup::Named(name) => {
-                let mut out = output_components(elements, context, owners)?;
-                out.result_names = (0..out.result_types.len())
-                    .map(|i| {
-                        Some(if out.result_types.len() == 1 {
-                            name.clone()
-                        } else {
-                            format!("{name}{i}")
-                        })
+        } => data::output_kotlin(children, record, context, owners),
+        JniNode::Branch {
+            meta: JniBranch::Named(name),
+            children,
+            ..
+        } => {
+            let mut out = output_components(children, context, owners)?;
+            out.result_names = (0..out.result_types.len())
+                .map(|i| {
+                    Some(if out.result_types.len() == 1 {
+                        name.clone()
+                    } else {
+                        format!("{name}{i}")
                     })
-                    .collect();
-                Ok(out)
-            }
-            _ => output_components(elements, context, owners),
-        },
+                })
+                .collect();
+            Ok(out)
+        }
+        JniNode::Branch { children, .. } => output_components(children, context, owners),
     }
 }
 pub(crate) fn output_components(

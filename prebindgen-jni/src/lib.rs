@@ -39,7 +39,7 @@ mod group;
 mod returns;
 mod scalar;
 pub use data::{DeclJniClass, DeclJniDataClass, JniDataGroup, JniField};
-pub use group::{JniBranch, JniChain, JniGroup, JniOptional};
+pub use group::{JniBranch, JniChain, JniOptional};
 use prebindgen_conversions::boxed::BoxedWire;
 use prebindgen_conversions::value::Value;
 use prebindgen_flat::Primitive;
@@ -869,7 +869,7 @@ impl Codec for JniCodec {
         if let prebindgen_declarations::ComponentSegment::Argument(name) = segment {
             *node = prebindgen_conversions::WireNode::Branch {
                 controls: vec![],
-                meta: JniBranch::Group(JniGroup::Argument(name)),
+                meta: JniBranch::Argument(name),
                 children: vec![std::mem::take(node)],
             };
         }
@@ -1302,15 +1302,15 @@ impl Codec for JniCodec {
         true
     }
     fn group(&self, kind: GroupKind<'_>) -> Result<JniBranch> {
-        Ok(JniBranch::Group(match kind {
-            GroupKind::Values => JniGroup::Values,
-            GroupKind::Fields => JniGroup::Fields(None),
-            GroupKind::Field(name) => JniGroup::Field(name.clone()),
+        Ok(match kind {
+            GroupKind::Values => JniBranch::Values,
+            GroupKind::Fields => JniBranch::Fields,
+            GroupKind::Field(name) => JniBranch::Field(name.clone()),
             GroupKind::NamedOutput(name) => {
                 validate_name(name)?;
-                JniGroup::Named(name.into())
+                JniBranch::Named(name.into())
             }
-        }))
+        })
     }
     fn optional(&self, request: Optional<'_, Self>) -> Result<OptionalEncoding<Self>> {
         group::prepare_optional(request)

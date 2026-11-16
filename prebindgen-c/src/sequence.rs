@@ -124,14 +124,7 @@ pub(crate) fn schemas<'a>(
     match node {
         WireNode::Leaf(_) => {}
         WireNode::Branch {
-            meta: CBranch::Group(_),
-            children: elements,
-            ..
-        }
-        | WireNode::Branch {
-            meta: CBranch::Alternatives | CBranch::Enum(_),
-            children: elements,
-            ..
+            children: elements, ..
         } => {
             for child in elements {
                 schemas(child, out);
@@ -352,9 +345,11 @@ pub(crate) fn callback_shape(
             ..
         } => matches!(metadata, COptional::Flag(_)) && callback_shape(element),
         WireNode::Branch {
-            meta: CBranch::Group(_),
-            children: elements,
+            meta: CBranch::Alternatives | CBranch::Enum(_),
             ..
+        } => false,
+        WireNode::Branch {
+            children: elements, ..
         } => {
             matches!(elements.as_slice(),[only] if callback_shape(only))
         }
@@ -435,14 +430,7 @@ pub(crate) fn validate_buffered(
             ..
         } => validate_buffered(element)?,
         prebindgen_conversions::WireNode::Branch {
-            meta: CBranch::Group(_),
-            children: elements,
-            ..
-        }
-        | prebindgen_conversions::WireNode::Branch {
-            meta: CBranch::Alternatives | CBranch::Enum(_),
-            children: elements,
-            ..
+            children: elements, ..
         } => {
             for element in elements {
                 validate_buffered(element)?;
@@ -597,7 +585,7 @@ mod delivery_tests {
         let extra = WireNode::Branch {
             controls: vec![],
             children: vec![visitor, leaf()],
-            meta: CBranch::Group(CGroup::Values),
+            meta: CBranch::Values,
         };
         assert!(callback_delivery(&extra)
             .unwrap_err()

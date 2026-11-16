@@ -1221,7 +1221,7 @@ fn schema(node: &JniNode, types: &JniTypes) -> Result<String> {
             ..
         } => schema(child, types)?,
         WireNode::Branch {
-            meta: JniBranch::Group(JniGroup::Argument(_)),
+            meta: JniBranch::Argument(_),
             children,
             controls,
         } if controls.is_empty() && children.len() == 1 => schema(&children[0], types)?,
@@ -1245,9 +1245,9 @@ fn schema(node: &JniNode, types: &JniTypes) -> Result<String> {
                             .join(";")
                     )
                 }
-                JniBranch::Group(JniGroup::Field(name)) => format!("field:{name}"),
-                JniBranch::Group(JniGroup::Named(name)) => format!("view:{name}"),
-                JniBranch::Group(JniGroup::Fields(_)) => "fields".into(),
+                JniBranch::Field(name) => format!("field:{name}"),
+                JniBranch::Named(name) => format!("view:{name}"),
+                JniBranch::Fields | JniBranch::Record(_) => "fields".into(),
                 _ => "group".into(),
             };
             format!(

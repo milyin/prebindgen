@@ -15,29 +15,25 @@ pub enum JniChain {
     /// Activation follows the enclosing optional/selector branches; layout comes from the child.
     Bulk,
 }
-/// Meaning of an ordered collection of child descriptions.
+/// How child conversions form one value or choose a source variant.
 #[derive(Clone, Debug)]
 pub enum JniBranch {
-    /// Related values or source fields, all belonging to the parent.
-    Group(JniGroup),
-    /// Exactly one selected arm; at least one arm is required.
-    Alternatives,
-    /// Source enum tag and selected payload, grouped or explicitly expanded.
-    Enum(std::rc::Rc<crate::sealed::JniEnumGroup>),
-}
-/// Relationships between the child values of a group.
-#[derive(Clone, Debug)]
-pub enum JniGroup {
-    /// Ordered conversion components, such as constructor arguments or output views.
+    /// Convert all ordered components, such as constructor arguments or output views.
     Values,
-    /// A source constructor argument, retained for public Kotlin parameter naming.
+    /// Components of one source argument, preserving its Kotlin parameter path.
     Argument(String),
-    /// An explicitly named output view.
+    /// Deliver an output view under an explicit Kotlin name.
     Named(String),
-    /// Source record fields. JNI may associate the record with a Kotlin data class.
-    Fields(Option<JniDataGroup>),
-    /// One named source field.
+    /// Convert named source fields independently, in declaration order.
+    Fields,
+    /// Convert one named source field through its child subtree.
     Field(syn::Ident),
+    /// Decompose or reconstruct one Kotlin data-class value through named child fields.
+    Record(JniDataGroup),
+    /// Convert exactly one constructor alternative selected by its incoming tag.
+    Alternatives,
+    /// Convert the selected source enum variant as a sealed value or expanded tag/fields.
+    Enum(std::rc::Rc<crate::sealed::JniEnumGroup>),
 }
 pub(crate) fn validate_selector(wire: &Wire<JniWire>) -> Result<()> {
     if !matches!(wire.kind, JniWire::Selector { .. }) {
@@ -370,32 +366,32 @@ fn validate_scope(
             }
             WireNode::Branch {
                 children,
-                meta: JniBranch::Group(metadata),
+                meta: metadata,
                 controls,
                 ..
             } => {
                 if !controls.is_empty() {
                     return Err("group metadata does not support control wires".into());
                 }
-                if let JniGroup::Fields(Some(record)) = metadata {
+                if let JniBranch::Record(record) = metadata {
                     if !bindings.insert(record.root.clone()) {
                         return Err(format!("duplicate Kotlin group binding `{}`", record.root));
                     }
                 }
                 match metadata {
-                    JniGroup::Named(name) => {
+                    JniBranch::Named(name) => {
                         validate_name(name)?;
                     }
-                    JniGroup::Field(_) if !in_fields => {
+                    JniBranch::Field(_) if !in_fields => {
                         return Err(
                             "named field must be a direct child of a field collection".into()
                         )
                     }
-                    JniGroup::Fields(_) => {
+                    JniBranch::Fields | JniBranch::Record(_) => {
                         let mut fields = std::collections::BTreeSet::new();
                         for child in children.as_slice() {
                             let WireNode::Branch {
-                                meta: JniBranch::Group(JniGroup::Field(name)),
+                                meta: JniBranch::Field(name),
                                 ..
                             } = child
                             else {
@@ -413,7 +409,7 @@ fn validate_scope(
                     visit(
                         child,
                         bindings,
-                        matches!(metadata, JniGroup::Fields(_)),
+                        matches!(metadata, JniBranch::Fields | JniBranch::Record(_)),
                         reserved,
                         bulk,
                     )?;
@@ -804,7 +800,7 @@ mod tests {
     fn field_names_placement_and_empty_records_are_validated() {
         let field = WireNode::Branch {
             controls: vec![],
-            meta: JniBranch::Group(JniGroup::Field(syn::parse_quote!(x))),
+            meta: JniBranch::Field(syn::parse_quote!(x)),
             children: vec![WireNode::default()],
         };
         assert!(validate_layout(&field)
@@ -812,7 +808,7 @@ mod tests {
             .contains("direct child"));
         let duplicates = WireNode::Branch {
             controls: vec![],
-            meta: JniBranch::Group(JniGroup::Fields(None)),
+            meta: JniBranch::Fields,
             children: vec![field.clone(), field.clone()],
         };
         assert!(validate_layout(&duplicates)
@@ -820,13 +816,13 @@ mod tests {
             .contains("duplicate field"));
         let record = WireNode::Branch {
             controls: vec![],
-            meta: JniBranch::Group(JniGroup::Fields(None)),
+            meta: JniBranch::Fields,
             children: vec![field],
         };
         validate_layout(&record).unwrap();
         let malformed = WireNode::Branch {
             controls: vec![],
-            meta: JniBranch::Group(JniGroup::Fields(None)),
+            meta: JniBranch::Fields,
             children: vec![WireNode::Leaf(vec![leaf("value")])],
         };
         assert!(validate_layout(&malformed)
@@ -834,7 +830,7 @@ mod tests {
             .contains("named field children"));
         let empty = WireNode::Branch {
             controls: vec![],
-            meta: JniBranch::Group(JniGroup::Fields(None)),
+            meta: JniBranch::Fields,
             children: vec![],
         };
         validate_layout(&empty).unwrap();
@@ -853,7 +849,7 @@ mod tests {
             .unwrap();
         input.node = prebindgen_conversions::WireNode::Branch {
             controls: vec![],
-            meta: JniBranch::Group(JniGroup::Field(syn::parse_quote!(orphan))),
+            meta: JniBranch::Field(syn::parse_quote!(orphan)),
             children: vec![std::mem::take(&mut input.node)],
         };
         assert!(JniCodec::raw()
@@ -872,7 +868,7 @@ mod tests {
             .unwrap();
         output.outcomes.success = prebindgen_conversions::WireNode::Branch {
             controls: vec![],
-            meta: JniBranch::Group(JniGroup::Field(syn::parse_quote!(orphan))),
+            meta: JniBranch::Field(syn::parse_quote!(orphan)),
             children: vec![std::mem::take(&mut output.outcomes.success)],
         };
         assert!(JniCodec::raw()
@@ -1068,7 +1064,7 @@ mod structural_validation_tests {
             .unwrap_err()
             .contains("no alternatives"));
         let node = WireNode::Branch {
-            meta: JniBranch::Group(JniGroup::Values),
+            meta: JniBranch::Values,
             children: vec![],
             controls: vec![Wire {
                 name: syn::parse_quote!(extra),
@@ -1110,17 +1106,7 @@ pub(crate) fn error_wire_shape(node: &kotlin::JniNode) -> Vec<String> {
         match node {
             WireNode::Leaf(fields) => wires(fields, out),
             WireNode::Branch {
-                meta: JniBranch::Group(_),
-                controls,
-                children,
-            } => {
-                wires(controls, out);
-                for child in children {
-                    visit(child, out, bulk);
-                }
-            }
-            WireNode::Branch {
-                meta,
+                meta: meta @ (JniBranch::Alternatives | JniBranch::Enum(_)),
                 controls,
                 children,
             } => {
@@ -1137,6 +1123,14 @@ pub(crate) fn error_wire_shape(node: &kotlin::JniNode) -> Vec<String> {
                     out.push("]".into());
                 }
                 out.push("]".into());
+            }
+            WireNode::Branch {
+                controls, children, ..
+            } => {
+                wires(controls, out);
+                for child in children {
+                    visit(child, out, bulk);
+                }
             }
             WireNode::Chain {
                 meta,

@@ -869,7 +869,7 @@ fn returned_handle_cleanup(
             format!("when(val {local}={value}) {{ {arms} else -> {{}} }}\n")
         }
         WireNode::Branch {
-            meta: crate::JniBranch::Group(crate::JniGroup::Fields(Some(data))),
+            meta: crate::JniBranch::Record(data),
             children,
             ..
         } => {

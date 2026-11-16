@@ -693,6 +693,24 @@ without embedding them in each element tree. Fragment validation permits an
 unattached enclosing scope; complete boundary validation requires a matching
 physical encoding under the actual Bulk nodes.
 
+Branch metadata describes the operation performed on its children directly:
+
+| Variant | Meaning |
+| --- | --- |
+| `Values` | Convert all ordered components, such as constructor arguments or combined output views. |
+| `Fields` / `Field(name)` | Convert named source fields independently, preserving field identity and order. |
+| `JniBranch::Record(record)` | Decompose or reconstruct one Kotlin data-class value using the child field conversions. |
+| `JniBranch::Argument(name)` | Preserve the parameter path of one source argument. |
+| `JniBranch::Named(name)` | Give a delivered Kotlin output view an explicit name. |
+| `Alternatives` / `Enum(...)` | Convert the selected constructor alternative or source enum variant. |
+
+`CBranch` and `JniBranch` have no intermediate `CGroup` / `JniGroup` enums.
+Custom converters use `CBranch::Fields` or `JniBranch::Field(name)` directly,
+for example. JNI's former `Fields(None)` is `JniBranch::Fields`; `Fields(Some(record))`
+is `JniBranch::Record(record)`. Optional encodings and sequence delivery retain
+separate types because their helpers operate specifically on presence encodings
+and row-delivery policies.
+
 Each adapter has operations for actual ABI tasks: building a function's
 parameters, laying out a successful result packet, defining one sequence row,
 and choosing a visitor callback's arguments. Those operations inspect the tree

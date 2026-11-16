@@ -657,21 +657,17 @@ pub(super) fn mark(
 ) -> Result<()> {
     group::retire_niches(layout, None)?;
     let mut nodes = std::mem::take(layout);
-    let prebindgen_conversions::WireNode::Branch {
-        meta: JniBranch::Group(metadata),
-        ..
-    } = &mut nodes
-    else {
+    let prebindgen_conversions::WireNode::Branch { meta, .. } = &mut nodes else {
         return Err("record compiler must produce one field collection".into());
     };
-    if !matches!(metadata, JniGroup::Fields(None)) {
+    if !matches!(meta, JniBranch::Fields) {
         return Err("record annotation requires a field collection".into());
     }
-    *metadata = JniGroup::Fields(Some(JniDataGroup {
+    *meta = JniBranch::Record(JniDataGroup {
         root,
         source,
         condition,
-    }));
+    });
     *layout = nodes;
     Ok(())
 }
@@ -679,7 +675,7 @@ pub(super) fn mark(
 pub(crate) fn field(node: &kotlin::JniNode) -> Result<&syn::Ident> {
     match node {
         kotlin::JniNode::Branch {
-            meta: JniBranch::Group(JniGroup::Field(name)),
+            meta: JniBranch::Field(name),
             ..
         } => Ok(name),
         _ => Err("Kotlin record requires named field children".into()),
@@ -1066,11 +1062,11 @@ mod group_tests {
     fn record(root: &str, source: TypeRef) -> WireNode<JniWire, crate::JniChain, crate::JniBranch> {
         WireNode::Branch {
             controls: vec![],
-            meta: JniBranch::Group(JniGroup::Fields(Some(JniDataGroup {
+            meta: JniBranch::Record(JniDataGroup {
                 root: root.into(),
                 source,
                 condition: "true".into(),
-            }))),
+            }),
             children: Vec::new(),
         }
     }
@@ -1096,12 +1092,12 @@ mod group_tests {
         };
         let mut combined = WireNode::Branch {
             controls: vec![],
-            meta: JniBranch::Group(JniGroup::Values),
+            meta: JniBranch::Values,
             children: vec![optional, record("value")],
         };
         crate::group::validate_layout(&combined).unwrap();
         let WireNode::Branch {
-            meta: JniBranch::Group(_),
+            meta: JniBranch::Values,
             children: elements,
             ..
         } = &mut combined
@@ -1114,12 +1110,65 @@ mod group_tests {
             .contains("duplicate Kotlin group binding `flag`"));
         let duplicates = WireNode::Branch {
             controls: vec![],
-            meta: JniBranch::Group(JniGroup::Values),
+            meta: JniBranch::Values,
             children: vec![record("value"), record("value")],
         };
         assert!(crate::group::validate_layout(&duplicates)
             .unwrap_err()
             .contains("duplicate Kotlin group binding `value`"));
+    }
+    #[test]
+    fn record_values_preserve_named_field_validation() {
+        let flat: JniBindings = JniBindings::parse([(
+            syn::parse_quote!(
+                pub struct Row {
+                    pub value: i64,
+                }
+            ),
+            Default::default(),
+        )])
+        .unwrap();
+        let mut node = record("row", flat.type_ref(&syn::parse_quote!(Row)).unwrap());
+        let WireNode::Branch { children, .. } = &mut node else {
+            panic!()
+        };
+        let leaf = WireNode::Leaf(vec![Wire {
+            name: syn::parse_quote!(value),
+            kind: JniWire::scalar(Primitive::I64),
+        }]);
+        children.push(leaf.clone());
+        assert!(crate::group::validate_layout(&node)
+            .unwrap_err()
+            .contains("named field children"));
+        let field = WireNode::Branch {
+            meta: JniBranch::Field(syn::parse_quote!(value)),
+            controls: vec![],
+            children: vec![leaf],
+        };
+        let WireNode::Branch { children, .. } = &mut node else {
+            panic!()
+        };
+        *children = vec![field.clone()];
+        crate::group::validate_layout(&node).unwrap();
+        let WireNode::Branch { children, .. } = &mut node else {
+            panic!()
+        };
+        let mut duplicate = field;
+        let WireNode::Branch {
+            children: fields, ..
+        } = &mut duplicate
+        else {
+            panic!()
+        };
+        let WireNode::Leaf(wires) = &mut fields[0] else {
+            panic!()
+        };
+        // Wire bindings are distinct; only the source field name is duplicated.
+        wires[0].name = syn::parse_quote!(second_value);
+        children.push(duplicate);
+        assert!(crate::group::validate_layout(&node)
+            .unwrap_err()
+            .contains("duplicate field `value`"));
     }
     #[test]
     fn kotlin_record_emission_reads_names_from_shared_fields() {
@@ -1138,16 +1187,16 @@ mod group_tests {
         }]);
         field = prebindgen_conversions::WireNode::Branch {
             controls: vec![],
-            meta: JniBranch::Group(JniGroup::Field(syn::parse_quote!(r#type))),
+            meta: JniBranch::Field(syn::parse_quote!(r#type)),
             children: vec![std::mem::take(&mut field)],
         };
         field = prebindgen_conversions::WireNode::Branch {
             controls: vec![],
-            meta: JniBranch::Group(JniGroup::Fields(Some(JniDataGroup {
+            meta: JniBranch::Record(JniDataGroup {
                 root: "point".into(),
                 source: flat.type_ref(&syn::parse_quote!(Point)).unwrap(),
                 condition: "true".into(),
-            }))),
+            }),
             children: vec![std::mem::take(&mut field)],
         };
         crate::group::validate_layout(&field).unwrap();

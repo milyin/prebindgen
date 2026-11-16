@@ -983,14 +983,7 @@ fn reference_and_presence_flag_niches_keep_nested_wire_counts_bounded() {
                 result.extend(reservations(element));
             }
             WireNode::Branch {
-                meta: JniBranch::Group(_),
-                children: elements,
-                ..
-            }
-            | WireNode::Branch {
-                meta: JniBranch::Alternatives,
-                children: elements,
-                ..
+                children: elements, ..
             } => {
                 for child in elements {
                     result.extend(reservations(child));
