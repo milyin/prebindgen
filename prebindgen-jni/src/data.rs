@@ -134,14 +134,13 @@ pub struct JniField {
 }
 /// Decode one Kotlin data-class input through its field conversion children.
 /// Also used for a retained callback's return value, which enters Rust.
+/// Enclosing optional and selector nodes supply activation during Kotlin traversal.
 #[derive(Clone, Debug)]
 pub struct JniInputRecord {
     /// Name of the Kotlin input binding used to read this value's properties.
     pub(crate) root: String,
     /// Canonical Flat record providing the fields and declared Kotlin class.
     pub(crate) source: TypeRef,
-    /// Kotlin expression selecting this input in optional/alternative contexts.
-    pub(crate) condition: String,
 }
 /// Reconstruct one Kotlin data-class output from its field conversion children.
 /// Also used for arguments delivered to a retained callback, which leave Rust.
@@ -785,9 +784,17 @@ pub(crate) fn input_kotlin(
     };
     for pair in record_fields(nodes, record)? {
         let (field, node) = pair?;
+        // Check the property's contract when this record is present. An
+        // inactive arm may widen temporary parameters to nullable, but that
+        // must not let a nullable property feed a required conversion.
         let child = kotlin::input_kotlin(node, context)?;
         check_property_input(&field.metadata.kotlin_type, &child.parameters)
             .map_err(|error| format!("{class_name}.{}: {error}", field.name))?;
+        let child = if active == "true" {
+            child
+        } else {
+            kotlin::input_kotlin_when(node, context, active)?
+        };
         kotlin::merge_input(&mut c, child)?;
     }
     c.prepare_arguments(nodes.iter().any(|n| kotlin::has_handles(n, false)))?;
@@ -831,17 +838,17 @@ pub(crate) fn input_kotlin(
                 _ => None,
             };
             let absent = primitive.unwrap_or("null").to_owned();
-            let expression = if d.condition == "true" {
+            let expression = if active == "true" {
                 expr
             } else {
-                format!("if ({}) {expr} else {absent}", d.condition)
+                format!("if ({active}) {expr} else {absent}")
             };
             out.setup.push(crate::KotlinBinding {
                 name: local.clone(),
                 expression,
                 absent,
             });
-            if d.condition != "true" && primitive.is_none() && !ty.ends_with('?') {
+            if active != "true" && primitive.is_none() && !ty.ends_with('?') {
                 format!("requireNotNull({local})")
             } else {
                 local
@@ -868,18 +875,17 @@ pub(crate) fn input_kotlin(
         }
     }
     for (j, a) in c.arguments.into_iter().enumerate() {
-        out.arguments.push(if d.condition == "true" {
+        out.arguments.push(if active == "true" {
             a
         } else {
             format!(
-                "if ({}) {a} else {}",
-                d.condition,
+                "if ({active}) {a} else {}",
                 optional::default_kt(&inner[j].kind, None)
             )
         });
     }
     for (j, a) in c.prepared_arguments.into_iter().enumerate() {
-        out.prepared_arguments.push(if d.condition == "true" {
+        out.prepared_arguments.push(if active == "true" {
             a
         } else {
             let absent = if matches!(inner[j].kind, JniWire::Handle { .. }) {
@@ -887,7 +893,7 @@ pub(crate) fn input_kotlin(
             } else {
                 optional::default_kt(&inner[j].kind, None)
             };
-            format!("if ({}) {a} else {absent}", d.condition)
+            format!("if ({active}) {a} else {absent}")
         });
     }
     out.locks.extend(c.locks);
@@ -1071,7 +1077,6 @@ mod group_tests {
             meta: JniInputWireBranch::Record(JniInputRecord {
                 root: root.into(),
                 source,
-                condition: "true".into(),
             }),
             children: Vec::new(),
         }
@@ -1242,7 +1247,6 @@ mod group_tests {
             JniInputWireBranch::Record(JniInputRecord {
                 root: "point".into(),
                 source: flat.type_ref(&syn::parse_quote!(Point)).unwrap(),
-                condition: "true".into(),
             }),
         ))
         .unwrap();
@@ -1270,20 +1274,23 @@ mod group_tests {
             cleanup_failure: None,
             output_prefix: "output",
         };
-        let input = kotlin::input_kotlin(
-            &field(
-                JniInputWireChain::Field,
-                JniInputWireBranch::Record(JniInputRecord {
-                    root: "point".into(),
-                    source: point.clone(),
-                    condition: "true".into(),
-                }),
-            ),
-            &context,
-        )
-        .unwrap();
+        let input_record = field(
+            JniInputWireChain::Field,
+            JniInputWireBranch::Record(JniInputRecord {
+                root: "point".into(),
+                source: point.clone(),
+            }),
+        );
+        let input = kotlin::input_kotlin(&input_record, &context).unwrap();
         assert_eq!(input.parameters, ["point: example.Point"]);
         assert!(input.arguments[0].contains("point.type"));
+        // The same prepared record obtains its guard from each enclosing
+        // traversal rather than keeping the condition from its compilation.
+        for active in ["first == 0", "second == 1"] {
+            let input = kotlin::input_kotlin_when(&input_record, &context, active).unwrap();
+            assert_eq!(input.parameters, ["point: example.Point?"]);
+            assert!(input.arguments[0].starts_with(&format!("if ({active})")));
+        }
         let output_record = field(
             JniOutputWireChain::Field,
             JniOutputWireBranch::Record(JniOutputRecord { source: point }),

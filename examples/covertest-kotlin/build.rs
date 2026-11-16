@@ -410,6 +410,23 @@ fn main() {
                          ),
                      )),
                  ))
+            .fun(fun!(type_input_holder_choice).expand_param("value",
+                expand_param!(TypeInputHolder)
+                    .variant(fun!(type_input_holder_empty))
+                    .variant_record(param_fields!().field("row",
+                        expand_param!(Option<TypeInputRow>).optional(
+                            expand_param!(TypeInputRow).variant_record(param_fields!()))))))
+            .fun(fun!(type_input_optional_holder).expand_param("value",
+                expand_param!(Option<TypeInputHolder>).optional(
+                    expand_param!(TypeInputHolder).variant_record(param_fields!().field("row",
+                        expand_param!(Option<TypeInputRow>).optional(
+                            expand_param!(TypeInputRow).variant_record(param_fields!())))))))
+            .fun(fun!(type_input_holder_callback).expand_param("callback",
+                callback!(impl Fn()->Option<TypeInputHolder>).name("TypeInputHolderCallback")
+                    .expand_return(expand_param!(Option<TypeInputHolder>).optional(
+                        expand_param!(TypeInputHolder).variant_record(param_fields!().field("row",
+                            expand_param!(Option<TypeInputRow>).optional(
+                                expand_param!(TypeInputRow).variant_record(param_fields!()))))))))
             .fun(fun!(type_input_rows).expand_param("values",type_rows().bulk()))
             .fun(fun!(type_input_rows_plain).expand_param("values",type_rows()))
             .fun(fun!(type_input_nested).expand_param("values",type_nested().bulk()))

@@ -139,6 +139,9 @@ internal object JNINative {
     @JvmStatic external fun call_type_input_row_d1ca0f73c8d133b6(p0_w1_f0: Long, p0_w1_f1: Long, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_type_input_row_fields_8983ada2ac2a38c0(p0_w2: Long, p0_w4: Long, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_type_input_holder_4673e9a6dda65297(p0_w1_f0_present: Int, p0_w1_f0_some_f0: Long, p0_w1_f0_some_f1: Long, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_type_input_holder_choice_ebf8f046c99824b3(p0_w1: Int, p0_w4_f0_present: Int, p0_w4_f0_some_f0: Long, p0_w4_f0_some_f1: Long, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_type_input_optional_holder_884309f0aa614615(p0_w1: Int, p0_w3_f0_present: Int, p0_w3_f0_some_f0: Long, p0_w3_f0_some_f1: Long, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_type_input_holder_callback_16aaa9e4c4680f71(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_type_input_rows_1943c070e2ef84cb(p0_w1: ByteArray?, p0_w1_length: Int, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_type_input_rows_plain_8d430d0aa0f4b840(p0_w1: Array<Any?>?, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_type_input_nested_d53c1e8c8b8963c9(p0_w1: ByteArray?, p0_w1_length: Int, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long

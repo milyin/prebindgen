@@ -1290,7 +1290,7 @@ impl Codec for JniCodec {
         flat: &prebindgen_flat::Flat<Self::Schema>,
         ty: &syn::Type,
         wire: &syn::Ident,
-        active: &Condition,
+        _active: &Condition,
         plan: &mut JniInputPlan<JniWire>,
         _: &(),
     ) -> Result<()> {
@@ -1303,7 +1303,6 @@ impl Codec for JniCodec {
             &mut plan.node,
             JniInputWireBranch::Record(JniInputRecord {
                 root: wire.to_string(),
-                condition: kotlin_condition(active),
                 source: flat.type_ref(ty)?,
             }),
         )

@@ -4362,6 +4362,31 @@ fn named_output_chains_keep_name_validation_in_both_codec_policies() {
 }
 
 #[test]
+fn inactive_record_fields_keep_intrinsic_nullability_contracts() {
+    for selected in [false, true] {
+        let record = expand_param!(Row).variant_record(param_fields!().field(
+            "text",
+            expand_param!(Option<String>).variant(fun!(required_text)),
+        ));
+        let mapping = if selected {
+            record.variant(fun!(empty_row))
+        } else {
+            record
+        };
+        let error = JniGen::builder()
+            .flat(flat("pub struct Row { pub text:Option<String> } pub fn required_text(text:String)->Option<String>{} pub fn empty_row()->Row{} pub fn take_row(row:Row){}"))
+            .set_package_prefix("test")
+            .package(package!().class(data_class!(Row))
+                .fun(fun!(take_row).expand_param("row", mapping)))
+            .build().err().expect("nullable source property must not feed a required conversion");
+        assert!(
+            error.contains("Kotlin property") && error.contains("String?"),
+            "{error}"
+        );
+    }
+}
+
+#[test]
 fn resolved_callback_owns_its_conversions_and_cleanup_policy() {
     use crate::operations::JniInput;
 

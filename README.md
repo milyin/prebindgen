@@ -726,7 +726,8 @@ use a unit `Sequence` variant for buffered rows; output chains use
 `Sequence(CSequence)` / `Sequence(JniSequence)` to select delivery.
 
 Record metadata is directional too: `JniInputRecord` retains its Kotlin input
-binding, source `TypeRef` and activation condition. `JniOutputRecord` retains
+binding and source `TypeRef`; enclosing tree nodes supply activation during
+Kotlin traversal. `JniOutputRecord` retains
 only the source `TypeRef` needed for reconstruction; `Named` supplies an output label.
 Private algorithms reuse structural traversal and the relevant
 metadata queries without copying trees into a common representation. Helpers
