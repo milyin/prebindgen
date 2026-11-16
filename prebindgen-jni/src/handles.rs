@@ -131,7 +131,12 @@ pub(crate) fn require_preflight<I: KotlinInputConversion>(input: &I) -> Result<(
                 meta: JniChain::Sequence(_),
                 controls,
                 ..
-            } if controls.iter().any(|wire| wire.kind.row_layout().is_some()) => false,
+            } if controls
+                .iter()
+                .any(|wire| matches!(wire.kind, JniWire::NativeRows { .. })) =>
+            {
+                false
+            }
             WireNode::Chain { child, .. } => prepared(child),
             WireNode::Branch { children, .. } => children.iter().all(prepared),
             WireNode::Leaf(_) => true,

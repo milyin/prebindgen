@@ -66,6 +66,7 @@ pub(crate) fn output(
     index: syn::Ident,
     element: &prebindgen_conversions::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
     values: &[(syn::Ident, TokenStream)],
+    types: &crate::metadata::JniTypes,
 ) -> Result<SequenceOutput<JniWire, crate::JniChain>> {
     let env = prebindgen_conversions::template_parameter("environment");
     let row = format_ident!("{wire}_row");
@@ -126,7 +127,7 @@ pub(crate) fn output(
         } else {
             crate::cleanup::Carrier::Objects
         },
-        None,
+        types,
     )?;
     let (own, complete, commit) = if let Some(release) = release {
         (

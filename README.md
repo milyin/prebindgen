@@ -662,7 +662,10 @@ property types are read from the canonical Flat declarations during emission.
 converters. Handle conversions use this same table; there is no separate
 `KotlinClass` registry. Record and enum fields are validated as their conversions
 are emitted, without retaining property tables or emitting a field again just to
-check its type. Compiled native row-range wires retain their physical row layout.
+check its type. Bulk frame and row layouts are temporary values derived from the
+wire subtree and canonical source types when preparing Rust code, emitting
+Kotlin, measuring target layouts or building cleanup helpers. No layout
+descriptors are retained in the wire tree.
 Changing the referenced source tags or wire layout after preparation requires
 preparing the conversions again; Kotlin class
 and variant-name overrides are resolved from the current declarations.
@@ -677,9 +680,12 @@ bulk element, but a bulk frame cannot enclose a callback-delivered sequence.
 
 Custom Kotlin conversion contexts start with `KotlinContext::bulk = false` at a
 call/callback boundary; the enclosing Bulk interpreter sets it for descendants.
-Custom native sequence compilers can prepare the derived range descriptor with
-`JniWire::native_rows(&flat, &element_node, condition)?`. Its cached layout is ABI
-data, not an encoding selector. Sequence transport requests and shared sequence
+Custom native sequence compilers describe ranges with
+`JniWire::NativeRows { condition }`; stride and field offsets are derived from
+the sequence child. `JniChain::Bulk(condition)` retains only the condition
+selecting its occurrence. `JniCallback::into_input(&flat, wire, target)` receives
+the canonical source context when recompiling a customized callback.
+Sequence transport requests and shared sequence
 helpers receive the source Flat explicitly, so adapters can resolve declarations
 without embedding them in each element tree. Fragment validation permits an
 unattached enclosing scope; complete boundary validation requires a matching

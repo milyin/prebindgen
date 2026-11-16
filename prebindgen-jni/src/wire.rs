@@ -28,8 +28,6 @@ pub enum JniWire {
     NativeRows {
         /// Kotlin expression selecting these rows.
         condition: String,
-        /// Derived physical row layout used for stride, measurements and cleanup.
-        layout: std::rc::Rc<crate::JniBulkRecord>,
     },
     /// Fixed-width big-endian bytes for a native 128-bit scalar.
     Native128 {
@@ -92,26 +90,6 @@ pub enum JniWire {
     },
 }
 impl JniWire {
-    pub(crate) fn row_layout(&self) -> Option<&std::rc::Rc<crate::JniBulkRecord>> {
-        match self {
-            Self::NativeRows { layout, .. } => Some(layout),
-            _ => None,
-        }
-    }
-
-    /// Compile the physical row-range descriptor selected by a bulk scope.
-    /// This prepares ABI data; the enclosing JniChain::Bulk owns the encoding policy.
-    pub fn native_rows<I, O>(
-        flat: &JniBindings<I, O>,
-        element: &prebindgen_conversions::WireNode<JniWire, JniChain, JniBranch>,
-        condition: impl Into<String>,
-    ) -> Result<Self> {
-        Ok(Self::NativeRows {
-            condition: condition.into(),
-            layout: crate::bulk::record(element, &flat.types)?,
-        })
-    }
-
     /// Describe a string with its null-reference niche initially available.
     pub fn text() -> Self {
         Self::Text {

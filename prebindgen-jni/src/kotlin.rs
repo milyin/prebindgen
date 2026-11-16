@@ -766,10 +766,10 @@ pub(crate) fn input_kotlin_when(
         } => crate::sealed::input(children, controls, group, context, active),
         JniNode::Leaf(wires) => input_leaves(&wires.iter().collect::<Vec<_>>(), context, active),
         JniNode::Chain {
-            meta: JniChain::Bulk(record),
+            meta: JniChain::Bulk(_),
             controls,
             child,
-        } => crate::bulk::input_kotlin(record, controls, child, context, active),
+        } => crate::bulk::input_kotlin(controls, child, context, active),
         JniNode::Branch {
             meta: JniBranch::Alternatives,
             children: elements,
@@ -928,10 +928,10 @@ pub(crate) fn output_kotlin_scoped(
         } => crate::sealed::output(children, controls, group, context, owners),
         JniNode::Leaf(wires) => output_leaves(&wires.iter().collect::<Vec<_>>(), context, owners),
         JniNode::Chain {
-            meta: JniChain::Bulk(record),
+            meta: JniChain::Bulk(_),
             child,
             ..
-        } => crate::bulk::output_kotlin(record, child, context, owners),
+        } => crate::bulk::output_kotlin(child, context, owners),
         JniNode::Branch {
             meta: JniBranch::Alternatives,
             ..

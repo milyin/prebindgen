@@ -3808,6 +3808,7 @@ fn ordinary_output_rows_respect_jvm_constructor_slot_limit() {
             syn::parse_quote!(index),
             &element,
             &values,
+            &BTreeMap::new(),
         )
         .unwrap();
         assert!(

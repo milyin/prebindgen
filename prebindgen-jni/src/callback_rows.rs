@@ -14,6 +14,7 @@ pub(crate) fn cleanup(
     node: &JniNode,
     context: &JniContext,
     root: &syn::Ident,
+    types: &crate::metadata::JniTypes,
 ) -> Result<Option<TokenStream>> {
     // Find ordinary collections transferring ownership. Packed children are
     // scanned natively after reading their own carrier. Results without ordinary
@@ -50,7 +51,7 @@ pub(crate) fn cleanup(
     // A single field is already a decoded native local. Composite results stay
     // in their private root array, just like rows at any deeper nesting level.
     let composite = fields.len() != 1;
-    let scan = receive(node, context, composite.then_some(root), &fields)?;
+    let scan = receive(node, context, composite.then_some(root), &fields, types)?;
     Ok(Some(if composite {
         quote!(if !#root.is_null() { #scan })
     } else {
@@ -125,6 +126,7 @@ fn receive(
     context: &JniContext,
     row: Option<&syn::Ident>,
     fields: &[&Wire<JniWire>],
+    types: &crate::metadata::JniTypes,
 ) -> Result<TokenStream> {
     if !kotlin::input_handles(node, true) {
         return Ok(quote!());
@@ -157,7 +159,7 @@ fn receive(
             let child_fields = group::row_fields(child).collect::<Vec<_>>();
             let capacity = i32::try_from(child_fields.len() + 8)
                 .map_err(|_| "too many callback row fields")?;
-            let scan = receive(child, context, Some(&child_row), &child_fields)?;
+            let scan = receive(child, context, Some(&child_row), &child_fields, types)?;
             let scan = read(
                 context,
                 &child_row,
@@ -175,13 +177,13 @@ fn receive(
             field(context, row, fields, carrier, scan)?
         }
         WireNode::Chain {
-            meta: JniChain::Bulk(layout),
+            meta: JniChain::Bulk(_),
             controls,
             child,
         } => {
             let carrier = &controls[0].name;
             let bytes = format_ident!("{carrier}_cleanup_bytes");
-            let scan = crate::bulk::cleanup_buffer(layout, child, &bytes)?;
+            let scan = crate::bulk::cleanup_buffer(child, &bytes, types)?;
             let env = &context.environment;
             let scan = read(
                 context,
@@ -207,7 +209,7 @@ fn receive(
             child,
             ..
         } => {
-            let scan = receive(child, context, row, fields)?;
+            let scan = receive(child, context, row, fields, types)?;
             if scan.is_empty() {
                 return Ok(scan);
             }
@@ -230,7 +232,7 @@ fn receive(
             let selector = &controls[0].name;
             let mut code = TokenStream::new();
             for (index, child) in children.iter().enumerate() {
-                let scan = receive(child, context, row, fields)?;
+                let scan = receive(child, context, row, fields, types)?;
                 let index = index as i32;
                 code.extend(quote!(if #selector == #index { #scan }));
             }
@@ -239,7 +241,7 @@ fn receive(
         WireNode::Branch { children, .. } => {
             let mut code = TokenStream::new();
             for child in children {
-                code.extend(receive(child, context, row, fields)?);
+                code.extend(receive(child, context, row, fields, types)?);
             }
             code
         }

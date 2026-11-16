@@ -12,7 +12,8 @@ pub enum JniChain {
     /// Zero or more element occurrences.
     Sequence(JniSequence),
     /// Expanded fields grouped into one C-representation bulk frame.
-    Bulk(std::rc::Rc<crate::bulk::JniBulkRecord>),
+    /// The condition selects this occurrence; its physical layout is derived from the child.
+    Bulk(prebindgen_declarations::Condition),
 }
 /// Meaning of an ordered collection of child descriptions.
 #[derive(Clone, Debug)]
@@ -1082,7 +1083,6 @@ pub(crate) fn error_wire_shape(node: &kotlin::JniNode) -> Vec<String> {
                 }
                 JniWire::Enum { enum_type, .. } => type_key(&enum_type.mapping.ty),
                 JniWire::NativeBuffer { text } => text.to_string(),
-                JniWire::NativeRows { layout, .. } => layout.key.clone(),
                 JniWire::Callback { callback } => callback.fqn(),
                 _ => String::new(),
             };
@@ -1107,9 +1107,16 @@ pub(crate) fn error_wire_shape(node: &kotlin::JniNode) -> Vec<String> {
                 }
             }
             WireNode::Branch {
-                controls, children, ..
+                meta,
+                controls,
+                children,
             } => {
-                out.push("alternatives[".into());
+                // Packed enums use a union; selector alternatives store their
+                // fields consecutively. Their JVM carriers alone are identical.
+                out.push(match meta {
+                    JniBranch::Enum(group) if bulk => format!("enum:{}[", group.source.key()),
+                    _ => "alternatives[".into(),
+                });
                 wires(controls, out);
                 for child in children {
                     out.push("arm[".into());

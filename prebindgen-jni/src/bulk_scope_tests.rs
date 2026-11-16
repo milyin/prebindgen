@@ -127,3 +127,75 @@ fn bulk_scope_does_not_leak_to_the_next_function_parameter() {
     assert!(matches!(ordinary.as_slice(), [wire] if matches!(wire.kind, JniWire::Rows { .. })));
     generate(&model).unwrap();
 }
+
+#[test]
+fn native_row_compatibility_distinguishes_enum_unions_from_selector_fields() {
+    let model = JniGen::builder()
+        .items(
+            syn::parse_file("pub enum Event { A(i64), B(i64) }pub fn rows()->Vec<Event>{}")
+                .unwrap()
+                .items
+                .into_iter()
+                .map(|item| (item, Default::default())),
+        )
+        .set_package_prefix("test")
+        .package(package!().class(sealed_class!(Event)).fun(fun!(rows)))
+        .prepare()
+        .unwrap();
+    let source = model.type_ref(&syn::parse_quote!(Event)).unwrap();
+    let leaf = |name: &str| {
+        WireNode::Leaf(vec![prebindgen_conversions::Wire {
+            name: syn::parse_str(name).unwrap(),
+            kind: JniWire::scalar(Primitive::I64),
+        }])
+    };
+    let rows = |meta| {
+        let element = WireNode::Branch {
+            meta,
+            controls: vec![prebindgen_conversions::Wire {
+                name: syn::parse_quote!(tag),
+                kind: JniWire::selector(),
+            }],
+            children: vec![leaf("a"), leaf("b")],
+        };
+        // Derive each layout independently. Neither wire tree retains one.
+        let layout = bulk::record(&element, &model.types).unwrap();
+        let node = WireNode::Chain {
+            meta: JniChain::Bulk(Default::default()),
+            controls: vec![prebindgen_conversions::Wire {
+                name: syn::parse_quote!(frame),
+                kind: JniWire::BulkBuffer {
+                    condition: "true".into(),
+                    null_niche_available: false,
+                },
+            }],
+            child: Box::new(WireNode::Chain {
+                meta: JniChain::Sequence(JniSequence::Buffered),
+                controls: vec![prebindgen_conversions::Wire {
+                    name: syn::parse_quote!(rows),
+                    kind: JniWire::NativeRows {
+                        condition: "true".into(),
+                    },
+                }],
+                child: Box::new(element),
+            }),
+        };
+        group::validate_layout(&node).unwrap();
+        (node, layout)
+    };
+    let (enumeration, enum_layout) = rows(JniBranch::Enum(std::rc::Rc::new(
+        crate::sealed::JniEnumGroup {
+            source,
+            value: false,
+            root: "event".into(),
+        },
+    )));
+    let (selector, selector_layout) = rows(JniBranch::Alternatives);
+    assert_ne!(enum_layout.key, selector_layout.key);
+    assert!(enum_layout.definitions.to_string().contains("union"));
+    assert!(!selector_layout.definitions.to_string().contains("union"));
+    assert_ne!(
+        group::error_wire_shape(&enumeration),
+        group::error_wire_shape(&selector)
+    );
+}

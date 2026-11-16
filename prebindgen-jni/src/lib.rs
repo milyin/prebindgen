@@ -15,7 +15,6 @@ pub use prebindgen_declarations::{
 mod bindings;
 mod bulk;
 mod metadata;
-pub use bulk::JniBulkRecord;
 pub use metadata::{JniBinding, JniFunction, JniModule, JniSchema, JniType};
 mod data;
 mod enums;
@@ -960,7 +959,7 @@ impl Codec for JniCodec {
             match delivery {
                 prebindgen_declarations::SequenceDelivery::Auto
                 | prebindgen_declarations::SequenceDelivery::Value => {
-                    sequence::output(wire, length, index, element, values)
+                    sequence::output(wire, length, index, element, values, &flat.types)
                 }
                 prebindgen_declarations::SequenceDelivery::Callback => {
                     sequence_callback::transport(wire, length, element, values)

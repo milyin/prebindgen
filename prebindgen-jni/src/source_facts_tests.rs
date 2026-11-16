@@ -108,7 +108,7 @@ fn changed_enum_field_shapes_are_rejected_after_preparation() {
 }
 
 #[test]
-fn changed_bulk_source_identity_requires_preparation_again() {
+fn changed_bulk_source_field_shapes_are_rejected_after_preparation() {
     let items = syn::parse_file("pub enum Event{Empty,Row(i64)}pub fn rows()->Vec<Event>{}")
         .unwrap()
         .items;
@@ -124,5 +124,5 @@ fn changed_bulk_source_identity_requires_preparation_again() {
         .variants
         .swap(0, 1);
     let error = generate(&flat).err().unwrap();
-    assert!(error.contains("prepare the conversions again"), "{error}");
+    assert!(error.contains("source variant"), "{error}");
 }

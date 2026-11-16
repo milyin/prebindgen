@@ -5,17 +5,16 @@ use prebindgen_declarations::{Condition, SequenceInput, SequenceOutput};
 
 use crate::metadata::JniTypes;
 use prebindgen_conversions::{Wire, WireNode};
-use std::{fmt::Write, rc::Rc};
+use std::fmt::Write;
 
-/// Physical record shared by the Rust encoder and the initialized Kotlin layout table.
-#[derive(Clone, Debug)]
-pub struct JniBulkRecord {
+/// Temporary physical layout derived from a wire subtree and canonical source types.
+#[derive(Debug)]
+pub(crate) struct JniBulkRecord {
     pub(crate) name: syn::Ident,
     pub(crate) definitions: TokenStream,
     pub(crate) offsets: Vec<TokenStream>,
     pub(crate) key: String,
     widths: Vec<usize>,
-    active: Condition,
 }
 pub(crate) fn field_type(w: &JniWire) -> Result<syn::Type> {
     Ok(match w {
@@ -25,7 +24,7 @@ pub(crate) fn field_type(w: &JniWire) -> Result<syn::Type> {
         _=>w.rust_type(),
     })
 }
-pub(crate) fn record(node: &JniNode, types: &JniTypes) -> Result<Rc<JniBulkRecord>> {
+pub(crate) fn record(node: &JniNode, types: &JniTypes) -> Result<JniBulkRecord> {
     let fields = crate::group::row_fields(node)
         .enumerate()
         .map(|(i, w)| Ok((format_ident!("v{i}"), field_type(&w.kind)?)))
@@ -65,14 +64,13 @@ pub(crate) fn record(node: &JniNode, types: &JniTypes) -> Result<Rc<JniBulkRecor
         prebindgen_reprc::schema_id(&key)
     );
     let (definitions, offsets) = physical_record(node, &name, fields)?;
-    Ok(Rc::new(JniBulkRecord {
+    Ok(JniBulkRecord {
         name,
         definitions,
         offsets,
         key,
         widths,
-        active: Condition::default(),
-    }))
+    })
 }
 fn parameter(name: &str) -> TokenStream {
     prebindgen_conversions::template_parameter(name)
@@ -142,9 +140,7 @@ pub(crate) fn input(
     active: &Condition,
     types: &JniTypes,
 ) -> Result<JniInputPlan<JniWire>> {
-    let mut layout = (*record(&child.node, types)?).clone();
-    layout.active = active.clone();
-    let layout = Rc::new(layout);
+    let layout = record(&child.node, types)?;
     let ty = &layout.name;
     let length = format_ident!("{wire}_length");
     let bytes = format_ident!("{wire}_bytes");
@@ -193,7 +189,7 @@ pub(crate) fn input(
         #bind #conversion
     }};
     child.node = WireNode::Chain {
-        meta: JniChain::Bulk(layout),
+        meta: JniChain::Bulk(active.clone()),
         child: Box::new(child.node),
         controls: vec![
             Wire {
@@ -242,7 +238,7 @@ pub(crate) fn output(
         let #wire=::prebindgen_jni_runtime::jni::objects::JObject::from(#env.byte_array_from_slice(#writer.bytes()).map_err(|e|e.to_string())?);
     };
     child.outcomes.success = WireNode::Chain {
-        meta: JniChain::Bulk(layout),
+        meta: JniChain::Bulk(Condition::default()),
         child: Box::new(child.outcomes.success),
         controls: vec![Wire {
             name: wire.clone(),
@@ -297,7 +293,6 @@ pub(crate) fn sequence_input(
             name: wire.clone(),
             kind: JniWire::NativeRows {
                 condition: kotlin_condition(active),
-                layout: layout.clone(),
             },
         }],
         metadata: JniChain::Sequence(JniSequence::Buffered),
@@ -320,11 +315,7 @@ pub(crate) fn sequence_output(
     let row = &layout.name;
     let writer = parameter("bulk_writer");
     let owner = format_ident!("{wire}_owners");
-    let release = crate::cleanup::helper(
-        element,
-        crate::cleanup::Carrier::Native,
-        Some(layout.clone()),
-    )?;
+    let release = crate::cleanup::helper(element, crate::cleanup::Carrier::Native, types)?;
     let owners = if let Some(release) = &release {
         quote!(let #owner = unsafe { #writer.own_rows(#wire, ::core::mem::size_of::<#row>(), #release) };)
     } else {
@@ -358,7 +349,6 @@ pub(crate) fn sequence_output(
             name: wire.clone(),
             kind: JniWire::NativeRows {
                 condition: "true".into(),
-                layout: layout.clone(),
             },
         }],
         metadata: JniChain::Sequence(JniSequence::Buffered),
@@ -631,12 +621,13 @@ fn input_writers(
 ) -> Result<()> {
     match node {
         WireNode::Chain {
-            meta: JniChain::Bulk(layout),
+            meta: JniChain::Bulk(_),
             child,
             ..
         } => {
             if input && crate::kotlin::input_handles(child, false) {
-                let name = input_writer(layout);
+                let layout = record(child, types)?;
+                let name = input_writer(&layout);
                 let kinds = crate::handles::kinds(child);
                 let count = kinds.len();
                 let patch = patch_handles(child, package, "0", &mut 0, &kinds, types)?;
@@ -811,7 +802,6 @@ pub(crate) fn input_list(
 }
 
 pub(crate) fn input_kotlin(
-    layout: &JniBulkRecord,
     controls: &[Wire<JniWire>],
     child: &JniNode,
     context: &KotlinContext<'_>,
@@ -823,8 +813,9 @@ pub(crate) fn input_kotlin(
     };
     let context = &scoped;
     let mut input = crate::kotlin::input_kotlin_when(child, context, active)?;
+    let layout = record(child, context.source_types)?;
     let writer = format!("{}_writer", controls[0].name);
-    let schema = kt_layout(layout, context);
+    let schema = kt_layout(&layout, context);
     input.prepare_arguments(crate::kotlin::input_handles(child, false))?;
     let body = pack(
         child,
@@ -844,7 +835,7 @@ pub(crate) fn input_kotlin(
         let state = format!("{writer}_state");
         input.setup.push(KotlinBinding {
             name:state.clone(),
-            expression:format!("if ({condition}) run {{ val {writer} = {}.BulkInputs.{}()\n{body}\n{writer} }} else null",context.package,input_writer(layout)),
+            expression:format!("if ({condition}) run {{ val {writer} = {}.BulkInputs.{}()\n{body}\n{writer} }} else null",context.package,input_writer(&layout)),
             absent:"null".into(),
         });
         input.arguments = vec![
@@ -918,7 +909,6 @@ fn remap(
     Ok(())
 }
 pub(crate) fn output_kotlin(
-    _layout: &JniBulkRecord,
     child: &JniNode,
     context: &KotlinContext<'_>,
     owners: Option<&str>,
@@ -1014,10 +1004,7 @@ pub(crate) fn output_list(
     })
 }
 
-fn register(
-    record: Rc<JniBulkRecord>,
-    out: &mut BTreeMap<String, Rc<JniBulkRecord>>,
-) -> Result<()> {
+fn register(record: JniBulkRecord, out: &mut BTreeMap<String, JniBulkRecord>) -> Result<()> {
     let id = format!("{:016x}", prebindgen_reprc::schema_id(&record.key));
     if let Some(previous) = out.get(&id) {
         if previous.key != record.key {
@@ -1028,33 +1015,19 @@ fn register(
     }
     Ok(())
 }
-fn validate_prepared_record(
-    layout: &JniBulkRecord,
-    node: &JniNode,
-    types: &JniTypes,
-) -> Result<()> {
-    if layout.key != record(node, types)?.key {
-        return Err(
-            "bulk source layout changed after preparation; prepare the conversions again".into(),
-        );
-    }
-    Ok(())
-}
-
 fn records(
     node: &JniNode,
-    out: &mut BTreeMap<String, Rc<JniBulkRecord>>,
+    out: &mut BTreeMap<String, JniBulkRecord>,
     types: &JniTypes,
     bulk: bool,
 ) -> Result<()> {
     match node {
         WireNode::Chain {
-            meta: JniChain::Bulk(r),
+            meta: JniChain::Bulk(_),
             child,
             ..
         } => {
-            validate_prepared_record(r, child, types)?;
-            register(r.clone(), out)?;
+            register(record(child, types)?, out)?;
             records(child, out, types, true)?;
         }
         WireNode::Chain {
@@ -1062,12 +1035,15 @@ fn records(
             controls,
             child,
         } => {
-            let row = controls.first().and_then(|wire| wire.kind.row_layout());
+            let native = controls
+                .first()
+                .is_some_and(|wire| matches!(wire.kind, JniWire::NativeRows { .. }));
             if bulk {
-                let row = row.ok_or("bulk sequences require a compiled native row range")?;
-                validate_prepared_record(row, child, types)?;
-                register(row.clone(), out)?;
-            } else if row.is_some() {
+                if !native {
+                    return Err("bulk sequences require a compiled native row range".into());
+                }
+                register(record(child, types)?, out)?;
+            } else if native {
                 return Err("native rows require an enclosing bulk scope".into());
             }
             records(child, out, types, bulk)?;
@@ -1319,7 +1295,7 @@ pub(crate) fn callback_cache(node: &JniNode, context: &JniContext) -> Result<Tok
     let mut code = TokenStream::new();
     for root in callback_roots(node) {
         if let WireNode::Chain {
-            meta: JniChain::Bulk(layout),
+            meta: JniChain::Bulk(active),
             controls,
             ..
         } = root
@@ -1327,7 +1303,7 @@ pub(crate) fn callback_cache(node: &JniNode, context: &JniContext) -> Result<Tok
             let wire = &controls[0].name;
             let length = &controls[1].name;
             let cache = format_ident!("{wire}_cached_bytes");
-            let active = layout.active.rust();
+            let active = active.rust();
             let env = &context.environment;
             code.extend(quote!(let #cache=if #active {::prebindgen_jni_runtime::bulk::input(&mut #env,&#wire,#length)?}else{Vec::new()};));
         }
@@ -1375,19 +1351,21 @@ fn cleanup_attempt(code: TokenStream) -> TokenStream {
 }
 
 pub(crate) fn cleanup_cached(
-    layout: &JniBulkRecord,
+    active: &Condition,
     controls: &[Wire<JniWire>],
     child: &JniNode,
+    types: &JniTypes,
 ) -> Result<TokenStream> {
+    let layout = record(child, types)?;
     // Like the eager scan, reclaim readable owner fields even in an incomplete
     // root. Reader bounds-checks each field; missing siblings cannot hide them.
-    let scan = cleanup_native(child, child, layout, quote!(0usize))?;
+    let scan = cleanup_native(child, child, &layout, quote!(0usize), types)?;
     if scan.is_empty() {
         return Ok(scan);
     }
     let cache = format_ident!("{}_cached_bytes", controls[0].name);
     let reader = format_ident!("{}_cleanup_reader", controls[0].name);
-    let active = layout.active.rust();
+    let active = active.rust();
     let code = quote!(if #active {
         let #reader=::prebindgen_jni_runtime::bulk::Reader::new(&#cache);
         #scan
@@ -1399,11 +1377,12 @@ pub(crate) fn cleanup_cached(
 // decoding failed. Reuse the native scanner rather than introducing another
 // ownership traversal for packed children.
 pub(crate) fn cleanup_buffer(
-    layout: &JniBulkRecord,
     child: &JniNode,
     bytes: &syn::Ident,
+    types: &JniTypes,
 ) -> Result<TokenStream> {
-    let scan = cleanup_native(child, child, layout, quote!(0usize))?;
+    let layout = record(child, types)?;
+    let scan = cleanup_native(child, child, &layout, quote!(0usize), types)?;
     let reader = format_ident!("{bytes}_reader");
     resolve(
         &quote! {
@@ -1420,6 +1399,7 @@ fn cleanup_native(
     row: &JniNode,
     layout: &JniBulkRecord,
     base: TokenStream,
+    types: &JniTypes,
 ) -> Result<TokenStream> {
     if !crate::kotlin::input_handles(node, true) {
         return Ok(quote!());
@@ -1464,7 +1444,7 @@ fn cleanup_native(
             } else {
                 quote!(#name == 1)
             };
-            let scan = cleanup_native(child, row, layout, base)?;
+            let scan = cleanup_native(child, row, layout, base, types)?;
             cleanup_attempt(quote!(let #name=#value; if #present { #scan }))
         }
         WireNode::Chain {
@@ -1473,16 +1453,14 @@ fn cleanup_native(
             child,
         } => {
             let [Wire {
-                kind:
-                    JniWire::NativeRows {
-                        layout: element, ..
-                    },
+                kind: JniWire::NativeRows { .. },
                 ..
             }] = controls.as_slice()
             else {
                 return Err("bulk cleanup requires a compiled native row range".into());
             };
             let value = read(&controls[0].name)?;
+            let element = record(child, types)?;
             let ty = &element.name;
             let start = format_ident!("{}_cleanup_start", controls[0].name);
             let count = format_ident!("{}_cleanup_count", controls[0].name);
@@ -1491,15 +1469,16 @@ fn cleanup_native(
             let scan = cleanup_native(
                 child,
                 child,
-                element,
+                &element,
                 quote!(#start + #index * ::core::mem::size_of::<#ty>()),
+                types,
             )?;
             cleanup_attempt(quote!(
                 let (#start,#count)=#reader.rows(#value,::core::mem::size_of::<#ty>())?;
                 for #index in 0..#count { #scan }
             ))
         }
-        WireNode::Chain { child, .. } => cleanup_native(child, row, layout, base)?,
+        WireNode::Chain { child, .. } => cleanup_native(child, row, layout, base, types)?,
         WireNode::Branch {
             meta: JniBranch::Alternatives | JniBranch::Enum(_),
             controls,
@@ -1510,14 +1489,14 @@ fn cleanup_native(
             let mut scans = TokenStream::new();
             for (index, child) in children.iter().enumerate() {
                 let index = index as i32;
-                let scan = cleanup_native(child, row, layout, base.clone())?;
+                let scan = cleanup_native(child, row, layout, base.clone(), types)?;
                 scans.extend(quote!(if #name==#index { #scan }));
             }
             cleanup_attempt(quote!(let #name=#value; #scans))
         }
         WireNode::Branch { children, .. } => children
             .iter()
-            .map(|child| cleanup_native(child, row, layout, base.clone()))
+            .map(|child| cleanup_native(child, row, layout, base.clone(), types))
             .collect::<Result<Vec<_>>>()?
             .into_iter()
             .collect(),
