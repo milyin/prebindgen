@@ -987,24 +987,24 @@
 <a href=#987 id=987 data-nosnippet>987</a>        } =&gt; <span class="kw">crate</span>::bulk::output_kotlin(child, context, owners),
 <a href=#988 id=988 data-nosnippet>988</a>        prebindgen_conversions::WireNode::Container {
 <a href=#989 id=989 data-nosnippet>989</a>            child: element,
-<a href=#990 id=990 data-nosnippet>990</a>            meta: JniOutputWireContainer::KList(metadata),
-<a href=#991 id=991 data-nosnippet>991</a>            ..
-<a href=#992 id=992 data-nosnippet>992</a>        } =&gt; {
-<a href=#993 id=993 data-nosnippet>993</a>            <span class="kw">let </span>name = <span class="macro">format!</span>(<span class="string">"{}owners"</span>, context.output_prefix);
-<a href=#994 id=994 data-nosnippet>994</a>            <span class="kw">let </span>root = owners.is_none() &amp;&amp; has_handles(element, <span class="bool-val">false</span>);
-<a href=#995 id=995 data-nosnippet>995</a>            <span class="kw">let </span>scope = <span class="kw">if </span>root { <span class="prelude-val">Some</span>(name.as_str()) } <span class="kw">else </span>{ owners };
-<a href=#996 id=996 data-nosnippet>996</a>            <span class="kw">let </span><span class="kw-2">mut </span>output = <span class="kw">if </span>context.bulk {
-<a href=#997 id=997 data-nosnippet>997</a>                <span class="kw">crate</span>::bulk::output_list(element, context, scope)<span class="question-mark">?
-<a href=#998 id=998 data-nosnippet>998</a>            </span>} <span class="kw">else </span>{
-<a href=#999 id=999 data-nosnippet>999</a>                <span class="kw">match </span><span class="kw-2">*</span>metadata {
-<a href=#1000 id=1000 data-nosnippet>1000</a>                    JniRowEncoding::ObjectArray =&gt; {
-<a href=#1001 id=1001 data-nosnippet>1001</a>                        <span class="kw">crate</span>::sequence::output_list(element, context, scope, <span class="bool-val">false</span>)<span class="question-mark">?
-<a href=#1002 id=1002 data-nosnippet>1002</a>                    </span>}
-<a href=#1003 id=1003 data-nosnippet>1003</a>                    JniRowEncoding::RowClass =&gt; {
-<a href=#1004 id=1004 data-nosnippet>1004</a>                        <span class="kw">crate</span>::sequence::output_list(element, context, scope, <span class="bool-val">true</span>)<span class="question-mark">?
-<a href=#1005 id=1005 data-nosnippet>1005</a>                    </span>}
-<a href=#1006 id=1006 data-nosnippet>1006</a>                }
-<a href=#1007 id=1007 data-nosnippet>1007</a>            };
+<a href=#990 id=990 data-nosnippet>990</a>            meta:
+<a href=#991 id=991 data-nosnippet>991</a>                metadata @ (JniOutputWireContainer::KListArrayRows
+<a href=#992 id=992 data-nosnippet>992</a>                | JniOutputWireContainer::KListClassRows),
+<a href=#993 id=993 data-nosnippet>993</a>            ..
+<a href=#994 id=994 data-nosnippet>994</a>        } =&gt; {
+<a href=#995 id=995 data-nosnippet>995</a>            <span class="kw">let </span>name = <span class="macro">format!</span>(<span class="string">"{}owners"</span>, context.output_prefix);
+<a href=#996 id=996 data-nosnippet>996</a>            <span class="kw">let </span>root = owners.is_none() &amp;&amp; has_handles(element, <span class="bool-val">false</span>);
+<a href=#997 id=997 data-nosnippet>997</a>            <span class="kw">let </span>scope = <span class="kw">if </span>root { <span class="prelude-val">Some</span>(name.as_str()) } <span class="kw">else </span>{ owners };
+<a href=#998 id=998 data-nosnippet>998</a>            <span class="kw">let </span><span class="kw-2">mut </span>output = <span class="kw">if </span>context.bulk {
+<a href=#999 id=999 data-nosnippet>999</a>                <span class="kw">crate</span>::bulk::output_list(element, context, scope)<span class="question-mark">?
+<a href=#1000 id=1000 data-nosnippet>1000</a>            </span>} <span class="kw">else </span>{
+<a href=#1001 id=1001 data-nosnippet>1001</a>                <span class="kw">crate</span>::sequence::output_list(
+<a href=#1002 id=1002 data-nosnippet>1002</a>                    element,
+<a href=#1003 id=1003 data-nosnippet>1003</a>                    context,
+<a href=#1004 id=1004 data-nosnippet>1004</a>                    scope,
+<a href=#1005 id=1005 data-nosnippet>1005</a>                    <span class="macro">matches!</span>(metadata, JniOutputWireContainer::KListClassRows),
+<a href=#1006 id=1006 data-nosnippet>1006</a>                )<span class="question-mark">?
+<a href=#1007 id=1007 data-nosnippet>1007</a>            </span>};
 <a href=#1008 id=1008 data-nosnippet>1008</a>            <span class="kw">if </span>root {
 <a href=#1009 id=1009 data-nosnippet>1009</a>                output.output_locals = <span class="macro">format!</span>(
 <a href=#1010 id=1010 data-nosnippet>1010</a>                    <span class="string">"var {name}: {}.CollectionOwners? = null\n{}"</span>,
