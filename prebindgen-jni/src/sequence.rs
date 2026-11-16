@@ -411,10 +411,10 @@ pub(crate) fn callback_optional(
             Ok(true)
         }
         WireNode::Branch {
-            meta: JniBranch::Group(_),
-            children,
+            meta: JniBranch::Alternatives | JniBranch::Enum(_),
             ..
-        } => {
+        } => Ok(false),
+        WireNode::Branch { children, .. } => {
             let mut optional = false;
             for child in children {
                 optional |= callback_optional(child)?;
@@ -450,14 +450,7 @@ pub(crate) fn validate_buffered(
             ..
         } => validate_buffered(element)?,
         prebindgen_conversions::WireNode::Branch {
-            meta: JniBranch::Group(_),
-            children: elements,
-            ..
-        }
-        | prebindgen_conversions::WireNode::Branch {
-            meta: JniBranch::Alternatives | JniBranch::Enum(_),
-            children: elements,
-            ..
+            children: elements, ..
         } => {
             for element in elements {
                 validate_buffered(element)?;
@@ -553,7 +546,7 @@ mod delivery_tests {
         let extra = WireNode::Branch {
             controls: vec![],
             children: vec![visitor, leaf()],
-            meta: JniBranch::Group(JniGroup::Values),
+            meta: JniBranch::Values,
         };
         assert!(callback_delivery(&extra)
             .unwrap_err()

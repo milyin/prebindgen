@@ -528,7 +528,7 @@ fn expanded_names(
     owners: Option<&str>,
 ) -> Result<Vec<Option<String>>> {
     if let WireNode::Branch {
-        meta: JniBranch::Group(JniGroup::Fields(Some(_))) | JniBranch::Enum(_),
+        meta: JniBranch::Record(_) | JniBranch::Enum(_),
         ..
     } = node
     {
@@ -542,7 +542,7 @@ fn expanded_names(
             .into_iter()
             .flatten()
             .collect::<Vec<_>>();
-        if let JniBranch::Group(JniGroup::Field(field)) = meta {
+        if let JniBranch::Field(field) = meta {
             let field = field.to_string();
             let tuple = field
                 .strip_prefix('v')

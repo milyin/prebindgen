@@ -14,25 +14,19 @@ pub enum CChain {
     /// Zero or more element occurrences.
     Sequence(CSequence),
 }
-/// Meaning of an ordered collection of child descriptions.
+/// How child conversions form one value or choose a source variant.
 #[derive(Clone, Debug)]
 pub enum CBranch {
-    /// Related values or source fields, all belonging to the parent.
-    Group(CGroup),
-    /// Exactly one selected arm; at least one arm is required.
-    Alternatives,
-    /// Source enum variants in wire-tag order.
-    Enum(std::rc::Rc<crate::CEnumGroup>),
-}
-/// Relationships between the child values of a group.
-#[derive(Clone, Debug)]
-pub enum CGroup {
-    /// Ordered conversion components, such as constructor arguments or output views.
+    /// Convert all ordered components, such as constructor arguments or output views.
     Values,
-    /// Source record fields.
+    /// Convert named source fields independently, in declaration order.
     Fields,
-    /// One named source field.
+    /// Convert one named source field through its child subtree.
     Field(syn::Ident),
+    /// Convert exactly one constructor alternative selected by its incoming tag.
+    Alternatives,
+    /// Convert source enum variants in wire-tag order.
+    Enum(std::rc::Rc<crate::CEnumGroup>),
 }
 pub(crate) fn validate_selector(wire: &Wire<CWire>) -> Result<()> {
     if !matches!(
@@ -299,7 +293,7 @@ pub(crate) fn validate_layout(node: &WireNode<CWire, crate::CChain, crate::CBran
             }
             WireNode::Branch {
                 children,
-                meta: CBranch::Group(metadata),
+                meta: metadata,
                 controls,
                 ..
             } => {
@@ -307,16 +301,16 @@ pub(crate) fn validate_layout(node: &WireNode<CWire, crate::CChain, crate::CBran
                     return Err("group metadata does not support control wires".into());
                 }
                 match metadata {
-                    CGroup::Field(_) if !in_fields => {
+                    CBranch::Field(_) if !in_fields => {
                         return Err(
                             "named field must be a direct child of a field collection".into()
                         )
                     }
-                    CGroup::Fields => {
+                    CBranch::Fields => {
                         let mut fields = std::collections::BTreeSet::new();
                         for child in children.as_slice() {
                             let WireNode::Branch {
-                                meta: CBranch::Group(CGroup::Field(name)),
+                                meta: CBranch::Field(name),
                                 ..
                             } = child
                             else {
@@ -334,7 +328,7 @@ pub(crate) fn validate_layout(node: &WireNode<CWire, crate::CChain, crate::CBran
                     visit(
                         child,
                         bindings,
-                        matches!(metadata, CGroup::Fields),
+                        matches!(metadata, CBranch::Fields),
                         reserved,
                     )?;
                 }
@@ -734,7 +728,7 @@ mod tests {
     fn field_names_placement_and_empty_records_are_validated() {
         let field = WireNode::Branch {
             controls: vec![],
-            meta: CBranch::Group(CGroup::Field(syn::parse_quote!(x))),
+            meta: CBranch::Field(syn::parse_quote!(x)),
             children: vec![WireNode::default()],
         };
         assert!(validate_layout(&field)
@@ -742,7 +736,7 @@ mod tests {
             .contains("direct child"));
         let duplicates = WireNode::Branch {
             controls: vec![],
-            meta: CBranch::Group(CGroup::Fields),
+            meta: CBranch::Fields,
             children: vec![field.clone(), field.clone()],
         };
         assert!(validate_layout(&duplicates)
@@ -750,13 +744,13 @@ mod tests {
             .contains("duplicate field"));
         let record = WireNode::Branch {
             controls: vec![],
-            meta: CBranch::Group(CGroup::Fields),
+            meta: CBranch::Fields,
             children: vec![field],
         };
         validate_layout(&record).unwrap();
         let malformed = WireNode::Branch {
             controls: vec![],
-            meta: CBranch::Group(CGroup::Fields),
+            meta: CBranch::Fields,
             children: vec![WireNode::Leaf(vec![leaf("value")])],
         };
         assert!(validate_layout(&malformed)
@@ -764,7 +758,7 @@ mod tests {
             .contains("named field children"));
         let empty = WireNode::Branch {
             controls: vec![],
-            meta: CBranch::Group(CGroup::Fields),
+            meta: CBranch::Fields,
             children: vec![],
         };
         validate_layout(&empty).unwrap();
@@ -783,7 +777,7 @@ mod tests {
             .unwrap();
         input.node = prebindgen_conversions::WireNode::Branch {
             controls: vec![],
-            meta: CBranch::Group(CGroup::Field(syn::parse_quote!(orphan))),
+            meta: CBranch::Field(syn::parse_quote!(orphan)),
             children: vec![std::mem::take(&mut input.node)],
         };
         assert!(CCodec::raw()
@@ -802,7 +796,7 @@ mod tests {
             .unwrap();
         output.outcomes.success = prebindgen_conversions::WireNode::Branch {
             controls: vec![],
-            meta: CBranch::Group(CGroup::Field(syn::parse_quote!(orphan))),
+            meta: CBranch::Field(syn::parse_quote!(orphan)),
             children: vec![std::mem::take(&mut output.outcomes.success)],
         };
         assert!(CCodec::raw()
@@ -977,7 +971,7 @@ mod structural_validation_tests {
             .unwrap_err()
             .contains("no alternatives"));
         let node = WireNode::Branch {
-            meta: CBranch::Group(CGroup::Values),
+            meta: CBranch::Values,
             children: vec![],
             controls: vec![Wire {
                 name: syn::parse_quote!(extra),

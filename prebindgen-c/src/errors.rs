@@ -89,14 +89,14 @@ fn field_names(
     use prebindgen_conversions::WireNode;
     let mut names = Vec::new();
     if let WireNode::Branch {
-        meta: CBranch::Group(CGroup::Fields),
+        meta: CBranch::Fields,
         children,
         ..
     } = layout
     {
         for node in children.as_slice() {
             if let WireNode::Branch {
-                meta: CBranch::Group(CGroup::Field(name)),
+                meta: CBranch::Field(name),
                 ..
             } = node
             {

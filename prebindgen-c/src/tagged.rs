@@ -146,7 +146,7 @@ fn arm_fields(node: &WireNode<CWire, CChain, CBranch>) -> Result<Vec<(&syn::Iden
         .iter()
         .map(|node| {
             let WireNode::Branch {
-                meta: CBranch::Group(CGroup::Field(name)),
+                meta: CBranch::Field(name),
                 ..
             } = node
             else {
