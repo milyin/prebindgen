@@ -1,7 +1,9 @@
 //! Executable conformance tests for codecs with domains unrelated to C or JNI.
 use super::*;
-type InputPlan<W> = prebindgen_conversions::InputPlan<W, (), DomainGroup, DomainGroup>;
-type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, (), DomainGroup, DomainGroup>;
+type InputPlan<W> =
+    prebindgen_conversions::InputPlan<W, (), DomainGroup, DomainGroup, DomainGroup, ()>;
+type OutputPlan<W> =
+    prebindgen_conversions::OutputPlan<W, (), DomainGroup, DomainGroup, DomainGroup, ()>;
 use prebindgen_conversions::WireKind;
 
 // This is intentionally not an enum of primitive sentinel kinds. An adapter may
@@ -40,32 +42,33 @@ impl std::ops::Deref for DomainGroup {
 struct DomainAbi;
 impl DomainAbi {
     fn wires(
-        node: &WireNode<Domain, DomainGroup, DomainGroup>,
+        node: &WireNode<Domain, DomainGroup, DomainGroup, DomainGroup, ()>,
     ) -> std::vec::IntoIter<&Wire<Domain>> {
         prebindgen_conversions::wire_definitions(std::iter::once(node))
             .collect::<Vec<_>>()
             .into_iter()
     }
     fn wires_mut(
-        node: &mut WireNode<Domain, DomainGroup, DomainGroup>,
+        node: &mut WireNode<Domain, DomainGroup, DomainGroup, DomainGroup, ()>,
     ) -> std::vec::IntoIter<&mut Wire<Domain>> {
         prebindgen_conversions::wire_definitions_mut(std::iter::once(node))
             .collect::<Vec<_>>()
             .into_iter()
     }
-    fn validate(node: &WireNode<Domain, DomainGroup, DomainGroup>) -> Result<()> {
+    fn validate(node: &WireNode<Domain, DomainGroup, DomainGroup, DomainGroup, ()>) -> Result<()> {
         prebindgen_conversions::validate_wire_names(Self::wires(node))
     }
 }
 struct DomainCodec;
 impl Codec for DomainCodec {
-    type Input = crate::CodecInputPlan<Self>;
-    type Output = crate::CodecOutputPlan<Self>;
+    type Input =
+        prebindgen_conversions::InputPlan<Domain, (), DomainGroup, DomainGroup, DomainGroup, ()>;
+    type Output =
+        prebindgen_conversions::OutputPlan<Domain, (), DomainGroup, DomainGroup, DomainGroup, ()>;
 
     test_operations!();
-    type Schema = prebindgen_conversions::PlanSchema<Domain, (), DomainGroup, DomainGroup>;
-    type Chain = DomainGroup;
-    type Branch = DomainGroup;
+    type Schema =
+        prebindgen_conversions::PlanSchema<Domain, (), DomainGroup, DomainGroup, DomainGroup, ()>;
 
     fn validate_input(&self, plan: &CodecInputPlan<Self>) -> Result<()> {
         DomainAbi::validate(&plan.node)
@@ -81,9 +84,19 @@ impl Codec for DomainCodec {
 
     type Extra = ();
     type Context = ();
-    type Wire = Domain;
 
-    fn selector(&self, _: &()) -> Result<Domain> {
+    fn input_selector(&self, _: &()) -> Result<Domain> {
+        Ok({
+            Domain {
+                ty: syn::parse_quote!(i32),
+                unused: vec![],
+                remaining: None,
+                prefix: false,
+                valid: quote!(true),
+            }
+        })
+    }
+    fn output_selector(&self, _: &()) -> Result<Domain> {
         Ok({
             Domain {
                 ty: syn::parse_quote!(i32),
@@ -108,21 +121,42 @@ impl Codec for DomainCodec {
     fn output_leaf(&self, _: OutputLeaf<'_, Self>) -> Result<OutputPlan<Domain>> {
         unreachable!()
     }
-    fn group(&self, kind: GroupKind<'_>) -> Result<DomainGroup> {
+    fn input_group(&self, kind: GroupKind) -> Result<DomainGroup> {
         Ok(match kind {
-            GroupKind::Values | GroupKind::NamedOutput(_) => DomainGroup::default(),
+            GroupKind::Values => DomainGroup::default(),
             GroupKind::Fields => DomainGroup {
                 description: "record".into(),
             },
-            GroupKind::Field(name) => DomainGroup {
-                description: format!("member:{name}"),
+        })
+    }
+    fn output_group(&self, kind: GroupKind) -> Result<DomainGroup> {
+        Ok(match kind {
+            GroupKind::Values => DomainGroup::default(),
+            GroupKind::Fields => DomainGroup {
+                description: "record".into(),
             },
         })
     }
-    fn optional(&self, request: Optional<'_, Self>) -> Result<OptionalEncoding<Self>> {
+    fn input_field(&self, name: &syn::Ident) -> Result<DomainGroup> {
+        Ok(DomainGroup {
+            description: format!("member:{name}"),
+        })
+    }
+    fn output_field(&self, name: &syn::Ident) -> Result<DomainGroup> {
+        Ok(DomainGroup {
+            description: format!("member:{name}"),
+        })
+    }
+    fn output_named(&self, _name: &str) -> Result<DomainGroup> {
+        Ok(DomainGroup::default())
+    }
+    fn input_optional(
+        &self,
+        request: InputOptional<'_, Self>,
+    ) -> Result<OptionalEncoding<Domain, DomainGroup>> {
         let prepared = prepare_optional_payload(
             DomainAbi::wires_mut(request.payload),
-            request.direction,
+            Direction::Input,
             |w| self.niche(w),
             |w, n| {
                 self.set_niche(w, n);
@@ -148,7 +182,48 @@ impl Codec for DomainCodec {
         } else {
             Presence::Flag(Wire {
                 name: request.presence,
-                kind: self.selector(request.extra)?,
+                kind: self.input_selector(request.extra)?,
+            })
+        };
+        Ok(OptionalEncoding {
+            presence,
+            metadata,
+            absent_values: prepared.absent_values,
+        })
+    }
+    fn output_optional(
+        &self,
+        request: OutputOptional<'_, Self>,
+    ) -> Result<OptionalEncoding<Domain, DomainGroup>> {
+        let prepared = prepare_optional_payload(
+            DomainAbi::wires_mut(request.payload),
+            Direction::Output,
+            |w| self.niche(w),
+            |w, n| {
+                self.set_niche(w, n);
+                Ok(())
+            },
+            |w, n, v| self.is_present(w, n, v),
+            |w, n| self.remaining_niche(w, n),
+            |w, n| self.absent_value(w, n, false),
+        )?;
+        let discriminator = prepared
+            .reservation
+            .as_ref()
+            .map(|r| r.discriminator.clone())
+            .unwrap_or_else(|| request.presence.clone());
+        let niche = prepared.reservation.as_ref().map(|r| r.niche.clone());
+        let metadata = DomainGroup {
+            description: format!("optional:{}:{discriminator}:{niche:?}", request.presence),
+        };
+        let presence = if prepared.reservation.is_some() {
+            Presence::Niche {
+                input_test: prepared.input_test,
+            }
+        } else {
+            Presence::Flag(Wire {
+                name: request.presence,
+                kind: self.output_selector(request.extra)?,
             })
         };
         Ok(OptionalEncoding {
@@ -220,7 +295,7 @@ fn input(domain: &Domain, depth: usize, active: Condition) -> InputPlan<Domain> 
                 0,
                 Wire {
                     name: format_ident!("prefix"),
-                    kind: DomainCodec.selector(&()).unwrap(),
+                    kind: DomainCodec.input_selector(&()).unwrap(),
                 },
             );
             quote!(prefix == 123)
@@ -269,7 +344,7 @@ fn output(domain: &Domain, depth: usize, source: TokenStream) -> OutputPlan<Doma
                 0,
                 Wire {
                     name: format_ident!("prefix"),
-                    kind: DomainCodec.selector(&()).unwrap(),
+                    kind: DomainCodec.output_selector(&()).unwrap(),
                 },
             );
             values.insert(0, (format_ident!("prefix"), quote!(123i32)));

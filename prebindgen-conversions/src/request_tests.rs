@@ -18,6 +18,8 @@ impl Conversion for Input {
     type Wire = syn::Type;
     type Chain = ();
     type Branch = ();
+    type Annotation = ();
+    type Container = ();
     type SlotFragment<'a> = Read<'a>;
     fn code_fragment_slot(&self, mode: Read<'_>, expected: &syn::Type) -> Result<TokenStream> {
         match mode {
@@ -74,6 +76,8 @@ impl Conversion for Output {
     type Wire = syn::Type;
     type Chain = ();
     type Branch = ();
+    type Annotation = ();
+    type Container = ();
     // Deliberately different from the input: no shared context or phase vocabulary.
     type SlotFragment<'a> = &'a syn::Ident;
     fn code_fragment_slot(&self, source: &syn::Ident, expected: &syn::Type) -> Result<TokenStream> {
@@ -209,6 +213,8 @@ fn one_logical_sequence_supports_packed_and_callback_readers() {
         type Wire = syn::Type;
         type Chain = ();
         type Branch = ();
+        type Annotation = ();
+        type Container = ();
         type SlotFragment<'a> = Delivery<'a>;
         fn code_fragment_slot(&self, mode: Delivery<'_>, _: &syn::Type) -> Result<TokenStream> {
             Ok(match mode {

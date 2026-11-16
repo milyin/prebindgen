@@ -149,7 +149,7 @@ fn boxed_input_releases_empty_allocation_before_continuation() {
         ),
     ] {
         let name = format_ident!("{name}");
-        let plan = boxed::input::<syn::Type, Context, (), ()>(
+        let plan = boxed::input::<syn::Type, Context, (), (), (), ()>(
             &storage,
             &syn::parse_quote!(Item),
             syn::parse_quote!(incoming),

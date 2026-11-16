@@ -3,24 +3,43 @@ use super::*;
 use prebindgen_conversions::InputConversion;
 use std::rc::Rc;
 
+/// Borrowed roots at function and callback boundaries. Each root keeps its direction.
+#[derive(Clone, Copy)]
+pub(crate) enum BoundaryNode<'a> {
+    Input(&'a JniInputWireNode),
+    Output(&'a JniOutputWireNode),
+}
+impl<'a> BoundaryNode<'a> {
+    pub(crate) fn wires(self) -> Vec<&'a prebindgen_conversions::Wire<JniWire>> {
+        match self {
+            Self::Input(node) => {
+                prebindgen_conversions::wire_definitions(std::iter::once(node)).collect()
+            }
+            Self::Output(node) => {
+                prebindgen_conversions::wire_definitions(std::iter::once(node)).collect()
+            }
+        }
+    }
+}
+
 /// Prepared boundary roots, including typed error converters and declarations
 /// whose callback interfaces are emitted without a direct exported occurrence.
 pub(crate) fn nodes<I: KotlinInputConversion, O: KotlinOutputConversion>(
     flat: &Flat<JniSchema<I, O>>,
-) -> Result<Vec<(bool, &kotlin::JniNode)>> {
+) -> Result<Vec<BoundaryNode<'_>>> {
     let mut nodes = Vec::new();
     for source in flat.functions.values() {
         for binding in &source.metadata {
             let call = binding.call()?;
             for plan in &call.inputs {
-                nodes.push((true, plan.input_node()));
+                nodes.push(BoundaryNode::Input(plan.input_node()));
             }
             let outcomes = call.output.output_outcomes();
             nodes.extend(
                 std::iter::once(&outcomes.success)
                     .chain(outcomes.source_error.iter())
                     .chain(outcomes.binding_failure.iter())
-                    .map(|node| (false, node)),
+                    .map(BoundaryNode::Output),
             );
             if let Some(output) = binding
                 .metadata
@@ -28,12 +47,12 @@ pub(crate) fn nodes<I: KotlinInputConversion, O: KotlinOutputConversion>(
                 .as_deref()
                 .and_then(|e| e.output.as_ref())
             {
-                nodes.push((false, &output.output_outcomes().success));
+                nodes.push(BoundaryNode::Output(&output.output_outcomes().success));
             }
         }
     }
     for input in crate::callback::declarations(flat)? {
-        nodes.push((true, input.input_node()));
+        nodes.push(BoundaryNode::Input(input.input_node()));
     }
     Ok(nodes)
 }

@@ -47,6 +47,7 @@ fun checkTypeInputs() {
     finally{TypeInputHolder.readRow=null}
     check(optionReads==1 && optionalA.isClosed && optionalB.isClosed && typeInputLive()==0L)
     check(typeInputHolder(TypeInputHolder(null))==-1L)
+    checkRecordActivation()
 
     fun rows()=listOf(TypeInputRow(typeInputANew(1),typeInputBNew(2)),TypeInputRow(typeInputANew(3),typeInputBNew(4)))
     fun handles(rows:List<TypeInputRow>)=rows.flatMap{listOf(it.a,it.b)}
@@ -89,6 +90,51 @@ fun checkTypeInputs() {
     check(typeInputLive()==0L)
     checkHandleOrderRoutes()
     println("type-aware inputs PASS: shared/exclusive types, records, nested/plain/bulk arrays, callbacks, GC fences and failure cleanup")
+}
+
+private fun checkRecordActivation() {
+    val a = typeInputANew(71)
+    val b = typeInputBNew(73)
+    val holder = TypeInputHolder(TypeInputRow(a, b))
+    var holderReads = 0
+    var rowReads = 0
+    TypeInputHolder.readRow = { holderReads++; it }
+    TypeInputRow.readA = { rowReads++; it }
+    try {
+        // The empty constructor wins: neither a null record nor a supplied
+        // inactive record may be inspected, locked or consumed.
+        check(typeInputHolderChoice(0, null) == -1L)
+        check(typeInputHolderChoice(0, holder) == -1L)
+        check(holderReads == 0 && rowReads == 0 && !a.isClosed && !b.isClosed)
+        check(typeInputOptionalHolder(null) == -2L)
+        check(typeInputHolderCallback(TypeInputHolderCallback { null }) == -2L)
+        check(typeInputOptionalHolder(TypeInputHolder(null)) == -1L)
+        check(typeInputHolderCallback(TypeInputHolderCallback { TypeInputHolder(null) }) == -1L)
+        holderReads = 0
+        rowReads = 0
+        check(typeInputHolderChoice(1, holder) == 144L)
+        check(holderReads == 1 && rowReads == 1 && a.isClosed && b.isClosed)
+    } finally {
+        TypeInputHolder.readRow = null
+        TypeInputRow.readA = null
+        a.close(); b.close()
+    }
+    for (callback in listOf(false, true)) {
+        val first = typeInputANew(79)
+        val second = typeInputBNew(83)
+        val value = TypeInputHolder(TypeInputRow(first, second))
+        var reads = 0
+        TypeInputHolder.readRow = { reads++; it }
+        try {
+            val sum = if (callback) typeInputHolderCallback(TypeInputHolderCallback { value })
+                      else typeInputOptionalHolder(value)
+            check(sum == 162L && reads == 1 && first.isClosed && second.isClosed)
+        } finally {
+            TypeInputHolder.readRow = null
+            first.close(); second.close()
+        }
+    }
+    check(typeInputLive() == 0L)
 }
 
 // Deliberately reverse addresses relative to type order. These monitor-only

@@ -1,7 +1,7 @@
 //! Active physical values in one native row. The tree supplies all predicates;
 //! no runtime ownership registry or row-by-row plan is required.
 use super::*;
-use crate::kotlin::JniNode;
+
 use prebindgen_conversions::WireNode;
 
 #[derive(Clone, Debug)]
@@ -40,7 +40,14 @@ pub(crate) struct Selection {
     kinds: Vec<JniWire>,
 }
 impl Selection {
-    pub(crate) fn new(node: &JniNode) -> Result<Self> {
+    pub(crate) fn new<
+        Chain: group::ChainMetadata,
+        Branch: group::BranchMetadata,
+        Annotation: group::AnnotationMetadata,
+        Container: group::ContainerMetadata,
+    >(
+        node: &JniWireNode<Chain, Branch, Annotation, Container>,
+    ) -> Result<Self> {
         let wires = group::row_fields(node).collect::<Vec<_>>();
         let indices = wires
             .iter()
@@ -48,8 +55,13 @@ impl Selection {
             .map(|(i, w)| (w.name.to_string(), i))
             .collect::<BTreeMap<_, _>>();
         let mut tests = vec![vec![]; wires.len()];
-        fn visit(
-            node: &JniNode,
+        fn visit<
+            Chain: group::ChainMetadata,
+            Branch: group::BranchMetadata,
+            Annotation: group::AnnotationMetadata,
+            Container: group::ContainerMetadata,
+        >(
+            node: &JniWireNode<Chain, Branch, Annotation, Container>,
             path: &[Test],
             indices: &BTreeMap<String, usize>,
             out: &mut [Vec<Test>],
@@ -61,17 +73,15 @@ impl Selection {
             };
             match node {
                 WireNode::Leaf(wires) => set(wires, out),
+                WireNode::Annotation { child, .. } => visit(child, path, indices, out)?,
+                WireNode::Container { wires, .. } => set(wires, out),
                 WireNode::Chain {
-                    controls,
-                    meta: JniChain::Sequence(_) | JniChain::Bulk,
-                    ..
-                } => set(controls, out),
-                WireNode::Chain {
+                    meta: encoding,
                     controls,
                     child,
-                    meta: JniChain::Optional(optional),
                 } => {
                     set(controls, out);
+                    let optional = encoding.optional().expect("optional chain");
                     let mut next = path.to_vec();
                     let donor = indices[&optional.discriminator().to_string()];
                     next.push(Test::Present(donor, optional.niche().cloned()));
@@ -79,6 +89,7 @@ impl Selection {
                     // The discriminator must be readable before testing presence.
                     out[donor].retain(|t| !matches!(t,Test::Present(i,_) if *i==donor));
                 }
+
                 WireNode::Branch {
                     controls,
                     children,
@@ -87,7 +98,7 @@ impl Selection {
                     set(controls, out);
                     for (i, child) in children.iter().enumerate() {
                         let mut next = path.to_vec();
-                        if matches!(meta, JniBranch::Enum(_) | JniBranch::Alternatives) {
+                        if meta.selects_arm() {
                             next.push(Test::Arm(indices[&controls[0].name.to_string()], i as i32));
                         }
                         visit(child, &next, indices, out)?;

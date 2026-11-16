@@ -183,7 +183,7 @@ pub(crate) fn input(
         // could disappear while Rust still borrows it. Moving the handle disarms
         // cleanup and does not have this problem.
         for wire in prebindgen_conversions::wire_definitions(std::iter::once(input.input_node())) {
-            if let JniWire::Handle { handle, .. } = &wire.kind {
+            if let JniWire::RHandle { handle, .. } = &wire.kind {
                 if handle.access != prebindgen_conversions::Access::Move
                     && flat
                         .type_info(&handle.ty)?
@@ -294,14 +294,14 @@ impl JniCallback {
             .map(Into::into)
     }
 
-    pub(crate) fn bulk_nodes(&self) -> Vec<(bool, &kotlin::JniNode)> {
+    pub(crate) fn bulk_nodes(&self) -> Vec<metadata::BoundaryNode<'_>> {
         let mut nodes = self
             .arguments
             .iter()
-            .map(|a| (false, &a.output.output_outcomes().success))
+            .map(|a| metadata::BoundaryNode::Output(&a.output.output_outcomes().success))
             .collect::<Vec<_>>();
         if let Some(value) = &self.return_value {
-            nodes.push((true, value.input.input_node()));
+            nodes.push(metadata::BoundaryNode::Input(value.input.input_node()));
         }
         nodes
     }
@@ -312,7 +312,7 @@ impl JniCallback {
     pub(crate) fn requires_preflight(&self) -> bool {
         self.return_value.as_ref().is_some_and(|value| {
             prebindgen_conversions::wire_definitions(std::iter::once(value.input.input_node()))
-                .any(|wire| matches!(wire.kind, JniWire::Handle { .. }))
+                .any(|wire| matches!(wire.kind, JniWire::RHandle { .. }))
         })
     }
 
@@ -449,7 +449,7 @@ impl JniCallback {
         let mut plan = JniInputPlan::new(
             WireNode::Leaf(vec![Wire {
                 name: wire.clone(),
-                kind: JniWire::Callback {
+                kind: JniWire::KCallback {
                     callback: self.clone(),
                 },
             }]),
@@ -645,7 +645,7 @@ impl CallbackReturn {
     ) -> Result<(TokenStream, TokenStream)> {
         let fields = self.fields();
         if let [field] = fields.as_slice() {
-            if let JniWire::Handle { handle, .. } = &field.kind {
+            if let JniWire::RHandle { handle, .. } = &field.kind {
                 if handle.access == Access::Move {
                     let name = &field.name;
                     let ty = &handle.ty;
@@ -807,13 +807,13 @@ impl CallbackReturn {
 // Traverse the configured Kotlin shape on the error path. The wire tree keeps
 // source field names and ownership, so borrowed fields are never reclaimed.
 fn returned_handle_cleanup(
-    node: &crate::kotlin::JniNode,
+    node: &JniInputWireNode,
     value: &str,
     prefix: &str,
     next: &mut usize,
     context: &KotlinContext<'_>,
 ) -> Result<String> {
-    if !crate::kotlin::input_handles(node, false) {
+    if !crate::kotlin::has_handles(node, false) {
         return Ok(String::new());
     }
     let local = format!("returnedValue{}", *next);
@@ -821,28 +821,30 @@ fn returned_handle_cleanup(
     Ok(match node {
         WireNode::Leaf(wires) => {
             let owned = wires.iter().any(
-                |w| matches!(&w.kind,JniWire::Handle{handle,..} if handle.access==Access::Move),
+                |w| matches!(&w.kind,JniWire::RHandle{handle,..} if handle.access==Access::Move),
             );
             format!("({value} as? {prefix}.NativeHandle)?.let {{ {local} -> returnedHandles.add({local}); {} }}\n",if owned{format!("returnedOwners.add({local})")}else{String::new()})
         }
-        WireNode::Chain {
-            meta: crate::JniChain::Sequence(_),
+        WireNode::Container {
+            meta: crate::JniInputWireContainer::KList,
             child,
             ..
         } => {
             let body = returned_handle_cleanup(child, &local, prefix, next, context)?;
             format!("({value} as? Iterable<*>)?.forEach {{ {local} -> {body} }}\n")
         }
-        WireNode::Chain { child, .. } => {
+        WireNode::Annotation { child, .. }
+        | WireNode::Chain { child, .. }
+        | WireNode::Container { child, .. } => {
             returned_handle_cleanup(child, value, prefix, next, context)?
         }
         WireNode::Branch {
-            meta: JniBranch::Enum(group),
+            meta: JniInputWireBranch::KSealed { r_type, .. },
             children,
             ..
         } => {
-            let (source, class) = group.declaration(context.source_types)?;
-            let class = class.ok_or("expanded enum callback result must expose one value")?;
+            let source = crate::metadata::source_enum(context.source_types, r_type)?;
+            let class = crate::sealed::class(context.source_types, r_type)?;
             if source.variants.len() != children.len() {
                 return Err("enum occurrence differs from its source variants".into());
             }
@@ -869,13 +871,12 @@ fn returned_handle_cleanup(
             format!("when(val {local}={value}) {{ {arms} else -> {{}} }}\n")
         }
         WireNode::Branch {
-            meta: crate::JniBranch::Record(data),
+            meta: crate::JniInputWireBranch::KDataClass { r_type, .. },
             children,
             ..
         } => {
             let mut body = String::new();
-            let (record, class) =
-                crate::metadata::source_data_class(context.source_types, &data.source)?;
+            let (record, class) = crate::metadata::source_data_class(context.source_types, r_type)?;
             for pair in crate::data::record_fields(children, record)? {
                 let (field, child) = pair?;
                 let expr = format!(
@@ -913,13 +914,13 @@ fn mentions_value(code: &TokenStream, name: &syn::Ident) -> bool {
 // Fixed native locals and cached bulk roots can be reclaimed without JNI.
 // Ordinary collection occurrences are handled by callback_rows instead.
 fn receive_native_return_owners(
-    node: &kotlin::JniNode,
+    node: &JniInputWireNode,
     types: &crate::metadata::JniTypes,
 ) -> Result<TokenStream> {
     Ok(match node {
-        WireNode::Chain { meta: JniChain::Bulk, controls, child } => crate::bulk::cleanup_cached(controls, child, types)?,
+        WireNode::Container { meta: JniInputWireContainer::BulkFrame, wires: controls, child } => crate::bulk::cleanup_cached(controls, child, types)?,
         WireNode::Leaf(fields) => fields.iter().filter_map(|field| {
-            if let JniWire::Handle { handle, .. } = &field.kind {
+            if let JniWire::RHandle { handle, .. } = &field.kind {
                 if handle.access == Access::Move {
                     let name=&field.name; let ty=&handle.ty;
                     return Some(quote!(unsafe { callback_return_owners.receive(#name as *mut ::prebindgen_jni_runtime::Allocation<#ty>); }));
@@ -927,17 +928,18 @@ fn receive_native_return_owners(
             }
             None
         }).collect(),
-        WireNode::Chain { meta: JniChain::Optional(optional), child, .. } => {
+        WireNode::Chain { meta: JniInputWireChain::ROption { presence: optional }, child, .. } => {
             let scan=receive_native_return_owners(child, types)?;
             if scan.is_empty() { return Ok(scan); }
             let present=optional.is_present(child)?;
             quote!(if #present { #scan })
         }
-        WireNode::Chain { meta: JniChain::Sequence(_), .. } => {
-            if kotlin::input_handles(node, true) { return Err("callback ownership cleanup requires buffered ordinary rows or an enclosing bulk frame".into()); }
+        WireNode::Container { meta: JniInputWireContainer::KList, .. } => {
+            if kotlin::has_handles(node, true) { return Err("callback ownership cleanup requires buffered ordinary rows or an enclosing bulk frame".into()); }
             quote!()
         }
-        WireNode::Branch { meta: JniBranch::Alternatives | JniBranch::Enum(_), controls, children } => {
+        WireNode::Annotation { meta: JniInputWireAnnotation::RField { .. } | JniInputWireAnnotation::RParam { .. }, child, .. } => receive_native_return_owners(child, types)?,
+        WireNode::Branch { meta: JniInputWireBranch::RChoices | JniInputWireBranch::KSealed { .. } | JniInputWireBranch::KEnumParams { .. }, controls, children } => {
             let selector=&controls[0].name;
             let scans=children.iter().enumerate().map(|(i,child)| {
                 let scan=receive_native_return_owners(child, types)?; if scan.is_empty(){return Ok(TokenStream::new());} let i=i as i32;
@@ -979,7 +981,7 @@ pub(crate) fn files<I: KotlinInputConversion, O: KotlinOutputConversion>(
         wires.extend(function.input_wire_definitions()?);
     }
     for wire in wires {
-        let JniWire::Callback { callback } = &wire.kind else {
+        let JniWire::KCallback { callback } = &wire.kind else {
             continue;
         };
         let context = KotlinContext {
@@ -1031,7 +1033,7 @@ pub(crate) fn files<I: KotlinInputConversion, O: KotlinOutputConversion>(
                 let handles = prebindgen_conversions::wire_definitions(std::iter::once(
                     &arg.output.output_outcomes().success,
                 ))
-                .any(|wire| matches!(wire.kind, JniWire::Handle { .. }));
+                .any(|wire| matches!(wire.kind, JniWire::RHandle { .. }));
                 handles && !arg.scoped
             })
             .collect::<Vec<_>>();

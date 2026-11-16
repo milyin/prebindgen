@@ -45,15 +45,18 @@ pub(crate) fn builtin(ty: &syn::Type) -> OpaqueLayout {
         OpaqueLayout::auto::<Vec<u8>>().key("std.vec")
     }
 }
-fn nodes(
-    plan: &COutputPlan<CWire>,
-) -> impl Iterator<Item = &prebindgen_conversions::WireNode<CWire, CChain, CBranch>> {
+fn nodes(plan: &COutputPlan<CWire>) -> impl Iterator<Item = &COutputWireNode> {
     std::iter::once(&plan.outcomes.success)
         .chain(plan.outcomes.source_error.iter())
         .chain(plan.outcomes.binding_failure.iter())
 }
-fn used_node(
-    node: &prebindgen_conversions::WireNode<CWire, CChain, CBranch>,
+fn used_node<
+    Chain: group::ChainMetadata,
+    Branch: group::BranchMetadata,
+    Annotation: group::AnnotationMetadata,
+    Container: group::ContainerMetadata,
+>(
+    node: &CWireNode<Chain, Branch, Annotation, Container>,
     names: &mut BTreeSet<String>,
 ) {
     for wire in prebindgen_conversions::wire_definitions(std::iter::once(node)) {

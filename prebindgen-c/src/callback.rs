@@ -23,7 +23,15 @@ pub(crate) struct Argument {
 }
 
 // Stable wire semantics, without spans, generated local names or recipe Debug.
-fn schema(node: &WireNode<CWire, CChain, CBranch>, out: &mut String) {
+fn schema<
+    Chain: group::ChainMetadata,
+    Branch: group::BranchMetadata,
+    Annotation: group::AnnotationMetadata,
+    Container: group::ContainerMetadata,
+>(
+    node: &CWireNode<Chain, Branch, Annotation, Container>,
+    out: &mut String,
+) {
     fn access(value: Access) -> &'static str {
         match value {
             Access::Move => "owned",
@@ -70,26 +78,35 @@ fn schema(node: &WireNode<CWire, CChain, CBranch>, out: &mut String) {
             out.push('L');
             fields(wires, out);
         }
+        WireNode::Annotation { child, .. } => {
+            out.push_str("G[");
+            schema(child, out);
+            out.push(']');
+        }
+        WireNode::Container { wires, child, meta } => {
+            out.push('(');
+            if meta.sequence().is_some() {
+                out.push('S');
+            } else if let Some(value) = meta.tagged() {
+                out.push('E');
+                out.push_str(&value.name);
+            }
+            fields(wires, out);
+            schema(child, out);
+            out.push(')');
+        }
         WireNode::Chain {
             controls,
             child,
             meta,
         } => {
             out.push('(');
-            match meta {
-                CChain::Sequence(_) => out.push('S'),
-                CChain::Tagged(value) => {
-                    out.push('E');
-                    out.push_str(&value.name);
-                }
-                CChain::Optional(optional) => {
-                    out.push('O');
-                    match optional.niche() {
-                        Some(CNiche::Null) => out.push('N'),
-                        Some(CNiche::Integer(n)) => out.push_str(&format!("I{n};")),
-                        None => out.push('F'),
-                    }
-                }
+            let optional = meta.optional().expect("optional chain");
+            out.push('O');
+            match optional.niche() {
+                Some(CNiche::Null) => out.push('N'),
+                Some(CNiche::Integer(n)) => out.push_str(&format!("I{n};")),
+                None => out.push('F'),
             }
             fields(controls, out);
             schema(child, out);
@@ -100,11 +117,7 @@ fn schema(node: &WireNode<CWire, CChain, CBranch>, out: &mut String) {
             children,
             meta,
         } => {
-            out.push(if matches!(meta, CBranch::Alternatives) {
-                'A'
-            } else {
-                'G'
-            });
+            out.push(if meta.is_alternatives() { 'A' } else { 'G' });
             out.push('[');
             fields(controls, out);
             for child in children {
@@ -324,10 +337,10 @@ impl CCallback {
     pub(crate) fn context(&self) -> CContext {
         let mut schemas = Vec::new();
         for arg in &self.arguments {
-            sequence::schemas(&arg.output.outcomes.success, &mut schemas);
+            sequence::boundary_schemas((&arg.output.outcomes.success).into(), &mut schemas);
         }
         if let Some((_, plan)) = &self.returned {
-            sequence::schemas(&plan.node, &mut schemas);
+            sequence::boundary_schemas((&plan.node).into(), &mut schemas);
         }
         CContext {
             input_transfers: prebindgen_conversions::InputTransfers::Forbidden,
@@ -502,7 +515,7 @@ impl CCallback {
     }
 }
 fn receive_return_owners(
-    node: &prebindgen_conversions::WireNode<CWire, CChain, CBranch>,
+    node: &CInputWireNode,
     context: &CContext,
     locations: &BTreeMap<String, TokenStream>,
 ) -> Result<TokenStream> {
@@ -530,7 +543,7 @@ fn receive_return_owners(
                 None
             })
             .collect(),
-        WireNode::Chain {meta:CChain::Tagged(value),controls,..}=>{
+        WireNode::Container {meta:CInputWireContainer::Tagged(value),wires: controls,..}=>{
             if !value.owned {TokenStream::new()}else{
                 let name=&controls[0].name;let native=&value.rust;let drop=&value.destructor;
                 let pointer=locations.get(&name.to_string()).cloned().unwrap_or_else(||quote!(::core::ptr::addr_of!(#name)));
@@ -539,7 +552,7 @@ fn receive_return_owners(
             }
         }
         WireNode::Chain {
-            meta: CChain::Optional(optional),
+            meta: CInputWireChain::Optional(optional),
             child,
             ..
         } => {
@@ -554,9 +567,9 @@ fn receive_return_owners(
                 .unwrap_or_else(|| quote!(#name==1));
             quote!(if #present {#scan})
         }
-        WireNode::Chain {
-            meta: CChain::Sequence(_),
-            controls,
+        WireNode::Container {
+            meta: CInputWireContainer::Sequence,
+            wires: controls,
             child,
         } => {
             let carrier = &controls[0].name;
@@ -573,8 +586,9 @@ fn receive_return_owners(
             // The ordinal counts owned fields across rows and nested collections.
             quote!(#[allow(clippy::explicit_counter_loop)] for index in 0..#carrier.len {#(#reads)* #scan})
         }
+        WireNode::Annotation { meta: CInputWireAnnotation::Field(_), child, .. } => receive_return_owners(child, context, locations)?,
         WireNode::Branch {
-            meta: CBranch::Alternatives | CBranch::Enum(_),
+            meta: CInputWireBranch::Alternatives | CInputWireBranch::Enum(_),
             controls,
             children,
         } => {
@@ -658,20 +672,20 @@ pub(crate) fn emit<R, E, P>(
         let mut output_carriers = BTreeSet::new();
         let mut fields = Vec::new();
         for arg in &callback.arguments {
-            sequence::schemas(&arg.output.outcomes.success, &mut schemas);
+            sequence::boundary_schemas((&arg.output.outcomes.success).into(), &mut schemas);
             fields.extend(group::callback_parameters(&arg.output.outcomes.success));
         }
         for (wire, _, _) in &schemas {
             output_carriers.insert(wire.name.to_string());
         }
         if let Some((_, plan)) = &callback.returned {
-            sequence::schemas(&plan.node, &mut schemas);
+            sequence::boundary_schemas((&plan.node).into(), &mut schemas);
         }
         for field in fields.iter().copied().chain(callback.return_fields()) {
             validate_wire_declaration(field, pointers, enums)?;
         }
         for (_, element, _) in &schemas {
-            for field in group::row_fields(element) {
+            for field in element.fields() {
                 validate_wire_declaration(field, pointers, enums)?;
             }
         }

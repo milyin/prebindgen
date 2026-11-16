@@ -274,10 +274,13 @@ time; generated calls gain no dispatch or allocations from this refactoring.
 ## Leaf and wire helpers
 
 Besides its operation vocabularies and compilation state, a codec selects
-`Schema`, `Wire`, `Context`, `Extra`, `Chain` and `Branch`. `Schema` fixes the
+`Schema`, `Context`, `Extra` and prepared converters. Those converters select
+`Wire`, `Chain`, `Branch`, `Annotation` and `Container`. `Schema` fixes the
 converters and declaration metadata; `Wire` describes one boundary value.
 `Context` supplies Rust emission bindings, and `Extra` supplies occurrence
-settings. `Chain` and `Branch` describe wire parents without duplicating children.
+settings. Parent metadata describes children without duplicating their trees.
+Annotations preserve a child boundary, chains/branches add controls, and containers
+replace the child boundary with their own `wires`.
 
 The existing physical-conversion hooks remain available to the reusable helpers:
 
@@ -286,7 +289,9 @@ The existing physical-conversion hooks remain available to the reusable helpers:
 | `input_leaf(InputLeaf)` | Construct one Rust input from boundary values. |
 | `output_leaf(OutputLeaf)` | Prepare boundary values from a Rust source expression. |
 | `output_consumes(flat, ty, extra)` | Report whether the leaf moves its source. |
-| `group(GroupKind)` | Describe values, fields or named output views. |
+| `input_group(GroupKind)` / `output_group(GroupKind)` | Describe an ordered child list: values or source fields. |
+| `input_field(name)` / `output_field(name)` | Return annotation metadata labeling one source field's conversion subtree. |
+| `output_named(name)` | Return annotation metadata naming one output projection subtree; unsupported by default. |
 
 Optional features reject unsupported work by default. All interpretation and
 composition happens during generation, not during an FFI call.
@@ -403,7 +408,9 @@ option value, including any options already selected by adapter methods.
 | `output_leaf`, `output_bulk_leaf` | `output_leaf(OutputLeaf)`. |
 | `output_projected`, `output_bulk_projected` | `output_projected(OutputLeaf, Projection)`. |
 | `consumes` | `output_consumes`. |
-| `group_metadata`, `fields_group`, `field_group`, `named_output_group` | `group(GroupKind)`, returning `Result`. |
+| `group_metadata`, `fields_group` | `input_group(GroupKind)` / `output_group(GroupKind)` for ordered child lists. |
+| `field_group` | `input_field(name)` / `output_field(name)` for single-child field annotations. |
+| `named_output_group` | `output_named(name)` for a single-child output annotation. |
 | Required optional metadata/reservation hooks | One optional `optional` operation; opt-in wire helpers. |
 | `alternatives_metadata` plus niche retirement | `alternatives` receives the prefixed selector and mutable arms. |
 | `sequence_*` and `sequence_*_bulk` | Request-based `sequence_input` / `sequence_output`. |

@@ -124,8 +124,8 @@ pub fn prepare_optional_payload<'a, W: prebindgen_conversions::WireKind + 'a, N>
         absent_values,
     })
 }
-fn validate_encoding<C: Codec>(
-    encoding: &OptionalEncoding<C>,
+fn validate_encoding<W: prebindgen_conversions::WireKind, M>(
+    encoding: &OptionalEncoding<W, M>,
     tag: &syn::Ident,
     direction: Direction,
 ) -> Result<()> {
@@ -145,7 +145,10 @@ fn validate_encoding<C: Codec>(
     }
     Ok(())
 }
-fn mark<C: Codec>(tree: &mut CodecNode<C>, encoding: OptionalEncoding<C>) {
+fn mark<W: prebindgen_conversions::WireKind, C, B, A, T>(
+    tree: &mut WireNode<W, C, B, A, T>,
+    encoding: OptionalEncoding<W, C>,
+) {
     let controls = match encoding.presence {
         Presence::Flag(wire) => vec![wire],
         Presence::Niche { .. } => vec![],
@@ -168,11 +171,10 @@ pub fn optional_input<C: Codec>(
     active: &Condition,
     mut child: CodecInputPlan<C>,
 ) -> Result<CodecInputPlan<C>> {
-    let encoding = codec.optional(Optional {
+    let encoding = codec.input_optional(InputOptional::<C> {
         extra,
         payload: &mut child.node,
         presence: tag.clone(),
-        direction: Direction::Input,
     })?;
     validate_encoding(&encoding, &tag, Direction::Input)?;
     let mut prefix = TokenStream::new();
@@ -223,11 +225,10 @@ pub fn optional_output<C: Codec>(
     }
     validate_nested_output(&child)?;
     codec.validate_output(&child)?;
-    let mut encoding = codec.optional(Optional {
+    let mut encoding = codec.output_optional(OutputOptional::<C> {
         extra,
         payload: &mut child.outcomes.success,
         presence: tag.clone(),
-        direction: Direction::Output,
     })?;
     validate_encoding(&encoding, &tag, Direction::Output)?;
     let uses_niche = matches!(encoding.presence, Presence::Niche { .. });

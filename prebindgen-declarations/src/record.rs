@@ -26,15 +26,14 @@ pub fn record_input<C: Codec>(
     for (index, field) in fields.into_iter().enumerate() {
         let (name, mut child) = field?;
         check_field(&mut names, &name)?;
-        codec.prefix_layout(&mut child.node, ComponentSegment::Field(name.to_string()));
+        codec.prefix_input(&mut child.node, ComponentSegment::Field(name.to_string()));
         fallible |= child.fallible;
         storage.extend(std::mem::take(&mut child.storage));
         let target = format_ident!("{var}_field_{index}");
         values.push(quote!(#name:#target));
-        child.node = WireNode::Branch {
-            controls: vec![],
-            meta: codec.group(GroupKind::Field(&name))?,
-            children: vec![std::mem::take(&mut child.node)],
+        child.node = WireNode::Annotation {
+            meta: codec.input_field(&name)?,
+            child: Box::new(std::mem::take(&mut child.node)),
         };
         plans.push((target, child));
     }
@@ -49,7 +48,7 @@ pub fn record_input<C: Codec>(
     out.node = WireNode::Branch {
         controls: vec![],
         children: plans.into_iter().map(|(_, p)| p.node).collect(),
-        meta: codec.group(GroupKind::Fields)?,
+        meta: codec.input_group(GroupKind::Fields)?,
     };
     out.storage = storage;
     out.fallible = fallible;
@@ -57,7 +56,7 @@ pub fn record_input<C: Codec>(
 }
 
 /// Observe a named Rust record through shared field references, evaluating it once.
-/// Group hooks preserve field boundaries as in [`record_input`].
+/// Field annotation hooks preserve field boundaries as in [`record_input`].
 ///
 /// The caller validates the field count and types against the source record.
 /// `fields` supplies source field names in declaration order. `convert` receives
@@ -88,7 +87,7 @@ pub fn record_output<C: Codec>(
             success: WireNode::Branch {
                 controls: vec![],
                 children: vec![],
-                meta: codec.group(GroupKind::Fields)?,
+                meta: codec.output_group(GroupKind::Fields)?,
             },
             source_error: None,
             binding_failure: None,
@@ -100,14 +99,13 @@ pub fn record_output<C: Codec>(
     for (index, name) in fields.enumerate() {
         check_field(&mut names, &name)?;
         let mut child = convert(index, quote!(&#var.#name))?;
-        codec.prefix_layout(
+        codec.prefix_output(
             &mut child.outcomes.success,
             ComponentSegment::Field(name.to_string()),
         );
-        child.outcomes.success = prebindgen_conversions::WireNode::Branch {
-            controls: vec![],
-            meta: codec.group(GroupKind::Field(&(name)))?,
-            children: vec![std::mem::take(&mut child.outcomes.success)],
+        child.outcomes.success = WireNode::Annotation {
+            meta: codec.output_field(&name)?,
+            child: Box::new(std::mem::take(&mut child.outcomes.success)),
         };
         append(&mut out, child)?;
     }
@@ -146,7 +144,7 @@ pub fn record_output_owned<C: Codec>(
             success: WireNode::Branch {
                 controls: vec![],
                 children: vec![],
-                meta: codec.group(GroupKind::Fields)?,
+                meta: codec.output_group(GroupKind::Fields)?,
             },
             source_error: None,
             binding_failure: None,
@@ -158,14 +156,13 @@ pub fn record_output_owned<C: Codec>(
     for (index, name) in fields.enumerate() {
         check_field(&mut names, &name)?;
         let mut child = convert(index, quote!(#var.#name))?;
-        codec.prefix_layout(
+        codec.prefix_output(
             &mut child.outcomes.success,
             ComponentSegment::Field(name.to_string()),
         );
-        child.outcomes.success = prebindgen_conversions::WireNode::Branch {
-            controls: vec![],
-            meta: codec.group(GroupKind::Field(&(name)))?,
-            children: vec![std::mem::take(&mut child.outcomes.success)],
+        child.outcomes.success = WireNode::Annotation {
+            meta: codec.output_field(&name)?,
+            child: Box::new(std::mem::take(&mut child.outcomes.success)),
         };
         append(&mut out, child)?;
     }

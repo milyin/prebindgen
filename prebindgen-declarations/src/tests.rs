@@ -10,24 +10,26 @@ enum TestGroup {
 struct TestAbi;
 impl TestAbi {
     fn wires(
-        node: &WireNode<TestWire, TestGroup, TestGroup>,
+        node: &WireNode<TestWire, TestGroup, TestGroup, TestGroup, ()>,
     ) -> std::vec::IntoIter<&Wire<TestWire>> {
         prebindgen_conversions::wire_definitions(std::iter::once(node))
             .collect::<Vec<_>>()
             .into_iter()
     }
     fn wires_mut(
-        node: &mut WireNode<TestWire, TestGroup, TestGroup>,
+        node: &mut WireNode<TestWire, TestGroup, TestGroup, TestGroup, ()>,
     ) -> std::vec::IntoIter<&mut Wire<TestWire>> {
         prebindgen_conversions::wire_definitions_mut(std::iter::once(node))
             .collect::<Vec<_>>()
             .into_iter()
     }
-    fn validate(node: &WireNode<TestWire, TestGroup, TestGroup>) -> Result<()> {
-        fn check(node: &WireNode<TestWire, TestGroup, TestGroup>) -> Result<()> {
+    fn validate(node: &WireNode<TestWire, TestGroup, TestGroup, TestGroup, ()>) -> Result<()> {
+        fn check(node: &WireNode<TestWire, TestGroup, TestGroup, TestGroup, ()>) -> Result<()> {
             match node {
                 WireNode::Leaf(_) => {}
-                WireNode::Chain { child, .. } => check(child)?,
+                WireNode::Annotation { child, .. }
+                | WireNode::Chain { child, .. }
+                | WireNode::Container { child, .. } => check(child)?,
                 WireNode::Branch { meta, children, .. } => {
                     if matches!(meta, TestGroup::Maybe) && children.is_empty() {
                         return Err("selection has no alternatives".into());
@@ -43,9 +45,9 @@ impl TestAbi {
         prebindgen_conversions::validate_wire_names(Self::wires(node))
     }
 }
-type TestBindings<W> = super::PlanBindings<W, (), TestGroup, TestGroup>;
-type InputPlan<W> = prebindgen_conversions::InputPlan<W, (), TestGroup, TestGroup>;
-type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, (), TestGroup, TestGroup>;
+type TestBindings<W> = super::PlanBindings<W, (), TestGroup, TestGroup, TestGroup, ()>;
+type InputPlan<W> = prebindgen_conversions::InputPlan<W, (), TestGroup, TestGroup, TestGroup, ()>;
+type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, (), TestGroup, TestGroup, TestGroup, ()>;
 use prebindgen_conversions::validate_bindings;
 use prebindgen_conversions::value::{self, Value};
 struct TestCodec;
@@ -84,15 +86,18 @@ fn wire(kind: Kind, ty: &Type, extra: &Extra) -> TestWire {
 }
 #[allow(clippy::type_complexity)] // Keep the test codec metadata roles visible.
 impl Codec for TestCodec {
-    type Input = crate::CodecInputPlan<Self>;
-    type Output = crate::CodecOutputPlan<Self>;
+    type Input =
+        prebindgen_conversions::InputPlan<TestWire, (), TestGroup, TestGroup, TestGroup, ()>;
+    type Output =
+        prebindgen_conversions::OutputPlan<TestWire, (), TestGroup, TestGroup, TestGroup, ()>;
 
     test_operations!();
-    type Schema = prebindgen_conversions::PlanSchema<TestWire, (), TestGroup, TestGroup>;
+    type Schema =
+        prebindgen_conversions::PlanSchema<TestWire, (), TestGroup, TestGroup, TestGroup, ()>;
     fn binding_failure_layout(
         &self,
         extra: &Extra,
-    ) -> Result<Option<WireNode<TestWire, TestGroup, TestGroup>>> {
+    ) -> Result<Option<WireNode<TestWire, TestGroup, TestGroup, TestGroup, ()>>> {
         Ok(
             (extra.name == "malformed_binding_failure").then(|| WireNode::Branch {
                 controls: vec![],
@@ -111,9 +116,6 @@ impl Codec for TestCodec {
         Ok(message)
     }
 
-    type Chain = TestGroup;
-    type Branch = TestGroup;
-
     fn validate_input(&self, plan: &CodecInputPlan<Self>) -> Result<()> {
         TestAbi::validate(&plan.node)
     }
@@ -130,9 +132,30 @@ impl Codec for TestCodec {
         )?;
         Ok(())
     }
-    fn prefix_layout(
+    fn prefix_input(
         &self,
-        layout: &mut prebindgen_conversions::WireNode<Self::Wire, Self::Chain, Self::Branch>,
+        layout: &mut prebindgen_conversions::WireNode<
+            TestWire,
+            TestGroup,
+            TestGroup,
+            TestGroup,
+            (),
+        >,
+        segment: ComponentSegment,
+    ) {
+        for w in TestAbi::wires_mut(layout) {
+            w.kind.component.prepend(segment.clone());
+        }
+    }
+    fn prefix_output(
+        &self,
+        layout: &mut prebindgen_conversions::WireNode<
+            TestWire,
+            TestGroup,
+            TestGroup,
+            TestGroup,
+            (),
+        >,
         segment: ComponentSegment,
     ) {
         for w in TestAbi::wires_mut(layout) {
@@ -141,10 +164,19 @@ impl Codec for TestCodec {
     }
 
     type Extra = Extra;
-    type Wire = TestWire;
     type Context = ();
 
-    fn selector(&self, extra: &Extra) -> Result<TestWire> {
+    fn input_selector(&self, extra: &Extra) -> Result<TestWire> {
+        Ok({
+            TestWire {
+                kind: Kind::Selector,
+                name: extra.name,
+                ty: "i32".into(),
+                component: Default::default(),
+            }
+        })
+    }
+    fn output_selector(&self, extra: &Extra) -> Result<TestWire> {
         Ok({
             TestWire {
                 kind: Kind::Selector,
@@ -231,17 +263,34 @@ impl Codec for TestCodec {
         })
     }
 
-    fn group(&self, kind: GroupKind<'_>) -> Result<TestGroup> {
+    fn input_group(&self, kind: GroupKind) -> Result<TestGroup> {
         Ok(match kind {
-            GroupKind::Values | GroupKind::NamedOutput(_) => TestGroup::Values,
+            GroupKind::Values => TestGroup::Values,
             GroupKind::Fields => TestGroup::Record,
-            GroupKind::Field(name) => TestGroup::Member(name.clone()),
         })
     }
-    fn optional(&self, request: Optional<'_, Self>) -> Result<OptionalEncoding<Self>> {
+    fn output_group(&self, kind: GroupKind) -> Result<TestGroup> {
+        Ok(match kind {
+            GroupKind::Values => TestGroup::Values,
+            GroupKind::Fields => TestGroup::Record,
+        })
+    }
+    fn input_field(&self, name: &syn::Ident) -> Result<TestGroup> {
+        Ok(TestGroup::Member(name.clone()))
+    }
+    fn output_field(&self, name: &syn::Ident) -> Result<TestGroup> {
+        Ok(TestGroup::Member(name.clone()))
+    }
+    fn output_named(&self, _name: &str) -> Result<TestGroup> {
+        Ok(TestGroup::Values)
+    }
+    fn input_optional(
+        &self,
+        request: InputOptional<'_, Self>,
+    ) -> Result<OptionalEncoding<TestWire, TestGroup>> {
         let prepared = prepare_optional_payload(
             TestAbi::wires_mut(request.payload),
-            request.direction,
+            Direction::Input,
             |w| self.niche(w),
             |w, n| {
                 self.set_niche(w, n);
@@ -262,7 +311,43 @@ impl Codec for TestCodec {
         } else {
             Presence::Flag(Wire {
                 name: request.presence,
-                kind: self.selector(request.extra)?,
+                kind: self.input_selector(request.extra)?,
+            })
+        };
+        Ok(OptionalEncoding {
+            presence,
+            metadata,
+            absent_values: prepared.absent_values,
+        })
+    }
+    fn output_optional(
+        &self,
+        request: OutputOptional<'_, Self>,
+    ) -> Result<OptionalEncoding<TestWire, TestGroup>> {
+        let prepared = prepare_optional_payload(
+            TestAbi::wires_mut(request.payload),
+            Direction::Output,
+            |w| self.niche(w),
+            |w, n| {
+                self.set_niche(w, n);
+                Ok(())
+            },
+            |w, n, v| self.is_present(w, n, v),
+            |w, n| self.remaining_niche(w, n),
+            |w, n| self.absent_value(w, n, false),
+        )?;
+        if request.extra.name == "reject_optional_metadata" {
+            return Err("optional metadata rejected".into());
+        }
+        let metadata = TestGroup::Maybe;
+        let presence = if prepared.reservation.is_some() {
+            Presence::Niche {
+                input_test: prepared.input_test,
+            }
+        } else {
+            Presence::Flag(Wire {
+                name: request.presence,
+                kind: self.output_selector(request.extra)?,
             })
         };
         Ok(OptionalEncoding {
@@ -829,7 +914,13 @@ fn nested_recipes_use_only_the_callers_extra() {
     )
     .unwrap();
     let f = flat.function("foo").unwrap();
-    let foreign = |wires: &prebindgen_conversions::WireNode<TestWire, TestGroup, TestGroup>| {
+    let foreign = |wires: &prebindgen_conversions::WireNode<
+        TestWire,
+        TestGroup,
+        TestGroup,
+        TestGroup,
+        (),
+    >| {
         prebindgen_conversions::wire_definitions(std::iter::once(wires))
             .filter_map(|w| match &w.kind.kind {
                 Kind::Token => Some((w.kind.name, w.kind.ty.clone())),
@@ -911,14 +1002,14 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
     struct FinalizingCodec;
 
     impl Codec for FinalizingCodec {
-        type Input = crate::CodecInputPlan<Self>;
-        type Output = crate::CodecOutputPlan<Self>;
+        type Input =
+            prebindgen_conversions::InputPlan<TestWire, (), TestGroup, TestGroup, TestGroup, ()>;
+        type Output =
+            prebindgen_conversions::OutputPlan<TestWire, (), TestGroup, TestGroup, TestGroup, ()>;
 
         test_operations!();
-        type Schema = prebindgen_conversions::PlanSchema<TestWire, (), TestGroup, TestGroup>;
-
-        type Chain = TestGroup;
-        type Branch = TestGroup;
+        type Schema =
+            prebindgen_conversions::PlanSchema<TestWire, (), TestGroup, TestGroup, TestGroup, ()>;
 
         fn validate_input(&self, plan: &CodecInputPlan<Self>) -> Result<()> {
             TestAbi::validate(&plan.node)
@@ -936,9 +1027,30 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
             )?;
             Ok(())
         }
-        fn prefix_layout(
+        fn prefix_input(
             &self,
-            layout: &mut prebindgen_conversions::WireNode<Self::Wire, Self::Chain, Self::Branch>,
+            layout: &mut prebindgen_conversions::WireNode<
+                TestWire,
+                TestGroup,
+                TestGroup,
+                TestGroup,
+                (),
+            >,
+            segment: ComponentSegment,
+        ) {
+            for w in TestAbi::wires_mut(layout) {
+                w.kind.component.prepend(segment.clone());
+            }
+        }
+        fn prefix_output(
+            &self,
+            layout: &mut prebindgen_conversions::WireNode<
+                TestWire,
+                TestGroup,
+                TestGroup,
+                TestGroup,
+                (),
+            >,
             segment: ComponentSegment,
         ) {
             for w in TestAbi::wires_mut(layout) {
@@ -947,11 +1059,13 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
         }
 
         type Extra = Extra;
-        type Wire = TestWire;
         type Context = ();
 
-        fn selector(&self, extra: &Extra) -> Result<TestWire> {
-            TEST_CODEC.selector(extra)
+        fn input_selector(&self, extra: &Extra) -> Result<TestWire> {
+            TEST_CODEC.input_selector(extra)
+        }
+        fn output_selector(&self, extra: &Extra) -> Result<TestWire> {
+            TEST_CODEC.output_selector(extra)
         }
         fn output_consumes(
             &self,
@@ -1036,15 +1150,44 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
             plan.delivery.statements = quote!(deliver_unit(););
             Ok(())
         }
-        fn group(&self, kind: GroupKind<'_>) -> Result<TestGroup> {
-            TEST_CODEC.group(kind)
+        fn input_group(&self, kind: GroupKind) -> Result<TestGroup> {
+            TEST_CODEC.input_group(kind)
         }
-        fn optional(&self, request: Optional<'_, Self>) -> Result<OptionalEncoding<Self>> {
-            let e = TEST_CODEC.optional(Optional {
+        fn output_group(&self, kind: GroupKind) -> Result<TestGroup> {
+            TEST_CODEC.output_group(kind)
+        }
+        fn input_field(&self, name: &syn::Ident) -> Result<TestGroup> {
+            Ok(TestGroup::Member(name.clone()))
+        }
+        fn output_field(&self, name: &syn::Ident) -> Result<TestGroup> {
+            Ok(TestGroup::Member(name.clone()))
+        }
+        fn output_named(&self, _name: &str) -> Result<TestGroup> {
+            Ok(TestGroup::Values)
+        }
+        fn input_optional(
+            &self,
+            request: InputOptional<'_, Self>,
+        ) -> Result<OptionalEncoding<TestWire, TestGroup>> {
+            let e = TEST_CODEC.input_optional(InputOptional {
                 extra: request.extra,
                 payload: request.payload,
                 presence: request.presence,
-                direction: request.direction,
+            })?;
+            Ok(OptionalEncoding {
+                presence: e.presence,
+                metadata: e.metadata,
+                absent_values: e.absent_values,
+            })
+        }
+        fn output_optional(
+            &self,
+            request: OutputOptional<'_, Self>,
+        ) -> Result<OptionalEncoding<TestWire, TestGroup>> {
+            let e = TEST_CODEC.output_optional(OutputOptional {
+                extra: request.extra,
+                payload: request.payload,
+                presence: request.presence,
             })?;
             Ok(OptionalEncoding {
                 presence: e.presence,
@@ -1564,7 +1707,9 @@ fn field_groups_preserve_empty_and_multiwire_fields_in_both_directions() {
         &Extra::default(),
     )
     .unwrap();
-    fn check(layout: &prebindgen_conversions::WireNode<TestWire, TestGroup, TestGroup>) {
+    fn check(
+        layout: &prebindgen_conversions::WireNode<TestWire, TestGroup, TestGroup, TestGroup, ()>,
+    ) {
         assert_eq!(
             prebindgen_conversions::wire_definitions(std::iter::once(layout)).count(),
             4
@@ -1582,7 +1727,7 @@ fn field_groups_preserve_empty_and_multiwire_fields_in_both_directions() {
         let mut names = Vec::new();
         let mut widths = Vec::new();
         for node in children.as_slice() {
-            let WireNode::Branch { meta: metadata, .. } = node else {
+            let WireNode::Annotation { meta: metadata, .. } = node else {
                 panic!()
             };
             let TestGroup::Member(name) = metadata else {

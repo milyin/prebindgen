@@ -23,8 +23,13 @@ impl NativeReturn {
         }
     }
 }
-pub(crate) fn packet_delivery(
-    node: &kotlin::JniNode,
+pub(crate) fn packet_delivery<
+    Chain: group::ChainMetadata,
+    Branch: group::BranchMetadata,
+    Annotation: group::AnnotationMetadata,
+    Container: group::ContainerMetadata,
+>(
+    node: &JniWireNode<Chain, Branch, Annotation, Container>,
     values: &[(syn::Ident, TokenStream)],
 ) -> Result<Delivery> {
     let env = prebindgen_conversions::template_parameter("environment");
@@ -84,8 +89,13 @@ fn chunks(wires: &[&Wire<JniWire>]) -> Vec<std::ops::Range<usize>> {
     ranges
 }
 
-pub(crate) fn callback_delivery(
-    node: &kotlin::JniNode,
+pub(crate) fn callback_delivery<
+    Chain: group::ChainMetadata,
+    Branch: group::BranchMetadata,
+    Annotation: group::AnnotationMetadata,
+    Container: group::ContainerMetadata,
+>(
+    node: &JniWireNode<Chain, Branch, Annotation, Container>,
     values: &[(syn::Ident, TokenStream)],
     sink: &syn::Ident,
     domain: bool,
@@ -127,8 +137,13 @@ pub(crate) fn callback_delivery(
         result: quote!(()),
     })
 }
-pub(crate) fn delivery(
-    node: &kotlin::JniNode,
+pub(crate) fn delivery<
+    Chain: group::ChainMetadata,
+    Branch: group::BranchMetadata,
+    Annotation: group::AnnotationMetadata,
+    Container: group::ContainerMetadata,
+>(
+    node: &JniWireNode<Chain, Branch, Annotation, Container>,
     values: &[(syn::Ident, TokenStream)],
     sink: &syn::Ident,
     domain: bool,

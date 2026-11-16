@@ -8,103 +8,64 @@ enum Metadata {
     Components,
     Alternatives,
     Fields,
-    Field,
 }
 #[derive(Clone, Debug)]
 enum PacketChain {
     Optional,
-    Sequence,
 }
+#[derive(Clone, Debug)]
+enum PacketAnnotation {
+    Field,
+    Named,
+}
+#[derive(Clone, Debug)]
+struct PacketRows;
 // A test adapter using separate pointer and length parameters.
 struct PointerLenAbi;
 impl PointerLenAbi {
-    fn parameters(node: &WireNode<Type, PacketChain, Metadata>) -> std::vec::IntoIter<&Wire<Type>> {
+    fn parameters(
+        node: &WireNode<Type, PacketChain, Metadata, PacketAnnotation, PacketRows>,
+    ) -> std::vec::IntoIter<&Wire<Type>> {
         Self::values(node)
     }
-    fn row_fields(node: &WireNode<Type, PacketChain, Metadata>) -> std::vec::IntoIter<&Wire<Type>> {
+    fn row_fields(
+        node: &WireNode<Type, PacketChain, Metadata, PacketAnnotation, PacketRows>,
+    ) -> std::vec::IntoIter<&Wire<Type>> {
         Self::values(node)
     }
     fn result_fields(
-        node: &WireNode<Type, PacketChain, Metadata>,
+        node: &WireNode<Type, PacketChain, Metadata, PacketAnnotation, PacketRows>,
     ) -> std::vec::IntoIter<&Wire<Type>> {
         Self::values(node)
     }
     fn result_packet<'a>(
-        node: &'a WireNode<Type, PacketChain, Metadata>,
+        node: &'a WireNode<Type, PacketChain, Metadata, PacketAnnotation, PacketRows>,
         bindings: &'a [(syn::Ident, TokenStream)],
     ) -> Result<Vec<(&'a Wire<Type>, &'a TokenStream)>> {
         prebindgen_conversions::match_output_fields(Self::result_fields(node), bindings)
     }
-    fn values(node: &WireNode<Type, PacketChain, Metadata>) -> std::vec::IntoIter<&Wire<Type>> {
-        fn visit<'a>(
-            node: &'a WireNode<Type, PacketChain, Metadata>,
-            out: &mut Vec<&'a Wire<Type>>,
-        ) {
-            match node {
-                WireNode::Leaf(w) => out.extend(w),
-                WireNode::Chain {
-                    meta: PacketChain::Sequence,
-                    controls,
-                    ..
-                } => out.extend(controls),
-                WireNode::Chain {
-                    child, controls, ..
-                } => {
-                    out.extend(controls);
-                    visit(child, out);
-                }
-                WireNode::Branch {
-                    children, controls, ..
-                } => {
-                    out.extend(controls);
-                    for child in children {
-                        visit(child, out);
-                    }
-                }
-            }
-        }
-        let mut out = vec![];
-        visit(node, &mut out);
-        out.into_iter()
+    fn values(
+        node: &WireNode<Type, PacketChain, Metadata, PacketAnnotation, PacketRows>,
+    ) -> std::vec::IntoIter<&Wire<Type>> {
+        prebindgen_conversions::boundary_wires(std::iter::once(node))
+            .collect::<Vec<_>>()
+            .into_iter()
     }
     fn values_mut(
-        node: &mut WireNode<Type, PacketChain, Metadata>,
+        node: &mut WireNode<Type, PacketChain, Metadata, PacketAnnotation, PacketRows>,
     ) -> std::vec::IntoIter<&mut Wire<Type>> {
-        fn visit<'a>(
-            node: &'a mut WireNode<Type, PacketChain, Metadata>,
-            out: &mut Vec<&'a mut Wire<Type>>,
-        ) {
-            match node {
-                WireNode::Leaf(w) => out.extend(w),
-                WireNode::Chain {
-                    meta: PacketChain::Sequence,
-                    controls,
-                    ..
-                } => out.extend(controls),
-                WireNode::Chain {
-                    child, controls, ..
-                } => {
-                    out.extend(controls);
-                    visit(child, out);
-                }
-                WireNode::Branch {
-                    children, controls, ..
-                } => {
-                    out.extend(controls);
-                    for child in children {
-                        visit(child, out);
-                    }
-                }
-            }
-        }
-        let mut out = vec![];
-        visit(node, &mut out);
-        out.into_iter()
+        prebindgen_conversions::boundary_wires_mut(std::iter::once(node))
+            .collect::<Vec<_>>()
+            .into_iter()
     }
-    fn validate(node: &WireNode<Type, PacketChain, Metadata>) -> Result<()> {
+    fn validate(
+        node: &WireNode<Type, PacketChain, Metadata, PacketAnnotation, PacketRows>,
+    ) -> Result<()> {
         validate_wire_names(Self::values(node))?;
         match node {
-            WireNode::Chain { child, .. } => Self::validate(child),
+            WireNode::Annotation { child, .. }
+            | WireNode::Chain { child, .. }
+            | WireNode::Container { child, .. } => Self::validate(child),
             WireNode::Branch { children, meta, .. } => {
                 if matches!(meta, Metadata::Alternatives) && children.is_empty() {
                     return Err("selection has no alternatives".into());
@@ -126,14 +87,32 @@ struct CodecImpl {
     row_only_leaf: bool,
 }
 impl Codec for CodecImpl {
-    type Input = crate::CodecInputPlan<Self>;
-    type Output = crate::CodecOutputPlan<Self>;
+    type Input = prebindgen_conversions::InputPlan<
+        Type,
+        (),
+        PacketChain,
+        Metadata,
+        PacketAnnotation,
+        PacketRows,
+    >;
+    type Output = prebindgen_conversions::OutputPlan<
+        Type,
+        (),
+        PacketChain,
+        Metadata,
+        PacketAnnotation,
+        PacketRows,
+    >;
 
     test_operations!();
-    type Schema = prebindgen_conversions::PlanSchema<Type, (), PacketChain, Metadata>;
-    type Wire = Type;
-    type Chain = PacketChain;
-    type Branch = Metadata;
+    type Schema = prebindgen_conversions::PlanSchema<
+        Type,
+        (),
+        PacketChain,
+        Metadata,
+        PacketAnnotation,
+        PacketRows,
+    >;
 
     fn validate_input(&self, plan: &CodecInputPlan<Self>) -> Result<()> {
         PointerLenAbi::validate(&plan.node)
@@ -147,7 +126,10 @@ impl Codec for CodecImpl {
     type Context = ();
     type Extra = ();
 
-    fn selector(&self, _: &()) -> Result<Type> {
+    fn input_selector(&self, _: &()) -> Result<Type> {
+        Ok(syn::parse_quote!(i32))
+    }
+    fn output_selector(&self, _: &()) -> Result<Type> {
         Ok(syn::parse_quote!(i32))
     }
 
@@ -192,7 +174,7 @@ impl Codec for CodecImpl {
     fn sequence_input(
         &self,
         request: SequenceInputRequest<'_, Self>,
-    ) -> Result<SequenceInput<Type, PacketChain>> {
+    ) -> Result<SequenceInput<Type, PacketRows>> {
         let SequenceInputRequest {
             flat: _,
             wire,
@@ -208,7 +190,7 @@ impl Codec for CodecImpl {
             .name
             .clone();
         Ok(SequenceInput {
-            controls: vec![
+            wires: vec![
                 Wire {
                     name: wire.clone(),
                     kind: syn::parse_quote!(*const i32),
@@ -218,7 +200,7 @@ impl Codec for CodecImpl {
                     kind: syn::parse_quote!(usize),
                 },
             ],
-            metadata: PacketChain::Sequence,
+            metadata: PacketRows,
             open: quote!(if #length>0 && #wire.is_null(){return Err("null sequence".into());}),
             bind: quote!(let #field=unsafe{*#wire.add(#index)};),
             validation_values: vec![(
@@ -235,7 +217,7 @@ impl Codec for CodecImpl {
     fn sequence_output(
         &self,
         request: SequenceOutputRequest<'_, Self>,
-    ) -> Result<SequenceOutput<Type, PacketChain>> {
+    ) -> Result<SequenceOutput<Type, PacketRows>> {
         let SequenceOutputRequest {
             flat: _,
             wire,
@@ -256,7 +238,7 @@ impl Codec for CodecImpl {
         )?;
         let value = values[0].1;
         Ok(SequenceOutput {
-            controls: vec![
+            wires: vec![
                 Wire {
                     name: wire.clone(),
                     kind: syn::parse_quote!(*const i32),
@@ -266,7 +248,7 @@ impl Codec for CodecImpl {
                     kind: syn::parse_quote!(usize),
                 },
             ],
-            metadata: PacketChain::Sequence,
+            metadata: PacketRows,
             commit_each: false,
             fallible: false,
             begin: quote!(let mut #wire=Vec::<i32>::with_capacity(#length);),
@@ -303,17 +285,34 @@ impl Codec for CodecImpl {
         Ok(())
     }
 
-    fn group(&self, kind: GroupKind<'_>) -> Result<Metadata> {
+    fn input_group(&self, kind: GroupKind) -> Result<Metadata> {
         Ok(match kind {
-            GroupKind::Values | GroupKind::NamedOutput(_) => Metadata::Components,
+            GroupKind::Values => Metadata::Components,
             GroupKind::Fields => Metadata::Fields,
-            GroupKind::Field(_) => Metadata::Field,
         })
     }
-    fn optional(&self, request: Optional<'_, Self>) -> Result<OptionalEncoding<Self>> {
+    fn output_group(&self, kind: GroupKind) -> Result<Metadata> {
+        Ok(match kind {
+            GroupKind::Values => Metadata::Components,
+            GroupKind::Fields => Metadata::Fields,
+        })
+    }
+    fn input_field(&self, _name: &syn::Ident) -> Result<PacketAnnotation> {
+        Ok(PacketAnnotation::Field)
+    }
+    fn output_field(&self, _name: &syn::Ident) -> Result<PacketAnnotation> {
+        Ok(PacketAnnotation::Field)
+    }
+    fn output_named(&self, _name: &str) -> Result<PacketAnnotation> {
+        Ok(PacketAnnotation::Named)
+    }
+    fn input_optional(
+        &self,
+        request: InputOptional<'_, Self>,
+    ) -> Result<OptionalEncoding<Type, PacketChain>> {
         let prepared = prepare_optional_payload(
             PointerLenAbi::values_mut(request.payload),
-            request.direction,
+            Direction::Input,
             |w| self.niche(w),
             |w, n| {
                 self.set_niche(w, n);
@@ -331,7 +330,40 @@ impl Codec for CodecImpl {
         } else {
             Presence::Flag(Wire {
                 name: request.presence,
-                kind: self.selector(request.extra)?,
+                kind: self.input_selector(request.extra)?,
+            })
+        };
+        Ok(OptionalEncoding {
+            presence,
+            metadata,
+            absent_values: prepared.absent_values,
+        })
+    }
+    fn output_optional(
+        &self,
+        request: OutputOptional<'_, Self>,
+    ) -> Result<OptionalEncoding<Type, PacketChain>> {
+        let prepared = prepare_optional_payload(
+            PointerLenAbi::values_mut(request.payload),
+            Direction::Output,
+            |w| self.niche(w),
+            |w, n| {
+                self.set_niche(w, n);
+                Ok(())
+            },
+            |w, n, v| self.is_present(w, n, v),
+            |w, n| self.remaining_niche(w, n),
+            |w, n| self.absent_value(w, n, false),
+        )?;
+        let metadata = PacketChain::Optional;
+        let presence = if prepared.reservation.is_some() {
+            Presence::Niche {
+                input_test: prepared.input_test,
+            }
+        } else {
+            Presence::Flag(Wire {
+                name: request.presence,
+                kind: self.output_selector(request.extra)?,
             })
         };
         Ok(OptionalEncoding {

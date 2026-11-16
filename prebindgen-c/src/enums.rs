@@ -205,11 +205,10 @@ mod tests {
         let source = flat("pub enum E { A = -1, B = 0 }");
         let mapping = std::rc::Rc::new(EnumMapping::new(source.enums().next().unwrap()).unwrap());
         let wire = CCodec::enum_wire("code", &mapping);
-        let mut tree: prebindgen_conversions::WireNode<CWire, crate::CChain, crate::CBranch> =
-            prebindgen_conversions::WireNode::Leaf(vec![GenericWire {
-                name: syn::parse_quote!(wire),
-                kind: wire,
-            }]);
+        let mut tree: CInputWireNode = prebindgen_conversions::WireNode::Leaf(vec![GenericWire {
+            name: syn::parse_quote!(wire),
+            kind: wire,
+        }]);
         let group = |presence, value| {
             COptional::from_parts(
                 syn::parse_str(presence).unwrap(),
@@ -221,7 +220,7 @@ mod tests {
         };
         tree = prebindgen_conversions::WireNode::Chain {
             controls: vec![],
-            meta: CChain::Optional(group("inner", -2)),
+            meta: CInputWireChain::Optional(group("inner", -2)),
             child: Box::new(std::mem::take(&mut tree)),
         };
         assert!(super::super::group::validate_layout(&tree)
@@ -235,7 +234,7 @@ mod tests {
         super::super::group::validate_layout(&tree).unwrap();
         tree = prebindgen_conversions::WireNode::Chain {
             controls: vec![],
-            meta: CChain::Optional(group("outer", -2)),
+            meta: CInputWireChain::Optional(group("outer", -2)),
             child: Box::new(std::mem::take(&mut tree)),
         };
         assert!(super::super::group::validate_layout(&tree)
@@ -255,7 +254,7 @@ mod tests {
                 unreachable!()
             };
             *next_integer_niche = Some(n);
-            let layout: prebindgen_conversions::WireNode<CWire, crate::CChain, crate::CBranch> =
+            let layout: CInputWireNode =
                 prebindgen_conversions::WireNode::Leaf(vec![GenericWire {
                     name: syn::parse_quote!(value),
                     kind: wire,

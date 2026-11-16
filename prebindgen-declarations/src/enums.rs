@@ -123,14 +123,14 @@ impl EnumMapping {
 
 /// Prepare checked enum decoding with the supplied boundary carrier.
 /// References borrow the decoded local; mutable references are unsupported.
-pub fn enum_input<W: prebindgen_conversions::WireKind, C, N, B>(
+pub fn enum_input<W: prebindgen_conversions::WireKind, C, N, B, A, T>(
     mapping: &EnumMapping,
     ty: &Type,
     wire: syn::Ident,
     var: syn::Ident,
     active: &Condition,
     kind: W,
-) -> Result<InputPlan<W, C, N, B>> {
+) -> Result<InputPlan<W, C, N, B, A, T>> {
     let borrowed = match ty {
         Type::Reference(r) if r.mutability.is_some() => {
             return Err("mutable enum inputs are unsupported".into())
@@ -159,12 +159,12 @@ pub fn enum_input<W: prebindgen_conversions::WireKind, C, N, B>(
     Ok(plan)
 }
 /// Prepare enum output by matching a borrow, without requiring `Copy` or `Clone`.
-pub fn enum_output<W: prebindgen_conversions::WireKind, C, N, B>(
+pub fn enum_output<W: prebindgen_conversions::WireKind, C, N, B, A, T>(
     mapping: &EnumMapping,
     wire: syn::Ident,
     value: TokenStream,
     kind: W,
-) -> OutputPlan<W, C, N, B> {
+) -> OutputPlan<W, C, N, B, A, T> {
     let encoded = mapping.encode(quote!(&(#value)));
     OutputPlan {
         fallible: false,

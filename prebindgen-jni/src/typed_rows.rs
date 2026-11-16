@@ -1,44 +1,74 @@
 //! Shared immutable row classes and their native constructor registration.
 use super::*;
-use kotlin::JniNode;
+
 use prebindgen_conversions::WireNode;
 
-pub(crate) fn supported(element: &JniNode) -> bool {
+pub(crate) fn supported<
+    Chain: group::ChainMetadata,
+    Branch,
+    Annotation: group::AnnotationMetadata,
+    Container: group::ContainerMetadata,
+>(
+    element: &JniWireNode<Chain, Branch, Annotation, Container>,
+) -> bool {
     group::row_fields(element)
         .map(|w| w.kind.parameter_slots())
         .sum::<usize>()
         <= 254
 }
-pub(crate) fn cache(element: &JniNode) -> Result<syn::Ident> {
+pub(crate) fn cache<
+    Chain: group::ChainMetadata,
+    Branch,
+    Annotation: group::AnnotationMetadata,
+    Container: group::ContainerMetadata,
+>(
+    element: &JniWireNode<Chain, Branch, Annotation, Container>,
+) -> Result<syn::Ident> {
     let (name, _) = sequence_callback::capture(element, &mut names::Names::default())?;
     Ok(format_ident!("__pb_row_type_{name}"))
 }
-fn visit<'a>(node: &'a JniNode, input: bool, rows: &mut Vec<&'a JniNode>, bulk: bool) {
+fn visit<'a>(node: &'a JniOutputWireNode, rows: &mut Vec<&'a JniOutputWireNode>, bulk: bool) {
     match node {
-        WireNode::Chain {
-            meta: JniChain::Bulk,
+        WireNode::Container {
+            meta: JniOutputWireContainer::BulkFrame,
             child,
             ..
-        } => visit(child, input, rows, true),
-        WireNode::Chain {
-            meta: JniChain::Sequence(JniSequence::TypedBuffered),
+        } => visit(child, rows, true),
+        WireNode::Container {
+            meta: JniOutputWireContainer::KListClassRows,
             child,
             ..
-        } if !input && !bulk => {
+        } if !bulk => {
             rows.push(child);
-            visit(child, input, rows, bulk);
+            visit(child, rows, bulk);
         }
-        WireNode::Chain { child, .. } => visit(child, input, rows, bulk),
+        WireNode::Annotation { child, .. }
+        | WireNode::Chain { child, .. }
+        | WireNode::Container { child, .. } => visit(child, rows, bulk),
         WireNode::Branch { children, .. } => {
             for child in children {
-                visit(child, input, rows, bulk)
+                visit(child, rows, bulk)
             }
         }
         WireNode::Leaf(wires) => {
             for wire in wires {
-                if let JniWire::Callback { callback } = &wire.kind {
-                    for (input, node) in callback.bulk_nodes() {
-                        visit(node, input, rows, false);
+                if let JniWire::KCallback { callback } = &wire.kind {
+                    for root in callback.bulk_nodes() {
+                        visit_boundary(root, rows);
+                    }
+                }
+            }
+        }
+    }
+}
+fn visit_boundary<'a>(root: metadata::BoundaryNode<'a>, rows: &mut Vec<&'a JniOutputWireNode>) {
+    match root {
+        metadata::BoundaryNode::Output(node) => visit(node, rows, false),
+        metadata::BoundaryNode::Input(node) => {
+            for wire in prebindgen_conversions::wire_definitions(std::iter::once(node)) {
+                if let JniWire::KCallback { callback } = &wire.kind {
+                    for root in callback.bulk_nodes() {
+                        visit_boundary(root, rows);
                     }
                 }
             }
@@ -53,8 +83,8 @@ pub(crate) fn emit<I: KotlinInputConversion, O: KotlinOutputConversion>(
     emitted: &mut BTreeSet<String>,
 ) -> Result<()> {
     let mut rows = Vec::new();
-    for (input, node) in metadata::nodes(flat)? {
-        visit(node, input, &mut rows, false);
+    for root in metadata::nodes(flat)? {
+        visit_boundary(root, &mut rows);
     }
     let mut schemas = BTreeMap::new();
     for row in rows {

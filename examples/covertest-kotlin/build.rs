@@ -410,6 +410,23 @@ fn main() {
                          ),
                      )),
                  ))
+            .fun(fun!(type_input_holder_choice).expand_param("value",
+                expand_param!(TypeInputHolder)
+                    .variant(fun!(type_input_holder_empty))
+                    .variant_record(param_fields!().field("row",
+                        expand_param!(Option<TypeInputRow>).optional(
+                            expand_param!(TypeInputRow).variant_record(param_fields!()))))))
+            .fun(fun!(type_input_optional_holder).expand_param("value",
+                expand_param!(Option<TypeInputHolder>).optional(
+                    expand_param!(TypeInputHolder).variant_record(param_fields!().field("row",
+                        expand_param!(Option<TypeInputRow>).optional(
+                            expand_param!(TypeInputRow).variant_record(param_fields!())))))))
+            .fun(fun!(type_input_holder_callback).expand_param("callback",
+                callback!(impl Fn()->Option<TypeInputHolder>).name("TypeInputHolderCallback")
+                    .expand_return(expand_param!(Option<TypeInputHolder>).optional(
+                        expand_param!(TypeInputHolder).variant_record(param_fields!().field("row",
+                            expand_param!(Option<TypeInputRow>).optional(
+                                expand_param!(TypeInputRow).variant_record(param_fields!()))))))))
             .fun(fun!(type_input_rows).expand_param("values",type_rows().bulk()))
             .fun(fun!(type_input_rows_plain).expand_param("values",type_rows()))
             .fun(fun!(type_input_nested).expand_param("values",type_nested().bulk()))
@@ -1268,13 +1285,13 @@ use prebindgen_conversions::{OutputConversion, Outcomes, WireNode};
                 return Err("collection probe must declare success and binding failure only".into());
             };
             let logical = success;
-            let WireNode::Chain {meta: prebindgen_jni::JniChain::Sequence(_), child: element, controls}=logical else {return Err("expected sequence".into());};
+            let WireNode::Container {meta: prebindgen_jni::JniOutputWireContainer::KListArrayRows | prebindgen_jni::JniOutputWireContainer::KListClassRows, child: element, wires: controls}=logical else {return Err("expected sequence".into());};
             assert_eq!(controls.len(),1);
             assert_eq!(prebindgen_conversions::wire_definitions(std::iter::once(logical)).count(),2);
-            assert!(matches!(prebindgen_conversions::wire_definitions(std::iter::once(element.as_ref())).next().unwrap().kind, prebindgen_jni::JniWire::Scalar {
+            assert!(matches!(prebindgen_conversions::wire_definitions(std::iter::once(element.as_ref())).next().unwrap().kind, prebindgen_jni::JniWire::RScalar {
                 primitive: prebindgen_flat::Primitive::Char, ..
             }));
-            assert!(matches!(output.result_packet_fields()?.next().unwrap().kind, prebindgen_jni::JniWire::Rows { .. }));
+            assert!(matches!(output.result_packet_fields()?.next().unwrap().kind, prebindgen_jni::JniWire::KRowArray { .. }));
             Ok(())
         })
         .expand(expand_param!(Vec<i64>).variant_self())

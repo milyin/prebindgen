@@ -24029,6 +24029,593 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
 /**# Safety
 The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_1input_1holder_1choice_1ebf8f046c99824b3<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+    p0_w1: i32,
+    p0_w4_f0_present: i32,
+    p0_w4_f0_some_f0: i64,
+    p0_w4_f0_some_f1: i64,
+    ownership_accepted: ::prebindgen_jni_runtime::jni::objects::JLongArray<'local>,
+    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+) -> i64 {
+    #[allow(unused_mut)]
+    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
+    let mut success_transferred = false;
+    let mut direct_output: i64 = Default::default();
+    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
+    let __pb_receipt_valid = ::core::cell::Cell::new(false);
+    let outcome = ::prebindgen_runtime::boundary(|| {
+        if jni_environment
+            .get_array_length(&ownership_accepted)
+            .map_err(|e| e.to_string())? != 1
+        {
+            return Err("invalid ownership acknowledgement".into());
+        }
+        __pb_receipt_valid.set(true);
+        {
+            if !(0..2i32).contains(&p0_w1) {
+                return Err("invalid selector".into());
+            }
+            let p0_w0: perftest_flat::TypeInputHolder = match p0_w1 {
+                0i32 => {
+                    let p0_w2: perftest_flat::TypeInputHolder = perftest_flat::type_input_holder_empty();
+                    let p0_w0_alternative_0 = p0_w2;
+                    p0_w0_alternative_0
+                }
+                1i32 => {
+                    if (p0_w1 == 1i32)
+                        && (p0_w4_f0_present != 0 && p0_w4_f0_present != 1)
+                    {
+                        return Err("invalid option presence".into());
+                    }
+                    let p0_w3_f0 = if (p0_w1 == 1i32) && (p0_w4_f0_present == 1i32) {
+                        {
+                            let p0_w4_f0_some_f0_pointer = p0_w4_f0_some_f0
+                                as *mut ::prebindgen_jni_runtime::Allocation<
+                                    perftest_flat::TypeInputA,
+                                >;
+                            ::prebindgen_runtime::validate_pointer(
+                                p0_w4_f0_some_f0_pointer,
+                            )?;
+                            let p0_w3_f0_some_f0: perftest_flat::TypeInputA = {
+                                let p0_w3_f0_some_f0 = unsafe {
+                                    Box::from_raw(p0_w4_f0_some_f0_pointer)
+                                };
+                                {
+                                    __pb_input_consumed
+                                        .set(__pb_input_consumed.get() + (1usize));
+                                }
+                                p0_w3_f0_some_f0.value
+                            };
+                            let p0_w3_f0_some_field_0 = p0_w3_f0_some_f0;
+                            let p0_w4_f0_some_f1_pointer = p0_w4_f0_some_f1
+                                as *mut ::prebindgen_jni_runtime::Allocation<
+                                    perftest_flat::TypeInputB,
+                                >;
+                            ::prebindgen_runtime::validate_pointer(
+                                p0_w4_f0_some_f1_pointer,
+                            )?;
+                            let p0_w3_f0_some_f1: perftest_flat::TypeInputB = {
+                                let p0_w3_f0_some_f1 = unsafe {
+                                    Box::from_raw(p0_w4_f0_some_f1_pointer)
+                                };
+                                {
+                                    __pb_input_consumed
+                                        .set(__pb_input_consumed.get() + (1usize));
+                                }
+                                p0_w3_f0_some_f1.value
+                            };
+                            let p0_w3_f0_some_field_1 = p0_w3_f0_some_f1;
+                            let p0_w3_f0_some: perftest_flat::TypeInputRow = perftest_flat::TypeInputRow {
+                                a: p0_w3_f0_some_field_0,
+                                b: p0_w3_f0_some_field_1,
+                            };
+                            let p0_w3_f0_payload = p0_w3_f0_some;
+                            Some(p0_w3_f0_payload)
+                        }
+                    } else {
+                        None
+                    };
+                    let p0_w3_field_0 = p0_w3_f0;
+                    let p0_w3: perftest_flat::TypeInputHolder = perftest_flat::TypeInputHolder {
+                        row: p0_w3_field_0,
+                    };
+                    let p0_w0_alternative_1 = p0_w3;
+                    p0_w0_alternative_1
+                }
+                _ => unreachable!("validated selector"),
+            };
+            let __prebindgen_argument_0 = p0_w0;
+            let source_value = perftest_flat::type_input_holder_choice(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = source_value;
+            let __pb_direct_result = unsafe {
+                (::prebindgen_jni_runtime::jni::sys::jvalue {
+                    j: ret_w0,
+                })
+                    .j
+            };
+            let _: () = {
+                direct_output = __pb_direct_result;
+                success_transferred = true;
+            };
+            Ok(__pb_direct_result)
+        }
+    });
+    if __pb_receipt_valid.get() {
+        let count = __pb_input_consumed.get() as i64;
+        let value = if outcome.is_ok() { count } else { -1 - count };
+        ::prebindgen_jni_runtime::write_input_receipt(
+            &mut jni_environment,
+            &ownership_accepted,
+            value,
+            outcome.is_err(),
+        );
+    }
+    match outcome {
+        Ok(result) => result,
+        Err(e) => {
+            if domain_output.is_none()
+                && matches!(jni_environment.exception_check(), Ok(false))
+            {
+                let reported = ::prebindgen_runtime::boundary(|| {
+                    let message = ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        &e,
+                    )?;
+                    unsafe {
+                        ::prebindgen_jni_runtime::invoke_error_callback(
+                            &mut jni_environment,
+                            &__pb_return,
+                            "bindingError",
+                            "(Ljava/lang/String;Z)V",
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    l: message.as_raw(),
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    z: u8::from(success_transferred),
+                                },
+                            ],
+                        )
+                    }
+                });
+                if let Err(message) = reported {
+                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                }
+            }
+            direct_output
+        }
+    }
+}
+#[allow(
+    clippy::let_and_return,
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_1input_1optional_1holder_1884309f0aa614615<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+    p0_w1: i32,
+    p0_w3_f0_present: i32,
+    p0_w3_f0_some_f0: i64,
+    p0_w3_f0_some_f1: i64,
+    ownership_accepted: ::prebindgen_jni_runtime::jni::objects::JLongArray<'local>,
+    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+) -> i64 {
+    #[allow(unused_mut)]
+    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
+    let mut success_transferred = false;
+    let mut direct_output: i64 = Default::default();
+    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
+    let __pb_receipt_valid = ::core::cell::Cell::new(false);
+    let outcome = ::prebindgen_runtime::boundary(|| {
+        if jni_environment
+            .get_array_length(&ownership_accepted)
+            .map_err(|e| e.to_string())? != 1
+        {
+            return Err("invalid ownership acknowledgement".into());
+        }
+        __pb_receipt_valid.set(true);
+        {
+            if p0_w1 != 0 && p0_w1 != 1 {
+                return Err("invalid option presence".into());
+            }
+            let p0_w0 = if p0_w1 == 1i32 {
+                {
+                    if (p0_w1 == 1i32)
+                        && (p0_w3_f0_present != 0 && p0_w3_f0_present != 1)
+                    {
+                        return Err("invalid option presence".into());
+                    }
+                    let p0_w2_f0 = if (p0_w1 == 1i32) && (p0_w3_f0_present == 1i32) {
+                        {
+                            let p0_w3_f0_some_f0_pointer = p0_w3_f0_some_f0
+                                as *mut ::prebindgen_jni_runtime::Allocation<
+                                    perftest_flat::TypeInputA,
+                                >;
+                            ::prebindgen_runtime::validate_pointer(
+                                p0_w3_f0_some_f0_pointer,
+                            )?;
+                            let p0_w2_f0_some_f0: perftest_flat::TypeInputA = {
+                                let p0_w2_f0_some_f0 = unsafe {
+                                    Box::from_raw(p0_w3_f0_some_f0_pointer)
+                                };
+                                {
+                                    __pb_input_consumed
+                                        .set(__pb_input_consumed.get() + (1usize));
+                                }
+                                p0_w2_f0_some_f0.value
+                            };
+                            let p0_w2_f0_some_field_0 = p0_w2_f0_some_f0;
+                            let p0_w3_f0_some_f1_pointer = p0_w3_f0_some_f1
+                                as *mut ::prebindgen_jni_runtime::Allocation<
+                                    perftest_flat::TypeInputB,
+                                >;
+                            ::prebindgen_runtime::validate_pointer(
+                                p0_w3_f0_some_f1_pointer,
+                            )?;
+                            let p0_w2_f0_some_f1: perftest_flat::TypeInputB = {
+                                let p0_w2_f0_some_f1 = unsafe {
+                                    Box::from_raw(p0_w3_f0_some_f1_pointer)
+                                };
+                                {
+                                    __pb_input_consumed
+                                        .set(__pb_input_consumed.get() + (1usize));
+                                }
+                                p0_w2_f0_some_f1.value
+                            };
+                            let p0_w2_f0_some_field_1 = p0_w2_f0_some_f1;
+                            let p0_w2_f0_some: perftest_flat::TypeInputRow = perftest_flat::TypeInputRow {
+                                a: p0_w2_f0_some_field_0,
+                                b: p0_w2_f0_some_field_1,
+                            };
+                            let p0_w2_f0_payload = p0_w2_f0_some;
+                            Some(p0_w2_f0_payload)
+                        }
+                    } else {
+                        None
+                    };
+                    let p0_w2_field_0 = p0_w2_f0;
+                    let p0_w2: perftest_flat::TypeInputHolder = perftest_flat::TypeInputHolder {
+                        row: p0_w2_field_0,
+                    };
+                    let p0_w0_payload = p0_w2;
+                    Some(p0_w0_payload)
+                }
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0;
+            let source_value = perftest_flat::type_input_optional_holder(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = source_value;
+            let __pb_direct_result = unsafe {
+                (::prebindgen_jni_runtime::jni::sys::jvalue {
+                    j: ret_w0,
+                })
+                    .j
+            };
+            let _: () = {
+                direct_output = __pb_direct_result;
+                success_transferred = true;
+            };
+            Ok(__pb_direct_result)
+        }
+    });
+    if __pb_receipt_valid.get() {
+        let count = __pb_input_consumed.get() as i64;
+        let value = if outcome.is_ok() { count } else { -1 - count };
+        ::prebindgen_jni_runtime::write_input_receipt(
+            &mut jni_environment,
+            &ownership_accepted,
+            value,
+            outcome.is_err(),
+        );
+    }
+    match outcome {
+        Ok(result) => result,
+        Err(e) => {
+            if domain_output.is_none()
+                && matches!(jni_environment.exception_check(), Ok(false))
+            {
+                let reported = ::prebindgen_runtime::boundary(|| {
+                    let message = ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        &e,
+                    )?;
+                    unsafe {
+                        ::prebindgen_jni_runtime::invoke_error_callback(
+                            &mut jni_environment,
+                            &__pb_return,
+                            "bindingError",
+                            "(Ljava/lang/String;Z)V",
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    l: message.as_raw(),
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    z: u8::from(success_transferred),
+                                },
+                            ],
+                        )
+                    }
+                });
+                if let Err(message) = reported {
+                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                }
+            }
+            direct_output
+        }
+    }
+}
+#[allow(
+    clippy::let_and_return,
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_1input_1holder_1callback_116aaa9e4c4680f71<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+    p0_callback: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+) -> i64 {
+    #[allow(unused_mut)]
+    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
+    let mut success_transferred = false;
+    let mut direct_output: i64 = Default::default();
+    let __pb_receipt_valid = ::core::cell::Cell::new(false);
+    let outcome = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_callback_retained = ::prebindgen_jni_runtime::Callback::new_named(
+                &mut jni_environment,
+                &p0_callback,
+                "()[Ljava/lang/Object;",
+                "io.prebindgen.covertest.TypeInputHolderCallback",
+            )?;
+            #[allow(unused_mut, clippy::collapsible_if)]
+            let p0_callback_value = move || {
+                p0_callback_retained
+                    .with_env_result(
+                        21i32,
+                        |callback_environment| {
+                            let mut callback_environment = callback_environment;
+                            {
+                                let arguments = [];
+                                {
+                                    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
+                                    let __prebindgen_input_consumed = &__pb_input_consumed;
+                                    let callback_result = unsafe {
+                                        p0_callback_retained
+                                            .invoke_return(
+                                                callback_environment,
+                                                ::prebindgen_jni_runtime::jni::signature::ReturnType::Object,
+                                                &arguments,
+                                            )
+                                    }?;
+                                    let callback_result_rows = ::prebindgen_jni_runtime::jni::objects::JObjectArray::from(
+                                        callback_result.l().map_err(|e| e.to_string())?,
+                                    );
+                                    let callback_return_w1 = ::prebindgen_jni_runtime::row_i32(
+                                        &mut callback_environment,
+                                        &(callback_result_rows),
+                                        0usize,
+                                    )?;
+                                    let callback_return_w3_f0_present = ::prebindgen_jni_runtime::row_i32(
+                                        &mut callback_environment,
+                                        &(callback_result_rows),
+                                        1usize,
+                                    )?;
+                                    let callback_return_w3_f0_some_f0 = ::prebindgen_jni_runtime::row_i64(
+                                        &mut callback_environment,
+                                        &(callback_result_rows),
+                                        2usize,
+                                    )?;
+                                    let callback_return_w3_f0_some_f1 = ::prebindgen_jni_runtime::row_i64(
+                                        &mut callback_environment,
+                                        &(callback_result_rows),
+                                        3usize,
+                                    )?;
+                                    let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
+                                    {
+                                        let mut callback_return_owners = ::prebindgen_runtime::CallbackReturnAllocations::tracking(
+                                            __prebindgen_input_consumed,
+                                        );
+                                        if callback_return_w1 == 1 {
+                                            if callback_return_w3_f0_present == 1 {
+                                                unsafe {
+                                                    callback_return_owners
+                                                        .receive(
+                                                            callback_return_w3_f0_some_f0
+                                                                as *mut ::prebindgen_jni_runtime::Allocation<
+                                                                    perftest_flat::TypeInputA,
+                                                                >,
+                                                        );
+                                                }
+                                                unsafe {
+                                                    callback_return_owners
+                                                        .receive(
+                                                            callback_return_w3_f0_some_f1
+                                                                as *mut ::prebindgen_jni_runtime::Allocation<
+                                                                    perftest_flat::TypeInputB,
+                                                                >,
+                                                        );
+                                                }
+                                            }
+                                        }
+                                        Ok(())
+                                    });
+                                    {
+                                        let callback_return_decoded = ({
+                                            if callback_return_w1 != 0 && callback_return_w1 != 1 {
+                                                return Err("invalid option presence".into());
+                                            }
+                                            let callback_return_w0 = if callback_return_w1 == 1i32 {
+                                                {
+                                                    if (callback_return_w1 == 1i32)
+                                                        && (callback_return_w3_f0_present != 0
+                                                            && callback_return_w3_f0_present != 1)
+                                                    {
+                                                        return Err("invalid option presence".into());
+                                                    }
+                                                    let callback_return_w2_f0 = if (callback_return_w1 == 1i32)
+                                                        && (callback_return_w3_f0_present == 1i32)
+                                                    {
+                                                        {
+                                                            let callback_return_w3_f0_some_f0_pointer = callback_return_w3_f0_some_f0
+                                                                as *mut ::prebindgen_jni_runtime::Allocation<
+                                                                    perftest_flat::TypeInputA,
+                                                                >;
+                                                            ::prebindgen_runtime::validate_pointer(
+                                                                callback_return_w3_f0_some_f0_pointer,
+                                                            )?;
+                                                            let callback_return_w2_f0_some_f0: perftest_flat::TypeInputA = {
+                                                                let callback_return_w2_f0_some_f0 = unsafe {
+                                                                    Box::from_raw(callback_return_w3_f0_some_f0_pointer)
+                                                                };
+                                                                {
+                                                                    __pb_input_consumed
+                                                                        .set(__pb_input_consumed.get() + (1usize));
+                                                                }
+                                                                callback_return_w2_f0_some_f0.value
+                                                            };
+                                                            let callback_return_w2_f0_some_field_0 = callback_return_w2_f0_some_f0;
+                                                            let callback_return_w3_f0_some_f1_pointer = callback_return_w3_f0_some_f1
+                                                                as *mut ::prebindgen_jni_runtime::Allocation<
+                                                                    perftest_flat::TypeInputB,
+                                                                >;
+                                                            ::prebindgen_runtime::validate_pointer(
+                                                                callback_return_w3_f0_some_f1_pointer,
+                                                            )?;
+                                                            let callback_return_w2_f0_some_f1: perftest_flat::TypeInputB = {
+                                                                let callback_return_w2_f0_some_f1 = unsafe {
+                                                                    Box::from_raw(callback_return_w3_f0_some_f1_pointer)
+                                                                };
+                                                                {
+                                                                    __pb_input_consumed
+                                                                        .set(__pb_input_consumed.get() + (1usize));
+                                                                }
+                                                                callback_return_w2_f0_some_f1.value
+                                                            };
+                                                            let callback_return_w2_f0_some_field_1 = callback_return_w2_f0_some_f1;
+                                                            let callback_return_w2_f0_some: perftest_flat::TypeInputRow = perftest_flat::TypeInputRow {
+                                                                a: callback_return_w2_f0_some_field_0,
+                                                                b: callback_return_w2_f0_some_field_1,
+                                                            };
+                                                            let callback_return_w2_f0_payload = callback_return_w2_f0_some;
+                                                            Some(callback_return_w2_f0_payload)
+                                                        }
+                                                    } else {
+                                                        None
+                                                    };
+                                                    let callback_return_w2_field_0 = callback_return_w2_f0;
+                                                    let callback_return_w2: perftest_flat::TypeInputHolder = perftest_flat::TypeInputHolder {
+                                                        row: callback_return_w2_field_0,
+                                                    };
+                                                    let callback_return_w0_payload = callback_return_w2;
+                                                    Some(callback_return_w0_payload)
+                                                }
+                                            } else {
+                                                None
+                                            };
+                                            let callback_return_value = callback_return_w0;
+                                            Ok::<_, String>(callback_return_value)
+                                        })?;
+                                        callback_return_cleanup.commit();
+                                        Ok::<_, String>(callback_return_decoded)
+                                    }
+                                }
+                            }
+                        },
+                    )
+                    .unwrap_or_else(|error| panic!("callback failed: {}", error))
+            };
+            let __prebindgen_argument_0 = p0_callback_value;
+            let source_value = perftest_flat::type_input_holder_callback(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = source_value;
+            let __pb_direct_result = unsafe {
+                (::prebindgen_jni_runtime::jni::sys::jvalue {
+                    j: ret_w0,
+                })
+                    .j
+            };
+            let _: () = {
+                direct_output = __pb_direct_result;
+                success_transferred = true;
+            };
+            Ok(__pb_direct_result)
+        }
+    });
+    match outcome {
+        Ok(result) => result,
+        Err(e) => {
+            if domain_output.is_none()
+                && matches!(jni_environment.exception_check(), Ok(false))
+            {
+                let reported = ::prebindgen_runtime::boundary(|| {
+                    let message = ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        &e,
+                    )?;
+                    unsafe {
+                        ::prebindgen_jni_runtime::invoke_error_callback(
+                            &mut jni_environment,
+                            &__pb_return,
+                            "bindingError",
+                            "(Ljava/lang/String;Z)V",
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    l: message.as_raw(),
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    z: u8::from(success_transferred),
+                                },
+                            ],
+                        )
+                    }
+                });
+                if let Err(message) = reported {
+                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                }
+            }
+            direct_output
+        }
+    }
+}
+#[allow(
+    clippy::let_and_return,
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
+#[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_1input_1rows_11943c070e2ef84cb<
     'local,
 >(

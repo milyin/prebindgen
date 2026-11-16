@@ -4,16 +4,13 @@ use prebindgen_conversions::{staged::emit_call, value};
 
 struct Scalars;
 impl Codec for Scalars {
-    type Input = crate::CodecInputPlan<Self>;
-    type Output = crate::CodecOutputPlan<Self>;
+    type Input = prebindgen_conversions::InputPlan<Type, (), (), ()>;
+    type Output = prebindgen_conversions::OutputPlan<Type, (), (), ()>;
 
     test_operations!();
     type Schema = prebindgen_conversions::PlanSchema<Type>;
-    type Wire = Type;
     type Context = ();
     type Extra = ();
-    type Chain = ();
-    type Branch = ();
 
     fn input_leaf(&self, r: InputLeaf<'_, Self>) -> Result<CodecInputPlan<Self>> {
         if !same_type(r.ty, &syn::parse_quote!(i64)) {
@@ -38,11 +35,21 @@ impl Codec for Scalars {
     fn output_consumes(&self, _: &Flat<Self::Schema>, _: &Type, _: &()) -> bool {
         false
     }
-    fn group(&self, kind: GroupKind<'_>) -> Result<()> {
+    fn input_group(&self, kind: GroupKind) -> Result<()> {
         match kind {
-            GroupKind::Values | GroupKind::Fields | GroupKind::Field(_) => Ok(()),
-            GroupKind::NamedOutput(_) => Err("named output views are unsupported".into()),
+            GroupKind::Values | GroupKind::Fields => Ok(()),
         }
+    }
+    fn output_group(&self, kind: GroupKind) -> Result<()> {
+        match kind {
+            GroupKind::Values | GroupKind::Fields => Ok(()),
+        }
+    }
+    fn input_field(&self, _name: &syn::Ident) -> Result<()> {
+        Ok(())
+    }
+    fn output_field(&self, _name: &syn::Ident) -> Result<()> {
+        Ok(())
     }
 }
 fn model() -> Flat<<Scalars as Codec>::Schema> {
@@ -226,8 +233,11 @@ fn minimal_codec_rejects_optional_features_and_bulk_before_decoding() {
     )
     .unwrap_err();
     assert!(error.contains("optional conversion is unsupported"));
-    assert!(Scalars.selector(&()).unwrap_err().contains("unsupported"));
-    assert!(Scalars.group(GroupKind::NamedOutput("view")).is_err());
+    assert!(Scalars
+        .input_selector(&())
+        .unwrap_err()
+        .contains("unsupported"));
+    assert!(Scalars.output_named("view").is_err());
     assert!(Scalars
         .sequence_input(SequenceInputRequest {
             flat: &flat,
@@ -288,16 +298,13 @@ struct Probe(
     std::cell::Cell<bool>,
 );
 impl Codec for Probe {
-    type Input = crate::CodecInputPlan<Self>;
-    type Output = crate::CodecOutputPlan<Self>;
+    type Input = prebindgen_conversions::InputPlan<Type, (), (), ()>;
+    type Output = prebindgen_conversions::OutputPlan<Type, (), (), ()>;
 
     test_operations!();
     type Schema = <Scalars as Codec>::Schema;
-    type Wire = Type;
     type Context = ();
     type Extra = ();
-    type Chain = ();
-    type Branch = ();
     fn input_leaf(&self, r: InputLeaf<'_, Self>) -> Result<CodecInputPlan<Self>> {
         self.0.borrow_mut().push((r.representation, r.role));
         Scalars.input_leaf(InputLeaf {
@@ -325,8 +332,17 @@ impl Codec for Probe {
     fn output_consumes(&self, _: &Flat<Self::Schema>, _: &Type, _: &()) -> bool {
         false
     }
-    fn group(&self, k: GroupKind<'_>) -> Result<()> {
-        Scalars.group(k)
+    fn input_group(&self, k: GroupKind) -> Result<()> {
+        Scalars.input_group(k)
+    }
+    fn output_group(&self, k: GroupKind) -> Result<()> {
+        Scalars.output_group(k)
+    }
+    fn input_field(&self, _name: &syn::Ident) -> Result<()> {
+        Ok(())
+    }
+    fn output_field(&self, _name: &syn::Ident) -> Result<()> {
+        Ok(())
     }
     fn supports_bulk(&self, direction: Direction) -> bool {
         direction == Direction::Input || self.1.get()
@@ -406,16 +422,13 @@ fn input_context_preserves_all_dispatch_cases_and_callback_roles() {
 
 struct MalformedOptional(u8);
 impl Codec for MalformedOptional {
-    type Input = crate::CodecInputPlan<Self>;
-    type Output = crate::CodecOutputPlan<Self>;
+    type Input = prebindgen_conversions::InputPlan<Type, (), (), ()>;
+    type Output = prebindgen_conversions::OutputPlan<Type, (), (), ()>;
 
     test_operations!();
     type Schema = <Scalars as Codec>::Schema;
-    type Wire = Type;
     type Context = ();
     type Extra = ();
-    type Chain = ();
-    type Branch = ();
     fn input_leaf(&self, r: InputLeaf<'_, Self>) -> Result<CodecInputPlan<Self>> {
         Scalars.input_leaf(InputLeaf::new(
             r.flat, r.ty, r.extra, r.wire, r.target, r.active,
@@ -429,10 +442,19 @@ impl Codec for MalformedOptional {
     fn output_consumes(&self, _: &Flat<Self::Schema>, _: &Type, _: &()) -> bool {
         false
     }
-    fn group(&self, k: GroupKind<'_>) -> Result<()> {
-        Scalars.group(k)
+    fn input_group(&self, k: GroupKind) -> Result<()> {
+        Scalars.input_group(k)
     }
-    fn optional(&self, r: Optional<'_, Self>) -> Result<OptionalEncoding<Self>> {
+    fn output_group(&self, k: GroupKind) -> Result<()> {
+        Scalars.output_group(k)
+    }
+    fn input_field(&self, _name: &syn::Ident) -> Result<()> {
+        Ok(())
+    }
+    fn output_field(&self, _name: &syn::Ident) -> Result<()> {
+        Ok(())
+    }
+    fn input_optional(&self, r: InputOptional<'_, Self>) -> Result<OptionalEncoding<Type, ()>> {
         let presence = match self.0 {
             0 => Presence::Flag(Wire {
                 name: format_ident!("wrong"),
@@ -457,11 +479,35 @@ impl Codec for MalformedOptional {
         Ok(OptionalEncoding {
             presence,
             metadata: (),
-            absent_values: if r.direction == Direction::Input && self.0 != 3 {
-                vec![]
-            } else {
-                absent_values
+            absent_values: if self.0 != 3 { vec![] } else { absent_values },
+        })
+    }
+    fn output_optional(&self, r: OutputOptional<'_, Self>) -> Result<OptionalEncoding<Type, ()>> {
+        let presence = match self.0 {
+            0 => Presence::Flag(Wire {
+                name: format_ident!("wrong"),
+                kind: syn::parse_quote!(i32),
+            }),
+            1 => Presence::Niche { input_test: None },
+            2 => Presence::Niche {
+                input_test: Some(quote!(true)),
             },
+            _ => Presence::Flag(Wire {
+                name: r.presence,
+                kind: syn::parse_quote!(i32),
+            }),
+        };
+        let absent_values = match self.0 {
+            3 => vec![(format_ident!("unexpected"), quote!(0i64))],
+            4 => vec![],
+            _ => prebindgen_conversions::wire_definitions(std::iter::once(&*r.payload))
+                .map(|w| (w.name.clone(), quote!(0i64)))
+                .collect(),
+        };
+        Ok(OptionalEncoding {
+            presence,
+            metadata: (),
+            absent_values,
         })
     }
 }
@@ -629,8 +675,8 @@ impl OutputOps for ArithmeticOutputs {
 }
 struct Arithmetic;
 impl Codec for Arithmetic {
-    type Input = crate::CodecInputPlan<Self>;
-    type Output = crate::CodecOutputPlan<Self>;
+    type Input = prebindgen_conversions::InputPlan<Type, (), (), ()>;
+    type Output = prebindgen_conversions::OutputPlan<Type, (), (), ()>;
 
     fn finish_output(&self, plan: &mut CodecOutputPlan<Self>, _: &()) -> Result<()> {
         plan.delivery.result = plan.values[0].1.clone();
@@ -641,11 +687,8 @@ impl Codec for Arithmetic {
     type OutOps = ArithmeticOutputs;
     type CompileState = ();
     type Schema = prebindgen_conversions::PlanSchema<Type>;
-    type Wire = Type;
     type Context = ();
     type Extra = ();
-    type Chain = ();
-    type Branch = ();
     fn input_leaf(&self, r: InputLeaf<'_, Self>) -> Result<CodecInputPlan<Self>> {
         let wire = &r.wire;
         value::input(r.ty, r.wire.clone(), r.target, quote!(#wire), r.ty.clone())
@@ -663,7 +706,16 @@ impl Codec for Arithmetic {
     fn output_consumes(&self, _: &Flat<Self::Schema>, _: &Type, _: &()) -> bool {
         false
     }
-    fn group(&self, _: GroupKind<'_>) -> Result<()> {
+    fn input_group(&self, _: GroupKind) -> Result<()> {
+        Ok(())
+    }
+    fn output_group(&self, _: GroupKind) -> Result<()> {
+        Ok(())
+    }
+    fn input_field(&self, _name: &syn::Ident) -> Result<()> {
+        Ok(())
+    }
+    fn output_field(&self, _name: &syn::Ident) -> Result<()> {
         Ok(())
     }
     fn compile_input_tree(

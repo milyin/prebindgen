@@ -552,7 +552,7 @@ impl<C: Codec<InOps = CInputOps, OutOps = COutputOps, CompileState = CCompileSta
                     let mut p = self.with_temporary_receiver(!borrowed && !consuming, || {
                         self.output(ty, child, extra, arg, borrowed || !consuming)
                     })?;
-                    self.prefix(&mut p.outcomes.success, ComponentSegment::View(index));
+                    self.prefix_output(&mut p.outcomes.success, ComponentSegment::View(index));
                     bodies.push((consuming, std::mem::take(&mut p.statements)));
                     append(&mut out, p)?;
                 }

@@ -134,7 +134,7 @@ impl JniEnum {
         self.member("fromWire")
     }
     pub(crate) fn wire(self: &std::rc::Rc<Self>) -> JniWire {
-        JniWire::Enum {
+        JniWire::REnumTag {
             enum_type: self.clone(),
             next_integer_niche: self.mapping.initial_niche(),
         }

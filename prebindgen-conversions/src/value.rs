@@ -69,20 +69,20 @@ impl Value {
 /// ```
 /// use prebindgen_conversions::{value};
 /// use quote::quote;
-/// let input = value::input::<syn::Type, (), (), ()>(
+/// let input = value::input::<syn::Type, (), (), (), (), ()>(
 ///     &syn::parse_quote!(&str), syn::parse_quote!(raw), syn::parse_quote!(text),
 ///     quote::quote!(read(raw)?), syn::parse_quote!(&str),
 /// )?;
 /// assert_eq!(prebindgen_flat::type_key(&prebindgen_conversions::wire_definitions(std::iter::once(&input.node)).next().unwrap().rust_type()), "& str");
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
-pub fn input<W: crate::WireKind, C, N, B>(
+pub fn input<W: crate::WireKind, C, N, B, A, T>(
     ty: &Type,
     wire: syn::Ident,
     var: syn::Ident,
     decode: TokenStream,
     kind: W,
-) -> Result<InputPlan<W, C, N, B>> {
+) -> Result<InputPlan<W, C, N, B, A, T>> {
     if Value::of(ty).is_none() {
         return Err(format!("`{}` is not a value type", type_key(ty)));
     }
@@ -139,14 +139,14 @@ pub fn input<W: crate::WireKind, C, N, B>(
 /// * `encode` — maps a Rust expression of the owned value to the expression
 ///   delivered on the wire.
 /// * `kind` — the adapter's [`Wire::kind`] for the wire.
-pub fn output<W: crate::WireKind, C, N, B>(
+pub fn output<W: crate::WireKind, C, N, B, A, T>(
     ty: &Type,
     wire: syn::Ident,
     value: TokenStream,
     borrowed: bool,
     encode: impl FnOnce(TokenStream) -> TokenStream,
     kind: W,
-) -> Result<OutputPlan<W, C, N, B>> {
+) -> Result<OutputPlan<W, C, N, B, A, T>> {
     let Some(class) = Value::of(ty).filter(|_| !matches!(ty, Type::Reference(_))) else {
         return Err(format!("`{}` is not an owned value type", type_key(ty)));
     };

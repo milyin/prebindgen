@@ -8,23 +8,32 @@ use quote::quote;
 /// `code` binds the caller's target and evaluates its continuation exactly once.
 /// `storage` contains only enclosing declarations with inert initializers. Recipe
 /// composition can hoist those declarations outside optional/selector branches.
-pub struct InputPlan<WireType: WireKind, Context = (), Chain = (), Branch = ()> {
+pub struct InputPlan<
+    WireType: WireKind,
+    Context = (),
+    Chain = (),
+    Branch = (),
+    Annotation = (),
+    Container = (),
+> {
     /// Whether conversion can return a binding error, excluding panics/aborts.
     pub fallible: bool,
     /// Context supplied by the language adapter during emission.
     pub context: std::marker::PhantomData<fn(&Context)>,
     /// Authoritative incoming representation, including adapter access metadata.
-    pub node: crate::WireNode<WireType, Chain, Branch>,
+    pub node: crate::WireNode<WireType, Chain, Branch, Annotation, Container>,
     /// Backing-storage declarations, without wire reads or ownership takes.
     pub storage: TokenStream,
     /// Complete scoped conversion with target and continuation markers.
     pub code: TokenStream,
 }
-impl<WireType: WireKind, Context, Chain, Branch> InputPlan<WireType, Context, Chain, Branch> {
+impl<WireType: WireKind, Context, Chain, Branch, Annotation, Container>
+    InputPlan<WireType, Context, Chain, Branch, Annotation, Container>
+{
     /// Prepare conversion statements and their value as one scoped operation.
     /// Supporting owners needed outside conditional branches belong in `storage`.
     pub fn new(
-        node: crate::WireNode<WireType, Chain, Branch>,
+        node: crate::WireNode<WireType, Chain, Branch, Annotation, Container>,
         code: TokenStream,
         value: TokenStream,
     ) -> Self {
@@ -54,7 +63,14 @@ impl<WireType: WireKind, Context, Chain, Branch> InputPlan<WireType, Context, Ch
 ///
 /// Optional concrete storage implementing [`crate::Conversion`].
 /// Delivery and ownership commit are separate requests.
-pub struct OutputPlan<WireType: WireKind, Context = (), Chain = (), Branch = ()> {
+pub struct OutputPlan<
+    WireType: WireKind,
+    Context = (),
+    Chain = (),
+    Branch = (),
+    Annotation = (),
+    Container = (),
+> {
     /// Whether preparation or delivery can return a binding error, excluding
     /// panics and allocation aborts. Adapters must mark custom fallible code.
     pub fallible: bool,
@@ -64,7 +80,7 @@ pub struct OutputPlan<WireType: WireKind, Context = (), Chain = (), Branch = ()>
     pub delivery: Delivery,
     /// Authoritative success/error value tree. Adapter metadata on its nodes
     /// records explicit native encodings without duplicating payload subtrees.
-    pub outcomes: crate::Outcomes<crate::WireNode<WireType, Chain, Branch>>,
+    pub outcomes: crate::Outcomes<crate::WireNode<WireType, Chain, Branch, Annotation, Container>>,
     /// Complete transfers for the selected protocol. Buffered outputs commit after
     /// foreign delivery succeeds; explicit visitor protocols can commit each
     /// element at callback entry during preparation.
@@ -124,7 +140,7 @@ pub fn source_result_expr() -> TokenStream {
 
 macro_rules! plan_traits {
     ($plan:ident; $($field:ident),* $(,)?) => {
-        impl<WireType: WireKind + Clone, Context, Chain: Clone, Branch: Clone> Clone for $plan<WireType, Context, Chain, Branch> {
+        impl<WireType: WireKind + Clone, Context, Chain: Clone, Branch: Clone, Annotation: Clone, Container: Clone> Clone for $plan<WireType, Context, Chain, Branch, Annotation, Container> {
             fn clone(&self) -> Self {
                 Self {
                     context: self.context,
@@ -132,8 +148,8 @@ macro_rules! plan_traits {
                 }
             }
         }
-        impl<WireType: WireKind + std::fmt::Debug, Context, Chain: std::fmt::Debug, Branch: std::fmt::Debug> std::fmt::Debug
-            for $plan<WireType, Context, Chain, Branch>
+        impl<WireType: WireKind + std::fmt::Debug, Context, Chain: std::fmt::Debug, Branch: std::fmt::Debug, Annotation: std::fmt::Debug, Container: std::fmt::Debug> std::fmt::Debug
+            for $plan<WireType, Context, Chain, Branch, Annotation, Container>
         {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 f.debug_struct(stringify!($plan))

@@ -1,6 +1,6 @@
 //! Compose cleanup from resolved output shapes and emit each helper once.
 use super::*;
-use crate::kotlin::JniNode;
+
 use crate::{bulk::JniBulkRecord, metadata::JniTypes};
 use prebindgen_conversions::WireNode;
 
@@ -42,29 +42,37 @@ struct Row {
 }
 
 struct CarrierChild<'a> {
-    node: &'a JniNode,
-    sequence: Option<&'a JniSequence>,
+    node: &'a JniOutputWireNode,
+    carrier: Carrier,
 }
 
-fn carrier_child<'a>(node: &'a JniNode, name: &syn::Ident) -> Option<CarrierChild<'a>> {
+fn carrier_child<'a>(node: &'a JniOutputWireNode, name: &syn::Ident) -> Option<CarrierChild<'a>> {
     match node {
-        WireNode::Chain {
-            meta: JniChain::Sequence(sequence),
-            controls,
+        WireNode::Container {
+            meta:
+                metadata @ (JniOutputWireContainer::KListArrayRows
+                | JniOutputWireContainer::KListClassRows),
+            wires,
             child,
-        } if controls.iter().any(|w| &w.name == name) => Some(CarrierChild {
+        } if wires.iter().any(|w| &w.name == name) => Some(CarrierChild {
             node: child,
-            sequence: Some(sequence),
+            carrier: if matches!(metadata, JniOutputWireContainer::KListClassRows) {
+                Carrier::TypedObjects
+            } else {
+                Carrier::Objects
+            },
         }),
-        WireNode::Chain {
-            meta: JniChain::Bulk,
-            controls,
+        WireNode::Container {
+            meta: JniOutputWireContainer::BulkFrame,
+            wires,
             child,
-        } if controls.iter().any(|w| &w.name == name) => Some(CarrierChild {
+        } if wires.iter().any(|w| &w.name == name) => Some(CarrierChild {
             node: child,
-            sequence: None,
+            carrier: Carrier::NativeJni,
         }),
-        WireNode::Chain { child, .. } => carrier_child(child, name),
+        WireNode::Annotation { child, .. }
+        | WireNode::Chain { child, .. }
+        | WireNode::Container { child, .. } => carrier_child(child, name),
         WireNode::Branch { children, .. } => {
             children.iter().find_map(|child| carrier_child(child, name))
         }
@@ -73,7 +81,7 @@ fn carrier_child<'a>(node: &'a JniNode, name: &syn::Ident) -> Option<CarrierChil
 }
 
 impl Row {
-    fn new(node: &JniNode, carrier: Carrier, types: &JniTypes) -> Result<Self> {
+    fn new(node: &JniOutputWireNode, carrier: Carrier, types: &JniTypes) -> Result<Self> {
         let layout = if matches!(carrier, Carrier::Objects | Carrier::TypedObjects) {
             None
         } else {
@@ -101,7 +109,7 @@ impl Row {
             // need no destruction. No occurrence-local wire names enter the key.
             parts.push(wire.kind.jvm_descriptor().into());
             let field = match &wire.kind {
-                JniWire::Handle { handle, .. } => {
+                JniWire::RHandle { handle, .. } => {
                     if handle.access != Access::Move {
                         return Err("output cleanup requires owned handle allocations".into());
                     }
@@ -109,14 +117,16 @@ impl Row {
                     labels.push(names::type_label(&handle.ty));
                     Field::Handle(Box::new(handle.ty.clone()))
                 }
-                JniWire::Rows { .. } | JniWire::NativeRows { .. } => {
+                JniWire::KRowArray { .. } | JniWire::FrameRowRange { .. } => {
                     if matches!(
                         (&wire.kind, carrier),
-                        (JniWire::Rows { .. }, Carrier::Native | Carrier::NativeJni)
-                            | (
-                                JniWire::NativeRows { .. },
-                                Carrier::Objects | Carrier::TypedObjects
-                            )
+                        (
+                            JniWire::KRowArray { .. },
+                            Carrier::Native | Carrier::NativeJni
+                        ) | (
+                            JniWire::FrameRowRange { .. },
+                            Carrier::Objects | Carrier::TypedObjects
+                        )
                     ) {
                         return Err("collection cleanup carrier differs from its row layout".into());
                     }
@@ -124,11 +134,7 @@ impl Row {
                         .ok_or("missing collection cleanup element")?;
                     let child_carrier =
                         if matches!(carrier, Carrier::Objects | Carrier::TypedObjects) {
-                            if matches!(child.sequence, Some(JniSequence::TypedBuffered)) {
-                                Carrier::TypedObjects
-                            } else {
-                                Carrier::Objects
-                            }
+                            child.carrier
                         } else {
                             carrier
                         };
@@ -140,13 +146,13 @@ impl Row {
                     labels.push("Rows".into());
                     Field::Rows(Box::new(row))
                 }
-                JniWire::BulkBuffer { .. } => {
+                JniWire::KBulkBytes { .. } => {
                     if !matches!(carrier, Carrier::Objects | Carrier::TypedObjects) {
                         return Err("a JVM bulk frame cannot be a native row field".into());
                     }
                     let child =
                         carrier_child(node, &wire.name).ok_or("missing frame cleanup layout")?;
-                    let row = Self::new(child.node, Carrier::NativeJni, types)?;
+                    let row = Self::new(child.node, child.carrier, types)?;
                     if row.fields.is_empty() {
                         continue;
                     }
@@ -154,14 +160,15 @@ impl Row {
                     labels.push("Frame".into());
                     Field::Frame(Box::new(row))
                 }
-                JniWire::Scalar { .. }
-                | JniWire::Enum { .. }
-                | JniWire::Selector { .. }
-                | JniWire::Text { .. }
-                | JniWire::Bytes { .. }
-                | JniWire::NativeBuffer { .. }
-                | JniWire::Native128 { .. } => continue,
-                JniWire::Callback { .. } => {
+                JniWire::RScalar { .. }
+                | JniWire::REnumTag { .. }
+                | JniWire::SelectorTag { .. }
+                | JniWire::KString { .. }
+                | JniWire::KByteArray { .. }
+                | JniWire::FrameBytes
+                | JniWire::FrameUtf8
+                | JniWire::FrameInt128 { .. } => continue,
+                JniWire::KCallback { .. } => {
                     return Err("callback objects cannot own output row resources".into())
                 }
             };
@@ -201,7 +208,7 @@ impl Row {
 
 /// A stable reference for preparation; definitions are interned during emission.
 pub(crate) fn helper(
-    node: &JniNode,
+    node: &JniOutputWireNode,
     carrier: Carrier,
     types: &JniTypes,
 ) -> Result<Option<syn::Ident>> {
@@ -378,48 +385,62 @@ impl Helpers {
         Ok(name)
     }
 
-    fn visit(&mut self, node: &JniNode, input: bool, bulk: bool, types: &JniTypes) -> Result<()> {
-        match node {
-            WireNode::Chain {
-                meta: JniChain::Bulk,
-                child,
-                ..
-            } => self.visit(child, input, true, types)?,
-            WireNode::Chain {
-                meta: JniChain::Sequence(sequence),
-                child,
-                ..
-            } => {
-                if !input {
-                    let carrier = if bulk {
-                        Some(Carrier::Native)
-                    } else {
-                        match sequence {
-                            JniSequence::Buffered => Some(Carrier::Objects),
-                            JniSequence::TypedBuffered => Some(Carrier::TypedObjects),
-                            JniSequence::Callback => None,
-                        }
-                    };
-                    if let Some(carrier) = carrier {
-                        let row = Row::new(child, carrier, types)?;
-                        if !row.fields.is_empty() {
-                            self.intern(&row)?;
+    fn visit_boundary(&mut self, root: metadata::BoundaryNode<'_>, types: &JniTypes) -> Result<()> {
+        match root {
+            metadata::BoundaryNode::Output(node) => self.visit(node, false, types),
+            metadata::BoundaryNode::Input(node) => {
+                for wire in prebindgen_conversions::wire_definitions(std::iter::once(node)) {
+                    if let JniWire::KCallback { callback } = &wire.kind {
+                        for root in callback.bulk_nodes() {
+                            self.visit_boundary(root, types)?;
                         }
                     }
                 }
-                self.visit(child, input, bulk, types)?;
+                Ok(())
             }
-            WireNode::Chain { child, .. } => self.visit(child, input, bulk, types)?,
+        }
+    }
+    fn visit(&mut self, node: &JniOutputWireNode, bulk: bool, types: &JniTypes) -> Result<()> {
+        match node {
+            WireNode::Container {
+                meta: JniOutputWireContainer::BulkFrame,
+                child,
+                ..
+            } => self.visit(child, true, types)?,
+            WireNode::Container {
+                meta:
+                    metadata @ (JniOutputWireContainer::KListArrayRows
+                    | JniOutputWireContainer::KListClassRows),
+                child,
+                ..
+            } => {
+                let carrier = if bulk {
+                    Carrier::Native
+                } else if matches!(metadata, JniOutputWireContainer::KListClassRows) {
+                    Carrier::TypedObjects
+                } else {
+                    Carrier::Objects
+                };
+                let row = Row::new(child, carrier, types)?;
+                if !row.fields.is_empty() {
+                    self.intern(&row)?;
+                }
+
+                self.visit(child, bulk, types)?;
+            }
+            WireNode::Annotation { child, .. }
+            | WireNode::Chain { child, .. }
+            | WireNode::Container { child, .. } => self.visit(child, bulk, types)?,
             WireNode::Branch { children, .. } => {
                 for child in children {
-                    self.visit(child, input, bulk, types)?;
+                    self.visit(child, bulk, types)?;
                 }
             }
             WireNode::Leaf(wires) => {
                 for wire in wires {
-                    if let JniWire::Callback { callback } = &wire.kind {
-                        for (input, node) in callback.bulk_nodes() {
-                            self.visit(node, input, false, types)?;
+                    if let JniWire::KCallback { callback } = &wire.kind {
+                        for root in callback.bulk_nodes() {
+                            self.visit_boundary(root, types)?;
                         }
                     }
                 }
@@ -433,8 +454,8 @@ pub(crate) fn emit<I: KotlinInputConversion, O: KotlinOutputConversion>(
     flat: &Flat<JniSchema<I, O>>,
 ) -> Result<TokenStream> {
     let mut helpers = Helpers::default();
-    for (input, node) in metadata::nodes(flat)? {
-        helpers.visit(node, input, false, &flat.types)?;
+    for root in metadata::nodes(flat)? {
+        helpers.visit_boundary(root, &flat.types)?;
     }
     Ok(helpers.definitions.into_values().collect())
 }
@@ -443,7 +464,7 @@ pub(crate) fn emit<I: KotlinInputConversion, O: KotlinOutputConversion>(
 mod tests {
     use super::*;
 
-    fn owner(name: &str) -> JniNode {
+    fn owner(name: &str) -> JniOutputWireNode {
         WireNode::Leaf(vec![prebindgen_conversions::Wire {
             name: syn::parse_str(name).unwrap(),
             kind: JniWire::handle(

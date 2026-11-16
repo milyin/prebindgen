@@ -19,12 +19,10 @@ pub struct JniArgument {
 impl JniWire {
     fn jvm_type(&self) -> JvmType {
         match self {
-            Self::BulkBuffer { .. }
-            | Self::NativeBuffer { text: false }
-            | Self::Native128 { .. } => JvmType::Bytes,
-            Self::NativeBuffer { text: true } => JvmType::Text,
-            Self::NativeRows { .. } => JvmType::Rows,
-            Self::Scalar { primitive, .. } => match primitive {
+            Self::KBulkBytes { .. } | Self::FrameBytes | Self::FrameInt128 { .. } => JvmType::Bytes,
+            Self::FrameUtf8 => JvmType::Text,
+            Self::FrameRowRange { .. } => JvmType::Rows,
+            Self::RScalar { primitive, .. } => match primitive {
                 Primitive::Bool => JvmType::Boolean,
                 Primitive::I8 => JvmType::Byte,
                 Primitive::I16 => JvmType::Short,
@@ -38,12 +36,12 @@ impl JniWire {
                 Primitive::F64 => JvmType::Double,
                 Primitive::I128 | Primitive::U128 => JvmType::Bytes,
             },
-            Self::Handle { .. } => JvmType::Long,
-            Self::Selector { .. } | Self::Enum { .. } => JvmType::Int,
-            Self::Text { .. } => JvmType::Text,
-            Self::Bytes { .. } => JvmType::Bytes,
-            Self::Rows { .. } => JvmType::Rows,
-            Self::Callback { .. } => JvmType::Object,
+            Self::RHandle { .. } => JvmType::Long,
+            Self::SelectorTag { .. } | Self::REnumTag { .. } => JvmType::Int,
+            Self::KString { .. } => JvmType::Text,
+            Self::KByteArray { .. } => JvmType::Bytes,
+            Self::KRowArray { .. } => JvmType::Rows,
+            Self::KCallback { .. } => JvmType::Object,
         }
     }
     pub(crate) fn bulk_scalar_access(&self) -> Result<(&'static str, usize)> {
@@ -130,7 +128,7 @@ impl JniWire {
         }
         match self.jvm_type() {
             JvmType::Text => quote!(#value),
-            JvmType::Bytes if matches!(self, Self::Scalar { .. }) => {
+            JvmType::Bytes if matches!(self, Self::RScalar { .. }) => {
                 quote!(::prebindgen_jni_runtime::bytes_object(&mut #env, &(#value))?)
             }
             JvmType::Bytes => quote!(#value),
@@ -142,7 +140,7 @@ impl JniWire {
         }
     }
     pub(crate) fn output_scalar(&self, value: &TokenStream) -> TokenStream {
-        if matches!(self, Self::Handle { .. }) {
+        if matches!(self, Self::RHandle { .. }) {
             quote!((#value) as i64)
         } else {
             value.clone()
@@ -199,13 +197,13 @@ impl JniWire {
 impl WireKind for JniWire {
     fn rust_type(&self) -> syn::Type {
         match self {
-            Self::NativeBuffer { .. } => {
+            Self::FrameBytes | Self::FrameUtf8 => {
                 syn::parse_quote!(Option<::prebindgen_jni_runtime::bulk::Range>)
             }
-            Self::NativeRows { .. } => {
+            Self::FrameRowRange { .. } => {
                 syn::parse_quote!(Option<::prebindgen_jni_runtime::bulk::Range>)
             }
-            Self::Native128 { .. } => syn::parse_quote!([u8; 16]),
+            Self::FrameInt128 { .. } => syn::parse_quote!([u8; 16]),
             _ => self.jvm_type().rust_type(),
         }
     }

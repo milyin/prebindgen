@@ -138,3 +138,23 @@ pub struct TypeInputHolder {
 pub fn type_input_holder(value: TypeInputHolder) -> i64 {
     value.row.map_or(-1, |r| r.a.value + r.b.value)
 }
+
+#[prebindgen]
+pub fn type_input_holder_empty() -> TypeInputHolder {
+    TypeInputHolder { row: None }
+}
+
+#[prebindgen]
+pub fn type_input_holder_choice(value: TypeInputHolder) -> i64 {
+    type_input_holder(value)
+}
+
+#[prebindgen]
+pub fn type_input_optional_holder(value: Option<TypeInputHolder>) -> i64 {
+    value.map_or(-2, type_input_holder)
+}
+
+#[prebindgen]
+pub fn type_input_holder_callback(callback: impl Fn() -> Option<TypeInputHolder>) -> i64 {
+    type_input_optional_holder(callback())
+}

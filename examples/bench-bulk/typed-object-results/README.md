@@ -30,7 +30,7 @@ this change does not turn the non-bulk path into a single bulk buffer.
 - More than 254 constructor parameter slots (including two per Long/Double)
   keeps legacy boxed array rows. Exactly 254 slots and mixed typed/legacy nesting
   are exercised through compiled JNI/Kotlin in the covertest.
-- Existing hand-built `JniSequence::Buffered` output layouts keep their decoder.
+- Existing hand-built `JniOutputWireContainer::KListArrayRows` output layouts keep their decoder.
   New hand-built typed schemas are checked for the constructor limit; custom
   typed writers must honor the exact registered row-class contract.
 

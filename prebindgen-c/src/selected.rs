@@ -32,14 +32,25 @@ pub(crate) fn condition(
         .reduce(|a, b| quote!((#a)&&(#b)))
         .unwrap_or_else(|| quote!(true))
 }
-pub(crate) fn values(
-    node: &prebindgen_conversions::WireNode<CWire, CChain, CBranch>,
+pub(crate) fn values<
+    Chain: group::ChainMetadata,
+    Branch: group::BranchMetadata,
+    Annotation: group::AnnotationMetadata,
+    Container: group::ContainerMetadata,
+>(
+    node: &CWireNode<Chain, Branch, Annotation, Container>,
 ) -> Result<Vec<(&Wire, Vec<Test>)>> {
-    fn visit<'a>(
-        node: &'a WireNode<CWire, CChain, CBranch>,
+    fn visit<
+        'a,
+        Chain: group::ChainMetadata,
+        Branch: group::BranchMetadata,
+        Annotation: group::AnnotationMetadata,
+        Container: group::ContainerMetadata,
+    >(
+        node: &'a CWireNode<Chain, Branch, Annotation, Container>,
         path: &[Test],
         out: &mut Vec<(&'a Wire, Vec<Test>)>,
-    ) {
+    ) -> Result<()> {
         let mut add = |wires: &'a [Wire]| {
             for wire in wires {
                 out.push((
@@ -53,17 +64,15 @@ pub(crate) fn values(
         };
         match node {
             WireNode::Leaf(wires) => add(wires),
+            WireNode::Annotation { child, .. } => visit(child, path, out)?,
+            WireNode::Container { wires, .. } => add(wires),
             WireNode::Chain {
-                meta: CChain::Sequence(_) | CChain::Tagged(_),
+                meta: encoding,
                 controls,
-                ..
-            } => add(controls),
-            WireNode::Chain {
-                meta: CChain::Optional(optional),
                 child,
-                controls,
             } => {
                 add(controls);
+                let optional = encoding.optional().expect("optional chain");
                 let mut next = path.to_vec();
                 let name = optional.discriminator().clone();
                 next.push(
@@ -72,8 +81,9 @@ pub(crate) fn values(
                         .map(|n| Test::Niche(name.clone(), n.clone()))
                         .unwrap_or(Test::Arm(name, 1)),
                 );
-                visit(child, &next, out);
+                visit(child, &next, out)?;
             }
+
             WireNode::Branch {
                 meta,
                 children,
@@ -82,16 +92,17 @@ pub(crate) fn values(
                 add(controls);
                 for (i, child) in children.iter().enumerate() {
                     let mut next = path.to_vec();
-                    if matches!(meta, CBranch::Enum(_) | CBranch::Alternatives) {
+                    if meta.selects_arm() {
                         next.push(Test::Arm(controls[0].name.clone(), i as i32));
                     }
-                    visit(child, &next, out);
+                    visit(child, &next, out)?;
                 }
             }
         }
+        Ok(())
     }
     let mut values = vec![];
-    visit(node, &[], &mut values);
+    visit(node, &[], &mut values)?;
     let indices = values
         .iter()
         .enumerate()
