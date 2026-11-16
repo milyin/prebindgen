@@ -59,7 +59,7 @@
 <a href=#59 id=59 data-nosnippet>59</a>        }],
 <a href=#60 id=60 data-nosnippet>60</a>        commit_each: <span class="bool-val">true</span>,
 <a href=#61 id=61 data-nosnippet>61</a>        fallible: <span class="bool-val">true</span>,
-<a href=#62 id=62 data-nosnippet>62</a>        metadata: JniOutputWireChain::Sequence(JniSequence::Callback),
+<a href=#62 id=62 data-nosnippet>62</a>        metadata: JniOutputWireChain::KCallbackRows,
 <a href=#63 id=63 data-nosnippet>63</a>        begin: <span class="macro">quote!</span> {
 <a href=#64 id=64 data-nosnippet>64</a>            <span class="comment">// Every accepted row belongs to the Kotlin collector, including
 <a href=#65 id=65 data-nosnippet>65</a>            // when a later row fails. Publish this before any row can arrive.
@@ -168,7 +168,7 @@
 <a href=#168 id=168 data-nosnippet>168</a>                meta: encoding,
 <a href=#169 id=169 data-nosnippet>169</a>                child,
 <a href=#170 id=170 data-nosnippet>170</a>                ..
-<a href=#171 id=171 data-nosnippet>171</a>            } <span class="kw">if </span>(encoding.sequence().is_some()) =&gt; kotlin::has_handles(child, <span class="bool-val">false</span>),
+<a href=#171 id=171 data-nosnippet>171</a>            } <span class="kw">if </span>(encoding.is_sequence()) =&gt; kotlin::has_handles(child, <span class="bool-val">false</span>),
 <a href=#172 id=172 data-nosnippet>172</a>            prebindgen_conversions::WireNode::Chain { child, .. } =&gt; nested_owners(child),
 <a href=#173 id=173 data-nosnippet>173</a>            prebindgen_conversions::WireNode::Branch { children, .. } =&gt; {
 <a href=#174 id=174 data-nosnippet>174</a>                children.iter().any(nested_owners)

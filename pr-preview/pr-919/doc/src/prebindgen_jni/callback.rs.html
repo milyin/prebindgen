@@ -183,7 +183,7 @@
 <a href=#183 id=183 data-nosnippet>183</a>        // could disappear while Rust still borrows it. Moving the handle disarms
 <a href=#184 id=184 data-nosnippet>184</a>        // cleanup and does not have this problem.
 <a href=#185 id=185 data-nosnippet>185</a>        </span><span class="kw">for </span>wire <span class="kw">in </span>prebindgen_conversions::wire_definitions(std::iter::once(input.input_node())) {
-<a href=#186 id=186 data-nosnippet>186</a>            <span class="kw">if let </span>JniWire::Handle { handle, .. } = <span class="kw-2">&amp;</span>wire.kind {
+<a href=#186 id=186 data-nosnippet>186</a>            <span class="kw">if let </span>JniWire::RHandle { handle, .. } = <span class="kw-2">&amp;</span>wire.kind {
 <a href=#187 id=187 data-nosnippet>187</a>                <span class="kw">if </span>handle.access != prebindgen_conversions::Access::Move
 <a href=#188 id=188 data-nosnippet>188</a>                    &amp;&amp; flat
 <a href=#189 id=189 data-nosnippet>189</a>                        .type_info(<span class="kw-2">&amp;</span>handle.ty)<span class="question-mark">?
@@ -312,7 +312,7 @@
 <a href=#312 id=312 data-nosnippet>312</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>requires_preflight(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
 <a href=#313 id=313 data-nosnippet>313</a>        <span class="self">self</span>.return_value.as_ref().is_some_and(|value| {
 <a href=#314 id=314 data-nosnippet>314</a>            prebindgen_conversions::wire_definitions(std::iter::once(value.input.input_node()))
-<a href=#315 id=315 data-nosnippet>315</a>                .any(|wire| <span class="macro">matches!</span>(wire.kind, JniWire::Handle { .. }))
+<a href=#315 id=315 data-nosnippet>315</a>                .any(|wire| <span class="macro">matches!</span>(wire.kind, JniWire::RHandle { .. }))
 <a href=#316 id=316 data-nosnippet>316</a>        })
 <a href=#317 id=317 data-nosnippet>317</a>    }
 <a href=#318 id=318 data-nosnippet>318</a>
@@ -449,7 +449,7 @@
 <a href=#449 id=449 data-nosnippet>449</a>        <span class="kw">let </span><span class="kw-2">mut </span>plan = JniInputPlan::new(
 <a href=#450 id=450 data-nosnippet>450</a>            WireNode::Leaf(<span class="macro">vec!</span>[Wire {
 <a href=#451 id=451 data-nosnippet>451</a>                name: wire.clone(),
-<a href=#452 id=452 data-nosnippet>452</a>                kind: JniWire::Callback {
+<a href=#452 id=452 data-nosnippet>452</a>                kind: JniWire::KCallback {
 <a href=#453 id=453 data-nosnippet>453</a>                    callback: <span class="self">self</span>.clone(),
 <a href=#454 id=454 data-nosnippet>454</a>                },
 <a href=#455 id=455 data-nosnippet>455</a>            }]),
@@ -645,7 +645,7 @@
 <a href=#645 id=645 data-nosnippet>645</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;(TokenStream, TokenStream)&gt; {
 <a href=#646 id=646 data-nosnippet>646</a>        <span class="kw">let </span>fields = <span class="self">self</span>.fields();
 <a href=#647 id=647 data-nosnippet>647</a>        <span class="kw">if let </span>[field] = fields.as_slice() {
-<a href=#648 id=648 data-nosnippet>648</a>            <span class="kw">if let </span>JniWire::Handle { handle, .. } = <span class="kw-2">&amp;</span>field.kind {
+<a href=#648 id=648 data-nosnippet>648</a>            <span class="kw">if let </span>JniWire::RHandle { handle, .. } = <span class="kw-2">&amp;</span>field.kind {
 <a href=#649 id=649 data-nosnippet>649</a>                <span class="kw">if </span>handle.access == Access::Move {
 <a href=#650 id=650 data-nosnippet>650</a>                    <span class="kw">let </span>name = <span class="kw-2">&amp;</span>field.name;
 <a href=#651 id=651 data-nosnippet>651</a>                    <span class="kw">let </span>ty = <span class="kw-2">&amp;</span>handle.ty;
@@ -821,12 +821,12 @@
 <a href=#821 id=821 data-nosnippet>821</a>    <span class="prelude-val">Ok</span>(<span class="kw">match </span>node {
 <a href=#822 id=822 data-nosnippet>822</a>        WireNode::Leaf(wires) =&gt; {
 <a href=#823 id=823 data-nosnippet>823</a>            <span class="kw">let </span>owned = wires.iter().any(
-<a href=#824 id=824 data-nosnippet>824</a>                |w| <span class="macro">matches!</span>(<span class="kw-2">&amp;</span>w.kind,JniWire::Handle{handle,..} <span class="kw">if </span>handle.access==Access::Move),
+<a href=#824 id=824 data-nosnippet>824</a>                |w| <span class="macro">matches!</span>(<span class="kw-2">&amp;</span>w.kind,JniWire::RHandle{handle,..} <span class="kw">if </span>handle.access==Access::Move),
 <a href=#825 id=825 data-nosnippet>825</a>            );
 <a href=#826 id=826 data-nosnippet>826</a>            <span class="macro">format!</span>(<span class="string">"({value} as? {prefix}.NativeHandle)?.let {{ {local} -&gt; returnedHandles.add({local}); {} }}\n"</span>,<span class="kw">if </span>owned{<span class="macro">format!</span>(<span class="string">"returnedOwners.add({local})"</span>)}<span class="kw">else</span>{String::new()})
 <a href=#827 id=827 data-nosnippet>827</a>        }
 <a href=#828 id=828 data-nosnippet>828</a>        WireNode::Chain {
-<a href=#829 id=829 data-nosnippet>829</a>            meta: <span class="kw">crate</span>::JniInputWireChain::Sequence,
+<a href=#829 id=829 data-nosnippet>829</a>            meta: <span class="kw">crate</span>::JniInputWireChain::KList,
 <a href=#830 id=830 data-nosnippet>830</a>            child,
 <a href=#831 id=831 data-nosnippet>831</a>            ..
 <a href=#832 id=832 data-nosnippet>832</a>        } =&gt; {
@@ -837,12 +837,12 @@
 <a href=#837 id=837 data-nosnippet>837</a>            returned_handle_cleanup(child, value, prefix, next, context)<span class="question-mark">?
 <a href=#838 id=838 data-nosnippet>838</a>        </span>}
 <a href=#839 id=839 data-nosnippet>839</a>        WireNode::Branch {
-<a href=#840 id=840 data-nosnippet>840</a>            meta: JniInputWireBranch::Enum(group),
+<a href=#840 id=840 data-nosnippet>840</a>            meta: JniInputWireBranch::KSealed(group),
 <a href=#841 id=841 data-nosnippet>841</a>            children,
 <a href=#842 id=842 data-nosnippet>842</a>            ..
 <a href=#843 id=843 data-nosnippet>843</a>        } =&gt; {
-<a href=#844 id=844 data-nosnippet>844</a>            <span class="kw">let </span>(source, class) = group.declaration(context.source_types)<span class="question-mark">?</span>;
-<a href=#845 id=845 data-nosnippet>845</a>            <span class="kw">let </span>class = class.ok_or(<span class="string">"expanded enum callback result must expose one value"</span>)<span class="question-mark">?</span>;
+<a href=#844 id=844 data-nosnippet>844</a>            <span class="kw">let </span>source = <span class="kw">crate</span>::metadata::source_enum(context.source_types, <span class="kw-2">&amp;</span>group.r_type)<span class="question-mark">?</span>;
+<a href=#845 id=845 data-nosnippet>845</a>            <span class="kw">let </span>class = <span class="kw">crate</span>::sealed::class(context.source_types, <span class="kw-2">&amp;</span>group.r_type)<span class="question-mark">?</span>;
 <a href=#846 id=846 data-nosnippet>846</a>            <span class="kw">if </span>source.variants.len() != children.len() {
 <a href=#847 id=847 data-nosnippet>847</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"enum occurrence differs from its source variants"</span>.into());
 <a href=#848 id=848 data-nosnippet>848</a>            }
@@ -869,13 +869,13 @@
 <a href=#869 id=869 data-nosnippet>869</a>            <span class="macro">format!</span>(<span class="string">"when(val {local}={value}) {{ {arms} else -&gt; {{}} }}\n"</span>)
 <a href=#870 id=870 data-nosnippet>870</a>        }
 <a href=#871 id=871 data-nosnippet>871</a>        WireNode::Branch {
-<a href=#872 id=872 data-nosnippet>872</a>            meta: <span class="kw">crate</span>::JniInputWireBranch::Record(data),
+<a href=#872 id=872 data-nosnippet>872</a>            meta: <span class="kw">crate</span>::JniInputWireBranch::KDataClass(data),
 <a href=#873 id=873 data-nosnippet>873</a>            children,
 <a href=#874 id=874 data-nosnippet>874</a>            ..
 <a href=#875 id=875 data-nosnippet>875</a>        } =&gt; {
 <a href=#876 id=876 data-nosnippet>876</a>            <span class="kw">let </span><span class="kw-2">mut </span>body = String::new();
 <a href=#877 id=877 data-nosnippet>877</a>            <span class="kw">let </span>(record, class) =
-<a href=#878 id=878 data-nosnippet>878</a>                <span class="kw">crate</span>::metadata::source_data_class(context.source_types, <span class="kw-2">&amp;</span>data.source)<span class="question-mark">?</span>;
+<a href=#878 id=878 data-nosnippet>878</a>                <span class="kw">crate</span>::metadata::source_data_class(context.source_types, <span class="kw-2">&amp;</span>data.r_type)<span class="question-mark">?</span>;
 <a href=#879 id=879 data-nosnippet>879</a>            <span class="kw">for </span>pair <span class="kw">in </span><span class="kw">crate</span>::data::record_fields(children, record)<span class="question-mark">? </span>{
 <a href=#880 id=880 data-nosnippet>880</a>                <span class="kw">let </span>(field, child) = pair<span class="question-mark">?</span>;
 <a href=#881 id=881 data-nosnippet>881</a>                <span class="kw">let </span>expr = <span class="macro">format!</span>(
@@ -917,9 +917,9 @@
 <a href=#917 id=917 data-nosnippet>917</a>    types: <span class="kw-2">&amp;</span><span class="kw">crate</span>::metadata::JniTypes,
 <a href=#918 id=918 data-nosnippet>918</a>) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
 <a href=#919 id=919 data-nosnippet>919</a>    <span class="prelude-val">Ok</span>(<span class="kw">match </span>node {
-<a href=#920 id=920 data-nosnippet>920</a>        WireNode::Chain { meta: JniInputWireChain::Bulk, controls, child } =&gt; <span class="kw">crate</span>::bulk::cleanup_cached(controls, child, types)<span class="question-mark">?</span>,
+<a href=#920 id=920 data-nosnippet>920</a>        WireNode::Chain { meta: JniInputWireChain::BulkFrame, controls, child } =&gt; <span class="kw">crate</span>::bulk::cleanup_cached(controls, child, types)<span class="question-mark">?</span>,
 <a href=#921 id=921 data-nosnippet>921</a>        WireNode::Leaf(fields) =&gt; fields.iter().filter_map(|field| {
-<a href=#922 id=922 data-nosnippet>922</a>            <span class="kw">if let </span>JniWire::Handle { handle, .. } = <span class="kw-2">&amp;</span>field.kind {
+<a href=#922 id=922 data-nosnippet>922</a>            <span class="kw">if let </span>JniWire::RHandle { handle, .. } = <span class="kw-2">&amp;</span>field.kind {
 <a href=#923 id=923 data-nosnippet>923</a>                <span class="kw">if </span>handle.access == Access::Move {
 <a href=#924 id=924 data-nosnippet>924</a>                    <span class="kw">let </span>name=<span class="kw-2">&amp;</span>field.name; <span class="kw">let </span>ty=<span class="kw-2">&amp;</span>handle.ty;
 <a href=#925 id=925 data-nosnippet>925</a>                    <span class="kw">return </span><span class="prelude-val">Some</span>(<span class="macro">quote!</span>(<span class="kw">unsafe </span>{ callback_return_owners.receive(#name <span class="kw">as </span><span class="kw-2">*mut </span>::prebindgen_jni_runtime::Allocation&lt;#ty&gt;); }));
@@ -927,18 +927,18 @@
 <a href=#927 id=927 data-nosnippet>927</a>            }
 <a href=#928 id=928 data-nosnippet>928</a>            <span class="prelude-val">None
 <a href=#929 id=929 data-nosnippet>929</a>        </span>}).collect(),
-<a href=#930 id=930 data-nosnippet>930</a>        WireNode::Chain { meta: JniInputWireChain::Optional(optional), child, .. } =&gt; {
+<a href=#930 id=930 data-nosnippet>930</a>        WireNode::Chain { meta: JniInputWireChain::ROption(optional), child, .. } =&gt; {
 <a href=#931 id=931 data-nosnippet>931</a>            <span class="kw">let </span>scan=receive_native_return_owners(child, types)<span class="question-mark">?</span>;
 <a href=#932 id=932 data-nosnippet>932</a>            <span class="kw">if </span>scan.is_empty() { <span class="kw">return </span><span class="prelude-val">Ok</span>(scan); }
 <a href=#933 id=933 data-nosnippet>933</a>            <span class="kw">let </span>present=optional.is_present(child)<span class="question-mark">?</span>;
 <a href=#934 id=934 data-nosnippet>934</a>            <span class="macro">quote!</span>(<span class="kw">if </span>#present { #scan })
 <a href=#935 id=935 data-nosnippet>935</a>        }
-<a href=#936 id=936 data-nosnippet>936</a>        WireNode::Chain { meta: JniInputWireChain::Sequence, .. } =&gt; {
+<a href=#936 id=936 data-nosnippet>936</a>        WireNode::Chain { meta: JniInputWireChain::KList, .. } =&gt; {
 <a href=#937 id=937 data-nosnippet>937</a>            <span class="kw">if </span>kotlin::has_handles(node, <span class="bool-val">true</span>) { <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"callback ownership cleanup requires buffered ordinary rows or an enclosing bulk frame"</span>.into()); }
 <a href=#938 id=938 data-nosnippet>938</a>            <span class="macro">quote!</span>()
 <a href=#939 id=939 data-nosnippet>939</a>        }
-<a href=#940 id=940 data-nosnippet>940</a>        WireNode::Chain { meta: JniInputWireChain::Field(<span class="kw">_</span>) | JniInputWireChain::Argument(<span class="kw">_</span>), child, .. } =&gt; receive_native_return_owners(child, types)<span class="question-mark">?</span>,
-<a href=#941 id=941 data-nosnippet>941</a>        WireNode::Branch { meta: JniInputWireBranch::Alternatives | JniInputWireBranch::Enum(<span class="kw">_</span>), controls, children } =&gt; {
+<a href=#940 id=940 data-nosnippet>940</a>        WireNode::Chain { meta: JniInputWireChain::RField(<span class="kw">_</span>) | JniInputWireChain::RParam(<span class="kw">_</span>), child, .. } =&gt; receive_native_return_owners(child, types)<span class="question-mark">?</span>,
+<a href=#941 id=941 data-nosnippet>941</a>        WireNode::Branch { meta: JniInputWireBranch::RChoices | JniInputWireBranch::KSealed(<span class="kw">_</span>) | JniInputWireBranch::KEnumParams { .. }, controls, children } =&gt; {
 <a href=#942 id=942 data-nosnippet>942</a>            <span class="kw">let </span>selector=<span class="kw-2">&amp;</span>controls[<span class="number">0</span>].name;
 <a href=#943 id=943 data-nosnippet>943</a>            <span class="kw">let </span>scans=children.iter().enumerate().map(|(i,child)| {
 <a href=#944 id=944 data-nosnippet>944</a>                <span class="kw">let </span>scan=receive_native_return_owners(child, types)<span class="question-mark">?</span>; <span class="kw">if </span>scan.is_empty(){<span class="kw">return </span><span class="prelude-val">Ok</span>(TokenStream::new());} <span class="kw">let </span>i=i <span class="kw">as </span>i32;
@@ -980,7 +980,7 @@
 <a href=#980 id=980 data-nosnippet>980</a>        wires.extend(function.input_wire_definitions()<span class="question-mark">?</span>);
 <a href=#981 id=981 data-nosnippet>981</a>    }
 <a href=#982 id=982 data-nosnippet>982</a>    <span class="kw">for </span>wire <span class="kw">in </span>wires {
-<a href=#983 id=983 data-nosnippet>983</a>        <span class="kw">let </span>JniWire::Callback { callback } = <span class="kw-2">&amp;</span>wire.kind <span class="kw">else </span>{
+<a href=#983 id=983 data-nosnippet>983</a>        <span class="kw">let </span>JniWire::KCallback { callback } = <span class="kw-2">&amp;</span>wire.kind <span class="kw">else </span>{
 <a href=#984 id=984 data-nosnippet>984</a>            <span class="kw">continue</span>;
 <a href=#985 id=985 data-nosnippet>985</a>        };
 <a href=#986 id=986 data-nosnippet>986</a>        <span class="kw">let </span>context = KotlinContext {
@@ -1032,7 +1032,7 @@
 <a href=#1032 id=1032 data-nosnippet>1032</a>                <span class="kw">let </span>handles = prebindgen_conversions::wire_definitions(std::iter::once(
 <a href=#1033 id=1033 data-nosnippet>1033</a>                    <span class="kw-2">&amp;</span>arg.output.output_outcomes().success,
 <a href=#1034 id=1034 data-nosnippet>1034</a>                ))
-<a href=#1035 id=1035 data-nosnippet>1035</a>                .any(|wire| <span class="macro">matches!</span>(wire.kind, JniWire::Handle { .. }));
+<a href=#1035 id=1035 data-nosnippet>1035</a>                .any(|wire| <span class="macro">matches!</span>(wire.kind, JniWire::RHandle { .. }));
 <a href=#1036 id=1036 data-nosnippet>1036</a>                handles &amp;&amp; !arg.scoped
 <a href=#1037 id=1037 data-nosnippet>1037</a>            })
 <a href=#1038 id=1038 data-nosnippet>1038</a>            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();

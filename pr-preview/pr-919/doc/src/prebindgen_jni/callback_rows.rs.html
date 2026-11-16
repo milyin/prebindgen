@@ -25,11 +25,11 @@
 <a href=#25 id=25 data-nosnippet>25</a>        <span class="kw">match </span>node {
 <a href=#26 id=26 data-nosnippet>26</a>            WireNode::Leaf(<span class="kw">_</span>) =&gt; <span class="bool-val">false</span>,
 <a href=#27 id=27 data-nosnippet>27</a>            WireNode::Chain {
-<a href=#28 id=28 data-nosnippet>28</a>                meta: JniInputWireChain::Sequence,
+<a href=#28 id=28 data-nosnippet>28</a>                meta: JniInputWireChain::KList,
 <a href=#29 id=29 data-nosnippet>29</a>                ..
 <a href=#30 id=30 data-nosnippet>30</a>            } =&gt; <span class="bool-val">true</span>,
 <a href=#31 id=31 data-nosnippet>31</a>            WireNode::Chain {
-<a href=#32 id=32 data-nosnippet>32</a>                meta: JniInputWireChain::Bulk,
+<a href=#32 id=32 data-nosnippet>32</a>                meta: JniInputWireChain::BulkFrame,
 <a href=#33 id=33 data-nosnippet>33</a>                ..
 <a href=#34 id=34 data-nosnippet>34</a>            } =&gt; <span class="bool-val">false</span>,
 <a href=#35 id=35 data-nosnippet>35</a>            WireNode::Chain { child, .. } =&gt; rows(child),
@@ -127,7 +127,7 @@
 <a href=#127 id=127 data-nosnippet>127</a>        WireNode::Leaf(wires) =&gt; {
 <a href=#128 id=128 data-nosnippet>128</a>            <span class="kw">let </span><span class="kw-2">mut </span>code = TokenStream::new();
 <a href=#129 id=129 data-nosnippet>129</a>            <span class="kw">for </span>wire <span class="kw">in </span>wires {
-<a href=#130 id=130 data-nosnippet>130</a>                <span class="kw">if let </span>JniWire::Handle { handle, .. } = <span class="kw-2">&amp;</span>wire.kind {
+<a href=#130 id=130 data-nosnippet>130</a>                <span class="kw">if let </span>JniWire::RHandle { handle, .. } = <span class="kw-2">&amp;</span>wire.kind {
 <a href=#131 id=131 data-nosnippet>131</a>                    <span class="kw">if </span>handle.access == Access::Move {
 <a href=#132 id=132 data-nosnippet>132</a>                        <span class="kw">let </span>name = <span class="kw-2">&amp;</span>wire.name;
 <a href=#133 id=133 data-nosnippet>133</a>                        <span class="kw">let </span>ty = <span class="kw-2">&amp;</span>handle.ty;
@@ -140,7 +140,7 @@
 <a href=#140 id=140 data-nosnippet>140</a>            code
 <a href=#141 id=141 data-nosnippet>141</a>        }
 <a href=#142 id=142 data-nosnippet>142</a>        WireNode::Chain {
-<a href=#143 id=143 data-nosnippet>143</a>            meta: JniInputWireChain::Sequence,
+<a href=#143 id=143 data-nosnippet>143</a>            meta: JniInputWireChain::KList,
 <a href=#144 id=144 data-nosnippet>144</a>            controls,
 <a href=#145 id=145 data-nosnippet>145</a>            child,
 <a href=#146 id=146 data-nosnippet>146</a>        } =&gt; {
@@ -169,7 +169,7 @@
 <a href=#169 id=169 data-nosnippet>169</a>            field(context, row, fields, carrier, scan)<span class="question-mark">?
 <a href=#170 id=170 data-nosnippet>170</a>        </span>}
 <a href=#171 id=171 data-nosnippet>171</a>        WireNode::Chain {
-<a href=#172 id=172 data-nosnippet>172</a>            meta: JniInputWireChain::Bulk,
+<a href=#172 id=172 data-nosnippet>172</a>            meta: JniInputWireChain::BulkFrame,
 <a href=#173 id=173 data-nosnippet>173</a>            controls,
 <a href=#174 id=174 data-nosnippet>174</a>            child,
 <a href=#175 id=175 data-nosnippet>175</a>        } =&gt; {
@@ -197,7 +197,7 @@
 <a href=#197 id=197 data-nosnippet>197</a>            )<span class="question-mark">?
 <a href=#198 id=198 data-nosnippet>198</a>        </span>}
 <a href=#199 id=199 data-nosnippet>199</a>        WireNode::Chain {
-<a href=#200 id=200 data-nosnippet>200</a>            meta: JniInputWireChain::Optional(optional),
+<a href=#200 id=200 data-nosnippet>200</a>            meta: JniInputWireChain::ROption(optional),
 <a href=#201 id=201 data-nosnippet>201</a>            child,
 <a href=#202 id=202 data-nosnippet>202</a>            ..
 <a href=#203 id=203 data-nosnippet>203</a>        } =&gt; {
@@ -210,31 +210,34 @@
 <a href=#210 id=210 data-nosnippet>210</a>            field(context, row, fields, name, <span class="macro">quote!</span>(<span class="kw">if </span>#present { #scan }))<span class="question-mark">?
 <a href=#211 id=211 data-nosnippet>211</a>        </span>}
 <a href=#212 id=212 data-nosnippet>212</a>        WireNode::Branch {
-<a href=#213 id=213 data-nosnippet>213</a>            meta: JniInputWireBranch::Alternatives | JniInputWireBranch::Enum(<span class="kw">_</span>),
-<a href=#214 id=214 data-nosnippet>214</a>            controls,
-<a href=#215 id=215 data-nosnippet>215</a>            children,
-<a href=#216 id=216 data-nosnippet>216</a>        } =&gt; {
-<a href=#217 id=217 data-nosnippet>217</a>            <span class="kw">let </span>selector = <span class="kw-2">&amp;</span>controls[<span class="number">0</span>].name;
-<a href=#218 id=218 data-nosnippet>218</a>            <span class="kw">let </span><span class="kw-2">mut </span>code = TokenStream::new();
-<a href=#219 id=219 data-nosnippet>219</a>            <span class="kw">for </span>(index, child) <span class="kw">in </span>children.iter().enumerate() {
-<a href=#220 id=220 data-nosnippet>220</a>                <span class="kw">let </span>scan = receive(child, context, row, fields, types)<span class="question-mark">?</span>;
-<a href=#221 id=221 data-nosnippet>221</a>                <span class="kw">let </span>index = index <span class="kw">as </span>i32;
-<a href=#222 id=222 data-nosnippet>222</a>                code.extend(<span class="macro">quote!</span>(<span class="kw">if </span>#selector == #index { #scan }));
-<a href=#223 id=223 data-nosnippet>223</a>            }
-<a href=#224 id=224 data-nosnippet>224</a>            field(context, row, fields, selector, code)<span class="question-mark">?
-<a href=#225 id=225 data-nosnippet>225</a>        </span>}
-<a href=#226 id=226 data-nosnippet>226</a>        WireNode::Chain {
-<a href=#227 id=227 data-nosnippet>227</a>            meta: JniInputWireChain::Field(<span class="kw">_</span>) | JniInputWireChain::Argument(<span class="kw">_</span>),
-<a href=#228 id=228 data-nosnippet>228</a>            child,
-<a href=#229 id=229 data-nosnippet>229</a>            ..
-<a href=#230 id=230 data-nosnippet>230</a>        } =&gt; receive(child, context, row, fields, types)<span class="question-mark">?</span>,
-<a href=#231 id=231 data-nosnippet>231</a>        WireNode::Branch { children, .. } =&gt; {
-<a href=#232 id=232 data-nosnippet>232</a>            <span class="kw">let </span><span class="kw-2">mut </span>code = TokenStream::new();
-<a href=#233 id=233 data-nosnippet>233</a>            <span class="kw">for </span>child <span class="kw">in </span>children {
-<a href=#234 id=234 data-nosnippet>234</a>                code.extend(receive(child, context, row, fields, types)<span class="question-mark">?</span>);
-<a href=#235 id=235 data-nosnippet>235</a>            }
-<a href=#236 id=236 data-nosnippet>236</a>            code
-<a href=#237 id=237 data-nosnippet>237</a>        }
-<a href=#238 id=238 data-nosnippet>238</a>    })
-<a href=#239 id=239 data-nosnippet>239</a>}
+<a href=#213 id=213 data-nosnippet>213</a>            meta:
+<a href=#214 id=214 data-nosnippet>214</a>                JniInputWireBranch::RChoices
+<a href=#215 id=215 data-nosnippet>215</a>                | JniInputWireBranch::KSealed(<span class="kw">_</span>)
+<a href=#216 id=216 data-nosnippet>216</a>                | JniInputWireBranch::KEnumParams { .. },
+<a href=#217 id=217 data-nosnippet>217</a>            controls,
+<a href=#218 id=218 data-nosnippet>218</a>            children,
+<a href=#219 id=219 data-nosnippet>219</a>        } =&gt; {
+<a href=#220 id=220 data-nosnippet>220</a>            <span class="kw">let </span>selector = <span class="kw-2">&amp;</span>controls[<span class="number">0</span>].name;
+<a href=#221 id=221 data-nosnippet>221</a>            <span class="kw">let </span><span class="kw-2">mut </span>code = TokenStream::new();
+<a href=#222 id=222 data-nosnippet>222</a>            <span class="kw">for </span>(index, child) <span class="kw">in </span>children.iter().enumerate() {
+<a href=#223 id=223 data-nosnippet>223</a>                <span class="kw">let </span>scan = receive(child, context, row, fields, types)<span class="question-mark">?</span>;
+<a href=#224 id=224 data-nosnippet>224</a>                <span class="kw">let </span>index = index <span class="kw">as </span>i32;
+<a href=#225 id=225 data-nosnippet>225</a>                code.extend(<span class="macro">quote!</span>(<span class="kw">if </span>#selector == #index { #scan }));
+<a href=#226 id=226 data-nosnippet>226</a>            }
+<a href=#227 id=227 data-nosnippet>227</a>            field(context, row, fields, selector, code)<span class="question-mark">?
+<a href=#228 id=228 data-nosnippet>228</a>        </span>}
+<a href=#229 id=229 data-nosnippet>229</a>        WireNode::Chain {
+<a href=#230 id=230 data-nosnippet>230</a>            meta: JniInputWireChain::RField(<span class="kw">_</span>) | JniInputWireChain::RParam(<span class="kw">_</span>),
+<a href=#231 id=231 data-nosnippet>231</a>            child,
+<a href=#232 id=232 data-nosnippet>232</a>            ..
+<a href=#233 id=233 data-nosnippet>233</a>        } =&gt; receive(child, context, row, fields, types)<span class="question-mark">?</span>,
+<a href=#234 id=234 data-nosnippet>234</a>        WireNode::Branch { children, .. } =&gt; {
+<a href=#235 id=235 data-nosnippet>235</a>            <span class="kw">let </span><span class="kw-2">mut </span>code = TokenStream::new();
+<a href=#236 id=236 data-nosnippet>236</a>            <span class="kw">for </span>child <span class="kw">in </span>children {
+<a href=#237 id=237 data-nosnippet>237</a>                code.extend(receive(child, context, row, fields, types)<span class="question-mark">?</span>);
+<a href=#238 id=238 data-nosnippet>238</a>            }
+<a href=#239 id=239 data-nosnippet>239</a>            code
+<a href=#240 id=240 data-nosnippet>240</a>        }
+<a href=#241 id=241 data-nosnippet>241</a>    })
+<a href=#242 id=242 data-nosnippet>242</a>}
 </code></pre></div></section></main></body></html>
