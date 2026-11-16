@@ -24,15 +24,15 @@
 <a href=#24 id=24 data-nosnippet>24</a>        }
 <a href=#25 id=25 data-nosnippet>25</a>        <span class="kw">match </span>node {
 <a href=#26 id=26 data-nosnippet>26</a>            WireNode::Leaf(<span class="kw">_</span>) =&gt; <span class="bool-val">false</span>,
-<a href=#27 id=27 data-nosnippet>27</a>            WireNode::Chain {
-<a href=#28 id=28 data-nosnippet>28</a>                meta: JniInputWireChain::KList,
+<a href=#27 id=27 data-nosnippet>27</a>            WireNode::Container {
+<a href=#28 id=28 data-nosnippet>28</a>                meta: JniInputWireContainer::KList,
 <a href=#29 id=29 data-nosnippet>29</a>                ..
 <a href=#30 id=30 data-nosnippet>30</a>            } =&gt; <span class="bool-val">true</span>,
-<a href=#31 id=31 data-nosnippet>31</a>            WireNode::Chain {
-<a href=#32 id=32 data-nosnippet>32</a>                meta: JniInputWireChain::BulkFrame,
+<a href=#31 id=31 data-nosnippet>31</a>            WireNode::Container {
+<a href=#32 id=32 data-nosnippet>32</a>                meta: JniInputWireContainer::BulkFrame,
 <a href=#33 id=33 data-nosnippet>33</a>                ..
 <a href=#34 id=34 data-nosnippet>34</a>            } =&gt; <span class="bool-val">false</span>,
-<a href=#35 id=35 data-nosnippet>35</a>            WireNode::Chain { child, .. } =&gt; rows(child),
+<a href=#35 id=35 data-nosnippet>35</a>            WireNode::Annotation { child, .. } | WireNode::Chain { child, .. } =&gt; rows(child),
 <a href=#36 id=36 data-nosnippet>36</a>            WireNode::Branch { children, .. } =&gt; children.iter().any(rows),
 <a href=#37 id=37 data-nosnippet>37</a>        }
 <a href=#38 id=38 data-nosnippet>38</a>    }
@@ -139,9 +139,9 @@
 <a href=#139 id=139 data-nosnippet>139</a>            }
 <a href=#140 id=140 data-nosnippet>140</a>            code
 <a href=#141 id=141 data-nosnippet>141</a>        }
-<a href=#142 id=142 data-nosnippet>142</a>        WireNode::Chain {
-<a href=#143 id=143 data-nosnippet>143</a>            meta: JniInputWireChain::KList,
-<a href=#144 id=144 data-nosnippet>144</a>            controls,
+<a href=#142 id=142 data-nosnippet>142</a>        WireNode::Container {
+<a href=#143 id=143 data-nosnippet>143</a>            meta: JniInputWireContainer::KList,
+<a href=#144 id=144 data-nosnippet>144</a>            wires: controls,
 <a href=#145 id=145 data-nosnippet>145</a>            child,
 <a href=#146 id=146 data-nosnippet>146</a>        } =&gt; {
 <a href=#147 id=147 data-nosnippet>147</a>            <span class="kw">let </span>carrier = <span class="kw-2">&amp;</span>controls[<span class="number">0</span>].name;
@@ -168,9 +168,9 @@
 <a href=#168 id=168 data-nosnippet>168</a>            });
 <a href=#169 id=169 data-nosnippet>169</a>            field(context, row, fields, carrier, scan)<span class="question-mark">?
 <a href=#170 id=170 data-nosnippet>170</a>        </span>}
-<a href=#171 id=171 data-nosnippet>171</a>        WireNode::Chain {
-<a href=#172 id=172 data-nosnippet>172</a>            meta: JniInputWireChain::BulkFrame,
-<a href=#173 id=173 data-nosnippet>173</a>            controls,
+<a href=#171 id=171 data-nosnippet>171</a>        WireNode::Container {
+<a href=#172 id=172 data-nosnippet>172</a>            meta: JniInputWireContainer::BulkFrame,
+<a href=#173 id=173 data-nosnippet>173</a>            wires: controls,
 <a href=#174 id=174 data-nosnippet>174</a>            child,
 <a href=#175 id=175 data-nosnippet>175</a>        } =&gt; {
 <a href=#176 id=176 data-nosnippet>176</a>            <span class="kw">let </span>carrier = <span class="kw-2">&amp;</span>controls[<span class="number">0</span>].name;
@@ -226,8 +226,8 @@
 <a href=#226 id=226 data-nosnippet>226</a>            }
 <a href=#227 id=227 data-nosnippet>227</a>            field(context, row, fields, selector, code)<span class="question-mark">?
 <a href=#228 id=228 data-nosnippet>228</a>        </span>}
-<a href=#229 id=229 data-nosnippet>229</a>        WireNode::Chain {
-<a href=#230 id=230 data-nosnippet>230</a>            meta: JniInputWireChain::RField(<span class="kw">_</span>) | JniInputWireChain::RParam(<span class="kw">_</span>),
+<a href=#229 id=229 data-nosnippet>229</a>        WireNode::Annotation {
+<a href=#230 id=230 data-nosnippet>230</a>            meta: JniInputWireAnnotation::RField(<span class="kw">_</span>) | JniInputWireAnnotation::RParam(<span class="kw">_</span>),
 <a href=#231 id=231 data-nosnippet>231</a>            child,
 <a href=#232 id=232 data-nosnippet>232</a>            ..
 <a href=#233 id=233 data-nosnippet>233</a>        } =&gt; receive(child, context, row, fields, types)<span class="question-mark">?</span>,
