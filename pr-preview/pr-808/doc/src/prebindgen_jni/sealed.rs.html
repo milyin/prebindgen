@@ -528,7 +528,7 @@
 <a href=#528 id=528 data-nosnippet>528</a>    owners: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>str&gt;,
 <a href=#529 id=529 data-nosnippet>529</a>) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="prelude-ty">Option</span>&lt;String&gt;&gt;&gt; {
 <a href=#530 id=530 data-nosnippet>530</a>    <span class="kw">if let </span>WireNode::Branch {
-<a href=#531 id=531 data-nosnippet>531</a>        meta: JniBranch::Group(JniGroup::Fields(<span class="prelude-val">Some</span>(<span class="kw">_</span>))) | JniBranch::Enum(<span class="kw">_</span>),
+<a href=#531 id=531 data-nosnippet>531</a>        meta: JniBranch::Record(<span class="kw">_</span>) | JniBranch::Enum(<span class="kw">_</span>),
 <a href=#532 id=532 data-nosnippet>532</a>        ..
 <a href=#533 id=533 data-nosnippet>533</a>    } = node
 <a href=#534 id=534 data-nosnippet>534</a>    {
@@ -542,7 +542,7 @@
 <a href=#542 id=542 data-nosnippet>542</a>            </span>.into_iter()
 <a href=#543 id=543 data-nosnippet>543</a>            .flatten()
 <a href=#544 id=544 data-nosnippet>544</a>            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-<a href=#545 id=545 data-nosnippet>545</a>        <span class="kw">if let </span>JniBranch::Group(JniGroup::Field(field)) = meta {
+<a href=#545 id=545 data-nosnippet>545</a>        <span class="kw">if let </span>JniBranch::Field(field) = meta {
 <a href=#546 id=546 data-nosnippet>546</a>            <span class="kw">let </span>field = field.to_string();
 <a href=#547 id=547 data-nosnippet>547</a>            <span class="kw">let </span>tuple = field
 <a href=#548 id=548 data-nosnippet>548</a>                .strip_prefix(<span class="string">'v'</span>)

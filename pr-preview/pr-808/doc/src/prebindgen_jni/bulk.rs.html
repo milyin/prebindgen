@@ -1221,7 +1221,7 @@
 <a href=#1221 id=1221 data-nosnippet>1221</a>            ..
 <a href=#1222 id=1222 data-nosnippet>1222</a>        } =&gt; schema(child, types)<span class="question-mark">?</span>,
 <a href=#1223 id=1223 data-nosnippet>1223</a>        WireNode::Branch {
-<a href=#1224 id=1224 data-nosnippet>1224</a>            meta: JniBranch::Group(JniGroup::Argument(<span class="kw">_</span>)),
+<a href=#1224 id=1224 data-nosnippet>1224</a>            meta: JniBranch::Argument(<span class="kw">_</span>),
 <a href=#1225 id=1225 data-nosnippet>1225</a>            children,
 <a href=#1226 id=1226 data-nosnippet>1226</a>            controls,
 <a href=#1227 id=1227 data-nosnippet>1227</a>        } <span class="kw">if </span>controls.is_empty() &amp;&amp; children.len() == <span class="number">1 </span>=&gt; schema(<span class="kw-2">&amp;</span>children[<span class="number">0</span>], types)<span class="question-mark">?</span>,
@@ -1245,9 +1245,9 @@
 <a href=#1245 id=1245 data-nosnippet>1245</a>                            .join(<span class="string">";"</span>)
 <a href=#1246 id=1246 data-nosnippet>1246</a>                    )
 <a href=#1247 id=1247 data-nosnippet>1247</a>                }
-<a href=#1248 id=1248 data-nosnippet>1248</a>                JniBranch::Group(JniGroup::Field(name)) =&gt; <span class="macro">format!</span>(<span class="string">"field:{name}"</span>),
-<a href=#1249 id=1249 data-nosnippet>1249</a>                JniBranch::Group(JniGroup::Named(name)) =&gt; <span class="macro">format!</span>(<span class="string">"view:{name}"</span>),
-<a href=#1250 id=1250 data-nosnippet>1250</a>                JniBranch::Group(JniGroup::Fields(<span class="kw">_</span>)) =&gt; <span class="string">"fields"</span>.into(),
+<a href=#1248 id=1248 data-nosnippet>1248</a>                JniBranch::Field(name) =&gt; <span class="macro">format!</span>(<span class="string">"field:{name}"</span>),
+<a href=#1249 id=1249 data-nosnippet>1249</a>                JniBranch::Named(name) =&gt; <span class="macro">format!</span>(<span class="string">"view:{name}"</span>),
+<a href=#1250 id=1250 data-nosnippet>1250</a>                JniBranch::Fields | JniBranch::Record(<span class="kw">_</span>) =&gt; <span class="string">"fields"</span>.into(),
 <a href=#1251 id=1251 data-nosnippet>1251</a>                <span class="kw">_ </span>=&gt; <span class="string">"group"</span>.into(),
 <a href=#1252 id=1252 data-nosnippet>1252</a>            };
 <a href=#1253 id=1253 data-nosnippet>1253</a>            <span class="macro">format!</span>(

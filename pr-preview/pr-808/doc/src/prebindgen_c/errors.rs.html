@@ -89,14 +89,14 @@
 <a href=#89 id=89 data-nosnippet>89</a>    <span class="kw">use </span>prebindgen_conversions::WireNode;
 <a href=#90 id=90 data-nosnippet>90</a>    <span class="kw">let </span><span class="kw-2">mut </span>names = Vec::new();
 <a href=#91 id=91 data-nosnippet>91</a>    <span class="kw">if let </span>WireNode::Branch {
-<a href=#92 id=92 data-nosnippet>92</a>        meta: CBranch::Group(CGroup::Fields),
+<a href=#92 id=92 data-nosnippet>92</a>        meta: CBranch::Fields,
 <a href=#93 id=93 data-nosnippet>93</a>        children,
 <a href=#94 id=94 data-nosnippet>94</a>        ..
 <a href=#95 id=95 data-nosnippet>95</a>    } = layout
 <a href=#96 id=96 data-nosnippet>96</a>    {
 <a href=#97 id=97 data-nosnippet>97</a>        <span class="kw">for </span>node <span class="kw">in </span>children.as_slice() {
 <a href=#98 id=98 data-nosnippet>98</a>            <span class="kw">if let </span>WireNode::Branch {
-<a href=#99 id=99 data-nosnippet>99</a>                meta: CBranch::Group(CGroup::Field(name)),
+<a href=#99 id=99 data-nosnippet>99</a>                meta: CBranch::Field(name),
 <a href=#100 id=100 data-nosnippet>100</a>                ..
 <a href=#101 id=101 data-nosnippet>101</a>            } = node
 <a href=#102 id=102 data-nosnippet>102</a>            {

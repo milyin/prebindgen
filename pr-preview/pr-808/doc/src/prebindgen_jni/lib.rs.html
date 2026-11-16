@@ -39,7 +39,7 @@
 <a href=#39 id=39 data-nosnippet>39</a><span class="kw">mod </span>returns;
 <a href=#40 id=40 data-nosnippet>40</a><span class="kw">mod </span>scalar;
 <a href=#41 id=41 data-nosnippet>41</a><span class="kw">pub use </span>data::{DeclJniClass, DeclJniDataClass, JniDataGroup, JniField};
-<a href=#42 id=42 data-nosnippet>42</a><span class="kw">pub use </span>group::{JniBranch, JniChain, JniGroup, JniOptional};
+<a href=#42 id=42 data-nosnippet>42</a><span class="kw">pub use </span>group::{JniBranch, JniChain, JniOptional};
 <a href=#43 id=43 data-nosnippet>43</a><span class="kw">use </span>prebindgen_conversions::boxed::BoxedWire;
 <a href=#44 id=44 data-nosnippet>44</a><span class="kw">use </span>prebindgen_conversions::value::Value;
 <a href=#45 id=45 data-nosnippet>45</a><span class="kw">use </span>prebindgen_flat::Primitive;
@@ -869,7 +869,7 @@
 <a href=#869 id=869 data-nosnippet>869</a>        <span class="kw">if let </span>prebindgen_declarations::ComponentSegment::Argument(name) = segment {
 <a href=#870 id=870 data-nosnippet>870</a>            <span class="kw-2">*</span>node = prebindgen_conversions::WireNode::Branch {
 <a href=#871 id=871 data-nosnippet>871</a>                controls: <span class="macro">vec!</span>[],
-<a href=#872 id=872 data-nosnippet>872</a>                meta: JniBranch::Group(JniGroup::Argument(name)),
+<a href=#872 id=872 data-nosnippet>872</a>                meta: JniBranch::Argument(name),
 <a href=#873 id=873 data-nosnippet>873</a>                children: <span class="macro">vec!</span>[std::mem::take(node)],
 <a href=#874 id=874 data-nosnippet>874</a>            };
 <a href=#875 id=875 data-nosnippet>875</a>        }
@@ -1302,15 +1302,15 @@
 <a href=#1302 id=1302 data-nosnippet>1302</a>        <span class="bool-val">true
 <a href=#1303 id=1303 data-nosnippet>1303</a>    </span>}
 <a href=#1304 id=1304 data-nosnippet>1304</a>    <span class="kw">fn </span>group(<span class="kw-2">&amp;</span><span class="self">self</span>, kind: GroupKind&lt;<span class="lifetime">'_</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;JniBranch&gt; {
-<a href=#1305 id=1305 data-nosnippet>1305</a>        <span class="prelude-val">Ok</span>(JniBranch::Group(<span class="kw">match </span>kind {
-<a href=#1306 id=1306 data-nosnippet>1306</a>            GroupKind::Values =&gt; JniGroup::Values,
-<a href=#1307 id=1307 data-nosnippet>1307</a>            GroupKind::Fields =&gt; JniGroup::Fields(<span class="prelude-val">None</span>),
-<a href=#1308 id=1308 data-nosnippet>1308</a>            GroupKind::Field(name) =&gt; JniGroup::Field(name.clone()),
+<a href=#1305 id=1305 data-nosnippet>1305</a>        <span class="prelude-val">Ok</span>(<span class="kw">match </span>kind {
+<a href=#1306 id=1306 data-nosnippet>1306</a>            GroupKind::Values =&gt; JniBranch::Values,
+<a href=#1307 id=1307 data-nosnippet>1307</a>            GroupKind::Fields =&gt; JniBranch::Fields,
+<a href=#1308 id=1308 data-nosnippet>1308</a>            GroupKind::Field(name) =&gt; JniBranch::Field(name.clone()),
 <a href=#1309 id=1309 data-nosnippet>1309</a>            GroupKind::NamedOutput(name) =&gt; {
 <a href=#1310 id=1310 data-nosnippet>1310</a>                validate_name(name)<span class="question-mark">?</span>;
-<a href=#1311 id=1311 data-nosnippet>1311</a>                JniGroup::Named(name.into())
+<a href=#1311 id=1311 data-nosnippet>1311</a>                JniBranch::Named(name.into())
 <a href=#1312 id=1312 data-nosnippet>1312</a>            }
-<a href=#1313 id=1313 data-nosnippet>1313</a>        }))
+<a href=#1313 id=1313 data-nosnippet>1313</a>        })
 <a href=#1314 id=1314 data-nosnippet>1314</a>    }
 <a href=#1315 id=1315 data-nosnippet>1315</a>    <span class="kw">fn </span>optional(<span class="kw-2">&amp;</span><span class="self">self</span>, request: Optional&lt;<span class="lifetime">'_</span>, <span class="self">Self</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;OptionalEncoding&lt;<span class="self">Self</span>&gt;&gt; {
 <a href=#1316 id=1316 data-nosnippet>1316</a>        group::prepare_optional(request)
