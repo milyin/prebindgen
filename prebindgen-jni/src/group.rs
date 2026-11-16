@@ -18,11 +18,17 @@ use syn::ext::IdentExt;
 pub enum JniInputWireAnnotation {
     /// Name one source argument's conversion subtree for exposed Kotlin parameter paths.
     /// Adds no control wires and preserves the child's native representation and scope.
-    RParam(String),
+    RParam {
+        /// Rust parameter name used in exposed Kotlin parameter paths.
+        name: String,
+    },
     /// Name one source field's conversion subtree, directly inside RFields or KDataClass.
     /// The identifier names a Rust field or an enum tuple field's generated property.
     /// Adds no control wires; the child may produce zero, one or several wire values.
-    RField(syn::Ident),
+    RField {
+        /// Rust field name or an enum tuple field's generated property name.
+        name: syn::Ident,
+    },
 }
 /// Add optional presence controls to one subtree at the same boundary.
 /// Input is relative to Rust; retained callbacks reverse the direction.
@@ -30,7 +36,10 @@ pub enum JniInputWireAnnotation {
 pub enum JniInputWireChain {
     /// Decode an optional child payload. A flag lives in controls; a niche instead
     /// reserves one representation of a child wire. Neither starts a new native scope.
-    ROption(JniPresence),
+    ROption {
+        /// Physical flag or niche encoding for this optional occurrence.
+        presence: JniPresence,
+    },
 }
 /// Expose only the container wires; interpret its child in an internal boundary.
 /// Input is relative to Rust; retained callbacks reverse the direction.
@@ -53,10 +62,16 @@ pub enum JniInputWireContainer {
 pub enum JniOutputWireAnnotation {
     /// Name one source field's conversion subtree, directly inside RFields or KDataClass.
     /// Adds no control wires or native scope; the child may produce several outputs.
-    RField(syn::Ident),
+    RField {
+        /// Rust field name or an enum tuple field's generated property name.
+        name: syn::Ident,
+    },
     /// Supply one base name for Kotlin callback, build and fold params. Multiple
     /// child results derive numeric suffixes. Adds no controls or native scope.
-    KParamName(String),
+    KParamName {
+        /// Base name of the Kotlin callback, build or fold parameter.
+        name: String,
+    },
 }
 /// Add optional presence controls to one subtree at the same boundary.
 /// Output is relative to Rust; retained callbacks reverse the direction.
@@ -64,7 +79,10 @@ pub enum JniOutputWireAnnotation {
 pub enum JniOutputWireChain {
     /// Encode an optional child payload. A flag lives in controls; a niche instead
     /// uses a reserved representation of a child wire, without a separate control.
-    ROption(JniPresence),
+    ROption {
+        /// Physical flag or niche encoding for this optional occurrence.
+        presence: JniPresence,
+    },
 }
 /// Expose only the container wires; interpret its child in an internal boundary.
 /// Output is relative to Rust; retained callbacks reverse the direction.
@@ -93,12 +111,12 @@ pub enum JniOutputWireContainer {
 /// Input has no named output projection:
 /// ```compile_fail
 /// use prebindgen_jni::JniInputWireAnnotation;
-/// let input = JniInputWireAnnotation::KParamName("size".into());
+/// let input = JniInputWireAnnotation::KParamName { name: "size".into() };
 /// ```
 /// RField names annotate one subtree, so they belong to annotation metadata:
 /// ```compile_fail
 /// use prebindgen_jni::JniInputWireBranch;
-/// let field = JniInputWireBranch::RField(syn::parse_quote!(x));
+/// let field = JniInputWireBranch::RField { name: syn::parse_quote!(x) };
 /// ```
 #[derive(Clone, Debug)]
 pub enum JniInputWireBranch {
@@ -111,7 +129,12 @@ pub enum JniInputWireBranch {
     /// Accept one Kotlin data-class value and extract its properties before JNI.
     /// Children are RField annotations in source order, as for RFields. Metadata identifies
     /// the canonical source type and Kotlin binding; no native carrier is added.
-    KDataClass(JniInputKDataClass),
+    KDataClass {
+        /// Canonical Rust record in Flat, providing its fields and Kotlin class.
+        r_type: prebindgen_flat::TypeRef,
+        /// Kotlin parameter/local whose properties are read.
+        k_name: String,
+    },
     /// Use the integer selector in controls to decode exactly one conversion arm,
     /// including constructor and identity alternatives.
     /// The nonempty child list is in selector order; inactive arms are not consumed.
@@ -120,7 +143,12 @@ pub enum JniInputWireBranch {
     /// Read one Kotlin sealed value and decode its selected Rust enum variant.
     /// The control tag selects the child payload in wire-tag order; metadata links
     /// the canonical enum and the Kotlin parameter/local holding its value.
-    KSealed(std::rc::Rc<crate::sealed::JniInputKSealed>),
+    KSealed {
+        /// Canonical Rust payload enum in Flat, including its tag mapping.
+        r_type: prebindgen_flat::TypeRef,
+        /// Kotlin parameter/local whose selected variant is read.
+        k_name: String,
+    },
     /// Decode a Rust enum from separate Kotlin tag and payload parameters.
     /// The control tag selects one child payload in wire-tag order.
     KEnumParams {
@@ -147,11 +175,17 @@ pub enum JniOutputWireBranch {
     /// order. Metadata identifies the canonical type; reconstruction happens on
     /// Kotlin's side without adding a native object carrier or wire scope.
     /// Output labels belong to KParamName annotations; no input binding is needed here.
-    KDataClass(JniOutputKDataClass),
+    KDataClass {
+        /// Canonical Rust record in Flat, providing its fields and Kotlin class.
+        r_type: prebindgen_flat::TypeRef,
+    },
     /// Reconstruct one Kotlin sealed value from the active Rust enum variant.
     /// The control tag selects a child payload in wire-tag order; inactive
     /// children contribute their absent wire values. No Kotlin input name is kept.
-    KSealed(std::rc::Rc<crate::sealed::JniOutputKSealed>),
+    KSealed {
+        /// Canonical Rust payload enum in Flat, including its tag mapping.
+        r_type: prebindgen_flat::TypeRef,
+    },
     /// Expose the Rust enum as separate Kotlin tag and payload parameters.
     /// The control tag selects a child payload in wire-tag order.
     KEnumParams {
@@ -168,7 +202,7 @@ pub(crate) trait AnnotationMetadata {
 }
 impl AnnotationMetadata for JniInputWireAnnotation {
     fn field(&self) -> Option<&syn::Ident> {
-        if let Self::RField(name) = self {
+        if let Self::RField { name } = self {
             Some(name)
         } else {
             None
@@ -180,14 +214,14 @@ impl AnnotationMetadata for JniInputWireAnnotation {
 }
 impl AnnotationMetadata for JniOutputWireAnnotation {
     fn field(&self) -> Option<&syn::Ident> {
-        if let Self::RField(name) = self {
+        if let Self::RField { name } = self {
             Some(name)
         } else {
             None
         }
     }
     fn output_name(&self) -> Option<&str> {
-        if let Self::KParamName(name) = self {
+        if let Self::KParamName { name } = self {
             Some(name)
         } else {
             None
@@ -199,13 +233,13 @@ pub(crate) trait ChainMetadata {
 }
 impl ChainMetadata for JniInputWireChain {
     fn optional(&self) -> Option<&JniPresence> {
-        let Self::ROption(value) = self;
+        let Self::ROption { presence: value } = self;
         Some(value)
     }
 }
 impl ChainMetadata for JniOutputWireChain {
     fn optional(&self) -> Option<&JniPresence> {
-        let Self::ROption(value) = self;
+        let Self::ROption { presence: value } = self;
         Some(value)
     }
 }
@@ -264,19 +298,18 @@ impl BranchMetadata for JniInputWireBranch {
         matches!(self, Self::RFields)
     }
     fn is_record(&self) -> bool {
-        matches!(self, Self::KDataClass(_))
+        matches!(self, Self::KDataClass { .. })
     }
     fn record_binding(&self) -> Option<&str> {
-        if let Self::KDataClass(value) = self {
-            Some(&value.k_name)
+        if let Self::KDataClass { k_name, .. } = self {
+            Some(k_name)
         } else {
             None
         }
     }
     fn r_enum(&self) -> Option<&prebindgen_flat::TypeRef> {
         match self {
-            Self::KSealed(value) => Some(&value.r_type),
-            Self::KEnumParams { r_type } => Some(r_type),
+            Self::KSealed { r_type, .. } | Self::KEnumParams { r_type } => Some(r_type),
             _ => None,
         }
     }
@@ -289,15 +322,14 @@ impl BranchMetadata for JniOutputWireBranch {
         matches!(self, Self::RFields)
     }
     fn is_record(&self) -> bool {
-        matches!(self, Self::KDataClass(_))
+        matches!(self, Self::KDataClass { .. })
     }
     fn record_binding(&self) -> Option<&str> {
         None
     }
     fn r_enum(&self) -> Option<&prebindgen_flat::TypeRef> {
         match self {
-            Self::KSealed(value) => Some(&value.r_type),
-            Self::KEnumParams { r_type } => Some(r_type),
+            Self::KSealed { r_type, .. } | Self::KEnumParams { r_type } => Some(r_type),
             _ => None,
         }
     }
@@ -844,7 +876,7 @@ mod tests {
         *tree = WireNode::Chain {
             controls,
             child: Box::new(payload),
-            meta: JniInputWireChain::ROption(metadata),
+            meta: JniInputWireChain::ROption { presence: metadata },
         };
     }
     fn leaf(name: &str) -> prebindgen_conversions::Wire<JniWire> {
@@ -1034,7 +1066,9 @@ mod tests {
         let flag: JniInputWireNode = WireNode::Chain {
             controls: vec![selector(syn::parse_quote!(actual))],
             child: Box::new(WireNode::default()),
-            meta: JniInputWireChain::ROption(JniPresence::Flag(syn::parse_quote!(missing))),
+            meta: JniInputWireChain::ROption {
+                presence: JniPresence::Flag(syn::parse_quote!(missing)),
+            },
         };
         assert!(validate_layout(&flag)
             .unwrap_err()
@@ -1109,7 +1143,9 @@ mod tests {
     #[test]
     fn field_names_placement_and_empty_records_are_validated() {
         let field: JniInputWireNode = WireNode::Annotation {
-            meta: JniInputWireAnnotation::RField(syn::parse_quote!(x)),
+            meta: JniInputWireAnnotation::RField {
+                name: syn::parse_quote!(x),
+            },
             child: Box::new(WireNode::default()),
         };
         assert!(validate_layout(&field)
@@ -1157,7 +1193,9 @@ mod tests {
             ))
             .unwrap();
         input.node = prebindgen_conversions::WireNode::Annotation {
-            meta: JniInputWireAnnotation::RField(syn::parse_quote!(orphan)),
+            meta: JniInputWireAnnotation::RField {
+                name: syn::parse_quote!(orphan),
+            },
             child: Box::new(std::mem::take(&mut input.node)),
         };
         assert!(JniCodec::raw()
@@ -1175,7 +1213,9 @@ mod tests {
             ))
             .unwrap();
         output.outcomes.success = prebindgen_conversions::WireNode::Annotation {
-            meta: JniOutputWireAnnotation::RField(syn::parse_quote!(orphan)),
+            meta: JniOutputWireAnnotation::RField {
+                name: syn::parse_quote!(orphan),
+            },
             child: Box::new(std::mem::take(&mut output.outcomes.success)),
         };
         assert!(JniCodec::raw()

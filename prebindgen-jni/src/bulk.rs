@@ -1432,12 +1432,12 @@ pub(crate) fn callback_cache(node: &JniInputWireNode, context: &JniContext) -> R
                 ..
             } => quote!(),
             WireNode::Annotation {
-                meta: JniInputWireAnnotation::RField(_) | JniInputWireAnnotation::RParam(_),
+                meta: JniInputWireAnnotation::RField { .. } | JniInputWireAnnotation::RParam { .. },
                 child,
                 ..
             } => cache(child, env)?,
             WireNode::Chain {
-                meta: JniInputWireChain::ROption(optional),
+                meta: JniInputWireChain::ROption { presence: optional },
                 child,
                 ..
             } => {
@@ -1455,7 +1455,7 @@ pub(crate) fn callback_cache(node: &JniInputWireNode, context: &JniContext) -> R
             WireNode::Branch {
                 meta:
                     JniInputWireBranch::RChoices
-                    | JniInputWireBranch::KSealed(_)
+                    | JniInputWireBranch::KSealed { .. }
                     | JniInputWireBranch::KEnumParams { .. },
                 controls,
                 children,
@@ -1617,7 +1617,7 @@ fn cleanup_native(
             code
         }
         WireNode::Chain {
-            meta: JniInputWireChain::ROption(optional),
+            meta: JniInputWireChain::ROption { presence: optional },
             child,
             ..
         } => {
@@ -1671,7 +1671,7 @@ fn cleanup_native(
         WireNode::Branch {
             meta:
                 JniInputWireBranch::RChoices
-                | JniInputWireBranch::KSealed(_)
+                | JniInputWireBranch::KSealed { .. }
                 | JniInputWireBranch::KEnumParams { .. },
             controls,
             children,
@@ -1848,13 +1848,15 @@ mod tests {
         let donor: syn::Ident = syn::parse_quote!(number);
         let node: JniInputWireNode = WireNode::Chain {
             controls: vec![],
-            meta: JniInputWireChain::ROption(JniPresence::Niche {
-                presence: syn::parse_quote!(present),
-                reservation: prebindgen_declarations::NicheReservation {
-                    discriminator: donor.clone(),
-                    niche: JniNiche::Integer(i64::MIN),
+            meta: JniInputWireChain::ROption {
+                presence: JniPresence::Niche {
+                    presence: syn::parse_quote!(present),
+                    reservation: prebindgen_declarations::NicheReservation {
+                        discriminator: donor.clone(),
+                        niche: JniNiche::Integer(i64::MIN),
+                    },
                 },
-            }),
+            },
             child: Box::new(WireNode::Leaf(vec![
                 Wire {
                     name: donor,

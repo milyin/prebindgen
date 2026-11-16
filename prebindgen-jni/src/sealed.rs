@@ -39,20 +39,6 @@ impl DeclJniSealedClass {
 #[macro_export]
 macro_rules! sealed_class {($($ty:tt)+)=>{$crate::DeclJniSealedClass::new($crate::__type(stringify!($($ty)+)))};}
 
-/// One Kotlin sealed input whose selected variant becomes a Rust enum value.
-#[derive(Clone, Debug)]
-pub struct JniInputKSealed {
-    /// Flat-issued source type reference, also identifying the tag mapping.
-    pub r_type: TypeRef,
-    /// Public Kotlin input binding.
-    pub k_name: String,
-}
-/// One Kotlin sealed output reconstructed from the active Rust enum variant.
-#[derive(Clone, Debug)]
-pub struct JniOutputKSealed {
-    /// Canonical Rust enum in Flat, also identifying its tag mapping.
-    pub r_type: TypeRef,
-}
 pub(crate) fn class<'a>(
     types: &'a crate::metadata::JniTypes,
     r_type: &TypeRef,
@@ -531,8 +517,8 @@ fn expanded_names(
 ) -> Result<Vec<Option<String>>> {
     if let WireNode::Branch {
         meta:
-            JniOutputWireBranch::KDataClass(_)
-            | JniOutputWireBranch::KSealed(_)
+            JniOutputWireBranch::KDataClass { .. }
+            | JniOutputWireBranch::KSealed { .. }
             | JniOutputWireBranch::KEnumParams { .. },
         ..
     } = node
@@ -540,7 +526,7 @@ fn expanded_names(
         return Ok(kotlin::output_kotlin_scoped(node, context, owners)?.result_names);
     }
     if let WireNode::Annotation {
-        meta: JniOutputWireAnnotation::RField(field),
+        meta: JniOutputWireAnnotation::RField { name: field },
         child,
         ..
     } = node

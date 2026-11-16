@@ -774,17 +774,10 @@ pub(crate) fn input_kotlin_when(
 ) -> Result<KotlinInput> {
     let mut out = match node {
         prebindgen_conversions::WireNode::Branch {
-            meta: JniInputWireBranch::KSealed(group),
+            meta: JniInputWireBranch::KSealed { r_type, k_name },
             children,
             controls,
-        } => crate::sealed::input(
-            children,
-            controls,
-            &group.r_type,
-            Some(&group.k_name),
-            context,
-            active,
-        ),
+        } => crate::sealed::input(children, controls, r_type, Some(k_name), context, active),
         prebindgen_conversions::WireNode::Branch {
             meta: JniInputWireBranch::KEnumParams { r_type },
             children,
@@ -845,16 +838,16 @@ pub(crate) fn input_kotlin_when(
         }
         prebindgen_conversions::WireNode::Chain {
             child: element,
-            meta: JniInputWireChain::ROption(metadata),
+            meta: JniInputWireChain::ROption { presence: metadata },
             ..
         } => optional::input_kotlin(element, metadata, context, active),
         prebindgen_conversions::WireNode::Branch {
-            meta: JniInputWireBranch::KDataClass(record),
+            meta: JniInputWireBranch::KDataClass { r_type, k_name },
             children,
             ..
-        } => data::input_kotlin(children, record, context, active),
+        } => data::input_kotlin(children, r_type, k_name, context, active),
         prebindgen_conversions::WireNode::Annotation {
-            meta: JniInputWireAnnotation::RParam(name),
+            meta: JniInputWireAnnotation::RParam { name },
             child,
             ..
         } => {
@@ -865,7 +858,7 @@ pub(crate) fn input_kotlin_when(
             Ok(out)
         }
         prebindgen_conversions::WireNode::Annotation {
-            meta: JniInputWireAnnotation::RField(name),
+            meta: JniInputWireAnnotation::RField { name },
             child,
             ..
         } => {
@@ -961,14 +954,14 @@ pub(crate) fn output_kotlin_scoped(
 ) -> Result<KotlinOutput> {
     match node {
         prebindgen_conversions::WireNode::Branch {
-            meta: JniOutputWireBranch::KSealed(group),
+            meta: JniOutputWireBranch::KSealed { r_type },
             children,
             controls,
         } => crate::sealed::output(
             children,
             controls,
-            &group.r_type,
-            Some(crate::sealed::class(context.source_types, &group.r_type)?),
+            r_type,
+            Some(crate::sealed::class(context.source_types, r_type)?),
             context,
             owners,
         ),
@@ -1028,7 +1021,7 @@ pub(crate) fn output_kotlin_scoped(
         }
         prebindgen_conversions::WireNode::Chain {
             child: element,
-            meta: JniOutputWireChain::ROption(metadata),
+            meta: JniOutputWireChain::ROption { presence: metadata },
             ..
         } => optional::output_kotlin(element, metadata, context, owners),
         prebindgen_conversions::WireNode::Container {
@@ -1036,12 +1029,12 @@ pub(crate) fn output_kotlin_scoped(
             ..
         } => Err("callback sequence requires function-level callback delivery".into()),
         prebindgen_conversions::WireNode::Branch {
-            meta: JniOutputWireBranch::KDataClass(record),
+            meta: JniOutputWireBranch::KDataClass { r_type },
             children,
             ..
-        } => data::output_kotlin(children, record, context, owners),
+        } => data::output_kotlin(children, r_type, context, owners),
         prebindgen_conversions::WireNode::Annotation {
-            meta: JniOutputWireAnnotation::KParamName(name),
+            meta: JniOutputWireAnnotation::KParamName { name },
             child,
             ..
         } => {
@@ -1058,7 +1051,7 @@ pub(crate) fn output_kotlin_scoped(
             Ok(out)
         }
         prebindgen_conversions::WireNode::Annotation {
-            meta: JniOutputWireAnnotation::RField(_),
+            meta: JniOutputWireAnnotation::RField { .. },
             child,
             ..
         } => output_components(std::slice::from_ref(child), context, owners),

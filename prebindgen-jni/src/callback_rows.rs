@@ -197,7 +197,7 @@ fn receive(
             )?
         }
         WireNode::Chain {
-            meta: JniInputWireChain::ROption(optional),
+            meta: JniInputWireChain::ROption { presence: optional },
             child,
             ..
         } => {
@@ -212,7 +212,7 @@ fn receive(
         WireNode::Branch {
             meta:
                 JniInputWireBranch::RChoices
-                | JniInputWireBranch::KSealed(_)
+                | JniInputWireBranch::KSealed { .. }
                 | JniInputWireBranch::KEnumParams { .. },
             controls,
             children,
@@ -227,7 +227,7 @@ fn receive(
             field(context, row, fields, selector, code)?
         }
         WireNode::Annotation {
-            meta: JniInputWireAnnotation::RField(_) | JniInputWireAnnotation::RParam(_),
+            meta: JniInputWireAnnotation::RField { .. } | JniInputWireAnnotation::RParam { .. },
             child,
             ..
         } => receive(child, context, row, fields, types)?,

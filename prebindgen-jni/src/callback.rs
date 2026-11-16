@@ -839,12 +839,12 @@ fn returned_handle_cleanup(
             returned_handle_cleanup(child, value, prefix, next, context)?
         }
         WireNode::Branch {
-            meta: JniInputWireBranch::KSealed(group),
+            meta: JniInputWireBranch::KSealed { r_type, .. },
             children,
             ..
         } => {
-            let source = crate::metadata::source_enum(context.source_types, &group.r_type)?;
-            let class = crate::sealed::class(context.source_types, &group.r_type)?;
+            let source = crate::metadata::source_enum(context.source_types, r_type)?;
+            let class = crate::sealed::class(context.source_types, r_type)?;
             if source.variants.len() != children.len() {
                 return Err("enum occurrence differs from its source variants".into());
             }
@@ -871,13 +871,12 @@ fn returned_handle_cleanup(
             format!("when(val {local}={value}) {{ {arms} else -> {{}} }}\n")
         }
         WireNode::Branch {
-            meta: crate::JniInputWireBranch::KDataClass(data),
+            meta: crate::JniInputWireBranch::KDataClass { r_type, .. },
             children,
             ..
         } => {
             let mut body = String::new();
-            let (record, class) =
-                crate::metadata::source_data_class(context.source_types, &data.r_type)?;
+            let (record, class) = crate::metadata::source_data_class(context.source_types, r_type)?;
             for pair in crate::data::record_fields(children, record)? {
                 let (field, child) = pair?;
                 let expr = format!(
@@ -929,7 +928,7 @@ fn receive_native_return_owners(
             }
             None
         }).collect(),
-        WireNode::Chain { meta: JniInputWireChain::ROption(optional), child, .. } => {
+        WireNode::Chain { meta: JniInputWireChain::ROption { presence: optional }, child, .. } => {
             let scan=receive_native_return_owners(child, types)?;
             if scan.is_empty() { return Ok(scan); }
             let present=optional.is_present(child)?;
@@ -939,8 +938,8 @@ fn receive_native_return_owners(
             if kotlin::has_handles(node, true) { return Err("callback ownership cleanup requires buffered ordinary rows or an enclosing bulk frame".into()); }
             quote!()
         }
-        WireNode::Annotation { meta: JniInputWireAnnotation::RField(_) | JniInputWireAnnotation::RParam(_), child, .. } => receive_native_return_owners(child, types)?,
-        WireNode::Branch { meta: JniInputWireBranch::RChoices | JniInputWireBranch::KSealed(_) | JniInputWireBranch::KEnumParams { .. }, controls, children } => {
+        WireNode::Annotation { meta: JniInputWireAnnotation::RField { .. } | JniInputWireAnnotation::RParam { .. }, child, .. } => receive_native_return_owners(child, types)?,
+        WireNode::Branch { meta: JniInputWireBranch::RChoices | JniInputWireBranch::KSealed { .. } | JniInputWireBranch::KEnumParams { .. }, controls, children } => {
             let selector=&controls[0].name;
             let scans=children.iter().enumerate().map(|(i,child)| {
                 let scan=receive_native_return_owners(child, types)?; if scan.is_empty(){return Ok(TokenStream::new());} let i=i as i32;

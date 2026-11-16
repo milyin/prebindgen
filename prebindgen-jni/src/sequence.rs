@@ -374,7 +374,7 @@ pub(crate) fn callback_optional(node: &JniOutputWireNode) -> Result<bool> {
     use prebindgen_conversions::WireNode;
     match node {
         WireNode::Chain {
-            meta: JniOutputWireChain::ROption(_),
+            meta: JniOutputWireChain::ROption { .. },
             child,
             ..
         } => {
@@ -384,7 +384,7 @@ pub(crate) fn callback_optional(node: &JniOutputWireNode) -> Result<bool> {
             Ok(true)
         }
         WireNode::Branch {
-            meta: JniOutputWireBranch::KSealed(_) | JniOutputWireBranch::KEnumParams { .. },
+            meta: JniOutputWireBranch::KSealed { .. } | JniOutputWireBranch::KEnumParams { .. },
             ..
         } => Ok(false),
         WireNode::Branch { children, .. } => {
@@ -395,7 +395,8 @@ pub(crate) fn callback_optional(node: &JniOutputWireNode) -> Result<bool> {
             Ok(optional)
         }
         WireNode::Annotation {
-            meta: JniOutputWireAnnotation::RField(_) | JniOutputWireAnnotation::KParamName(_),
+            meta:
+                JniOutputWireAnnotation::RField { .. } | JniOutputWireAnnotation::KParamName { .. },
             child,
             ..
         } => callback_optional(child),

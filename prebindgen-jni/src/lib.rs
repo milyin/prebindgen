@@ -20,7 +20,7 @@ mod data;
 mod enums;
 mod sealed;
 mod selected;
-pub use sealed::{DeclJniSealedClass, JniInputKSealed, JniOutputKSealed};
+pub use sealed::DeclJniSealedClass;
 #[cfg(test)]
 mod payload_tests;
 pub use enums::{DeclJniEnumClass, JniEnum};
@@ -38,7 +38,7 @@ pub use optional::JniNiche;
 mod group;
 mod returns;
 mod scalar;
-pub use data::{DeclJniClass, DeclJniDataClass, JniField, JniInputKDataClass, JniOutputKDataClass};
+pub use data::{DeclJniClass, DeclJniDataClass, JniField};
 pub use group::{
     JniInputWireAnnotation, JniInputWireBranch, JniInputWireChain, JniInputWireContainer,
     JniOutputWireAnnotation, JniOutputWireBranch, JniOutputWireChain, JniOutputWireContainer,
@@ -884,10 +884,7 @@ impl Codec for JniCodec {
             .to_owned();
         sealed::encoding(request, Direction::Input, |r_type, form| match form {
             prebindgen_declarations::EnumForm::Value => {
-                JniInputWireBranch::KSealed(std::rc::Rc::new(sealed::JniInputKSealed {
-                    r_type,
-                    k_name,
-                }))
+                JniInputWireBranch::KSealed { r_type, k_name }
             }
             prebindgen_declarations::EnumForm::Fields => JniInputWireBranch::KEnumParams { r_type },
         })
@@ -897,9 +894,7 @@ impl Codec for JniCodec {
         request: prebindgen_declarations::OutputEnumVariants<'_, Self>,
     ) -> Result<prebindgen_declarations::EnumEncoding<JniOutputWireBranch>> {
         sealed::encoding(request, Direction::Output, |r_type, form| match form {
-            prebindgen_declarations::EnumForm::Value => {
-                JniOutputWireBranch::KSealed(std::rc::Rc::new(sealed::JniOutputKSealed { r_type }))
-            }
+            prebindgen_declarations::EnumForm::Value => JniOutputWireBranch::KSealed { r_type },
             prebindgen_declarations::EnumForm::Fields => {
                 JniOutputWireBranch::KEnumParams { r_type }
             }
@@ -935,7 +930,7 @@ impl Codec for JniCodec {
     ) {
         if let prebindgen_declarations::ComponentSegment::Argument(name) = segment {
             *node = prebindgen_conversions::WireNode::Annotation {
-                meta: JniInputWireAnnotation::RParam(name),
+                meta: JniInputWireAnnotation::RParam { name },
                 child: Box::new(std::mem::take(node)),
             };
         }
@@ -1342,10 +1337,10 @@ impl Codec for JniCodec {
         Self::source_record(flat, ty)?.ok_or("missing data-class representation")?;
         data::mark(
             &mut plan.node,
-            JniInputWireBranch::KDataClass(JniInputKDataClass {
+            JniInputWireBranch::KDataClass {
                 k_name: wire.to_string(),
                 r_type: flat.type_ref(ty)?,
-            }),
+            },
         )
     }
     fn output_record_metadata(
@@ -1363,9 +1358,9 @@ impl Codec for JniCodec {
         Self::source_record(flat, ty)?.ok_or("missing data-class representation")?;
         data::mark(
             &mut plan.outcomes.success,
-            JniOutputWireBranch::KDataClass(JniOutputKDataClass {
+            JniOutputWireBranch::KDataClass {
                 r_type: flat.type_ref(ty)?,
-            }),
+            },
         )
     }
 
@@ -1385,26 +1380,30 @@ impl Codec for JniCodec {
         })
     }
     fn input_field(&self, name: &syn::Ident) -> Result<JniInputWireAnnotation> {
-        Ok(JniInputWireAnnotation::RField(name.clone()))
+        Ok(JniInputWireAnnotation::RField { name: name.clone() })
     }
     fn output_field(&self, name: &syn::Ident) -> Result<JniOutputWireAnnotation> {
-        Ok(JniOutputWireAnnotation::RField(name.clone()))
+        Ok(JniOutputWireAnnotation::RField { name: name.clone() })
     }
     fn output_named(&self, name: &str) -> Result<JniOutputWireAnnotation> {
         validate_name(name)?;
-        Ok(JniOutputWireAnnotation::KParamName(name.into()))
+        Ok(JniOutputWireAnnotation::KParamName { name: name.into() })
     }
     fn input_optional(
         &self,
         request: InputOptional<'_, Self>,
     ) -> Result<OptionalEncoding<JniWire, JniInputWireChain>> {
-        group::prepare_optional(request, Direction::Input, JniInputWireChain::ROption)
+        group::prepare_optional(request, Direction::Input, |presence| {
+            JniInputWireChain::ROption { presence }
+        })
     }
     fn output_optional(
         &self,
         request: OutputOptional<'_, Self>,
     ) -> Result<OptionalEncoding<JniWire, JniOutputWireChain>> {
-        group::prepare_optional(request, Direction::Output, JniOutputWireChain::ROption)
+        group::prepare_optional(request, Direction::Output, |presence| {
+            JniOutputWireChain::ROption { presence }
+        })
     }
     fn alternatives(&self, request: Alternatives<'_, Self>) -> Result<JniInputWireBranch> {
         group::validate_selector(request.selector)?;

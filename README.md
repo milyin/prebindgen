@@ -717,14 +717,14 @@ remains universal.
 | --- | --- | --- |
 | `KValues` | Branch | Combine the children's Kotlin values in order. |
 | `RFields` | Branch | Convert Rust struct or enum-variant fields in declaration order; each child is an `RField` annotation. |
-| `RField(name)` | Annotation | Identify one Rust field's conversion subtree, which may produce several wires. |
-| `KDataClass(...)` | Branch | Read or reconstruct one Kotlin data-class value through its field children. |
-| Input `RParam(name)` | Annotation | Preserve the identity of one Rust parameter in Kotlin parameter paths. |
-| Output `KParamName(name)` | Annotation | Supply one base name for Kotlin callback/build/fold params; several results derive numbered names. |
+| `RField { name }` | Annotation | Identify one Rust field's conversion subtree, which may produce several wires. |
+| `KDataClass { .. }` | Branch | Read or reconstruct one Kotlin data-class value through its field children. |
+| Input `RParam { name }` | Annotation | Preserve the identity of one Rust parameter in Kotlin parameter paths. |
+| Output `KParamName { name }` | Annotation | Supply one base name for Kotlin callback/build/fold params; several results derive numbered names. |
 | Input `RChoices` | Branch | Select one conversion producing a Rust value, including constructor and identity alternatives. |
-| `KSealed(...)` | Branch | Read or reconstruct one Kotlin sealed value. |
+| `KSealed { .. }` | Branch | Read or reconstruct one Kotlin sealed value. |
 | `KEnumParams { r_type }` | Branch | Convert an enum through separate Kotlin tag/payload params. |
-| `ROption(...)` | Chain | Convert zero or one Rust value with a presence flag or payload niche. |
+| `ROption { presence }` | Chain | Convert zero or one Rust value with a presence flag or payload niche. |
 | Input `KList` | Container | Decode buffered Kotlin list elements. |
 | Output `KListArrayRows` | Container | Materialize a Kotlin list from object-array rows of boxed fields. |
 | Output `KListClassRows` | Container | Materialize a Kotlin list from generated JVM row classes with typed fields. |
@@ -737,11 +737,17 @@ payloads. C retains its own `Values`, `Fields`, `Field`, `Alternatives`, `Enum`,
 `Optional`, `Sequence` and `Tagged` metadata; these JNI names do not change C or
 the shared structural tree.
 
-`JniInputKDataClass` retains `k_name` (the Kotlin parameter/local name) and
-`r_type` (the canonical Rust `TypeRef`). `JniOutputKDataClass` needs only `r_type`;
-`KParamName` annotations name delivered params. `JniInputKSealed` and `JniOutputKSealed` use
-the same directional field convention. `KEnumParams` needs no Kotlin object name
-or representation boolean. Enclosing nodes supply activation during traversal.
+JNI wire-operation variants use named fields for occurrence-specific metadata.
+Input `KDataClass { r_type, k_name }` and `KSealed { r_type, k_name }` retain the
+canonical Rust `TypeRef` and Kotlin parameter/local name. Their output variants
+need only `r_type`; a `KParamName { name }` annotation names delivered params.
+There are no separate data-class/sealed payload structs or shared wrappers around
+these small fields. `KEnumParams { r_type }` follows the same convention.
+
+Separate field types remain for reusable concepts with their own behavior:
+`ROption { presence }` uses `JniPresence` for flag/niche encoding, and
+`JniWire::KCallback { callback }` retains a `JniCallback` with its signature and
+prepared conversions. Enclosing nodes supply activation during traversal.
 Private algorithms borrow canonical type references and inspect the concrete
 metadata without copying trees into a common representation.
 
