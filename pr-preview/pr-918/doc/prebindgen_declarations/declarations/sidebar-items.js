@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["CallbackReturn"],"fn":["parse_type"],"struct":["DeclFunction"]};
