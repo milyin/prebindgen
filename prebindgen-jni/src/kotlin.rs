@@ -819,23 +819,23 @@ pub(crate) fn input_kotlin_when(
             children,
             ..
         } => data::input_kotlin(children, record, context, active),
-        prebindgen_conversions::WireNode::Branch {
-            meta: JniInputWireBranch::Argument(name),
-            children,
+        prebindgen_conversions::WireNode::Chain {
+            meta: JniInputWireChain::Argument(name),
+            child,
             ..
         } => {
-            let mut out = input_components_when(children, context, active)?;
+            let mut out = input_components_when(std::slice::from_ref(child), context, active)?;
             for path in &mut out.parameter_paths {
                 path.prepend(ComponentSegment::Argument(name.clone()));
             }
             Ok(out)
         }
-        prebindgen_conversions::WireNode::Branch {
-            meta: JniInputWireBranch::Field(name),
-            children,
+        prebindgen_conversions::WireNode::Chain {
+            meta: JniInputWireChain::Field(name),
+            child,
             ..
         } => {
-            let mut out = input_components_when(children, context, active)?;
+            let mut out = input_components_when(std::slice::from_ref(child), context, active)?;
             for path in &mut out.parameter_paths {
                 path.prepend(ComponentSegment::Field(name.to_string()));
             }
@@ -998,12 +998,12 @@ pub(crate) fn output_kotlin_scoped(
             children,
             ..
         } => data::output_kotlin(children, record, context, owners),
-        prebindgen_conversions::WireNode::Branch {
-            meta: JniOutputWireBranch::Named(name),
-            children,
+        prebindgen_conversions::WireNode::Chain {
+            meta: JniOutputWireChain::Named(name),
+            child,
             ..
         } => {
-            let mut out = output_components(children, context, owners)?;
+            let mut out = output_components(std::slice::from_ref(child), context, owners)?;
             out.result_names = (0..out.result_types.len())
                 .map(|i| {
                     Some(if out.result_types.len() == 1 {
@@ -1015,6 +1015,11 @@ pub(crate) fn output_kotlin_scoped(
                 .collect();
             Ok(out)
         }
+        prebindgen_conversions::WireNode::Chain {
+            meta: JniOutputWireChain::Field(_),
+            child,
+            ..
+        } => output_components(std::slice::from_ref(child), context, owners),
         prebindgen_conversions::WireNode::Branch { children, .. } => {
             output_components(children, context, owners)
         }

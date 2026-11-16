@@ -5,8 +5,11 @@ use crate::{Wire, WireKind};
 ///
 /// `C` describes a parent with exactly one child; `B` describes a parent with an
 /// ordered child list. Adapters decide what those descriptions mean: for example,
-/// optional and sequence encodings can share the chain shape, while fields and
-/// alternatives can share the branch shape. The tree imposes no delivery policy.
+/// optional and sequence encodings can share the chain shape, while field
+/// collections and alternatives can share the branch shape. The tree imposes no delivery policy.
+/// Classify nodes by child subtrees, not by the number of resulting wire values:
+/// a field or projection name annotates one subtree and therefore belongs in `C`.
+/// An ordered collection of fields or constructor alternatives belongs in `B`.
 /// Every wire belongs to a leaf or a parent's `controls`. Metadata may contain
 /// policies, annotations and references to those wires, but no wire descriptors.
 /// Controls belong to the parent occurrence, outside its child payloads.

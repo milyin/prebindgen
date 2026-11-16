@@ -374,10 +374,10 @@ impl<C: Codec> Compiler<'_, C> {
     ) -> Result<CodecOutputPlan<C>> {
         {
             let mut plan = self.output_named(ty, output, extra, value, borrowed, wire_name)?;
-            plan.outcomes.success = WireNode::Branch {
-                meta: self.codec.output_group(GroupKind::NamedOutput(name))?,
+            plan.outcomes.success = WireNode::Chain {
+                meta: self.codec.output_named(name)?,
                 controls: vec![],
-                children: vec![plan.outcomes.success],
+                child: Box::new(plan.outcomes.success),
             };
             Ok(plan)
         }
@@ -813,10 +813,10 @@ impl<C: Codec> Compiler<'_, C> {
                 if arm.fields.len() != 1 || field.key() != "0" {
                     self.prefix_input(&mut child.node, ComponentSegment::Field(field.property()));
                 }
-                child.node = WireNode::Branch {
+                child.node = WireNode::Chain {
                     controls: vec![],
-                    children: vec![child.node],
-                    meta: self.codec.input_group(GroupKind::Field(&name))?,
+                    child: Box::new(child.node),
+                    meta: self.codec.input_field(&name)?,
                 };
                 storage.extend(std::mem::take(&mut child.storage));
                 fallible |= child.fallible;
@@ -983,10 +983,10 @@ impl<C: Codec> Compiler<'_, C> {
                         ComponentSegment::Field(field.property()),
                     );
                 }
-                field_plan.outcomes.success = WireNode::Branch {
+                field_plan.outcomes.success = WireNode::Chain {
                     controls: vec![],
-                    children: vec![field_plan.outcomes.success],
-                    meta: self.codec.output_group(GroupKind::Field(&name))?,
+                    child: Box::new(field_plan.outcomes.success),
+                    meta: self.codec.output_field(&name)?,
                 };
                 append(&mut child, field_plan)?;
             }

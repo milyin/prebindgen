@@ -246,19 +246,26 @@ impl Codec for TestCodec {
         })
     }
 
-    fn input_group(&self, kind: GroupKind<'_>) -> Result<TestGroup> {
+    fn input_group(&self, kind: GroupKind) -> Result<TestGroup> {
         Ok(match kind {
-            GroupKind::Values | GroupKind::NamedOutput(_) => TestGroup::Values,
+            GroupKind::Values => TestGroup::Values,
             GroupKind::Fields => TestGroup::Record,
-            GroupKind::Field(name) => TestGroup::Member(name.clone()),
         })
     }
-    fn output_group(&self, kind: GroupKind<'_>) -> Result<TestGroup> {
+    fn output_group(&self, kind: GroupKind) -> Result<TestGroup> {
         Ok(match kind {
-            GroupKind::Values | GroupKind::NamedOutput(_) => TestGroup::Values,
+            GroupKind::Values => TestGroup::Values,
             GroupKind::Fields => TestGroup::Record,
-            GroupKind::Field(name) => TestGroup::Member(name.clone()),
         })
+    }
+    fn input_field(&self, name: &syn::Ident) -> Result<TestGroup> {
+        Ok(TestGroup::Member(name.clone()))
+    }
+    fn output_field(&self, name: &syn::Ident) -> Result<TestGroup> {
+        Ok(TestGroup::Member(name.clone()))
+    }
+    fn output_named(&self, _name: &str) -> Result<TestGroup> {
+        Ok(TestGroup::Values)
     }
     fn input_optional(
         &self,
@@ -1105,11 +1112,20 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
             plan.delivery.statements = quote!(deliver_unit(););
             Ok(())
         }
-        fn input_group(&self, kind: GroupKind<'_>) -> Result<TestGroup> {
+        fn input_group(&self, kind: GroupKind) -> Result<TestGroup> {
             TEST_CODEC.input_group(kind)
         }
-        fn output_group(&self, kind: GroupKind<'_>) -> Result<TestGroup> {
+        fn output_group(&self, kind: GroupKind) -> Result<TestGroup> {
             TEST_CODEC.output_group(kind)
+        }
+        fn input_field(&self, name: &syn::Ident) -> Result<TestGroup> {
+            Ok(TestGroup::Member(name.clone()))
+        }
+        fn output_field(&self, name: &syn::Ident) -> Result<TestGroup> {
+            Ok(TestGroup::Member(name.clone()))
+        }
+        fn output_named(&self, _name: &str) -> Result<TestGroup> {
+            Ok(TestGroup::Values)
         }
         fn input_optional(
             &self,
@@ -1671,7 +1687,7 @@ fn field_groups_preserve_empty_and_multiwire_fields_in_both_directions() {
         let mut names = Vec::new();
         let mut widths = Vec::new();
         for node in children.as_slice() {
-            let WireNode::Branch { meta: metadata, .. } = node else {
+            let WireNode::Chain { meta: metadata, .. } = node else {
                 panic!()
             };
             let TestGroup::Member(name) = metadata else {

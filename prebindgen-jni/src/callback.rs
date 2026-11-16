@@ -937,6 +937,7 @@ fn receive_native_return_owners(
             if kotlin::has_handles(node, true) { return Err("callback ownership cleanup requires buffered ordinary rows or an enclosing bulk frame".into()); }
             quote!()
         }
+        WireNode::Chain { meta: JniInputWireChain::Field(_) | JniInputWireChain::Argument(_), child, .. } => receive_native_return_owners(child, types)?,
         WireNode::Branch { meta: JniInputWireBranch::Alternatives | JniInputWireBranch::Enum(_), controls, children } => {
             let selector=&controls[0].name;
             let scans=children.iter().enumerate().map(|(i,child)| {

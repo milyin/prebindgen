@@ -1264,22 +1264,16 @@ fn schema<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
                     },
                 };
                 format!("optional:{kind}({})", schema(child, types)?)
-            } else if meta.is_bulk() {
+            } else if meta.is_bulk() || meta.argument_name().is_some() {
                 schema(child, types)?
+            } else if let Some(name) = meta.field() {
+                format!("field:{name}[]({})", schema(child, types)?)
+            } else if let Some(name) = meta.output_name() {
+                format!("view:{name}[]({})", schema(child, types)?)
             } else {
                 return Err("unsupported bulk chain metadata".into());
             }
         }
-        WireNode::Branch {
-            meta: encoding,
-            children,
-            controls,
-        } if (encoding.argument_name().is_some())
-            && (controls.is_empty() && children.len() == 1) =>
-        {
-            schema(&children[0], types)?
-        }
-
         WireNode::Branch {
             meta,
             children,
@@ -1299,10 +1293,6 @@ fn schema<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
                         .collect::<Vec<_>>()
                         .join(";")
                 )
-            } else if let Some(name) = meta.field() {
-                format!("field:{name}")
-            } else if let Some(name) = meta.output_name() {
-                format!("view:{name}")
             } else if meta.is_field_collection() {
                 "fields".into()
             } else {
@@ -1373,6 +1363,11 @@ pub(crate) fn callback_cache(node: &JniInputWireNode, context: &JniContext) -> R
                 meta: JniInputWireChain::Sequence,
                 ..
             } => quote!(),
+            WireNode::Chain {
+                meta: JniInputWireChain::Field(_) | JniInputWireChain::Argument(_),
+                child,
+                ..
+            } => cache(child, env)?,
             WireNode::Chain {
                 meta: JniInputWireChain::Optional(optional),
                 child,

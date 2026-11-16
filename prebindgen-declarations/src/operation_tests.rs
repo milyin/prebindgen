@@ -35,17 +35,21 @@ impl Codec for Scalars {
     fn output_consumes(&self, _: &Flat<Self::Schema>, _: &Type, _: &()) -> bool {
         false
     }
-    fn input_group(&self, kind: GroupKind<'_>) -> Result<()> {
+    fn input_group(&self, kind: GroupKind) -> Result<()> {
         match kind {
-            GroupKind::Values | GroupKind::Fields | GroupKind::Field(_) => Ok(()),
-            GroupKind::NamedOutput(_) => Err("named output views are unsupported".into()),
+            GroupKind::Values | GroupKind::Fields => Ok(()),
         }
     }
-    fn output_group(&self, kind: GroupKind<'_>) -> Result<()> {
+    fn output_group(&self, kind: GroupKind) -> Result<()> {
         match kind {
-            GroupKind::Values | GroupKind::Fields | GroupKind::Field(_) => Ok(()),
-            GroupKind::NamedOutput(_) => Err("named output views are unsupported".into()),
+            GroupKind::Values | GroupKind::Fields => Ok(()),
         }
+    }
+    fn input_field(&self, _name: &syn::Ident) -> Result<()> {
+        Ok(())
+    }
+    fn output_field(&self, _name: &syn::Ident) -> Result<()> {
+        Ok(())
     }
 }
 fn model() -> Flat<<Scalars as Codec>::Schema> {
@@ -233,9 +237,7 @@ fn minimal_codec_rejects_optional_features_and_bulk_before_decoding() {
         .input_selector(&())
         .unwrap_err()
         .contains("unsupported"));
-    assert!(Scalars
-        .output_group(GroupKind::NamedOutput("view"))
-        .is_err());
+    assert!(Scalars.output_named("view").is_err());
     assert!(Scalars
         .sequence_input(SequenceInputRequest {
             flat: &flat,
@@ -330,11 +332,17 @@ impl Codec for Probe {
     fn output_consumes(&self, _: &Flat<Self::Schema>, _: &Type, _: &()) -> bool {
         false
     }
-    fn input_group(&self, k: GroupKind<'_>) -> Result<()> {
+    fn input_group(&self, k: GroupKind) -> Result<()> {
         Scalars.input_group(k)
     }
-    fn output_group(&self, k: GroupKind<'_>) -> Result<()> {
+    fn output_group(&self, k: GroupKind) -> Result<()> {
         Scalars.output_group(k)
+    }
+    fn input_field(&self, _name: &syn::Ident) -> Result<()> {
+        Ok(())
+    }
+    fn output_field(&self, _name: &syn::Ident) -> Result<()> {
+        Ok(())
     }
     fn supports_bulk(&self, direction: Direction) -> bool {
         direction == Direction::Input || self.1.get()
@@ -434,11 +442,17 @@ impl Codec for MalformedOptional {
     fn output_consumes(&self, _: &Flat<Self::Schema>, _: &Type, _: &()) -> bool {
         false
     }
-    fn input_group(&self, k: GroupKind<'_>) -> Result<()> {
+    fn input_group(&self, k: GroupKind) -> Result<()> {
         Scalars.input_group(k)
     }
-    fn output_group(&self, k: GroupKind<'_>) -> Result<()> {
+    fn output_group(&self, k: GroupKind) -> Result<()> {
         Scalars.output_group(k)
+    }
+    fn input_field(&self, _name: &syn::Ident) -> Result<()> {
+        Ok(())
+    }
+    fn output_field(&self, _name: &syn::Ident) -> Result<()> {
+        Ok(())
     }
     fn input_optional(&self, r: InputOptional<'_, Self>) -> Result<OptionalEncoding<Type, ()>> {
         let presence = match self.0 {
@@ -692,10 +706,16 @@ impl Codec for Arithmetic {
     fn output_consumes(&self, _: &Flat<Self::Schema>, _: &Type, _: &()) -> bool {
         false
     }
-    fn input_group(&self, _: GroupKind<'_>) -> Result<()> {
+    fn input_group(&self, _: GroupKind) -> Result<()> {
         Ok(())
     }
-    fn output_group(&self, _: GroupKind<'_>) -> Result<()> {
+    fn output_group(&self, _: GroupKind) -> Result<()> {
+        Ok(())
+    }
+    fn input_field(&self, _name: &syn::Ident) -> Result<()> {
+        Ok(())
+    }
+    fn output_field(&self, _name: &syn::Ident) -> Result<()> {
         Ok(())
     }
     fn compile_input_tree(

@@ -93,8 +93,8 @@ fn field_names(layout: &COutputWireNode) -> Vec<String> {
     } = layout
     {
         for node in children.as_slice() {
-            if let WireNode::Branch {
-                meta: COutputWireBranch::Field(name),
+            if let WireNode::Chain {
+                meta: COutputWireChain::Field(name),
                 ..
             } = node
             {

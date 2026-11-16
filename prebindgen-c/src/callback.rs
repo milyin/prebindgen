@@ -78,6 +78,15 @@ fn schema<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
             child,
             meta,
         } => {
+            if meta.field().is_some() {
+                // Field annotations previously used a one-child group. Keep
+                // the structural key stable across the arity correction.
+                out.push_str("G[");
+                fields(controls, out);
+                schema(child, out);
+                out.push(']');
+                return;
+            }
             out.push('(');
             if meta.sequence().is_some() {
                 out.push('S');
@@ -571,6 +580,7 @@ fn receive_return_owners(
             // The ordinal counts owned fields across rows and nested collections.
             quote!(#[allow(clippy::explicit_counter_loop)] for index in 0..#carrier.len {#(#reads)* #scan})
         }
+        WireNode::Chain { meta: CInputWireChain::Field(_), child, .. } => receive_return_owners(child, context, locations)?,
         WireNode::Branch {
             meta: CInputWireBranch::Alternatives | CInputWireBranch::Enum(_),
             controls,

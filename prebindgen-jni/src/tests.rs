@@ -4341,7 +4341,7 @@ fn mixed_callback_rows_reject_multi_argument_constructor_alternatives() {
 }
 
 #[test]
-fn named_output_groups_keep_name_validation_in_both_codec_policies() {
+fn named_output_chains_keep_name_validation_in_both_codec_policies() {
     use crate::operations::{JniOutput, JniOutputLeafOp, JniOutputUnary};
 
     let model = flat("pub fn value()->i64{}");
@@ -4357,7 +4357,7 @@ fn named_output_groups_keep_name_validation_in_both_codec_policies() {
                 "accepted {name:?}"
             );
         }
-        assert!(codec.output_group(GroupKind::NamedOutput("count")).is_ok());
+        assert!(codec.output_named("count").is_ok());
     }
 }
 

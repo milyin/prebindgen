@@ -18,10 +18,12 @@ impl WireKind for OutgoingWire {
 }
 #[derive(Clone, Debug)]
 enum IncomingChain {
+    Field,
     Optional,
 }
 #[derive(Clone, Debug)]
 enum OutgoingChain {
+    Field,
     Optional,
 }
 #[derive(Clone, Debug)]
@@ -61,11 +63,17 @@ impl Codec for Directional {
     fn output_consumes(&self, _: &Flat<Self::Schema>, _: &Type, _: &()) -> bool {
         false
     }
-    fn input_group(&self, _: GroupKind<'_>) -> Result<IncomingGroup> {
+    fn input_group(&self, _: GroupKind) -> Result<IncomingGroup> {
         Ok(IncomingGroup)
     }
-    fn output_group(&self, _: GroupKind<'_>) -> Result<OutgoingGroup> {
+    fn output_group(&self, _: GroupKind) -> Result<OutgoingGroup> {
         Ok(OutgoingGroup)
+    }
+    fn input_field(&self, _name: &syn::Ident) -> Result<IncomingChain> {
+        Ok(IncomingChain::Field)
+    }
+    fn output_field(&self, _name: &syn::Ident) -> Result<OutgoingChain> {
+        Ok(OutgoingChain::Field)
     }
     fn input_optional(
         &self,
@@ -139,6 +147,26 @@ fn shared_compiler_accepts_unrelated_input_and_output_tree_families() {
     let outgoing = compile_output(&flat, &Directional, "exchange", &output, &()).unwrap();
     let _: &WireNode<IncomingWire, IncomingChain, IncomingGroup> = &incoming.node;
     let _: &WireNode<OutgoingWire, OutgoingChain, OutgoingGroup> = &outgoing.outcomes.success;
+    let WireNode::Branch { children, .. } = &incoming.node else {
+        panic!("record input must group fields")
+    };
+    assert!(children.iter().all(|n| matches!(
+        n,
+        WireNode::Chain {
+            meta: IncomingChain::Field,
+            ..
+        }
+    )));
+    let WireNode::Branch { children, .. } = &outgoing.outcomes.success else {
+        panic!("record output must group fields")
+    };
+    assert!(children.iter().all(|n| matches!(
+        n,
+        WireNode::Chain {
+            meta: OutgoingChain::Field,
+            ..
+        }
+    )));
     assert_eq!(
         prebindgen_conversions::wire_definitions(std::iter::once(&incoming.node)).count(),
         3

@@ -114,10 +114,20 @@ pub trait Codec {
     /// Whether a leaf moves its source. Must agree with output_leaf and is needed
     /// before ordering observations and moves of the same source value.
     fn output_consumes(&self, flat: &Flat<Self::Schema>, ty: &Type, extra: &Self::Extra) -> bool;
-    /// Describe the requested structural group; reject unsupported kinds explicitly.
-    fn input_group(&self, kind: GroupKind<'_>) -> Result<CodecInputBranch<Self>>;
-    /// Describe a group of converted output components.
-    fn output_group(&self, kind: GroupKind<'_>) -> Result<CodecOutputBranch<Self>>;
+    /// Describe an ordered list of input conversion subtrees.
+    fn input_group(&self, kind: GroupKind) -> Result<CodecInputBranch<Self>>;
+    /// Describe an ordered list of output conversion subtrees.
+    fn output_group(&self, kind: GroupKind) -> Result<CodecOutputBranch<Self>>;
+    /// Label the single subtree decoding a source field. The identifier names
+    /// that field (or an enum tuple field's generated property), not a wire.
+    fn input_field(&self, name: &syn::Ident) -> Result<CodecInputChain<Self>>;
+    /// Label the single subtree encoding a source field.
+    fn output_field(&self, name: &syn::Ident) -> Result<CodecOutputChain<Self>>;
+    /// Name one output projection subtree, which may produce several wire values.
+    /// Adapters without named output views reject this operation.
+    fn output_named(&self, _name: &str) -> Result<CodecOutputChain<Self>> {
+        Err("named output views are unsupported".into())
+    }
     /// Explicit opt-in to bulk conversion for this direction. JNI dispatch and
     /// reusable sequence helpers check it before selecting bulk transport.
     fn supports_bulk(&self, _direction: Direction) -> bool {

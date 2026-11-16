@@ -516,10 +516,16 @@ impl Codec for ArrowCodec {
     fn output_consumes(&self, _: &Flat<Self::Schema>, _: &syn::Type, _: &()) -> bool {
         false
     }
-    fn input_group(&self, _: GroupKind<'_>) -> prebindgen_flat::Result<()> {
+    fn input_group(&self, _: GroupKind) -> prebindgen_flat::Result<()> {
         Ok(())
     }
-    fn output_group(&self, _: GroupKind<'_>) -> prebindgen_flat::Result<()> {
+    fn output_group(&self, _: GroupKind) -> prebindgen_flat::Result<()> {
+        Ok(())
+    }
+    fn input_field(&self, _name: &syn::Ident) -> Result<()> {
+        Ok(())
+    }
+    fn output_field(&self, _name: &syn::Ident) -> Result<()> {
         Ok(())
     }
     fn finish_output(

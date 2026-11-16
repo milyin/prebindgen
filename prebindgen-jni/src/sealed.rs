@@ -194,7 +194,7 @@ pub(crate) fn encoding<
 // Source field identities and order come from the canonical variant. Occurrence
 // nodes only describe conversions of those fields.
 #[allow(clippy::type_complexity)] // Borrow each canonical field with its directional conversion subtree.
-pub(crate) fn variant_fields<'a, Chain, Branch: group::BranchMetadata>(
+pub(crate) fn variant_fields<'a, Chain: group::ChainMetadata, Branch>(
     node: &'a JniWireNode<Chain, Branch>,
     source: &'a PayloadVariant<(), JniField>,
 ) -> Result<
@@ -544,31 +544,36 @@ fn expanded_names(
     {
         return Ok(kotlin::output_kotlin_scoped(node, context, owners)?.result_names);
     }
-    if let WireNode::Branch { meta, children, .. } = node {
-        let mut names = children
+    if let WireNode::Chain {
+        meta: JniOutputWireChain::Field(field),
+        child,
+        ..
+    } = node
+    {
+        let mut names = expanded_names(child, context, owners)?;
+        let field = field.to_string();
+        let tuple = field
+            .strip_prefix('v')
+            .is_some_and(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()));
+        if !tuple {
+            let field = lower_camel(&field);
+            for name in &mut names {
+                *name = Some(
+                    name.as_ref()
+                        .map_or_else(|| field.clone(), |n| format!("{field}{}", upper_first(n))),
+                );
+            }
+        }
+        return Ok(names);
+    }
+    if let WireNode::Branch { children, .. } = node {
+        return Ok(children
             .iter()
             .map(|n| expanded_names(n, context, owners))
             .collect::<Result<Vec<_>>>()?
             .into_iter()
             .flatten()
-            .collect::<Vec<_>>();
-        if let JniOutputWireBranch::Field(field) = meta {
-            let field = field.to_string();
-            let tuple = field
-                .strip_prefix('v')
-                .is_some_and(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()));
-            if !tuple {
-                let field = lower_camel(&field);
-                for name in &mut names {
-                    *name =
-                        Some(name.as_ref().map_or_else(
-                            || field.clone(),
-                            |n| format!("{field}{}", upper_first(n)),
-                        ));
-                }
-            }
-        }
-        return Ok(names);
+            .collect());
     }
     Ok(kotlin::output_kotlin_scoped(node, context, owners)?.result_names)
 }

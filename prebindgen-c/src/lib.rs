@@ -801,25 +801,23 @@ impl Codec for CCodec {
         Ok(())
     }
 
-    fn input_group(&self, kind: GroupKind<'_>) -> Result<CInputWireBranch> {
+    fn input_group(&self, kind: GroupKind) -> Result<CInputWireBranch> {
         Ok(match kind {
             GroupKind::Values => CInputWireBranch::Values,
             GroupKind::Fields => CInputWireBranch::Fields,
-            GroupKind::Field(name) => CInputWireBranch::Field(name.clone()),
-            GroupKind::NamedOutput(_) => {
-                return Err("named output views are unsupported by this codec".into())
-            }
         })
     }
-    fn output_group(&self, kind: GroupKind<'_>) -> Result<COutputWireBranch> {
+    fn output_group(&self, kind: GroupKind) -> Result<COutputWireBranch> {
         Ok(match kind {
             GroupKind::Values => COutputWireBranch::Values,
             GroupKind::Fields => COutputWireBranch::Fields,
-            GroupKind::Field(name) => COutputWireBranch::Field(name.clone()),
-            GroupKind::NamedOutput(_) => {
-                return Err("named output views are unsupported by this codec".into())
-            }
         })
+    }
+    fn input_field(&self, name: &syn::Ident) -> Result<CInputWireChain> {
+        Ok(CInputWireChain::Field(name.clone()))
+    }
+    fn output_field(&self, name: &syn::Ident) -> Result<COutputWireChain> {
+        Ok(COutputWireChain::Field(name.clone()))
     }
     fn input_optional(
         &self,
@@ -2800,35 +2798,39 @@ fn describe_groups<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
                 parents.pop();
             }
         }
+        if let prebindgen_conversions::WireNode::Chain {
+            meta: metadata,
+            child,
+            ..
+        } = node
+        {
+            if let Some(name) = metadata.field() {
+                field_path.push(name.to_string().trim_start_matches("r#").into());
+                let values = crate::group::record_fields(node)
+                    .map(|w| names[&w.name.to_string()].clone())
+                    .collect::<Vec<_>>();
+                let values = if values.is_empty() {
+                    "no boundary values".into()
+                } else {
+                    values.join(", ")
+                };
+                out.push_str(&format!(
+                    "/* Field {}: {values}. */\n",
+                    field_path.join(".")
+                ));
+                visit(child, names, parents, out, next_label, field_path);
+                field_path.pop();
+            }
+        }
         if let prebindgen_conversions::WireNode::Branch {
             meta: metadata,
             children,
             ..
         } = node
         {
-            if metadata.is_values() || metadata.is_fields() || metadata.field().is_some() {
-                if let Some(name) = metadata.field() {
-                    field_path.push(name.to_string().trim_start_matches("r#").into());
-                    let values = crate::group::record_fields(node)
-                        .map(|w| names[&w.name.to_string()].clone())
-                        .collect::<Vec<_>>();
-                    let values = if values.is_empty() {
-                        "no boundary values".into()
-                    } else {
-                        values.join(", ")
-                    };
-                    out.push_str(&format!(
-                        "/* Field {}: {values}. */\n",
-                        field_path.join(".")
-                    ));
-                    for child in children {
-                        visit(child, names, parents, out, next_label, field_path);
-                    }
-                    field_path.pop();
-                } else {
-                    for child in children {
-                        visit(child, names, parents, out, next_label, field_path);
-                    }
+            if metadata.is_values() || metadata.is_fields() {
+                for child in children {
+                    visit(child, names, parents, out, next_label, field_path);
                 }
             }
         }

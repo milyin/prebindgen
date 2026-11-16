@@ -155,7 +155,7 @@ fn arm_fields<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
     children
         .iter()
         .map(|node| {
-            let WireNode::Branch { meta, .. } = node else {
+            let WireNode::Chain { meta, .. } = node else {
                 return Err("enum payload requires named source fields".into());
             };
             let Some(name) = meta.field() else {

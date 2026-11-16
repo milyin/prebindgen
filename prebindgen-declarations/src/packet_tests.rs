@@ -8,10 +8,11 @@ enum Metadata {
     Components,
     Alternatives,
     Fields,
-    Field,
 }
 #[derive(Clone, Debug)]
 enum PacketChain {
+    Field,
+    Named,
     Optional,
     Sequence,
 }
@@ -303,19 +304,26 @@ impl Codec for CodecImpl {
         Ok(())
     }
 
-    fn input_group(&self, kind: GroupKind<'_>) -> Result<Metadata> {
+    fn input_group(&self, kind: GroupKind) -> Result<Metadata> {
         Ok(match kind {
-            GroupKind::Values | GroupKind::NamedOutput(_) => Metadata::Components,
+            GroupKind::Values => Metadata::Components,
             GroupKind::Fields => Metadata::Fields,
-            GroupKind::Field(_) => Metadata::Field,
         })
     }
-    fn output_group(&self, kind: GroupKind<'_>) -> Result<Metadata> {
+    fn output_group(&self, kind: GroupKind) -> Result<Metadata> {
         Ok(match kind {
-            GroupKind::Values | GroupKind::NamedOutput(_) => Metadata::Components,
+            GroupKind::Values => Metadata::Components,
             GroupKind::Fields => Metadata::Fields,
-            GroupKind::Field(_) => Metadata::Field,
         })
+    }
+    fn input_field(&self, _name: &syn::Ident) -> Result<PacketChain> {
+        Ok(PacketChain::Field)
+    }
+    fn output_field(&self, _name: &syn::Ident) -> Result<PacketChain> {
+        Ok(PacketChain::Field)
+    }
+    fn output_named(&self, _name: &str) -> Result<PacketChain> {
+        Ok(PacketChain::Named)
     }
     fn input_optional(
         &self,

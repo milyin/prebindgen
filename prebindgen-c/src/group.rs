@@ -4,7 +4,8 @@ use super::*;
 use prebindgen_conversions::{Wire, WireNode};
 use syn::ext::IdentExt;
 
-/// Decode one nested input from C into Rust.
+/// Interpret exactly one child subtree while decoding C values into Rust.
+/// Input includes a callback's return value; callback arguments use output metadata.
 ///
 /// Output delivery cannot be selected on an input:
 /// ```compile_fail
@@ -13,36 +14,62 @@ use syn::ext::IdentExt;
 /// ```
 #[derive(Clone, Debug)]
 pub enum CInputWireChain {
-    /// Use a flag or payload niche to decode zero or one Rust value.
+    /// Name one source field's conversion subtree, directly inside Fields.
+    /// The identifier names a Rust field or an enum tuple field's generated property.
+    /// Adds no controls or native scope; the child may produce several ABI values.
+    Field(syn::Ident),
+    /// Decode an optional child payload. A flag lives in controls; a niche instead
+    /// reserves one representation of a child wire, without a separate control.
     Optional(COptional),
-    /// Read a tagged carrier; the child describes its converted payload fields.
+    /// Unpack the tagged C carrier in controls into the child's enum tag and
+    /// payload wires. The child has its own native wire scope, independent of
+    /// whether the carrier itself is inline or passed by pointer.
     Tagged(std::rc::Rc<crate::CTagged>),
-    /// Read buffered C rows. The child describes how one row becomes a Rust element.
+    /// Decode a collection by repeating the child's element conversion.
+    /// Controls contain one pointer/length row carrier; each row has its own
+    /// native wire scope. The caller keeps the row storage live while it is read.
     Sequence,
 }
-/// Encode one nested Rust output for C delivery.
+/// Interpret exactly one child subtree while encoding Rust values for C.
+/// Output includes arguments delivered to a callback; its return uses input metadata.
 #[derive(Clone, Debug)]
 pub enum COutputWireChain {
-    /// Encode absence with a flag or an excluded payload representation.
+    /// Name one source field's conversion subtree, directly inside Fields.
+    /// Adds no control wires or native scope; the child may produce several outputs.
+    Field(syn::Ident),
+    /// Encode an optional child payload. A flag lives in controls; a niche instead
+    /// uses a reserved representation of a child wire, without a separate control.
     Optional(COptional),
-    /// Build a tagged carrier; the child describes its converted payload fields.
+    /// Pack the child's enum tag and payload wires into the tagged C carrier in
+    /// controls. The child has its own native wire scope; carrier metadata chooses
+    /// whether C receives inline storage or a pointer to storage.
     Tagged(std::rc::Rc<crate::CTagged>),
-    /// Buffer rows or deliver each row through a callback, according to this policy.
+    /// Repeat the child's element conversion using the selected delivery policy.
+    /// Controls carry the buffered rows or callback-delivered count; each row has
+    /// its own wire scope. Buffered output owns the generated row storage.
     Sequence(CSequence),
 }
 /// How C input components reconstruct a Rust value.
+/// Field names annotate one subtree, so they belong to chain metadata:
+/// ```compile_fail
+/// use prebindgen_c::CInputWireBranch;
+/// let field = CInputWireBranch::Field(syn::parse_quote!(x));
+/// ```
 #[derive(Clone, Debug)]
 pub enum CInputWireBranch {
-    /// Decode every ordered child, such as the arguments of a Rust constructor.
+    /// Decode every child in order, such as a constructor's arguments.
+    /// Accepts an empty list; adds no controls, names, or native scope.
     Values,
-    /// Decode named Rust fields in source declaration order.
+    /// Decode source fields in declaration order. Every child is a Field chain;
+    /// empty records have no children. Adds no controls or native scope.
     Fields,
-    /// Decode the child for this named Rust field.
-    Field(syn::Ident),
-    /// An incoming selector chooses exactly one Rust constructor alternative.
-    /// The selector belongs to the node's controls; children describe the alternatives.
+    /// Use the integer selector in controls to decode exactly one constructor arm.
+    /// The nonempty child list is in selector order; inactive arms are not consumed.
+    /// Constructors may produce the same source variant; this is not a source enum.
     Alternatives,
-    /// Decode the selected source enum variant; children follow wire-tag order.
+    /// Decode exactly one source enum variant. The control tag selects a child
+    /// payload in wire-tag order. Metadata links these arms to the canonical source
+    /// enum; an enclosing Tagged chain may supply a single C carrier for all arms.
     Enum(std::rc::Rc<crate::CEnumGroup>),
 }
 /// How Rust output components become C values.
@@ -54,18 +81,21 @@ pub enum CInputWireBranch {
 /// ```
 #[derive(Clone, Debug)]
 pub enum COutputWireBranch {
-    /// Deliver every ordered child, such as multiple projections of one Rust value.
+    /// Deliver every child in order, such as multiple projections of one Rust value.
+    /// Accepts an empty list; adds no controls, names, or native scope.
     Values,
-    /// Project named Rust fields in source declaration order.
+    /// Encode source fields in declaration order. Every child is a Field chain;
+    /// empty records have no children. Adds no controls or native scope.
     Fields,
-    /// Encode this named Rust field through its child subtree.
-    Field(syn::Ident),
-    /// Encode the selected source enum variant; children follow wire-tag order.
+    /// Encode the active source enum variant. The control tag selects a child
+    /// payload in wire-tag order; inactive children contribute their absent wire
+    /// values. An enclosing Tagged chain may pack the result into one C carrier.
     Enum(std::rc::Rc<crate::CEnumGroup>),
 }
 
 // Private queries used by shared wire-scope, selection and layout algorithms.
 pub(crate) trait ChainMetadata {
+    fn field(&self) -> Option<&syn::Ident>;
     fn optional(&self) -> Option<&COptional>;
     fn sequence(&self) -> Option<CSequence>;
     fn tagged(&self) -> Option<&std::rc::Rc<CTagged>>;
@@ -74,6 +104,13 @@ pub(crate) trait ChainMetadata {
     }
 }
 impl ChainMetadata for CInputWireChain {
+    fn field(&self) -> Option<&syn::Ident> {
+        if let Self::Field(name) = self {
+            Some(name)
+        } else {
+            None
+        }
+    }
     fn optional(&self) -> Option<&COptional> {
         if let Self::Optional(value) = self {
             Some(value)
@@ -93,6 +130,13 @@ impl ChainMetadata for CInputWireChain {
     }
 }
 impl ChainMetadata for COutputWireChain {
+    fn field(&self) -> Option<&syn::Ident> {
+        if let Self::Field(name) = self {
+            Some(name)
+        } else {
+            None
+        }
+    }
     fn optional(&self) -> Option<&COptional> {
         if let Self::Optional(value) = self {
             Some(value)
@@ -118,7 +162,6 @@ impl ChainMetadata for COutputWireChain {
 pub(crate) trait BranchMetadata {
     fn is_values(&self) -> bool;
     fn is_fields(&self) -> bool;
-    fn field(&self) -> Option<&syn::Ident>;
     fn enumeration(&self) -> Option<&std::rc::Rc<CEnumGroup>>;
     fn is_alternatives(&self) -> bool;
     fn selects_arm(&self) -> bool {
@@ -134,13 +177,6 @@ impl BranchMetadata for CInputWireBranch {
     }
     fn is_fields(&self) -> bool {
         matches!(self, Self::Fields)
-    }
-    fn field(&self) -> Option<&syn::Ident> {
-        if let Self::Field(value) = self {
-            Some(value)
-        } else {
-            None
-        }
     }
     fn enumeration(&self) -> Option<&std::rc::Rc<CEnumGroup>> {
         if let Self::Enum(value) = self {
@@ -159,13 +195,6 @@ impl BranchMetadata for COutputWireBranch {
     }
     fn is_fields(&self) -> bool {
         matches!(self, Self::Fields)
-    }
-    fn field(&self) -> Option<&syn::Ident> {
-        if let Self::Field(value) = self {
-            Some(value)
-        } else {
-            None
-        }
     }
     fn enumeration(&self) -> Option<&std::rc::Rc<CEnumGroup>> {
         if let Self::Enum(value) = self {
@@ -366,7 +395,17 @@ pub(crate) fn validate_layout<Chain: group::ChainMetadata, Branch: group::Branch
                 controls,
                 child,
             } => {
-                if let Some(value) = encoding.tagged() {
+                if encoding.field().is_some() {
+                    if !controls.is_empty() {
+                        return Err("annotation metadata does not support control wires".into());
+                    }
+                    if !in_fields {
+                        return Err(
+                            "named field must be a direct child of a field collection".into()
+                        );
+                    }
+                    visit(child, bindings, false, reserved)?;
+                } else if let Some(value) = encoding.tagged() {
                     if controls.len() != 1
                         || !matches!(&controls[0].kind,CWire::Tagged{value:v,..} if v.name==value.name)
                     {
@@ -454,13 +493,10 @@ pub(crate) fn validate_layout<Chain: group::ChainMetadata, Branch: group::Branch
                 if !controls.is_empty() {
                     return Err("group metadata does not support control wires".into());
                 }
-                if metadata.field().is_some() && !in_fields {
-                    return Err("named field must be a direct child of a field collection".into());
-                }
                 if metadata.is_field_collection() {
                     let mut fields = std::collections::BTreeSet::new();
                     for child in children {
-                        let WireNode::Branch { meta, .. } = child else {
+                        let WireNode::Chain { meta, .. } = child else {
                             return Err("field collection requires named field children".into());
                         };
                         let Some(name) = meta.field() else {
@@ -883,10 +919,10 @@ mod tests {
     }
     #[test]
     fn field_names_placement_and_empty_records_are_validated() {
-        let field: CInputWireNode = WireNode::Branch {
+        let field: CInputWireNode = WireNode::Chain {
             controls: vec![],
-            meta: CInputWireBranch::Field(syn::parse_quote!(x)),
-            children: vec![WireNode::default()],
+            meta: CInputWireChain::Field(syn::parse_quote!(x)),
+            child: Box::new(WireNode::default()),
         };
         assert!(validate_layout(&field)
             .unwrap_err()
@@ -905,6 +941,17 @@ mod tests {
             children: vec![field],
         };
         validate_layout(&record).unwrap();
+        let mut controlled = record;
+        let WireNode::Branch { children, .. } = &mut controlled else {
+            unreachable!()
+        };
+        let WireNode::Chain { controls, .. } = &mut children[0] else {
+            unreachable!()
+        };
+        controls.push(leaf("unexpected"));
+        assert!(validate_layout(&controlled)
+            .unwrap_err()
+            .contains("annotation metadata"));
         let malformed: CInputWireNode = WireNode::Branch {
             controls: vec![],
             meta: CInputWireBranch::Fields,
@@ -932,10 +979,10 @@ mod tests {
                 &prebindgen_declarations::Condition::default(),
             ))
             .unwrap();
-        input.node = prebindgen_conversions::WireNode::Branch {
+        input.node = prebindgen_conversions::WireNode::Chain {
             controls: vec![],
-            meta: CInputWireBranch::Field(syn::parse_quote!(orphan)),
-            children: vec![std::mem::take(&mut input.node)],
+            meta: CInputWireChain::Field(syn::parse_quote!(orphan)),
+            child: Box::new(std::mem::take(&mut input.node)),
         };
         assert!(CCodec::raw()
             .finish_input(&mut input, &())
@@ -951,10 +998,10 @@ mod tests {
                 prebindgen_declarations::ValueAccess::Owned,
             ))
             .unwrap();
-        output.outcomes.success = prebindgen_conversions::WireNode::Branch {
+        output.outcomes.success = prebindgen_conversions::WireNode::Chain {
             controls: vec![],
-            meta: COutputWireBranch::Field(syn::parse_quote!(orphan)),
-            children: vec![std::mem::take(&mut output.outcomes.success)],
+            meta: COutputWireChain::Field(syn::parse_quote!(orphan)),
+            child: Box::new(std::mem::take(&mut output.outcomes.success)),
         };
         assert!(CCodec::raw()
             .finish_output(&mut output, &())

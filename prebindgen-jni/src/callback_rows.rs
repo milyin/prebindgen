@@ -223,6 +223,11 @@ fn receive(
             }
             field(context, row, fields, selector, code)?
         }
+        WireNode::Chain {
+            meta: JniInputWireChain::Field(_) | JniInputWireChain::Argument(_),
+            child,
+            ..
+        } => receive(child, context, row, fields, types)?,
         WireNode::Branch { children, .. } => {
             let mut code = TokenStream::new();
             for child in children {

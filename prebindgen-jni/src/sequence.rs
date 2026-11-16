@@ -408,6 +408,11 @@ pub(crate) fn callback_optional(node: &JniOutputWireNode) -> Result<bool> {
             }
             Ok(optional)
         }
+        WireNode::Chain {
+            meta: JniOutputWireChain::Field(_) | JniOutputWireChain::Named(_),
+            child,
+            ..
+        } => callback_optional(child),
         _ => Ok(false),
     }
 }

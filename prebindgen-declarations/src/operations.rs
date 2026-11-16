@@ -146,17 +146,15 @@ impl<'a, C: Codec + ?Sized> OutputLeaf<'a, C> {
     }
 }
 
-/// Meaning of a group in the adapter's wire tree.
+/// Meaning of an ordered child list in the adapter's wire tree.
+/// Single-child annotations, such as field names, use the codec's chain hooks.
 #[derive(Clone, Copy, Debug)]
-pub enum GroupKind<'a> {
+pub enum GroupKind {
     /// Ordered constructor arguments or combined output observations.
     Values,
-    /// Source fields, including unit's empty group.
+    /// Source fields in declaration order, including unit's empty group.
+    /// Each child is a field chain containing that field's conversion subtree.
     Fields,
-    /// One named source field and its entire subtree.
-    Field(&'a syn::Ident),
-    /// An explicitly named output view.
-    NamedOutput(&'a str),
 }
 
 /// Choose an optional encoding and update its payload's remaining niche offers.

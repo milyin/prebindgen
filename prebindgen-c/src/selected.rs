@@ -60,19 +60,21 @@ pub(crate) fn values<Chain: group::ChainMetadata, Branch: group::BranchMetadata>
             } => {
                 add(controls);
                 if !encoding.is_scope_boundary() {
-                    let optional = encoding
-                        .optional()
-                        .ok_or("unsupported selection chain metadata")?;
-
-                    let mut next = path.to_vec();
-                    let name = optional.discriminator().clone();
-                    next.push(
-                        optional
-                            .niche()
-                            .map(|n| Test::Niche(name.clone(), n.clone()))
-                            .unwrap_or(Test::Arm(name, 1)),
-                    );
-                    visit(child, &next, out)?;
+                    if let Some(optional) = encoding.optional() {
+                        let mut next = path.to_vec();
+                        let name = optional.discriminator().clone();
+                        next.push(
+                            optional
+                                .niche()
+                                .map(|n| Test::Niche(name.clone(), n.clone()))
+                                .unwrap_or(Test::Arm(name, 1)),
+                        );
+                        visit(child, &next, out)?;
+                    } else if encoding.field().is_some() {
+                        visit(child, path, out)?;
+                    } else {
+                        return Err("unsupported selection chain metadata".into());
+                    }
                 }
             }
 

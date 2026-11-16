@@ -673,10 +673,10 @@ pub(super) fn mark<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
     Ok(())
 }
 
-pub(crate) fn field<Chain, Branch: group::BranchMetadata>(
+pub(crate) fn field<Chain: group::ChainMetadata, Branch>(
     node: &JniWireNode<Chain, Branch>,
 ) -> Result<&syn::Ident> {
-    if let prebindgen_conversions::WireNode::Branch { meta, .. } = node {
+    if let prebindgen_conversions::WireNode::Chain { meta, .. } = node {
         if let Some(name) = meta.field() {
             return Ok(name);
         }
@@ -748,7 +748,7 @@ pub(crate) fn check_property_output(expected: &str, results: &[String]) -> Resul
 }
 
 #[allow(clippy::type_complexity)] // Borrow each canonical field with its directional conversion subtree.
-pub(crate) fn record_fields<'a, Chain, Branch: group::BranchMetadata>(
+pub(crate) fn record_fields<'a, Chain: group::ChainMetadata, Branch>(
     nodes: &'a [JniWireNode<Chain, Branch>],
     source: &'a Record<JniField>,
 ) -> Result<impl Iterator<Item = Result<(&'a Field<JniField>, &'a JniWireNode<Chain, Branch>)>>> {
@@ -1143,10 +1143,10 @@ mod group_tests {
         assert!(crate::group::validate_layout(&node)
             .unwrap_err()
             .contains("named field children"));
-        let field = WireNode::Branch {
-            meta: JniInputWireBranch::Field(syn::parse_quote!(value)),
+        let field = WireNode::Chain {
+            meta: JniInputWireChain::Field(syn::parse_quote!(value)),
             controls: vec![],
-            children: vec![leaf],
+            child: Box::new(leaf),
         };
         let WireNode::Branch { children, .. } = &mut node else {
             panic!()
@@ -1157,13 +1157,10 @@ mod group_tests {
             panic!()
         };
         let mut duplicate = field;
-        let WireNode::Branch {
-            children: fields, ..
-        } = &mut duplicate
-        else {
+        let WireNode::Chain { child, .. } = &mut duplicate else {
             panic!()
         };
-        let WireNode::Leaf(wires) = &mut fields[0] else {
+        let WireNode::Leaf(wires) = child.as_mut() else {
             panic!()
         };
         // Wire bindings are distinct; only the source field name is duplicated.
@@ -1186,17 +1183,17 @@ mod group_tests {
             .unwrap();
         fn field<Chain, Branch>(
             source: TypeRef,
-            named: impl FnOnce(syn::Ident) -> Branch,
+            named: impl FnOnce(syn::Ident) -> Chain,
             record: impl FnOnce(JniDataGroup) -> Branch,
         ) -> JniWireNode<Chain, Branch> {
             let mut field = prebindgen_conversions::WireNode::Leaf(vec![Wire {
                 name: syn::parse_quote!(incoming),
                 kind: JniWire::scalar(Primitive::I32),
             }]);
-            field = prebindgen_conversions::WireNode::Branch {
+            field = prebindgen_conversions::WireNode::Chain {
                 controls: vec![],
                 meta: named(syn::parse_quote!(r#type)),
-                children: vec![std::mem::take(&mut field)],
+                child: Box::new(std::mem::take(&mut field)),
             };
             field = prebindgen_conversions::WireNode::Branch {
                 controls: vec![],
@@ -1211,7 +1208,7 @@ mod group_tests {
         }
         crate::group::validate_layout(&field::<JniInputWireChain, JniInputWireBranch>(
             flat.type_ref(&syn::parse_quote!(Point)).unwrap(),
-            JniInputWireBranch::Field,
+            JniInputWireChain::Field,
             JniInputWireBranch::Record,
         ))
         .unwrap();
@@ -1244,7 +1241,7 @@ mod group_tests {
         let input = kotlin::input_kotlin(
             &field(
                 point.clone(),
-                JniInputWireBranch::Field,
+                JniInputWireChain::Field,
                 JniInputWireBranch::Record,
             ),
             &context,
@@ -1255,7 +1252,7 @@ mod group_tests {
         let output = kotlin::output_kotlin(
             &field(
                 point,
-                JniOutputWireBranch::Field,
+                JniOutputWireChain::Field,
                 JniOutputWireBranch::Record,
             ),
             &context,

@@ -383,6 +383,11 @@ pub(crate) fn callback_shape(node: &COutputWireNode) -> bool {
             meta: COutputWireChain::Optional(metadata),
             ..
         } => matches!(metadata, COptional::Flag(_)) && callback_shape(element),
+        WireNode::Chain {
+            meta: COutputWireChain::Field(_),
+            child,
+            ..
+        } => callback_shape(child),
         WireNode::Branch {
             meta: COutputWireBranch::Enum(_),
             ..
@@ -561,6 +566,9 @@ fn release_condition<Chain: group::ChainMetadata, Branch: group::BranchMetadata>
                 let i = i as i32;
                 Some(enclose(quote!((#tag)==#i), child))
             })
+        }
+        WireNode::Chain { meta, child, .. } if meta.field().is_some() => {
+            release_condition(child, target, fields)
         }
         WireNode::Chain { .. } => panic!("unsupported C cleanup chain metadata"),
         WireNode::Branch { children, .. } => children

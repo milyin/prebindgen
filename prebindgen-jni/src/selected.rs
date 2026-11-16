@@ -70,16 +70,21 @@ impl Selection {
                 } => {
                     set(controls, out);
                     if !encoding.is_scope_boundary() {
-                        let optional = encoding
-                            .optional()
-                            .ok_or("unsupported selection chain metadata")?;
-
-                        let mut next = path.to_vec();
-                        let donor = indices[&optional.discriminator().to_string()];
-                        next.push(Test::Present(donor, optional.niche().cloned()));
-                        visit(child, &next, indices, out)?;
-                        // The discriminator must be readable before testing presence.
-                        out[donor].retain(|t| !matches!(t,Test::Present(i,_) if *i==donor));
+                        if let Some(optional) = encoding.optional() {
+                            let mut next = path.to_vec();
+                            let donor = indices[&optional.discriminator().to_string()];
+                            next.push(Test::Present(donor, optional.niche().cloned()));
+                            visit(child, &next, indices, out)?;
+                            // The discriminator must be readable before testing presence.
+                            out[donor].retain(|t| !matches!(t,Test::Present(i,_) if *i==donor));
+                        } else if encoding.field().is_some()
+                            || encoding.argument_name().is_some()
+                            || encoding.output_name().is_some()
+                        {
+                            visit(child, path, indices, out)?;
+                        } else {
+                            return Err("unsupported selection chain metadata".into());
+                        }
                     }
                 }
 

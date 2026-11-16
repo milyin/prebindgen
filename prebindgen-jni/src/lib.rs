@@ -892,10 +892,10 @@ impl Codec for JniCodec {
         segment: prebindgen_declarations::ComponentSegment,
     ) {
         if let prebindgen_declarations::ComponentSegment::Argument(name) = segment {
-            *node = prebindgen_conversions::WireNode::Branch {
+            *node = prebindgen_conversions::WireNode::Chain {
                 controls: vec![],
-                meta: JniInputWireBranch::Argument(name),
-                children: vec![std::mem::take(node)],
+                meta: JniInputWireChain::Argument(name),
+                child: Box::new(std::mem::take(node)),
             };
         }
     }
@@ -1332,24 +1332,27 @@ impl Codec for JniCodec {
     fn supports_bulk(&self, _: Direction) -> bool {
         true
     }
-    fn input_group(&self, kind: GroupKind<'_>) -> Result<JniInputWireBranch> {
+    fn input_group(&self, kind: GroupKind) -> Result<JniInputWireBranch> {
         Ok(match kind {
             GroupKind::Values => JniInputWireBranch::Values,
             GroupKind::Fields => JniInputWireBranch::Fields,
-            GroupKind::Field(name) => JniInputWireBranch::Field(name.clone()),
-            GroupKind::NamedOutput(_) => return Err("named views are output-only".into()),
         })
     }
-    fn output_group(&self, kind: GroupKind<'_>) -> Result<JniOutputWireBranch> {
+    fn output_group(&self, kind: GroupKind) -> Result<JniOutputWireBranch> {
         Ok(match kind {
             GroupKind::Values => JniOutputWireBranch::Values,
             GroupKind::Fields => JniOutputWireBranch::Fields,
-            GroupKind::Field(name) => JniOutputWireBranch::Field(name.clone()),
-            GroupKind::NamedOutput(name) => {
-                validate_name(name)?;
-                JniOutputWireBranch::Named(name.into())
-            }
         })
+    }
+    fn input_field(&self, name: &syn::Ident) -> Result<JniInputWireChain> {
+        Ok(JniInputWireChain::Field(name.clone()))
+    }
+    fn output_field(&self, name: &syn::Ident) -> Result<JniOutputWireChain> {
+        Ok(JniOutputWireChain::Field(name.clone()))
+    }
+    fn output_named(&self, name: &str) -> Result<JniOutputWireChain> {
+        validate_name(name)?;
+        Ok(JniOutputWireChain::Named(name.into()))
     }
     fn input_optional(
         &self,

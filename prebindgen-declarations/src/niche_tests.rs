@@ -116,27 +116,34 @@ impl Codec for DomainCodec {
     fn output_leaf(&self, _: OutputLeaf<'_, Self>) -> Result<OutputPlan<Domain>> {
         unreachable!()
     }
-    fn input_group(&self, kind: GroupKind<'_>) -> Result<DomainGroup> {
+    fn input_group(&self, kind: GroupKind) -> Result<DomainGroup> {
         Ok(match kind {
-            GroupKind::Values | GroupKind::NamedOutput(_) => DomainGroup::default(),
+            GroupKind::Values => DomainGroup::default(),
             GroupKind::Fields => DomainGroup {
                 description: "record".into(),
-            },
-            GroupKind::Field(name) => DomainGroup {
-                description: format!("member:{name}"),
             },
         })
     }
-    fn output_group(&self, kind: GroupKind<'_>) -> Result<DomainGroup> {
+    fn output_group(&self, kind: GroupKind) -> Result<DomainGroup> {
         Ok(match kind {
-            GroupKind::Values | GroupKind::NamedOutput(_) => DomainGroup::default(),
+            GroupKind::Values => DomainGroup::default(),
             GroupKind::Fields => DomainGroup {
                 description: "record".into(),
             },
-            GroupKind::Field(name) => DomainGroup {
-                description: format!("member:{name}"),
-            },
         })
+    }
+    fn input_field(&self, name: &syn::Ident) -> Result<DomainGroup> {
+        Ok(DomainGroup {
+            description: format!("member:{name}"),
+        })
+    }
+    fn output_field(&self, name: &syn::Ident) -> Result<DomainGroup> {
+        Ok(DomainGroup {
+            description: format!("member:{name}"),
+        })
+    }
+    fn output_named(&self, _name: &str) -> Result<DomainGroup> {
+        Ok(DomainGroup::default())
     }
     fn input_optional(
         &self,

@@ -699,21 +699,28 @@ Prepared input and output trees have different types. A function parameter uses
 output trees and the callback result uses an input tree. Shared wire leaves
 (`JniWire` / `CWire`) still describe the same physical carrier types.
 
-Branch metadata describes the operation performed on its children directly:
+Prepared metadata describes the operation performed on its children directly.
+A chain has exactly one child subtree; a branch has an ordered child list.
+The shape counts subtrees, rather than the physical values produced by them.
 
-| Variant | Meaning |
-| --- | --- |
-| `Values` | Convert all ordered components, such as constructor arguments or combined output views. |
-| `Fields` / `Field(name)` | Convert named source fields independently, preserving field identity and order. |
-| `JniInputWireBranch::Record(record)` / `JniOutputWireBranch::Record(record)` | Decompose or reconstruct one Kotlin data-class value using its child field conversions. |
-| `JniInputWireBranch::Argument(name)` | Preserve the parameter path of one source argument. |
-| `JniOutputWireBranch::Named(name)` | Give a delivered Kotlin output view an explicit name. |
-| `CInputWireBranch::Alternatives` / `JniInputWireBranch::Alternatives` | Select one constructor alternative. |
-| `Enum(...)` | Convert the selected source enum variant. |
+| Variant | Shape | Meaning |
+| --- | --- | --- |
+| `Values` | Branch | Convert all ordered components, such as constructor arguments or combined output views. |
+| `Fields` | Branch | Convert source fields in declaration order; each child is a `Field` chain. |
+| `Field(name)` | Chain | Label one field's conversion subtree, which may produce zero, one or several wires. |
+| `JniInputWireBranch::Record(record)` / `JniOutputWireBranch::Record(record)` | Branch | Decompose or reconstruct one Kotlin data-class value using its child field conversions. |
+| `JniInputWireChain::Argument(name)` | Chain | Preserve the parameter path of one source argument. |
+| `JniOutputWireChain::Named(name)` | Chain | Give a delivered Kotlin output view an explicit name. |
+| `CInputWireBranch::Alternatives` / `JniInputWireBranch::Alternatives` | Branch | Select one constructor alternative. |
+| `Enum(...)` | Branch | Convert the selected source enum variant. |
+| `Optional(...)` | Chain | Convert the child payload when present; encode absence with a flag or niche. |
+| `Sequence` / `Sequence(...)` | Chain | Repeat the child element conversion for the collection's rows. |
+| JNI `Bulk` | Chain | Pack or unpack the child subtree in one native C-representation frame. |
+| C `Tagged(...)` | Chain | Pack or unpack the child enum subtree through a tagged C carrier. |
 
 The input/output chain and branch types are separate enums. Reading a definition
-shows every operation supported in that direction: input branches provide argument
-paths and constructor alternatives; output branches provide named projections.
+shows every operation supported in that direction: JNI input chains retain argument
+paths, input branches provide constructor alternatives, and JNI output chains name projections.
 There are no direction capability parameters or placeholder payloads. Input chains
 use a unit `Sequence` variant for buffered rows; output chains use
 `Sequence(CSequence)` / `Sequence(JniSequence)` to select delivery.
@@ -787,7 +794,7 @@ that function. With multiple exports, select the desired binding and use
 its Flat; on failure its converters and source data drop normally.
 
 Core physical conversion hooks include `input_leaf(InputLeaf)`, `output_leaf(OutputLeaf)`,
-`output_consumes`, and `group(GroupKind)`. Optional features reject unsupported
+`output_consumes`, and directional group and field hooks. Optional features reject unsupported
 requests by default. [The operation guide](docs/declaration-codec.md) describes
 the requests and migration from the former hooks. C and JNI each implement the
 trait once: `CCodec::raw()` / `JniCodec::raw()` preserve manual low-level
@@ -2280,8 +2287,13 @@ context supplied by the adapter.
 Metadata types `C` and `B` describe chain and branch parents. Each adapter
 chooses their semantic variants. `W` describes each individual value. Use `()` for metadata a generator does not need. The shared compiler
 creates metadata through codec operations and does not interpret it.
-`input_group(GroupKind)` and `output_group(GroupKind)` describe values, fields, one named field or a named output
-view; unsupported kinds return an error. Constructor arguments and output
+`input_group(GroupKind)` and `output_group(GroupKind)` describe ordered lists of
+values or source fields. `input_field(name)` and `output_field(name)` label one
+field's conversion subtree and return chain metadata. `output_named(name)` labels
+one output projection subtree; adapters without named views reject it by default.
+JNI also uses an input `Argument` chain to retain a source parameter's name.
+A chain has exactly one child subtree even if that child produces multiple wires;
+a branch groups child subtrees. Constructor arguments and output
 combinations retain their group with one component; constructors without
 arguments retain an empty group. The directional optional hooks and `alternatives` prepare metadata
 and update the payload's encoding state; the tree owns its supporting controls.

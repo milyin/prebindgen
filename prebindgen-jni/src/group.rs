@@ -4,7 +4,8 @@ use super::*;
 use prebindgen_conversions::{Wire, WireNode};
 use syn::ext::IdentExt;
 
-/// Decode one nested input from Kotlin/JNI into Rust.
+/// Interpret exactly one child subtree while decoding Kotlin/JNI values into Rust.
+/// Input includes a callback's return value; callback arguments use output metadata.
 ///
 /// Output delivery cannot be selected on an input:
 /// ```compile_fail
@@ -13,50 +14,78 @@ use syn::ext::IdentExt;
 /// ```
 #[derive(Clone, Debug)]
 pub enum JniInputWireChain {
-    /// Use a flag or payload niche to decode zero or one Rust value.
+    /// Name one source argument's conversion subtree for exposed Kotlin parameter paths.
+    /// Adds no control wires and preserves the child's native representation and scope.
+    Argument(String),
+    /// Name one source field's conversion subtree, directly inside Fields or Record.
+    /// The identifier names a Rust field or an enum tuple field's generated property.
+    /// Adds no control wires; the child may produce zero, one or several wire values.
+    Field(syn::Ident),
+    /// Decode an optional child payload. A flag lives in controls; a niche instead
+    /// reserves one representation of a child wire. Neither starts a new native scope.
     Optional(JniOptional),
-    /// Decode buffered object-array rows, or native offset/count ranges inside Bulk.
-    /// The child describes how one row becomes a Rust element.
+    /// Decode a collection by repeating the child's element conversion.
+    /// Controls carry an object array ordinarily, or a native offset/count range
+    /// inside Bulk. Each row has its own native wire scope.
     Sequence,
-    /// Decode the child's fields from one packed C-representation byte buffer.
-    /// Sequences inside this scope use native rows; layout is derived from the child.
+    /// Decode the whole child subtree from one packed C-representation frame.
+    /// Controls carry the byte buffer and its length; the child defines the frame's
+    /// layout and native wire scope. Nested sequences use native rows in that frame.
     Bulk,
 }
-/// Encode one nested Rust output for Kotlin/JNI delivery.
+/// Interpret exactly one child subtree while encoding Rust values for Kotlin/JNI.
+/// Output includes arguments delivered to a callback; its return uses input metadata.
 #[derive(Clone, Debug)]
 pub enum JniOutputWireChain {
-    /// Encode absence with a flag or an excluded payload representation.
+    /// Name one source field's conversion subtree, directly inside Fields or Record.
+    /// Adds no control wires or native scope; the child may produce several outputs.
+    Field(syn::Ident),
+    /// Give one projection subtree an explicit Kotlin output name. Multiple results
+    /// receive numeric suffixes. Adds no controls and preserves the child's scope.
+    Named(String),
+    /// Encode an optional child payload. A flag lives in controls; a niche instead
+    /// uses a reserved representation of a child wire, without a separate control.
     Optional(JniOptional),
-    /// Buffer rows or deliver each row through a callback, according to this policy.
-    /// The child describes one element; an enclosing Bulk scope selects native rows.
+    /// Repeat the child's element conversion using the selected delivery policy.
+    /// Controls carry the buffered rows or callback-delivered count; each row has
+    /// its own wire scope. An enclosing Bulk frame selects native buffered rows.
     Sequence(JniSequence),
-    /// Pack the child's outputs in one C-representation byte buffer.
-    /// Callback-delivered sequences may contain bulk elements but cannot be enclosed here.
+    /// Pack the whole child subtree in one C-representation frame, carried by the
+    /// control byte buffer. The child defines the frame's layout and native scope.
+    /// Callback sequences may have bulk elements but cannot be enclosed by Bulk.
     Bulk,
 }
 /// How Kotlin/JNI input components reconstruct a Rust value.
 ///
-/// Input branches have no named output projection:
+/// Input has no named output projection:
+/// ```compile_fail
+/// use prebindgen_jni::JniInputWireChain;
+/// let input = JniInputWireChain::Named("size".into());
+/// ```
+/// Field names annotate one subtree, so they belong to chain metadata:
 /// ```compile_fail
 /// use prebindgen_jni::JniInputWireBranch;
-/// let input = JniInputWireBranch::Named("size".into());
+/// let field = JniInputWireBranch::Field(syn::parse_quote!(x));
 /// ```
 #[derive(Clone, Debug)]
 pub enum JniInputWireBranch {
-    /// Decode every ordered child, such as the arguments of a Rust constructor.
+    /// Decode every child in order, such as a constructor's arguments.
+    /// Accepts an empty list; adds no controls, names, or native scope.
     Values,
-    /// Keep one source argument's name in the exposed Kotlin parameter paths.
-    Argument(String),
-    /// Decode named Rust fields in source declaration order.
+    /// Decode source fields in declaration order. Every child is a Field chain;
+    /// empty records have no children. Adds no controls or native scope.
     Fields,
-    /// Decode the child for this named Rust field.
-    Field(syn::Ident),
-    /// Accept one Kotlin data-class value; Kotlin extracts its child fields before JNI.
+    /// Accept one Kotlin data-class value and extract its properties before JNI.
+    /// Children are Field chains in source order, as for Fields. Metadata identifies
+    /// the canonical source type and Kotlin binding; no native carrier is added.
     Record(JniDataGroup),
-    /// An incoming selector chooses exactly one Rust constructor alternative.
-    /// The selector belongs to the node's controls; children describe the alternatives.
+    /// Use the integer selector in controls to decode exactly one constructor arm.
+    /// The nonempty child list is in selector order; inactive arms are not consumed.
+    /// Constructors may produce the same source variant; this is not a source enum.
     Alternatives,
-    /// Decode a sealed Kotlin value or selector and fields into the selected Rust enum variant.
+    /// Decode exactly one source enum variant. The control tag selects a child
+    /// payload in wire-tag order. Metadata links canonical variants and chooses
+    /// a sealed Kotlin value or expanded tag/field parameters at the public edge.
     Enum(std::rc::Rc<crate::sealed::JniEnumGroup>),
 }
 /// How Rust output components become Kotlin values.
@@ -68,23 +97,28 @@ pub enum JniInputWireBranch {
 /// ```
 #[derive(Clone, Debug)]
 pub enum JniOutputWireBranch {
-    /// Deliver every ordered child, such as multiple projections of one Rust value.
+    /// Deliver every child in order, such as multiple projections of one Rust value.
+    /// Accepts an empty list; adds no controls, names, or native scope.
     Values,
-    /// Give this child projection an explicit Kotlin output name.
-    Named(String),
-    /// Project named Rust fields in source declaration order.
+    /// Encode source fields in declaration order. Every child is a Field chain;
+    /// empty records have no children. Adds no controls or native scope.
     Fields,
-    /// Encode this named Rust field through its child subtree.
-    Field(syn::Ident),
-    /// Kotlin reconstructs one data-class value from the child outputs.
+    /// Reconstruct one Kotlin data-class value from the Field children in source
+    /// order. Metadata identifies the canonical type; reconstruction happens on
+    /// Kotlin's side without adding a native object carrier or wire scope.
     Record(JniDataGroup),
-    /// Encode the selected source enum variant as a sealed Kotlin value or tag/fields.
+    /// Encode the active source enum variant. The control tag selects a child
+    /// payload in wire-tag order. Metadata chooses a sealed Kotlin value or
+    /// expanded tag/fields; inactive children contribute their absent wire values.
     Enum(std::rc::Rc<crate::sealed::JniEnumGroup>),
 }
 
 // Private queries used by shared wire-scope, selection and layout algorithms.
 // The concrete enums above remain the complete input/output operation definitions.
 pub(crate) trait ChainMetadata {
+    fn field(&self) -> Option<&syn::Ident>;
+    fn argument_name(&self) -> Option<&str>;
+    fn output_name(&self) -> Option<&str>;
     fn optional(&self) -> Option<&JniOptional>;
     fn sequence(&self) -> Option<JniSequence>;
     fn is_bulk(&self) -> bool;
@@ -93,6 +127,23 @@ pub(crate) trait ChainMetadata {
     }
 }
 impl ChainMetadata for JniInputWireChain {
+    fn field(&self) -> Option<&syn::Ident> {
+        if let Self::Field(name) = self {
+            Some(name)
+        } else {
+            None
+        }
+    }
+    fn argument_name(&self) -> Option<&str> {
+        if let Self::Argument(name) = self {
+            Some(name)
+        } else {
+            None
+        }
+    }
+    fn output_name(&self) -> Option<&str> {
+        None
+    }
     fn optional(&self) -> Option<&JniOptional> {
         if let Self::Optional(value) = self {
             Some(value)
@@ -108,6 +159,23 @@ impl ChainMetadata for JniInputWireChain {
     }
 }
 impl ChainMetadata for JniOutputWireChain {
+    fn field(&self) -> Option<&syn::Ident> {
+        if let Self::Field(name) = self {
+            Some(name)
+        } else {
+            None
+        }
+    }
+    fn argument_name(&self) -> Option<&str> {
+        None
+    }
+    fn output_name(&self) -> Option<&str> {
+        if let Self::Named(name) = self {
+            Some(name)
+        } else {
+            None
+        }
+    }
     fn optional(&self) -> Option<&JniOptional> {
         if let Self::Optional(value) = self {
             Some(value)
@@ -128,12 +196,9 @@ impl ChainMetadata for JniOutputWireChain {
 }
 pub(crate) trait BranchMetadata {
     fn is_fields(&self) -> bool;
-    fn field(&self) -> Option<&syn::Ident>;
     fn record(&self) -> Option<&JniDataGroup>;
     fn enumeration(&self) -> Option<&std::rc::Rc<crate::sealed::JniEnumGroup>>;
     fn is_alternatives(&self) -> bool;
-    fn argument_name(&self) -> Option<&str>;
-    fn output_name(&self) -> Option<&str>;
     fn selects_arm(&self) -> bool {
         self.is_alternatives() || self.enumeration().is_some()
     }
@@ -144,13 +209,6 @@ pub(crate) trait BranchMetadata {
 impl BranchMetadata for JniInputWireBranch {
     fn is_fields(&self) -> bool {
         matches!(self, Self::Fields)
-    }
-    fn field(&self) -> Option<&syn::Ident> {
-        if let Self::Field(value) = self {
-            Some(value)
-        } else {
-            None
-        }
     }
     fn record(&self) -> Option<&JniDataGroup> {
         if let Self::Record(value) = self {
@@ -169,27 +227,10 @@ impl BranchMetadata for JniInputWireBranch {
     fn is_alternatives(&self) -> bool {
         matches!(self, Self::Alternatives)
     }
-    fn argument_name(&self) -> Option<&str> {
-        if let Self::Argument(value) = self {
-            Some(value)
-        } else {
-            None
-        }
-    }
-    fn output_name(&self) -> Option<&str> {
-        None
-    }
 }
 impl BranchMetadata for JniOutputWireBranch {
     fn is_fields(&self) -> bool {
         matches!(self, Self::Fields)
-    }
-    fn field(&self) -> Option<&syn::Ident> {
-        if let Self::Field(value) = self {
-            Some(value)
-        } else {
-            None
-        }
     }
     fn record(&self) -> Option<&JniDataGroup> {
         if let Self::Record(value) = self {
@@ -207,16 +248,6 @@ impl BranchMetadata for JniOutputWireBranch {
     }
     fn is_alternatives(&self) -> bool {
         false
-    }
-    fn argument_name(&self) -> Option<&str> {
-        None
-    }
-    fn output_name(&self) -> Option<&str> {
-        if let Self::Named(value) = self {
-            Some(value)
-        } else {
-            None
-        }
     }
 }
 pub(crate) fn validate_selector(wire: &Wire<JniWire>) -> Result<()> {
@@ -412,7 +443,23 @@ fn validate_scope<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
                 controls,
                 child,
             } => {
-                if encoding.is_bulk() {
+                if encoding.field().is_some()
+                    || encoding.argument_name().is_some()
+                    || encoding.output_name().is_some()
+                {
+                    if !controls.is_empty() {
+                        return Err("annotation metadata does not support control wires".into());
+                    }
+                    if encoding.field().is_some() && !in_fields {
+                        return Err(
+                            "named field must be a direct child of a field collection".into()
+                        );
+                    }
+                    if let Some(name) = encoding.output_name() {
+                        validate_name(name)?;
+                    }
+                    visit(child, bindings, false, reserved, bulk)?;
+                } else if encoding.is_bulk() {
                     if bulk == Some(true) {
                         return Err(
                             "nested bulk frames must be lowered into the enclosing bulk scope"
@@ -573,16 +620,10 @@ fn validate_scope<Chain: group::ChainMetadata, Branch: group::BranchMetadata>(
                         return Err(format!("duplicate Kotlin group binding `{}`", record.root));
                     }
                 }
-                if let Some(name) = metadata.output_name() {
-                    validate_name(name)?;
-                }
-                if metadata.field().is_some() && !in_fields {
-                    return Err("named field must be a direct child of a field collection".into());
-                }
                 if metadata.is_field_collection() {
                     let mut fields = std::collections::BTreeSet::new();
                     for child in children {
-                        let WireNode::Branch { meta, .. } = child else {
+                        let WireNode::Chain { meta, .. } = child else {
                             return Err("field collection requires named field children".into());
                         };
                         let Some(name) = meta.field() else {
@@ -995,10 +1036,10 @@ mod tests {
     }
     #[test]
     fn field_names_placement_and_empty_records_are_validated() {
-        let field: JniInputWireNode = WireNode::Branch {
+        let field: JniInputWireNode = WireNode::Chain {
             controls: vec![],
-            meta: JniInputWireBranch::Field(syn::parse_quote!(x)),
-            children: vec![WireNode::default()],
+            meta: JniInputWireChain::Field(syn::parse_quote!(x)),
+            child: Box::new(WireNode::default()),
         };
         assert!(validate_layout(&field)
             .unwrap_err()
@@ -1017,6 +1058,17 @@ mod tests {
             children: vec![field],
         };
         validate_layout(&record).unwrap();
+        let mut controlled = record;
+        let WireNode::Branch { children, .. } = &mut controlled else {
+            unreachable!()
+        };
+        let WireNode::Chain { controls, .. } = &mut children[0] else {
+            unreachable!()
+        };
+        controls.push(leaf("unexpected"));
+        assert!(validate_layout(&controlled)
+            .unwrap_err()
+            .contains("annotation metadata"));
         let malformed: JniInputWireNode = WireNode::Branch {
             controls: vec![],
             meta: JniInputWireBranch::Fields,
@@ -1044,10 +1096,10 @@ mod tests {
                 &prebindgen_declarations::Condition::default(),
             ))
             .unwrap();
-        input.node = prebindgen_conversions::WireNode::Branch {
+        input.node = prebindgen_conversions::WireNode::Chain {
             controls: vec![],
-            meta: JniInputWireBranch::Field(syn::parse_quote!(orphan)),
-            children: vec![std::mem::take(&mut input.node)],
+            meta: JniInputWireChain::Field(syn::parse_quote!(orphan)),
+            child: Box::new(std::mem::take(&mut input.node)),
         };
         assert!(JniCodec::raw()
             .finish_input(&mut input, &())
@@ -1063,10 +1115,10 @@ mod tests {
                 prebindgen_declarations::ValueAccess::Owned,
             ))
             .unwrap();
-        output.outcomes.success = prebindgen_conversions::WireNode::Branch {
+        output.outcomes.success = prebindgen_conversions::WireNode::Chain {
             controls: vec![],
-            meta: JniOutputWireBranch::Field(syn::parse_quote!(orphan)),
-            children: vec![std::mem::take(&mut output.outcomes.success)],
+            meta: JniOutputWireChain::Field(syn::parse_quote!(orphan)),
+            child: Box::new(std::mem::take(&mut output.outcomes.success)),
         };
         assert!(JniCodec::raw()
             .finish_output(&mut output, &())
@@ -1343,6 +1395,13 @@ pub(crate) fn error_wire_shape<Chain: group::ChainMetadata, Branch: group::Branc
                 controls,
                 child,
             } => {
+                if meta.field().is_some()
+                    || meta.argument_name().is_some()
+                    || meta.output_name().is_some()
+                {
+                    wires(controls, out);
+                    return visit(child, out, bulk);
+                }
                 let label = if let Some(optional) = meta.optional() {
                     match optional {
                         JniOptional::Flag(_) => "optional:flag".into(),
