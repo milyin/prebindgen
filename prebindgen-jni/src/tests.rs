@@ -3810,9 +3810,11 @@ fn ordinary_output_rows_respect_jvm_constructor_slot_limit() {
             &BTreeMap::new(),
         )
         .unwrap();
-        assert!(
-            matches!(output.metadata, JniOutputWireContainer::KList(actual) if actual == if typed { JniRowEncoding::RowClass } else { JniRowEncoding::ObjectArray })
-        );
+        assert!(if typed {
+            matches!(output.metadata, JniOutputWireContainer::KListClassRows)
+        } else {
+            matches!(output.metadata, JniOutputWireContainer::KListArrayRows)
+        });
         assert_eq!(output.store.to_string().contains("construct"), typed);
         assert_eq!(output.store.to_string().contains("valueOf"), !typed);
     }
@@ -3834,7 +3836,7 @@ fn legacy_buffered_schema_keeps_array_decoder_and_input_only_skips_registration(
                 kind: JniWire::scalar(Primitive::I64),
             },
         ])),
-        meta: JniOutputWireContainer::KList(JniRowEncoding::ObjectArray),
+        meta: JniOutputWireContainer::KListArrayRows,
     };
     let context = KotlinContext {
         package: "test",

@@ -43,26 +43,32 @@ struct Row {
 
 struct CarrierChild<'a> {
     node: &'a JniOutputWireNode,
-    row_encoding: Option<JniRowEncoding>,
+    carrier: Carrier,
 }
 
 fn carrier_child<'a>(node: &'a JniOutputWireNode, name: &syn::Ident) -> Option<CarrierChild<'a>> {
     match node {
         WireNode::Container {
-            meta: JniOutputWireContainer::KList(sequence),
-            wires: controls,
+            meta:
+                metadata @ (JniOutputWireContainer::KListArrayRows
+                | JniOutputWireContainer::KListClassRows),
+            wires,
             child,
-        } if controls.iter().any(|w| &w.name == name) => Some(CarrierChild {
+        } if wires.iter().any(|w| &w.name == name) => Some(CarrierChild {
             node: child,
-            row_encoding: Some(*sequence),
+            carrier: if matches!(metadata, JniOutputWireContainer::KListClassRows) {
+                Carrier::TypedObjects
+            } else {
+                Carrier::Objects
+            },
         }),
         WireNode::Container {
             meta: JniOutputWireContainer::BulkFrame,
-            wires: controls,
+            wires,
             child,
-        } if controls.iter().any(|w| &w.name == name) => Some(CarrierChild {
+        } if wires.iter().any(|w| &w.name == name) => Some(CarrierChild {
             node: child,
-            row_encoding: None,
+            carrier: Carrier::NativeJni,
         }),
         WireNode::Annotation { child, .. }
         | WireNode::Chain { child, .. }
@@ -128,14 +134,7 @@ impl Row {
                         .ok_or("missing collection cleanup element")?;
                     let child_carrier =
                         if matches!(carrier, Carrier::Objects | Carrier::TypedObjects) {
-                            if child
-                                .row_encoding
-                                .is_some_and(|s| s == JniRowEncoding::RowClass)
-                            {
-                                Carrier::TypedObjects
-                            } else {
-                                Carrier::Objects
-                            }
+                            child.carrier
                         } else {
                             carrier
                         };
@@ -153,7 +152,7 @@ impl Row {
                     }
                     let child =
                         carrier_child(node, &wire.name).ok_or("missing frame cleanup layout")?;
-                    let row = Self::new(child.node, Carrier::NativeJni, types)?;
+                    let row = Self::new(child.node, child.carrier, types)?;
                     if row.fields.is_empty() {
                         continue;
                     }
@@ -409,23 +408,22 @@ impl Helpers {
                 ..
             } => self.visit(child, true, types)?,
             WireNode::Container {
-                meta: JniOutputWireContainer::KList(sequence),
+                meta:
+                    metadata @ (JniOutputWireContainer::KListArrayRows
+                    | JniOutputWireContainer::KListClassRows),
                 child,
                 ..
             } => {
                 let carrier = if bulk {
-                    Some(Carrier::Native)
+                    Carrier::Native
+                } else if matches!(metadata, JniOutputWireContainer::KListClassRows) {
+                    Carrier::TypedObjects
                 } else {
-                    match *sequence {
-                        JniRowEncoding::ObjectArray => Some(Carrier::Objects),
-                        JniRowEncoding::RowClass => Some(Carrier::TypedObjects),
-                    }
+                    Carrier::Objects
                 };
-                if let Some(carrier) = carrier {
-                    let row = Row::new(child, carrier, types)?;
-                    if !row.fields.is_empty() {
-                        self.intern(&row)?;
-                    }
+                let row = Row::new(child, carrier, types)?;
+                if !row.fields.is_empty() {
+                    self.intern(&row)?;
                 }
 
                 self.visit(child, bulk, types)?;

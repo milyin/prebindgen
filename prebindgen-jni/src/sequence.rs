@@ -4,18 +4,6 @@ use crate::group::ContainerMetadata;
 use crate::kotlin::{input_kotlin, KotlinBinding, KotlinContext, KotlinInput, KotlinOutput};
 use prebindgen_declarations::{Condition, SequenceInput, SequenceOutput};
 
-/// Ordinary JVM row objects used to reconstruct a Kotlin list.
-/// An enclosing BulkFrame selects native rows independently of this preference.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum JniRowEncoding {
-    /// Each row is an object array containing its converted field values.
-    ObjectArray,
-    /// Prefer generated immutable JVM row objects outside BulkFrame scopes.
-    /// Custom writers must use the registered OutputRowType for those objects.
-    /// Bulk scopes use native rows regardless of this ordinary-JVM preference.
-    RowClass,
-}
-
 pub(crate) fn input(
     wire: syn::Ident,
     length: syn::Ident,
@@ -151,11 +139,11 @@ pub(crate) fn output(
         }],
         commit_each: true,
         fallible: true,
-        metadata: JniOutputWireContainer::KList(if typed {
-            JniRowEncoding::RowClass
+        metadata: if typed {
+            JniOutputWireContainer::KListClassRows
         } else {
-            JniRowEncoding::ObjectArray
-        }),
+            JniOutputWireContainer::KListArrayRows
+        },
         begin: quote!(#prepare let #wire=::prebindgen_jni_runtime::array(&mut #env,#length)?; #own),
         enter,
         store: quote! {
@@ -503,10 +491,12 @@ mod delivery_tests {
     ) -> JniOutputWireNode {
         let kind = match delivery {
             JniOutputWireContainer::KCallbackRows => JniWire::selector(),
-            JniOutputWireContainer::KList(_) => JniWire::KRowArray {
-                condition: "true".into(),
-                null_niche_available: true,
-            },
+            JniOutputWireContainer::KListArrayRows | JniOutputWireContainer::KListClassRows => {
+                JniWire::KRowArray {
+                    condition: "true".into(),
+                    null_niche_available: true,
+                }
+            }
             _ => panic!("expected collection metadata"),
         };
         WireNode::Container {
@@ -525,15 +515,11 @@ mod delivery_tests {
         assert!(validate_buffered(&visitor)
             .unwrap_err()
             .contains("successful return"));
-        let packed = sequence(
-            JniOutputWireContainer::KList(JniRowEncoding::ObjectArray),
-            "rows",
-            leaf(),
-        );
+        let packed = sequence(JniOutputWireContainer::KListArrayRows, "rows", leaf());
         assert!(!callback_delivery(&packed).unwrap());
         validate_buffered(&packed).unwrap();
         let nested = sequence(
-            JniOutputWireContainer::KList(JniRowEncoding::ObjectArray),
+            JniOutputWireContainer::KListArrayRows,
             "rows",
             visitor.clone(),
         );

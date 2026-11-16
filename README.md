@@ -676,10 +676,10 @@ and variant-name overrides are resolved from the current declarations.
 
 `BulkFrame` on either directional JNI container establishes packed encoding for its
 entire child tree during Rust preparation and Kotlin interpretation. Input
-`KList` reads buffered elements. Output `KList(JniRowEncoding)` materializes a
-Kotlin list; `KCallbackRows` delivers elements through the generated Kotlin row
-callback. `JniRowEncoding::ObjectArray` and `RowClass` choose ordinary JVM row
-objects. Under `BulkFrame`, lists instead use offset/count ranges and contiguous
+`KList` reads buffered elements. Output `KListArrayRows` materializes a Kotlin
+list from object-array rows of boxed fields; `KListClassRows` uses generated
+immutable row classes with typed fields. `KCallbackRows` delivers elements through
+the generated Kotlin row callback. Under `BulkFrame`, lists instead use offset/count ranges and contiguous
 native rows; nested collections share the enclosing frame. Callback delivery can
 wrap a bulk element, but a bulk frame cannot enclose callback-delivered rows.
 
@@ -725,7 +725,9 @@ remains universal.
 | `KSealed(...)` | Branch | Read or reconstruct one Kotlin sealed value. |
 | `KEnumParams { r_type }` | Branch | Convert an enum through separate Kotlin tag/payload params. |
 | `ROption(...)` | Chain | Convert zero or one Rust value with a presence flag or payload niche. |
-| Input `KList` / output `KList(JniRowEncoding)` | Container | Decode or materialize buffered Kotlin list elements. |
+| Input `KList` | Container | Decode buffered Kotlin list elements. |
+| Output `KListArrayRows` | Container | Materialize a Kotlin list from object-array rows of boxed fields. |
+| Output `KListClassRows` | Container | Materialize a Kotlin list from generated JVM row classes with typed fields. |
 | Output `KCallbackRows` | Container | Deliver elements through the generated row callback; user build/fold code runs after JNI returns. |
 | `BulkFrame` | Container | Pack or unpack the child subtree in one native C-representation frame. |
 
@@ -744,9 +746,9 @@ Private algorithms borrow canonical type references and inspect the concrete
 metadata without copying trees into a common representation.
 
 `JniPresence` describes the shared flag/niche encoding of `ROption`. Its bindings
-are used in both directions. `JniRowEncoding` describes JVM list rows only:
-`ObjectArray` stores boxed fields, and `RowClass` uses generated immutable row
-objects. `BulkFrame` selects native rows independently of that preference.
+are used in both directions. List representations are direct container variants;
+there is no separate row-encoding enum. Inside `BulkFrame`, both output list
+variants use native packed rows without generating JVM row classes.
 
 Each adapter has operations for actual ABI tasks: building a function's
 parameters, laying out a successful result packet, defining one sequence row,
@@ -2310,8 +2312,9 @@ Sequence operations return `SequenceInput<W, Container>` or
 The shared compiler installs those as a Container around the element description.
 
 - C `Sequence(CSequence)` selects buffered or callback delivery. JNI inputs use
-  `KList`; outputs use `KList(JniRowEncoding)` or `KCallbackRows`. The container's
-  wires declare the buffer, count or presence marker visible at this boundary.
+  `KList`; outputs use `KListArrayRows`, `KListClassRows` or `KCallbackRows`.
+  The container's wires declare the buffer, count or presence marker visible at
+  this boundary.
 - `COptional` / `JniPresence` describe a flag or niche. A flag references one
   chain control; a niche reserves an absent representation in an exposed payload
   wire. A niche hidden inside a container cannot represent an outer option.

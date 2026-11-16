@@ -35,7 +35,7 @@ fn visit<'a>(node: &'a JniOutputWireNode, rows: &mut Vec<&'a JniOutputWireNode>,
             ..
         } => visit(child, rows, true),
         WireNode::Container {
-            meta: JniOutputWireContainer::KList(JniRowEncoding::RowClass),
+            meta: JniOutputWireContainer::KListClassRows,
             child,
             ..
         } if !bulk => {

@@ -70,10 +70,15 @@ pub enum JniOutputWireChain {
 /// Output is relative to Rust; retained callbacks reverse the direction.
 #[derive(Clone, Debug)]
 pub enum JniOutputWireContainer {
-    /// Reconstruct one Kotlin list from the child's repeated element conversion.
-    /// The wires declare the array carrier; the child describes one row. The
-    /// encoding selects JVM row objects; BulkFrame instead uses a native row range.
-    KList(JniRowEncoding),
+    /// Reconstruct a Kotlin list from rows stored as JVM object arrays of boxed
+    /// fields. The wires declare the outer array; the child describes one row.
+    /// Inside BulkFrame, use a native row range and packed rows instead.
+    KListArrayRows,
+    /// Reconstruct a Kotlin list from generated immutable JVM row-class objects
+    /// with typed fields. Custom writers use the registered OutputRowType.
+    /// The wires declare the outer array; the child describes one row.
+    /// Inside BulkFrame, use a native row range without generating a JVM row class.
+    KListClassRows,
     /// Deliver the child's repeated elements through the generated Kotlin row
     /// callback. Wires carry the presence marker; each row has its own scope.
     /// User build/fold code runs after JNI returns, outside native handle locks.
@@ -205,16 +210,17 @@ impl ChainMetadata for JniOutputWireChain {
     }
 }
 pub(crate) trait ContainerMetadata {
-    fn list_encoding(&self) -> Option<JniRowEncoding>;
+    fn uses_class_rows(&self) -> bool;
     fn is_callback_rows(&self) -> bool;
-    fn is_sequence(&self) -> bool {
-        self.list_encoding().is_some() || self.is_callback_rows()
-    }
+    fn is_sequence(&self) -> bool;
     fn is_bulk(&self) -> bool;
 }
 impl ContainerMetadata for JniInputWireContainer {
-    fn list_encoding(&self) -> Option<JniRowEncoding> {
-        matches!(self, Self::KList).then_some(JniRowEncoding::ObjectArray)
+    fn uses_class_rows(&self) -> bool {
+        false
+    }
+    fn is_sequence(&self) -> bool {
+        matches!(self, Self::KList)
     }
     fn is_callback_rows(&self) -> bool {
         false
@@ -224,12 +230,14 @@ impl ContainerMetadata for JniInputWireContainer {
     }
 }
 impl ContainerMetadata for JniOutputWireContainer {
-    fn list_encoding(&self) -> Option<JniRowEncoding> {
-        if let Self::KList(value) = self {
-            Some(*value)
-        } else {
-            None
-        }
+    fn uses_class_rows(&self) -> bool {
+        matches!(self, Self::KListClassRows)
+    }
+    fn is_sequence(&self) -> bool {
+        matches!(
+            self,
+            Self::KListArrayRows | Self::KListClassRows | Self::KCallbackRows
+        )
     }
     fn is_callback_rows(&self) -> bool {
         matches!(self, Self::KCallbackRows)
@@ -521,7 +529,7 @@ fn validate_scope<
                         );
                     }
                     if matches!(carrier.kind, JniWire::KRowArray { .. })
-                        && encoding.list_encoding() == Some(JniRowEncoding::RowClass)
+                        && encoding.uses_class_rows()
                         && !typed_rows::supported(element)
                     {
                         return Err(
@@ -1059,7 +1067,7 @@ mod tests {
         let WireNode::Container { meta, .. } = &mut node else {
             panic!()
         };
-        *meta = JniOutputWireContainer::KList(JniRowEncoding::ObjectArray);
+        *meta = JniOutputWireContainer::KListArrayRows;
         assert!(validate_layout(&node)
             .unwrap_err()
             .contains("incompatible with its delivery"));
@@ -1487,11 +1495,10 @@ pub(crate) fn error_wire_shape<
                             "sequence:{}",
                             if meta.is_callback_rows() {
                                 "Callback"
+                            } else if meta.uses_class_rows() {
+                                "TypedBuffered"
                             } else {
-                                match meta.list_encoding().expect("list encoding") {
-                                    JniRowEncoding::ObjectArray => "Buffered",
-                                    JniRowEncoding::RowClass => "TypedBuffered",
-                                }
+                                "Buffered"
                             }
                         )
                     }

@@ -48,8 +48,11 @@ fn prefer_jvm_rows(node: &mut JniOutputWireNode) {
             prefer_jvm_rows(child)
         }
         WireNode::Container { meta, child, .. } => {
-            if let JniOutputWireContainer::KList(delivery) = meta {
-                *delivery = JniRowEncoding::RowClass;
+            if matches!(
+                meta,
+                JniOutputWireContainer::KListArrayRows | JniOutputWireContainer::KListClassRows
+            ) {
+                *meta = JniOutputWireContainer::KListClassRows;
             }
             prefer_jvm_rows(child);
         }

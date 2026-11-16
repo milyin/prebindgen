@@ -987,7 +987,9 @@ pub(crate) fn output_kotlin_scoped(
         } => crate::bulk::output_kotlin(child, context, owners),
         prebindgen_conversions::WireNode::Container {
             child: element,
-            meta: JniOutputWireContainer::KList(metadata),
+            meta:
+                metadata @ (JniOutputWireContainer::KListArrayRows
+                | JniOutputWireContainer::KListClassRows),
             ..
         } => {
             let name = format!("{}owners", context.output_prefix);
@@ -996,14 +998,12 @@ pub(crate) fn output_kotlin_scoped(
             let mut output = if context.bulk {
                 crate::bulk::output_list(element, context, scope)?
             } else {
-                match *metadata {
-                    JniRowEncoding::ObjectArray => {
-                        crate::sequence::output_list(element, context, scope, false)?
-                    }
-                    JniRowEncoding::RowClass => {
-                        crate::sequence::output_list(element, context, scope, true)?
-                    }
-                }
+                crate::sequence::output_list(
+                    element,
+                    context,
+                    scope,
+                    matches!(metadata, JniOutputWireContainer::KListClassRows),
+                )?
             };
             if root {
                 output.output_locals = format!(

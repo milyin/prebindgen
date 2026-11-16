@@ -352,7 +352,7 @@ pub(crate) fn sequence_output(
                 condition: "true".into(),
             },
         }],
-        metadata: JniOutputWireContainer::KList(JniRowEncoding::ObjectArray),
+        metadata: JniOutputWireContainer::KListArrayRows,
         commit_each: true,
         fallible: true,
         begin: quote!(let #wire=#writer.rows(#length,::core::mem::size_of::<#row>(),::core::mem::align_of::<#row>())?; #owners),

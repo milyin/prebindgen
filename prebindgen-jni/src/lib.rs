@@ -47,7 +47,6 @@ pub use group::{
 use prebindgen_conversions::boxed::BoxedWire;
 use prebindgen_conversions::value::Value;
 use prebindgen_flat::Primitive;
-pub use sequence::JniRowEncoding;
 mod wire;
 use prebindgen_conversions::Access;
 use prebindgen_declarations::{
