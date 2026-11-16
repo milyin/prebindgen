@@ -197,7 +197,7 @@
 <a href=#197 id=197 data-nosnippet>197</a>            )<span class="question-mark">?
 <a href=#198 id=198 data-nosnippet>198</a>        </span>}
 <a href=#199 id=199 data-nosnippet>199</a>        WireNode::Chain {
-<a href=#200 id=200 data-nosnippet>200</a>            meta: JniInputWireChain::ROption(optional),
+<a href=#200 id=200 data-nosnippet>200</a>            meta: JniInputWireChain::ROption { presence: optional },
 <a href=#201 id=201 data-nosnippet>201</a>            child,
 <a href=#202 id=202 data-nosnippet>202</a>            ..
 <a href=#203 id=203 data-nosnippet>203</a>        } =&gt; {
@@ -212,7 +212,7 @@
 <a href=#212 id=212 data-nosnippet>212</a>        WireNode::Branch {
 <a href=#213 id=213 data-nosnippet>213</a>            meta:
 <a href=#214 id=214 data-nosnippet>214</a>                JniInputWireBranch::RChoices
-<a href=#215 id=215 data-nosnippet>215</a>                | JniInputWireBranch::KSealed(<span class="kw">_</span>)
+<a href=#215 id=215 data-nosnippet>215</a>                | JniInputWireBranch::KSealed { .. }
 <a href=#216 id=216 data-nosnippet>216</a>                | JniInputWireBranch::KEnumParams { .. },
 <a href=#217 id=217 data-nosnippet>217</a>            controls,
 <a href=#218 id=218 data-nosnippet>218</a>            children,
@@ -227,7 +227,7 @@
 <a href=#227 id=227 data-nosnippet>227</a>            field(context, row, fields, selector, code)<span class="question-mark">?
 <a href=#228 id=228 data-nosnippet>228</a>        </span>}
 <a href=#229 id=229 data-nosnippet>229</a>        WireNode::Annotation {
-<a href=#230 id=230 data-nosnippet>230</a>            meta: JniInputWireAnnotation::RField(<span class="kw">_</span>) | JniInputWireAnnotation::RParam(<span class="kw">_</span>),
+<a href=#230 id=230 data-nosnippet>230</a>            meta: JniInputWireAnnotation::RField { .. } | JniInputWireAnnotation::RParam { .. },
 <a href=#231 id=231 data-nosnippet>231</a>            child,
 <a href=#232 id=232 data-nosnippet>232</a>            ..
 <a href=#233 id=233 data-nosnippet>233</a>        } =&gt; receive(child, context, row, fields, types)<span class="question-mark">?</span>,

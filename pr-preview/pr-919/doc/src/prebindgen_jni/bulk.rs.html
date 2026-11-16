@@ -1432,12 +1432,12 @@
 <a href=#1432 id=1432 data-nosnippet>1432</a>                ..
 <a href=#1433 id=1433 data-nosnippet>1433</a>            } =&gt; <span class="macro">quote!</span>(),
 <a href=#1434 id=1434 data-nosnippet>1434</a>            WireNode::Annotation {
-<a href=#1435 id=1435 data-nosnippet>1435</a>                meta: JniInputWireAnnotation::RField(<span class="kw">_</span>) | JniInputWireAnnotation::RParam(<span class="kw">_</span>),
+<a href=#1435 id=1435 data-nosnippet>1435</a>                meta: JniInputWireAnnotation::RField { .. } | JniInputWireAnnotation::RParam { .. },
 <a href=#1436 id=1436 data-nosnippet>1436</a>                child,
 <a href=#1437 id=1437 data-nosnippet>1437</a>                ..
 <a href=#1438 id=1438 data-nosnippet>1438</a>            } =&gt; cache(child, env)<span class="question-mark">?</span>,
 <a href=#1439 id=1439 data-nosnippet>1439</a>            WireNode::Chain {
-<a href=#1440 id=1440 data-nosnippet>1440</a>                meta: JniInputWireChain::ROption(optional),
+<a href=#1440 id=1440 data-nosnippet>1440</a>                meta: JniInputWireChain::ROption { presence: optional },
 <a href=#1441 id=1441 data-nosnippet>1441</a>                child,
 <a href=#1442 id=1442 data-nosnippet>1442</a>                ..
 <a href=#1443 id=1443 data-nosnippet>1443</a>            } =&gt; {
@@ -1455,7 +1455,7 @@
 <a href=#1455 id=1455 data-nosnippet>1455</a>            WireNode::Branch {
 <a href=#1456 id=1456 data-nosnippet>1456</a>                meta:
 <a href=#1457 id=1457 data-nosnippet>1457</a>                    JniInputWireBranch::RChoices
-<a href=#1458 id=1458 data-nosnippet>1458</a>                    | JniInputWireBranch::KSealed(<span class="kw">_</span>)
+<a href=#1458 id=1458 data-nosnippet>1458</a>                    | JniInputWireBranch::KSealed { .. }
 <a href=#1459 id=1459 data-nosnippet>1459</a>                    | JniInputWireBranch::KEnumParams { .. },
 <a href=#1460 id=1460 data-nosnippet>1460</a>                controls,
 <a href=#1461 id=1461 data-nosnippet>1461</a>                children,
@@ -1617,7 +1617,7 @@
 <a href=#1617 id=1617 data-nosnippet>1617</a>            code
 <a href=#1618 id=1618 data-nosnippet>1618</a>        }
 <a href=#1619 id=1619 data-nosnippet>1619</a>        WireNode::Chain {
-<a href=#1620 id=1620 data-nosnippet>1620</a>            meta: JniInputWireChain::ROption(optional),
+<a href=#1620 id=1620 data-nosnippet>1620</a>            meta: JniInputWireChain::ROption { presence: optional },
 <a href=#1621 id=1621 data-nosnippet>1621</a>            child,
 <a href=#1622 id=1622 data-nosnippet>1622</a>            ..
 <a href=#1623 id=1623 data-nosnippet>1623</a>        } =&gt; {
@@ -1671,7 +1671,7 @@
 <a href=#1671 id=1671 data-nosnippet>1671</a>        WireNode::Branch {
 <a href=#1672 id=1672 data-nosnippet>1672</a>            meta:
 <a href=#1673 id=1673 data-nosnippet>1673</a>                JniInputWireBranch::RChoices
-<a href=#1674 id=1674 data-nosnippet>1674</a>                | JniInputWireBranch::KSealed(<span class="kw">_</span>)
+<a href=#1674 id=1674 data-nosnippet>1674</a>                | JniInputWireBranch::KSealed { .. }
 <a href=#1675 id=1675 data-nosnippet>1675</a>                | JniInputWireBranch::KEnumParams { .. },
 <a href=#1676 id=1676 data-nosnippet>1676</a>            controls,
 <a href=#1677 id=1677 data-nosnippet>1677</a>            children,
@@ -1848,30 +1848,32 @@
 <a href=#1848 id=1848 data-nosnippet>1848</a>        <span class="kw">let </span>donor: syn::Ident = <span class="macro">syn::parse_quote!</span>(number);
 <a href=#1849 id=1849 data-nosnippet>1849</a>        <span class="kw">let </span>node: JniInputWireNode = WireNode::Chain {
 <a href=#1850 id=1850 data-nosnippet>1850</a>            controls: <span class="macro">vec!</span>[],
-<a href=#1851 id=1851 data-nosnippet>1851</a>            meta: JniInputWireChain::ROption(JniPresence::Niche {
-<a href=#1852 id=1852 data-nosnippet>1852</a>                presence: <span class="macro">syn::parse_quote!</span>(present),
-<a href=#1853 id=1853 data-nosnippet>1853</a>                reservation: prebindgen_declarations::NicheReservation {
-<a href=#1854 id=1854 data-nosnippet>1854</a>                    discriminator: donor.clone(),
-<a href=#1855 id=1855 data-nosnippet>1855</a>                    niche: JniNiche::Integer(i64::MIN),
-<a href=#1856 id=1856 data-nosnippet>1856</a>                },
-<a href=#1857 id=1857 data-nosnippet>1857</a>            }),
-<a href=#1858 id=1858 data-nosnippet>1858</a>            child: Box::new(WireNode::Leaf(<span class="macro">vec!</span>[
-<a href=#1859 id=1859 data-nosnippet>1859</a>                Wire {
-<a href=#1860 id=1860 data-nosnippet>1860</a>                    name: donor,
-<a href=#1861 id=1861 data-nosnippet>1861</a>                    kind: JniWire::scalar(Primitive::U32),
-<a href=#1862 id=1862 data-nosnippet>1862</a>                },
-<a href=#1863 id=1863 data-nosnippet>1863</a>                Wire {
-<a href=#1864 id=1864 data-nosnippet>1864</a>                    name: <span class="macro">syn::parse_quote!</span>(resource),
-<a href=#1865 id=1865 data-nosnippet>1865</a>                    kind: JniWire::handle(handle.clone(), <span class="string">"true"</span>),
-<a href=#1866 id=1866 data-nosnippet>1866</a>                },
-<a href=#1867 id=1867 data-nosnippet>1867</a>            ])),
-<a href=#1868 id=1868 data-nosnippet>1868</a>        };
-<a href=#1869 id=1869 data-nosnippet>1869</a>        <span class="comment">// u32 uses a JVM long so excluded values can encode absence. Truncating
-<a href=#1870 id=1870 data-nosnippet>1870</a>        // MIN to 32 bits changes it to zero and wrongly patches an absent owner.
-<a href=#1871 id=1871 data-nosnippet>1871</a>        </span><span class="kw">let </span>code = patch_handles(<span class="kw-2">&amp;</span>node, <span class="string">"test"</span>, <span class="string">"0"</span>, <span class="kw-2">&amp;mut </span><span class="number">0</span>, <span class="kw-2">&amp;</span>[handle], <span class="kw-2">&amp;</span>BTreeMap::new()).unwrap();
-<a href=#1872 id=1872 data-nosnippet>1872</a>        <span class="macro">assert!</span>(code.contains(<span class="string">"long((0)"</span>), <span class="string">"{code}"</span>);
-<a href=#1873 id=1873 data-nosnippet>1873</a>        <span class="macro">assert!</span>(code.contains(<span class="string">"!= kotlin.Long.MIN_VALUE"</span>), <span class="string">"{code}"</span>);
-<a href=#1874 id=1874 data-nosnippet>1874</a>        <span class="macro">assert!</span>(!code.contains(<span class="string">"int((0)"</span>), <span class="string">"{code}"</span>);
-<a href=#1875 id=1875 data-nosnippet>1875</a>    }
-<a href=#1876 id=1876 data-nosnippet>1876</a>}
+<a href=#1851 id=1851 data-nosnippet>1851</a>            meta: JniInputWireChain::ROption {
+<a href=#1852 id=1852 data-nosnippet>1852</a>                presence: JniPresence::Niche {
+<a href=#1853 id=1853 data-nosnippet>1853</a>                    presence: <span class="macro">syn::parse_quote!</span>(present),
+<a href=#1854 id=1854 data-nosnippet>1854</a>                    reservation: prebindgen_declarations::NicheReservation {
+<a href=#1855 id=1855 data-nosnippet>1855</a>                        discriminator: donor.clone(),
+<a href=#1856 id=1856 data-nosnippet>1856</a>                        niche: JniNiche::Integer(i64::MIN),
+<a href=#1857 id=1857 data-nosnippet>1857</a>                    },
+<a href=#1858 id=1858 data-nosnippet>1858</a>                },
+<a href=#1859 id=1859 data-nosnippet>1859</a>            },
+<a href=#1860 id=1860 data-nosnippet>1860</a>            child: Box::new(WireNode::Leaf(<span class="macro">vec!</span>[
+<a href=#1861 id=1861 data-nosnippet>1861</a>                Wire {
+<a href=#1862 id=1862 data-nosnippet>1862</a>                    name: donor,
+<a href=#1863 id=1863 data-nosnippet>1863</a>                    kind: JniWire::scalar(Primitive::U32),
+<a href=#1864 id=1864 data-nosnippet>1864</a>                },
+<a href=#1865 id=1865 data-nosnippet>1865</a>                Wire {
+<a href=#1866 id=1866 data-nosnippet>1866</a>                    name: <span class="macro">syn::parse_quote!</span>(resource),
+<a href=#1867 id=1867 data-nosnippet>1867</a>                    kind: JniWire::handle(handle.clone(), <span class="string">"true"</span>),
+<a href=#1868 id=1868 data-nosnippet>1868</a>                },
+<a href=#1869 id=1869 data-nosnippet>1869</a>            ])),
+<a href=#1870 id=1870 data-nosnippet>1870</a>        };
+<a href=#1871 id=1871 data-nosnippet>1871</a>        <span class="comment">// u32 uses a JVM long so excluded values can encode absence. Truncating
+<a href=#1872 id=1872 data-nosnippet>1872</a>        // MIN to 32 bits changes it to zero and wrongly patches an absent owner.
+<a href=#1873 id=1873 data-nosnippet>1873</a>        </span><span class="kw">let </span>code = patch_handles(<span class="kw-2">&amp;</span>node, <span class="string">"test"</span>, <span class="string">"0"</span>, <span class="kw-2">&amp;mut </span><span class="number">0</span>, <span class="kw-2">&amp;</span>[handle], <span class="kw-2">&amp;</span>BTreeMap::new()).unwrap();
+<a href=#1874 id=1874 data-nosnippet>1874</a>        <span class="macro">assert!</span>(code.contains(<span class="string">"long((0)"</span>), <span class="string">"{code}"</span>);
+<a href=#1875 id=1875 data-nosnippet>1875</a>        <span class="macro">assert!</span>(code.contains(<span class="string">"!= kotlin.Long.MIN_VALUE"</span>), <span class="string">"{code}"</span>);
+<a href=#1876 id=1876 data-nosnippet>1876</a>        <span class="macro">assert!</span>(!code.contains(<span class="string">"int((0)"</span>), <span class="string">"{code}"</span>);
+<a href=#1877 id=1877 data-nosnippet>1877</a>    }
+<a href=#1878 id=1878 data-nosnippet>1878</a>}
 </code></pre></div></section></main></body></html>
