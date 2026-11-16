@@ -1162,20 +1162,21 @@
 <a href=#1162 id=1162 data-nosnippet>1162</a>        <span class="kw">let </span>context = KotlinContext {
 <a href=#1163 id=1163 data-nosnippet>1163</a>            package: <span class="string">"example"</span>,
 <a href=#1164 id=1164 data-nosnippet>1164</a>            source_types: <span class="kw-2">&amp;</span>types,
-<a href=#1165 id=1165 data-nosnippet>1165</a>            result: <span class="string">"result"</span>,
-<a href=#1166 id=1166 data-nosnippet>1166</a>            failure: <span class="string">"failure"</span>,
-<a href=#1167 id=1167 data-nosnippet>1167</a>            cleanup_failure: <span class="prelude-val">None</span>,
-<a href=#1168 id=1168 data-nosnippet>1168</a>            output_prefix: <span class="string">"output"</span>,
-<a href=#1169 id=1169 data-nosnippet>1169</a>        };
-<a href=#1170 id=1170 data-nosnippet>1170</a>        <span class="kw">let </span>input = kotlin::input_kotlin(<span class="kw-2">&amp;</span>field, <span class="kw-2">&amp;</span>context).unwrap();
-<a href=#1171 id=1171 data-nosnippet>1171</a>        <span class="macro">assert_eq!</span>(input.parameters, [<span class="string">"point: example.Point"</span>]);
-<a href=#1172 id=1172 data-nosnippet>1172</a>        <span class="macro">assert!</span>(input.arguments[<span class="number">0</span>].contains(<span class="string">"point.type"</span>));
-<a href=#1173 id=1173 data-nosnippet>1173</a>        <span class="kw">let </span>output = kotlin::output_kotlin(<span class="kw-2">&amp;</span>field, <span class="kw-2">&amp;</span>context).unwrap();
-<a href=#1174 id=1174 data-nosnippet>1174</a>        <span class="macro">assert_eq!</span>(output.result_types, [<span class="string">"example.Point"</span>]);
-<a href=#1175 id=1175 data-nosnippet>1175</a>        <span class="macro">assert!</span>(output.delivered[<span class="number">0</span>].contains(<span class="string">"example.Point(result[0]"</span>));
-<a href=#1176 id=1176 data-nosnippet>1176</a>        <span class="comment">// An empty record still denotes one Kotlin object with no ABI wires.
-<a href=#1177 id=1177 data-nosnippet>1177</a>        </span><span class="kw">let </span>output = kotlin::output_kotlin(<span class="kw-2">&amp;</span>empty, <span class="kw-2">&amp;</span>context).unwrap();
-<a href=#1178 id=1178 data-nosnippet>1178</a>        <span class="macro">assert_eq!</span>(output.delivered, [<span class="string">"example.Empty()"</span>]);
-<a href=#1179 id=1179 data-nosnippet>1179</a>    }
-<a href=#1180 id=1180 data-nosnippet>1180</a>}
+<a href=#1165 id=1165 data-nosnippet>1165</a>            bulk: <span class="bool-val">false</span>,
+<a href=#1166 id=1166 data-nosnippet>1166</a>            result: <span class="string">"result"</span>,
+<a href=#1167 id=1167 data-nosnippet>1167</a>            failure: <span class="string">"failure"</span>,
+<a href=#1168 id=1168 data-nosnippet>1168</a>            cleanup_failure: <span class="prelude-val">None</span>,
+<a href=#1169 id=1169 data-nosnippet>1169</a>            output_prefix: <span class="string">"output"</span>,
+<a href=#1170 id=1170 data-nosnippet>1170</a>        };
+<a href=#1171 id=1171 data-nosnippet>1171</a>        <span class="kw">let </span>input = kotlin::input_kotlin(<span class="kw-2">&amp;</span>field, <span class="kw-2">&amp;</span>context).unwrap();
+<a href=#1172 id=1172 data-nosnippet>1172</a>        <span class="macro">assert_eq!</span>(input.parameters, [<span class="string">"point: example.Point"</span>]);
+<a href=#1173 id=1173 data-nosnippet>1173</a>        <span class="macro">assert!</span>(input.arguments[<span class="number">0</span>].contains(<span class="string">"point.type"</span>));
+<a href=#1174 id=1174 data-nosnippet>1174</a>        <span class="kw">let </span>output = kotlin::output_kotlin(<span class="kw-2">&amp;</span>field, <span class="kw-2">&amp;</span>context).unwrap();
+<a href=#1175 id=1175 data-nosnippet>1175</a>        <span class="macro">assert_eq!</span>(output.result_types, [<span class="string">"example.Point"</span>]);
+<a href=#1176 id=1176 data-nosnippet>1176</a>        <span class="macro">assert!</span>(output.delivered[<span class="number">0</span>].contains(<span class="string">"example.Point(result[0]"</span>));
+<a href=#1177 id=1177 data-nosnippet>1177</a>        <span class="comment">// An empty record still denotes one Kotlin object with no ABI wires.
+<a href=#1178 id=1178 data-nosnippet>1178</a>        </span><span class="kw">let </span>output = kotlin::output_kotlin(<span class="kw-2">&amp;</span>empty, <span class="kw-2">&amp;</span>context).unwrap();
+<a href=#1179 id=1179 data-nosnippet>1179</a>        <span class="macro">assert_eq!</span>(output.delivered, [<span class="string">"example.Empty()"</span>]);
+<a href=#1180 id=1180 data-nosnippet>1180</a>    }
+<a href=#1181 id=1181 data-nosnippet>1181</a>}
 </code></pre></div></section></main></body></html>
