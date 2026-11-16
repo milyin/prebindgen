@@ -57,7 +57,7 @@ fn carrier_child<'a>(node: &'a JniNode, name: &syn::Ident) -> Option<CarrierChil
             sequence: Some(sequence),
         }),
         WireNode::Chain {
-            meta: JniChain::Bulk(_),
+            meta: JniChain::Bulk,
             controls,
             child,
         } if controls.iter().any(|w| &w.name == name) => Some(CarrierChild {
@@ -381,7 +381,7 @@ impl Helpers {
     fn visit(&mut self, node: &JniNode, input: bool, bulk: bool, types: &JniTypes) -> Result<()> {
         match node {
             WireNode::Chain {
-                meta: JniChain::Bulk(_),
+                meta: JniChain::Bulk,
                 child,
                 ..
             } => self.visit(child, input, true, types)?,

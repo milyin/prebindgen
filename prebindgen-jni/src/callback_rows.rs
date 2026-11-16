@@ -31,7 +31,7 @@ pub(crate) fn cleanup(
                 ..
             } => rows(child).map(|_| true),
             WireNode::Chain {
-                meta: JniChain::Bulk(_),
+                meta: JniChain::Bulk,
                 ..
             } => Some(false),
             WireNode::Chain {
@@ -177,7 +177,7 @@ fn receive(
             field(context, row, fields, carrier, scan)?
         }
         WireNode::Chain {
-            meta: JniChain::Bulk(_),
+            meta: JniChain::Bulk,
             controls,
             child,
         } => {
@@ -214,14 +214,7 @@ fn receive(
                 return Ok(scan);
             }
             let name = optional.discriminator();
-            let present = if let Some(niche) = optional.niche() {
-                let wire = group::argument_parameters(child)
-                    .find(|w| w.name == *name)
-                    .ok_or("missing callback cleanup discriminator")?;
-                niche.present(&wire.kind, quote!(#name))
-            } else {
-                quote!(#name == 1)
-            };
+            let present = optional.is_present(child)?;
             field(context, row, fields, name, quote!(if #present { #scan }))?
         }
         WireNode::Branch {

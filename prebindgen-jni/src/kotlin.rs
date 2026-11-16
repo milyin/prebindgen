@@ -700,7 +700,7 @@ pub(crate) fn has_optional(node: &JniNode) -> bool {
     match node {
         JniNode::Leaf(_)
         | JniNode::Chain {
-            meta: JniChain::Sequence(_) | JniChain::Bulk(_),
+            meta: JniChain::Sequence(_) | JniChain::Bulk,
             ..
         } => false,
         JniNode::Chain {
@@ -766,7 +766,7 @@ pub(crate) fn input_kotlin_when(
         } => crate::sealed::input(children, controls, group, context, active),
         JniNode::Leaf(wires) => input_leaves(&wires.iter().collect::<Vec<_>>(), context, active),
         JniNode::Chain {
-            meta: JniChain::Bulk(_),
+            meta: JniChain::Bulk,
             controls,
             child,
         } => crate::bulk::input_kotlin(controls, child, context, active),
@@ -928,7 +928,7 @@ pub(crate) fn output_kotlin_scoped(
         } => crate::sealed::output(children, controls, group, context, owners),
         JniNode::Leaf(wires) => output_leaves(&wires.iter().collect::<Vec<_>>(), context, owners),
         JniNode::Chain {
-            meta: JniChain::Bulk(_),
+            meta: JniChain::Bulk,
             child,
             ..
         } => crate::bulk::output_kotlin(child, context, owners),

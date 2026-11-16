@@ -46,6 +46,30 @@ private fun nestedCleanupFrame(owners: List<BulkHandle>, mode: Int): ByteArray {
 }
 
 fun checkBulkCallbackCleanup() {
+    // Both selected frames transfer ownership before Rust constructs the first.
+    // A failure there must reclaim the later frame even though it was never decoded.
+    for (choice in 0..3) {
+        for (failFirst in listOf(false, true)) {
+            val first = bulkHandleNew(if (failFirst) -1 else 40)
+            val second = if (choice >= 2) bulkHandleNew(2) else null
+            val selected = when (choice) {
+                0 -> null
+                1 -> BulkCleanupChoice.Empty
+                2 -> BulkCleanupChoice.One(requireNotNull(second))
+                else -> BulkCleanupChoice.Two(requireNotNull(second))
+            }
+            val before = bulkDrops()
+            var failed = false
+            val result = bulkCleanupBranchesCallback(
+                BulkCleanupBranchesCallback { BulkCleanupBranches(first, selected) },
+                JniErrorHandler { failed = true; 0L },
+            )
+            check(failed == failFirst)
+            check(result == if (failFirst) 0L else if (second != null) 42L else 40L)
+            check(first.isClosed && (second == null || second.isClosed))
+            check(bulkDrops() == before + if (second != null) 2uL else 1uL)
+        }
+    }
     for (worker in listOf(false, true)) {
         val owners = List(3) { bulkHandleNew(100L + it) }
         val before = bulkDrops()

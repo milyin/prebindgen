@@ -14,8 +14,6 @@ pub use transport::JniArgument;
 pub enum JniWire {
     /// One complete bulk frame in a byte array. Input length is a separate control.
     BulkBuffer {
-        /// Kotlin expression selecting this frame.
-        condition: String,
         /// Whether null is available for an enclosing option.
         null_niche_available: bool,
     },

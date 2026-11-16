@@ -3578,7 +3578,7 @@ fn resolved_callback_elements_can_keep_optional_presence_outside_a_bulk_frame() 
     // The optional uses a null frame, so presence stays outside its payload
     // without adding a separate discriminator argument.
     assert!(
-        matches!(element, prebindgen_conversions::WireNode::Chain {meta:JniChain::Optional(_),child,..} if matches!(child.as_ref(),prebindgen_conversions::WireNode::Chain {meta:JniChain::Bulk(_),..}))
+        matches!(element, prebindgen_conversions::WireNode::Chain {meta:JniChain::Optional(_),child,..} if matches!(child.as_ref(),prebindgen_conversions::WireNode::Chain {meta:JniChain::Bulk,..}))
     );
     assert_eq!(fields.len(), 1);
     assert_eq!(

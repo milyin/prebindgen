@@ -682,8 +682,10 @@ Custom Kotlin conversion contexts start with `KotlinContext::bulk = false` at a
 call/callback boundary; the enclosing Bulk interpreter sets it for descendants.
 Custom native sequence compilers describe ranges with
 `JniWire::NativeRows { condition }`; stride and field offsets are derived from
-the sequence child. `JniChain::Bulk(condition)` retains only the condition
-selecting its occurrence. `JniCallback::into_input(&flat, wire, target)` receives
+the sequence child. `JniChain::Bulk` is a unit variant: activation follows the
+enclosing optional and selector branches. Callback results cache every selected
+frame before source construction and retain the existing result-level cleanup
+guard, so a constructor failure also reclaims owners in later unread frames. `JniCallback::into_input(&flat, wire, target)` receives
 the canonical source context when recompiling a customized callback.
 Sequence transport requests and shared sequence
 helpers receive the source Flat explicitly, so adapters can resolve declarations

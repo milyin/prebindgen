@@ -917,7 +917,7 @@ fn receive_native_return_owners(
     types: &crate::metadata::JniTypes,
 ) -> Result<TokenStream> {
     Ok(match node {
-        WireNode::Chain { meta: JniChain::Bulk(active), controls, child } => crate::bulk::cleanup_cached(active, controls, child, types)?,
+        WireNode::Chain { meta: JniChain::Bulk, controls, child } => crate::bulk::cleanup_cached(controls, child, types)?,
         WireNode::Leaf(fields) => fields.iter().filter_map(|field| {
             if let JniWire::Handle { handle, .. } = &field.kind {
                 if handle.access == Access::Move {
@@ -930,11 +930,7 @@ fn receive_native_return_owners(
         WireNode::Chain { meta: JniChain::Optional(optional), child, .. } => {
             let scan=receive_native_return_owners(child, types)?;
             if scan.is_empty() { return Ok(scan); }
-            let name=optional.discriminator();
-            let present=if let Some(niche)=optional.niche() {
-                let field=group::argument_parameters(child).find(|w| w.name==*name).ok_or("missing callback return optional discriminator")?;
-                niche.present(&field.kind, quote!(#name))
-            } else { quote!(#name==1) };
+            let present=optional.is_present(child)?;
             quote!(if #present { #scan })
         }
         WireNode::Chain { meta: JniChain::Sequence(_), .. } => {

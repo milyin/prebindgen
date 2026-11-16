@@ -16,7 +16,7 @@ pub(crate) fn cache(element: &JniNode) -> Result<syn::Ident> {
 fn visit<'a>(node: &'a JniNode, input: bool, rows: &mut Vec<&'a JniNode>, bulk: bool) {
     match node {
         WireNode::Chain {
-            meta: JniChain::Bulk(_),
+            meta: JniChain::Bulk,
             child,
             ..
         } => visit(child, input, rows, true),

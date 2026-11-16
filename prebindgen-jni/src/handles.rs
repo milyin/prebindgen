@@ -64,7 +64,7 @@ fn controlled_child<'a>(node: &'a JniNode, name: &syn::Ident) -> Option<&'a JniN
             } else if matches!(
                 node,
                 WireNode::Chain {
-                    meta: JniChain::Sequence(_) | JniChain::Bulk(_),
+                    meta: JniChain::Sequence(_) | JniChain::Bulk,
                     ..
                 }
             ) {
@@ -124,7 +124,7 @@ pub(crate) fn require_preflight<I: KotlinInputConversion>(input: &I) -> Result<(
     fn prepared(node: &JniNode) -> bool {
         match node {
             WireNode::Chain {
-                meta: JniChain::Bulk(_),
+                meta: JniChain::Bulk,
                 ..
             } => true,
             WireNode::Chain {
@@ -154,7 +154,7 @@ fn complete_handle_inputs(node: &JniNode, input: &mut KotlinInput) -> Result<()>
     fn sources(node: &JniNode, expected: &mut BTreeMap<(String, u8, bool), usize>) {
         match node {
             WireNode::Chain {
-                meta: JniChain::Bulk(_) | JniChain::Sequence(_),
+                meta: JniChain::Bulk | JniChain::Sequence(_),
                 child,
                 ..
             } => {
@@ -428,7 +428,6 @@ mod tests {
             Wire {
                 name: syn::parse_quote!(buffer),
                 kind: JniWire::BulkBuffer {
-                    condition: "true".into(),
                     null_niche_available: true,
                 },
             },

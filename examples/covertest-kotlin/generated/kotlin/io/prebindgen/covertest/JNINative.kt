@@ -57,7 +57,7 @@ internal object JNINative {
     @JvmStatic private external fun init_OutputRows_776ecb9d0c3754e8(classes: Array<Class<*>>)
     init { init_OutputRows_776ecb9d0c3754e8(arrayOf(SequenceRow_Array_Any___1_00f39593b4ea53ea::class.java, SequenceRow_ByteArray_1_92dc0f7ab995287c::class.java, SequenceRow_Int_Long_String_4_3817dc835fa26831::class.java, SequenceRow_Int_Long_String_7_e1006826998dc4d4::class.java, SequenceRow_Long_1_127a3c24b600dbe0::class.java, SequenceRow_Long_Double_2_012db11776ed72c5::class.java, SequenceRow_Long_Int_2_cec315495ba8c6f9::class.java, SequenceRow_Long_Long_Int_4_851daa809dd7a1b1::class.java, SequenceRow_Long_Long_Long_127_725c521ebd1c733a::class.java, SequenceRow_Long_Long_Long_3_ad466713697fa9e4::class.java, SequenceRow_Long_String_2_3ea2c8aa47ab7590::class.java, SequenceRow_Long_String_ByteArray_3_e5ce0d0d57155c04::class.java, SequenceRow_Long_String_Long_3_b4558cb7b740d7c6::class.java)) }
     @JvmStatic external fun payloadEnumSchema(): Long
-    init { require(payloadEnumSchema() == 6456508916958230965L) { "incompatible payload enum tag mapping" } }
+    init { require(payloadEnumSchema() == -5695124300702348130L) { "incompatible payload enum tag mapping" } }
     @JvmStatic external fun bulkLayouts(): LongArray
     @JvmStatic external fun call_wire_event_borrowed_09bf8d605d27949b(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
     @JvmStatic external fun call_wire_self_name_echo_5724c1bd8adc5e81(p0_w1_tag: Int, p0_w1_a0_f0: Long, returns: Return_Int_Long2_ErrorEmpty_62eb913ef507b63c): Unit
@@ -194,6 +194,7 @@ internal object JNINative {
     @JvmStatic external fun call_bulk_replay_callback_929e98d2cfd600ef(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_bulk_nested_handles_input_dba24072c6255486(p0_w1: ByteArray?, p0_w1_length: Int, ownership: LongArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_bulk_cleanup_nested_callback_5f8da21ad356132b(p0_callback: Any?, p1_w1: Boolean, p2_w1: Boolean, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
+    @JvmStatic external fun call_bulk_cleanup_branches_callback_2b004ce485812a40(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_bulk_cleanup_pair_callback_f2f2462e96f2da09(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_bulk_replay_reset_ec26adbfb8cc43d7(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Unit
     @JvmStatic external fun call_bulk_replay_count_0e31779505af7ccf(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long

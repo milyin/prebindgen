@@ -137,7 +137,6 @@ fn native_store(
 pub(crate) fn input(
     wire: syn::Ident,
     mut child: JniInputPlan<JniWire>,
-    active: &Condition,
     types: &JniTypes,
 ) -> Result<JniInputPlan<JniWire>> {
     let layout = record(&child.node, types)?;
@@ -157,12 +156,7 @@ pub(crate) fn input(
             let n = &wires[j].name;
             quote!(#n)
         });
-        let condition = if selection.tests[i].is_empty() {
-            active.rust()
-        } else {
-            active.and(selected)
-        };
-        bind.extend(quote!(let #name=if #condition {#read}else{#absent};));
+        bind.extend(quote!(let #name=if #selected {#read}else{#absent};));
     }
     let bind = resolve(&bind, "bulk_reader", &quote!(#reader))?;
     let conversion = resolve(&child.code, "bulk_reader", &quote!(#reader))?;
@@ -178,7 +172,7 @@ pub(crate) fn input(
     // Keep the wire operands explicit so enclosing row composition can rebind
     // them to the successfully decoded fields rather than their Result locals.
     let read = quote!((#read)(&mut #env, &#wire, #length));
-    let truncated = active.and(quote!(#bytes.len()<::core::mem::size_of::<#ty>()));
+    let truncated = quote!(#bytes.len()<::core::mem::size_of::<#ty>());
     child.code = quote! {{
         #[allow(clippy::redundant_closure_call)]
         let bulk_value=#read?;
@@ -189,13 +183,12 @@ pub(crate) fn input(
         #bind #conversion
     }};
     child.node = WireNode::Chain {
-        meta: JniChain::Bulk(active.clone()),
+        meta: JniChain::Bulk,
         child: Box::new(child.node),
         controls: vec![
             Wire {
                 name: wire,
                 kind: JniWire::BulkBuffer {
-                    condition: kotlin_condition(active),
                     null_niche_available: false,
                 },
             },
@@ -238,12 +231,11 @@ pub(crate) fn output(
         let #wire=::prebindgen_jni_runtime::jni::objects::JObject::from(#env.byte_array_from_slice(#writer.bytes()).map_err(|e|e.to_string())?);
     };
     child.outcomes.success = WireNode::Chain {
-        meta: JniChain::Bulk(Condition::default()),
+        meta: JniChain::Bulk,
         child: Box::new(child.outcomes.success),
         controls: vec![Wire {
             name: wire.clone(),
             kind: JniWire::BulkBuffer {
-                condition: "true".into(),
                 null_niche_available: true,
             },
         }],
@@ -621,7 +613,7 @@ fn input_writers(
 ) -> Result<()> {
     match node {
         WireNode::Chain {
-            meta: JniChain::Bulk(_),
+            meta: JniChain::Bulk,
             child,
             ..
         } => {
@@ -827,10 +819,10 @@ pub(crate) fn input_kotlin(
     )?;
     let handles = crate::kotlin::input_handles(child, false);
     let owned = crate::kotlin::input_handles(child, true);
-    let condition = match &controls[0].kind {
-        JniWire::BulkBuffer { condition, .. } => condition.as_str(),
-        _ => return Err("missing bulk input carrier".into()),
-    };
+    if !matches!(controls[0].kind, JniWire::BulkBuffer { .. }) {
+        return Err("missing bulk input carrier".into());
+    }
+    let condition = active;
     if handles {
         let state = format!("{writer}_state");
         input.setup.push(KotlinBinding {
@@ -1023,7 +1015,7 @@ fn records(
 ) -> Result<()> {
     match node {
         WireNode::Chain {
-            meta: JniChain::Bulk(_),
+            meta: JniChain::Bulk,
             child,
             ..
         } => {
@@ -1224,7 +1216,7 @@ fn schema(node: &JniNode, types: &JniTypes) -> Result<String> {
             format!("optional:{kind}({})", schema(child, types)?)
         }
         WireNode::Chain {
-            meta: JniChain::Bulk(_),
+            meta: JniChain::Bulk,
             child,
             ..
         } => schema(child, types)?,
@@ -1279,7 +1271,7 @@ fn schema(node: &JniNode, types: &JniTypes) -> Result<String> {
 fn callback_roots(node: &JniNode) -> Vec<&JniNode> {
     match node {
         WireNode::Chain {
-            meta: JniChain::Bulk(_),
+            meta: JniChain::Bulk,
             ..
         } => vec![node],
         WireNode::Chain {
@@ -1291,24 +1283,94 @@ fn callback_roots(node: &JniNode) -> Vec<&JniNode> {
         _ => vec![],
     }
 }
+// Cache every selected frame before fallible source construction. Parent
+// branches determine activation; no per-frame condition or runtime flag is kept.
 pub(crate) fn callback_cache(node: &JniNode, context: &JniContext) -> Result<TokenStream> {
-    let mut code = TokenStream::new();
-    for root in callback_roots(node) {
-        if let WireNode::Chain {
-            meta: JniChain::Bulk(active),
-            controls,
-            ..
-        } = root
-        {
-            let wire = &controls[0].name;
-            let length = &controls[1].name;
-            let cache = format_ident!("{wire}_cached_bytes");
-            let active = active.rust();
-            let env = &context.environment;
-            code.extend(quote!(let #cache=if #active {::prebindgen_jni_runtime::bulk::input(&mut #env,&#wire,#length)?}else{Vec::new()};));
-        }
+    fn bindings(node: &JniNode) -> Vec<syn::Ident> {
+        callback_roots(node)
+            .into_iter()
+            .map(|node| {
+                let WireNode::Chain { controls, .. } = node else {
+                    unreachable!()
+                };
+                format_ident!("{}_cached_bytes", controls[0].name)
+            })
+            .collect()
     }
-    Ok(code)
+    fn cache(node: &JniNode, env: &syn::Ident) -> Result<TokenStream> {
+        Ok(match node {
+            WireNode::Chain {
+                meta: JniChain::Bulk,
+                controls,
+                ..
+            } => {
+                let wire = &controls[0].name;
+                let length = &controls[1].name;
+                let cache = format_ident!("{wire}_cached_bytes");
+                quote!(let #cache=::prebindgen_jni_runtime::bulk::input(&mut #env,&#wire,#length)?;)
+            }
+            // Ordinary rows introduce new wire bindings; their failure walker
+            // reads packed children from the retained JVM result instead.
+            WireNode::Chain {
+                meta: JniChain::Sequence(_),
+                ..
+            } => quote!(),
+            WireNode::Chain {
+                meta: JniChain::Optional(optional),
+                child,
+                ..
+            } => {
+                let names = bindings(child);
+                if names.is_empty() {
+                    return Ok(quote!());
+                }
+                let present = optional.is_present(child)?;
+                let code = cache(child, env)?;
+                let absent = names.iter().map(|_| quote!(Vec::new()));
+                quote!(let (#(#names,)*)=if #present {
+                    #code (#(#names,)*)
+                } else { (#(#absent,)*) };)
+            }
+            WireNode::Branch {
+                meta: JniBranch::Alternatives | JniBranch::Enum(_),
+                controls,
+                children,
+            } => {
+                let names = bindings(node);
+                if names.is_empty() {
+                    return Ok(quote!());
+                }
+                let tag = &controls[0].name;
+                let arms = children
+                    .iter()
+                    .enumerate()
+                    .map(|(index, child)| {
+                        let index = index as i32;
+                        let child_names = bindings(child);
+                        let code = cache(child, env)?;
+                        let values = names.iter().map(|name| {
+                            if child_names.contains(name) {
+                                quote!(#name)
+                            } else {
+                                quote!(Vec::new())
+                            }
+                        });
+                        Ok(quote!(#index => { #code (#(#values,)*) }))
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                let absent = names.iter().map(|_| quote!(Vec::new()));
+                quote!(let (#(#names,)*)=match #tag {
+                    #(#arms,)* _ => (#(#absent,)*)
+                };)
+            }
+            WireNode::Branch { children, .. } => children
+                .iter()
+                .map(|child| cache(child, env))
+                .collect::<Result<TokenStream>>()?,
+            WireNode::Leaf(_) => quote!(),
+        })
+    }
+    cache(node, &context.environment)
 }
 pub(crate) fn cached_reads(code: &TokenStream, node: &JniNode) -> Result<TokenStream> {
     let roots = callback_roots(node)
@@ -1351,7 +1413,6 @@ fn cleanup_attempt(code: TokenStream) -> TokenStream {
 }
 
 pub(crate) fn cleanup_cached(
-    active: &Condition,
     controls: &[Wire<JniWire>],
     child: &JniNode,
     types: &JniTypes,
@@ -1365,8 +1426,7 @@ pub(crate) fn cleanup_cached(
     }
     let cache = format_ident!("{}_cached_bytes", controls[0].name);
     let reader = format_ident!("{}_cleanup_reader", controls[0].name);
-    let active = active.rust();
-    let code = quote!(if #active {
+    let code = quote!({
         let #reader=::prebindgen_jni_runtime::bulk::Reader::new(&#cache);
         #scan
     });
@@ -1524,7 +1584,7 @@ fn physical_record(
             WireNode::Leaf(w) => take(w.len()),
             WireNode::Chain {
                 controls,
-                meta: JniChain::Sequence(_) | JniChain::Bulk(_),
+                meta: JniChain::Sequence(_) | JniChain::Bulk,
                 ..
             } => take(controls.len()),
             WireNode::Chain {

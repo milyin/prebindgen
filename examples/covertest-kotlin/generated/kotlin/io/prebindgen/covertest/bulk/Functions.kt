@@ -397,6 +397,60 @@ requireNotNull(outputbulkList)
     } finally { returnCapture.release() }
 }
 
+public fun bulkCleanupBranchesCallback(callback: io.prebindgen.covertest.BulkCleanupBranchesCallback, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+    val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
+    try {
+val nativeResult = try { run { run { val nativeArgument0 = try { object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(): Array<Any?> {
+        var callbackCleanupFailure: Throwable? = null
+        lateinit var callbackReturned: io.prebindgen.covertest.bulk.BulkCleanupBranches
+        try {
+        } catch (failure: Throwable) {
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+        callbackReturned = callback.run()
+return kotlin.run { val callback_return_w1 = callbackReturned
+ try { val __pb_callback_return_w1_field0 = callback_return_w1.first
+val __pb_callback_return_w1_field1 = callback_return_w1.second
+val callback_return_w2_writer_state = if (true) run { val callback_return_w2_writer = io.prebindgen.covertest.BulkInputs.Input_i64_3711b7e845f5d8b9()
+callback_return_w2_writer.handle((0) + io.prebindgen.covertest.BulkLayouts.r3711b7e845f5d8b9.offsets[0], io.prebindgen.covertest.InputValidation.value { __pb_callback_return_w1_field0 }, true, 0)
+
+callback_return_w2_writer } else null
+val callback_return_w1_f1_some_tag = if (__pb_callback_return_w1_field1 != null) (when (val value = requireNotNull(requireNotNull(__pb_callback_return_w1_field1))) { is io.prebindgen.covertest.bulk.BulkCleanupChoice.Empty -> 0
+is io.prebindgen.covertest.bulk.BulkCleanupChoice.One -> 1
+is io.prebindgen.covertest.bulk.BulkCleanupChoice.Two -> 2 }) else (0)
+val callback_return_w5_writer_state = if (__pb_callback_return_w1_field1 != null) (if (callback_return_w1_f1_some_tag == 1) run { val callback_return_w5_writer = io.prebindgen.covertest.BulkInputs.Input_i64_638fef00b45d8f09()
+callback_return_w5_writer.handle((0) + io.prebindgen.covertest.BulkLayouts.r638fef00b45d8f09.offsets[0], io.prebindgen.covertest.InputValidation.value { if (true && callback_return_w1_f1_some_tag == 1) (if (callback_return_w1_f1_some_tag == 1) (requireNotNull(requireNotNull(__pb_callback_return_w1_field1)) as io.prebindgen.covertest.bulk.BulkCleanupChoice.One).`value` else null) else null }, true, 0)
+
+callback_return_w5_writer } else null) else (null)
+val callback_return_w6_writer_state = if (__pb_callback_return_w1_field1 != null) (if (callback_return_w1_f1_some_tag == 2) run { val callback_return_w6_writer = io.prebindgen.covertest.BulkInputs.Input_i64_638fef00b45d8f09()
+callback_return_w6_writer.handle((0) + io.prebindgen.covertest.BulkLayouts.r638fef00b45d8f09.offsets[0], io.prebindgen.covertest.InputValidation.value { if (true && callback_return_w1_f1_some_tag == 2) (if (callback_return_w1_f1_some_tag == 2) (requireNotNull(requireNotNull(__pb_callback_return_w1_field1)) as io.prebindgen.covertest.bulk.BulkCleanupChoice.Two).`value` else null) else null }, true, 0)
+
+callback_return_w6_writer } else null) else (null)
+ run { val __pb_handle0: kotlin.collections.List<io.prebindgen.covertest.NativeHandle> = try { callback_return_w2_writer_state?.handles.orEmpty() } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; val __pb_handle1: kotlin.collections.List<io.prebindgen.covertest.NativeHandle> = try { if (__pb_callback_return_w1_field1 != null) (callback_return_w5_writer_state?.handles.orEmpty()) else kotlin.collections.emptyList() } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; val __pb_handle2: kotlin.collections.List<io.prebindgen.covertest.NativeHandle> = try { if (__pb_callback_return_w1_field1 != null) (callback_return_w6_writer_state?.handles.orEmpty()) else kotlin.collections.emptyList() } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withInputHandleLocks((((__pb_handle0) + (__pb_handle1)) + (__pb_handle2)), true) { val callbackReturnWire = kotlin.arrayOf<kotlin.Any?>(callback_return_w2_writer_state?.encode(), callback_return_w2_writer_state?.length ?: 0, if (__pb_callback_return_w1_field1 != null) run { val value = callback_return_w1_f1_some_tag; require(value != -2) { "invalid option payload" }; value } else -2, if (__pb_callback_return_w1_field1 != null) callback_return_w5_writer_state?.encode() else null, if (__pb_callback_return_w1_field1 != null) callback_return_w5_writer_state?.length ?: 0 else 0, if (__pb_callback_return_w1_field1 != null) callback_return_w6_writer_state?.encode() else null, if (__pb_callback_return_w1_field1 != null) callback_return_w6_writer_state?.length ?: 0 else 0)
+val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
+callback_return_w2_writer_state?.consume(__pb_consume); if (__pb_callback_return_w1_field1 != null) { callback_return_w5_writer_state?.consume(__pb_consume) }; if (__pb_callback_return_w1_field1 != null) { callback_return_w6_writer_state?.consume(__pb_consume) }
+callbackReturnWire } } } catch (failure: Throwable) { val returnedOwners = kotlin.collections.ArrayList<io.prebindgen.covertest.NativeHandle>(); val returnedHandles = kotlin.collections.ArrayList<io.prebindgen.covertest.NativeHandle>(); (callback_return_w1 as? io.prebindgen.covertest.bulk.BulkCleanupBranches)?.let { returnedValue0 -> (returnedValue0.first as? io.prebindgen.covertest.NativeHandle)?.let { returnedValue5 -> returnedHandles.add(returnedValue5); returnedOwners.add(returnedValue5) }
+when(val returnedValue8=returnedValue0.second) { is io.prebindgen.covertest.bulk.BulkCleanupChoice.Empty -> {  }
+is io.prebindgen.covertest.bulk.BulkCleanupChoice.One -> { (returnedValue8.`value` as? io.prebindgen.covertest.NativeHandle)?.let { returnedValue11 -> returnedHandles.add(returnedValue11); returnedOwners.add(returnedValue11) }
+ }
+is io.prebindgen.covertest.bulk.BulkCleanupChoice.Two -> { (returnedValue8.`value` as? io.prebindgen.covertest.NativeHandle)?.let { returnedValue14 -> returnedHandles.add(returnedValue14); returnedOwners.add(returnedValue14) }
+ }
+ else -> {} }
+ }
+
+val released = kotlin.collections.HashSet<Long>(); for (owner in returnedOwners) { if (owner.isClosed) continue; try { if (released.add(owner.address)) owner.close() else owner.markConsumed() } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) } }; for (handle in returnedHandles) { if (handle.address in released) handle.markConsumed() }; throw failure } }
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_bulk_cleanup_branches_callback_2b004ce485812a40(nativeArgument0, nativeArgument1) } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    if (returnCapture.status == 2) {
+        return@run onError.run(returnCapture.message) }
+
+    nativeResult
+    } finally { returnCapture.release() }
+}
+
 public fun bulkCleanupPairCallback(callback: io.prebindgen.covertest.BulkCleanupPairCallback, onError: io.prebindgen.covertest.JniErrorHandler<ULong> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): ULong = run {
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {

@@ -445,7 +445,7 @@ pub(crate) fn validate_buffered(
             validate_buffered(element)?;
         }
         prebindgen_conversions::WireNode::Chain {
-            meta: JniChain::Optional(_) | JniChain::Bulk(_),
+            meta: JniChain::Optional(_) | JniChain::Bulk,
             child: element,
             ..
         } => validate_buffered(element)?,

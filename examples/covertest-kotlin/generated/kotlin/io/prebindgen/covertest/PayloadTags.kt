@@ -1,5 +1,8 @@
 package io.prebindgen.covertest
 
+public const val BULK_CLEANUP_CHOICE_EMPTY_TAG: Int = 0
+public const val BULK_CLEANUP_CHOICE_ONE_TAG: Int = 1
+public const val BULK_CLEANUP_CHOICE_TWO_TAG: Int = 2
 public const val WIRE_CHECKED_EVENT_DATA_TAG: Int = 1
 public const val WIRE_CHECKED_EVENT_EMPTY_TAG: Int = 0
 public const val WIRE_EVENT_COUNT_TAG: Int = 1

@@ -82,7 +82,7 @@ fn complete_boundaries_reject_native_rows_without_a_scope_and_object_rows_inside
     let (_, plan) = prepared();
     let mut root = plan.outcomes.success;
     let WireNode::Chain {
-        meta: JniChain::Bulk(_),
+        meta: JniChain::Bulk,
         child,
         ..
     } = &mut root
@@ -161,11 +161,10 @@ fn native_row_compatibility_distinguishes_enum_unions_from_selector_fields() {
         // Derive each layout independently. Neither wire tree retains one.
         let layout = bulk::record(&element, &model.types).unwrap();
         let node = WireNode::Chain {
-            meta: JniChain::Bulk(Default::default()),
+            meta: JniChain::Bulk,
             controls: vec![prebindgen_conversions::Wire {
                 name: syn::parse_quote!(frame),
                 kind: JniWire::BulkBuffer {
-                    condition: "true".into(),
                     null_niche_available: false,
                 },
             }],

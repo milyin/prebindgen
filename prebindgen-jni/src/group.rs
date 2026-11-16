@@ -12,8 +12,8 @@ pub enum JniChain {
     /// Zero or more element occurrences.
     Sequence(JniSequence),
     /// Expanded fields grouped into one C-representation bulk frame.
-    /// The condition selects this occurrence; its physical layout is derived from the child.
-    Bulk(prebindgen_declarations::Condition),
+    /// Activation follows the enclosing optional/selector branches; layout comes from the child.
+    Bulk,
 }
 /// Meaning of an ordered collection of child descriptions.
 #[derive(Clone, Debug)]
@@ -73,6 +73,19 @@ impl JniOptional {
             Self::Niche { reservation, .. } => &reservation.discriminator,
         }
     }
+    // Read presence from the actual wire discriminator, including niche encoding.
+    // Useful before the input converter has produced its normalized presence local.
+    pub(crate) fn is_present(&self, child: &kotlin::JniNode) -> Result<TokenStream> {
+        let name = self.discriminator();
+        if let Some(niche) = self.niche() {
+            let wire = argument_parameters(child)
+                .find(|wire| wire.name == *name)
+                .ok_or("missing callback return optional discriminator")?;
+            Ok(niche.present(&wire.kind, quote!(#name)))
+        } else {
+            Ok(quote!(#name == 1))
+        }
+    }
     /// Reserved payload representation; a flag encoding has no reservation.
     pub fn niche(&self) -> Option<&JniNiche> {
         match self {
@@ -119,7 +132,7 @@ pub(crate) fn values(
         match node {
             WireNode::Leaf(wires) => out.extend(wires),
             WireNode::Chain {
-                meta: JniChain::Sequence(_) | JniChain::Bulk(_),
+                meta: JniChain::Sequence(_) | JniChain::Bulk,
                 controls,
                 ..
             } => out.extend(controls),
@@ -153,7 +166,7 @@ pub(crate) fn values_mut(
         match node {
             WireNode::Leaf(wires) => out.extend(wires),
             WireNode::Chain {
-                meta: JniChain::Sequence(_) | JniChain::Bulk(_),
+                meta: JniChain::Sequence(_) | JniChain::Bulk,
                 controls,
                 ..
             } => out.extend(controls),
@@ -214,7 +227,7 @@ fn validate_scope(
     ) -> Result<()> {
         match node {
             WireNode::Chain {
-                meta: JniChain::Bulk(_),
+                meta: JniChain::Bulk,
                 child,
                 controls,
             } => {
@@ -1141,7 +1154,7 @@ pub(crate) fn error_wire_shape(node: &kotlin::JniNode) -> Vec<String> {
                     }
                     JniChain::Sequence(_) if bulk => "sequence:native-rows".into(),
                     JniChain::Sequence(delivery) => format!("sequence:{delivery:?}"),
-                    JniChain::Bulk(_) => {
+                    JniChain::Bulk => {
                         let mut fields = group::row_fields(child)
                             .map(|w| {
                                 type_key(
@@ -1158,7 +1171,7 @@ pub(crate) fn error_wire_shape(node: &kotlin::JniNode) -> Vec<String> {
                 out.push(label);
                 out.push("[".into());
                 wires(controls, out);
-                visit(child, out, bulk || matches!(meta, JniChain::Bulk(_)));
+                visit(child, out, bulk || matches!(meta, JniChain::Bulk));
                 out.push("]".into());
             }
         }

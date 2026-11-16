@@ -843,9 +843,8 @@ impl Codec for JniCodec {
         _: &(),
         w: syn::Ident,
         child: JniInputPlan<JniWire>,
-        active: &prebindgen_declarations::Condition,
     ) -> Result<JniInputPlan<JniWire>> {
-        bulk::input(w, child, active, &flat.types)
+        bulk::input(w, child, &flat.types)
     }
     fn bulk_output(
         &self,
