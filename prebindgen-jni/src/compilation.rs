@@ -198,8 +198,7 @@ impl<C: Codec<InOps = JniInputOps, OutOps = JniOutputOps, CompileState = JniComp
                 self.state.bulk.set(true);
                 let child = self.input_named(ty, inner, extra, active, names);
                 self.state.bulk.set(false);
-                self.codec
-                    .bulk_input(self.flat, ty, extra, wire, child?, active)
+                self.codec.bulk_input(self.flat, ty, extra, wire, child?)
             }
             JniInput::Arrow {
                 operation: operation @ JniInputArrow::BoundCallback(callback),

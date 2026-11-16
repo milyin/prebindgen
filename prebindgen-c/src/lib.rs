@@ -235,6 +235,7 @@ impl Codec for CCodec {
             return Err("borrowed collection inputs cannot consume elements; declare an element constructor using borrowed inputs, or use Vec<T>".into());
         }
         let SequenceInputRequest {
+            flat: _,
             extra: _,
             wire,
             length,
@@ -254,6 +255,7 @@ impl Codec for CCodec {
         request: SequenceOutputRequest<'_, Self>,
     ) -> Result<prebindgen_declarations::SequenceOutput<CWire, CChain>> {
         let SequenceOutputRequest {
+            flat: _,
             extra: _,
             wire,
             length,

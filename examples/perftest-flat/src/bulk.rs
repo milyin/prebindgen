@@ -599,3 +599,32 @@ pub fn bulk_replay_nested_callback(callback: impl Fn() -> Vec<Vec<BulkReplayRow>
 pub fn bulk_nested_handles_input(values: Vec<Option<Vec<Option<BulkHandle>>>>) -> usize {
     values.into_iter().flatten().flatten().flatten().count()
 }
+
+// Distinct callback-result frames must all be covered before any constructor runs.
+#[prebindgen]
+pub enum BulkCleanupChoice {
+    Empty,
+    One { value: BulkHandle },
+    Two { value: BulkHandle },
+}
+#[prebindgen]
+pub struct BulkCleanupBranches {
+    pub first: BulkHandle,
+    pub second: Option<BulkCleanupChoice>,
+}
+#[prebindgen]
+pub fn bulk_cleanup_first(value: BulkHandle) -> BulkHandle {
+    assert!(value.value >= 0, "injected first-frame constructor failure");
+    value
+}
+#[prebindgen]
+pub fn bulk_cleanup_branches_callback(callback: impl Fn() -> BulkCleanupBranches) -> i64 {
+    let value = callback();
+    value.first.value
+        + match &value.second {
+            None | Some(BulkCleanupChoice::Empty) => 0,
+            Some(BulkCleanupChoice::One { value } | BulkCleanupChoice::Two { value }) => {
+                value.value
+            }
+        }
+}

@@ -15,7 +15,6 @@ pub use prebindgen_declarations::{
 mod bindings;
 mod bulk;
 mod metadata;
-pub use bulk::JniBulkRecord;
 pub use metadata::{JniBinding, JniFunction, JniModule, JniSchema, JniType};
 mod data;
 mod enums;
@@ -68,7 +67,7 @@ mod converters;
 pub use converters::{JniInputConverter, JniOutputConverter};
 mod kotlin;
 pub use kotlin::{
-    JniReturnDelivery, KotlinBinding, KotlinClass, KotlinContext, KotlinHandleInput, KotlinInput,
+    JniReturnDelivery, KotlinBinding, KotlinContext, KotlinHandleInput, KotlinInput,
     KotlinInputConversion, KotlinOutput, KotlinOutputConversion, KotlinReturnContext,
 };
 /// Flat source model with JNI conversion data for wrapper emission.
@@ -839,24 +838,23 @@ impl Codec for JniCodec {
     }
     fn bulk_input(
         &self,
-        _: &JniBindings,
+        flat: &JniBindings,
         _: &syn::Type,
         _: &(),
         w: syn::Ident,
         child: JniInputPlan<JniWire>,
-        active: &prebindgen_declarations::Condition,
     ) -> Result<JniInputPlan<JniWire>> {
-        bulk::input(w, child, active)
+        bulk::input(w, child, &flat.types)
     }
     fn bulk_output(
         &self,
-        _: &JniBindings,
+        flat: &JniBindings,
         _: &syn::Type,
         _: &(),
         w: syn::Ident,
         child: JniOutputPlan<JniWire>,
     ) -> Result<JniOutputPlan<JniWire>> {
-        bulk::output(w, child)
+        bulk::output(w, child, &flat.types)
     }
 
     type Schema = JniSchema;
@@ -894,11 +892,11 @@ impl Codec for JniCodec {
     type Wire = JniWire;
     type Context = JniContext;
     fn finish_input(&self, plan: &mut JniInputPlan<JniWire>, _: &()) -> Result<()> {
-        group::validate_layout(&plan.node)
+        group::validate_fragment(&plan.node)
     }
     fn finish_output(&self, plan: &mut JniOutputPlan<JniWire>, _: &()) -> Result<()> {
         plan.fallible = true;
-        group::validate_layout(&plan.outcomes.success)?;
+        group::validate_fragment(&plan.outcomes.success)?;
         plan.commit
             .extend(prebindgen_conversions::template_parameter(
                 "output_committed",
@@ -918,6 +916,7 @@ impl Codec for JniCodec {
             return Err("borrowed collection inputs cannot consume elements; declare an element constructor using borrowed inputs, or use Vec<T>".into());
         }
         let SequenceInputRequest {
+            flat,
             extra: _,
             view: _,
             wire,
@@ -928,7 +927,7 @@ impl Codec for JniCodec {
             representation,
         } = request;
         if representation == Representation::Bulk {
-            bulk::sequence_input(wire, length, index, element, active)
+            bulk::sequence_input(wire, length, index, element, active, &flat.types)
         } else {
             sequence::input(wire, length, index, element, active)
         }
@@ -938,6 +937,7 @@ impl Codec for JniCodec {
         request: SequenceOutputRequest<'_, Self>,
     ) -> Result<prebindgen_declarations::SequenceOutput<JniWire, JniChain>> {
         let SequenceOutputRequest {
+            flat,
             extra: _,
             wire,
             length,
@@ -953,12 +953,12 @@ impl Codec for JniCodec {
                     "bulk collection delivery cannot also use per-element callbacks".into(),
                 );
             }
-            bulk::sequence_output(wire, length, index, element, values)
+            bulk::sequence_output(wire, length, index, element, values, &flat.types)
         } else {
             match delivery {
                 prebindgen_declarations::SequenceDelivery::Auto
                 | prebindgen_declarations::SequenceDelivery::Value => {
-                    sequence::output(wire, length, index, element, values)
+                    sequence::output(wire, length, index, element, values, &flat.types)
                 }
                 prebindgen_declarations::SequenceDelivery::Callback => {
                     sequence_callback::transport(wire, length, element, values)
@@ -1234,7 +1234,7 @@ impl Codec for JniCodec {
 
     fn validate_input(&self, plan: &prebindgen_declarations::CodecInputPlan<Self>) -> Result<()> {
         sequence::validate_buffered(&plan.node)?;
-        crate::group::validate_layout(&plan.node)
+        crate::group::validate_fragment(&plan.node)
     }
     fn validate_output(&self, plan: &prebindgen_declarations::CodecOutputPlan<Self>) -> Result<()> {
         sequence::callback_delivery(&plan.outcomes.success)?;
@@ -1250,7 +1250,7 @@ impl Codec for JniCodec {
             .chain(plan.outcomes.source_error.iter())
             .chain(plan.outcomes.binding_failure.iter())
         {
-            crate::group::validate_layout(node)?;
+            crate::group::validate_fragment(node)?;
         }
         crate::group::result_packet(&plan.outcomes.success, &plan.values)?;
         Ok(())
@@ -1269,18 +1269,13 @@ impl Codec for JniCodec {
             return Err("foreign record inputs are unsupported by this codec".into());
         }
 
-        Self::source_record(flat, ty)?
-            .ok_or("missing data-class representation")?
-            .mark(
-                &mut plan.node,
-                wire.to_string(),
-                kotlin_condition(active),
-                flat.record(ty)?
-                    .fields
-                    .iter()
-                    .map(|f| f.metadata.kotlin_type.clone())
-                    .collect(),
-            )
+        Self::source_record(flat, ty)?.ok_or("missing data-class representation")?;
+        data::mark(
+            &mut plan.node,
+            wire.to_string(),
+            kotlin_condition(active),
+            flat.type_ref(ty)?,
+        )
     }
     fn output_record_metadata(
         &self,
@@ -1294,18 +1289,13 @@ impl Codec for JniCodec {
             return Err("foreign record outputs are unsupported by this codec".into());
         }
 
-        Self::source_record(flat, ty)?
-            .ok_or("missing data-class representation")?
-            .mark(
-                &mut plan.outcomes.success,
-                wire.to_string(),
-                "true".into(),
-                flat.record(ty)?
-                    .fields
-                    .iter()
-                    .map(|f| f.metadata.kotlin_type.clone())
-                    .collect(),
-            )
+        Self::source_record(flat, ty)?.ok_or("missing data-class representation")?;
+        data::mark(
+            &mut plan.outcomes.success,
+            wire.to_string(),
+            "true".into(),
+            flat.type_ref(ty)?,
+        )
     }
 
     fn supports_bulk(&self, _: Direction) -> bool {
@@ -1745,27 +1735,17 @@ pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
         validate_name(&f.metadata.name)?;
     }
     let init = &flat.metadata.native_init;
-    let classes = flat
-        .types
-        .values()
-        .filter_map(|t| {
-            t.metadata
-                .class
-                .as_ref()
-                .filter(|c| matches!(c.representation, ClassRepresentation::Handle { .. }))
-                .map(|c| (type_key(&t.ty), (&t.ty, c)))
-        })
-        .collect::<BTreeMap<_, _>>();
-    let mut allocation_ids = BTreeMap::new();
+    let mut gc_managed = false;
     let mut claimed_ids = BTreeMap::new();
-    for (key, (ty, _)) in &classes {
+    for (ty, class) in metadata::handle_classes(&flat.types) {
+        gc_managed |= class.gc_managed();
         let id = handles::allocation_type_id(ty);
+        let key = type_key(ty);
         if let Some(previous) = claimed_ids.insert(id, key.clone()) {
             return Err(format!(
                 "allocation-type identity collision between `{previous}` and `{key}`"
             ));
         }
-        allocation_ids.insert(key.clone(), id);
     }
     functions.sort_by_key(|f| f.metadata.order);
     let errors = functions
@@ -1814,7 +1794,6 @@ pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
     if !init.is_empty() {
         native.push_str(&format!("    init {{ {init} }}\n"));
     }
-    let gc_managed = classes.values().any(|(_, c)| c.gc_managed());
     files.insert(
         format!("{}/NativeHandle.kt", prefix.replace('.', "/")),
         native_handle(prefix, gc_managed),
@@ -1828,10 +1807,10 @@ pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
     let mut names = names::Names::default();
     let mut row_captures = BTreeSet::new();
     let mut capacity_registered = false;
-    for (ty, c) in classes.values() {
-        let id = allocation_ids[&type_key(ty)];
+    for (ty, c) in metadata::handle_classes(&flat.types) {
+        let id = handles::allocation_type_id(ty);
         let handle_type = wire::jvm::long_literal(id);
-        let method = names.name("drop", &names::type_label(ty), &[&names::type_identity(ty)])?;
+        let method = handles::drop_method(ty, &mut names)?;
         let sym = symbol(prefix, &method);
         rust.extend(quote!{#[doc = "# Safety\nOnly generated Kotlin ownership release paths may call this entry point. The pointer must be a live allocation of the declared type with no outstanding native access; an opted-in Cleaner may release an unreachable wrapper without its monitor."]
 #[no_mangle]pub unsafe extern "system" fn #sym(mut env: ::prebindgen_jni_runtime::jni::JNIEnv<'_>,_class: ::prebindgen_jni_runtime::jni::objects::JClass<'_>,id:i64){if let Err(e)=::prebindgen_runtime::boundary(||unsafe {::prebindgen_jni_runtime::drop_pointer::<#ty>(id)}){::prebindgen_jni_runtime::fail(&mut env,&e);}}});
@@ -1844,37 +1823,17 @@ pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
         let text=format!("package {}\n\npublic class {} internal constructor(raw: Long) : {base} {{\n    override val handleType: Long get() = {handle_type}\n    public fun take(): {} = synchronized(this) {{ check(!isClosed) {{ \"closed or consumed handle\" }}; val owner = {}(raw); markConsumed(); owner }}\n    override fun freeNative(raw: Long) {{ {prefix}.JNINative.{method}(raw) }}\n}}\n",c.pkg,c.name,c.name,c.name);
         files.insert(format!("{}/{}.kt", c.pkg.replace('.', "/"), c.name), text);
     }
-    let kotlin_classes = classes
-        .iter()
-        .map(|(ty, (source, class))| {
-            Ok((
-                ty.clone(),
-                KotlinClass {
-                    handle_type: allocation_ids[ty],
-                    gc_managed: class.gc_managed(),
-                    name: class.fqn(),
-                    drop_function: format!(
-                        "{prefix}.JNINative.{}",
-                        names.name(
-                            "drop",
-                            &names::type_label(source),
-                            &[&names::type_identity(source)]
-                        )?
-                    ),
-                },
-            ))
-        })
-        .collect::<Result<_>>()?;
     typed_rows::emit(flat, &mut rust, &mut native, &mut names, &mut row_captures)?;
     sealed::emit_tags(flat, &mut rust, &mut native, &mut files)?;
     bulk::emit(flat, &mut rust, &mut native, &mut files)?;
     rust.extend(cleanup::emit(flat)?);
-    callback::files(flat, &kotlin_classes, &mut files)?;
+    callback::files(flat, &mut files)?;
     errors::handler_files(
         &errors,
         &KotlinContext {
             package: prefix,
-            classes: &kotlin_classes,
+            source_types: &flat.types,
+            bulk: false,
             result: "result",
             failure: "failure",
             cleanup_failure: None,
@@ -1907,7 +1866,8 @@ pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
             .sum();
         let kotlin_context = KotlinContext {
             package: prefix,
-            classes: &kotlin_classes,
+            source_types: &flat.types,
+            bulk: false,
             result: "result",
             failure: "failure",
             cleanup_failure: None,
@@ -2582,3 +2542,9 @@ fn test_export<'a>(
         .find(|f| f.name == name)
         .expect("prepared export")
 }
+
+#[cfg(test)]
+mod source_facts_tests;
+
+#[cfg(test)]
+mod bulk_scope_tests;

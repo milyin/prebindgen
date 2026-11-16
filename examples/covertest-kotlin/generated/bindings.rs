@@ -5097,7 +5097,7 @@ pub extern "system" fn Java_io_prebindgen_covertest_JNINative_payloadEnumSchema(
     _env: ::prebindgen_jni_runtime::jni::JNIEnv,
     _class: ::prebindgen_jni_runtime::jni::objects::JClass,
 ) -> i64 {
-    6456508916958230965i64
+    -5695124300702348130i64
 }
 #[allow(non_camel_case_types, dead_code)]
 #[repr(C)]
@@ -24729,21 +24729,17 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
                                         &(callback_result_rows),
                                         1usize,
                                     )?;
-                                    let callback_return_w1_cached_bytes = if true {
-                                        ::prebindgen_jni_runtime::bulk::input(
-                                            &mut callback_environment,
-                                            &callback_return_w1,
-                                            callback_return_w1_length,
-                                        )?
-                                    } else {
-                                        Vec::new()
-                                    };
+                                    let callback_return_w1_cached_bytes = ::prebindgen_jni_runtime::bulk::input(
+                                        &mut callback_environment,
+                                        &callback_return_w1,
+                                        callback_return_w1_length,
+                                    )?;
                                     let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
                                     {
                                         let mut callback_return_owners = ::prebindgen_runtime::CallbackReturnAllocations::tracking(
                                             __prebindgen_input_consumed,
                                         );
-                                        if true {
+                                        {
                                             let callback_return_w1_cleanup_reader = ::prebindgen_jni_runtime::bulk::Reader::new(
                                                 &callback_return_w1_cached_bytes,
                                             );
@@ -25083,21 +25079,17 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1type_
                                         &(callback_result_rows),
                                         1usize,
                                     )?;
-                                    let callback_return_w1_cached_bytes = if true {
-                                        ::prebindgen_jni_runtime::bulk::input(
-                                            &mut callback_environment,
-                                            &callback_return_w1,
-                                            callback_return_w1_length,
-                                        )?
-                                    } else {
-                                        Vec::new()
-                                    };
+                                    let callback_return_w1_cached_bytes = ::prebindgen_jni_runtime::bulk::input(
+                                        &mut callback_environment,
+                                        &callback_return_w1,
+                                        callback_return_w1_length,
+                                    )?;
                                     let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
                                     {
                                         let mut callback_return_owners = ::prebindgen_runtime::CallbackReturnAllocations::tracking(
                                             __prebindgen_input_consumed,
                                         );
-                                        if true {
+                                        {
                                             let callback_return_w1_cleanup_reader = ::prebindgen_jni_runtime::bulk::Reader::new(
                                                 &callback_return_w1_cached_bytes,
                                             );
@@ -32299,21 +32291,17 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                         &(callback_result_rows),
                                         1usize,
                                     )?;
-                                    let callback_return_w1_cached_bytes = if true {
-                                        ::prebindgen_jni_runtime::bulk::input(
-                                            &mut callback_environment,
-                                            &callback_return_w1,
-                                            callback_return_w1_length,
-                                        )?
-                                    } else {
-                                        Vec::new()
-                                    };
+                                    let callback_return_w1_cached_bytes = ::prebindgen_jni_runtime::bulk::input(
+                                        &mut callback_environment,
+                                        &callback_return_w1,
+                                        callback_return_w1_length,
+                                    )?;
                                     let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
                                     {
                                         let mut callback_return_owners = ::prebindgen_runtime::CallbackReturnAllocations::tracking(
                                             __prebindgen_input_consumed,
                                         );
-                                        if true {
+                                        {
                                             let callback_return_w1_cleanup_reader = ::prebindgen_jni_runtime::bulk::Reader::new(
                                                 &callback_return_w1_cached_bytes,
                                             );
@@ -33254,21 +33242,17 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                         &(callback_result_rows),
                                         1usize,
                                     )?;
-                                    let callback_return_w1_cached_bytes = if true {
-                                        ::prebindgen_jni_runtime::bulk::input(
-                                            &mut callback_environment,
-                                            &callback_return_w1,
-                                            callback_return_w1_length,
-                                        )?
-                                    } else {
-                                        Vec::new()
-                                    };
+                                    let callback_return_w1_cached_bytes = ::prebindgen_jni_runtime::bulk::input(
+                                        &mut callback_environment,
+                                        &callback_return_w1,
+                                        callback_return_w1_length,
+                                    )?;
                                     let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
                                     {
                                         let mut callback_return_owners = ::prebindgen_runtime::CallbackReturnAllocations::tracking(
                                             __prebindgen_input_consumed,
                                         );
-                                        if true {
+                                        {
                                             let callback_return_w1_cleanup_reader = ::prebindgen_jni_runtime::bulk::Reader::new(
                                                 &callback_return_w1_cached_bytes,
                                             );
@@ -34032,21 +34016,17 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                         &(callback_result_rows),
                                         1usize,
                                     )?;
-                                    let callback_return_w1_cached_bytes = if true {
-                                        ::prebindgen_jni_runtime::bulk::input(
-                                            &mut callback_environment,
-                                            &callback_return_w1,
-                                            callback_return_w1_length,
-                                        )?
-                                    } else {
-                                        Vec::new()
-                                    };
+                                    let callback_return_w1_cached_bytes = ::prebindgen_jni_runtime::bulk::input(
+                                        &mut callback_environment,
+                                        &callback_return_w1,
+                                        callback_return_w1_length,
+                                    )?;
                                     let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
                                     {
                                         let mut callback_return_owners = ::prebindgen_runtime::CallbackReturnAllocations::tracking(
                                             __prebindgen_input_consumed,
                                         );
-                                        if true {
+                                        {
                                             let callback_return_w1_cleanup_reader = ::prebindgen_jni_runtime::bulk::Reader::new(
                                                 &callback_return_w1_cached_bytes,
                                             );
@@ -34458,6 +34438,477 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
 /**# Safety
 The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
 #[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1cleanup_1branches_1callback_12b004ce485812a40<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+    p0_callback: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+) -> i64 {
+    #[allow(unused_mut)]
+    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
+    let mut success_transferred = false;
+    let mut direct_output: i64 = Default::default();
+    let __pb_receipt_valid = ::core::cell::Cell::new(false);
+    let outcome = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_callback_retained = ::prebindgen_jni_runtime::Callback::new_named(
+                &mut jni_environment,
+                &p0_callback,
+                "()[Ljava/lang/Object;",
+                "io.prebindgen.covertest.BulkCleanupBranchesCallback",
+            )?;
+            #[allow(unused_mut, clippy::collapsible_if)]
+            let p0_callback_value = move || {
+                p0_callback_retained
+                    .with_env_result(
+                        24i32,
+                        |callback_environment| {
+                            let mut callback_environment = callback_environment;
+                            {
+                                let arguments = [];
+                                {
+                                    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
+                                    let __prebindgen_input_consumed = &__pb_input_consumed;
+                                    let callback_result = unsafe {
+                                        p0_callback_retained
+                                            .invoke_return(
+                                                callback_environment,
+                                                ::prebindgen_jni_runtime::jni::signature::ReturnType::Object,
+                                                &arguments,
+                                            )
+                                    }?;
+                                    let callback_result_rows = ::prebindgen_jni_runtime::jni::objects::JObjectArray::from(
+                                        callback_result.l().map_err(|e| e.to_string())?,
+                                    );
+                                    let callback_return_w2 = ::prebindgen_jni_runtime::row_bytes(
+                                        &mut callback_environment,
+                                        &(callback_result_rows),
+                                        0usize,
+                                    )?;
+                                    let callback_return_w2_length = ::prebindgen_jni_runtime::row_i32(
+                                        &mut callback_environment,
+                                        &(callback_result_rows),
+                                        1usize,
+                                    )?;
+                                    let callback_return_w1_f1_some_tag = ::prebindgen_jni_runtime::row_i32(
+                                        &mut callback_environment,
+                                        &(callback_result_rows),
+                                        2usize,
+                                    )?;
+                                    let callback_return_w5 = ::prebindgen_jni_runtime::row_bytes(
+                                        &mut callback_environment,
+                                        &(callback_result_rows),
+                                        3usize,
+                                    )?;
+                                    let callback_return_w5_length = ::prebindgen_jni_runtime::row_i32(
+                                        &mut callback_environment,
+                                        &(callback_result_rows),
+                                        4usize,
+                                    )?;
+                                    let callback_return_w6 = ::prebindgen_jni_runtime::row_bytes(
+                                        &mut callback_environment,
+                                        &(callback_result_rows),
+                                        5usize,
+                                    )?;
+                                    let callback_return_w6_length = ::prebindgen_jni_runtime::row_i32(
+                                        &mut callback_environment,
+                                        &(callback_result_rows),
+                                        6usize,
+                                    )?;
+                                    let callback_return_w2_cached_bytes = ::prebindgen_jni_runtime::bulk::input(
+                                        &mut callback_environment,
+                                        &callback_return_w2,
+                                        callback_return_w2_length,
+                                    )?;
+                                    let (
+                                        callback_return_w5_cached_bytes,
+                                        callback_return_w6_cached_bytes,
+                                    ) = if callback_return_w1_f1_some_tag != -2 {
+                                        let (
+                                            callback_return_w5_cached_bytes,
+                                            callback_return_w6_cached_bytes,
+                                        ) = match callback_return_w1_f1_some_tag {
+                                            0i32 => (Vec::new(), Vec::new()),
+                                            1i32 => {
+                                                let callback_return_w5_cached_bytes = ::prebindgen_jni_runtime::bulk::input(
+                                                    &mut callback_environment,
+                                                    &callback_return_w5,
+                                                    callback_return_w5_length,
+                                                )?;
+                                                (callback_return_w5_cached_bytes, Vec::new())
+                                            }
+                                            2i32 => {
+                                                let callback_return_w6_cached_bytes = ::prebindgen_jni_runtime::bulk::input(
+                                                    &mut callback_environment,
+                                                    &callback_return_w6,
+                                                    callback_return_w6_length,
+                                                )?;
+                                                (Vec::new(), callback_return_w6_cached_bytes)
+                                            }
+                                            _ => (Vec::new(), Vec::new()),
+                                        };
+                                        (
+                                            callback_return_w5_cached_bytes,
+                                            callback_return_w6_cached_bytes,
+                                        )
+                                    } else {
+                                        (Vec::new(), Vec::new())
+                                    };
+                                    let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
+                                    {
+                                        let mut callback_return_owners = ::prebindgen_runtime::CallbackReturnAllocations::tracking(
+                                            __prebindgen_input_consumed,
+                                        );
+                                        {
+                                            let callback_return_w2_cleanup_reader = ::prebindgen_jni_runtime::bulk::Reader::new(
+                                                &callback_return_w2_cached_bytes,
+                                            );
+                                            if let Err(error) = (|| -> ::prebindgen_runtime::Result<()> {
+                                                unsafe {
+                                                    callback_return_owners
+                                                        .receive(
+                                                            (callback_return_w2_cleanup_reader
+                                                                .read::<
+                                                                    i64,
+                                                                >(
+                                                                    ::core::mem::offset_of!(__PbBulk_i64_3711b7e845f5d8b9, v0),
+                                                                )?)
+                                                                as *mut ::prebindgen_jni_runtime::Allocation<
+                                                                    perftest_flat::BulkHandle,
+                                                                >,
+                                                        );
+                                                }
+                                                Ok(())
+                                            })() {
+                                                ::prebindgen_runtime::report_callback_cleanup_error(&error);
+                                            }
+                                        }
+                                        if callback_return_w1_f1_some_tag != -2 {
+                                            if callback_return_w1_f1_some_tag == 1i32 {
+                                                {
+                                                    let callback_return_w5_cleanup_reader = ::prebindgen_jni_runtime::bulk::Reader::new(
+                                                        &callback_return_w5_cached_bytes,
+                                                    );
+                                                    if let Err(error) = (|| -> ::prebindgen_runtime::Result<()> {
+                                                        unsafe {
+                                                            callback_return_owners
+                                                                .receive(
+                                                                    (callback_return_w5_cleanup_reader
+                                                                        .read::<
+                                                                            i64,
+                                                                        >(
+                                                                            ::core::mem::offset_of!(__PbBulk_i64_638fef00b45d8f09, v0),
+                                                                        )?)
+                                                                        as *mut ::prebindgen_jni_runtime::Allocation<
+                                                                            perftest_flat::BulkHandle,
+                                                                        >,
+                                                                );
+                                                        }
+                                                        Ok(())
+                                                    })() {
+                                                        ::prebindgen_runtime::report_callback_cleanup_error(&error);
+                                                    }
+                                                }
+                                            }
+                                            if callback_return_w1_f1_some_tag == 2i32 {
+                                                {
+                                                    let callback_return_w6_cleanup_reader = ::prebindgen_jni_runtime::bulk::Reader::new(
+                                                        &callback_return_w6_cached_bytes,
+                                                    );
+                                                    if let Err(error) = (|| -> ::prebindgen_runtime::Result<()> {
+                                                        unsafe {
+                                                            callback_return_owners
+                                                                .receive(
+                                                                    (callback_return_w6_cleanup_reader
+                                                                        .read::<
+                                                                            i64,
+                                                                        >(
+                                                                            ::core::mem::offset_of!(__PbBulk_i64_638fef00b45d8f09, v0),
+                                                                        )?)
+                                                                        as *mut ::prebindgen_jni_runtime::Allocation<
+                                                                            perftest_flat::BulkHandle,
+                                                                        >,
+                                                                );
+                                                        }
+                                                        Ok(())
+                                                    })() {
+                                                        ::prebindgen_runtime::report_callback_cleanup_error(&error);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        Ok(())
+                                    });
+                                    {
+                                        let callback_return_decoded = ({
+                                            #[allow(clippy::needless_late_init)]
+                                            let callback_return_w2_bytes;
+                                            #[allow(clippy::needless_late_init)]
+                                            let callback_return_w5_bytes;
+                                            #[allow(clippy::needless_late_init)]
+                                            let callback_return_w6_bytes;
+                                            #[allow(clippy::redundant_closure_call)]
+                                            let bulk_value = (|_, _, _| Ok::<
+                                                _,
+                                                String,
+                                            >(
+                                                callback_return_w2_cached_bytes.as_slice(),
+                                            ))(
+                                                &mut callback_environment,
+                                                &callback_return_w2,
+                                                callback_return_w2_length,
+                                            )?;
+                                            callback_return_w2_bytes = bulk_value;
+                                            let callback_return_w2_bytes = &callback_return_w2_bytes;
+                                            let callback_return_w2_reader = &::prebindgen_jni_runtime::bulk::Reader::new(
+                                                callback_return_w2_bytes,
+                                            );
+                                            if callback_return_w2_bytes.len()
+                                                < ::core::mem::size_of::<__PbBulk_i64_3711b7e845f5d8b9>()
+                                            {
+                                                return Err("truncated bulk root record".into());
+                                            }
+                                            let callback_return_w4 = if true {
+                                                callback_return_w2_reader
+                                                    .read::<
+                                                        i64,
+                                                    >(
+                                                        ::core::mem::offset_of!(__PbBulk_i64_3711b7e845f5d8b9, v0),
+                                                    )?
+                                            } else {
+                                                0
+                                            };
+                                            let callback_return_w4_pointer = callback_return_w4
+                                                as *mut ::prebindgen_jni_runtime::Allocation<
+                                                    perftest_flat::BulkHandle,
+                                                >;
+                                            ::prebindgen_runtime::validate_pointer(
+                                                callback_return_w4_pointer,
+                                            )?;
+                                            let callback_return_w3: perftest_flat::BulkHandle = {
+                                                let callback_return_w3 = unsafe {
+                                                    Box::from_raw(callback_return_w4_pointer)
+                                                };
+                                                {
+                                                    __pb_input_consumed
+                                                        .set(__pb_input_consumed.get() + (1usize));
+                                                }
+                                                callback_return_w3.value
+                                            };
+                                            let callback_return_w0_f0_argument_0 = callback_return_w3;
+                                            let callback_return_w0_f0: perftest_flat::BulkHandle = perftest_flat::bulk_cleanup_first(
+                                                callback_return_w0_f0_argument_0,
+                                            );
+                                            let callback_return_w0_field_0 = callback_return_w0_f0;
+                                            let callback_return_w1_f1_present: i32 = i32::from(
+                                                callback_return_w1_f1_some_tag != -2,
+                                            );
+                                            let callback_return_w0_f1 = if callback_return_w1_f1_present
+                                                == 1i32
+                                            {
+                                                {
+                                                    let callback_return_w0_f1_some: perftest_flat::BulkCleanupChoice = match callback_return_w1_f1_some_tag {
+                                                        0i32 => perftest_flat::BulkCleanupChoice::Empty,
+                                                        1i32 => {
+                                                            #[allow(clippy::redundant_closure_call)]
+                                                            let bulk_value = (|_, _, _| Ok::<
+                                                                _,
+                                                                String,
+                                                            >(
+                                                                callback_return_w5_cached_bytes.as_slice(),
+                                                            ))(
+                                                                &mut callback_environment,
+                                                                &callback_return_w5,
+                                                                callback_return_w5_length,
+                                                            )?;
+                                                            callback_return_w5_bytes = bulk_value;
+                                                            let callback_return_w5_bytes = &callback_return_w5_bytes;
+                                                            let callback_return_w5_reader = &::prebindgen_jni_runtime::bulk::Reader::new(
+                                                                callback_return_w5_bytes,
+                                                            );
+                                                            if callback_return_w5_bytes.len()
+                                                                < ::core::mem::size_of::<__PbBulk_i64_638fef00b45d8f09>()
+                                                            {
+                                                                return Err("truncated bulk root record".into());
+                                                            }
+                                                            let callback_return_w1_f1_some_a1_f0 = if true {
+                                                                callback_return_w5_reader
+                                                                    .read::<
+                                                                        i64,
+                                                                    >(
+                                                                        ::core::mem::offset_of!(__PbBulk_i64_638fef00b45d8f09, v0),
+                                                                    )?
+                                                            } else {
+                                                                0
+                                                            };
+                                                            let callback_return_w1_f1_some_a1_f0_pointer = callback_return_w1_f1_some_a1_f0
+                                                                as *mut ::prebindgen_jni_runtime::Allocation<
+                                                                    perftest_flat::BulkHandle,
+                                                                >;
+                                                            ::prebindgen_runtime::validate_pointer(
+                                                                callback_return_w1_f1_some_a1_f0_pointer,
+                                                            )?;
+                                                            let callback_return_w0_f1_some_a1_f0_value: perftest_flat::BulkHandle = {
+                                                                let callback_return_w0_f1_some_a1_f0_value = unsafe {
+                                                                    Box::from_raw(callback_return_w1_f1_some_a1_f0_pointer)
+                                                                };
+                                                                {
+                                                                    __pb_input_consumed
+                                                                        .set(__pb_input_consumed.get() + (1usize));
+                                                                }
+                                                                callback_return_w0_f1_some_a1_f0_value.value
+                                                            };
+                                                            let callback_return_w0_f1_some_a1_f0 = callback_return_w0_f1_some_a1_f0_value;
+                                                            perftest_flat::BulkCleanupChoice::One {
+                                                                value: callback_return_w0_f1_some_a1_f0,
+                                                            }
+                                                        }
+                                                        2i32 => {
+                                                            #[allow(clippy::redundant_closure_call)]
+                                                            let bulk_value = (|_, _, _| Ok::<
+                                                                _,
+                                                                String,
+                                                            >(
+                                                                callback_return_w6_cached_bytes.as_slice(),
+                                                            ))(
+                                                                &mut callback_environment,
+                                                                &callback_return_w6,
+                                                                callback_return_w6_length,
+                                                            )?;
+                                                            callback_return_w6_bytes = bulk_value;
+                                                            let callback_return_w6_bytes = &callback_return_w6_bytes;
+                                                            let callback_return_w6_reader = &::prebindgen_jni_runtime::bulk::Reader::new(
+                                                                callback_return_w6_bytes,
+                                                            );
+                                                            if callback_return_w6_bytes.len()
+                                                                < ::core::mem::size_of::<__PbBulk_i64_638fef00b45d8f09>()
+                                                            {
+                                                                return Err("truncated bulk root record".into());
+                                                            }
+                                                            let callback_return_w1_f1_some_a2_f0 = if true {
+                                                                callback_return_w6_reader
+                                                                    .read::<
+                                                                        i64,
+                                                                    >(
+                                                                        ::core::mem::offset_of!(__PbBulk_i64_638fef00b45d8f09, v0),
+                                                                    )?
+                                                            } else {
+                                                                0
+                                                            };
+                                                            let callback_return_w1_f1_some_a2_f0_pointer = callback_return_w1_f1_some_a2_f0
+                                                                as *mut ::prebindgen_jni_runtime::Allocation<
+                                                                    perftest_flat::BulkHandle,
+                                                                >;
+                                                            ::prebindgen_runtime::validate_pointer(
+                                                                callback_return_w1_f1_some_a2_f0_pointer,
+                                                            )?;
+                                                            let callback_return_w0_f1_some_a2_f0_value: perftest_flat::BulkHandle = {
+                                                                let callback_return_w0_f1_some_a2_f0_value = unsafe {
+                                                                    Box::from_raw(callback_return_w1_f1_some_a2_f0_pointer)
+                                                                };
+                                                                {
+                                                                    __pb_input_consumed
+                                                                        .set(__pb_input_consumed.get() + (1usize));
+                                                                }
+                                                                callback_return_w0_f1_some_a2_f0_value.value
+                                                            };
+                                                            let callback_return_w0_f1_some_a2_f0 = callback_return_w0_f1_some_a2_f0_value;
+                                                            perftest_flat::BulkCleanupChoice::Two {
+                                                                value: callback_return_w0_f1_some_a2_f0,
+                                                            }
+                                                        }
+                                                        _ => return Err("invalid enum tag".into()),
+                                                    };
+                                                    let callback_return_w0_f1_payload = callback_return_w0_f1_some;
+                                                    Some(callback_return_w0_f1_payload)
+                                                }
+                                            } else {
+                                                None
+                                            };
+                                            let callback_return_w0_field_1 = callback_return_w0_f1;
+                                            let callback_return_w0: perftest_flat::BulkCleanupBranches = perftest_flat::BulkCleanupBranches {
+                                                first: callback_return_w0_field_0,
+                                                second: callback_return_w0_field_1,
+                                            };
+                                            let callback_return_value = callback_return_w0;
+                                            Ok::<_, String>(callback_return_value)
+                                        })?;
+                                        callback_return_cleanup.commit();
+                                        Ok::<_, String>(callback_return_decoded)
+                                    }
+                                }
+                            }
+                        },
+                    )
+                    .unwrap_or_else(|error| panic!("callback failed: {}", error))
+            };
+            let __prebindgen_argument_0 = p0_callback_value;
+            let source_value = perftest_flat::bulk_cleanup_branches_callback(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = source_value;
+            let __pb_direct_result = unsafe {
+                (::prebindgen_jni_runtime::jni::sys::jvalue {
+                    j: ret_w0,
+                })
+                    .j
+            };
+            let _: () = {
+                direct_output = __pb_direct_result;
+                success_transferred = true;
+            };
+            Ok(__pb_direct_result)
+        }
+    });
+    match outcome {
+        Ok(result) => result,
+        Err(e) => {
+            if domain_output.is_none()
+                && matches!(jni_environment.exception_check(), Ok(false))
+            {
+                let reported = ::prebindgen_runtime::boundary(|| {
+                    let message = ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        &e,
+                    )?;
+                    unsafe {
+                        ::prebindgen_jni_runtime::invoke_error_callback(
+                            &mut jni_environment,
+                            &__pb_return,
+                            "bindingError",
+                            "(Ljava/lang/String;Z)V",
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    l: message.as_raw(),
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    z: u8::from(success_transferred),
+                                },
+                            ],
+                        )
+                    }
+                });
+                if let Err(message) = reported {
+                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                }
+            }
+            direct_output
+        }
+    }
+}
+#[allow(
+    clippy::let_and_return,
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
+#[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_1cleanup_1pair_1callback_1f2f2462e96f2da09<
     'local,
 >(
@@ -34512,21 +34963,17 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                         &(callback_result_rows),
                                         1usize,
                                     )?;
-                                    let callback_return_w1_cached_bytes = if true {
-                                        ::prebindgen_jni_runtime::bulk::input(
-                                            &mut callback_environment,
-                                            &callback_return_w1,
-                                            callback_return_w1_length,
-                                        )?
-                                    } else {
-                                        Vec::new()
-                                    };
+                                    let callback_return_w1_cached_bytes = ::prebindgen_jni_runtime::bulk::input(
+                                        &mut callback_environment,
+                                        &callback_return_w1,
+                                        callback_return_w1_length,
+                                    )?;
                                     let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
                                     {
                                         let mut callback_return_owners = ::prebindgen_runtime::CallbackReturnAllocations::tracking(
                                             __prebindgen_input_consumed,
                                         );
-                                        if true {
+                                        {
                                             let callback_return_w1_cleanup_reader = ::prebindgen_jni_runtime::bulk::Reader::new(
                                                 &callback_return_w1_cached_bytes,
                                             );
@@ -35312,21 +35759,17 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                         &(callback_result_rows),
                                         1usize,
                                     )?;
-                                    let callback_return_w1_cached_bytes = if true {
-                                        ::prebindgen_jni_runtime::bulk::input(
-                                            &mut callback_environment,
-                                            &callback_return_w1,
-                                            callback_return_w1_length,
-                                        )?
-                                    } else {
-                                        Vec::new()
-                                    };
+                                    let callback_return_w1_cached_bytes = ::prebindgen_jni_runtime::bulk::input(
+                                        &mut callback_environment,
+                                        &callback_return_w1,
+                                        callback_return_w1_length,
+                                    )?;
                                     let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
                                     {
                                         let mut callback_return_owners = ::prebindgen_runtime::CallbackReturnAllocations::tracking(
                                             __prebindgen_input_consumed,
                                         );
-                                        if true {
+                                        {
                                             let callback_return_w1_cleanup_reader = ::prebindgen_jni_runtime::bulk::Reader::new(
                                                 &callback_return_w1_cached_bytes,
                                             );
@@ -36005,21 +36448,17 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                         &(callback_result_rows),
                                         1usize,
                                     )?;
-                                    let callback_return_w1_cached_bytes = if true {
-                                        ::prebindgen_jni_runtime::bulk::input(
-                                            &mut callback_environment,
-                                            &callback_return_w1,
-                                            callback_return_w1_length,
-                                        )?
-                                    } else {
-                                        Vec::new()
-                                    };
+                                    let callback_return_w1_cached_bytes = ::prebindgen_jni_runtime::bulk::input(
+                                        &mut callback_environment,
+                                        &callback_return_w1,
+                                        callback_return_w1_length,
+                                    )?;
                                     let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
                                     {
                                         let mut callback_return_owners = ::prebindgen_runtime::CallbackReturnAllocations::tracking(
                                             __prebindgen_input_consumed,
                                         );
-                                        if true {
+                                        {
                                             let callback_return_w1_cleanup_reader = ::prebindgen_jni_runtime::bulk::Reader::new(
                                                 &callback_return_w1_cached_bytes,
                                             );
@@ -37230,21 +37669,17 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                         &(callback_result_rows),
                                         1usize,
                                     )?;
-                                    let callback_return_w1_cached_bytes = if true {
-                                        ::prebindgen_jni_runtime::bulk::input(
-                                            &mut callback_environment,
-                                            &callback_return_w1,
-                                            callback_return_w1_length,
-                                        )?
-                                    } else {
-                                        Vec::new()
-                                    };
+                                    let callback_return_w1_cached_bytes = ::prebindgen_jni_runtime::bulk::input(
+                                        &mut callback_environment,
+                                        &callback_return_w1,
+                                        callback_return_w1_length,
+                                    )?;
                                     let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
                                     {
                                         let mut callback_return_owners = ::prebindgen_runtime::CallbackReturnAllocations::tracking(
                                             __prebindgen_input_consumed,
                                         );
-                                        if true {
+                                        {
                                             let callback_return_w1_cleanup_reader = ::prebindgen_jni_runtime::bulk::Reader::new(
                                                 &callback_return_w1_cached_bytes,
                                             );
@@ -38924,16 +39359,17 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                         &(callback_result_rows),
                                         2usize,
                                     )?;
-                                    let callback_return_w4_cached_bytes = if callback_return_w1
-                                        == 1i32
+                                    let (callback_return_w4_cached_bytes,) = if callback_return_w1
+                                        == 1
                                     {
-                                        ::prebindgen_jni_runtime::bulk::input(
+                                        let callback_return_w4_cached_bytes = ::prebindgen_jni_runtime::bulk::input(
                                             &mut callback_environment,
                                             &callback_return_w4,
                                             callback_return_w4_length,
-                                        )?
+                                        )?;
+                                        (callback_return_w4_cached_bytes,)
                                     } else {
-                                        Vec::new()
+                                        (Vec::new(),)
                                     };
                                     let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
                                     {
@@ -38941,7 +39377,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                             __prebindgen_input_consumed,
                                         );
                                         if callback_return_w1 == 1 {
-                                            if callback_return_w1 == 1i32 {
+                                            {
                                                 let callback_return_w4_cleanup_reader = ::prebindgen_jni_runtime::bulk::Reader::new(
                                                     &callback_return_w4_cached_bytes,
                                                 );
@@ -39014,13 +39450,12 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                                     let callback_return_w4_reader = &::prebindgen_jni_runtime::bulk::Reader::new(
                                                         callback_return_w4_bytes,
                                                     );
-                                                    if (callback_return_w1 == 1i32)
-                                                        && (callback_return_w4_bytes.len()
-                                                            < ::core::mem::size_of::<__PbBulk_Range_42eab86179b36709>())
+                                                    if callback_return_w4_bytes.len()
+                                                        < ::core::mem::size_of::<__PbBulk_Range_42eab86179b36709>()
                                                     {
                                                         return Err("truncated bulk root record".into());
                                                     }
-                                                    let callback_return_w6 = if callback_return_w1 == 1i32 {
+                                                    let callback_return_w6 = if true {
                                                         callback_return_w4_reader
                                                             .range(
                                                                 ::core::mem::offset_of!(__PbBulk_Range_42eab86179b36709, v0),
@@ -41432,15 +41867,11 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                     &(callback_result_rows),
                                     1usize,
                                 )?;
-                                let callback_return_w2_cached_bytes = if true {
-                                    ::prebindgen_jni_runtime::bulk::input(
-                                        &mut callback_environment,
-                                        &callback_return_w2,
-                                        callback_return_w2_length,
-                                    )?
-                                } else {
-                                    Vec::new()
-                                };
+                                let callback_return_w2_cached_bytes = ::prebindgen_jni_runtime::bulk::input(
+                                    &mut callback_environment,
+                                    &callback_return_w2,
+                                    callback_return_w2_length,
+                                )?;
                                 #[allow(clippy::needless_late_init)]
                                 let callback_return_w2_bytes;
                                 #[allow(clippy::redundant_closure_call)]
@@ -41738,15 +42169,11 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                     &(callback_result_rows),
                                     1usize,
                                 )?;
-                                let callback_return_w2_cached_bytes = if true {
-                                    ::prebindgen_jni_runtime::bulk::input(
-                                        &mut callback_environment,
-                                        &callback_return_w2,
-                                        callback_return_w2_length,
-                                    )?
-                                } else {
-                                    Vec::new()
-                                };
+                                let callback_return_w2_cached_bytes = ::prebindgen_jni_runtime::bulk::input(
+                                    &mut callback_environment,
+                                    &callback_return_w2,
+                                    callback_return_w2_length,
+                                )?;
                                 #[allow(clippy::needless_late_init)]
                                 let callback_return_w2_bytes;
                                 #[allow(clippy::redundant_closure_call)]
@@ -42071,21 +42498,17 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                     &(callback_result_rows),
                                     1usize,
                                 )?;
-                                let callback_return_w2_cached_bytes = if true {
-                                    ::prebindgen_jni_runtime::bulk::input(
-                                        &mut callback_environment,
-                                        &callback_return_w2,
-                                        callback_return_w2_length,
-                                    )?
-                                } else {
-                                    Vec::new()
-                                };
+                                let callback_return_w2_cached_bytes = ::prebindgen_jni_runtime::bulk::input(
+                                    &mut callback_environment,
+                                    &callback_return_w2,
+                                    callback_return_w2_length,
+                                )?;
                                 let mut callback_return_cleanup = ::prebindgen_runtime::CallbackReturnCleanup::new(||
                                 {
                                     let mut callback_return_owners = ::prebindgen_runtime::CallbackReturnAllocations::tracking(
                                         __prebindgen_input_consumed,
                                     );
-                                    if true {
+                                    {
                                         let callback_return_w2_cleanup_reader = ::prebindgen_jni_runtime::bulk::Reader::new(
                                             &callback_return_w2_cached_bytes,
                                         );
@@ -128812,6 +129235,14 @@ const _: () = assert!(
 const _: () = assert!(
     ::core::mem::size_of:: < perftest_flat::BulkBorrowPair > () != 0,
     "flat object `BulkBorrowPair` must have nonzero size"
+);
+const _: () = assert!(
+    ::core::mem::size_of:: < perftest_flat::BulkCleanupBranches > () != 0,
+    "flat object `BulkCleanupBranches` must have nonzero size"
+);
+const _: () = assert!(
+    ::core::mem::size_of:: < perftest_flat::BulkCleanupChoice > () != 0,
+    "flat object `BulkCleanupChoice` must have nonzero size"
 );
 const _: () = assert!(
     ::core::mem::size_of:: < perftest_flat::BulkEnvelope > () != 0,

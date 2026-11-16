@@ -2,7 +2,9 @@
 use super::*;
 use prebindgen_declarations::{EnumEncoding, EnumForm, EnumVariants};
 
+use crate::kotlin::JniNode;
 use prebindgen_conversions::{InputConversion, Wire, WireNode};
+use prebindgen_flat::{PayloadEnum, PayloadField, PayloadVariant, TypeDefinition, TypeRef};
 use std::rc::Rc;
 
 /// Declare a Kotlin sealed interface for a Rust payload enum or concrete Result.
@@ -42,56 +44,84 @@ macro_rules! sealed_class {($($ty:tt)+)=>{$crate::DeclJniSealedClass::new($crate
 /// Prepared enum grouping in an occurrence's wire tree.
 #[derive(Clone, Debug)]
 pub struct JniEnumGroup {
-    /// Source type, also identifying the tag mapping.
-    pub ty: syn::Type,
-    /// Source names in tag order.
-    pub variants: Vec<String>,
-    /// Grouped public class; absent for expanded fields.
-    pub class_name: Option<String>,
-    /// Nested Kotlin variant names.
-    pub classes: Vec<String>,
-    /// Field property names in each variant.
-    pub fields: Vec<Vec<String>>,
-    /// Declared Kotlin property types in each variant, retained with its representation.
-    pub property_types: Vec<Vec<String>>,
+    /// Flat-issued source type reference, also identifying the tag mapping.
+    pub source: TypeRef,
+    /// Expose one sealed-class value rather than expanded tag/field parameters.
+    pub value: bool,
     /// Public Kotlin input binding.
     pub root: String,
 }
-fn variant_names(class: &Class, names: &[String]) -> Result<Vec<String>> {
-    let mut overrides = BTreeMap::new();
+impl JniEnumGroup {
+    pub(crate) fn declaration<'a>(
+        &self,
+        types: &'a crate::metadata::JniTypes,
+    ) -> Result<(&'a PayloadEnum<(), JniField>, Option<&'a Class>)> {
+        let source = crate::metadata::source_type(types, &self.source)?;
+        let TypeDefinition::PayloadEnum(enumeration) = &source.definition else {
+            return Err(format!(
+                "`{}` is not a source payload enum",
+                type_key(&source.ty)
+            ));
+        };
+        let class = if self.value {
+            Some(
+                source
+                    .metadata
+                    .class
+                    .as_deref()
+                    .filter(|class| {
+                        matches!(class.representation, ClassRepresentation::Sealed { .. })
+                    })
+                    .ok_or("ordinary payload enum requires a declared sealed class")?,
+            )
+        } else {
+            None
+        };
+        Ok((enumeration, class))
+    }
+}
+pub(crate) fn variant_name(class: &Class, variant: &syn::Ident) -> String {
+    let source = variant.to_string();
+    let source = source.trim_start_matches("r#");
+    let ClassRepresentation::Sealed { variant_names, .. } = &class.representation else {
+        unreachable!("variant naming requires a sealed class")
+    };
+    variant_names
+        .iter()
+        .find(|(name, _)| name.trim_start_matches("r#") == source)
+        .map_or_else(|| source.to_owned(), |(_, name)| name.clone())
+}
+fn validate_variants(class: &Class, source: &PayloadEnum<(), JniField>) -> Result<()> {
     let ClassRepresentation::Sealed { variant_names, .. } = &class.representation else {
         return Err("variant naming requires a sealed class".into());
     };
-    for (source, name) in variant_names {
-        let source = source.trim_start_matches("r#");
-        if !names.iter().any(|name| name == source) {
-            return Err(format!("unknown enum variant `{source}`"));
+    let mut overrides = BTreeSet::new();
+    for (source_name, _) in variant_names {
+        let name = source_name.trim_start_matches("r#");
+        if !source
+            .variants
+            .iter()
+            .any(|v| v.name.to_string().trim_start_matches("r#") == name)
+        {
+            return Err(format!("unknown enum variant `{name}`"));
         }
-        if overrides.insert(source.to_owned(), name).is_some() {
+        if !overrides.insert(name) {
             return Err("duplicate enum variant override".into());
         }
     }
     let mut seen = BTreeSet::new();
-    names
-        .iter()
-        .map(|source| {
-            let name = overrides.get(source).copied().unwrap_or(source);
-            validate_class_name(name)?;
-            if !seen.insert(name.clone()) {
-                return Err("duplicate Kotlin enum variant name".into());
-            }
-            Ok(name.clone())
-        })
-        .collect()
+    for variant in &source.variants {
+        let name = variant_name(class, &variant.name);
+        validate_class_name(&name)?;
+        if !seen.insert(name) {
+            return Err("duplicate Kotlin enum variant name".into());
+        }
+    }
+    Ok(())
 }
 
 pub(crate) fn encoding(request: EnumVariants<'_, JniCodec>) -> Result<EnumEncoding<JniCodec>> {
     let source = request.flat.payload_enum(request.ty)?;
-    let names = source
-        .variants
-        .iter()
-        .map(|v| v.name.to_string().trim_start_matches("r#").to_owned())
-        .collect::<Vec<_>>();
     let class = request
         .flat
         .type_info(request.ty)
@@ -105,10 +135,9 @@ pub(crate) fn encoding(request: EnumVariants<'_, JniCodec>) -> Result<EnumEncodi
             type_key(request.ty)
         ));
     }
-    let classes = class
-        .map(|c| variant_names(c, &names))
-        .transpose()?
-        .unwrap_or_else(|| names.clone());
+    if let Some(class) = class {
+        validate_variants(class, source)?;
+    }
     for arm in request.arms.iter_mut() {
         prebindgen_declarations::retire_optional_niches(
             crate::group::values_mut(arm),
@@ -141,29 +170,8 @@ pub(crate) fn encoding(request: EnumVariants<'_, JniCodec>) -> Result<EnumEncodi
     };
     Ok(EnumEncoding {
         metadata: JniBranch::Enum(Rc::new(JniEnumGroup {
-            ty: request.ty.clone(),
-            variants: names,
-            classes,
-            property_types: source
-                .variants
-                .iter()
-                .map(|v| {
-                    v.fields
-                        .iter()
-                        .map(|f| f.metadata.kotlin_type.clone())
-                        .collect()
-                })
-                .collect(),
-            fields: source
-                .variants
-                .iter()
-                .map(|v| v.fields.iter().map(|f| f.property()).collect())
-                .collect(),
-            class_name: if grouped {
-                class.map(|c| c.fqn())
-            } else {
-                None
-            },
+            source: request.flat.type_ref(request.ty)?,
+            value: grouped,
             root: request
                 .selector
                 .name
@@ -176,6 +184,36 @@ pub(crate) fn encoding(request: EnumVariants<'_, JniCodec>) -> Result<EnumEncodi
     })
 }
 
+// Source field identities and order come from the canonical variant. Occurrence
+// nodes only describe conversions of those fields.
+pub(crate) fn variant_fields<'a>(
+    node: &'a JniNode,
+    source: &'a PayloadVariant<(), JniField>,
+) -> Result<impl Iterator<Item = Result<(&'a PayloadField<JniField>, &'a JniNode)>>> {
+    let WireNode::Branch { children, .. } = node else {
+        return Err("enum arm must group fields".into());
+    };
+    if children.len() != source.fields.len() {
+        return Err(format!(
+            "enum occurrence differs from source variant `{}` fields",
+            source.name
+        ));
+    }
+    Ok(source
+        .fields
+        .iter()
+        .zip(children)
+        .map(|(source_field, node)| {
+            if data::field(node)?.to_string().trim_start_matches("r#") != source_field.property() {
+                return Err(format!(
+                    "enum occurrence differs from source variant `{}` fields",
+                    source.name
+                ));
+            }
+            Ok((source_field, node))
+        }))
+}
+
 pub(crate) fn input(
     nodes: &[kotlin::JniNode],
     controls: &[Wire<JniWire>],
@@ -183,10 +221,15 @@ pub(crate) fn input(
     context: &KotlinContext<'_>,
     active: &str,
 ) -> Result<KotlinInput> {
+    let (source, declaration) = meta.declaration(context.source_types)?;
+    if source.variants.len() != nodes.len() {
+        return Err("enum occurrence differs from its source variants".into());
+    }
+    let class_name = declaration.map(Class::fqn);
     let [tag] = controls else {
         return Err("enum needs one tag".into());
     };
-    if meta.class_name.is_none() {
+    if class_name.is_none() {
         let tree = WireNode::Branch {
             controls: controls.to_vec(),
             children: nodes.to_vec(),
@@ -197,21 +240,28 @@ pub(crate) fn input(
             for step in &mut path.0 {
                 if let prebindgen_declarations::ComponentSegment::Alternative(index) = step {
                     *step = prebindgen_declarations::ComponentSegment::Named(
-                        meta.variants[*index].clone(),
+                        source.variants[*index]
+                            .name
+                            .to_string()
+                            .trim_start_matches("r#")
+                            .into(),
                     );
                 }
             }
         }
         return Ok(out);
     }
-    let class = meta.class_name.as_ref().unwrap();
+    let class = class_name.as_ref().unwrap();
     let root = &meta.root;
     let tag_name = tag.name.to_string();
-    let cases = meta
-        .classes
+    let cases = source
+        .variants
         .iter()
         .enumerate()
-        .map(|(i, c)| format!("is {class}.{c} -> {i}"))
+        .map(|(i, variant)| {
+            let name = variant_name(declaration.unwrap(), &variant.name);
+            format!("is {class}.{name} -> {i}")
+        })
         .collect::<Vec<_>>()
         .join("\n");
     let select = format!("when (val value = requireNotNull({root})) {{ {cases} }}");
@@ -233,26 +283,20 @@ pub(crate) fn input(
     out.arguments.push(tag_name.clone());
     out.prepared_arguments.push(tag_name.clone());
     out.handle_inputs = Some(vec![]);
-    for (index, node) in nodes.iter().enumerate() {
+    for (index, (node, variant)) in nodes.iter().zip(&source.variants).enumerate() {
+        let variant_class = variant_name(declaration.unwrap(), &variant.name);
         let selected = if active == "true" {
             format!("{tag_name} == {index}")
         } else {
             format!("({active}) && {tag_name} == {index}")
         };
-        let fields = data::fields(match node {
-            WireNode::Branch { children, .. } => children,
-            _ => return Err("enum arm must group fields".into()),
-        })?;
-        for (field_index, (_, node)) in fields.iter().enumerate() {
+        for pair in variant_fields(node, variant)? {
+            let (field, node) = pair?;
             let mut child = kotlin::input_kotlin_when(node, context, &selected)?;
             child.prepare_arguments(kotlin::input_handles(node, false))?;
-            data::check_property_input(&meta.property_types[index][field_index], &child.parameters)
-                .map_err(|error| {
-                    format!(
-                        "{class}.{}.{}: {error}",
-                        meta.classes[index], meta.fields[index][field_index]
-                    )
-                })?;
+            data::check_property_input(&field.metadata.kotlin_type, &child.parameters).map_err(
+                |error| format!("{class}.{}.{}: {error}", variant_class, field.property()),
+            )?;
             if let Some(parameter) = child.parameters.first() {
                 let (parameter_name, ty) = parameter
                     .split_once(": ")
@@ -265,8 +309,8 @@ pub(crate) fn input(
                     "UByte" => "0.toUByte()",
                     ty => crate::wire::jvm::primitive_local_default(ty).unwrap_or("null"),
                 };
-                let property = kotlin_identifier(&meta.fields[index][field_index]);
-                let expression=format!("(if ({selected}) (requireNotNull({root}) as {class}.{}).{property} else {absent})",meta.classes[index]);
+                let property = kotlin_identifier(&field.property());
+                let expression=format!("(if ({selected}) (requireNotNull({root}) as {class}.{}).{property} else {absent})",variant_class);
                 replace_input(&mut child, &name, &expression);
             }
             child.parameters.clear();
@@ -304,6 +348,11 @@ pub(crate) fn output(
     context: &KotlinContext<'_>,
     owners: Option<&str>,
 ) -> Result<KotlinOutput> {
+    let (source, declaration) = meta.declaration(context.source_types)?;
+    if source.variants.len() != nodes.len() {
+        return Err("enum occurrence differs from its source variants".into());
+    }
+    let class_name = declaration.map(Class::fqn);
     let tag = kotlin::output_leaves(&controls.iter().collect::<Vec<_>>(), context, owners)?;
     let tag_expr = tag.delivered.first().ok_or("missing enum tag")?;
     let mut out = KotlinOutput::default();
@@ -312,18 +361,35 @@ pub(crate) fn output(
     let mut cleanup = String::new();
     let mut offset = controls.len();
     let mut expanded = Vec::new();
-    if meta.class_name.is_none() {
+    if class_name.is_none() {
         out.delivered.extend(tag.delivered.clone());
         out.result_types.extend(tag.result_types);
         out.result_names.push(Some("tag".into()));
     }
-    for (index, node) in nodes.iter().enumerate() {
+    for (index, (node, variant)) in nodes.iter().zip(&source.variants).enumerate() {
         let prefix = format!("{}a{index}_", context.output_prefix);
         let ctx = KotlinContext {
             output_prefix: &prefix,
             ..*context
         };
-        let mut child = kotlin::output_kotlin_scoped(node, &ctx, owners)?;
+        let mut child = if declaration.is_some() {
+            let mut fields = variant_fields(node, variant)?;
+            let WireNode::Branch { children, .. } = node else {
+                unreachable!()
+            };
+            kotlin::output_components_checked(children, &ctx, owners, |child| {
+                let (field, _) = fields.next().ok_or("missing enum field")??;
+                data::check_property_output(&field.metadata.kotlin_type, &child.result_types)?;
+                match child.delivered.len() {
+                    0 => { child.delivered.push("kotlin.Unit".into()); child.result_types.push("kotlin.Unit".into()); }
+                    1 => {}
+                    _ => return Err("ordinary enum fields require one Kotlin value; use enum_fields for expanded delivery".into()),
+                }
+                Ok(())
+            })?
+        } else {
+            kotlin::output_kotlin_scoped(node, &ctx, owners)?
+        };
         let count = crate::group::kotlin_result_fields(node).len();
         kotlin::remap_output(&mut child, context.result, context.result, offset, count);
         offset += count;
@@ -334,33 +400,13 @@ pub(crate) fn output(
                 child.cleanup
             ));
         }
-        if let Some(class) = &meta.class_name {
-            let fields = data::fields(match node {
-                WireNode::Branch { children, .. } => children,
-                _ => return Err("enum arm must group fields".into()),
-            })?;
-            for ((_, node), expected) in fields.iter().zip(&meta.property_types[index]) {
-                let field = kotlin::output_kotlin_scoped(node, &ctx, owners)?;
-                data::check_property_output(expected, &field.result_types)?;
-            }
-            let mut delivered = child.delivered.into_iter();
-            let args = fields
-                .iter()
-                .map(|(_, n)| {
-                    match kotlin::output_kotlin_scoped(n,&ctx,owners)?.delivered.len() {
-                        0=>Ok("kotlin.Unit".into()),
-                        1=>delivered.next().ok_or("missing enum payload value".into()),
-                        _=>Err("ordinary enum fields require one Kotlin value; use enum_fields for expanded delivery".into()),
-                    }
-                })
-                .collect::<Result<Vec<String>>>()?;
-            if delivered.next().is_some() {
-                return Err("unexpected extra enum payload value".into());
-            }
-            let constructor = if fields.is_empty() {
-                format!("{class}.{}", meta.classes[index])
+        if let Some(class) = &class_name {
+            let variant_class = variant_name(declaration.unwrap(), &variant.name);
+            let args = child.delivered.join(", ");
+            let constructor = if variant.fields.is_empty() {
+                format!("{class}.{variant_class}")
             } else {
-                format!("{class}.{}({})", meta.classes[index], args.join(", "))
+                format!("{class}.{variant_class}({args})")
             };
             body.push_str(&format!(
                 "{index} -> {{ {} {constructor} }}\n",
@@ -415,7 +461,7 @@ pub(crate) fn output(
                 out.output_locals
                     .push_str(&format!("var {name}: {result_type} = {absent}\n"));
                 out.result_types.push(result_type);
-                let variant = lower_camel(&meta.variants[index]);
+                let variant = lower_camel(variant.name.to_string().trim_start_matches("r#"));
                 let field_name = child
                     .result_names
                     .get(i)
@@ -443,7 +489,7 @@ pub(crate) fn output(
             ));
         }
     }
-    if let Some(class) = &meta.class_name {
+    if let Some(class) = &class_name {
         out.output_locals
             .push_str(&format!("var {local}: {class}? = null\n"));
         out.materialize = format!(
@@ -523,12 +569,7 @@ pub(crate) fn render<I: KotlinInputConversion, O: KotlinOutputConversion>(
     ty: &syn::Type,
 ) -> Result<String> {
     let source = flat.payload_enum(ty)?;
-    let names = source
-        .variants
-        .iter()
-        .map(|v| v.name.to_string().trim_start_matches("r#").to_owned())
-        .collect::<Vec<_>>();
-    let variants = variant_names(class, &names)?;
+    validate_variants(class, source)?;
     let mut out = format!(
         "package {}\n\npublic sealed interface {}{} {{\n",
         class.pkg,
@@ -539,7 +580,8 @@ pub(crate) fn render<I: KotlinInputConversion, O: KotlinOutputConversion>(
             ""
         }
     );
-    for (arm, name) in source.variants.iter().zip(variants) {
+    for arm in &source.variants {
+        let name = variant_name(class, &arm.name);
         if arm.fields.is_empty() {
             out.push_str(&format!(
                 "public data object {name} : {}{}\n",
@@ -552,21 +594,15 @@ pub(crate) fn render<I: KotlinInputConversion, O: KotlinOutputConversion>(
             ));
             continue;
         }
-        let fields = arm
-            .fields
-            .iter()
-            .map(|f| prebindgen_flat::Field {
-                name: format_ident!("{}", f.property()),
-                ty: f.ty.clone(),
-                metadata: f.metadata.clone(),
-            })
-            .collect::<Vec<_>>();
         let nested = Class {
             name: name.clone(),
             pkg: class.pkg.clone(),
             representation: ClassRepresentation::Data { has_handles: false },
         };
-        let rendered = data::render_record_fields(&nested, &fields)?;
+        let rendered = data::render_record_fields(
+            &nested,
+            arm.fields.iter().map(|f| (f.property(), &f.metadata)),
+        )?;
         let text = rendered
             .split_once("public data class")
             .ok_or("invalid variant class")?
@@ -576,11 +612,11 @@ pub(crate) fn render<I: KotlinInputConversion, O: KotlinOutputConversion>(
         text.insert_str(at, &format!(" : {}", class.fqn()));
         if class.has_handles() {
             let mut close = String::new();
-            for f in &fields {
+            for f in &arm.fields {
                 close.push_str(&close_member(
                     flat,
                     &f.ty,
-                    &format!("this.{}", kotlin_identifier(&f.name.to_string())),
+                    &format!("this.{}", kotlin_identifier(&f.property())),
                     0,
                 )?);
             }
@@ -696,7 +732,7 @@ pub(crate) fn emit_tags<I: KotlinInputConversion, O: KotlinOutputConversion>(
     fn visit(
         node: &kotlin::JniNode,
         package: &str,
-        by_package: &mut BTreeMap<String, BTreeMap<String, Rc<JniEnumGroup>>>,
+        by_package: &mut BTreeMap<String, BTreeSet<TypeRef>>,
     ) -> Result<()> {
         match node {
             WireNode::Leaf(wires) => {
@@ -711,11 +747,10 @@ pub(crate) fn emit_tags<I: KotlinInputConversion, O: KotlinOutputConversion>(
             WireNode::Chain { child, .. } => visit(child, package, by_package)?,
             WireNode::Branch { meta, children, .. } => {
                 if let JniBranch::Enum(e) = meta {
-                    let key = names::type_identity(&e.ty);
                     by_package
                         .entry(package.into())
                         .or_default()
-                        .insert(key, e.clone());
+                        .insert(e.source.clone());
                 }
                 for child in children {
                     visit(child, package, by_package)?;
@@ -763,10 +798,12 @@ pub(crate) fn emit_tags<I: KotlinInputConversion, O: KotlinOutputConversion>(
     let mut catalogue = BTreeMap::new();
     for (package, enums) in packages {
         let mut constants = BTreeMap::new();
-        for (identity, e) in enums {
-            let stem = tag_stem(&e.ty);
-            for (index, variant) in e.variants.iter().enumerate() {
-                let variant = tag_word(variant);
+        for reference in enums {
+            let source = crate::metadata::source_enum(&flat.types, &reference)?;
+            let identity = names::type_identity(&source.ty);
+            let stem = tag_stem(&source.ty);
+            for (index, variant) in source.variants.iter().enumerate() {
+                let variant = tag_word(&variant.name.to_string());
                 let name = format!("{stem}_{variant}_TAG");
                 validate_name(&name)?;
                 if constants
@@ -779,7 +816,7 @@ pub(crate) fn emit_tags<I: KotlinInputConversion, O: KotlinOutputConversion>(
                     return Err("payload enum tag constant collision".into());
                 }
             }
-            catalogue.insert(identity, e.variants.clone());
+            catalogue.insert(identity, source);
         }
         files.insert(
             format!("{}/PayloadTags.kt", package.replace('.', "/")),
@@ -791,7 +828,17 @@ pub(crate) fn emit_tags<I: KotlinInputConversion, O: KotlinOutputConversion>(
     }
     let schema = catalogue
         .iter()
-        .map(|(ty, variants)| format!("{ty}:{}", variants.join(";")))
+        .map(|(ty, source)| {
+            format!(
+                "{ty}:{}",
+                source
+                    .variants
+                    .iter()
+                    .map(|v| v.name.to_string().trim_start_matches("r#").to_owned())
+                    .collect::<Vec<_>>()
+                    .join(";")
+            )
+        })
         .collect::<Vec<_>>()
         .join("|");
     let hash = prebindgen_reprc::schema_id(&schema) as i64;

@@ -303,30 +303,20 @@ fn a_local_callback_projection_needs_a_distinct_shared_interface_name() {
     custom
         .set_argument_converter(0, TextOutput(native))
         .unwrap();
-    bindings::set_input(
-        &mut flat,
-        "invoke",
-        "callback",
-        custom
-            .clone()
-            .into_input(syn::parse_quote!(wire), syn::parse_quote!(value))
-            .unwrap(),
-    )
-    .unwrap();
+    let input = custom
+        .clone()
+        .into_input(&flat, syn::parse_quote!(wire), syn::parse_quote!(value))
+        .unwrap();
+    bindings::set_input(&mut flat, "invoke", "callback", input).unwrap();
     assert!(generate(&flat)
         .err()
         .unwrap()
         .contains("signature collision"));
     custom.set_interface_name("TextCallback").unwrap();
-    bindings::set_input(
-        &mut flat,
-        "invoke",
-        "callback",
-        custom
-            .into_input(syn::parse_quote!(wire), syn::parse_quote!(value))
-            .unwrap(),
-    )
-    .unwrap();
+    let input = custom
+        .into_input(&flat, syn::parse_quote!(wire), syn::parse_quote!(value))
+        .unwrap();
+    bindings::set_input(&mut flat, "invoke", "callback", input).unwrap();
     let output = generate(&flat).unwrap();
     assert!(output.kotlin["test/TextCallback.kt"].contains("arg0_0: String"));
     assert!(output.kotlin["test/i64Toi64Callback.kt"].contains("arg0_0: Long"));

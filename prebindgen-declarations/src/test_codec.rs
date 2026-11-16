@@ -192,8 +192,7 @@ impl<C: Codec<InOps = TestInputOps, OutOps = TestOutputOps, CompileState = TestC
                 self.state.bulk.set(true);
                 let child = self.input_named(ty, inner, extra, active, names);
                 self.state.bulk.set(false);
-                self.codec
-                    .bulk_input(self.flat, ty, extra, wire, child?, active)
+                self.codec.bulk_input(self.flat, ty, extra, wire, child?)
             }
             TestInput::Arrow {
                 operation: operation @ TestInputArrow::BoundCallback(callback),

@@ -234,6 +234,7 @@ pub fn generate() -> Result<JniGen> {
     flat.function_mut("duration_callback")?.metadata[0]
         .call_mut()?
         .inputs[0] = callback.into_input(
+        &flat,
         syn::parse_quote!(custom_callback),
         syn::parse_quote!(callback_value),
     )?;

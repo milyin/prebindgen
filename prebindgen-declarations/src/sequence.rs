@@ -119,6 +119,7 @@ fn replace(code: &TokenStream, values: &[(syn::Ident, TokenStream)]) -> Result<T
 #[allow(clippy::too_many_arguments)]
 /// Assemble one sequence input from a prepared row conversion.
 pub fn input<C: Codec>(
+    flat: &Flat<C::Schema>,
     codec: &C,
     ty: &Type,
     extra: &C::Extra,
@@ -143,6 +144,7 @@ pub fn input<C: Codec>(
         require_bulk(codec, Direction::Input)?;
     }
     let transport = codec.sequence_input(SequenceInputRequest {
+        flat,
         extra,
         view,
         wire: wire.clone(),
@@ -268,6 +270,7 @@ pub fn input<C: Codec>(
 #[allow(clippy::too_many_arguments)]
 /// Assemble one sequence output with the selected transport and delivery.
 pub fn output<C: Codec>(
+    flat: &Flat<C::Schema>,
     codec: &C,
     ty: &Type,
     extra: &C::Extra,
@@ -305,6 +308,7 @@ pub fn output<C: Codec>(
         require_bulk(codec, Direction::Output)?;
     }
     let transport = codec.sequence_output(SequenceOutputRequest {
+        flat,
         extra,
         wire: wire.clone(),
         length: length.clone(),

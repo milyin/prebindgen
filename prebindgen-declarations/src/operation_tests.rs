@@ -230,6 +230,7 @@ fn minimal_codec_rejects_optional_features_and_bulk_before_decoding() {
     assert!(Scalars.group(GroupKind::NamedOutput("view")).is_err());
     assert!(Scalars
         .sequence_input(SequenceInputRequest {
+            flat: &flat,
             view: prebindgen_flat::SequenceView::Owned,
             extra: &(),
             wire: format_ident!("rows"),

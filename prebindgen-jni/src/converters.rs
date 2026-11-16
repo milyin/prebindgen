@@ -184,7 +184,7 @@ impl JniOutputConverter {
     pub fn result_packet_fields(
         &self,
     ) -> Result<std::vec::IntoIter<&prebindgen_conversions::Wire<JniWire>>> {
-        group::validate_layout(&self.output_outcomes().success)?;
+        group::validate_fragment(&self.output_outcomes().success)?;
         Ok(group::result_packet_fields(&self.output_outcomes().success))
     }
 }

@@ -536,6 +536,25 @@ fn main() {
                                  .bulk(),
                          ),
                  ))
+            .class(data_class!(BulkCleanupBranches))
+            .class(sealed_class!(BulkCleanupChoice))
+            .fun(fun!(bulk_cleanup_branches_callback).expand_param(
+                "callback",
+                callback!(impl Fn() -> BulkCleanupBranches)
+                    .name("BulkCleanupBranchesCallback")
+                    .expand_return(
+                        expand_param!(BulkCleanupBranches).variant_record(
+                            param_fields!()
+                                .field("first", expand_param!(BulkHandle).variant(fun!(bulk_cleanup_first)).bulk())
+                                .field("second", expand_param!(Option<BulkCleanupChoice>).optional(
+                                    expand_param!(BulkCleanupChoice).enum_value([
+                                        ("One", param_fields!().field("value", expand_param!(BulkHandle).variant_self().bulk())),
+                                        ("Two", param_fields!().field("value", expand_param!(BulkHandle).variant_self().bulk())),
+                                    ]),
+                                )),
+                        ),
+                    ),
+            ))
             .fun(fun!(bulk_cleanup_pair_callback).expand_param(
                      "callback",
                      callback!(impl Fn() -> BulkPairText)

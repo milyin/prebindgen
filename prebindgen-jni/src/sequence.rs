@@ -3,19 +3,18 @@ use super::*;
 use crate::kotlin::{input_kotlin, KotlinBinding, KotlinContext, KotlinInput, KotlinOutput};
 use prebindgen_declarations::{Condition, SequenceInput, SequenceOutput};
 
-/// Selected delivery of a logical sequence.
+/// Materialization or callback delivery of a logical sequence.
+/// The enclosing bulk scope selects native row encoding independently.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum JniSequence {
-    /// Array of legacy `Object[]` rows, also used for inputs and custom schemas.
+    /// Materialized rows: object arrays ordinarily, native rows in a bulk scope.
     Buffered,
-    /// JVM array of generated immutable typed rows, with cached constructors.
-    /// Custom writers must create this exact schema's row objects through the
-    /// registered `prebindgen_jni_runtime::OutputRowType`, never `Object[]` rows.
+    /// Prefer generated immutable JVM row objects outside bulk scopes.
+    /// Custom writers must use the registered OutputRowType for those objects.
+    /// Bulk scopes use native rows regardless of this ordinary-JVM preference.
     TypedBuffered,
-    /// Native row ranges inside an enclosing bulk frame.
-    Bulk,
-    /// Each row is delivered through the function's sequence callback; the
-    /// collection's scalar status distinguishes present (zero) from absent.
+    /// Deliver each row through the function's sequence callback. Bulk may wrap
+    /// its element conversion, but cannot enclose the callback sequence itself.
     Callback,
 }
 
@@ -67,6 +66,7 @@ pub(crate) fn output(
     index: syn::Ident,
     element: &prebindgen_conversions::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
     values: &[(syn::Ident, TokenStream)],
+    types: &crate::metadata::JniTypes,
 ) -> Result<SequenceOutput<JniWire, crate::JniChain>> {
     let env = prebindgen_conversions::template_parameter("environment");
     let row = format_ident!("{wire}_row");
@@ -127,6 +127,7 @@ pub(crate) fn output(
         } else {
             crate::cleanup::Carrier::Objects
         },
+        types,
     )?;
     let (own, complete, commit) = if let Some(release) = release {
         (
@@ -180,7 +181,10 @@ pub(crate) fn input_list(
     context: &KotlinContext<'_>,
     active: &str,
 ) -> Result<KotlinInput> {
-    if *sequence == JniSequence::Bulk {
+    if context.bulk {
+        if *sequence == JniSequence::Callback {
+            return Err("bulk scopes cannot enclose callback sequence delivery".into());
+        }
         return crate::bulk::input_list(carrier, element, context, active);
     }
     if *sequence != JniSequence::Buffered {
@@ -441,7 +445,7 @@ pub(crate) fn validate_buffered(
             validate_buffered(element)?;
         }
         prebindgen_conversions::WireNode::Chain {
-            meta: JniChain::Optional(_) | JniChain::Bulk(_),
+            meta: JniChain::Optional(_) | JniChain::Bulk,
             child: element,
             ..
         } => validate_buffered(element)?,
@@ -517,9 +521,6 @@ mod delivery_tests {
         element: prebindgen_conversions::WireNode<JniWire, JniChain, JniBranch>,
     ) -> prebindgen_conversions::WireNode<JniWire, JniChain, JniBranch> {
         let kind = match delivery {
-            JniSequence::Bulk => JniWire::NativeRows {
-                condition: "true".into(),
-            },
             JniSequence::Callback => JniWire::selector(),
             JniSequence::Buffered | JniSequence::TypedBuffered => JniWire::Rows {
                 condition: "true".into(),

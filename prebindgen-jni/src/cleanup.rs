@@ -1,8 +1,8 @@
 //! Compose cleanup from resolved output shapes and emit each helper once.
 use super::*;
 use crate::kotlin::JniNode;
+use crate::{bulk::JniBulkRecord, metadata::JniTypes};
 use prebindgen_conversions::WireNode;
-use std::rc::Rc;
 
 #[derive(Clone, Copy)]
 pub(crate) enum Carrier {
@@ -32,7 +32,7 @@ enum Field {
 }
 struct Row {
     carrier: Carrier,
-    layout: Option<Rc<JniBulkRecord>>,
+    layout: Option<JniBulkRecord>,
     fields: Vec<(usize, Field)>,
     parts: Vec<String>,
     label: String,
@@ -41,21 +41,29 @@ struct Row {
     wires: Vec<JniWire>,
 }
 
-fn carrier_child<'a>(
+struct CarrierChild<'a> {
     node: &'a JniNode,
-    name: &syn::Ident,
-) -> Option<(&'a JniNode, Option<&'a JniSequence>)> {
+    sequence: Option<&'a JniSequence>,
+}
+
+fn carrier_child<'a>(node: &'a JniNode, name: &syn::Ident) -> Option<CarrierChild<'a>> {
     match node {
         WireNode::Chain {
             meta: JniChain::Sequence(sequence),
             controls,
             child,
-        } if controls.iter().any(|w| &w.name == name) => Some((child, Some(sequence))),
+        } if controls.iter().any(|w| &w.name == name) => Some(CarrierChild {
+            node: child,
+            sequence: Some(sequence),
+        }),
         WireNode::Chain {
-            meta: JniChain::Bulk(_),
+            meta: JniChain::Bulk,
             controls,
             child,
-        } if controls.iter().any(|w| &w.name == name) => Some((child, None)),
+        } if controls.iter().any(|w| &w.name == name) => Some(CarrierChild {
+            node: child,
+            sequence: None,
+        }),
         WireNode::Chain { child, .. } => carrier_child(child, name),
         WireNode::Branch { children, .. } => {
             children.iter().find_map(|child| carrier_child(child, name))
@@ -65,11 +73,11 @@ fn carrier_child<'a>(
 }
 
 impl Row {
-    fn new(node: &JniNode, carrier: Carrier) -> Result<Self> {
+    fn new(node: &JniNode, carrier: Carrier, types: &JniTypes) -> Result<Self> {
         let layout = if matches!(carrier, Carrier::Objects | Carrier::TypedObjects) {
             None
         } else {
-            Some(bulk::record(node)?)
+            Some(bulk::record(node, types)?)
         };
         let mut parts = vec![layout.as_ref().map_or_else(
             || {
@@ -112,11 +120,11 @@ impl Row {
                     ) {
                         return Err("collection cleanup carrier differs from its row layout".into());
                     }
-                    let (child, sequence) = carrier_child(node, &wire.name)
+                    let child = carrier_child(node, &wire.name)
                         .ok_or("missing collection cleanup element")?;
                     let child_carrier =
                         if matches!(carrier, Carrier::Objects | Carrier::TypedObjects) {
-                            if matches!(sequence, Some(JniSequence::TypedBuffered)) {
+                            if matches!(child.sequence, Some(JniSequence::TypedBuffered)) {
                                 Carrier::TypedObjects
                             } else {
                                 Carrier::Objects
@@ -124,7 +132,7 @@ impl Row {
                         } else {
                             carrier
                         };
-                    let row = Self::new(child, child_carrier)?;
+                    let row = Self::new(child.node, child_carrier, types)?;
                     if row.fields.is_empty() {
                         continue;
                     }
@@ -136,9 +144,9 @@ impl Row {
                     if !matches!(carrier, Carrier::Objects | Carrier::TypedObjects) {
                         return Err("a JVM bulk frame cannot be a native row field".into());
                     }
-                    let (child, _) =
+                    let child =
                         carrier_child(node, &wire.name).ok_or("missing frame cleanup layout")?;
-                    let row = Self::new(child, Carrier::NativeJni)?;
+                    let row = Self::new(child.node, Carrier::NativeJni, types)?;
                     if row.fields.is_empty() {
                         continue;
                     }
@@ -192,8 +200,12 @@ impl Row {
 }
 
 /// A stable reference for preparation; definitions are interned during emission.
-pub(crate) fn helper(node: &JniNode, carrier: Carrier) -> Result<Option<syn::Ident>> {
-    let row = Row::new(node, carrier)?;
+pub(crate) fn helper(
+    node: &JniNode,
+    carrier: Carrier,
+    types: &JniTypes,
+) -> Result<Option<syn::Ident>> {
+    let row = Row::new(node, carrier, types)?;
     if row.fields.is_empty() {
         Ok(None)
     } else {
@@ -366,40 +378,48 @@ impl Helpers {
         Ok(name)
     }
 
-    fn visit(&mut self, node: &JniNode, input: bool) -> Result<()> {
+    fn visit(&mut self, node: &JniNode, input: bool, bulk: bool, types: &JniTypes) -> Result<()> {
         match node {
+            WireNode::Chain {
+                meta: JniChain::Bulk,
+                child,
+                ..
+            } => self.visit(child, input, true, types)?,
             WireNode::Chain {
                 meta: JniChain::Sequence(sequence),
                 child,
                 ..
             } => {
                 if !input {
-                    let carrier = match sequence {
-                        JniSequence::Buffered => Some(Carrier::Objects),
-                        JniSequence::TypedBuffered => Some(Carrier::TypedObjects),
-                        JniSequence::Bulk => Some(Carrier::Native),
-                        JniSequence::Callback => None,
+                    let carrier = if bulk {
+                        Some(Carrier::Native)
+                    } else {
+                        match sequence {
+                            JniSequence::Buffered => Some(Carrier::Objects),
+                            JniSequence::TypedBuffered => Some(Carrier::TypedObjects),
+                            JniSequence::Callback => None,
+                        }
                     };
                     if let Some(carrier) = carrier {
-                        let row = Row::new(child, carrier)?;
+                        let row = Row::new(child, carrier, types)?;
                         if !row.fields.is_empty() {
                             self.intern(&row)?;
                         }
                     }
                 }
-                self.visit(child, input)?;
+                self.visit(child, input, bulk, types)?;
             }
-            WireNode::Chain { child, .. } => self.visit(child, input)?,
+            WireNode::Chain { child, .. } => self.visit(child, input, bulk, types)?,
             WireNode::Branch { children, .. } => {
                 for child in children {
-                    self.visit(child, input)?;
+                    self.visit(child, input, bulk, types)?;
                 }
             }
             WireNode::Leaf(wires) => {
                 for wire in wires {
                     if let JniWire::Callback { callback } = &wire.kind {
                         for (input, node) in callback.bulk_nodes() {
-                            self.visit(node, input)?;
+                            self.visit(node, input, false, types)?;
                         }
                     }
                 }
@@ -414,7 +434,7 @@ pub(crate) fn emit<I: KotlinInputConversion, O: KotlinOutputConversion>(
 ) -> Result<TokenStream> {
     let mut helpers = Helpers::default();
     for (input, node) in metadata::nodes(flat)? {
-        helpers.visit(node, input)?;
+        helpers.visit(node, input, false, &flat.types)?;
     }
     Ok(helpers.definitions.into_values().collect())
 }
@@ -441,8 +461,8 @@ mod tests {
         let mut helpers = Helpers::default();
         let mut names = BTreeSet::new();
         for carrier in [Carrier::Objects, Carrier::Native, Carrier::NativeJni] {
-            let first = Row::new(&owner("first"), carrier).unwrap();
-            let second = Row::new(&owner("second"), carrier).unwrap();
+            let first = Row::new(&owner("first"), carrier, &BTreeMap::new()).unwrap();
+            let second = Row::new(&owner("second"), carrier, &BTreeMap::new()).unwrap();
             let one = helpers.intern(&first).unwrap();
             let two = helpers.intern(&second).unwrap();
             assert_eq!(one, two);
@@ -454,7 +474,7 @@ mod tests {
 
     #[test]
     fn helper_names_reject_collisions_instead_of_reusing_wrong_cleanup() {
-        let row = Row::new(&owner("value"), Carrier::Objects).unwrap();
+        let row = Row::new(&owner("value"), Carrier::Objects, &BTreeMap::new()).unwrap();
         let name = row.name().unwrap();
         let mut helpers = Helpers::default();
         helpers

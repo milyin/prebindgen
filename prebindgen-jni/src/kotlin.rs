@@ -1,6 +1,6 @@
 //! JNI slot converters own Kotlin conversion, locking and rollback behavior.
 use super::*;
-use crate::group::validate_layout;
+use crate::group::validate_layout_in;
 use prebindgen_declarations::{ComponentPath, ComponentSegment};
 
 use prebindgen_conversions::{Conversion, Wire};
@@ -54,24 +54,15 @@ impl KotlinReturnContext<'_> {
         Ok(output)
     }
 }
-/// Configured names for a generated handle class and its native destructor.
-#[derive(Clone, Debug)]
-pub struct KotlinClass {
-    /// Stable allocation-class identifier used for one consistent lock order.
-    pub handle_type: i64,
-    /// Whether inputs of this class need a JVM reachability fence.
-    pub gc_managed: bool,
-    /// Fully qualified Kotlin class name.
-    pub name: String,
-    /// Fully qualified native function accepting a raw handle address.
-    pub drop_function: String,
-}
 /// Names and class settings supplied by the Kotlin wrapper writer.
 pub struct KotlinContext<'a> {
     /// Root package of this binding module and its bulk runtime.
     pub package: &'a str,
-    /// Configured classes indexed by [`prebindgen_flat::type_key`].
-    pub classes: &'a BTreeMap<String, KotlinClass>,
+    /// Canonical source declarations and JNI type/field metadata, borrowed from Flat.
+    pub source_types: &'a BTreeMap<String, prebindgen_flat::TypeInfo<JniType, JniField>>,
+    /// Inherited packed encoding, set by an enclosing JniChain::Bulk while
+    /// interpreting its descendants. Start ordinary call/callback boundaries false.
+    pub bulk: bool,
     /// Variable holding the native output array.
     pub result: &'a str,
     /// Caught delivery exception to which rollback failures are attached.
@@ -97,20 +88,15 @@ impl KotlinContext<'_> {
     }
     /// Resolve the configured Kotlin class name for a source type.
     pub fn class_name(&self, ty: &syn::Type) -> Result<String> {
-        Ok(self
-            .classes
-            .get(&type_key(ty))
-            .ok_or_else(|| format!("no handle class for `{}`", type_key(ty)))?
-            .name
-            .clone())
+        Ok(crate::metadata::source_handle(self.source_types, ty)?
+            .1
+            .fqn())
     }
     /// Emit the configured native destructor invocation for an unwrapped handle.
     pub fn drop_handle(&self, ty: &syn::Type, value: &str) -> Result<String> {
-        let class = self
-            .classes
-            .get(&type_key(ty))
-            .ok_or_else(|| format!("no handle class for `{}`", type_key(ty)))?;
-        Ok(format!("{}({value})", class.drop_function))
+        let (ty, _) = crate::metadata::source_handle(self.source_types, ty)?;
+        let method = crate::handles::drop_method(ty, &mut names::Names::default())?;
+        Ok(format!("{}.JNINative.{method}({value})", self.package))
     }
 }
 /// A prepared local binding, evaluated before collecting handle locks.
@@ -402,7 +388,7 @@ impl Conversion for PlanOutput {
 impl KotlinInputConversion for PlanInput {
     fn kotlin(&self, context: &KotlinContext<'_>) -> Result<KotlinInput> {
         crate::sequence::validate_buffered(self.input_node())?;
-        validate_layout(self.input_node())?;
+        validate_layout_in(self.input_node(), context.bulk)?;
         input_kotlin(self.input_node(), context)
     }
     fn callback_return_fragment(
@@ -585,7 +571,7 @@ pub(crate) fn input_leaves(
 }
 impl KotlinOutputConversion for PlanOutput {
     fn kotlin(&self, context: &KotlinContext<'_>) -> Result<KotlinOutput> {
-        validate_layout(&self.output_outcomes().success)?;
+        validate_layout_in(&self.output_outcomes().success, context.bulk)?;
         output_kotlin(&self.output_outcomes().success, context)
     }
     fn delivery_policy(&self) -> prebindgen_conversions::DeliveryPolicy {
@@ -714,7 +700,7 @@ pub(crate) fn has_optional(node: &JniNode) -> bool {
     match node {
         JniNode::Leaf(_)
         | JniNode::Chain {
-            meta: JniChain::Sequence(_) | JniChain::Bulk(_),
+            meta: JniChain::Sequence(_) | JniChain::Bulk,
             ..
         } => false,
         JniNode::Chain {
@@ -780,10 +766,10 @@ pub(crate) fn input_kotlin_when(
         } => crate::sealed::input(children, controls, group, context, active),
         JniNode::Leaf(wires) => input_leaves(&wires.iter().collect::<Vec<_>>(), context, active),
         JniNode::Chain {
-            meta: JniChain::Bulk(record),
+            meta: JniChain::Bulk,
             controls,
             child,
-        } => crate::bulk::input_kotlin(record, controls, child, context, active),
+        } => crate::bulk::input_kotlin(controls, child, context, active),
         JniNode::Branch {
             meta: JniBranch::Alternatives,
             children: elements,
@@ -859,12 +845,6 @@ pub(crate) fn input_kotlin_when(
     }?;
     out.complete_parameter_paths()?;
     Ok(out)
-}
-pub(crate) fn input_components(
-    nodes: &[JniNode],
-    context: &KotlinContext<'_>,
-) -> Result<KotlinInput> {
-    input_components_when(nodes, context, "true")
 }
 fn input_components_when(
     nodes: &[JniNode],
@@ -948,10 +928,10 @@ pub(crate) fn output_kotlin_scoped(
         } => crate::sealed::output(children, controls, group, context, owners),
         JniNode::Leaf(wires) => output_leaves(&wires.iter().collect::<Vec<_>>(), context, owners),
         JniNode::Chain {
-            meta: JniChain::Bulk(record),
+            meta: JniChain::Bulk,
             child,
             ..
-        } => crate::bulk::output_kotlin(record, child, context, owners),
+        } => crate::bulk::output_kotlin(child, context, owners),
         JniNode::Branch {
             meta: JniBranch::Alternatives,
             ..
@@ -964,18 +944,24 @@ pub(crate) fn output_kotlin_scoped(
             let name = format!("{}owners", context.output_prefix);
             let root = owners.is_none() && input_handles(element, false);
             let scope = if root { Some(name.as_str()) } else { owners };
-            let mut output = match metadata {
-                JniSequence::Buffered => {
-                    crate::sequence::output_list(element, context, scope, false)?
+            let mut output = if context.bulk {
+                if *metadata == JniSequence::Callback {
+                    return Err("bulk scopes cannot enclose callback sequence delivery".into());
                 }
-                JniSequence::TypedBuffered => {
-                    crate::sequence::output_list(element, context, scope, true)?
-                }
-                JniSequence::Bulk => crate::bulk::output_list(element, context, scope)?,
-                JniSequence::Callback => {
-                    return Err(
-                        "callback sequence requires function-level callback delivery".into(),
-                    )
+                crate::bulk::output_list(element, context, scope)?
+            } else {
+                match metadata {
+                    JniSequence::Buffered => {
+                        crate::sequence::output_list(element, context, scope, false)?
+                    }
+                    JniSequence::TypedBuffered => {
+                        crate::sequence::output_list(element, context, scope, true)?
+                    }
+                    JniSequence::Callback => {
+                        return Err(
+                            "callback sequence requires function-level callback delivery".into(),
+                        )
+                    }
                 }
             };
             if root {
@@ -1036,6 +1022,15 @@ pub(crate) fn output_components(
         let wires = nodes.iter().flat_map(leaf_wires).collect::<Vec<_>>();
         return output_leaves(&wires, context, owners);
     }
+    output_components_checked(nodes, context, owners, |_| Ok(()))
+}
+// Validate or normalize each property while its conversion is emitted once.
+pub(crate) fn output_components_checked(
+    nodes: &[JniNode],
+    context: &KotlinContext<'_>,
+    owners: Option<&str>,
+    mut check: impl FnMut(&mut KotlinOutput) -> Result<()>,
+) -> Result<KotlinOutput> {
     let mut out = KotlinOutput::default();
     let mut offset = 0;
     for (index, node) in nodes.iter().enumerate() {
@@ -1048,6 +1043,7 @@ pub(crate) fn output_components(
         };
         let count = crate::group::kotlin_result_fields(node).len();
         let mut c = output_kotlin_scoped(node, &ctx, owners)?;
+        check(&mut c)?;
         remap_output(&mut c, &local, context.result, offset, count);
         c.result_names.resize(c.result_types.len(), None);
         out.result_names.extend(c.result_names);
@@ -1078,18 +1074,21 @@ mod tests {
 
     #[test]
     fn slots_emit_private_conditions_and_use_supplied_output_bindings() {
-        let classes = BTreeMap::from([(
-            "Counter".into(),
-            KotlinClass {
-                name: "example.Counter".into(),
-                drop_function: "example.Native.release".into(),
-                handle_type: 0,
-                gc_managed: false,
-            },
-        )]);
+        let flat = JniGen::builder()
+            .items([(
+                syn::parse_quote!(
+                    pub struct Counter {}
+                ),
+                Default::default(),
+            )])
+            .set_package_prefix("example")
+            .package(package!().class(ptr_class!(Counter)))
+            .configured()
+            .unwrap();
         let context = KotlinContext {
             package: "example",
-            classes: &classes,
+            source_types: &flat.types,
+            bulk: false,
             result: "native_values",
             failure: "delivery_error",
             cleanup_failure: None,
@@ -1099,7 +1098,7 @@ mod tests {
         let mut plan = JniCodec::raw()
             .input_leaf(prebindgen_declarations::InputLeaf::new(
                 &JniBindings::parse([]).unwrap(),
-                &syn::parse_quote!(Counter),
+                &syn::parse_quote!(crate::Counter),
                 &(),
                 syn::parse_quote!(incoming),
                 syn::parse_quote!(value),
@@ -1150,7 +1149,7 @@ mod tests {
         let plan = JniCodec::raw()
             .output_leaf(prebindgen_declarations::OutputLeaf::new(
                 &JniBindings::parse([]).unwrap(),
-                &syn::parse_quote!(Counter),
+                &syn::parse_quote!(crate::Counter),
                 &(),
                 syn::parse_quote!(wire),
                 quote!(returned),
@@ -1162,9 +1161,8 @@ mod tests {
         assert!(output
             .materialize
             .contains("example.Counter(native_values[0] as Long)"));
-        assert!(output
-            .cleanup
-            .contains("example.Native.release(native_values[0] as Long)"));
+        assert!(output.cleanup.contains("example.JNINative.drop_Counter_"));
+        assert!(output.cleanup.contains("(native_values[0] as Long)"));
         assert!(output
             .cleanup
             .contains("delivery_error.addSuppressed(cleanup)"));

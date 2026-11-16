@@ -194,6 +194,7 @@ impl Codec for CodecImpl {
         request: SequenceInputRequest<'_, Self>,
     ) -> Result<SequenceInput<Type, PacketChain>> {
         let SequenceInputRequest {
+            flat: _,
             wire,
             length,
             index,
@@ -236,6 +237,7 @@ impl Codec for CodecImpl {
         request: SequenceOutputRequest<'_, Self>,
     ) -> Result<SequenceOutput<Type, PacketChain>> {
         let SequenceOutputRequest {
+            flat: _,
             wire,
             length,
             element,

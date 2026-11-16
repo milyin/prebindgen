@@ -422,6 +422,12 @@ rows0Index++
 }
 }
 }
+internal class Input_i64_3711b7e845f5d8b9 : BulkHandleWriter(BulkLayouts.r3711b7e845f5d8b9.size, 1) {
+override fun patchHandles() {
+var handleIndex0 = 0
+handleIndex0 = patchHandle((0) + io.prebindgen.covertest.BulkLayouts.r3711b7e845f5d8b9.offsets[0], handleIndex0, 0)
+}
+}
 internal class Input_i64_638fef00b45d8f09 : BulkHandleWriter(BulkLayouts.r638fef00b45d8f09.size, 1) {
 override fun patchHandles() {
 var handleIndex0 = 0

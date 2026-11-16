@@ -63,7 +63,7 @@ impl Selection {
                 WireNode::Leaf(wires) => set(wires, out),
                 WireNode::Chain {
                     controls,
-                    meta: JniChain::Sequence(_) | JniChain::Bulk(_),
+                    meta: JniChain::Sequence(_) | JniChain::Bulk,
                     ..
                 } => set(controls, out),
                 WireNode::Chain {

@@ -118,3 +118,77 @@ pub type JniBinding<I = JniInputConverter, O = JniOutputConverter> =
         O,
         JniFunction,
     >;
+
+// Borrow the actual Flat type table, independent of its export converter types.
+pub(crate) type JniTypes = BTreeMap<String, prebindgen_flat::TypeInfo<JniType, data::JniField>>;
+
+pub(crate) fn handle_classes(types: &JniTypes) -> impl Iterator<Item = (&syn::Type, &Class)> {
+    let mut classes = types
+        .values()
+        .filter_map(|source| {
+            source
+                .metadata
+                .class
+                .as_deref()
+                .filter(|class| matches!(class.representation, ClassRepresentation::Handle { .. }))
+                .map(|class| (&source.ty, class))
+        })
+        .collect::<Vec<_>>();
+    // Preserve emitted declaration order across captured and external types.
+    classes.sort_by_key(|(ty, _)| type_key(ty));
+    classes.into_iter()
+}
+
+pub(crate) fn source_handle<'a>(
+    types: &'a JniTypes,
+    ty: &syn::Type,
+) -> Result<(&'a syn::Type, &'a Class)> {
+    let source = types
+        .values()
+        .find(|entry| prebindgen_flat::same_type(&entry.ty, ty))
+        .ok_or_else(|| format!("unregistered JNI source type `{}`", type_key(ty)))?;
+    let class = source
+        .metadata
+        .class
+        .as_deref()
+        .filter(|class| matches!(class.representation, ClassRepresentation::Handle { .. }))
+        .ok_or_else(|| format!("no handle class for `{}`", type_key(ty)))?;
+    Ok((&source.ty, class))
+}
+
+pub(crate) fn source_type<'a>(
+    types: &'a JniTypes,
+    reference: &prebindgen_flat::TypeRef,
+) -> Result<&'a prebindgen_flat::TypeInfo<JniType, data::JniField>> {
+    types
+        .get(reference.key())
+        .ok_or_else(|| format!("missing JNI source type entry `{}`", reference.key()))
+}
+pub(crate) fn source_data_class<'a>(
+    types: &'a JniTypes,
+    reference: &prebindgen_flat::TypeRef,
+) -> Result<(&'a prebindgen_flat::Record<data::JniField>, &'a Class)> {
+    let source = source_type(types, reference)?;
+    let class = source
+        .metadata
+        .class
+        .as_deref()
+        .filter(|class| matches!(class.representation, ClassRepresentation::Data { .. }))
+        .ok_or("record conversion requires a declared data class")?;
+    match &source.definition {
+        prebindgen_flat::TypeDefinition::Record(record) => Ok((record, class)),
+        _ => Err(format!("`{}` is not a source record", reference.key())),
+    }
+}
+pub(crate) fn source_enum<'a>(
+    types: &'a JniTypes,
+    reference: &prebindgen_flat::TypeRef,
+) -> Result<&'a prebindgen_flat::PayloadEnum<(), data::JniField>> {
+    match &source_type(types, reference)?.definition {
+        prebindgen_flat::TypeDefinition::PayloadEnum(enumeration) => Ok(enumeration),
+        _ => Err(format!(
+            "`{}` is not a source payload enum",
+            reference.key()
+        )),
+    }
+}

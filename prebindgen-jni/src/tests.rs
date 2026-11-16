@@ -3578,7 +3578,7 @@ fn resolved_callback_elements_can_keep_optional_presence_outside_a_bulk_frame() 
     // The optional uses a null frame, so presence stays outside its payload
     // without adding a separate discriminator argument.
     assert!(
-        matches!(element, prebindgen_conversions::WireNode::Chain {meta:JniChain::Optional(_),child,..} if matches!(child.as_ref(),prebindgen_conversions::WireNode::Chain {meta:JniChain::Bulk(_),..}))
+        matches!(element, prebindgen_conversions::WireNode::Chain {meta:JniChain::Optional(_),child,..} if matches!(child.as_ref(),prebindgen_conversions::WireNode::Chain {meta:JniChain::Bulk,..}))
     );
     assert_eq!(fields.len(), 1);
     assert_eq!(
@@ -3808,6 +3808,7 @@ fn ordinary_output_rows_respect_jvm_constructor_slot_limit() {
             syn::parse_quote!(index),
             &element,
             &values,
+            &BTreeMap::new(),
         )
         .unwrap();
         assert!(
@@ -3838,7 +3839,8 @@ fn legacy_buffered_schema_keeps_array_decoder_and_input_only_skips_registration(
     };
     let context = KotlinContext {
         package: "test",
-        classes: &BTreeMap::new(),
+        source_types: &BTreeMap::new(),
+        bulk: false,
         result: "packet",
         failure: "failure",
         cleanup_failure: None,

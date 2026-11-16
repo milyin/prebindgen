@@ -236,6 +236,8 @@ pub struct EnumEncoding<C: Codec + ?Sized> {
 
 /// Choose the physical input transport for a prepared sequence element.
 pub struct SequenceInputRequest<'a, C: Codec + ?Sized> {
+    /// Canonical source declarations and adapter metadata.
+    pub flat: &'a Flat<C::Schema>,
     /// Source collection ownership/view semantics.
     pub view: prebindgen_flat::SequenceView,
     /// Borrowed occurrence configuration.
@@ -255,6 +257,8 @@ pub struct SequenceInputRequest<'a, C: Codec + ?Sized> {
 }
 /// Choose physical storage/delivery for a prepared sequence output.
 pub struct SequenceOutputRequest<'a, C: Codec + ?Sized> {
+    /// Canonical source declarations and adapter metadata.
+    pub flat: &'a Flat<C::Schema>,
     /// Borrowed occurrence configuration.
     pub extra: &'a C::Extra,
     /// Unique carrier binding stem.

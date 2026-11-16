@@ -206,7 +206,6 @@ pub trait Codec {
         _extra: &Self::Extra,
         _wire: syn::Ident,
         _child: CodecInputPlan<Self>,
-        _active: &Condition,
     ) -> Result<CodecInputPlan<Self>> {
         Err("bulk inputs are unsupported by this codec".into())
     }

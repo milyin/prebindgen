@@ -1213,7 +1213,7 @@ impl<C: Codec> Compiler<'_, C> {
             let child = self.input(element, element_recipe, extra, &Condition::default());
             let child = child?;
             sequence::input(
-                self.codec, ty, extra, wire, var, length, index, active, child, bulk,
+                self.flat, self.codec, ty, extra, wire, var, length, index, active, child, bulk,
             )
         }
     }
@@ -1275,6 +1275,7 @@ impl<C: Codec> Compiler<'_, C> {
             });
             let child = child?;
             sequence::output(
+                self.flat,
                 self.codec,
                 ty,
                 extra,

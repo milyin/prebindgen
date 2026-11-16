@@ -649,6 +649,50 @@ All definitions occur in terminal bundles or the `controls` of chain and branch
 nodes. Metadata retains encoding decisions and references to
 those definitions; it owns no wire descriptors or copies of child trees.
 
+`Flat::type_ref(&rust_type)` issues an opaque `TypeRef` only for a registered
+type. Its private key supports direct `Flat::get_type` / `get_type_mut` lookup;
+there is no public constructor, default or conversion from a string. References
+remain usable when Flat is cloned or its attachments are mapped with table keys
+preserved. Lookup fails if the referenced entry is removed.
+
+JNI record and payload-enum occurrences retain a Flat-issued `TypeRef` and their
+local binding/grouping policy. Class names, variant/field names and Kotlin
+property types are read from the canonical Flat declarations during emission.
+`KotlinContext::source_types` borrows that actual type table, including for custom
+converters. Handle conversions use this same table; there is no separate
+`KotlinClass` registry. Record and enum fields are validated as their conversions
+are emitted, without retaining property tables or emitting a field again just to
+check its type. Bulk frame and row layouts are temporary values derived from the
+wire subtree and canonical source types when preparing Rust code, emitting
+Kotlin, measuring target layouts or building cleanup helpers. No layout
+descriptors are retained in the wire tree.
+Changing the referenced source tags or wire layout after preparation requires
+preparing the conversions again; Kotlin class
+and variant-name overrides are resolved from the current declarations.
+
+`JniChain::Bulk` establishes packed encoding for its entire child tree during
+Rust preparation and Kotlin interpretation. Sequences inherit this scope: their
+`JniSequence` metadata selects materialized or callback delivery, with an optional
+ordinary-JVM typed-row preference. There is no sequence-level bulk policy.
+Under bulk, materialized sequences use offset/count ranges and contiguous native
+rows; nested collections share the enclosing frame. Callback delivery can wrap a
+bulk element, but a bulk frame cannot enclose a callback-delivered sequence.
+
+Custom Kotlin conversion contexts start with `KotlinContext::bulk = false` at a
+call/callback boundary; the enclosing Bulk interpreter sets it for descendants.
+Custom native sequence compilers describe ranges with
+`JniWire::NativeRows { condition }`; stride and field offsets are derived from
+the sequence child. `JniChain::Bulk` is a unit variant: activation follows the
+enclosing optional and selector branches. Callback results cache every selected
+frame before source construction and retain the existing result-level cleanup
+guard, so a constructor failure also reclaims owners in later unread frames. `JniCallback::into_input(&flat, wire, target)` receives
+the canonical source context when recompiling a customized callback.
+Sequence transport requests and shared sequence
+helpers receive the source Flat explicitly, so adapters can resolve declarations
+without embedding them in each element tree. Fragment validation permits an
+unattached enclosing scope; complete boundary validation requires a matching
+physical encoding under the actual Bulk nodes.
+
 Each adapter has operations for actual ABI tasks: building a function's
 parameters, laying out a successful result packet, defining one sequence row,
 and choosing a visitor callback's arguments. Those operations inspect the tree
@@ -895,8 +939,10 @@ stored or rendered by the shared protocol.
 `allocation_type` identifies an independently owned allocation class used by
 Kotlin's handle preflight; C loans can use `None` for interior pointers.
 
-Low-level JNI adapter struct literals also need `KotlinClass::{handle_type,
-gc_managed}` and `KotlinInput::handle_inputs`. Resource-bearing inputs must expose
+Low-level JNI adapters read class settings from `KotlinContext::source_types`,
+the canonical Flat declarations, and provide `KotlinInput::handle_inputs`.
+Allocation IDs and destructor names derive from canonical source types, with no
+separate class registry. Resource-bearing inputs must expose
 all retained handles with their allocation types, access modes and individual or
 collection grouping. Missing or inconsistent metadata fails generation. Inputs
 without resources or handle locks may leave `handle_inputs` absent. Normal
