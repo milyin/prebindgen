@@ -1,8 +1,6 @@
 //! Inputs and results of declaration preparation operations.
 use super::*;
 
-/// Wire tree prepared by one codec.
-pub type CodecNode<C> = WireNode<<C as Codec>::Wire, <C as Codec>::Chain, <C as Codec>::Branch>;
 /// Prepared expressions keyed by their wire binding names.
 pub type WireValues = Vec<(syn::Ident, TokenStream)>;
 
@@ -162,15 +160,13 @@ pub enum GroupKind<'a> {
 }
 
 /// Choose an optional encoding and update its payload's remaining niche offers.
-pub struct Optional<'a, C: Codec + ?Sized> {
+pub struct Optional<'a, C: Codec + ?Sized, V: prebindgen_conversions::Conversion + ?Sized> {
     /// Borrowed occurrence configuration.
     pub extra: &'a C::Extra,
     /// Temporary payload tree; its native scope determines available discriminators.
-    pub payload: &'a mut CodecNode<C>,
+    pub payload: &'a mut WireNode<V::Wire, V::Chain, V::Branch>,
     /// Requested normalized 0/1 presence binding.
     pub presence: syn::Ident,
-    /// Input needs a presence test; output needs inactive expressions.
-    pub direction: Direction,
 }
 /// Presence encoding selected by one optional preparation operation.
 pub enum Presence<W: prebindgen_conversions::WireKind> {
@@ -184,11 +180,11 @@ pub enum Presence<W: prebindgen_conversions::WireKind> {
     },
 }
 /// Complete physical optional encoding, without duplicating its payload tree.
-pub struct OptionalEncoding<C: Codec + ?Sized> {
+pub struct OptionalEncoding<W: prebindgen_conversions::WireKind, M> {
     /// Separate flag or a reserved representation in an existing payload wire.
-    pub presence: Presence<C::Wire>,
+    pub presence: Presence<W>,
     /// Adapter metadata retaining the selected discriminator/reservation.
-    pub metadata: C::Chain,
+    pub metadata: M,
     /// Output expressions for every inactive payload wire. The niche donor must
     /// produce its reserved value. Empty for input.
     pub absent_values: WireValues,
@@ -196,9 +192,9 @@ pub struct OptionalEncoding<C: Codec + ?Sized> {
 /// Prepare metadata and inactive arm offers after the compiler names the selector.
 pub struct Alternatives<'a, C: Codec + ?Sized> {
     /// The selector after its source path has already been prefixed.
-    pub selector: &'a Wire<C::Wire>,
+    pub selector: &'a Wire<CodecInputWire<C>>,
     /// Prepared arm trees; retire offers in inactive values within each native scope.
-    pub arms: &'a mut [CodecNode<C>],
+    pub arms: &'a mut [CodecInputNode<C>],
 }
 
 /// Physical grouping requested for a source enum occurrence.
@@ -210,7 +206,7 @@ pub enum EnumForm {
     Fields,
 }
 /// Prepare the physical interpretation of already converted enum payloads.
-pub struct EnumVariants<'a, C: Codec + ?Sized> {
+pub struct EnumVariants<'a, C: Codec + ?Sized, V: prebindgen_conversions::Conversion + ?Sized> {
     /// Source enum and adapter declarations.
     pub flat: &'a Flat<C::Schema>,
     /// Qualified source type.
@@ -218,18 +214,16 @@ pub struct EnumVariants<'a, C: Codec + ?Sized> {
     /// Input/output occurrence settings.
     pub extra: &'a C::Extra,
     /// Tag wire; the adapter can reserve its remaining domain for options.
-    pub selector: &'a mut Wire<C::Wire>,
+    pub selector: &'a mut Wire<V::Wire>,
     /// One active-arm description per source variant.
-    pub arms: &'a mut [CodecNode<C>],
+    pub arms: &'a mut [WireNode<V::Wire, V::Chain, V::Branch>],
     /// Ordinary enum value or explicitly expanded fields.
     pub form: EnumForm,
-    /// Input or output conversion.
-    pub direction: Direction,
 }
 /// Enum grouping metadata and safe raw values for inactive output slots.
-pub struct EnumEncoding<C: Codec + ?Sized> {
+pub struct EnumEncoding<M> {
     /// Adapter enum grouping, without duplicated child descriptions.
-    pub metadata: C::Branch,
+    pub metadata: M,
     /// One inactive-value list per output arm; empty on input.
     pub inactive: Vec<WireValues>,
 }
@@ -249,7 +243,7 @@ pub struct SequenceInputRequest<'a, C: Codec + ?Sized> {
     /// Binding for the current element index.
     pub index: syn::Ident,
     /// Prepared element tree.
-    pub element: &'a CodecNode<C>,
+    pub element: &'a CodecInputNode<C>,
     /// Active outer branches.
     pub active: &'a Condition,
     /// Ordinary rows or native bulk storage.
@@ -268,7 +262,7 @@ pub struct SequenceOutputRequest<'a, C: Codec + ?Sized> {
     /// Binding for the current element index.
     pub index: syn::Ident,
     /// Prepared element tree.
-    pub element: &'a CodecNode<C>,
+    pub element: &'a CodecOutputNode<C>,
     /// Element expressions keyed by wire name.
     pub values: &'a [(syn::Ident, TokenStream)],
     /// Materialization or per-element callback, after resolving Auto.
@@ -293,7 +287,16 @@ pub struct SourceError<'a, C: Codec + ?Sized> {
 /// Matching error payload and expression for the active fallible boundary.
 pub struct SourceErrorPlan<C: Codec + ?Sized> {
     /// Logical error wires, matching the declared delivery.
-    pub payload: CodecNode<C>,
+    pub payload: CodecOutputNode<C>,
     /// String expression returned as Err after typed delivery, if any.
     pub propagate: TokenStream,
 }
+
+/// Prepare optional input presence using only input wire metadata.
+pub type InputOptional<'a, C> = Optional<'a, C, <C as Codec>::Input>;
+/// Prepare optional output absence using only output wire metadata.
+pub type OutputOptional<'a, C> = Optional<'a, C, <C as Codec>::Output>;
+/// Interpret converted input enum variants.
+pub type InputEnumVariants<'a, C> = EnumVariants<'a, C, <C as Codec>::Input>;
+/// Interpret converted output enum variants.
+pub type OutputEnumVariants<'a, C> = EnumVariants<'a, C, <C as Codec>::Output>;

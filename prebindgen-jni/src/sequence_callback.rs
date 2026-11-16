@@ -5,9 +5,9 @@ use prebindgen_declarations::SequenceOutput;
 pub(crate) fn transport(
     wire: syn::Ident,
     length: syn::Ident,
-    element: &prebindgen_conversions::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
+    element: &JniOutputWireNode,
     values: &[(syn::Ident, TokenStream)],
-) -> Result<SequenceOutput<JniWire, crate::JniChain>> {
+) -> Result<SequenceOutput<JniWire, crate::JniOutputWireChain>> {
     let env = prebindgen_conversions::template_parameter("environment");
     let method = format_ident!("{wire}_callback_method");
     let class = format_ident!("{wire}_callback_class");
@@ -59,7 +59,7 @@ pub(crate) fn transport(
         }],
         commit_each: true,
         fallible: true,
-        metadata: JniChain::Sequence(JniSequence::Callback),
+        metadata: JniWireChain::Sequence(JniSequence::Callback),
         begin: quote! {
             // Every accepted row belongs to the Kotlin collector, including
             // when a later row fails. Publish this before any row can arrive.
@@ -96,8 +96,8 @@ pub(crate) fn transport(
 /// immutable record avoids primitive boxes and generic row arrays without
 /// copying wide rows when the collector grows. Logical projections can share
 /// the same physical JVM record type.
-pub(crate) fn capture(
-    element: &kotlin::JniNode,
+pub(crate) fn capture<Sq: crate::sequence::RowEncoding, In, Out>(
+    element: &JniWireNode<Sq, In, Out>,
     names: &mut names::Names,
 ) -> Result<(String, String)> {
     let fields = crate::group::callback_parameters(element).collect::<Vec<_>>();
@@ -160,13 +160,15 @@ pub(crate) fn fold<O: KotlinOutputConversion>(
     // Lexical row cleanup keeps partially constructed wrappers in scope. Only
     // dynamic nested collections need the shared owner journal; fixed fields
     // can use their existing locals without allocating a journal or a lambda.
-    fn nested_owners(node: &kotlin::JniNode) -> bool {
+    fn nested_owners<Sq: crate::sequence::RowEncoding, In, Out>(
+        node: &JniWireNode<Sq, In, Out>,
+    ) -> bool {
         match node {
             prebindgen_conversions::WireNode::Chain {
-                meta: JniChain::Sequence(_),
+                meta: JniWireChain::Sequence(_),
                 child,
                 ..
-            } => kotlin::input_handles(child, false),
+            } => kotlin::has_handles(child, false),
             prebindgen_conversions::WireNode::Chain { child, .. } => nested_owners(child),
             prebindgen_conversions::WireNode::Branch { children, .. } => {
                 children.iter().any(nested_owners)

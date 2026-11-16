@@ -1,7 +1,7 @@
 //! Active physical values in one native row. The tree supplies all predicates;
 //! no runtime ownership registry or row-by-row plan is required.
 use super::*;
-use crate::kotlin::JniNode;
+
 use prebindgen_conversions::WireNode;
 
 #[derive(Clone, Debug)]
@@ -40,7 +40,9 @@ pub(crate) struct Selection {
     kinds: Vec<JniWire>,
 }
 impl Selection {
-    pub(crate) fn new(node: &JniNode) -> Result<Self> {
+    pub(crate) fn new<Sq: crate::sequence::RowEncoding, In, Out>(
+        node: &JniWireNode<Sq, In, Out>,
+    ) -> Result<Self> {
         let wires = group::row_fields(node).collect::<Vec<_>>();
         let indices = wires
             .iter()
@@ -48,8 +50,8 @@ impl Selection {
             .map(|(i, w)| (w.name.to_string(), i))
             .collect::<BTreeMap<_, _>>();
         let mut tests = vec![vec![]; wires.len()];
-        fn visit(
-            node: &JniNode,
+        fn visit<Sq: crate::sequence::RowEncoding, In, Out>(
+            node: &JniWireNode<Sq, In, Out>,
             path: &[Test],
             indices: &BTreeMap<String, usize>,
             out: &mut [Vec<Test>],
@@ -63,13 +65,13 @@ impl Selection {
                 WireNode::Leaf(wires) => set(wires, out),
                 WireNode::Chain {
                     controls,
-                    meta: JniChain::Sequence(_) | JniChain::Bulk,
+                    meta: JniWireChain::Sequence(_) | JniWireChain::Bulk,
                     ..
                 } => set(controls, out),
                 WireNode::Chain {
                     controls,
                     child,
-                    meta: JniChain::Optional(optional),
+                    meta: JniWireChain::Optional(optional),
                 } => {
                     set(controls, out);
                     let mut next = path.to_vec();
@@ -87,7 +89,10 @@ impl Selection {
                     set(controls, out);
                     for (i, child) in children.iter().enumerate() {
                         let mut next = path.to_vec();
-                        if matches!(meta, JniBranch::Enum(_) | JniBranch::Alternatives) {
+                        if matches!(
+                            meta,
+                            JniWireBranch::Enum(_) | JniWireBranch::Alternatives(_)
+                        ) {
                             next.push(Test::Arm(indices[&controls[0].name.to_string()], i as i32));
                         }
                         visit(child, &next, indices, out)?;

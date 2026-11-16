@@ -4,19 +4,23 @@ use super::*;
 use prebindgen_conversions::{Wire, WireNode};
 use syn::ext::IdentExt;
 
-/// Meaning and encoding of a parent with one child description.
+/// Optional and sequence structure shared by the directional wire tree families.
+/// `Sequence` is `()` for inputs and the adapter's delivery policy for outputs.
+/// Use the concrete input/output aliases at converter boundaries.
 #[derive(Clone, Debug)]
-pub enum CChain {
+pub enum CWireChain<Sequence> {
     /// Zero or one payload occurrence.
     Optional(COptional),
     /// Ordinary tagged value; child describes its physical payload members.
     Tagged(std::rc::Rc<crate::CTagged>),
     /// Zero or more element occurrences.
-    Sequence(CSequence),
+    Sequence(Sequence),
 }
-/// How child conversions form one value or choose a source variant.
+/// Structural operations shared by the directional wire tree families.
+/// Input-only payloads are `()` in inputs and `Infallible` in outputs.
+/// Use the concrete input/output aliases at converter boundaries.
 #[derive(Clone, Debug)]
-pub enum CBranch {
+pub enum CWireBranch<Input> {
     /// Convert all ordered components, such as constructor arguments or output views.
     Values,
     /// Convert named source fields independently, in declaration order.
@@ -24,7 +28,7 @@ pub enum CBranch {
     /// Convert one named source field through its child subtree.
     Field(syn::Ident),
     /// Convert exactly one constructor alternative selected by its incoming tag.
-    Alternatives,
+    Alternatives(Input),
     /// Convert source enum variants in wire-tag order.
     Enum(std::rc::Rc<crate::CEnumGroup>),
 }
@@ -104,12 +108,17 @@ impl COptional {
 }
 
 // Definitions in one native scope; sequence element definitions belong to row scopes.
-pub(crate) fn values(node: &WireNode<CWire, CChain, CBranch>) -> std::vec::IntoIter<&Wire<CWire>> {
-    fn visit<'a>(node: &'a WireNode<CWire, CChain, CBranch>, out: &mut Vec<&'a Wire<CWire>>) {
+pub(crate) fn values<Sq: crate::sequence::RowEncoding, In>(
+    node: &CWireNode<Sq, In>,
+) -> std::vec::IntoIter<&Wire<CWire>> {
+    fn visit<'a, Sq: crate::sequence::RowEncoding, In>(
+        node: &'a CWireNode<Sq, In>,
+        out: &mut Vec<&'a Wire<CWire>>,
+    ) {
         match node {
             WireNode::Leaf(wires) => out.extend(wires),
             WireNode::Chain {
-                meta: CChain::Sequence(_) | CChain::Tagged(_),
+                meta: CWireChain::Sequence(_) | CWireChain::Tagged(_),
                 controls,
                 ..
             } => out.extend(controls),
@@ -133,17 +142,17 @@ pub(crate) fn values(node: &WireNode<CWire, CChain, CBranch>) -> std::vec::IntoI
     visit(node, &mut out);
     out.into_iter()
 }
-pub(crate) fn values_mut(
-    node: &mut WireNode<CWire, CChain, CBranch>,
+pub(crate) fn values_mut<Sq: crate::sequence::RowEncoding, In>(
+    node: &mut CWireNode<Sq, In>,
 ) -> std::vec::IntoIter<&mut Wire<CWire>> {
-    fn visit<'a>(
-        node: &'a mut WireNode<CWire, CChain, CBranch>,
+    fn visit<'a, Sq: crate::sequence::RowEncoding, In>(
+        node: &'a mut CWireNode<Sq, In>,
         out: &mut Vec<&'a mut Wire<CWire>>,
     ) {
         match node {
             WireNode::Leaf(wires) => out.extend(wires),
             WireNode::Chain {
-                meta: CChain::Sequence(_) | CChain::Tagged(_),
+                meta: CWireChain::Sequence(_) | CWireChain::Tagged(_),
                 controls,
                 ..
             } => out.extend(controls),
@@ -167,15 +176,17 @@ pub(crate) fn values_mut(
     visit(node, &mut out);
     out.into_iter()
 }
-pub(crate) fn validate_layout(node: &WireNode<CWire, crate::CChain, crate::CBranch>) -> Result<()> {
+pub(crate) fn validate_layout<Sq: crate::sequence::RowEncoding, In>(
+    node: &CWireNode<Sq, In>,
+) -> Result<()> {
     prebindgen_conversions::validate_wire_names(prebindgen_conversions::wire_definitions(
         std::iter::once(node),
     ))?;
     for wire in values(node) {
         wire.kind.validate()?;
     }
-    fn visit(
-        node: &WireNode<CWire, crate::CChain, crate::CBranch>,
+    fn visit<Sq: crate::sequence::RowEncoding, In>(
+        node: &CWireNode<Sq, In>,
         bindings: &mut std::collections::BTreeSet<String>,
         in_fields: bool,
         reserved: &mut std::collections::BTreeMap<String, Vec<CNiche>>,
@@ -189,7 +200,7 @@ pub(crate) fn validate_layout(node: &WireNode<CWire, crate::CChain, crate::CBran
                 }
             }
             WireNode::Branch {
-                meta: CBranch::Alternatives | CBranch::Enum(_),
+                meta: CWireBranch::Alternatives(_) | CWireBranch::Enum(_),
                 children: alternatives,
                 controls,
                 ..
@@ -209,7 +220,7 @@ pub(crate) fn validate_layout(node: &WireNode<CWire, crate::CChain, crate::CBran
             WireNode::Chain {
                 child,
                 controls,
-                meta: CChain::Tagged(value),
+                meta: CWireChain::Tagged(value),
             } => {
                 if controls.len() != 1
                     || !matches!(&controls[0].kind,CWire::Tagged{value:v,..} if v.name==value.name)
@@ -221,13 +232,13 @@ pub(crate) fn validate_layout(node: &WireNode<CWire, crate::CChain, crate::CBran
             WireNode::Chain {
                 child: element,
                 controls,
-                meta: CChain::Sequence(metadata),
+                meta: CWireChain::Sequence(metadata),
                 ..
             } => {
                 let [carrier] = controls.as_slice() else {
                     return Err("sequence requires one carrier control".into());
                 };
-                let valid = match metadata {
+                let valid = match metadata.delivery() {
                     CSequence::Buffered => matches!(carrier.kind, CWire::Rows),
                     CSequence::Callback => matches!(
                         carrier.kind,
@@ -248,7 +259,7 @@ pub(crate) fn validate_layout(node: &WireNode<CWire, crate::CChain, crate::CBran
             }
             WireNode::Chain {
                 child: element,
-                meta: CChain::Optional(o),
+                meta: CWireChain::Optional(o),
                 controls,
                 ..
             } => {
@@ -301,16 +312,16 @@ pub(crate) fn validate_layout(node: &WireNode<CWire, crate::CChain, crate::CBran
                     return Err("group metadata does not support control wires".into());
                 }
                 match metadata {
-                    CBranch::Field(_) if !in_fields => {
+                    CWireBranch::Field(_) if !in_fields => {
                         return Err(
                             "named field must be a direct child of a field collection".into()
                         )
                     }
-                    CBranch::Fields => {
+                    CWireBranch::Fields => {
                         let mut fields = std::collections::BTreeSet::new();
                         for child in children.as_slice() {
                             let WireNode::Branch {
-                                meta: CBranch::Field(name),
+                                meta: CWireBranch::Field(name),
                                 ..
                             } = child
                             else {
@@ -328,7 +339,7 @@ pub(crate) fn validate_layout(node: &WireNode<CWire, crate::CChain, crate::CBran
                     visit(
                         child,
                         bindings,
-                        matches!(metadata, CBranch::Fields),
+                        matches!(metadata, CWireBranch::Fields),
                         reserved,
                     )?;
                 }
@@ -345,14 +356,18 @@ pub(crate) fn validate_layout(node: &WireNode<CWire, crate::CChain, crate::CBran
 }
 
 /// Native parameters contributed by a source argument.
-pub(crate) fn argument_parameters(
-    node: &WireNode<CWire, crate::CChain, crate::CBranch>,
+pub(crate) fn argument_parameters<Sq: crate::sequence::RowEncoding, In>(
+    node: &CWireNode<Sq, In>,
 ) -> std::vec::IntoIter<&Wire<CWire>> {
     values(node)
 }
 pub(crate) fn function_parameters<
     'a,
-    I: prebindgen_conversions::InputConversion<Wire = CWire, Chain = CChain, Branch = CBranch>,
+    I: prebindgen_conversions::InputConversion<
+        Wire = CWire,
+        Chain = CInputWireChain,
+        Branch = CInputWireBranch,
+    >,
     O: prebindgen_conversions::Conversion,
     M,
 >(
@@ -364,37 +379,48 @@ pub(crate) fn function_parameters<
     }
     Ok(out.into_iter())
 }
-pub(crate) fn result_packet_fields(
-    node: &WireNode<CWire, crate::CChain, crate::CBranch>,
+pub(crate) fn result_packet_fields<Sq: crate::sequence::RowEncoding, In>(
+    node: &CWireNode<Sq, In>,
 ) -> std::vec::IntoIter<&Wire<CWire>> {
     values(node)
 }
-pub(crate) fn result_packet<'a>(
-    node: &'a WireNode<CWire, crate::CChain, crate::CBranch>,
+pub(crate) fn result_packet<'a, Sq: crate::sequence::RowEncoding, In>(
+    node: &'a CWireNode<Sq, In>,
     bindings: &'a [(syn::Ident, TokenStream)],
 ) -> Result<Vec<(&'a Wire<CWire>, &'a TokenStream)>> {
     prebindgen_conversions::match_output_fields(result_packet_fields(node), bindings)
 }
-pub(crate) fn row_fields(
-    node: &WireNode<CWire, crate::CChain, crate::CBranch>,
+pub(crate) fn row_fields<Sq: crate::sequence::RowEncoding, In>(
+    node: &CWireNode<Sq, In>,
 ) -> std::vec::IntoIter<&Wire<CWire>> {
     values(node)
 }
-pub(crate) fn row_values<'a>(
-    node: &'a WireNode<CWire, crate::CChain, crate::CBranch>,
+pub(crate) fn row_values<'a, Sq: crate::sequence::RowEncoding, In>(
+    node: &'a CWireNode<Sq, In>,
     bindings: &'a [(syn::Ident, TokenStream)],
 ) -> Result<Vec<(&'a Wire<CWire>, &'a TokenStream)>> {
     prebindgen_conversions::match_output_fields(row_fields(node), bindings)
 }
-pub(crate) fn callback_parameters(
-    node: &WireNode<CWire, crate::CChain, crate::CBranch>,
+pub(crate) fn callback_parameters<Sq: crate::sequence::RowEncoding, In>(
+    node: &CWireNode<Sq, In>,
 ) -> std::vec::IntoIter<&Wire<CWire>> {
     values(node)
 }
-pub(crate) fn prepare_optional(request: Optional<'_, CCodec>) -> Result<OptionalEncoding<CCodec>> {
+pub(crate) fn prepare_optional<
+    Sq: crate::sequence::RowEncoding,
+    In,
+    V: prebindgen_conversions::Conversion<
+        Wire = CWire,
+        Chain = CWireChain<Sq>,
+        Branch = CWireBranch<In>,
+    >,
+>(
+    request: prebindgen_declarations::Optional<'_, CCodec, V>,
+    direction: prebindgen_declarations::Direction,
+) -> Result<OptionalEncoding<CWire, CWireChain<Sq>>> {
     let prepared = prebindgen_declarations::prepare_optional_payload(
         values_mut(request.payload),
-        request.direction,
+        direction,
         CWire::available_niche,
         CWire::set_niche,
         |wire, niche, value| {
@@ -428,15 +454,15 @@ pub(crate) fn prepare_optional(request: Optional<'_, CCodec>) -> Result<Optional
         prepared.reservation.map(|r| r.niche),
         &controls,
     )
-    .map(CChain::Optional)?;
+    .map(CWireChain::Optional)?;
     Ok(OptionalEncoding {
         presence,
         metadata,
         absent_values: prepared.absent_values,
     })
 }
-pub(crate) fn retire_niches(
-    node: &mut WireNode<CWire, CChain, CBranch>,
+pub(crate) fn retire_niches<Sq: crate::sequence::RowEncoding, In>(
+    node: &mut CWireNode<Sq, In>,
     reservation: Option<&prebindgen_declarations::NicheReservation<CNiche>>,
 ) -> Result<()> {
     prebindgen_declarations::retire_optional_niches(
@@ -447,8 +473,8 @@ pub(crate) fn retire_niches(
     )
 }
 
-pub(crate) fn record_fields(
-    node: &WireNode<CWire, crate::CChain, crate::CBranch>,
+pub(crate) fn record_fields<Sq: crate::sequence::RowEncoding, In>(
+    node: &CWireNode<Sq, In>,
 ) -> std::vec::IntoIter<&Wire<CWire>> {
     values(node)
 }
@@ -462,7 +488,7 @@ mod tests {
             kind: CWire::scalar(Primitive::I32),
         }
     }
-    fn enclose_optional_metadata(tree: &mut WireNode<CWire, CChain, CBranch>, metadata: COptional) {
+    fn enclose_optional_metadata(tree: &mut CInputWireNode, metadata: COptional) {
         let mut payload = std::mem::take(tree);
         let controls = if let COptional::Flag(name) = &metadata {
             if let WireNode::Leaf(wires) = &mut payload {
@@ -480,7 +506,7 @@ mod tests {
         *tree = WireNode::Chain {
             controls,
             child: Box::new(payload),
-            meta: CChain::Optional(metadata),
+            meta: CInputWireChain::Optional(metadata),
         };
     }
     fn leaf(name: &str) -> prebindgen_conversions::Wire<CWire> {
@@ -552,45 +578,45 @@ mod tests {
         )
         .unwrap_err()
         .contains("integer tag"));
-        let sequence: WireNode<CWire, CChain, CBranch> = WireNode::Chain {
+        let sequence: CInputWireNode = WireNode::Chain {
             controls: vec![prebindgen_conversions::Wire {
                 name: syn::parse_quote!(rows),
                 kind: CWire::Rows,
             }],
             child: Box::new(WireNode::Leaf(vec![leaf("value")])),
-            meta: CChain::Sequence(CSequence::Buffered),
+            meta: CInputWireChain::Sequence(()),
         };
         validate_layout(&sequence).unwrap();
-        let empty = WireNode::Chain {
+        let empty: CInputWireNode = WireNode::Chain {
             controls: vec![prebindgen_conversions::Wire {
                 name: syn::parse_quote!(rows),
                 kind: CWire::Rows,
             }],
             child: Box::new(WireNode::default()),
-            meta: CChain::Sequence(CSequence::Buffered),
+            meta: CInputWireChain::Sequence(()),
         };
         assert!(validate_layout(&empty)
             .unwrap_err()
             .contains("nonempty element"));
-        let choice = WireNode::Branch {
+        let choice: CInputWireNode = WireNode::Branch {
             controls: vec![selector(syn::parse_quote!(tag))],
             children: vec![WireNode::default()],
-            meta: CBranch::Alternatives,
+            meta: CInputWireBranch::Alternatives(()),
         };
         validate_layout(&choice).unwrap();
     }
     #[test]
     fn malformed_tree_controls_are_rejected() {
-        let mut tree: WireNode<CWire, CChain, CBranch> = WireNode::Branch {
+        let mut tree: CInputWireNode = WireNode::Branch {
             controls: vec![],
             children: vec![WireNode::default()],
-            meta: CBranch::Alternatives,
+            meta: CInputWireBranch::Alternatives(()),
         };
         assert!(validate_layout(&tree)
             .unwrap_err()
             .contains("one selector control"));
         let WireNode::Branch {
-            meta: CBranch::Alternatives,
+            meta: CInputWireBranch::Alternatives(()),
             controls,
             ..
         } = &mut tree
@@ -599,18 +625,18 @@ mod tests {
         };
         controls.push(leaf("wrong_kind"));
         assert!(validate_layout(&tree).unwrap_err().contains("integer tag"));
-        let empty_sequence = WireNode::Chain {
+        let empty_sequence: CInputWireNode = WireNode::Chain {
             controls: vec![],
             child: Box::new(WireNode::Leaf(vec![leaf("value")])),
-            meta: CChain::Sequence(CSequence::Buffered),
+            meta: CInputWireChain::Sequence(()),
         };
         assert!(validate_layout(&empty_sequence)
             .unwrap_err()
             .contains("one carrier control"));
-        let flag = WireNode::Chain {
+        let flag: CInputWireNode = WireNode::Chain {
             controls: vec![selector(syn::parse_quote!(actual))],
             child: Box::new(WireNode::default()),
-            meta: CChain::Optional(COptional::Flag(syn::parse_quote!(missing))),
+            meta: CInputWireChain::Optional(COptional::Flag(syn::parse_quote!(missing))),
         };
         assert!(validate_layout(&flag)
             .unwrap_err()
@@ -618,7 +644,7 @@ mod tests {
     }
     #[test]
     fn nested_optional_references_and_presence_bindings_are_validated() {
-        let mut tree = prebindgen_conversions::WireNode::Leaf(vec![leaf("value")]);
+        let mut tree: CInputWireNode = prebindgen_conversions::WireNode::Leaf(vec![leaf("value")]);
         prebindgen_conversions::wire_definitions_mut(std::iter::once(&mut tree))
             .next()
             .expect("logical wire index out of range")
@@ -642,7 +668,7 @@ mod tests {
             .contains("outside payload"));
         enclose_optional_metadata(&mut tree, optional("inner", "value", true));
         assert!(validate_layout(&tree).unwrap_err().contains("duplicate"));
-        let mut flag = prebindgen_conversions::WireNode::Leaf(vec![leaf("flag")]);
+        let mut flag: CInputWireNode = prebindgen_conversions::WireNode::Leaf(vec![leaf("flag")]);
         crate::group::values_mut(&mut flag).next().unwrap().kind = CWire::scalar(Primitive::I32);
         enclose_optional_metadata(&mut flag, optional("flag", "flag", false));
         validate_layout(&flag).unwrap();
@@ -667,10 +693,11 @@ mod tests {
                 CNiche::Null,
             ),
         ] {
-            let mut tree = prebindgen_conversions::WireNode::Leaf(vec![GenericWire {
-                name: syn::parse_quote!(value),
-                kind,
-            }]);
+            let mut tree: CInputWireNode =
+                prebindgen_conversions::WireNode::Leaf(vec![GenericWire {
+                    name: syn::parse_quote!(value),
+                    kind,
+                }]);
             let group = |presence: &str, niche: CNiche| {
                 COptional::from_parts(
                     syn::parse_str(presence).unwrap(),
@@ -707,10 +734,11 @@ mod tests {
                 CNiche::Integer(0),
             ),
         ] {
-            let mut tree = prebindgen_conversions::WireNode::Leaf(vec![GenericWire {
-                name: syn::parse_quote!(value),
-                kind,
-            }]);
+            let mut tree: CInputWireNode =
+                prebindgen_conversions::WireNode::Leaf(vec![GenericWire {
+                    name: syn::parse_quote!(value),
+                    kind,
+                }]);
             enclose_optional_metadata(
                 &mut tree,
                 COptional::from_parts(
@@ -726,39 +754,39 @@ mod tests {
     }
     #[test]
     fn field_names_placement_and_empty_records_are_validated() {
-        let field = WireNode::Branch {
+        let field: CInputWireNode = WireNode::Branch {
             controls: vec![],
-            meta: CBranch::Field(syn::parse_quote!(x)),
+            meta: CInputWireBranch::Field(syn::parse_quote!(x)),
             children: vec![WireNode::default()],
         };
         assert!(validate_layout(&field)
             .unwrap_err()
             .contains("direct child"));
-        let duplicates = WireNode::Branch {
+        let duplicates: CInputWireNode = WireNode::Branch {
             controls: vec![],
-            meta: CBranch::Fields,
+            meta: CInputWireBranch::Fields,
             children: vec![field.clone(), field.clone()],
         };
         assert!(validate_layout(&duplicates)
             .unwrap_err()
             .contains("duplicate field"));
-        let record = WireNode::Branch {
+        let record: CInputWireNode = WireNode::Branch {
             controls: vec![],
-            meta: CBranch::Fields,
+            meta: CInputWireBranch::Fields,
             children: vec![field],
         };
         validate_layout(&record).unwrap();
-        let malformed = WireNode::Branch {
+        let malformed: CInputWireNode = WireNode::Branch {
             controls: vec![],
-            meta: CBranch::Fields,
+            meta: CInputWireBranch::Fields,
             children: vec![WireNode::Leaf(vec![leaf("value")])],
         };
         assert!(validate_layout(&malformed)
             .unwrap_err()
             .contains("named field children"));
-        let empty = WireNode::Branch {
+        let empty: CInputWireNode = WireNode::Branch {
             controls: vec![],
-            meta: CBranch::Fields,
+            meta: CInputWireBranch::Fields,
             children: vec![],
         };
         validate_layout(&empty).unwrap();
@@ -777,7 +805,7 @@ mod tests {
             .unwrap();
         input.node = prebindgen_conversions::WireNode::Branch {
             controls: vec![],
-            meta: CBranch::Field(syn::parse_quote!(orphan)),
+            meta: CInputWireBranch::Field(syn::parse_quote!(orphan)),
             children: vec![std::mem::take(&mut input.node)],
         };
         assert!(CCodec::raw()
@@ -796,7 +824,7 @@ mod tests {
             .unwrap();
         output.outcomes.success = prebindgen_conversions::WireNode::Branch {
             controls: vec![],
-            meta: CBranch::Field(syn::parse_quote!(orphan)),
+            meta: COutputWireBranch::Field(syn::parse_quote!(orphan)),
             children: vec![std::mem::take(&mut output.outcomes.success)],
         };
         assert!(CCodec::raw()
@@ -880,7 +908,7 @@ mod abi_tests {
             name: syn::parse_str(name).unwrap(),
             kind: CWire::scalar(Primitive::I32),
         };
-        let element: prebindgen_conversions::WireNode<CWire, crate::CChain, crate::CBranch> =
+        let element: CInputWireNode =
             prebindgen_conversions::WireNode::Leaf(vec![scalar("first"), scalar("second")]);
         let mut sequence = element.clone();
         sequence = prebindgen_conversions::WireNode::Chain {
@@ -888,7 +916,7 @@ mod abi_tests {
                 name: syn::parse_quote!(rows),
                 kind: CWire::Rows,
             }],
-            meta: CChain::Sequence(CSequence::Buffered),
+            meta: CInputWireChain::Sequence(()),
             child: Box::new(std::mem::take(&mut sequence)),
         };
         let result = prebindgen_conversions::Outcomes {
@@ -962,16 +990,16 @@ mod structural_validation_tests {
     use super::*;
     #[test]
     fn adapter_rejects_empty_alternatives_and_unsupported_group_controls() {
-        let node: WireNode<CWire, CChain, CBranch> = WireNode::Branch {
-            meta: CBranch::Alternatives,
+        let node: CInputWireNode = WireNode::Branch {
+            meta: CInputWireBranch::Alternatives(()),
             children: vec![],
             controls: vec![],
         };
         assert!(validate_layout(&node)
             .unwrap_err()
             .contains("no alternatives"));
-        let node = WireNode::Branch {
-            meta: CBranch::Values,
+        let node: CInputWireNode = WireNode::Branch {
+            meta: CInputWireBranch::Values,
             children: vec![],
             controls: vec![Wire {
                 name: syn::parse_quote!(extra),

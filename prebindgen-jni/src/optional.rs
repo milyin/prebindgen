@@ -92,7 +92,7 @@ pub(crate) fn replace(s: &str, from: &str, to: &str) -> String {
     out
 }
 pub(crate) fn input_kotlin(
-    nodes: &prebindgen_conversions::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
+    nodes: &JniInputWireNode,
     o: &JniOptional,
     context: &KotlinContext<'_>,
     active: &str,
@@ -113,7 +113,7 @@ pub(crate) fn input_kotlin(
         };
         c = kotlin::input_kotlin_when(nodes, context, &present)?;
     }
-    c.prepare_arguments(kotlin::input_handles(nodes, false))?;
+    c.prepare_arguments(kotlin::has_handles(nodes, false))?;
     // A single converted value is idiomatic T?. Multiple views retain an
     // explicit presence argument so Some with nullable components is distinct.
     let presence = if single {
@@ -273,7 +273,7 @@ pub(crate) fn input_kotlin(
     Ok(out)
 }
 pub(crate) fn output_kotlin(
-    nodes: &prebindgen_conversions::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
+    nodes: &JniOutputWireNode,
     o: &JniOptional,
     context: &KotlinContext<'_>,
     owners: Option<&str>,

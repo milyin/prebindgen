@@ -39,7 +39,7 @@ mod group;
 mod returns;
 mod scalar;
 pub use data::{DeclJniClass, DeclJniDataClass, JniDataGroup, JniField};
-pub use group::{JniBranch, JniChain, JniOptional};
+pub use group::{JniOptional, JniWireBranch, JniWireChain};
 use prebindgen_conversions::boxed::BoxedWire;
 use prebindgen_conversions::value::Value;
 use prebindgen_flat::Primitive;
@@ -47,9 +47,9 @@ pub use sequence::JniSequence;
 mod wire;
 use prebindgen_conversions::Access;
 use prebindgen_declarations::{
-    Alternatives, Codec, Condition, Direction, GroupKind, InputLeaf, Optional, OptionalEncoding,
-    OutputLeaf, Presence, Representation, SequenceInputRequest, SequenceOutputRequest, SourceError,
-    SourceErrorPlan, ValueAccess,
+    Alternatives, Codec, Condition, Direction, GroupKind, InputLeaf, InputOptional,
+    OptionalEncoding, OutputLeaf, OutputOptional, Presence, Representation, SequenceInputRequest,
+    SequenceOutputRequest, SourceError, SourceErrorPlan, ValueAccess,
 };
 pub use wire::{JniArgument, JniWire};
 mod emission;
@@ -59,10 +59,56 @@ mod handles;
 mod names;
 mod parameter_names;
 pub use emission::JniContext;
+/// Prepared input sequence/optional encoding.
+///
+/// Output delivery is unavailable on inputs:
+/// ```compile_fail
+/// use prebindgen_jni::{JniInputWireChain, JniSequence};
+/// let input: JniInputWireChain = JniInputWireChain::Sequence(JniSequence::Callback);
+/// ```
+pub type JniInputWireChain = JniWireChain<()>;
+/// Prepared input structural operations. Opposite-direction operations are uninhabited.
+///
+/// Named output views are unavailable on inputs:
+/// ```compile_fail
+/// use prebindgen_jni::JniInputWireBranch;
+/// let input: JniInputWireBranch = JniInputWireBranch::Named("view".into(), ());
+/// ```
+pub type JniInputWireBranch = JniWireBranch<(), std::convert::Infallible>;
+/// Prepared input tree exposed by input converters.
+///
+/// Input and output trees cannot be swapped:
+/// ```compile_fail
+/// use prebindgen_jni::{JniInputWireNode, JniOutputWireNode};
+/// fn accept_input(_: JniInputWireNode) {}
+/// let output: JniOutputWireNode = prebindgen_conversions::WireNode::Leaf(vec![]);
+/// accept_input(output);
+/// ```
+pub type JniInputWireNode =
+    prebindgen_conversions::WireNode<JniWire, JniInputWireChain, JniInputWireBranch>;
 type JniInputPlan<WireType> =
-    prebindgen_conversions::InputPlan<WireType, JniContext, crate::JniChain, crate::JniBranch>;
-type JniOutputPlan<WireType> =
-    prebindgen_conversions::OutputPlan<WireType, JniContext, crate::JniChain, crate::JniBranch>;
+    prebindgen_conversions::InputPlan<WireType, JniContext, JniInputWireChain, JniInputWireBranch>;
+/// Prepared output sequence/optional encoding.
+pub type JniOutputWireChain = JniWireChain<JniSequence>;
+/// Prepared output structural operations. Opposite-direction operations are uninhabited.
+///
+/// Constructor alternatives are unavailable on outputs:
+/// ```compile_fail
+/// use prebindgen_jni::JniOutputWireBranch;
+/// let output: JniOutputWireBranch = JniOutputWireBranch::Alternatives(());
+/// ```
+pub type JniOutputWireBranch = JniWireBranch<std::convert::Infallible, ()>;
+/// Prepared output tree exposed by output converters.
+pub type JniOutputWireNode =
+    prebindgen_conversions::WireNode<JniWire, JniOutputWireChain, JniOutputWireBranch>;
+type JniOutputPlan<WireType> = prebindgen_conversions::OutputPlan<
+    WireType,
+    JniContext,
+    JniOutputWireChain,
+    JniOutputWireBranch,
+>;
+type JniWireNode<Sq, In, Out> =
+    prebindgen_conversions::WireNode<JniWire, JniWireChain<Sq>, JniWireBranch<In, Out>>;
 mod converters;
 pub use converters::{JniInputConverter, JniOutputConverter};
 mod kotlin;
@@ -830,11 +876,17 @@ impl Codec for JniCodec {
         Ok(())
     }
 
-    fn enum_variants(
+    fn input_enum_variants(
         &self,
-        request: prebindgen_declarations::EnumVariants<'_, Self>,
-    ) -> Result<prebindgen_declarations::EnumEncoding<Self>> {
-        sealed::encoding(request)
+        request: prebindgen_declarations::InputEnumVariants<'_, Self>,
+    ) -> Result<prebindgen_declarations::EnumEncoding<JniInputWireBranch>> {
+        sealed::encoding(request, Direction::Input)
+    }
+    fn output_enum_variants(
+        &self,
+        request: prebindgen_declarations::OutputEnumVariants<'_, Self>,
+    ) -> Result<prebindgen_declarations::EnumEncoding<JniOutputWireBranch>> {
+        sealed::encoding(request, Direction::Output)
     }
     fn bulk_input(
         &self,
@@ -858,28 +910,28 @@ impl Codec for JniCodec {
     }
 
     type Schema = JniSchema;
-    type Chain = JniChain;
-    type Branch = JniBranch;
 
-    fn prefix_layout(
+    fn prefix_input(
         &self,
-        node: &mut prebindgen_conversions::WireNode<JniWire, JniChain, JniBranch>,
+        node: &mut JniInputWireNode,
         segment: prebindgen_declarations::ComponentSegment,
     ) {
         if let prebindgen_declarations::ComponentSegment::Argument(name) = segment {
             *node = prebindgen_conversions::WireNode::Branch {
                 controls: vec![],
-                meta: JniBranch::Argument(name),
+                meta: JniInputWireBranch::Argument(name, ()),
                 children: vec![std::mem::take(node)],
             };
         }
     }
-
-    fn binding_failure_layout(
+    fn prefix_output(
         &self,
-        _: &(),
-    ) -> Result<Option<prebindgen_conversions::WireNode<Self::Wire, Self::Chain, Self::Branch>>>
-    {
+        _node: &mut JniOutputWireNode,
+        _segment: prebindgen_declarations::ComponentSegment,
+    ) {
+    }
+
+    fn binding_failure_layout(&self, _: &()) -> Result<Option<JniOutputWireNode>> {
         Ok(Some(prebindgen_conversions::WireNode::Leaf(vec![
             prebindgen_conversions::Wire {
                 name: syn::parse_quote!(message),
@@ -889,7 +941,6 @@ impl Codec for JniCodec {
     }
 
     type Extra = ();
-    type Wire = JniWire;
     type Context = JniContext;
     fn finish_input(&self, plan: &mut JniInputPlan<JniWire>, _: &()) -> Result<()> {
         group::validate_fragment(&plan.node)
@@ -911,7 +962,7 @@ impl Codec for JniCodec {
     fn sequence_input(
         &self,
         request: SequenceInputRequest<'_, Self>,
-    ) -> Result<prebindgen_declarations::SequenceInput<JniWire, JniChain>> {
+    ) -> Result<prebindgen_declarations::SequenceInput<JniWire, JniInputWireChain>> {
         if !request.view.is_owned() && takes_input_owners(request.element) {
             return Err("borrowed collection inputs cannot consume elements; declare an element constructor using borrowed inputs, or use Vec<T>".into());
         }
@@ -935,7 +986,7 @@ impl Codec for JniCodec {
     fn sequence_output(
         &self,
         request: SequenceOutputRequest<'_, Self>,
-    ) -> Result<prebindgen_declarations::SequenceOutput<JniWire, JniChain>> {
+    ) -> Result<prebindgen_declarations::SequenceOutput<JniWire, JniOutputWireChain>> {
         let SequenceOutputRequest {
             flat,
             extra: _,
@@ -967,7 +1018,10 @@ impl Codec for JniCodec {
         }
     }
 
-    fn selector(&self, _: &()) -> Result<JniWire> {
+    fn input_selector(&self, _: &()) -> Result<JniWire> {
+        Ok(JniWire::selector())
+    }
+    fn output_selector(&self, _: &()) -> Result<JniWire> {
         Ok(JniWire::selector())
     }
     fn output_consumes(
@@ -1301,26 +1355,43 @@ impl Codec for JniCodec {
     fn supports_bulk(&self, _: Direction) -> bool {
         true
     }
-    fn group(&self, kind: GroupKind<'_>) -> Result<JniBranch> {
+    fn input_group(&self, kind: GroupKind<'_>) -> Result<JniInputWireBranch> {
         Ok(match kind {
-            GroupKind::Values => JniBranch::Values,
-            GroupKind::Fields => JniBranch::Fields,
-            GroupKind::Field(name) => JniBranch::Field(name.clone()),
+            GroupKind::Values => JniInputWireBranch::Values,
+            GroupKind::Fields => JniInputWireBranch::Fields,
+            GroupKind::Field(name) => JniInputWireBranch::Field(name.clone()),
+            GroupKind::NamedOutput(_) => return Err("named views are output-only".into()),
+        })
+    }
+    fn output_group(&self, kind: GroupKind<'_>) -> Result<JniOutputWireBranch> {
+        Ok(match kind {
+            GroupKind::Values => JniOutputWireBranch::Values,
+            GroupKind::Fields => JniOutputWireBranch::Fields,
+            GroupKind::Field(name) => JniOutputWireBranch::Field(name.clone()),
             GroupKind::NamedOutput(name) => {
                 validate_name(name)?;
-                JniBranch::Named(name.into())
+                JniOutputWireBranch::Named(name.into(), ())
             }
         })
     }
-    fn optional(&self, request: Optional<'_, Self>) -> Result<OptionalEncoding<Self>> {
-        group::prepare_optional(request)
+    fn input_optional(
+        &self,
+        request: InputOptional<'_, Self>,
+    ) -> Result<OptionalEncoding<JniWire, JniInputWireChain>> {
+        group::prepare_optional(request, Direction::Input)
     }
-    fn alternatives(&self, request: Alternatives<'_, Self>) -> Result<JniBranch> {
+    fn output_optional(
+        &self,
+        request: OutputOptional<'_, Self>,
+    ) -> Result<OptionalEncoding<JniWire, JniOutputWireChain>> {
+        group::prepare_optional(request, Direction::Output)
+    }
+    fn alternatives(&self, request: Alternatives<'_, Self>) -> Result<JniInputWireBranch> {
         group::validate_selector(request.selector)?;
         for arm in request.arms {
             group::retire_niches(arm, None)?;
         }
-        Ok(JniBranch::Alternatives)
+        Ok(JniInputWireBranch::Alternatives(()))
     }
     fn source_error(&self, request: SourceError<'_, Self>) -> Result<SourceErrorPlan<Self>> {
         if !self.declared {
@@ -2046,7 +2117,7 @@ pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
         )?;
         let mut delegated_handles = false;
         for (parameter, input) in f.params.iter().zip(&inputs) {
-            delegated_handles |= crate::kotlin::input_handles(input.input_node(), false);
+            delegated_handles |= crate::kotlin::has_handles(input.input_node(), false);
             handles::require_preflight(*input).map_err(|error| {
                 format!(
                     "function `{}` parameter `{}`: {error}",
@@ -2490,7 +2561,7 @@ fn native_handle(prefix: &str, gc_managed: bool) -> String {
     }
 }
 
-fn takes_input_owners(node: &crate::kotlin::JniNode) -> bool {
+fn takes_input_owners(node: &JniInputWireNode) -> bool {
     prebindgen_conversions::wire_definitions(std::iter::once(node))
         .any(|w| matches!(&w.kind,JniWire::Handle{handle,..} if handle.access==Access::Move))
 }

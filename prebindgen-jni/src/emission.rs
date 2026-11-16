@@ -70,7 +70,11 @@ impl JniContext {
     pub fn cached_callback_validation(
         &self,
         validation: &TokenStream,
-        node: &prebindgen_conversions::WireNode<crate::JniWire, crate::JniChain, crate::JniBranch>,
+        node: &prebindgen_conversions::WireNode<
+            crate::JniWire,
+            crate::JniInputWireChain,
+            crate::JniInputWireBranch,
+        >,
     ) -> Result<TokenStream> {
         crate::bulk::cached_reads(validation, node)
     }
@@ -80,7 +84,11 @@ impl JniContext {
     pub fn output_delivery(
         &self,
         outcomes: &prebindgen_conversions::Outcomes<
-            prebindgen_conversions::WireNode<crate::JniWire, crate::JniChain, crate::JniBranch>,
+            prebindgen_conversions::WireNode<
+                crate::JniWire,
+                crate::JniOutputWireChain,
+                crate::JniOutputWireBranch,
+            >,
         >,
         values: &[(syn::Ident, TokenStream)],
     ) -> Result<prebindgen_conversions::Delivery> {

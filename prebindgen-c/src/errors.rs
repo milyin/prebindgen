@@ -83,20 +83,18 @@ pub(crate) fn compile(flat: &mut CBindings, codec: &CCodec) -> Result<()> {
     Ok(())
 }
 
-fn field_names(
-    layout: &prebindgen_conversions::WireNode<CWire, crate::CChain, crate::CBranch>,
-) -> Vec<String> {
+fn field_names<Sq: crate::sequence::RowEncoding, In>(layout: &CWireNode<Sq, In>) -> Vec<String> {
     use prebindgen_conversions::WireNode;
     let mut names = Vec::new();
     if let WireNode::Branch {
-        meta: CBranch::Fields,
+        meta: CWireBranch::Fields,
         children,
         ..
     } = layout
     {
         for node in children.as_slice() {
             if let WireNode::Branch {
-                meta: CBranch::Field(name),
+                meta: CWireBranch::Field(name),
                 ..
             } = node
             {
@@ -155,7 +153,7 @@ pub(crate) fn emit<R, E, P>(
             input_transfers: prebindgen_conversions::InputTransfers::Forbidden,
             row_types: {
                 let mut schemas = Vec::new();
-                sequence::schemas(&plan.outcomes.success, &mut schemas);
+                sequence::boundary_schemas((&plan.outcomes.success).into(), &mut schemas);
                 schemas
                     .into_iter()
                     .map(|(wire, _, _)| {
@@ -177,7 +175,7 @@ pub(crate) fn emit<R, E, P>(
             read_buffer: syn::parse_quote!(__pb_read),
         };
         let mut schemas = Vec::new();
-        sequence::schemas(&plan.outcomes.success, &mut schemas);
+        sequence::boundary_schemas((&plan.outcomes.success).into(), &mut schemas);
         let carriers = schemas
             .iter()
             .map(|(wire, _, _)| wire.name.to_string())
@@ -309,11 +307,11 @@ pub(crate) fn emit<R, E, P>(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn result_function<R, E, P>(
+pub(crate) fn result_function<Sq: crate::sequence::RowEncoding, In, R, E, P>(
     source_name: &syn::Ident,
     error_ty: &syn::Type,
     outputs: &[&Wire],
-    function_output_layout: &prebindgen_conversions::WireNode<CWire, crate::CChain, crate::CBranch>,
+    function_output_layout: &CWireNode<Sq, In>,
     mut params: Vec<TokenStream>,
     mut cparams: Vec<String>,
     body: &TokenStream,

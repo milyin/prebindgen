@@ -81,19 +81,21 @@ pub trait Codec {
     /// Source attachment types read by conversion hooks; independent of Input and Output.
     type Schema: Schema;
     /// Prepared conversion for a function parameter.
-    type Input: prebindgen_conversions::InputConversion + From<CodecInputPlan<Self>>;
+    type Input: prebindgen_conversions::InputConversion<
+            Wire: Clone + std::fmt::Debug,
+            Chain: Clone,
+            Branch: Clone,
+        > + From<CodecInputPlan<Self>>;
     /// Prepared conversion for a function return.
-    type Output: prebindgen_conversions::OutputConversion + From<CodecOutputPlan<Self>>;
-    /// Complete description of one foreign wire value.
-    type Wire: prebindgen_conversions::WireKind + Clone + std::fmt::Debug;
+    type Output: prebindgen_conversions::OutputConversion<
+            Wire: Clone + std::fmt::Debug,
+            Chain: Clone,
+            Branch: Clone,
+        > + From<CodecOutputPlan<Self>>;
     /// Names supplied by the language's Rust wrapper emitter.
     type Context: prebindgen_conversions::TemplateContext + 'static;
     /// Borrowed occurrence settings used while preparing nested conversions.
     type Extra;
-    /// Adapter metadata for a one-child node, without duplicated wires/children.
-    type Chain: Clone;
-    /// Adapter metadata for groups/alternatives, without duplicated children.
-    type Branch: Clone;
 
     /// Compile standalone callback declarations and typed error outputs stored in Flat.
     /// Called before function plans; implementations consume only resolved model data.
@@ -113,7 +115,9 @@ pub trait Codec {
     /// before ordering observations and moves of the same source value.
     fn output_consumes(&self, flat: &Flat<Self::Schema>, ty: &Type, extra: &Self::Extra) -> bool;
     /// Describe the requested structural group; reject unsupported kinds explicitly.
-    fn group(&self, kind: GroupKind<'_>) -> Result<Self::Branch>;
+    fn input_group(&self, kind: GroupKind<'_>) -> Result<CodecInputBranch<Self>>;
+    /// Describe a group of converted output components.
+    fn output_group(&self, kind: GroupKind<'_>) -> Result<CodecOutputBranch<Self>>;
     /// Explicit opt-in to bulk conversion for this direction. JNI dispatch and
     /// reusable sequence helpers check it before selecting bulk transport.
     fn supports_bulk(&self, _direction: Direction) -> bool {
@@ -121,20 +125,44 @@ pub trait Codec {
     }
     /// Select a flag or niche, retire inactive offers, and prepare metadata and
     /// inactive output values. Input niches require a test; output niches do not.
-    fn optional(&self, _request: Optional<'_, Self>) -> Result<OptionalEncoding<Self>> {
+    fn input_optional(
+        &self,
+        _request: InputOptional<'_, Self>,
+    ) -> Result<OptionalEncoding<CodecInputWire<Self>, CodecInputChain<Self>>> {
+        Err("optional conversion is unsupported by this codec".into())
+    }
+    /// Prepare output absence and inactive expressions using the output payload tree.
+    fn output_optional(
+        &self,
+        _request: OutputOptional<'_, Self>,
+    ) -> Result<OptionalEncoding<CodecOutputWire<Self>, CodecOutputChain<Self>>> {
         Err("optional conversion is unsupported by this codec".into())
     }
     /// Create an i32-compatible selector kind, before its source path is prefixed.
-    fn selector(&self, _extra: &Self::Extra) -> Result<Self::Wire> {
+    fn input_selector(&self, _extra: &Self::Extra) -> Result<CodecInputWire<Self>> {
+        Err("selector tags are unsupported by this codec".into())
+    }
+    /// Create an output selector kind before prefixing its source path.
+    fn output_selector(&self, _extra: &Self::Extra) -> Result<CodecOutputWire<Self>> {
         Err("selector tags are unsupported by this codec".into())
     }
     /// Validate the already-prefixed selector representation and retire inactive
     /// arm offers. Runtime tag validation remains the shared compiler's policy.
-    fn alternatives(&self, _request: Alternatives<'_, Self>) -> Result<Self::Branch> {
+    fn alternatives(&self, _request: Alternatives<'_, Self>) -> Result<CodecInputBranch<Self>> {
         Err("input alternatives are unsupported by this codec".into())
     }
     /// Interpret a selected source variant and its recursively compiled payload.
-    fn enum_variants(&self, _request: EnumVariants<'_, Self>) -> Result<EnumEncoding<Self>> {
+    fn input_enum_variants(
+        &self,
+        _request: InputEnumVariants<'_, Self>,
+    ) -> Result<EnumEncoding<CodecInputBranch<Self>>> {
+        Err("payload enums are unsupported by this codec".into())
+    }
+    /// Interpret converted source variants using output branch metadata.
+    fn output_enum_variants(
+        &self,
+        _request: OutputEnumVariants<'_, Self>,
+    ) -> Result<EnumEncoding<CodecOutputBranch<Self>>> {
         Err("payload enums are unsupported by this codec".into())
     }
     /// Wrap an ordinary enum input in the adapter's public value carrier.
@@ -166,14 +194,14 @@ pub trait Codec {
     fn sequence_input(
         &self,
         _request: SequenceInputRequest<'_, Self>,
-    ) -> Result<SequenceInput<Self::Wire, Self::Chain>> {
+    ) -> Result<SequenceInput<CodecInputWire<Self>, CodecInputChain<Self>>> {
         Err("collections are unsupported by this codec".into())
     }
     /// Choose ordinary/bulk output storage and the explicit element delivery.
     fn sequence_output(
         &self,
         _request: SequenceOutputRequest<'_, Self>,
-    ) -> Result<SequenceOutput<Self::Wire, Self::Chain>> {
+    ) -> Result<SequenceOutput<CodecOutputWire<Self>, CodecOutputChain<Self>>> {
         Err("collections are unsupported by this codec".into())
     }
     /// Prepare matching source-error wires and propagation. The default preserves
@@ -285,8 +313,7 @@ pub trait Codec {
     fn binding_failure_layout(
         &self,
         _extra: &Self::Extra,
-    ) -> Result<Option<prebindgen_conversions::WireNode<Self::Wire, Self::Chain, Self::Branch>>>
-    {
+    ) -> Result<Option<CodecOutputNode<Self>>> {
         Ok(None)
     }
 
@@ -305,12 +332,9 @@ pub trait Codec {
     /// Prepend a semantic source path to one prepared occurrence. Override when
     /// node controls carry paths, or element definitions have a separate
     /// path context. Codecs without source-path metadata need no implementation.
-    fn prefix_layout(
-        &self,
-        _layout: &mut prebindgen_conversions::WireNode<Self::Wire, Self::Chain, Self::Branch>,
-        _segment: ComponentSegment,
-    ) {
-    }
+    fn prefix_input(&self, _layout: &mut CodecInputNode<Self>, _segment: ComponentSegment) {}
+    /// Attach a source component path to an output tree.
+    fn prefix_output(&self, _layout: &mut CodecOutputNode<Self>, _segment: ComponentSegment) {}
 
     /// Complete a composed parameter plan before it is stored in a slot.
     /// Called once per bound parameter, including records and selectors. The

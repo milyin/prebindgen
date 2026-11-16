@@ -48,20 +48,55 @@ mod group;
 mod selected;
 mod sequence;
 use group::validate_layout;
-pub use group::{CBranch, CChain, COptional};
+pub use group::{COptional, CWireBranch, CWireChain};
 use prebindgen_conversions::Wire as GenericWire;
 use prebindgen_declarations::{
-    Alternatives, Codec, GroupKind, InputLeaf, InputRole, Optional, OptionalEncoding, OutputLeaf,
-    Presence, Representation, SequenceInputRequest, SequenceOutputRequest, SourceError,
-    SourceErrorPlan, ValueAccess,
+    Alternatives, Codec, Direction, GroupKind, InputLeaf, InputOptional, InputRole,
+    OptionalEncoding, OutputLeaf, OutputOptional, Presence, Representation, SequenceInputRequest,
+    SequenceOutputRequest, SourceError, SourceErrorPlan, ValueAccess,
 };
 pub use sequence::CSequence;
 mod emission;
 pub use emission::CContext;
+/// Prepared input sequence/optional encoding.
+///
+/// Output delivery is unavailable on inputs:
+/// ```compile_fail
+/// use prebindgen_c::{CInputWireChain, CSequence};
+/// let input: CInputWireChain = CInputWireChain::Sequence(CSequence::Callback);
+/// ```
+pub type CInputWireChain = CWireChain<()>;
+/// Prepared input structural operations. Opposite-direction operations are uninhabited.
+pub type CInputWireBranch = CWireBranch<()>;
+/// Prepared input tree exposed by input converters.
+///
+/// Input and output trees cannot be swapped:
+/// ```compile_fail
+/// use prebindgen_c::{CInputWireNode, COutputWireNode};
+/// fn accept_input(_: CInputWireNode) {}
+/// let output: COutputWireNode = prebindgen_conversions::WireNode::Leaf(vec![]);
+/// accept_input(output);
+/// ```
+pub type CInputWireNode =
+    prebindgen_conversions::WireNode<CWire, CInputWireChain, CInputWireBranch>;
 type CInputPlan<WireType> =
-    prebindgen_conversions::InputPlan<WireType, CContext, crate::CChain, crate::CBranch>;
+    prebindgen_conversions::InputPlan<WireType, CContext, CInputWireChain, CInputWireBranch>;
+/// Prepared output sequence/optional encoding.
+pub type COutputWireChain = CWireChain<CSequence>;
+/// Prepared output structural operations. Opposite-direction operations are uninhabited.
+///
+/// Constructor alternatives are unavailable on outputs:
+/// ```compile_fail
+/// use prebindgen_c::COutputWireBranch;
+/// let output: COutputWireBranch = COutputWireBranch::Alternatives(());
+/// ```
+pub type COutputWireBranch = CWireBranch<std::convert::Infallible>;
+/// Prepared output tree exposed by output converters.
+pub type COutputWireNode =
+    prebindgen_conversions::WireNode<CWire, COutputWireChain, COutputWireBranch>;
 type COutputPlan<WireType> =
-    prebindgen_conversions::OutputPlan<WireType, CContext, crate::CChain, crate::CBranch>;
+    prebindgen_conversions::OutputPlan<WireType, CContext, COutputWireChain, COutputWireBranch>;
+type CWireNode<Sq, In> = prebindgen_conversions::WireNode<CWire, CWireChain<Sq>, CWireBranch<In>>;
 /// Prepared C parameter conversion.
 pub type CInputConverter = CInputPlan<CWire>;
 /// Prepared C result conversion.
@@ -176,14 +211,8 @@ impl Codec for CCodec {
     }
 
     type Schema = CSchema;
-    type Chain = CChain;
-    type Branch = CBranch;
 
-    fn binding_failure_layout(
-        &self,
-        _: &(),
-    ) -> Result<Option<prebindgen_conversions::WireNode<Self::Wire, Self::Chain, Self::Branch>>>
-    {
+    fn binding_failure_layout(&self, _: &()) -> Result<Option<COutputWireNode>> {
         Ok(Some(prebindgen_conversions::WireNode::Leaf(vec![
             prebindgen_conversions::Wire {
                 name: syn::parse_quote!(message),
@@ -196,7 +225,6 @@ impl Codec for CCodec {
         false
     }
     type Extra = ();
-    type Wire = CWire;
     type Context = CContext;
     fn finish_input(&self, plan: &mut CInputPlan<CWire>, _: &()) -> Result<()> {
         validate_layout(&plan.node)
@@ -230,7 +258,7 @@ impl Codec for CCodec {
     fn sequence_input(
         &self,
         request: SequenceInputRequest<'_, Self>,
-    ) -> Result<prebindgen_declarations::SequenceInput<CWire, CChain>> {
+    ) -> Result<prebindgen_declarations::SequenceInput<CWire, CInputWireChain>> {
         if !request.view.is_owned() && takes_input_owners(request.element) {
             return Err("borrowed collection inputs cannot consume elements; declare an element constructor using borrowed inputs, or use Vec<T>".into());
         }
@@ -253,7 +281,7 @@ impl Codec for CCodec {
     fn sequence_output(
         &self,
         request: SequenceOutputRequest<'_, Self>,
-    ) -> Result<prebindgen_declarations::SequenceOutput<CWire, CChain>> {
+    ) -> Result<prebindgen_declarations::SequenceOutput<CWire, COutputWireChain>> {
         let SequenceOutputRequest {
             flat: _,
             extra: _,
@@ -293,11 +321,17 @@ impl Codec for CCodec {
         )
     }
 
-    fn enum_variants(
+    fn input_enum_variants(
         &self,
-        request: prebindgen_declarations::EnumVariants<'_, Self>,
-    ) -> Result<prebindgen_declarations::EnumEncoding<Self>> {
-        tagged::encoding(request)
+        request: prebindgen_declarations::InputEnumVariants<'_, Self>,
+    ) -> Result<prebindgen_declarations::EnumEncoding<CInputWireBranch>> {
+        tagged::encoding(request, Direction::Input)
+    }
+    fn output_enum_variants(
+        &self,
+        request: prebindgen_declarations::OutputEnumVariants<'_, Self>,
+    ) -> Result<prebindgen_declarations::EnumEncoding<COutputWireBranch>> {
+        tagged::encoding(request, Direction::Output)
     }
     fn input_enum(
         &self,
@@ -322,7 +356,10 @@ impl Codec for CCodec {
         tagged::output(flat, ty, wire, plan)
     }
 
-    fn selector(&self, _: &()) -> Result<CWire> {
+    fn input_selector(&self, _: &()) -> Result<CWire> {
+        Ok(CWire::scalar(Primitive::I32))
+    }
+    fn output_selector(&self, _: &()) -> Result<CWire> {
         Ok(CWire::scalar(Primitive::I32))
     }
     fn output_consumes(
@@ -782,25 +819,44 @@ impl Codec for CCodec {
         Ok(())
     }
 
-    fn group(&self, kind: GroupKind<'_>) -> Result<CBranch> {
+    fn input_group(&self, kind: GroupKind<'_>) -> Result<CInputWireBranch> {
         Ok(match kind {
-            GroupKind::Values => CBranch::Values,
-            GroupKind::Fields => CBranch::Fields,
-            GroupKind::Field(name) => CBranch::Field(name.clone()),
+            GroupKind::Values => CInputWireBranch::Values,
+            GroupKind::Fields => CInputWireBranch::Fields,
+            GroupKind::Field(name) => CInputWireBranch::Field(name.clone()),
             GroupKind::NamedOutput(_) => {
                 return Err("named output views are unsupported by this codec".into())
             }
         })
     }
-    fn optional(&self, request: Optional<'_, Self>) -> Result<OptionalEncoding<Self>> {
-        group::prepare_optional(request)
+    fn output_group(&self, kind: GroupKind<'_>) -> Result<COutputWireBranch> {
+        Ok(match kind {
+            GroupKind::Values => COutputWireBranch::Values,
+            GroupKind::Fields => COutputWireBranch::Fields,
+            GroupKind::Field(name) => COutputWireBranch::Field(name.clone()),
+            GroupKind::NamedOutput(_) => {
+                return Err("named output views are unsupported by this codec".into())
+            }
+        })
     }
-    fn alternatives(&self, request: Alternatives<'_, Self>) -> Result<CBranch> {
+    fn input_optional(
+        &self,
+        request: InputOptional<'_, Self>,
+    ) -> Result<OptionalEncoding<CWire, CInputWireChain>> {
+        group::prepare_optional(request, Direction::Input)
+    }
+    fn output_optional(
+        &self,
+        request: OutputOptional<'_, Self>,
+    ) -> Result<OptionalEncoding<CWire, COutputWireChain>> {
+        group::prepare_optional(request, Direction::Output)
+    }
+    fn alternatives(&self, request: Alternatives<'_, Self>) -> Result<CInputWireBranch> {
         group::validate_selector(request.selector)?;
         for arm in request.arms {
             group::retire_niches(arm, None)?;
         }
-        Ok(CBranch::Alternatives)
+        Ok(CInputWireBranch::Alternatives(()))
     }
     fn source_error(&self, request: SourceError<'_, Self>) -> Result<SourceErrorPlan<Self>> {
         if self.declared {
@@ -1827,14 +1883,14 @@ where
     >,
     I: for<'a> prebindgen_conversions::InputConversion<
         Wire = CWire,
-        Chain = CChain,
-        Branch = CBranch,
+        Chain = CInputWireChain,
+        Branch = CInputWireBranch,
         SlotFragment<'a> = prebindgen_conversions::InputFragment<'a, CContext>,
     >,
     O: for<'a> prebindgen_conversions::OutputConversion<
         Wire = CWire,
-        Chain = CChain,
-        Branch = CBranch,
+        Chain = COutputWireChain,
+        Branch = COutputWireBranch,
         SlotFragment<'a> = prebindgen_conversions::OutputFragment<'a, CContext>,
     >,
 {
@@ -1985,10 +2041,10 @@ where
             row_types: {
                 let mut schemas = Vec::new();
                 for slot in f.input_conversions()? {
-                    sequence::schemas(slot.input_node(), &mut schemas);
+                    sequence::boundary_schemas((slot.input_node()).into(), &mut schemas);
                 }
-                sequence::schemas(
-                    &f.output_conversion()?.output_outcomes().success,
+                sequence::boundary_schemas(
+                    (&f.output_conversion()?.output_outcomes().success).into(),
                     &mut schemas,
                 );
                 schemas
@@ -2040,14 +2096,14 @@ where
             .collect::<Vec<_>>();
         let mut schemas = Vec::new();
         for slot in f.input_conversions()? {
-            sequence::schemas(slot.input_node(), &mut schemas);
+            sequence::boundary_schemas((slot.input_node()).into(), &mut schemas);
         }
-        sequence::schemas(
-            &f.output_conversion()?.output_outcomes().success,
+        sequence::boundary_schemas(
+            (&f.output_conversion()?.output_outcomes().success).into(),
             &mut schemas,
         );
         for (_, element, _) in schemas {
-            all_wires.extend(crate::group::row_fields(element));
+            all_wires.extend(element.fields());
         }
         for wire in all_wires {
             validate_wire_declaration(wire, pointers, &enums)?;
@@ -2305,12 +2361,10 @@ The pointer must be null or a live allocation of the declared type returned by t
     for error in &errors {
         validate_layout(&error.plan()?.outcomes.success)?;
         let mut schemas = Vec::new();
-        sequence::schemas(&error.plan()?.outcomes.success, &mut schemas);
-        for wire in crate::group::result_packet_fields(&error.plan()?.outcomes.success).chain(
-            schemas
-                .iter()
-                .flat_map(|(_, element, _)| crate::group::row_fields(element)),
-        ) {
+        sequence::boundary_schemas((&error.plan()?.outcomes.success).into(), &mut schemas);
+        for wire in crate::group::result_packet_fields(&error.plan()?.outcomes.success)
+            .chain(schemas.iter().flat_map(|(_, element, _)| element.fields()))
+        {
             validate_wire_declaration(wire, pointers, &enums)?;
         }
     }
@@ -2326,11 +2380,11 @@ The pointer must be null or a live allocation of the declared type returned by t
     for (f, body, context) in calls {
         let mut schemas = Vec::new();
         for slot in f.input_conversions()? {
-            sequence::schemas(slot.input_node(), &mut schemas);
+            sequence::boundary_schemas((slot.input_node()).into(), &mut schemas);
         }
         let mut output_schemas = Vec::new();
-        sequence::schemas(
-            &f.output_conversion()?.output_outcomes().success,
+        sequence::boundary_schemas(
+            (&f.output_conversion()?.output_outcomes().success).into(),
             &mut output_schemas,
         );
         let output_carriers = output_schemas
@@ -2569,10 +2623,10 @@ fn pointer_owns_value(pointer: &syn::Type, returned: &syn::Type) -> bool {
 }
 fn validate_return_loans<I, O, M>(
     function: &prebindgen_conversions::BoundFunction<'_, I, O, M>,
-    output: &prebindgen_conversions::WireNode<CWire, CChain, CBranch>,
+    output: &COutputWireNode,
 ) -> Result<()>
 where
-    I: InputConversion<Wire = CWire, Chain = CChain, Branch = CBranch>,
+    I: InputConversion<Wire = CWire, Chain = CInputWireChain, Branch = CInputWireBranch>,
 {
     if !borrowed::has_loans(output) {
         return Ok(());
@@ -2597,14 +2651,11 @@ where
     {
         return Ok(());
     }
-    fn stable_input(
-        ty: &syn::Type,
-        node: &prebindgen_conversions::WireNode<CWire, CChain, CBranch>,
-    ) -> bool {
+    fn stable_input(ty: &syn::Type, node: &CInputWireNode) -> bool {
         if let (
             Some(inner),
             prebindgen_conversions::WireNode::Chain {
-                meta: CChain::Optional(_),
+                meta: CWireChain::Optional(_),
                 child,
                 ..
             },
@@ -2674,15 +2725,15 @@ where
     Ok(())
 }
 
-fn describe_groups(
-    layout: &prebindgen_conversions::WireNode<CWire, crate::CChain, crate::CBranch>,
+fn describe_groups<Sq: crate::sequence::RowEncoding, In>(
+    layout: &CWireNode<Sq, In>,
     wires: &[&Wire],
     output: bool,
     next_label: &mut usize,
     root: &str,
 ) -> String {
-    fn visit(
-        node: &prebindgen_conversions::WireNode<CWire, crate::CChain, crate::CBranch>,
+    fn visit<Sq: crate::sequence::RowEncoding, In>(
+        node: &CWireNode<Sq, In>,
         names: &std::collections::BTreeMap<String, String>,
         parents: &mut Vec<String>,
         out: &mut String,
@@ -2692,14 +2743,14 @@ fn describe_groups(
         if matches!(
             node,
             prebindgen_conversions::WireNode::Chain {
-                meta: CChain::Tagged(_),
+                meta: CWireChain::Tagged(_),
                 ..
             }
         ) {
             return;
         }
         if let prebindgen_conversions::WireNode::Branch {
-            meta: CBranch::Alternatives,
+            meta: CWireBranch::Alternatives(_),
             children: alternatives,
             ..
         } = node
@@ -2711,7 +2762,7 @@ fn describe_groups(
         if let prebindgen_conversions::WireNode::Chain {
             controls,
             child: element,
-            meta: CChain::Sequence(metadata),
+            meta: CWireChain::Sequence(metadata),
             ..
         } = node
         {
@@ -2719,7 +2770,7 @@ fn describe_groups(
                 return;
             };
             let path = field_path.join(".");
-            if *metadata == CSequence::Buffered {
+            if metadata.delivery() == CSequence::Buffered {
                 out.push_str(&format!("/* Collection {path}: {} carries rows of {} ABI fields; element-owned fields are released separately from row storage. */\n",carrier.name,crate::group::row_fields(element).len()));
             } else {
                 out.push_str(&format!("/* Callback sequence {path}: {} reports the delivered element count; the visitor receives {} fields per element. */\n",carrier.name,crate::group::row_fields(element).len()));
@@ -2739,7 +2790,7 @@ fn describe_groups(
         }
         if let prebindgen_conversions::WireNode::Chain {
             child: element,
-            meta: CChain::Optional(g),
+            meta: CWireChain::Optional(g),
             ..
         } = node
         {
@@ -2762,12 +2813,12 @@ fn describe_groups(
             parents.pop();
         }
         if let prebindgen_conversions::WireNode::Branch {
-            meta: metadata @ (CBranch::Values | CBranch::Fields | CBranch::Field(_)),
+            meta: metadata @ (CWireBranch::Values | CWireBranch::Fields | CWireBranch::Field(_)),
             children,
             ..
         } = node
         {
-            if let CBranch::Field(name) = metadata {
+            if let CWireBranch::Field(name) = metadata {
                 field_path.push(name.to_string().trim_start_matches("r#").into());
                 let values = crate::group::record_fields(node)
                     .map(|w| names[&w.name.to_string()].clone())
@@ -3657,13 +3708,12 @@ mod generation_tests {
                 ..
             }
         ));
-        let shape =
-            |layout: &prebindgen_conversions::WireNode<CWire, crate::CChain, crate::CBranch>| {
-                let (_, element, _) = sequence::return_sequence(layout).unwrap();
-                prebindgen_conversions::wire_definitions_with_paths(std::iter::once(element))
-                    .map(|e| (e.path, prebindgen_flat::type_key(&e.wire.rust_type())))
-                    .collect::<Vec<_>>()
-            };
+        let shape = |layout: &COutputWireNode| {
+            let (_, element, _) = sequence::return_sequence(layout).unwrap();
+            prebindgen_conversions::wire_definitions_with_paths(std::iter::once(element))
+                .map(|e| (e.path, prebindgen_flat::type_key(&e.wire.rust_type())))
+                .collect::<Vec<_>>()
+        };
         let expected = shape(&output.output_outcomes().success);
         let expected_paths = prebindgen_conversions::wire_definitions_with_paths(std::iter::once(
             &output.output_outcomes().success,
@@ -4027,7 +4077,7 @@ mod generation_tests {
                 4
             );
             let prebindgen_conversions::WireNode::Chain {
-                meta: CChain::Optional(outer_metadata),
+                meta: CWireChain::Optional(outer_metadata),
                 ..
             } = &plan.node
             else {
@@ -4222,14 +4272,12 @@ mod generation_tests {
         #[allow(clippy::type_complexity)] // Custom slot storage keeps every metadata type explicit.
         struct CountedOutput(
             std::rc::Rc<std::cell::Cell<usize>>,
-            prebindgen_conversions::Outcomes<
-                prebindgen_conversions::WireNode<CWire, crate::CChain, crate::CBranch>,
-            >,
+            prebindgen_conversions::Outcomes<COutputWireNode>,
         );
         impl prebindgen_conversions::Conversion for CountedOutput {
             type Wire = CWire;
-            type Chain = CChain;
-            type Branch = CBranch;
+            type Chain = COutputWireChain;
+            type Branch = COutputWireBranch;
             type SlotFragment<'a> = prebindgen_conversions::OutputFragment<'a, CContext>;
 
             fn code_fragment_slot(
@@ -4249,11 +4297,7 @@ mod generation_tests {
             }
         }
         impl prebindgen_conversions::OutputConversion for CountedOutput {
-            fn output_outcomes(
-                &self,
-            ) -> &prebindgen_conversions::Outcomes<
-                prebindgen_conversions::WireNode<CWire, crate::CChain, crate::CBranch>,
-            > {
+            fn output_outcomes(&self) -> &prebindgen_conversions::Outcomes<COutputWireNode> {
                 &self.1
             }
         }
@@ -4445,7 +4489,7 @@ mod abort_policy_tests {
     }
 }
 
-fn takes_input_owners(node: &prebindgen_conversions::WireNode<CWire, CChain, CBranch>) -> bool {
+fn takes_input_owners(node: &CInputWireNode) -> bool {
     prebindgen_conversions::wire_definitions(std::iter::once(node)).any(|w| match &w.kind {
         CWire::Pointer { pointer, .. } => pointer.access == Access::Move,
         CWire::Owned { access, .. } => *access == Access::Move,

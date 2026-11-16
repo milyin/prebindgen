@@ -126,14 +126,11 @@ struct CodecImpl {
     row_only_leaf: bool,
 }
 impl Codec for CodecImpl {
-    type Input = crate::CodecInputPlan<Self>;
-    type Output = crate::CodecOutputPlan<Self>;
+    type Input = prebindgen_conversions::InputPlan<Type, (), PacketChain, Metadata>;
+    type Output = prebindgen_conversions::OutputPlan<Type, (), PacketChain, Metadata>;
 
     test_operations!();
     type Schema = prebindgen_conversions::PlanSchema<Type, (), PacketChain, Metadata>;
-    type Wire = Type;
-    type Chain = PacketChain;
-    type Branch = Metadata;
 
     fn validate_input(&self, plan: &CodecInputPlan<Self>) -> Result<()> {
         PointerLenAbi::validate(&plan.node)
@@ -147,7 +144,10 @@ impl Codec for CodecImpl {
     type Context = ();
     type Extra = ();
 
-    fn selector(&self, _: &()) -> Result<Type> {
+    fn input_selector(&self, _: &()) -> Result<Type> {
+        Ok(syn::parse_quote!(i32))
+    }
+    fn output_selector(&self, _: &()) -> Result<Type> {
         Ok(syn::parse_quote!(i32))
     }
 
@@ -303,17 +303,27 @@ impl Codec for CodecImpl {
         Ok(())
     }
 
-    fn group(&self, kind: GroupKind<'_>) -> Result<Metadata> {
+    fn input_group(&self, kind: GroupKind<'_>) -> Result<Metadata> {
         Ok(match kind {
             GroupKind::Values | GroupKind::NamedOutput(_) => Metadata::Components,
             GroupKind::Fields => Metadata::Fields,
             GroupKind::Field(_) => Metadata::Field,
         })
     }
-    fn optional(&self, request: Optional<'_, Self>) -> Result<OptionalEncoding<Self>> {
+    fn output_group(&self, kind: GroupKind<'_>) -> Result<Metadata> {
+        Ok(match kind {
+            GroupKind::Values | GroupKind::NamedOutput(_) => Metadata::Components,
+            GroupKind::Fields => Metadata::Fields,
+            GroupKind::Field(_) => Metadata::Field,
+        })
+    }
+    fn input_optional(
+        &self,
+        request: InputOptional<'_, Self>,
+    ) -> Result<OptionalEncoding<Type, PacketChain>> {
         let prepared = prepare_optional_payload(
             PointerLenAbi::values_mut(request.payload),
-            request.direction,
+            Direction::Input,
             |w| self.niche(w),
             |w, n| {
                 self.set_niche(w, n);
@@ -331,7 +341,40 @@ impl Codec for CodecImpl {
         } else {
             Presence::Flag(Wire {
                 name: request.presence,
-                kind: self.selector(request.extra)?,
+                kind: self.input_selector(request.extra)?,
+            })
+        };
+        Ok(OptionalEncoding {
+            presence,
+            metadata,
+            absent_values: prepared.absent_values,
+        })
+    }
+    fn output_optional(
+        &self,
+        request: OutputOptional<'_, Self>,
+    ) -> Result<OptionalEncoding<Type, PacketChain>> {
+        let prepared = prepare_optional_payload(
+            PointerLenAbi::values_mut(request.payload),
+            Direction::Output,
+            |w| self.niche(w),
+            |w, n| {
+                self.set_niche(w, n);
+                Ok(())
+            },
+            |w, n, v| self.is_present(w, n, v),
+            |w, n| self.remaining_niche(w, n),
+            |w, n| self.absent_value(w, n, false),
+        )?;
+        let metadata = PacketChain::Optional;
+        let presence = if prepared.reservation.is_some() {
+            Presence::Niche {
+                input_test: prepared.input_test,
+            }
+        } else {
+            Presence::Flag(Wire {
+                name: request.presence,
+                kind: self.output_selector(request.extra)?,
             })
         };
         Ok(OptionalEncoding {

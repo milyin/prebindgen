@@ -84,8 +84,8 @@ fn wire(kind: Kind, ty: &Type, extra: &Extra) -> TestWire {
 }
 #[allow(clippy::type_complexity)] // Keep the test codec metadata roles visible.
 impl Codec for TestCodec {
-    type Input = crate::CodecInputPlan<Self>;
-    type Output = crate::CodecOutputPlan<Self>;
+    type Input = prebindgen_conversions::InputPlan<TestWire, (), TestGroup, TestGroup>;
+    type Output = prebindgen_conversions::OutputPlan<TestWire, (), TestGroup, TestGroup>;
 
     test_operations!();
     type Schema = prebindgen_conversions::PlanSchema<TestWire, (), TestGroup, TestGroup>;
@@ -111,9 +111,6 @@ impl Codec for TestCodec {
         Ok(message)
     }
 
-    type Chain = TestGroup;
-    type Branch = TestGroup;
-
     fn validate_input(&self, plan: &CodecInputPlan<Self>) -> Result<()> {
         TestAbi::validate(&plan.node)
     }
@@ -130,9 +127,18 @@ impl Codec for TestCodec {
         )?;
         Ok(())
     }
-    fn prefix_layout(
+    fn prefix_input(
         &self,
-        layout: &mut prebindgen_conversions::WireNode<Self::Wire, Self::Chain, Self::Branch>,
+        layout: &mut prebindgen_conversions::WireNode<TestWire, TestGroup, TestGroup>,
+        segment: ComponentSegment,
+    ) {
+        for w in TestAbi::wires_mut(layout) {
+            w.kind.component.prepend(segment.clone());
+        }
+    }
+    fn prefix_output(
+        &self,
+        layout: &mut prebindgen_conversions::WireNode<TestWire, TestGroup, TestGroup>,
         segment: ComponentSegment,
     ) {
         for w in TestAbi::wires_mut(layout) {
@@ -141,10 +147,19 @@ impl Codec for TestCodec {
     }
 
     type Extra = Extra;
-    type Wire = TestWire;
     type Context = ();
 
-    fn selector(&self, extra: &Extra) -> Result<TestWire> {
+    fn input_selector(&self, extra: &Extra) -> Result<TestWire> {
+        Ok({
+            TestWire {
+                kind: Kind::Selector,
+                name: extra.name,
+                ty: "i32".into(),
+                component: Default::default(),
+            }
+        })
+    }
+    fn output_selector(&self, extra: &Extra) -> Result<TestWire> {
         Ok({
             TestWire {
                 kind: Kind::Selector,
@@ -231,17 +246,27 @@ impl Codec for TestCodec {
         })
     }
 
-    fn group(&self, kind: GroupKind<'_>) -> Result<TestGroup> {
+    fn input_group(&self, kind: GroupKind<'_>) -> Result<TestGroup> {
         Ok(match kind {
             GroupKind::Values | GroupKind::NamedOutput(_) => TestGroup::Values,
             GroupKind::Fields => TestGroup::Record,
             GroupKind::Field(name) => TestGroup::Member(name.clone()),
         })
     }
-    fn optional(&self, request: Optional<'_, Self>) -> Result<OptionalEncoding<Self>> {
+    fn output_group(&self, kind: GroupKind<'_>) -> Result<TestGroup> {
+        Ok(match kind {
+            GroupKind::Values | GroupKind::NamedOutput(_) => TestGroup::Values,
+            GroupKind::Fields => TestGroup::Record,
+            GroupKind::Field(name) => TestGroup::Member(name.clone()),
+        })
+    }
+    fn input_optional(
+        &self,
+        request: InputOptional<'_, Self>,
+    ) -> Result<OptionalEncoding<TestWire, TestGroup>> {
         let prepared = prepare_optional_payload(
             TestAbi::wires_mut(request.payload),
-            request.direction,
+            Direction::Input,
             |w| self.niche(w),
             |w, n| {
                 self.set_niche(w, n);
@@ -262,7 +287,43 @@ impl Codec for TestCodec {
         } else {
             Presence::Flag(Wire {
                 name: request.presence,
-                kind: self.selector(request.extra)?,
+                kind: self.input_selector(request.extra)?,
+            })
+        };
+        Ok(OptionalEncoding {
+            presence,
+            metadata,
+            absent_values: prepared.absent_values,
+        })
+    }
+    fn output_optional(
+        &self,
+        request: OutputOptional<'_, Self>,
+    ) -> Result<OptionalEncoding<TestWire, TestGroup>> {
+        let prepared = prepare_optional_payload(
+            TestAbi::wires_mut(request.payload),
+            Direction::Output,
+            |w| self.niche(w),
+            |w, n| {
+                self.set_niche(w, n);
+                Ok(())
+            },
+            |w, n, v| self.is_present(w, n, v),
+            |w, n| self.remaining_niche(w, n),
+            |w, n| self.absent_value(w, n, false),
+        )?;
+        if request.extra.name == "reject_optional_metadata" {
+            return Err("optional metadata rejected".into());
+        }
+        let metadata = TestGroup::Maybe;
+        let presence = if prepared.reservation.is_some() {
+            Presence::Niche {
+                input_test: prepared.input_test,
+            }
+        } else {
+            Presence::Flag(Wire {
+                name: request.presence,
+                kind: self.output_selector(request.extra)?,
             })
         };
         Ok(OptionalEncoding {
@@ -911,14 +972,11 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
     struct FinalizingCodec;
 
     impl Codec for FinalizingCodec {
-        type Input = crate::CodecInputPlan<Self>;
-        type Output = crate::CodecOutputPlan<Self>;
+        type Input = prebindgen_conversions::InputPlan<TestWire, (), TestGroup, TestGroup>;
+        type Output = prebindgen_conversions::OutputPlan<TestWire, (), TestGroup, TestGroup>;
 
         test_operations!();
         type Schema = prebindgen_conversions::PlanSchema<TestWire, (), TestGroup, TestGroup>;
-
-        type Chain = TestGroup;
-        type Branch = TestGroup;
 
         fn validate_input(&self, plan: &CodecInputPlan<Self>) -> Result<()> {
             TestAbi::validate(&plan.node)
@@ -936,9 +994,18 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
             )?;
             Ok(())
         }
-        fn prefix_layout(
+        fn prefix_input(
             &self,
-            layout: &mut prebindgen_conversions::WireNode<Self::Wire, Self::Chain, Self::Branch>,
+            layout: &mut prebindgen_conversions::WireNode<TestWire, TestGroup, TestGroup>,
+            segment: ComponentSegment,
+        ) {
+            for w in TestAbi::wires_mut(layout) {
+                w.kind.component.prepend(segment.clone());
+            }
+        }
+        fn prefix_output(
+            &self,
+            layout: &mut prebindgen_conversions::WireNode<TestWire, TestGroup, TestGroup>,
             segment: ComponentSegment,
         ) {
             for w in TestAbi::wires_mut(layout) {
@@ -947,11 +1014,13 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
         }
 
         type Extra = Extra;
-        type Wire = TestWire;
         type Context = ();
 
-        fn selector(&self, extra: &Extra) -> Result<TestWire> {
-            TEST_CODEC.selector(extra)
+        fn input_selector(&self, extra: &Extra) -> Result<TestWire> {
+            TEST_CODEC.input_selector(extra)
+        }
+        fn output_selector(&self, extra: &Extra) -> Result<TestWire> {
+            TEST_CODEC.output_selector(extra)
         }
         fn output_consumes(
             &self,
@@ -1036,15 +1105,35 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
             plan.delivery.statements = quote!(deliver_unit(););
             Ok(())
         }
-        fn group(&self, kind: GroupKind<'_>) -> Result<TestGroup> {
-            TEST_CODEC.group(kind)
+        fn input_group(&self, kind: GroupKind<'_>) -> Result<TestGroup> {
+            TEST_CODEC.input_group(kind)
         }
-        fn optional(&self, request: Optional<'_, Self>) -> Result<OptionalEncoding<Self>> {
-            let e = TEST_CODEC.optional(Optional {
+        fn output_group(&self, kind: GroupKind<'_>) -> Result<TestGroup> {
+            TEST_CODEC.output_group(kind)
+        }
+        fn input_optional(
+            &self,
+            request: InputOptional<'_, Self>,
+        ) -> Result<OptionalEncoding<TestWire, TestGroup>> {
+            let e = TEST_CODEC.input_optional(InputOptional {
                 extra: request.extra,
                 payload: request.payload,
                 presence: request.presence,
-                direction: request.direction,
+            })?;
+            Ok(OptionalEncoding {
+                presence: e.presence,
+                metadata: e.metadata,
+                absent_values: e.absent_values,
+            })
+        }
+        fn output_optional(
+            &self,
+            request: OutputOptional<'_, Self>,
+        ) -> Result<OptionalEncoding<TestWire, TestGroup>> {
+            let e = TEST_CODEC.output_optional(OutputOptional {
+                extra: request.extra,
+                payload: request.payload,
+                presence: request.presence,
             })?;
             Ok(OptionalEncoding {
                 presence: e.presence,

@@ -1,6 +1,6 @@
 //! Compose cleanup from resolved output shapes and emit each helper once.
 use super::*;
-use crate::kotlin::JniNode;
+
 use crate::{bulk::JniBulkRecord, metadata::JniTypes};
 use prebindgen_conversions::WireNode;
 
@@ -41,15 +41,18 @@ struct Row {
     wires: Vec<JniWire>,
 }
 
-struct CarrierChild<'a> {
-    node: &'a JniNode,
-    sequence: Option<&'a JniSequence>,
+struct CarrierChild<'a, Sq, In, Out> {
+    node: &'a JniWireNode<Sq, In, Out>,
+    sequence: Option<&'a Sq>,
 }
 
-fn carrier_child<'a>(node: &'a JniNode, name: &syn::Ident) -> Option<CarrierChild<'a>> {
+fn carrier_child<'a, Sq: crate::sequence::RowEncoding, In, Out>(
+    node: &'a JniWireNode<Sq, In, Out>,
+    name: &syn::Ident,
+) -> Option<CarrierChild<'a, Sq, In, Out>> {
     match node {
         WireNode::Chain {
-            meta: JniChain::Sequence(sequence),
+            meta: JniWireChain::Sequence(sequence),
             controls,
             child,
         } if controls.iter().any(|w| &w.name == name) => Some(CarrierChild {
@@ -57,7 +60,7 @@ fn carrier_child<'a>(node: &'a JniNode, name: &syn::Ident) -> Option<CarrierChil
             sequence: Some(sequence),
         }),
         WireNode::Chain {
-            meta: JniChain::Bulk,
+            meta: JniWireChain::Bulk,
             controls,
             child,
         } if controls.iter().any(|w| &w.name == name) => Some(CarrierChild {
@@ -73,7 +76,11 @@ fn carrier_child<'a>(node: &'a JniNode, name: &syn::Ident) -> Option<CarrierChil
 }
 
 impl Row {
-    fn new(node: &JniNode, carrier: Carrier, types: &JniTypes) -> Result<Self> {
+    fn new<Sq: crate::sequence::RowEncoding, In, Out>(
+        node: &JniWireNode<Sq, In, Out>,
+        carrier: Carrier,
+        types: &JniTypes,
+    ) -> Result<Self> {
         let layout = if matches!(carrier, Carrier::Objects | Carrier::TypedObjects) {
             None
         } else {
@@ -124,7 +131,10 @@ impl Row {
                         .ok_or("missing collection cleanup element")?;
                     let child_carrier =
                         if matches!(carrier, Carrier::Objects | Carrier::TypedObjects) {
-                            if matches!(child.sequence, Some(JniSequence::TypedBuffered)) {
+                            if child
+                                .sequence
+                                .is_some_and(|s| s.delivery() == JniSequence::TypedBuffered)
+                            {
                                 Carrier::TypedObjects
                             } else {
                                 Carrier::Objects
@@ -200,8 +210,8 @@ impl Row {
 }
 
 /// A stable reference for preparation; definitions are interned during emission.
-pub(crate) fn helper(
-    node: &JniNode,
+pub(crate) fn helper<Sq: crate::sequence::RowEncoding, In, Out>(
+    node: &JniWireNode<Sq, In, Out>,
     carrier: Carrier,
     types: &JniTypes,
 ) -> Result<Option<syn::Ident>> {
@@ -378,15 +388,21 @@ impl Helpers {
         Ok(name)
     }
 
-    fn visit(&mut self, node: &JniNode, input: bool, bulk: bool, types: &JniTypes) -> Result<()> {
+    fn visit<Sq: crate::sequence::RowEncoding, In, Out>(
+        &mut self,
+        node: &JniWireNode<Sq, In, Out>,
+        input: bool,
+        bulk: bool,
+        types: &JniTypes,
+    ) -> Result<()> {
         match node {
             WireNode::Chain {
-                meta: JniChain::Bulk,
+                meta: JniWireChain::Bulk,
                 child,
                 ..
             } => self.visit(child, input, true, types)?,
             WireNode::Chain {
-                meta: JniChain::Sequence(sequence),
+                meta: JniWireChain::Sequence(sequence),
                 child,
                 ..
             } => {
@@ -394,7 +410,7 @@ impl Helpers {
                     let carrier = if bulk {
                         Some(Carrier::Native)
                     } else {
-                        match sequence {
+                        match sequence.delivery() {
                             JniSequence::Buffered => Some(Carrier::Objects),
                             JniSequence::TypedBuffered => Some(Carrier::TypedObjects),
                             JniSequence::Callback => None,
@@ -418,8 +434,15 @@ impl Helpers {
             WireNode::Leaf(wires) => {
                 for wire in wires {
                     if let JniWire::Callback { callback } = &wire.kind {
-                        for (input, node) in callback.bulk_nodes() {
-                            self.visit(node, input, false, types)?;
+                        for root in callback.bulk_nodes() {
+                            match root {
+                                metadata::BoundaryNode::Input(node) => {
+                                    self.visit(node, true, false, types)?;
+                                }
+                                metadata::BoundaryNode::Output(node) => {
+                                    self.visit(node, false, false, types)?;
+                                }
+                            }
                         }
                     }
                 }
@@ -433,8 +456,15 @@ pub(crate) fn emit<I: KotlinInputConversion, O: KotlinOutputConversion>(
     flat: &Flat<JniSchema<I, O>>,
 ) -> Result<TokenStream> {
     let mut helpers = Helpers::default();
-    for (input, node) in metadata::nodes(flat)? {
-        helpers.visit(node, input, false, &flat.types)?;
+    for root in metadata::nodes(flat)? {
+        match root {
+            metadata::BoundaryNode::Input(node) => {
+                helpers.visit(node, true, false, &flat.types)?;
+            }
+            metadata::BoundaryNode::Output(node) => {
+                helpers.visit(node, false, false, &flat.types)?;
+            }
+        }
     }
     Ok(helpers.definitions.into_values().collect())
 }
@@ -443,7 +473,7 @@ pub(crate) fn emit<I: KotlinInputConversion, O: KotlinOutputConversion>(
 mod tests {
     use super::*;
 
-    fn owner(name: &str) -> JniNode {
+    fn owner(name: &str) -> JniOutputWireNode {
         WireNode::Leaf(vec![prebindgen_conversions::Wire {
             name: syn::parse_str(name).unwrap(),
             kind: JniWire::handle(

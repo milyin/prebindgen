@@ -969,14 +969,14 @@ fn optional_unannotated_fields_keep_outer_presence_in_both_directions() {
 #[test]
 fn reference_and_presence_flag_niches_keep_nested_wire_counts_bounded() {
     use prebindgen_conversions::WireNode;
-    fn reservations(
-        layout: &prebindgen_conversions::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
+    fn reservations<Sq: crate::sequence::RowEncoding, In, Out>(
+        layout: &JniWireNode<Sq, In, Out>,
     ) -> Vec<Option<JniNiche>> {
         let mut result = vec![];
         match layout {
             WireNode::Chain {
                 child: element,
-                meta: JniChain::Optional(metadata),
+                meta: JniWireChain::Optional(metadata),
                 ..
             } => {
                 result.push(metadata.niche().cloned());
@@ -1437,12 +1437,11 @@ fn logical_outcomes_keep_typed_errors_and_match_both_jni_sequence_deliveries() {
         crate::group::result_packet_fields(&output.output_outcomes().success).count(),
         1
     );
-    let shape =
-        |layout: &prebindgen_conversions::WireNode<JniWire, crate::JniChain, crate::JniBranch>| {
-            prebindgen_conversions::wire_definitions_with_paths(std::iter::once(layout))
-                .map(|e| (e.path, prebindgen_flat::type_key(&e.wire.rust_type())))
-                .collect::<Vec<_>>()
-        };
+    let shape = |layout: &JniOutputWireNode| {
+        prebindgen_conversions::wire_definitions_with_paths(std::iter::once(layout))
+            .map(|e| (e.path, prebindgen_flat::type_key(&e.wire.rust_type())))
+            .collect::<Vec<_>>()
+    };
     let expected = shape(&output.output_outcomes().success);
     sequence::callback_target(&(test_export(&flat, "f").ret.slot).output_outcomes().success)
         .unwrap();
@@ -2856,7 +2855,7 @@ fn automatic_bulk_collection_outputs_keep_inputs_and_direct_buffers_ordinary() {
     assert!(matches!(
         input.input_node(),
         prebindgen_conversions::WireNode::Chain {
-            meta: JniChain::Sequence(JniSequence::Buffered),
+            meta: JniInputWireChain::Sequence(()),
             ..
         }
     ));
@@ -3571,7 +3570,7 @@ fn resolved_callback_elements_can_keep_optional_presence_outside_a_bulk_frame() 
     // The optional uses a null frame, so presence stays outside its payload
     // without adding a separate discriminator argument.
     assert!(
-        matches!(element, prebindgen_conversions::WireNode::Chain {meta:JniChain::Optional(_),child,..} if matches!(child.as_ref(),prebindgen_conversions::WireNode::Chain {meta:JniChain::Bulk,..}))
+        matches!(element, prebindgen_conversions::WireNode::Chain {meta:JniWireChain::Optional(_),child,..} if matches!(child.as_ref(),prebindgen_conversions::WireNode::Chain {meta:JniWireChain::Bulk,..}))
     );
     assert_eq!(fields.len(), 1);
     assert_eq!(
@@ -3805,7 +3804,7 @@ fn ordinary_output_rows_respect_jvm_constructor_slot_limit() {
         )
         .unwrap();
         assert!(
-            matches!(output.metadata, JniChain::Sequence(actual) if actual == if typed { JniSequence::TypedBuffered } else { JniSequence::Buffered })
+            matches!(output.metadata, JniWireChain::Sequence(actual) if actual == if typed { JniSequence::TypedBuffered } else { JniSequence::Buffered })
         );
         assert_eq!(output.store.to_string().contains("construct"), typed);
         assert_eq!(output.store.to_string().contains("valueOf"), !typed);
@@ -3828,7 +3827,7 @@ fn legacy_buffered_schema_keeps_array_decoder_and_input_only_skips_registration(
                 kind: JniWire::scalar(Primitive::I64),
             },
         ])),
-        meta: JniChain::Sequence(JniSequence::Buffered),
+        meta: JniOutputWireChain::Sequence(JniSequence::Buffered),
     };
     let context = KotlinContext {
         package: "test",
@@ -4356,7 +4355,7 @@ fn named_output_groups_keep_name_validation_in_both_codec_policies() {
                 "accepted {name:?}"
             );
         }
-        assert!(codec.group(GroupKind::NamedOutput("count")).is_ok());
+        assert!(codec.output_group(GroupKind::NamedOutput("count")).is_ok());
     }
 }
 

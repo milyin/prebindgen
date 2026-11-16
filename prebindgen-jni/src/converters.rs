@@ -8,7 +8,7 @@ use std::rc::Rc;
 // Conversion's associated request family is intentionally not object safe.
 // These private adapters erase only the already-fixed JNI request family.
 trait InputProvider {
-    fn node(&self) -> &kotlin::JniNode;
+    fn node(&self) -> &JniInputWireNode;
     fn fragment(
         &self,
         request: InputFragment<'_, JniContext>,
@@ -23,7 +23,7 @@ trait InputProvider {
     fn kotlin(&self, context: &KotlinContext<'_>) -> Result<KotlinInput>;
 }
 impl<T: KotlinInputConversion> InputProvider for T {
-    fn node(&self) -> &kotlin::JniNode {
+    fn node(&self) -> &JniInputWireNode {
         self.input_node()
     }
     fn fragment(
@@ -70,8 +70,8 @@ impl From<JniInputPlan<JniWire>> for JniInputConverter {
 }
 impl Conversion for JniInputConverter {
     type Wire = JniWire;
-    type Chain = JniChain;
-    type Branch = JniBranch;
+    type Chain = JniInputWireChain;
+    type Branch = JniInputWireBranch;
     type SlotFragment<'a> = InputFragment<'a, JniContext>;
     fn code_fragment_slot(
         &self,
@@ -82,7 +82,7 @@ impl Conversion for JniInputConverter {
     }
 }
 impl InputConversion for JniInputConverter {
-    fn input_node(&self) -> &kotlin::JniNode {
+    fn input_node(&self) -> &JniInputWireNode {
         self.0.node()
     }
 }
@@ -101,7 +101,7 @@ impl KotlinInputConversion for JniInputConverter {
 }
 
 trait OutputProvider {
-    fn outcomes(&self) -> &Outcomes<kotlin::JniNode>;
+    fn outcomes(&self) -> &Outcomes<JniOutputWireNode>;
     fn fragment(
         &self,
         request: OutputFragment<'_, JniContext>,
@@ -123,7 +123,7 @@ trait OutputProvider {
     fn kotlin_return(&self, context: &KotlinReturnContext<'_>) -> Result<KotlinOutput>;
 }
 impl<T: KotlinOutputConversion> OutputProvider for T {
-    fn outcomes(&self) -> &Outcomes<kotlin::JniNode> {
+    fn outcomes(&self) -> &Outcomes<JniOutputWireNode> {
         self.output_outcomes()
     }
     fn fragment(
@@ -203,8 +203,8 @@ impl From<JniOutputPlan<JniWire>> for JniOutputConverter {
 }
 impl Conversion for JniOutputConverter {
     type Wire = JniWire;
-    type Chain = JniChain;
-    type Branch = JniBranch;
+    type Chain = JniOutputWireChain;
+    type Branch = JniOutputWireBranch;
     type SlotFragment<'a> = OutputFragment<'a, JniContext>;
     fn code_fragment_slot(
         &self,
@@ -215,7 +215,7 @@ impl Conversion for JniOutputConverter {
     }
 }
 impl OutputConversion for JniOutputConverter {
-    fn output_outcomes(&self) -> &Outcomes<kotlin::JniNode> {
+    fn output_outcomes(&self) -> &Outcomes<JniOutputWireNode> {
         self.provider.outcomes()
     }
 }

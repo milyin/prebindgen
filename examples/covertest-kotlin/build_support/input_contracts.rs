@@ -3,18 +3,18 @@ use prebindgen_conversions::InputFragment;
 use prebindgen_conversions::{Conversion, InputConversion, Wire, WireNode};
 use prebindgen_flat::{Flat, Primitive, Result};
 use prebindgen_jni::{
-    JniBindings, JniBranch, JniChain, JniContext, JniFunction, JniGen, JniSchema, JniWire,
-    KotlinContext, KotlinInput, KotlinInputConversion,
+    JniBindings, JniContext, JniFunction, JniGen, JniInputWireBranch, JniInputWireChain, JniSchema,
+    JniWire, KotlinContext, KotlinInput, KotlinInputConversion,
 };
 use proc_macro2::TokenStream;
 use quote::quote;
 
-struct DurationInput(WireNode<JniWire, JniChain, JniBranch>);
+struct DurationInput(WireNode<JniWire, JniInputWireChain, JniInputWireBranch>);
 
 impl Conversion for DurationInput {
     type Wire = JniWire;
-    type Chain = JniChain;
-    type Branch = JniBranch;
+    type Chain = JniInputWireChain;
+    type Branch = JniInputWireBranch;
     type SlotFragment<'a> = InputFragment<'a, JniContext>;
 
     fn code_fragment_slot(
@@ -28,7 +28,7 @@ impl Conversion for DurationInput {
 }
 
 impl InputConversion for DurationInput {
-    fn input_node(&self) -> &WireNode<JniWire, JniChain, JniBranch> {
+    fn input_node(&self) -> &WireNode<JniWire, JniInputWireChain, JniInputWireBranch> {
         &self.0
     }
 }

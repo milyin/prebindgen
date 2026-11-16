@@ -3,8 +3,9 @@ use prebindgen_conversions::{Conversion, InputConversion, OutputConversion, Wire
 use prebindgen_conversions::{Delivery, DeliveryPolicy, InputFragment, OutputFragment};
 use prebindgen_flat::Result;
 use prebindgen_jni::{
-    expand_return, fun, package, ptr_class, JniBindings, JniBranch, JniCallback, JniChain,
-    JniContext, JniGen, JniInputConverter, JniOutputConverter, JniWire, KotlinContext, KotlinInput,
+    expand_return, fun, package, ptr_class, JniBindings, JniCallback, JniContext, JniGen,
+    JniInputConverter, JniInputWireBranch, JniInputWireChain, JniOutputConverter,
+    JniOutputWireBranch, JniOutputWireChain, JniWire, KotlinContext, KotlinInput,
     KotlinInputConversion, KotlinOutput, KotlinOutputConversion,
 };
 use proc_macro2::TokenStream;
@@ -13,8 +14,8 @@ use proc_macro2::TokenStream;
 struct DurationOutput(JniOutputConverter);
 impl Conversion for DurationOutput {
     type Wire = JniWire;
-    type Chain = JniChain;
-    type Branch = JniBranch;
+    type Chain = JniOutputWireChain;
+    type Branch = JniOutputWireBranch;
     type SlotFragment<'a> = OutputFragment<'a, JniContext>;
     fn code_fragment_slot(
         &self,
@@ -27,7 +28,8 @@ impl Conversion for DurationOutput {
 impl OutputConversion for DurationOutput {
     fn output_outcomes(
         &self,
-    ) -> &prebindgen_conversions::Outcomes<WireNode<JniWire, JniChain, JniBranch>> {
+    ) -> &prebindgen_conversions::Outcomes<WireNode<JniWire, JniOutputWireChain, JniOutputWireBranch>>
+    {
         self.0.output_outcomes()
     }
 }
@@ -83,8 +85,8 @@ impl KotlinOutputConversion for DurationOutput {
 struct DurationInput(JniInputConverter);
 impl Conversion for DurationInput {
     type Wire = JniWire;
-    type Chain = JniChain;
-    type Branch = JniBranch;
+    type Chain = JniInputWireChain;
+    type Branch = JniInputWireBranch;
     type SlotFragment<'a> = InputFragment<'a, JniContext>;
     fn code_fragment_slot(
         &self,
@@ -95,7 +97,7 @@ impl Conversion for DurationInput {
     }
 }
 impl InputConversion for DurationInput {
-    fn input_node(&self) -> &WireNode<JniWire, JniChain, JniBranch> {
+    fn input_node(&self) -> &WireNode<JniWire, JniInputWireChain, JniInputWireBranch> {
         self.0.input_node()
     }
 }

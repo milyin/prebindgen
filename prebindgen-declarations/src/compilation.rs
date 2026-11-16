@@ -34,12 +34,11 @@ impl<C: Codec> Compiler<'_, C> {
         self.next.set(next + 1);
         n
     }
-    pub fn prefix(
-        &self,
-        wires: &mut prebindgen_conversions::WireNode<C::Wire, C::Chain, C::Branch>,
-        segment: ComponentSegment,
-    ) {
-        self.codec.prefix_layout(wires, segment);
+    pub fn prefix_input(&self, wires: &mut CodecInputNode<C>, segment: ComponentSegment) {
+        self.codec.prefix_input(wires, segment);
+    }
+    pub fn prefix_output(&self, wires: &mut CodecOutputNode<C>, segment: ComponentSegment) {
+        self.codec.prefix_output(wires, segment);
     }
     pub fn empty_output(&self) -> Result<CodecOutputPlan<C>> {
         let out = OutputPlan {
@@ -51,7 +50,7 @@ impl<C: Codec> Compiler<'_, C> {
                 success: WireNode::Branch {
                     controls: vec![],
                     children: vec![],
-                    meta: self.codec.group(GroupKind::Values)?,
+                    meta: self.codec.output_group(GroupKind::Values)?,
                 },
                 source_error: None,
                 binding_failure: None,
@@ -70,7 +69,7 @@ impl<C: Codec> Compiler<'_, C> {
                 WireNode::Branch {
                     controls: vec![],
                     children: vec![],
-                    meta: self.codec.group(GroupKind::Fields)?,
+                    meta: self.codec.input_group(GroupKind::Fields)?,
                 },
                 quote!(),
                 quote!(()),
@@ -108,7 +107,7 @@ impl<C: Codec> Compiler<'_, C> {
                 WireNode::Branch {
                     controls: vec![],
                     children: vec![child.node],
-                    meta: self.codec.group(GroupKind::Values)?,
+                    meta: self.codec.input_group(GroupKind::Values)?,
                 },
                 quote!(# build ;),
                 value,
@@ -162,7 +161,7 @@ impl<C: Codec> Compiler<'_, C> {
                     WireNode::Branch {
                         controls: vec![],
                         children: vec![],
-                        meta: self.codec.group(GroupKind::Fields)?,
+                        meta: self.codec.input_group(GroupKind::Fields)?,
                     },
                     quote!(),
                     quote!(()),
@@ -240,7 +239,7 @@ impl<C: Codec> Compiler<'_, C> {
             let mut fallible = false;
             for (i, (param, child)) in f.params.iter().zip(args).enumerate() {
                 let mut p = self.input(&param.ty.ty, child, extra, active)?;
-                self.prefix(
+                self.prefix_input(
                     &mut p.node,
                     ComponentSegment::Argument(param.name.to_string()),
                 );
@@ -265,7 +264,7 @@ impl<C: Codec> Compiler<'_, C> {
             plan.node = WireNode::Branch {
                 controls: vec![],
                 children: wires,
-                meta: self.codec.group(GroupKind::Values)?,
+                meta: self.codec.input_group(GroupKind::Values)?,
             };
             plan.storage = storage;
             plan.fallible = fallible;
@@ -293,9 +292,9 @@ impl<C: Codec> Compiler<'_, C> {
             let tag = self.name();
             let mut selector_layout = prebindgen_conversions::WireNode::Leaf(vec![Wire {
                 name: tag.clone(),
-                kind: self.codec.selector(extra)?,
+                kind: self.codec.input_selector(extra)?,
             }]);
-            self.prefix(&mut selector_layout, ComponentSegment::Selector);
+            self.prefix_input(&mut selector_layout, ComponentSegment::Selector);
             let WireNode::Leaf(mut selector_values) = selector_layout else {
                 return Err("selector prefixing must retain its value".into());
             };
@@ -313,7 +312,7 @@ impl<C: Codec> Compiler<'_, C> {
             let mut cases = Vec::new();
             for (i, arm) in arms.iter().enumerate() {
                 let mut p = self.input(ty, arm, extra, &active.arm(tag.clone(), i as i32))?;
-                self.prefix(&mut p.node, ComponentSegment::Alternative(i));
+                self.prefix_input(&mut p.node, ComponentSegment::Alternative(i));
                 fallible |= p.fallible;
                 storage.extend(std::mem::take(&mut p.storage));
                 let target = format_ident!("{var}_alternative_{i}");
@@ -358,7 +357,7 @@ impl<C: Codec> Compiler<'_, C> {
             out.outcomes.success = WireNode::Branch {
                 controls: vec![],
                 children: vec![],
-                meta: self.codec.group(GroupKind::Fields)?,
+                meta: self.codec.output_group(GroupKind::Fields)?,
             };
             Ok(out)
         }
@@ -376,7 +375,7 @@ impl<C: Codec> Compiler<'_, C> {
         {
             let mut plan = self.output_named(ty, output, extra, value, borrowed, wire_name)?;
             plan.outcomes.success = WireNode::Branch {
-                meta: self.codec.group(GroupKind::NamedOutput(name))?,
+                meta: self.codec.output_group(GroupKind::NamedOutput(name))?,
                 controls: vec![],
                 children: vec![plan.outcomes.success],
             };
@@ -501,7 +500,7 @@ impl<C: Codec> Compiler<'_, C> {
             if type_key(ty) == "()" && children.is_empty() {
                 out.outcomes.success = WireNode::Branch {
                     controls: vec![],
-                    meta: self.codec.group(GroupKind::Fields)?,
+                    meta: self.codec.output_group(GroupKind::Fields)?,
                     children: vec![],
                 };
                 return Ok(out);
@@ -602,7 +601,7 @@ impl<C: Codec> Compiler<'_, C> {
                 &child,
                 extra,
             )?;
-            self.prefix(
+            self.prefix_output(
                 &mut child.outcomes.success,
                 ComponentSegment::Getter(function.clone()),
             );
@@ -777,7 +776,7 @@ impl<C: Codec> Compiler<'_, C> {
         let tag = format_ident!("{root}_tag");
         let mut selector = Wire {
             name: tag.clone(),
-            kind: self.codec.selector(extra)?,
+            kind: self.codec.input_selector(extra)?,
         };
         let mut arms = vec![];
         let mut cases = vec![];
@@ -812,12 +811,12 @@ impl<C: Codec> Compiler<'_, C> {
                     .map_err(|e| format!("{}::{}.{}: {e}", type_key(ty), arm.name, field.key()))?;
                 let name = format_ident!("{}", field.property());
                 if arm.fields.len() != 1 || field.key() != "0" {
-                    self.prefix(&mut child.node, ComponentSegment::Field(field.property()));
+                    self.prefix_input(&mut child.node, ComponentSegment::Field(field.property()));
                 }
                 child.node = WireNode::Branch {
                     controls: vec![],
                     children: vec![child.node],
-                    meta: self.codec.group(GroupKind::Field(&name))?,
+                    meta: self.codec.input_group(GroupKind::Field(&name))?,
                 };
                 storage.extend(std::mem::take(&mut child.storage));
                 fallible |= child.fallible;
@@ -835,15 +834,15 @@ impl<C: Codec> Compiler<'_, C> {
             let mut arm_node = WireNode::Branch {
                 controls: vec![],
                 children,
-                meta: self.codec.group(GroupKind::Fields)?,
+                meta: self.codec.input_group(GroupKind::Fields)?,
             };
-            self.prefix(
+            self.prefix_input(
                 &mut arm_node,
                 ComponentSegment::Named(arm.name.to_string().trim_start_matches("r#").into()),
             );
             arms.push(arm_node);
         }
-        let encoding = self.codec.enum_variants(EnumVariants {
+        let encoding = self.codec.input_enum_variants(InputEnumVariants {
             flat: self.flat,
             ty,
             extra,
@@ -854,7 +853,6 @@ impl<C: Codec> Compiler<'_, C> {
             } else {
                 EnumForm::Fields
             },
-            direction: Direction::Input,
         })?;
         let invalid = if self.codec.validates_inputs() {
             quote!(return Err("invalid enum tag".into()))
@@ -928,7 +926,7 @@ impl<C: Codec> Compiler<'_, C> {
         let tag = format_ident!("{root}_tag");
         let mut selector = Wire {
             name: tag.clone(),
-            kind: self.codec.selector(extra)?,
+            kind: self.codec.output_selector(extra)?,
         };
         let mut plans = vec![];
         let mut patterns = vec![];
@@ -955,7 +953,7 @@ impl<C: Codec> Compiler<'_, C> {
                     success: WireNode::Branch {
                         controls: vec![],
                         children: vec![],
-                        meta: self.codec.group(GroupKind::Fields)?,
+                        meta: self.codec.output_group(GroupKind::Fields)?,
                     },
                     source_error: None,
                     binding_failure: None,
@@ -980,7 +978,7 @@ impl<C: Codec> Compiler<'_, C> {
                     .map_err(|e| format!("{}::{}.{}: {e}", type_key(ty), arm.name, field.key()))?;
                 let name = format_ident!("{}", field.property());
                 if arm.fields.len() != 1 || field.key() != "0" {
-                    self.prefix(
+                    self.prefix_output(
                         &mut field_plan.outcomes.success,
                         ComponentSegment::Field(field.property()),
                     );
@@ -988,11 +986,11 @@ impl<C: Codec> Compiler<'_, C> {
                 field_plan.outcomes.success = WireNode::Branch {
                     controls: vec![],
                     children: vec![field_plan.outcomes.success],
-                    meta: self.codec.group(GroupKind::Field(&name))?,
+                    meta: self.codec.output_group(GroupKind::Field(&name))?,
                 };
                 append(&mut child, field_plan)?;
             }
-            self.prefix(
+            self.prefix_output(
                 &mut child.outcomes.success,
                 ComponentSegment::Named(arm.name.to_string().trim_start_matches("r#").into()),
             );
@@ -1002,7 +1000,7 @@ impl<C: Codec> Compiler<'_, C> {
             .iter_mut()
             .map(|p| std::mem::take(&mut p.outcomes.success))
             .collect::<Vec<_>>();
-        let encoding = self.codec.enum_variants(EnumVariants {
+        let encoding = self.codec.output_enum_variants(OutputEnumVariants {
             flat: self.flat,
             ty,
             extra,
@@ -1013,7 +1011,6 @@ impl<C: Codec> Compiler<'_, C> {
             } else {
                 EnumForm::Fields
             },
-            direction: Direction::Output,
         })?;
         if encoding.inactive.len() != plans.len() {
             return Err("missing inactive enum arm values".into());
@@ -1332,7 +1329,7 @@ impl<C: Codec> Compiler<'_, C> {
                     success: WireNode::Branch {
                         controls: vec![],
                         children: vec![],
-                        meta: self.codec.group(GroupKind::Values)?,
+                        meta: self.codec.output_group(GroupKind::Values)?,
                     },
                     source_error: None,
                     binding_failure: None,
@@ -1382,13 +1379,13 @@ impl<C: Codec> Compiler<'_, C> {
                         let body = plan.statements;
                         quote!(let # source = # path (# argument) ; # body)
                     };
-                    self.prefix(
+                    self.prefix_output(
                         &mut plan.outcomes.success,
                         ComponentSegment::Getter(function.to_owned()),
                     );
                     plan
                 };
-                self.prefix(&mut plan.outcomes.success, ComponentSegment::View(index));
+                self.prefix_output(&mut plan.outcomes.success, ComponentSegment::View(index));
                 append(&mut result, plan)?;
             }
             result.statements = {
@@ -1426,7 +1423,7 @@ impl<C: Codec> Compiler<'_, C> {
                 success: WireNode::Branch {
                     controls: vec![],
                     children: vec![],
-                    meta: self.codec.group(GroupKind::Values)?,
+                    meta: self.codec.output_group(GroupKind::Values)?,
                 },
                 source_error: None,
                 binding_failure: None,
@@ -1434,7 +1431,7 @@ impl<C: Codec> Compiler<'_, C> {
         };
         for (index, part) in parts.iter().enumerate() {
             let mut child = self.output_return(ty, part, extra, value.clone(), false)?;
-            self.prefix(&mut child.outcomes.success, ComponentSegment::View(index));
+            self.prefix_output(&mut child.outcomes.success, ComponentSegment::View(index));
             append(&mut result, child)?;
         }
         Ok(result)

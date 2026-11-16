@@ -26,14 +26,14 @@ pub fn record_input<C: Codec>(
     for (index, field) in fields.into_iter().enumerate() {
         let (name, mut child) = field?;
         check_field(&mut names, &name)?;
-        codec.prefix_layout(&mut child.node, ComponentSegment::Field(name.to_string()));
+        codec.prefix_input(&mut child.node, ComponentSegment::Field(name.to_string()));
         fallible |= child.fallible;
         storage.extend(std::mem::take(&mut child.storage));
         let target = format_ident!("{var}_field_{index}");
         values.push(quote!(#name:#target));
         child.node = WireNode::Branch {
             controls: vec![],
-            meta: codec.group(GroupKind::Field(&name))?,
+            meta: codec.input_group(GroupKind::Field(&name))?,
             children: vec![std::mem::take(&mut child.node)],
         };
         plans.push((target, child));
@@ -49,7 +49,7 @@ pub fn record_input<C: Codec>(
     out.node = WireNode::Branch {
         controls: vec![],
         children: plans.into_iter().map(|(_, p)| p.node).collect(),
-        meta: codec.group(GroupKind::Fields)?,
+        meta: codec.input_group(GroupKind::Fields)?,
     };
     out.storage = storage;
     out.fallible = fallible;
@@ -88,7 +88,7 @@ pub fn record_output<C: Codec>(
             success: WireNode::Branch {
                 controls: vec![],
                 children: vec![],
-                meta: codec.group(GroupKind::Fields)?,
+                meta: codec.output_group(GroupKind::Fields)?,
             },
             source_error: None,
             binding_failure: None,
@@ -100,13 +100,13 @@ pub fn record_output<C: Codec>(
     for (index, name) in fields.enumerate() {
         check_field(&mut names, &name)?;
         let mut child = convert(index, quote!(&#var.#name))?;
-        codec.prefix_layout(
+        codec.prefix_output(
             &mut child.outcomes.success,
             ComponentSegment::Field(name.to_string()),
         );
         child.outcomes.success = prebindgen_conversions::WireNode::Branch {
             controls: vec![],
-            meta: codec.group(GroupKind::Field(&(name)))?,
+            meta: codec.output_group(GroupKind::Field(&(name)))?,
             children: vec![std::mem::take(&mut child.outcomes.success)],
         };
         append(&mut out, child)?;
@@ -146,7 +146,7 @@ pub fn record_output_owned<C: Codec>(
             success: WireNode::Branch {
                 controls: vec![],
                 children: vec![],
-                meta: codec.group(GroupKind::Fields)?,
+                meta: codec.output_group(GroupKind::Fields)?,
             },
             source_error: None,
             binding_failure: None,
@@ -158,13 +158,13 @@ pub fn record_output_owned<C: Codec>(
     for (index, name) in fields.enumerate() {
         check_field(&mut names, &name)?;
         let mut child = convert(index, quote!(#var.#name))?;
-        codec.prefix_layout(
+        codec.prefix_output(
             &mut child.outcomes.success,
             ComponentSegment::Field(name.to_string()),
         );
         child.outcomes.success = prebindgen_conversions::WireNode::Branch {
             controls: vec![],
-            meta: codec.group(GroupKind::Field(&(name)))?,
+            meta: codec.output_group(GroupKind::Field(&(name)))?,
             children: vec![std::mem::take(&mut child.outcomes.success)],
         };
         append(&mut out, child)?;

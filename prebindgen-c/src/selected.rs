@@ -32,11 +32,11 @@ pub(crate) fn condition(
         .reduce(|a, b| quote!((#a)&&(#b)))
         .unwrap_or_else(|| quote!(true))
 }
-pub(crate) fn values(
-    node: &prebindgen_conversions::WireNode<CWire, CChain, CBranch>,
+pub(crate) fn values<Sq: crate::sequence::RowEncoding, In>(
+    node: &CWireNode<Sq, In>,
 ) -> Result<Vec<(&Wire, Vec<Test>)>> {
-    fn visit<'a>(
-        node: &'a WireNode<CWire, CChain, CBranch>,
+    fn visit<'a, Sq: crate::sequence::RowEncoding, In>(
+        node: &'a CWireNode<Sq, In>,
         path: &[Test],
         out: &mut Vec<(&'a Wire, Vec<Test>)>,
     ) {
@@ -54,12 +54,12 @@ pub(crate) fn values(
         match node {
             WireNode::Leaf(wires) => add(wires),
             WireNode::Chain {
-                meta: CChain::Sequence(_) | CChain::Tagged(_),
+                meta: CWireChain::Sequence(_) | CWireChain::Tagged(_),
                 controls,
                 ..
             } => add(controls),
             WireNode::Chain {
-                meta: CChain::Optional(optional),
+                meta: CWireChain::Optional(optional),
                 child,
                 controls,
             } => {
@@ -82,7 +82,7 @@ pub(crate) fn values(
                 add(controls);
                 for (i, child) in children.iter().enumerate() {
                     let mut next = path.to_vec();
-                    if matches!(meta, CBranch::Enum(_) | CBranch::Alternatives) {
+                    if matches!(meta, CWireBranch::Enum(_) | CWireBranch::Alternatives(_)) {
                         next.push(Test::Arm(controls[0].name.clone(), i as i32));
                     }
                     visit(child, &next, out);

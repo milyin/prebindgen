@@ -1,8 +1,7 @@
 //! Kotlin sealed values and selected-variant JNI conversion.
 use super::*;
-use prebindgen_declarations::{EnumEncoding, EnumForm, EnumVariants};
+use prebindgen_declarations::{EnumEncoding, EnumForm};
 
-use crate::kotlin::JniNode;
 use prebindgen_conversions::{InputConversion, Wire, WireNode};
 use prebindgen_flat::{PayloadEnum, PayloadField, PayloadVariant, TypeDefinition, TypeRef};
 use std::rc::Rc;
@@ -120,7 +119,19 @@ fn validate_variants(class: &Class, source: &PayloadEnum<(), JniField>) -> Resul
     Ok(())
 }
 
-pub(crate) fn encoding(request: EnumVariants<'_, JniCodec>) -> Result<EnumEncoding<JniCodec>> {
+pub(crate) fn encoding<
+    Sq: crate::sequence::RowEncoding,
+    In,
+    Out,
+    V: prebindgen_conversions::Conversion<
+        Wire = JniWire,
+        Chain = JniWireChain<Sq>,
+        Branch = JniWireBranch<In, Out>,
+    >,
+>(
+    request: prebindgen_declarations::EnumVariants<'_, JniCodec, V>,
+    direction: prebindgen_declarations::Direction,
+) -> Result<EnumEncoding<JniWireBranch<In, Out>>> {
     let source = request.flat.payload_enum(request.ty)?;
     let class = request
         .flat
@@ -150,7 +161,7 @@ pub(crate) fn encoding(request: EnumVariants<'_, JniCodec>) -> Result<EnumEncodi
         .selector
         .kind
         .set_niche(Some(JniNiche::Integer(-2)))?;
-    let inactive = if request.direction == prebindgen_declarations::Direction::Output {
+    let inactive = if direction == prebindgen_declarations::Direction::Output {
         request
             .arms
             .iter()
@@ -169,7 +180,7 @@ pub(crate) fn encoding(request: EnumVariants<'_, JniCodec>) -> Result<EnumEncodi
         vec![]
     };
     Ok(EnumEncoding {
-        metadata: JniBranch::Enum(Rc::new(JniEnumGroup {
+        metadata: JniWireBranch::Enum(Rc::new(JniEnumGroup {
             source: request.flat.type_ref(request.ty)?,
             value: grouped,
             root: request
@@ -186,10 +197,12 @@ pub(crate) fn encoding(request: EnumVariants<'_, JniCodec>) -> Result<EnumEncodi
 
 // Source field identities and order come from the canonical variant. Occurrence
 // nodes only describe conversions of those fields.
-pub(crate) fn variant_fields<'a>(
-    node: &'a JniNode,
+#[allow(clippy::type_complexity)] // Borrow each canonical field with its directional conversion subtree.
+pub(crate) fn variant_fields<'a, Sq: crate::sequence::RowEncoding, In, Out>(
+    node: &'a JniWireNode<Sq, In, Out>,
     source: &'a PayloadVariant<(), JniField>,
-) -> Result<impl Iterator<Item = Result<(&'a PayloadField<JniField>, &'a JniNode)>>> {
+) -> Result<impl Iterator<Item = Result<(&'a PayloadField<JniField>, &'a JniWireNode<Sq, In, Out>)>>>
+{
     let WireNode::Branch { children, .. } = node else {
         return Err("enum arm must group fields".into());
     };
@@ -215,7 +228,7 @@ pub(crate) fn variant_fields<'a>(
 }
 
 pub(crate) fn input(
-    nodes: &[kotlin::JniNode],
+    nodes: &[JniInputWireNode],
     controls: &[Wire<JniWire>],
     meta: &JniEnumGroup,
     context: &KotlinContext<'_>,
@@ -233,7 +246,7 @@ pub(crate) fn input(
         let tree = WireNode::Branch {
             controls: controls.to_vec(),
             children: nodes.to_vec(),
-            meta: JniBranch::Alternatives,
+            meta: JniInputWireBranch::Alternatives(()),
         };
         let mut out = kotlin::input_kotlin_when(&tree, context, active)?;
         for path in &mut out.parameter_paths {
@@ -293,7 +306,7 @@ pub(crate) fn input(
         for pair in variant_fields(node, variant)? {
             let (field, node) = pair?;
             let mut child = kotlin::input_kotlin_when(node, context, &selected)?;
-            child.prepare_arguments(kotlin::input_handles(node, false))?;
+            child.prepare_arguments(kotlin::has_handles(node, false))?;
             data::check_property_input(&field.metadata.kotlin_type, &child.parameters).map_err(
                 |error| format!("{class}.{}.{}: {error}", variant_class, field.property()),
             )?;
@@ -342,7 +355,7 @@ fn replace_input(input: &mut KotlinInput, old: &str, new: &str) {
 }
 
 pub(crate) fn output(
-    nodes: &[kotlin::JniNode],
+    nodes: &[JniOutputWireNode],
     controls: &[Wire<JniWire>],
     meta: &JniEnumGroup,
     context: &KotlinContext<'_>,
@@ -523,12 +536,12 @@ fn upper_first(name: &str) -> String {
 // Read source field paths from the same resolved tree. Publicly grouped values
 // remain one property; expanded child fields retain their meaningful names.
 fn expanded_names(
-    node: &kotlin::JniNode,
+    node: &JniOutputWireNode,
     context: &KotlinContext<'_>,
     owners: Option<&str>,
 ) -> Result<Vec<Option<String>>> {
     if let WireNode::Branch {
-        meta: JniBranch::Record(_) | JniBranch::Enum(_),
+        meta: JniWireBranch::Record(_) | JniWireBranch::Enum(_),
         ..
     } = node
     {
@@ -542,7 +555,7 @@ fn expanded_names(
             .into_iter()
             .flatten()
             .collect::<Vec<_>>();
-        if let JniBranch::Field(field) = meta {
+        if let JniWireBranch::Field(field) = meta {
             let field = field.to_string();
             let tuple = field
                 .strip_prefix('v')
@@ -729,8 +742,8 @@ pub(crate) fn emit_tags<I: KotlinInputConversion, O: KotlinOutputConversion>(
     native: &mut String,
     files: &mut BTreeMap<String, String>,
 ) -> Result<()> {
-    fn visit(
-        node: &kotlin::JniNode,
+    fn visit<Sq: crate::sequence::RowEncoding, In, Out>(
+        node: &JniWireNode<Sq, In, Out>,
         package: &str,
         by_package: &mut BTreeMap<String, BTreeSet<TypeRef>>,
     ) -> Result<()> {
@@ -738,15 +751,22 @@ pub(crate) fn emit_tags<I: KotlinInputConversion, O: KotlinOutputConversion>(
             WireNode::Leaf(wires) => {
                 for wire in wires {
                     if let JniWire::Callback { callback } = &wire.kind {
-                        for (_, node) in callback.bulk_nodes() {
-                            visit(node, &callback.package, by_package)?;
+                        for root in callback.bulk_nodes() {
+                            match root {
+                                metadata::BoundaryNode::Input(node) => {
+                                    visit(node, &callback.package, by_package)?;
+                                }
+                                metadata::BoundaryNode::Output(node) => {
+                                    visit(node, &callback.package, by_package)?;
+                                }
+                            }
                         }
                     }
                 }
             }
             WireNode::Chain { child, .. } => visit(child, package, by_package)?,
             WireNode::Branch { meta, children, .. } => {
-                if let JniBranch::Enum(e) = meta {
+                if let JniWireBranch::Enum(e) = meta {
                     by_package
                         .entry(package.into())
                         .or_default()

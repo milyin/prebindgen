@@ -12,8 +12,8 @@ struct ExternalOutput {
 }
 impl Conversion for ExternalOutput {
     type Wire = JniWire;
-    type Chain = JniChain;
-    type Branch = JniBranch;
+    type Chain = JniOutputWireChain;
+    type Branch = JniOutputWireBranch;
     type SlotFragment<'a> = OutputFragment<'a, JniContext>;
     fn code_fragment_slot(
         &self,
@@ -30,7 +30,7 @@ impl Conversion for ExternalOutput {
     }
 }
 impl OutputConversion for ExternalOutput {
-    fn output_outcomes(&self) -> &prebindgen_conversions::Outcomes<kotlin::JniNode> {
+    fn output_outcomes(&self) -> &prebindgen_conversions::Outcomes<JniOutputWireNode> {
         self.native.output_outcomes()
     }
 }
@@ -245,8 +245,8 @@ fn one_prepared_output_supports_packet_direct_and_capture_without_mutation() {
 struct TextOutput(JniOutputConverter);
 impl Conversion for TextOutput {
     type Wire = JniWire;
-    type Chain = JniChain;
-    type Branch = JniBranch;
+    type Chain = JniOutputWireChain;
+    type Branch = JniOutputWireBranch;
     type SlotFragment<'a> = OutputFragment<'a, JniContext>;
     fn code_fragment_slot(
         &self,
@@ -257,7 +257,7 @@ impl Conversion for TextOutput {
     }
 }
 impl OutputConversion for TextOutput {
-    fn output_outcomes(&self) -> &prebindgen_conversions::Outcomes<kotlin::JniNode> {
+    fn output_outcomes(&self) -> &prebindgen_conversions::Outcomes<JniOutputWireNode> {
         self.0.output_outcomes()
     }
 }
@@ -398,7 +398,7 @@ fn nested_error_layouts_must_match_even_with_the_same_outer_byte_array() {
         .source_error
         .as_ref()
         .unwrap();
-    let top = |node: &kotlin::JniNode| {
+    let top = |node: &JniOutputWireNode| {
         group::result_packet_fields(node)
             .map(|wire| wire.kind.jvm_descriptor())
             .collect::<Vec<_>>()

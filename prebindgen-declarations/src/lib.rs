@@ -115,13 +115,13 @@ pub use component::{ComponentPath, ComponentSegment};
 
 /// Input preparation plan, including the codec's composition metadata.
 pub type CodecInputPlan<C> =
-    InputPlan<<C as Codec>::Wire, <C as Codec>::Context, <C as Codec>::Chain, <C as Codec>::Branch>;
-/// Output preparation plan, including the codec's composition metadata.
+    InputPlan<CodecInputWire<C>, <C as Codec>::Context, CodecInputChain<C>, CodecInputBranch<C>>;
+/// Output preparation plan, including only output composition metadata.
 pub type CodecOutputPlan<C> = OutputPlan<
-    <C as Codec>::Wire,
+    CodecOutputWire<C>,
     <C as Codec>::Context,
-    <C as Codec>::Chain,
-    <C as Codec>::Branch,
+    CodecOutputChain<C>,
+    CodecOutputBranch<C>,
 >;
 
 /// How a sequence return reaches the foreign caller.
@@ -148,6 +148,8 @@ mod test_language;
 use test_language::*;
 mod compilation;
 pub use codec::{prepare_mapped_source_error, Codec};
+mod wire;
+pub use wire::*;
 mod operations;
 pub use operations::*;
 
@@ -524,3 +526,6 @@ pub use binding::{
     bind_prepared_input, bind_prepared_output, compile_call, resolve_call, BindingState,
     ConfiguredCall, ConfiguredSlot, DeclBinding, ResolvedCall,
 };
+
+#[cfg(test)]
+mod direction_tests;

@@ -1,6 +1,5 @@
 //! Failure-only ownership cleanup for ordinary Kotlin callback result trees.
 use super::*;
-use crate::kotlin::JniNode;
 
 use prebindgen_conversions::{Wire, WireNode};
 
@@ -11,7 +10,7 @@ use prebindgen_conversions::{Wire, WireNode};
 /// and rollback, as required by the generated preparation/ownership protocol.
 /// Packed children reuse the native bulk cleanup traversal.
 pub(crate) fn cleanup(
-    node: &JniNode,
+    node: &JniInputWireNode,
     context: &JniContext,
     root: &syn::Ident,
     types: &crate::metadata::JniTypes,
@@ -19,32 +18,25 @@ pub(crate) fn cleanup(
     // Find ordinary collections transferring ownership. Packed children are
     // scanned natively after reading their own carrier. Results without ordinary
     // owner collections retain the existing native-only cleanup guards.
-    fn rows(node: &JniNode) -> Option<bool> {
-        if !kotlin::input_handles(node, true) {
-            return Some(false);
+    fn rows(node: &JniInputWireNode) -> bool {
+        if !kotlin::has_handles(node, true) {
+            return false;
         }
         match node {
-            WireNode::Leaf(_) => Some(false),
+            WireNode::Leaf(_) => false,
             WireNode::Chain {
-                meta: JniChain::Sequence(JniSequence::Buffered),
-                child,
+                meta: JniInputWireChain::Sequence(()),
                 ..
-            } => rows(child).map(|_| true),
+            } => true,
             WireNode::Chain {
-                meta: JniChain::Bulk,
+                meta: JniInputWireChain::Bulk,
                 ..
-            } => Some(false),
-            WireNode::Chain {
-                meta: JniChain::Sequence(_),
-                ..
-            } => None,
+            } => false,
             WireNode::Chain { child, .. } => rows(child),
-            WireNode::Branch { children, .. } => children
-                .iter()
-                .try_fold(false, |found, child| Some(rows(child)? || found)),
+            WireNode::Branch { children, .. } => children.iter().any(rows),
         }
     }
-    if rows(node) != Some(true) {
+    if !rows(node) {
         return Ok(None);
     }
     let fields = group::argument_parameters(node).collect::<Vec<_>>();
@@ -122,13 +114,13 @@ fn field(
     ))
 }
 fn receive(
-    node: &JniNode,
+    node: &JniInputWireNode,
     context: &JniContext,
     row: Option<&syn::Ident>,
     fields: &[&Wire<JniWire>],
     types: &crate::metadata::JniTypes,
 ) -> Result<TokenStream> {
-    if !kotlin::input_handles(node, true) {
+    if !kotlin::has_handles(node, true) {
         return Ok(quote!());
     }
     Ok(match node {
@@ -148,7 +140,7 @@ fn receive(
             code
         }
         WireNode::Chain {
-            meta: JniChain::Sequence(JniSequence::Buffered),
+            meta: JniInputWireChain::Sequence(()),
             controls,
             child,
         } => {
@@ -177,7 +169,7 @@ fn receive(
             field(context, row, fields, carrier, scan)?
         }
         WireNode::Chain {
-            meta: JniChain::Bulk,
+            meta: JniInputWireChain::Bulk,
             controls,
             child,
         } => {
@@ -205,7 +197,7 @@ fn receive(
             )?
         }
         WireNode::Chain {
-            meta: JniChain::Optional(optional),
+            meta: JniInputWireChain::Optional(optional),
             child,
             ..
         } => {
@@ -218,7 +210,7 @@ fn receive(
             field(context, row, fields, name, quote!(if #present { #scan }))?
         }
         WireNode::Branch {
-            meta: JniBranch::Alternatives | JniBranch::Enum(_),
+            meta: JniInputWireBranch::Alternatives(_) | JniInputWireBranch::Enum(_),
             controls,
             children,
         } => {
@@ -238,6 +230,5 @@ fn receive(
             }
             code
         }
-        _ => return Err("unsupported callback collection cleanup shape".into()),
     })
 }

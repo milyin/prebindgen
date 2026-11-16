@@ -411,18 +411,15 @@ fn cloning_builders_does_not_require_clonable_function_declarations() {
 
 struct ArrowCodec;
 impl Codec for ArrowCodec {
-    type Input = crate::CodecInputPlan<Self>;
-    type Output = crate::CodecOutputPlan<Self>;
+    type Input = prebindgen_conversions::InputPlan<syn::Type, (), (), ()>;
+    type Output = prebindgen_conversions::OutputPlan<syn::Type, (), (), ()>;
 
     type InOps = Incoming;
     type OutOps = Outgoing;
     type CompileState = ();
     type Schema = prebindgen_conversions::PlanSchema<syn::Type>;
-    type Wire = syn::Type;
     type Context = ();
     type Extra = ();
-    type Chain = ();
-    type Branch = ();
     fn compile_input_tree(
         &self,
         cx: &Compiler<'_, Self>,
@@ -519,7 +516,10 @@ impl Codec for ArrowCodec {
     fn output_consumes(&self, _: &Flat<Self::Schema>, _: &syn::Type, _: &()) -> bool {
         false
     }
-    fn group(&self, _: GroupKind<'_>) -> prebindgen_flat::Result<()> {
+    fn input_group(&self, _: GroupKind<'_>) -> prebindgen_flat::Result<()> {
+        Ok(())
+    }
+    fn output_group(&self, _: GroupKind<'_>) -> prebindgen_flat::Result<()> {
         Ok(())
     }
     fn finish_output(

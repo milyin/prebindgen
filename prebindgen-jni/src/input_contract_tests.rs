@@ -16,8 +16,8 @@ struct ExternalInput {
 }
 impl Conversion for ExternalInput {
     type Wire = JniWire;
-    type Chain = JniChain;
-    type Branch = JniBranch;
+    type Chain = JniInputWireChain;
+    type Branch = JniInputWireBranch;
     type SlotFragment<'a> = InputFragment<'a, JniContext>;
 
     fn code_fragment_slot(
@@ -29,7 +29,7 @@ impl Conversion for ExternalInput {
     }
 }
 impl InputConversion for ExternalInput {
-    fn input_node(&self) -> &prebindgen_conversions::WireNode<JniWire, JniChain, JniBranch> {
+    fn input_node(&self) -> &JniInputWireNode {
         self.native.input_node()
     }
 }

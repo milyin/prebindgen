@@ -670,7 +670,7 @@ Changing the referenced source tags or wire layout after preparation requires
 preparing the conversions again; Kotlin class
 and variant-name overrides are resolved from the current declarations.
 
-`JniChain::Bulk` establishes packed encoding for its entire child tree during
+`Bulk` on either directional JNI chain establishes packed encoding for its entire child tree during
 Rust preparation and Kotlin interpretation. Sequences inherit this scope: their
 `JniSequence` metadata selects materialized or callback delivery, with an optional
 ordinary-JVM typed-row preference. There is no sequence-level bulk policy.
@@ -682,7 +682,7 @@ Custom Kotlin conversion contexts start with `KotlinContext::bulk = false` at a
 call/callback boundary; the enclosing Bulk interpreter sets it for descendants.
 Custom native sequence compilers describe ranges with
 `JniWire::NativeRows { condition }`; stride and field offsets are derived from
-the sequence child. `JniChain::Bulk` is a unit variant: activation follows the
+the sequence child. `Bulk` is a unit variant in both directions: activation follows the
 enclosing optional and selector branches. Callback results cache every selected
 frame before source construction and retain the existing result-level cleanup
 guard, so a constructor failure also reclaims owners in later unread frames. `JniCallback::into_input(&flat, wire, target)` receives
@@ -693,23 +693,36 @@ without embedding them in each element tree. Fragment validation permits an
 unattached enclosing scope; complete boundary validation requires a matching
 physical encoding under the actual Bulk nodes.
 
+Prepared input and output trees have different types. A function parameter uses
+`JniInputWireNode` or `CInputWireNode`; its result uses `JniOutputWireNode` or
+`COutputWireNode`. Retained callbacks reverse those directions: arguments use
+output trees and the callback result uses an input tree. Shared wire leaves
+(`JniWire` / `CWire`) still describe the same physical carrier types.
+
 Branch metadata describes the operation performed on its children directly:
 
 | Variant | Meaning |
 | --- | --- |
 | `Values` | Convert all ordered components, such as constructor arguments or combined output views. |
 | `Fields` / `Field(name)` | Convert named source fields independently, preserving field identity and order. |
-| `JniBranch::Record(record)` | Decompose or reconstruct one Kotlin data-class value using the child field conversions. |
-| `JniBranch::Argument(name)` | Preserve the parameter path of one source argument. |
-| `JniBranch::Named(name)` | Give a delivered Kotlin output view an explicit name. |
-| `Alternatives` / `Enum(...)` | Convert the selected constructor alternative or source enum variant. |
+| `JniInputWireBranch::Record(record)` / `JniOutputWireBranch::Record(record)` | Decompose or reconstruct one Kotlin data-class value using its child field conversions. |
+| `JniInputWireBranch::Argument(name, ())` | Preserve the parameter path of one source argument. |
+| `JniOutputWireBranch::Named(name, ())` | Give a delivered Kotlin output view an explicit name. |
+| `CInputWireBranch::Alternatives(())` / `JniInputWireBranch::Alternatives(())` | Select one constructor alternative. |
+| `Enum(...)` | Convert the selected source enum variant. |
 
-`CBranch` and `JniBranch` have no intermediate `CGroup` / `JniGroup` enums.
-Custom converters use `CBranch::Fields` or `JniBranch::Field(name)` directly,
-for example. JNI's former `Fields(None)` is `JniBranch::Fields`; `Fields(Some(record))`
-is `JniBranch::Record(record)`. Optional encodings and sequence delivery retain
-separate types because their helpers operate specifically on presence encodings
-and row-delivery policies.
+The directional aliases specialize `CWireBranch<Input>` /
+`JniWireBranch<Input, Output>` with `()` for permitted operations and `Infallible`
+for opposite-direction operations. Those zero-sized payloads make invalid nodes
+impossible to construct. Likewise, input chains use `Sequence(())`, whereas output
+chains carry `CSequence` / `JniSequence` delivery policies, including callbacks.
+These families share structural walkers privately without converting either tree
+to another representation. Custom converters expose their directional node type;
+there is no shared unrestricted input/output node alias.
+
+Optional encodings retain separate types because their helpers operate specifically
+on presence encodings. `JniOptional`, `COptional`, record metadata and enum metadata
+are reusable in both directions.
 
 Each adapter has operations for actual ABI tasks: building a function's
 parameters, laying out a successful result packet, defining one sequence row,
@@ -735,7 +748,7 @@ prepare named absent outputs, and retire niches from inactive payload values.
 The reservation identifies a payload binding and its excluded representation.
 The adapter chooses its candidates, including tree-owned controls, while
 shared composition handles conditional validation, preparation and ownership.
-`prefix_layout` lets a codec attach source paths without exposing its physical
+`prefix_input` and `prefix_output` let a codec attach source paths without exposing its physical
 values to the common compiler. `validate_input` and `validate_output` check the
 finished conversion before installation.
 
@@ -749,6 +762,13 @@ Stored plans use `TemplateContext::render`. `template_parameter(name)` marks a
 binding supplied by the generator, and `source_result_expr()` marks the source
 return-value binding carried by output requests. Custom converters need neither
 stored plans nor template support.
+
+`Codec::Input` and `Codec::Output` select prepared converters independently.
+`CodecInputPlan<C>` derives its wire, chain and branch metadata from `C::Input`;
+`CodecOutputPlan<C>` derives them from `C::Output`. There is no second set of
+`Codec::Wire`, `Codec::Chain` or `Codec::Branch` declarations that could force the
+two directions together. The compiler's group, selector, optional, enum and path
+hooks are directional; source-error and binding-failure payloads use output trees.
 
 `prebindgen-declarations` resolves and compiles adapter-owned call recipes.
 `Codec::Input` and `Codec::Output` choose prepared converter types independently
@@ -797,7 +817,7 @@ adapters define schemas that also select their declaration metadata.
 A `Wire` exposes only a binding name and carrier description. It does not expose
 fields, constructor arguments, alternatives or ownership meaning. `ComponentPath`
 and `Condition` belong to declarations. A codec can retain logical mappings in
-its private preparation metadata through `prefix_layout`. The final converter emits the corresponding
+its private preparation metadata through `prefix_input` / `prefix_output`. The final converter emits the corresponding
 projections or constructions itself. Wrapper writers never interpret these paths.
 `BoundFunction::input_conversions()` preserves argument grouping; the adapters match named prepared output expressions to their destination fields.
 
@@ -2188,8 +2208,8 @@ cannot supply another niche, because an absent payload fills them with defaults.
 C headers document the exact discriminator argument or result field for each
 optional value, including enclosing optional values.
 
-Adapters implement one `Codec::optional` operation. It receives the mutable
-payload tree, presence binding and conversion direction, then returns
+Adapters implement `Codec::input_optional` and `Codec::output_optional`. Each
+receives its directional payload tree and presence binding, then returns
 `OptionalEncoding`: adapter metadata, a separate flag or niche presence test,
 and inactive output expressions. A niche is an adapter-private concept rather
 than a required associated type. The shared compiler validates flag names,
@@ -2204,8 +2224,9 @@ its arms after the compiler prefixes the selector and arm source paths.
 Each logical `Wire<W>` defines one typed value. `WireNode<W, C, B>` arranges
 those definitions into leaves, parents with one child and parents with ordered
 children. `C` and `B` are adapter metadata types for the two parent shapes;
-the base API does not interpret them. C uses `CChain` and `CBranch`; JNI uses
-`JniChain` and `JniBranch`. Optional and sequence policies belong to chain
+the base API does not interpret them. C uses `CInputWireChain` / `CInputWireBranch`
+and their output counterparts; JNI uses `JniInputWireChain` / `JniInputWireBranch`
+and their output counterparts. Optional and sequence policies belong to chain
 metadata; grouping and alternative policies belong to branch metadata.
 An empty leaf carries no wires. An empty branch can preserve a field collection
 or zero-argument constructor; an adapter rejects it when its metadata instead
@@ -2256,23 +2277,24 @@ context supplied by the adapter.
 Metadata types `C` and `B` describe chain and branch parents. Each adapter
 chooses their semantic variants. `W` describes each individual value. Use `()` for metadata a generator does not need. The shared compiler
 creates metadata through codec operations and does not interpret it.
-`group(GroupKind)` describes values, fields, one named field or a named output
+`input_group(GroupKind)` and `output_group(GroupKind)` describe values, fields, one named field or a named output
 view; unsupported kinds return an error. Constructor arguments and output
 combinations retain their group with one component; constructors without
-arguments retain an empty group. `optional` and `alternatives` prepare metadata
+arguments retain an empty group. The directional optional hooks and `alternatives` prepare metadata
 and update the payload's encoding state; the tree owns its supporting controls.
 Sequence operations
 return `SequenceInput<W, C>` or `SequenceOutput<W, C>`, with separate `controls`
 and metadata fields. Metadata must not retain wire descriptors.
 
-- `CSequence` / `JniSequence` are `Buffered` or `Callback` delivery policies.
+- `CSequence` / `JniSequence` are output delivery policies (`Buffered` or `Callback`;
+  JNI also supports `TypedBuffered`). Input sequences have no delivery choice.
   The sequence node's controls contain the actual row buffer, delivered-element
   count or JNI presence marker. Callback signatures, cleanup and Kotlin folds
   read the policy and controls from that node.
 - `COptional` / `JniOptional` are `Flag(binding)` or `Niche`. A flag references
   one tree-owned integer control; a niche references a payload binding and its
   reserved absent representation. The wire kind retains remaining niche state.
-- `CBranch::Alternatives` / `JniBranch::Alternatives` identify a choice between
+- `CInputWireBranch::Alternatives(())` / `JniInputWireBranch::Alternatives(())` identify a choice between
   child arms. The selector is an ordinary control wire, validated against the
   adapter's tag representation.
   Its remaining niche state is stored on that same wire.
