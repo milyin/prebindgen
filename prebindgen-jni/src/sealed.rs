@@ -688,9 +688,12 @@ fn close_member<S: prebindgen_flat::Schema<Field = data::JniField, Type = JniTyp
             })
             .collect::<Result<Vec<_>>>()?
             .join(""),
-        ClassRepresentation::ConfiguredEnum { .. }
-        | ClassRepresentation::Enum(_)
-        | ClassRepresentation::Sealed { .. } => String::new(),
+        ClassRepresentation::ConfiguredData
+        | ClassRepresentation::ConfiguredEnum { .. }
+        | ClassRepresentation::ConfiguredSealed { .. } => {
+            return Err(format!("JNI class `{}` is unresolved", class.fqn()))
+        }
+        ClassRepresentation::Enum(_) | ClassRepresentation::Sealed { .. } => String::new(),
     })
 }
 

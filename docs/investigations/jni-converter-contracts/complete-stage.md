@@ -16,7 +16,7 @@ public contracts used by independent converters. There is no second renderer.
 ## Use custom converters in normal bindings
 
 `JniInput::new(my_input)` and `JniOutput::new(my_output)` retain independent
-implementations in ordinary occurrence slots. A `configure` hook can install
+implementations in ordinary occurrence slots. An `on_configure` hook can install
 them before the normal declaration compiler fills the other slots. Consumers
 can also choose concrete converter types in `JniSchema<I, O>` from the outset.
 

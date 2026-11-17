@@ -1133,7 +1133,7 @@ mod tests {
             )])
             .set_package_prefix("example")
             .package(package!().class(ptr_class!(Counter)))
-            .configured()
+            .configure()
             .unwrap();
         let context = KotlinContext {
             package: "example",

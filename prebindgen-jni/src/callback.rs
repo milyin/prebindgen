@@ -59,11 +59,12 @@ pub(crate) fn source_parameters(
 /// A declaration configures a source occurrence, rather than inventing a signature.
 pub(crate) fn validate_source_occurrence(
     flat: &JniBindings,
-    declaration: &prebindgen_declarations::CallbackOperation,
+    ty: &syn::Type,
+    name: Option<&str>,
     sources: &[syn::Type],
 ) -> Result<()> {
-    let expected = callback_signature(&declaration.ty)?
-        .ok_or("callback declaration requires impl Fn(...) -> R")?;
+    let expected =
+        callback_signature(ty)?.ok_or("callback declaration requires impl Fn(...) -> R")?;
     let matches = sources.iter().any(|source| {
         let Ok(Some(actual)) = callback_signature(source) else {
             return false;
@@ -82,10 +83,10 @@ pub(crate) fn validate_source_occurrence(
                 .is_ok_and(|actual| prebindgen_flat::same_type(&actual, &expected.return_type))
     });
     if !matches {
-        let name = declaration.foreign.as_deref().unwrap_or("<unnamed>");
+        let name = name.unwrap_or("<unnamed>");
         return Err(format!(
             "callback declaration `{name}` for `{}` does not match any source function parameter; check the callback argument and return types",
-            type_key(&declaration.ty)
+            type_key(ty)
         ));
     }
     Ok(())
@@ -1135,6 +1136,9 @@ pub(crate) fn resolve_declarations(
         .collect::<Vec<_>>();
     for (key, ty) in pending {
         let recipe = resolver.resolve_input(flat, codec, &ty, &JniInputConfig::auto(), &())?;
+        if !matches!(recipe, crate::JniInput::Arrow { .. }) {
+            return Err("callback declaration requires a callback conversion".into());
+        }
         flat.types.get_mut(&key).unwrap().metadata.callback =
             Some(prebindgen_conversions::BindingState::Resolved(recipe));
     }

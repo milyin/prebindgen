@@ -208,6 +208,7 @@ impl JniSourceResolver {
         tree: &JniInputConfig,
         extra: &(),
     ) -> Result<JniInput> {
+        codec.require_resolved_classes(flat)?;
         self.input(flat, codec, ty, tree, extra, &mut vec![])
             .map(operations::lift_input_bulk)
     }
@@ -633,6 +634,7 @@ impl JniSourceResolver {
         tree: &JniOutputConfig,
         extra: &(),
     ) -> Result<JniOutput> {
+        codec.require_resolved_classes(flat)?;
         self.output(flat, codec, ty, tree, extra, &mut vec![], false)
             .map(operations::lift_output_bulk)
     }

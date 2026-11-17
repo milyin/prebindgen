@@ -81,6 +81,9 @@ impl<I, O> Schema for IndependentSchema<I, O> {
     type Type = <JniSchema as Schema>::Type;
     type Field = <JniSchema as Schema>::Field;
     type Variant = <JniSchema as Schema>::Variant;
+    type Record = <JniSchema as Schema>::Record;
+    type Enum = <JniSchema as Schema>::Enum;
+    type PayloadEnum = <JniSchema as Schema>::PayloadEnum;
 }
 
 #[cfg(feature = "independent-input")]
@@ -123,7 +126,7 @@ fn main() -> Result<()> {
                 .map(|item| (item, Default::default())),
         )
         .set_package_prefix("probe")
-        .configure(|flat| {
+        .on_configure(|flat| {
             let ty = flat.function("echo")?.params[0].ty.ty.clone();
             let mut plan = prebindgen_jni::JniCodec::raw().input_leaf(
                 prebindgen_declarations::InputLeaf::new(
@@ -137,8 +140,11 @@ fn main() -> Result<()> {
             )?;
             plan.storage
                 .extend(quote!(let __pb_contract_probe_marker = ();));
-            flat.function_mut("echo")?.params[0].ty.slot = Some(plan.into());
-            Ok(())
+            prebindgen_declarations::bind_prepared_input(
+                &mut flat.function_mut("echo")?.metadata[0],
+                0,
+                plan.into(),
+            )
         })
         .package(package!().fun(fun!(echo)))
         .prepare()?;

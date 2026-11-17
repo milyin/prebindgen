@@ -242,16 +242,25 @@ uses the same source helpers as C and JNI.
 
 ## Resolved Flat and compilation
 
-The language builder's `configured()` method returns `Flat<CSchema>` or
+The language builder's `configure()` method returns `Flat<CSchema>` or
 `Flat<JniSchema>`. Every configured export belongs to its original source function;
 type defaults and canonical conversions belong to their source types. No external
 declaration list, builder or defaults inventory is needed after that boundary.
 
 Adapter `resolve(flat)` resolves each `ConfiguredCall` to `ResolvedCall`.
+JNI also resolves class properties, nested handle ownership and enum mappings
+at the start of this stage: callback and function recipes depend on them.
+`configure()` retains class declarations and normalizes source identities and
+canonical value conversions; it does not derive Kotlin properties or enum wires.
+Class/property errors therefore occur during `resolve`, while the combined
+`prepare`/`build` entry points retain the same diagnostics.
 Adapter `compile(flat)` compiles shared declarations, then each resolved call to
 `PreparedCall`. Both consume Flat and keep its original source owners. The
 binding's state changes; Flat does not interpret it. `prepare(flat)` combines these
-stages. Builder `prepare()` first runs `configured()` and uses the same stages.
+stages. Builder `prepare()` first runs `configure()` and uses the same stages.
+JNI compilation and generation reject unresolved class declarations, including
+models with no exported functions. Resolved classes need no additional compilation
+state; their fields/variants already own the complete public representation.
 
 The adapter implements `Codec::compile_input_tree` and `compile_output_tree` to
 interpret its own operations. `compile_call` passes the original source signature

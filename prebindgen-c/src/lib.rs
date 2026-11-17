@@ -1398,12 +1398,14 @@ impl Cbindgen {
         self.enums.push((name.into(), ty));
         self
     }
-    /// Resolve declarations and converters into a complete Flat model.
+    /// Select source items and attach declarations to a self-contained Flat model.
     ///
     /// Does not write files. Returns an error for conflicting sources, invalid or
     /// duplicate declarations, unsupported conversions, or missing opaque pointees.
-    /// Rust layout/trait requirements are checked when the generated Rust compiles.
-    pub fn configured(self) -> Result<CBindings> {
+    /// Call [`resolve`] and [`compile`] to prepare its converters, or use
+    /// [`Self::prepare`] to perform all stages. Rust layout/trait requirements are
+    /// checked when the generated Rust compiles.
+    pub fn configure(self) -> Result<CBindings> {
         prebindgen_declarations::ident(&self.prefix)?;
         let target = self.target.unwrap_or_else(|| {
             std::env::var("TARGET").unwrap_or_else(|_| env!("PREBINDGEN_C_GENERATOR_TARGET").into())
@@ -1647,7 +1649,7 @@ impl Cbindgen {
     }
     /// Apply declarations, then resolve and compile every export using only Flat.
     pub fn prepare(self) -> Result<CBindings> {
-        prepare(self.configured()?)
+        prepare(self.configure()?)
     }
     /// Prepare a complete Flat model, then emit its C and Rust bindings.
     pub fn build(self) -> Result<CGeneration> {
@@ -4140,19 +4142,19 @@ mod generation_tests {
             } else {
                 Cbindgen::new(flat).enum_type("code", syn::parse_quote!(E))
             }
-            .configured()
+            .configure()
             .unwrap();
             let next = if pointer_first {
                 Cbindgen::new(first).enum_type("code", syn::parse_quote!(E))
             } else {
                 Cbindgen::new(first).opaque_ptr("handle", syn::parse_quote!(E))
             };
-            assert!(next.configured().err().unwrap().contains("conflicting"));
+            assert!(next.configure().err().unwrap().contains("conflicting"));
         }
         let flat = error_model("pub struct Row { pub value: i64 }");
         let configured = Cbindgen::new(flat)
             .opaque_ptr("row", syn::parse_quote!(Row))
-            .configured()
+            .configure()
             .unwrap();
         assert!(matches!(
             configured
