@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["Access","CBranch","CChain","CGroup","CNiche","COptional","CSequence","CWire"],"fn":["generate"],"struct":["CCallback","CCodec","CContext","CEnum","CFunction","CModule","COwned","CPointer","CSchema","CType","Cbindgen","Generation","OpaqueLayout"],"type":["Bindings","OpaqueLayouts"]};
