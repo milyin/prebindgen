@@ -1,0 +1,305 @@
+//! Test-only JNI allocation failures on the invoking thread, restored with RAII.
+use prebindgen_jni_runtime::jni::{
+    objects::{GlobalRef, JClass},
+    sys::*,
+};
+use std::cell::RefCell;
+
+#[derive(Clone, Copy)]
+struct Fault {
+    original: *const JNINativeInterface_,
+    oom: jclass,
+    remaining: jint,
+    failures: jint,
+    first_array: jobjectArray,
+    root_stores: jint,
+    progress: jint,
+    mode: jint,
+    initial_drops: i64,
+}
+thread_local! { static FAULT: RefCell<Option<Fault>> = const { RefCell::new(None) }; }
+
+fn current() -> Option<(Fault, bool)> {
+    FAULT.with(|slot| {
+        let mut slot = slot.borrow_mut();
+        let fault = slot.as_mut()?;
+        let inject = fault.remaining == 1;
+        fault.remaining = (fault.remaining - 1).max(0);
+        if inject {
+            fault.failures += 1;
+            fault.progress = if fault.mode == 16 {
+                ((perftest_flat::callback_row_resource_drops() - fault.initial_drops) / 2) as jint
+            } else {
+                fault.root_stores
+            };
+        }
+        Some((*fault, inject))
+    })
+}
+unsafe fn out_of_memory(env: *mut JNIEnv, fault: Fault) {
+    if let Some(throw) = (*fault.original).ThrowNew {
+        throw(
+            env,
+            fault.oom,
+            c"injected callback allocation failure".as_ptr(),
+        );
+    }
+}
+unsafe extern "system" fn fail_frame(env: *mut JNIEnv, capacity: jint) -> jint {
+    let Some((fault, inject)) = current() else {
+        return JNI_ERR;
+    };
+    if inject {
+        out_of_memory(env, fault);
+        JNI_ERR
+    } else {
+        ((*fault.original).PushLocalFrame.unwrap())(env, capacity)
+    }
+}
+unsafe extern "system" fn fail_array(
+    env: *mut JNIEnv,
+    length: jsize,
+    class: jclass,
+    value: jobject,
+) -> jobjectArray {
+    let Some((fault, inject)) = current() else {
+        return std::ptr::null_mut();
+    };
+    if inject {
+        out_of_memory(env, fault);
+        std::ptr::null_mut()
+    } else {
+        let array = ((*fault.original).NewObjectArray.unwrap())(env, length, class, value);
+        FAULT.with(|slot| {
+            if let Some(fault) = slot.borrow_mut().as_mut() {
+                if fault.first_array.is_null() {
+                    fault.first_array = array;
+                }
+            }
+        });
+        array
+    }
+}
+
+// Record the root without counting it as a typed-row allocation.
+unsafe extern "system" fn track_array(
+    env: *mut JNIEnv,
+    length: jsize,
+    class: jclass,
+    value: jobject,
+) -> jobjectArray {
+    let fault = FAULT.with(|slot| slot.borrow().expect("installed hook"));
+    let array = ((*fault.original).NewObjectArray.unwrap())(env, length, class, value);
+    FAULT.with(|slot| {
+        let mut slot = slot.borrow_mut();
+        let fault = slot.as_mut().unwrap();
+        if fault.first_array.is_null() {
+            fault.first_array = array;
+        }
+    });
+    array
+}
+unsafe extern "system" fn fail_object(
+    env: *mut JNIEnv,
+    class: jclass,
+    method: jmethodID,
+    arguments: *const jvalue,
+) -> jobject {
+    let (fault, inject) = current().expect("installed thread-local hook");
+    if inject {
+        out_of_memory(env, fault);
+        std::ptr::null_mut()
+    } else {
+        ((*fault.original).NewObjectA.unwrap())(env, class, method, arguments)
+    }
+}
+
+unsafe extern "system" fn track_store(
+    env: *mut JNIEnv,
+    array: jobjectArray,
+    index: jsize,
+    value: jobject,
+) {
+    let mode = FAULT.with(|slot| slot.borrow().expect("installed hook").mode);
+    if mode == 20 {
+        let (fault, inject) = current().expect("installed hook");
+        if inject {
+            out_of_memory(env, fault);
+            return;
+        }
+    }
+    let fault = FAULT.with(|slot| slot.borrow().expect("installed hook"));
+    ((*fault.original).SetObjectArrayElement.unwrap())(env, array, index, value);
+    if array == fault.first_array && ((*fault.original).ExceptionCheck.unwrap())(env) == JNI_FALSE {
+        FAULT.with(|slot| slot.borrow_mut().as_mut().unwrap().root_stores += 1);
+    }
+}
+
+unsafe extern "system" fn fail_string(env: *mut JNIEnv, text: *const std::ffi::c_char) -> jstring {
+    let Some((fault, inject)) = current() else {
+        return std::ptr::null_mut();
+    };
+    if inject {
+        out_of_memory(env, fault);
+        std::ptr::null_mut()
+    } else {
+        ((*fault.original).NewStringUTF.unwrap())(env, text)
+    }
+}
+unsafe extern "system" fn fail_bytes(env: *mut JNIEnv, length: jsize) -> jbyteArray {
+    let Some((fault, inject)) = current() else {
+        return std::ptr::null_mut();
+    };
+    if inject {
+        out_of_memory(env, fault);
+        std::ptr::null_mut()
+    } else {
+        ((*fault.original).NewByteArray.unwrap())(env, length)
+    }
+}
+
+struct Hook {
+    env: *mut JNIEnv,
+    original: *const JNINativeInterface_,
+    _table: Box<JNINativeInterface_>,
+    _oom: GlobalRef,
+}
+impl Hook {
+    unsafe fn install(
+        env: &mut prebindgen_jni_runtime::jni::JNIEnv<'_>,
+        mode: jint,
+    ) -> prebindgen_runtime::Result<Self> {
+        let oom = env
+            .find_class("java/lang/OutOfMemoryError")
+            .map_err(|e| e.to_string())?;
+        let oom = env.new_global_ref(oom).map_err(|e| e.to_string())?;
+        let raw = env.get_native_interface();
+        let original = *raw;
+        let mut table = Box::new(*original);
+        match mode {
+            0 => table.PushLocalFrame = Some(fail_frame),
+            // Materialized collections use object arrays or a bulk byte frame.
+            1 => {
+                table.NewObjectArray = Some(fail_array);
+                table.NewByteArray = Some(fail_bytes);
+            }
+            2 | 4 | 6 | 8 => table.NewStringUTF = Some(fail_string),
+            3 | 5 | 7 | 9 | 10 | 11 | 12 => table.NewByteArray = Some(fail_bytes),
+            13..=15 | 17..=19 | 21 => {
+                table.NewObjectArray = Some(track_array);
+                table.NewObjectA = Some(fail_object);
+            }
+            16 => table.NewStringUTF = Some(fail_string),
+            20 => table.NewObjectArray = Some(track_array),
+            22 => table.NewObjectArray = Some(fail_array),
+            _ => unreachable!(),
+        }
+        if mode >= 13 && mode != 16 {
+            table.SetObjectArrayElement = Some(track_store);
+        }
+        FAULT.with(|slot| {
+            *slot.borrow_mut() = Some(Fault {
+                original,
+                oom: oom.as_obj().as_raw(),
+                remaining: if (8..=9).contains(&mode) || mode == 11 || mode == 16 {
+                    2
+                } else if mode == 17 {
+                    6
+                } else if mode == 18 {
+                    2
+                } else if mode == 21 {
+                    3
+                } else if mode == 14 {
+                    5
+                } else if mode == 19 {
+                    1
+                } else if mode == 22 {
+                    4
+                } else if mode >= 13 {
+                    // Fail after completed rows; the pair also has an already
+                    // completed first output when conversion of the second fails.
+                    if mode == 15 {
+                        4
+                    } else {
+                        3
+                    }
+                } else {
+                    1
+                },
+                failures: 0,
+                first_array: std::ptr::null_mut(),
+                root_stores: 0,
+                progress: 0,
+                mode,
+                initial_drops: perftest_flat::callback_row_resource_drops(),
+            })
+        });
+        *raw = &*table;
+        Ok(Self {
+            env: raw,
+            original,
+            _table: table,
+            _oom: oom,
+        })
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_io_prebindgen_covertest_CallbackFailureProbe_progress(
+    _: prebindgen_jni_runtime::jni::JNIEnv<'_>,
+    _: JClass<'_>,
+) -> jint {
+    FAULT.with(|slot| slot.borrow().as_ref().map_or(0, |fault| fault.progress))
+}
+impl Drop for Hook {
+    fn drop(&mut self) {
+        unsafe {
+            *self.env = self.original;
+        }
+        FAULT.with(|slot| *slot.borrow_mut() = None);
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_io_prebindgen_covertest_CallbackFailureProbe_exercise(
+    mut env: prebindgen_jni_runtime::jni::JNIEnv<'_>,
+    _: JClass<'_>,
+    mode: jint,
+) -> jint {
+    prebindgen_runtime::boundary(|| {
+        if !(0..=22).contains(&mode) {
+            return Err("unknown allocation probe".into());
+        }
+        // Resolve Java entry points before arming the selected JNI allocation
+        // hook. Collection probes skip the first successfully prepared row.
+        let class = env
+            .find_class(if mode < 2 {
+                "io/prebindgen/covertest/CallbackFailureEntryPoint"
+            } else if mode < 4 {
+                "io/prebindgen/covertest/BufferFailureEntryPoint"
+            } else if mode < 10 {
+                "io/prebindgen/covertest/BufferReturnFailureEntryPoint"
+            } else if mode <= 12 {
+                "io/prebindgen/covertest/NativeOutputFailureEntryPoint"
+            } else {
+                "io/prebindgen/covertest/JniOutputFailureEntryPoint"
+            })
+            .map_err(|e| e.to_string())?;
+        let hook = unsafe { Hook::install(&mut env, mode) }?;
+        let result = if mode < 4 {
+            env.call_static_method(&class, "run", "()V", &[])
+        } else {
+            env.call_static_method(
+                &class,
+                "run",
+                "(I)V",
+                &[prebindgen_jni_runtime::jni::objects::JValue::Int(mode)],
+            )
+        };
+        let failures = FAULT.with(|slot| slot.borrow().as_ref().map_or(0, |fault| fault.failures));
+        drop(hook);
+        result.map_err(|e| e.to_string())?;
+        Ok(failures)
+    })
+    .unwrap_or(-1)
+}

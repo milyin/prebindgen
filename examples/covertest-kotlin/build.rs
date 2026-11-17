@@ -1,3 +1,7 @@
+//! Active coverage: primitives, strings/bytes, owned handles, selectors and field outputs.
+//! The original coverage inventory below includes features now commented out.
+//!
+//! Unsupported declarations remain commented below.
 //! Build script generating Kotlin/JNI bindings for `perftest-flat` using the
 //! separate `prebindgen-jni` crate's `JniGenBuilder` adapter — exercising **every**
 //! JniGenBuilder feature so the hand-written `kotlin/.../Test.kt` can assert each one.
@@ -7,7 +11,7 @@
 //! including the coverage-only items in `perftest_flat::ext` — through the full
 //! adapter surface. `JniGenBuilder` accepts pre-built declaration objects (the
 //! `prebindgen-jni` decl types, built by its root decl macros) rather than a fluent typestate
-//! chain — each row below is a `PackageDecl`/`ConvertDecl`/etc. built
+//! chain — each row below is a `DeclJniPackage`/`DeclConvert`/etc. built
 //! independently and then handed to `jni.package(...)` / `jni.convert(...)`:
 //!
 //! | JniGenBuilder feature                       | Exercised by |
@@ -17,10 +21,10 @@
 //! | `JniGenBuilder::package` (subpackages)      | `model` / `errors` / `analytics` / `storage` |
 //! | `JniGenBuilder::set_jni_native_init`      | `NativeLibrary.ensureLoaded()` |
 //! | contextual name-mangle closures      | package-aware class/function hooks + package/class-aware method hook |
-//! | `DataClassDecl`                      | `Payload`; `Annotated` (recursive direct + optional nested fields) |
-//! | `DataClassDecl::jobject_input()`     | `ObjectBoundary` (127 `Long` leaves plus JNI infrastructure exceed the JVM's 255-slot method limit) |
-//! | `PtrClassDecl`                       | `Storage` / `Summary` / `StorageError` / `Archive` / handlers |
-//! | `EnumClassDecl`                      | `Priority` |
+//! | `DeclJniDataClass`                      | `Payload`; `Annotated` (recursive direct + optional nested fields) |
+//! | `DeclJniDataClass::jobject_input()`     | `ObjectBoundary` (127 `Long` leaves plus JNI infrastructure exceed the JVM's 255-slot method limit) |
+//! | `DeclJniPtrClass`                       | `Storage` / `Summary` / `StorageError` / `Archive` / handlers |
+//! | `DeclJniEnumClass`                      | `Priority` |
 //! | `convert!` + chained source streams   | `Millis` ⇄ `Long` via `covertest-helpers` fns |
 //! | `.source_named(dir, "cov_helpers")`   | the helpers dep is RENAMED to `cov_helpers` in Cargo.toml |
 //! | `convert!` `.input(from!)`/`.output(into!)` | `Celsius` ⇄ `Int` via `From`/`Into` impls |
@@ -30,16 +34,16 @@
 //! | `.method()` / `.constructor()`       | `Storage` + `Summary` + `Stamp` members |
 //! | `expand_param!` `.variant()` (+`_self`)| `Summary` default input (splittable, checked #52) |
 //! | Optional combined-selector expansion  | `summary_total_opt(Option<&Summary>)` — selector `-1` = absent, borrow-identity arm clones |
-//! | `FunctionDecl::split_on_param` (#52)  | single: `archiveStore`/`storageMatchesSummary` (class-default) + `storageExpectSummary` (per-fn); cartesian product: `summaryPrefer` (2 params); manual same-named overload in `ManualOverloads.kt` |
+//! | `DeclJniFunction::split_on_param` (#52)  | single: `archiveStore`/`storageMatchesSummary` (class-default) + `storageExpectSummary` (per-fn); cartesian product: `summaryPrefer` (2 params); manual same-named overload in `ManualOverloads.kt` |
 //! | split × builder-delivered return (#87) | `summaryMerge` — cartesian split + generic `<R>` wrapper; every overload re-declares `<R>` |
 //! | JNI native-symbol escaping (#86)      | `esc_pkg.Esc_Probe` — underscored subpackage + class (escaped `freePtr` symbol) + hook-mangled `escape_probe_value` harness extern |
 //! | `expand_return!` `.field()` (+`_self`) | `Summary` fields + `StorageError` `message` + self (error handle → `onError`) |
 //! | `expand_return!` `.fields(fields!(…))` (#213) | `Report` — boundary DERIVED from the value form instead of restated; covers every per-field rule (spliced `Summary`, inlined `Stamp`, `Option<data class>`, a sum with a handle payload, a plain leaf) |
-//! | `expand_return!` `.fields_self_into(fields!(…))` | `report_into_struct(r: Report)` — the CONSUMING value form: the value is given away and its fields MOVED out, so the clones the borrowing `report_to_struct` pays are not emitted at all |
-//! | `PackageDecl::fun` / `FunctionDecl::name`| every free function; `.name` renames `millis_add` → `addMillis` |
+//! | `expand_return!` `.fields_into(fields!(…))` | `report_into_struct(r: Report)` — the CONSUMING value form: the value is given away and its fields MOVED out, so the clones the borrowing `report_to_struct` pays are not emitted at all |
+//! | `DeclJniPackage::fun` / `DeclJniFunction::name`| every free function; `.name` renames `millis_add` → `addMillis` |
 //! | `JniGen::report()` (C7)               | `kotlin/REPORT.md` — the resolved surface, committed next to the regen |
 //! | contextual method names               | method hook strips `storage`/`stamp` class prefixes; `summary_new`→`.name("of")` still overrides |
-//! | per-class `.name()`                  | `Archive` → Kotlin `SummaryVault` (literal, bypasses mangles) |
+//! | per-class `.name()`                  | `Summary` → Kotlin `SummaryValue` (literal, bypasses mangles) |
 //! | `.interface()` + `.implements(…)`      | `Storage`/`Payload` emit an Api interface; `CovResource`/`Timestamped` extend it (#54) |
 //! | `.interface_name(…)`                  | `Priority` → generated `PriorityKind` interface (#54) |
 //! | base-package functions               | `string_new` (declared in a `package!()`) |
@@ -48,7 +52,7 @@
 //! | `constant!(N).with(ty!, path!)`       | `val COVER_VERSION` from binding-local `crate::cover_version()` |
 //! | `constant!(N).expr(ty!, expr!)`       | `COVER_BANNER` = binding-defined `format!` expression |
 //! | per-fn `.expand_param(name, …)` identity-only | `summary_total_raw` (raw handle param, overrides the type default) |
-//! | per-fn `.expand_return(…)` identity-only | `storage_summary_handle` / `archive_latest` (raw handle return) |
+//! | per-fn `.expand_return(…)` identity-only | `storage_summary_handle` (raw handle return) |
 //! | per-fn `.expand_param(name, …)` variants | `storage_expect_summary` |
 //! | per-fn `.expand_return(…)` fields+self | `storage_summary_full` |
 //! | binding-local field `fun!(crate::…).sig(sig!).name(…)` | `storage_summary_probe` — custom field, here a conditional handle via `crate::summary_if_nonempty` |
@@ -67,10 +71,13 @@
 //! | N-ary sorted handle locking          | `storage_total_len` (3 handles) + a 4-thread smoke |
 //! | `Vec<String>` return                 | `storage_labels` (single-leaf string fold) |
 //! | `String` return                      | `string_new` |
+//! | `&String` param (converted, then borrowed) | `string_len` |
+//! | shared primitive param (`&i64`) as a Kotlin scalar | `i64_ref_double` |
+//! | `variant_self()` / `field_self()` on `String` and `Vec<u8>` → text/bytes | `text_echo` / `bytes_echo` |
 //! | binding-error channel (`JniErrorHandler`) | wrong-length `[u8; 2]` (fixed-size array length guard) |
 //! | callback no-throw contract           | a throwing `PayloadCallback` (described + cleared per upcall) |
 //! | `data_class` instance member          | `Payload.labelLen()` (receiver crosses as `this` field leaves) |
-//! | `JniGenBuilder::ignore` (exact)              | `string_len` / `storage_put_by_read_and_update` (acknowledged-unbound, no skip warnings) |
+//! | `JniGenBuilder::ignore` (exact)              | `storage_put_by_read_and_update` (acknowledged-unbound, no skip warnings) |
 //! | `JniGenBuilder::ignore` + `matching(…)`      | the `storage_get_into_*` group (one name predicate, any item kind) |
 //!
 //! One feature is deliberately left at its default and documented rather than
@@ -89,20 +96,20 @@
 //! per-kind name hooks (≡ the identity closures registered here) — which are
 //! binding-exclusive like the lock toggle above and add no code-path coverage.
 //!
-//! Four functions are deliberately NOT wrapped — their shapes are C-tier
-//! with no JVM mapping (`string_len`'s `&String` param / `usize` return, the
-//! `storage_get_into_*` out-param group, `storage_put_by_read_and_update`'s
-//! read-write borrow). The two loners are acknowledged per-name via
-//! `.ignore(fun!(…))`; the `storage_get_into_*` naming family via one
+//! Some functions are deliberately NOT wrapped — their shapes are C-tier
+//! with no JVM mapping (the `storage_get_into_*` out-param group,
+//! `storage_put_by_read_and_update`'s read-write borrow). The loner is
+//! acknowledged by name via `.ignore(fun!(…))`; the `storage_get_into_*` naming family via one
 //! `.ignore(matching(…))` predicate. Both suppress the per-item
 //! "skipping undeclared" build warning while emitting nothing.
 
+use prebindgen_jni::prelude::*;
+/* Unsupported: imports and helpers for the disabled declarations.
 use prebindgen_jni::{
     constant, data_class, enum_class, matching, package, ptr_class, sealed_class, variant, JniGen,
 };
-use prebindgen_registry::{
-    convert, expand_param, expand_return, expr, fields, from, fun, into, path, sig, try_from, ty,
-};
+use prebindgen_declarations::{convert,expr,from,into,path,sig,try_from,ty};
+use prebindgen_jni::{expand_param,expand_return,fields,fun};
 
 fn strip_flat_class_prefix(class: &str, name: &str) -> String {
     if name
@@ -118,10 +125,1281 @@ fn strip_flat_class_prefix(class: &str, name: &str) -> String {
     name.to_string()
 }
 
+
+*/
+use prebindgen_declarations::{convert, from, into, try_from, try_into};
+use prebindgen_jni::{callback, data_class, enum_class, package, ptr_class, sealed_class, JniGen};
+use prebindgen_jni::{expand_param, expand_return, fields, fun, param_fields};
+
+#[path = "build_support/bulk_normalization.rs"]
+mod bulk_normalization;
+use bulk_normalization::redundant_bulk_replay_input_with;
+
+fn bulk_replay_input_with(bulk_rows: bool) -> prebindgen_jni::DeclJniExpandParam {
+    let mut text = expand_param!(Option<String>)
+        .optional(expand_param!(String).variant(fun!(bulk_replay_text)));
+    let mut bytes = expand_param!(Option<Vec<u8>>)
+        .optional(expand_param!(Vec<u8>).variant(fun!(bulk_replay_bytes)));
+    if !bulk_rows {
+        text = text.bulk();
+        bytes = bytes.bulk();
+    }
+    let input = expand_param!(Vec<BulkReplayRow>).element(
+        expand_param!(BulkReplayRow).variant_record(
+            param_fields!()
+                .field("text", text)
+                .field("bytes", bytes)
+                .field(
+                    "kind",
+                    expand_param!(Option<BulkKind>)
+                        .optional(expand_param!(BulkKind).variant(fun!(bulk_replay_kind))),
+                ),
+        ),
+    );
+    if bulk_rows {
+        input.bulk()
+    } else {
+        input
+    }
+}
+fn bulk_replay_input() -> prebindgen_jni::DeclJniExpandParam {
+    bulk_replay_input_with(true)
+}
+
+#[path = "build_support/input_contracts.rs"]
+mod input_contracts;
+#[path = "build_support/output_contracts.rs"]
+mod output_contracts;
+
 fn main() {
+    let getter_views = || {
+        expand_return!(GetterOwner)
+            .field(fun!(getter_owner_child))
+            .field(fun!(getter_owner_optional))
+            .field(fun!(getter_owner_container))
+            .field(fun!(getter_owner_rows))
+            .field(fun!(getter_owner_leaf))
+    };
+    let wide_buffer_views = (0..48).fold(expand_return!(JniBufferRow), |views, _| {
+        views.field(fun!(jni_buffer_row_text))
+    });
+    let wide_return = (0..130).fold(expand_return!(i64), |views, _| views.field_self_cloned());
+    let type_rows = || {
+        expand_param!(Vec<TypeInputRow>)
+            .element(expand_param!(TypeInputRow).variant_record(param_fields!()))
+    };
+    let type_nested = || expand_param!(Vec<Vec<TypeInputRow>>).element(type_rows());
     let binding = JniGen::builder()
+        .convert(convert!(WireMarker).input(fun!(wire_marker_new)).output(fun!(wire_marker_value)))
+        .expand(expand_return!(WireReply).fields_into(fields!(wire_reply_into_struct)))
+        .expand(expand_return!(WireReplyResult).view(expand_return!(WireReplyResult).enum_fields([])))
+        .expand(expand_return!(WireReplySample).view(
+                    expand_return!(WireReplySample).fields_into(
+                        fields!()
+                            .field("resource", expand_return!(CallbackReturnResource).default())
+                            .field("payload", expand_return!(Vec<u8>).default()),
+                    ),
+                ))
+        .expand(expand_return!(WireReplyError).fields(fields!(wire_reply_error_view)))
+        .convert(convert!(WireDuration).input(fun!(wire_duration_new)).output(fun!(wire_duration_millis)))
+        .package(package!("payloadenums")
+            .class(sealed_class!(WireEvent))
+            .class(sealed_class!(WireSelfName))
+            .class(sealed_class!(WireErrorKind))
+            .class(sealed_class!(Result<Result<i64,String>,String>).name("WireNestedDecision"))
+            .class(callback!(impl Fn(&WireEvent)).expand_param(0,expand_return!(WireEvent).field_self_cloned()))
+            .fun(fun!(wire_event_borrowed))
+            .fun(fun!(wire_self_name_echo))
+            .fun(fun!(wire_nested_echo).result_as_value())
+            .fun(fun!(wire_nested_outcome))
+            .fun(fun!(wire_error_outcome))
+            .class(sealed_class!(WireEmpty))
+            .fun(fun!(wire_empty_echo))
+            .class(sealed_class!(WireBench))
+            .fun(fun!(wire_owned_bench))
+            .fun(fun!(wire_manual_owned_bench))
+            .fun(fun!(wire_bench_total))
+            .fun(fun!(wire_bench_scalar_bulk).expand_param("value",expand_param!(WireBench).variant_self().bulk()))
+            .fun(fun!(wire_manual_total))
+            .fun(fun!(wire_bench_bulk).expand_param("values",expand_param!(Vec<WireBench>).variant_self().bulk()))
+            .fun(fun!(wire_bench_objects))
+            .class(sealed_class!(WireCheckedEvent))
+            .fun(fun!(wire_checked_new))
+            .fun(fun!(wire_checked_callback))
+            .fun(fun!(wire_reply_emit))
+            .class(sealed_class!(WireOwnedEvent))
+            .class(sealed_class!(WireCompositeOwnedEvent))
+            .fun(fun!(wire_composite_owned_new))
+            .class(data_class!(WireOptionalOwner))
+            .class(sealed_class!(WireNicheEvent))
+            .fun(fun!(wire_niche_rows).expand_param(
+                     "values",
+                     expand_param!(Vec<WireNicheEvent>)
+                         .element(
+                             expand_param!(WireNicheEvent).enum_value([
+                                 ("Empty", param_fields!()),
+                                 (
+                                     "Data",
+                                     param_fields!()
+                                         .field(
+                                             "small",
+                                             expand_param!(Option<WireOptionalOwner>).optional(
+                                                 expand_param!(WireOptionalOwner)
+                                                     .variant_record(param_fields!()),
+                                             ),
+                                         )
+                                         .field(
+                                             "wide",
+                                             expand_param!(Option<CallbackReturnResource>)
+                                                 .variant_self(),
+                                         ),
+                                 ),
+                             ]),
+                         )
+                         .bulk(),
+                 ))
+            .fun(fun!(wire_owned_new))
+            .fun(fun!(wire_owned_echo))
+            .fun(fun!(wire_owned_callback))
+            .fun(fun!(wire_owned_rows).expand_param("values",expand_param!(Vec<WireOwnedEvent>).variant_self().bulk()))
+            .fun(fun!(wire_owned_rows_new))
+            .class(sealed_class!(WireRecoveryMode))
+            .class(data_class!(WireRecoveryConfig))
+            .class(data_class!(WireTimestamp))
+            .class(sealed_class!(WireInstrumentationTimestamp))
+            .class(enum_class!(WireInterceptionPoint))
+            .class(data_class!(WireTimestampStackRecord))
+            .fun(fun!(wire_recovery_echo))
+            .fun(fun!(wire_timestamps).expand_param("values",expand_param!(Vec<WireTimestampStackRecord>).variant_self().bulk()))
+            .class(sealed_class!(Result<i64,String>).name("WireDecision"))
+            .class(sealed_class!(Result<(),String>).name("WireNotice"))
+            .fun(fun!(wire_event_rows).expand_param("values",expand_param!(Vec<WireEvent>).variant_self().bulk())
+                .expand_return(expand_return!(WireEvent).enum_value([
+                    ("Packet",fields!().field("id",expand_return!(u64).default()))])))
+            .fun(fun!(wire_event_rows_callback))
+            .fun(fun!(wire_bare_echo).expand_param("value",expand_param!(WireBare).enum_fields([])).expand_return(expand_return!(WireBare).enum_fields([])))
+            .fun(fun!(wire_event_echo))
+            .fun(fun!(wire_event_callback))
+            .fun(fun!(wire_result_echo).result_as_value())
+            .fun(fun!(wire_result_callback).result_as_value()))
+        .convert(
+            convert!(CanonMillis)
+                .input(fun!(canonical_millis_new))
+                .output(fun!(canonical_millis_value)),
+        )
+        .convert(convert!(CanonCelsius).input(from!(i32)).output(into!(i32)))
+        .convert(
+            convert!(CanonPercent)
+                .input(try_from!(i32))
+                .output(try_into!(i32)),
+        )
+        .convert(
+            convert!(CanonLabel)
+                .input(fun!(canonical_label_new))
+                .output(fun!(canonical_label_value)),
+        )
+        .convert(
+            convert!(CanonOwned)
+                .input(fun!(canonical_owned_new))
+                .output(fun!(canonical_owned_token)),
+        )
+        .expand(expand_return!(CanonError).field(fun!(canonical_error_code)))
+        .package(
+            package!("canonical")
+                .class(data_class!(CanonSettings))
+                .class(data_class!(CanonOutput))
+                .class(data_class!(CanonView))
+                .class(ptr_class!(CanonToken))
+                .fun(
+                    fun!(canonical_millis_borrow)
+                        .expand_param("value", expand_param!(&CanonMillis).reconstruct()),
+                )
+                .fun(fun!(canonical_millis_from_token).expand_param(
+                    "value",
+                    convert!(CanonMillis).input(fun!(canonical_from_borrowed_token)),
+                ))
+                .fun(fun!(canonical_millis_echo))
+                .fun(fun!(canonical_millis_echo).name("canonicalMillisEchoInt")
+                    .expand_param("value",convert!(CanonMillis).input(from!(i32)))
+                    .expand_return(convert!(CanonMillis).output(into!(i32))))
+                .fun(fun!(canonical_millis_optional))
+                .fun(fun!(canonical_millis_rows).expand_return(expand_return!(Vec<CanonMillis>).element(expand_return!(CanonMillis).default())))
+                .fun(fun!(canonical_millis_callback))
+                .fun(fun!(canonical_millis_notify))
+                .fun(fun!(canonical_millis_static))
+                .fun(
+                    fun!(canonical_millis_views).expand_return(
+                        expand_return!(CanonMillis)
+                            .view(convert!(CanonMillis).output(fun!(canonical_millis_value)))
+                            .view(convert!(CanonMillis).output(fun!(canonical_millis_value))),
+                    ),
+                )
+                .fun(fun!(canonical_celsius))
+                .fun(fun!(canonical_percent))
+                .fun(fun!(canonical_percent_invalid))
+                .fun(fun!(canonical_percent_callback))
+                .fun(fun!(canonical_percent_notify))
+                .fun(fun!(canonical_label_echo))
+                .fun(fun!(canonical_settings))
+                .fun(
+                    fun!(canonical_settings_rows)
+                        .expand_param("value", expand_param!(Vec<CanonSettings>).variant_self().bulk()),
+                )
+                .fun(fun!(canonical_settings_callback))
+                .fun(fun!(canonical_view_echo))
+                .fun(fun!(canonical_domain_error))
+                .fun(fun!(canonical_token_new))
+                .fun(fun!(canonical_token_value))
+                .fun(fun!(canonical_live))
+                .fun(fun!(canonical_output_rows))
+                .fun(
+                    fun!(canonical_output_rows_plain).expand_return(expand_return!(Vec<CanonOutput>).field_self()),
+                )
+                .fun(fun!(canonical_output_notify))
+                .fun(fun!(canonical_consume_rows))
+                .fun(fun!(canonical_consume_rows_bulk).expand_param(
+                    "values",
+                    expand_param!(Vec<CanonOwned>).variant_self().bulk(),
+                ))
+                .fun(fun!(canonical_consume))
+                .fun(fun!(canonical_owned_callback))
+                .fun(
+                    fun!(canonical_millis_callback_local).expand_param(
+                        "callback",
+                        callback!(impl Fn(CanonMillis) -> CanonMillis)
+                            .name("CanonicalIntCallback")
+                            .expand_param(0, convert!(CanonMillis).output(into!(i32)))
+                            .expand_return(convert!(CanonMillis).input(from!(i32))),
+                    ),
+                )
+                .fun(
+                    fun!(canonical_millis_local)
+                        .expand_param("value", convert!(CanonMillis).input(from!(i32)))
+                        .expand_return(convert!(CanonMillis).output(into!(i32))),
+                ),
+        )
+        .package(package!("typeinputs")
+            .class(ptr_class!(TypeInputA)).class(ptr_class!(TypeInputB))
+            .class(ptr_class!(TypeInputControl).gc_managed())
+            .class(data_class!(TypeInputRow)).class(data_class!(TypeInputHolder))
+            .fun(fun!(type_input_a_new)).fun(fun!(type_input_a_read))
+            .fun(fun!(type_input_b_new)).fun(fun!(type_input_b_read))
+            .fun(fun!(type_input_control_new)).fun(fun!(type_input_live)).fun(fun!(type_input_conversions))
+            .fun(fun!(type_input_fixed)).fun(fun!(type_input_fixed_mut))
+            .fun(fun!(type_input_shared_lists)
+                .expand_param("a",expand_param!(i64).variant(fun!(type_input_a_read)).bulk())
+                .expand_param("b",expand_param!(i64).variant(fun!(type_input_b_read)).bulk()))
+            .fun(fun!(type_input_mut_lists)
+                .expand_param("a",expand_param!(i64).variant(fun!(type_input_a_mut)).bulk())
+                .expand_param("b",expand_param!(i64).variant(fun!(type_input_b_mut)).bulk()))
+            .fun(fun!(type_input_mixed)
+                .expand_param("reads",expand_param!(i64).variant(fun!(type_input_a_read)).bulk())
+                .expand_param("writes",expand_param!(i64).variant(fun!(type_input_a_mut)).bulk()))
+            .fun(fun!(type_input_row).expand_param(
+                     "value",
+                     expand_param!(TypeInputRow).variant_record(param_fields!()),
+                 ))
+            .fun(fun!(type_input_row_fields).expand_param("value",
+                expand_param!(TypeInputRow).variant_fields(param_fields!())))
+            .fun(fun!(type_input_holder).expand_param(
+                     "value",
+                     expand_param!(TypeInputHolder).variant_record(param_fields!().field(
+                         "row",
+                         expand_param!(Option<TypeInputRow>).optional(
+                             expand_param!(TypeInputRow).variant_record(param_fields!()),
+                         ),
+                     )),
+                 ))
+            .fun(fun!(type_input_holder_choice).expand_param("value",
+                expand_param!(TypeInputHolder)
+                    .variant(fun!(type_input_holder_empty))
+                    .variant_record(param_fields!().field("row",
+                        expand_param!(Option<TypeInputRow>).optional(
+                            expand_param!(TypeInputRow).variant_record(param_fields!()))))))
+            .fun(fun!(type_input_optional_holder).expand_param("value",
+                expand_param!(Option<TypeInputHolder>).optional(
+                    expand_param!(TypeInputHolder).variant_record(param_fields!().field("row",
+                        expand_param!(Option<TypeInputRow>).optional(
+                            expand_param!(TypeInputRow).variant_record(param_fields!())))))))
+            .fun(fun!(type_input_holder_callback).expand_param("callback",
+                callback!(impl Fn()->Option<TypeInputHolder>).name("TypeInputHolderCallback")
+                    .expand_return(expand_param!(Option<TypeInputHolder>).optional(
+                        expand_param!(TypeInputHolder).variant_record(param_fields!().field("row",
+                            expand_param!(Option<TypeInputRow>).optional(
+                                expand_param!(TypeInputRow).variant_record(param_fields!()))))))))
+            .fun(fun!(type_input_rows).expand_param("values",type_rows().bulk()))
+            .fun(fun!(type_input_rows_plain).expand_param("values",type_rows()))
+            .fun(fun!(type_input_nested).expand_param("values",type_nested().bulk()))
+            .fun(fun!(type_input_callback).expand_param("callback",callback!(impl Fn()->Vec<TypeInputRow>).name("TypeInputCallback").expand_return(type_rows().bulk())))
+            .fun(fun!(type_input_nested_callback).expand_param("callback",callback!(impl Fn()->Vec<Vec<TypeInputRow>>).name("TypeInputNestedCallback").expand_return(type_nested().bulk())))
+            .fun(fun!(type_input_optional).expand_param("values",expand_param!(Option<Vec<TypeInputA>>).variant_self().bulk()))
+            .fun(fun!(type_input_array).expand_param("values",expand_param!([TypeInputA;2]).variant_self().bulk())))
+        .expand(expand_return!(&CallbackOwned).field_self_cloned())
+        .expand(expand_return!(&BorrowPacket).field_self_cloned())
+        .package(package!("borrowcopies")
+            .class(ptr_class!(BorrowPacket)).class(ptr_class!(BorrowNoClone))
+            .class(enum_class!(BorrowMode)).class(data_class!(BorrowEnumRow))
+            .fun(fun!(borrow_enum_rows).expand_return(expand_return!(BorrowEnumRow).field_self_cloned().bulk()))
+            .class(callback!(impl Fn(&BorrowPacket)).name("BorrowPacketCopy")
+                .expand_param(0,expand_return!(BorrowPacket).field_self_cloned()))
+            .fun(fun!(borrow_packet_new)).fun(fun!(borrow_packet_len))
+            .fun(fun!(borrow_packet_ref)).fun(fun!(borrow_packet_optional))
+            .fun(fun!(borrow_packet_ref_expanded).expand_return(
+                expand_return!(BorrowPacket).field(fun!(borrow_packet_len))))
+            .fun(fun!(borrow_packet_emit)).fun(fun!(borrow_packet_emit_copy))
+            .fun(fun!(borrow_packet_emit_optional).expand_param("callback",
+                callback!(impl Fn(Option<&BorrowPacket>)).name("OptionalBorrowCopy")
+                    .expand_param(0,expand_return!(BorrowPacket).field_self_cloned())))
+            .fun(fun!(borrow_packet_emit_expanded).expand_param("callback",
+                callback!(impl Fn(&BorrowPacket)).name("BorrowPacketLength")
+                    .expand_param(0,expand_return!(BorrowPacket).field(fun!(borrow_packet_len)))))
+            .fun(fun!(borrow_packet_emit_worker))
+            .fun(fun!(borrow_packet_counter))
+            .fun(fun!(borrow_no_clone_new)).fun(fun!(borrow_no_clone_value))
+            .fun(fun!(borrow_no_clone_emit).expand_param("callback",
+                callback!(impl Fn(&BorrowNoClone)).name("NoCloneNumber")
+                    .expand_param(0,expand_return!(BorrowNoClone).field(fun!(borrow_no_clone_value))))))
+        .package(package!("collectioninputs")
+            .fun(fun!(collection_input_plain))
+            .fun(fun!(collection_input_bulk).expand_param("values", expand_param!(Vec<i64>).variant_self().bulk()))
+            .fun(fun!(collection_input_custom).expand_param("values", expand_param!(i64).variant(fun!(collection_input_value))))
+            .fun(fun!(collection_input_custom_bulk).expand_param("values", expand_param!(i64).variant(fun!(collection_input_value)).bulk()))
+            .fun(fun!(collection_input_narrow).expand_param("values", expand_param!(i64).variant(fun!(collection_input_narrow_value))))
+            .fun(fun!(collection_input_narrow_bulk).expand_param("values", expand_param!(i64).variant(fun!(collection_input_narrow_value)).bulk()))
+            .fun(fun!(collection_input_constructions))
+            .fun(fun!(collection_input_slice))
+            .fun(fun!(collection_input_array))
+            .fun(fun!(collection_input_optional_array))
+            .fun(fun!(collection_input_optional_array_bulk).expand_param("values", expand_param!(Option<[i64; 4]>).variant_self().bulk()))
+            .fun(fun!(collection_input_optional).expand_param("values", expand_param!(Option<Vec<i64>>).variant_self().bulk())))
+        .package(package!("defaults")
+            .class(data_class!(DefaultBulkRow))
+            .fun(fun!(default_bulk_echo))
+            .fun(fun!(default_bulk_array).callback_return())
+            .fun(fun!(default_bulk_optional).callback_return())
+            .fun(fun!(default_bulk_nested))
+            .fun(fun!(default_bulk_borrowed))
+            .fun(fun!(default_bulk_numbers))
+            .fun(fun!(default_bulk_units))
+            .fun(fun!(default_bulk_texts))
+            .fun(fun!(default_bulk_optional_texts).expand_return(expand_return!(String).field_self_cloned()))
+            .fun(fun!(default_bulk_buffers))
+            .fun(fun!(default_bulk_plain).expand_return(expand_return!(Vec<DefaultBulkRow>).field_self()))
+            .fun(fun!(default_bulk_callback))
+            .fun(fun!(default_bulk_callback_mixed).expand_param("callback",
+                callback!(impl Fn(Vec<Vec<i64>>,Vec<Vec<i64>>)).name("DefaultBulkMixedCallback")
+                    .expand_param(0,expand_return!(Vec<Vec<i64>>).field_self()))))
+        .expand(expand_param!(BulkPrimitives).variant_self().bulk())
+        .expand(expand_return!(BulkPrimitives).field_self_into().bulk())
+        .expand(expand_param!(BulkNative).variant_self().bulk())
+        .expand(expand_return!(BulkNative).field_self_into().bulk())
+        .expand(expand_param!(BulkExpanded).variant(fun!(bulk_expanded_from)).bulk())
+        .expand(expand_return!(BulkExpanded).field(fun!(bulk_expanded_number)).field(fun!(bulk_expanded_text)).bulk())
+        .expand(expand_return!(BulkFailure).field(fun!(bulk_failure_code)).bulk())
+        .expand(expand_param!(BulkPoint).variant_self().bulk())
+        .expand(expand_return!(BulkPoint).field_self_into().bulk())
+        .package(package!("bulk")
+            .class(data_class!(BulkPoint)).class(data_class!(BulkEnvelope)).class(data_class!(BulkPrimitives)).class(enum_class!(BulkKind))
+            .class(data_class!(BulkNative)).class(data_class!(BulkExpanded))
+            .class(ptr_class!(BulkHandle))
+            .class(data_class!(BulkHandleText)).class(data_class!(BulkPairText))
+            .class(data_class!(BulkReplayRow))
+            .fun(fun!(bulk_replay_rows).expand_param("rows",bulk_replay_input()))
+            .fun(fun!(bulk_replay_redundant_rows).expand_param("rows",redundant_bulk_replay_input_with(true, true)))
+            .fun(fun!(bulk_replay_nested_rows).expand_param(
+                     "rows",
+                     expand_param!(Vec<Vec<BulkReplayRow>>)
+                         .element(redundant_bulk_replay_input_with(true, true))
+                         .bulk(),
+                 ))
+            .fun(fun!(bulk_replay_nested_callback).expand_param(
+                     "callback",
+                     callback!(impl Fn() -> Vec<Vec<BulkReplayRow>>)
+                         .name("BulkReplayNestedCallback")
+                         .expand_return(
+                             expand_param!(Vec<Vec<BulkReplayRow>>)
+                                 .element(redundant_bulk_replay_input_with(true, true))
+                                 .bulk(),
+                         ),
+                 ))
+            .fun(fun!(bulk_replay_object_rows).expand_param("rows",bulk_replay_input_with(false)))
+            .fun(fun!(bulk_replay_callback).expand_param("callback",callback!(impl Fn()->Vec<BulkReplayRow>).name("BulkReplayCallback").expand_return(bulk_replay_input())))
+            .fun(fun!(bulk_nested_handles_input).expand_param(
+                     "values",
+                     expand_param!(Vec<Option<Vec<Option<BulkHandle>>>>)
+                         .element(
+                             expand_param!(Option<Vec<Option<BulkHandle>>>).optional(
+                                 expand_param!(Vec<Option<BulkHandle>>).element(
+                                     expand_param!(Option<BulkHandle>)
+                                         .optional(expand_param!(BulkHandle).variant_self().bulk()),
+                                 ),
+                             ),
+                         )
+                         .bulk(),
+                 ))
+            .fun(fun!(bulk_cleanup_nested_callback).expand_param(
+                     "callback",
+                     callback!(impl Fn() -> Vec<Option<Vec<Option<BulkHandle>>>> + Send + 'static)
+                         .name("BulkCleanupNestedCallback")
+                         .expand_return(
+                             expand_param!(Vec<Option<Vec<Option<BulkHandle>>>>)
+                                 .element(expand_param!(Option<Vec<Option<BulkHandle>>>).optional(
+                                     expand_param!(Vec<Option<BulkHandle>>).element(
+                                         expand_param!(Option<BulkHandle>).optional(
+                                             expand_param!(BulkHandle).variant_self().bulk(),
+                                         ),
+                                     ),
+                                 ))
+                                 .bulk(),
+                         ),
+                 ))
+            .class(data_class!(BulkCleanupBranches))
+            .class(sealed_class!(BulkCleanupChoice))
+            .fun(fun!(bulk_cleanup_branches_callback).expand_param(
+                "callback",
+                callback!(impl Fn() -> BulkCleanupBranches)
+                    .name("BulkCleanupBranchesCallback")
+                    .expand_return(
+                        expand_param!(BulkCleanupBranches).variant_record(
+                            param_fields!()
+                                .field("first", expand_param!(BulkHandle).variant(fun!(bulk_cleanup_first)).bulk())
+                                .field("second", expand_param!(Option<BulkCleanupChoice>).optional(
+                                    expand_param!(BulkCleanupChoice).enum_value([
+                                        ("One", param_fields!().field("value", expand_param!(BulkHandle).variant_self().bulk())),
+                                        ("Two", param_fields!().field("value", expand_param!(BulkHandle).variant_self().bulk())),
+                                    ]),
+                                )),
+                        ),
+                    ),
+            ))
+            .fun(fun!(bulk_cleanup_pair_callback).expand_param(
+                     "callback",
+                     callback!(impl Fn() -> BulkPairText)
+                         .name("BulkCleanupPairCallback")
+                         .expand_return(
+                             expand_param!(BulkPairText)
+                                 .variant_record(param_fields!().field(
+                                     "borrowed_handle",
+                                     expand_param!(BulkHandle).variant(
+                                         fun!(bulk_handle_copy).expand_param(
+                                             "value",
+                                             expand_param!(&BulkHandle).variant_self(),
+                                         ),
+                                     ),
+                                 ))
+                                 .bulk(),
+                         ),
+                 ))
+            .fun(fun!(bulk_replay_reset)).fun(fun!(bulk_replay_count))
+            .fun(fun!(bulk_patch_rows).expand_param(
+                     "row",
+                     expand_param!(BulkPatchRow)
+                         .variant(
+                             fun!(bulk_patch_row_new)
+                                 .expand_param(
+                                     "first",
+                                     expand_param!(Option<BulkHandle>)
+                                         .optional(expand_param!(BulkHandle).variant_self()),
+                                 )
+                                 .expand_param(
+                                     "children",
+                                     expand_param!(Option<Vec<Option<Vec<Option<BulkHandle>>>>>)
+                                         .optional(
+                                             expand_param!(Vec<Option<Vec<Option<BulkHandle>>>>)
+                                                 .element(
+                                                     expand_param!(Option<Vec<Option<BulkHandle>>>)
+                                                         .optional(
+                                                             expand_param!(Vec<Option<BulkHandle>>)
+                                                                 .element(
+                                                                     expand_param!(Option<BulkHandle>)
+                                                                         .optional(
+                                                                             expand_param!(BulkHandle)
+                                                                                 .variant_self(),
+                                                                         ),
+                                                                 ),
+                                                         ),
+                                                 ),
+                                         ),
+                                 )
+                                 .expand_param("last", expand_param!(BulkHandle).variant_self()),
+                         )
+                         .bulk(),
+                 ))
+            .fun(fun!(bulk_patch_callback).expand_param(
+                     "callback",
+                     callback!(impl Fn() -> Vec<Option<Vec<Option<BulkHandle>>>>)
+                         .name("BulkPatchCallback")
+                         .expand_return(
+                             expand_param!(Vec<Option<Vec<Option<BulkHandle>>>>)
+                                 .element(expand_param!(Option<Vec<Option<BulkHandle>>>).optional(
+                                     expand_param!(Vec<Option<BulkHandle>>).element(
+                                         expand_param!(Option<BulkHandle>).optional(
+                                             expand_param!(BulkHandle).variant_self().bulk(),
+                                         ),
+                                     ),
+                                 ))
+                                 .bulk(),
+                         ),
+                 ))
+            .fun(fun!(bulk_nested_envelope).expand_param(
+                     "values",
+                     expand_param!(Vec<BulkInputEnvelope>).element(
+                         expand_param!(BulkInputEnvelope).variant(
+                             fun!(bulk_input_envelope_new).expand_param(
+                                 "values",
+                                 expand_param!(Vec<Vec<i64>>)
+                                     .element(
+                                         expand_param!(Vec<i64>)
+                                             .element(expand_param!(i64).variant_self()),
+                                     )
+                                     .bulk(),
+                             ),
+                         ),
+                     ),
+                 ))
+            .fun(fun!(bulk_pair_text_callback).expand_param(
+                     "callback",
+                     callback!(impl Fn() -> Vec<BulkPairText>)
+                         .name("BulkPairTextCallback")
+                         .expand_return(
+                             expand_param!(Vec<BulkPairText>)
+                                 .element(expand_param!(BulkPairText).variant_record(
+                                     param_fields!().field(
+                                         "borrowed_handle",
+                                         expand_param!(BulkHandle).variant(
+                                             fun!(bulk_handle_copy).expand_param(
+                                                 "value",
+                                                 expand_param!(&BulkHandle).variant_self(),
+                                             ),
+                                         ),
+                                     ),
+                                 ))
+                                 .bulk(),
+                         ),
+                 ))
+            .fun(fun!(bulk_handle_texts).expand_param(
+                     "values",
+                     expand_param!(Vec<BulkHandleText>)
+                         .element(expand_param!(BulkHandleText).variant_record(param_fields!()))
+                         .bulk(),
+                 ))
+            .fun(fun!(bulk_collection_lock_groups).expand_param("probe",callback!(impl Fn()->bool).name("CollectionLocksProbe")))
+            .fun(fun!(bulk_handle_nested).expand_param(
+                     "values",
+                     expand_param!(Vec<Vec<BulkHandle>>).element(
+                         expand_param!(Vec<BulkHandle>)
+                             .element(expand_param!(BulkHandle).variant_self())
+                             .bulk(),
+                     ),
+                 ))
+            .fun(fun!(bulk_handle_text_callback).expand_param(
+                     "callback",
+                     callback!(impl Fn() -> Vec<BulkHandleText>)
+                         .name("BulkHandleTextCallback")
+                         .expand_return(
+                             expand_param!(Vec<BulkHandleText>)
+                                 .element(
+                                     expand_param!(BulkHandleText).variant_record(param_fields!()),
+                                 )
+                                 .bulk(),
+                         ),
+                 ))
+            .fun(fun!(bulk_optional_borrow_pair).expand_param("value",expand_param!(Option < BulkBorrowPair >).optional(expand_param!(BulkBorrowPair).variant(fun!(bulk_borrow_pair_new).expand_param("handle", expand_param!(& BulkHandle).variant_self()).expand_param("number", expand_param!(i64).variant_self()))).bulk()))
+            .fun(fun!(bulk_select).expand_param("value",expand_param!(i64).variant(fun!(bulk_scalar)).variant_self().bulk()).expand_return(expand_return!(i64).field_self().bulk()))
+            .fun(fun!(bulk_kinds).expand_param("value",expand_param!(BulkKind).variant_self().bulk()).expand_return(expand_return!(BulkKind).field_self().bulk()))
+            .fun(fun!(bulk_units).expand_param("value",expand_param!(Vec<()>).variant_self().bulk()).expand_return(expand_return!(Vec<()>).field_self_into().bulk()))
+            .fun(fun!(bulk_flags).expand_param("value",expand_param!(bool).variant_self().bulk()).expand_return(expand_return!(bool).field_self().bulk()))
+            .fun(fun!(bulk_envelope)).fun(fun!(bulk_primitives))
+            .fun(fun!(bulk_optional_wide).expand_param("value",expand_param!(i128).variant_self().bulk()).expand_return(expand_return!(i128).field_self().bulk()))
+            .fun(fun!(bulk_optional_callback).expand_param("value",callback!(impl Fn()->Option<Vec<BulkHandle>>).name("BulkOptionalCallback").expand_return(expand_param!(BulkHandle).variant_self().bulk())))
+            .fun(fun!(bulk_native)).fun(fun!(bulk_expanded)).fun(fun!(bulk_expanded_rows).expand_param("values",expand_param!(BulkExpanded).variant_self().bulk()).expand_return(expand_return!(BulkExpanded).field_self_into().bulk())).fun(fun!(bulk_result))
+            .fun(fun!(bulk_handle_new)).fun(fun!(bulk_handle_value)).fun(fun!(bulk_drops))
+            .fun(fun!(bulk_late).expand_return(expand_return!(BulkLate).field(fun!(bulk_late_handle)).bulk()))
+            .fun(fun!(bulk_handle_views).expand_return(expand_return!(BulkHandle).field_self_into().field(fun!(bulk_handle_value)).bulk()))
+            .fun(fun!(bulk_handles).expand_param("values",expand_param!(BulkHandle).variant_self().bulk()).expand_return(expand_return!(BulkHandle).field_self_into().bulk()))
+            .fun(fun!(bulk_borrow).expand_param("value",expand_param!(&BulkHandle).variant_self().bulk()))
+            .fun(fun!(bulk_checked).expand_param("value",expand_param!(BulkHandle).variant_self().bulk()).expand_param("number",expand_param!(u8).variant_self().bulk()).expand_return(expand_return!(BulkHandle).field_self_into().bulk()))
+            .fun(fun!(bulk_wide).expand_param("values",expand_param!(i128).variant_self().bulk()).expand_return(expand_return!(i128).field_self().bulk()))
+            .fun(fun!(bulk_unsigned_wide).expand_param("values",expand_param!(u128).variant_self().bulk()).expand_return(expand_return!(u128).field_self().bulk()))
+            .fun(fun!(bulk_callback_worker).expand_param("value",callback!(impl Fn(Vec<i64>)->Vec<i64>+Send+'static).name("BulkWorkerCallback").expand_param(0,expand_return!(i64).field_self().bulk()).expand_return(expand_param!(i64).variant_self().bulk())).expand_return(expand_return!(i64).field_self().bulk()))
+            .fun(fun!(bulk_callback).expand_param("value",callback!(impl Fn(Vec<i64>)->Vec<i64>).name("BulkNumbersCallback").expand_param(0,expand_return!(i64).field_self().bulk()).expand_return(expand_param!(i64).variant_self().bulk())).expand_return(expand_return!(i64).field_self().bulk()))
+            .fun(fun!(bulk_handle_callback).expand_param("value",callback!(impl Fn(Vec<BulkHandle>)->Vec<BulkHandle>).name("BulkHandlesCallback").expand_param(0,expand_return!(BulkHandle).field_self_into().bulk()).expand_return(expand_param!(BulkHandle).variant_self().bulk())).expand_return(expand_return!(BulkHandle).field_self_into().bulk()))
+            .fun(fun!(bulk_point)).fun(fun!(bulk_points)).fun(fun!(bulk_point_array)).fun(fun!(bulk_slice))
+            .fun(fun!(bulk_point_plain).expand_param("value",expand_param!(BulkPoint).variant_self()).expand_return(expand_return!(BulkPoint).field_self_into()))
+            .fun(fun!(bulk_optional_handles).expand_param("value",expand_param!(BulkHandle).variant_self().bulk()).expand_return(expand_return!(BulkHandle).field_self_into().bulk()))
+            .fun(fun!(bulk_array).expand_param("value",expand_param!(i64).variant_self().bulk()).expand_return(expand_return!(i64).field_self().bulk()))
+            .fun(fun!(bulk_array_borrow).expand_param("value",expand_param!(i64).variant_self().bulk()))
+            .fun(fun!(bulk_scalar).expand_param("value", expand_param!(i64).variant_self().bulk()).expand_return(expand_return!(i64).field_self().bulk()))
+            .fun(fun!(bulk_numbers).expand_param("values", expand_param!(i64).variant_self().bulk()).expand_return(expand_return!(i64).field_self().bulk()))
+            .fun(fun!(bulk_nested).expand_param("values", expand_param!(i64).variant_self().bulk()).expand_return(expand_return!(i64).field_self().bulk()))
+            .fun(fun!(bulk_text).expand_param("value", expand_param!(String).variant_self().bulk()).expand_return(expand_return!(String).field_self_into().bulk()))
+            .fun(fun!(bulk_strings).expand_param("values", expand_param!(String).variant_self().bulk()).expand_return(expand_return!(String).field_self_into().bulk()))
+            .fun(fun!(bulk_optional).expand_param("value", expand_param!(String).variant_self().bulk()).expand_return(expand_return!(String).field_self_into().bulk()))
+            .fun(fun!(bulk_bytes).expand_param("value", expand_param!(Vec<u8>).variant_self().bulk()).expand_return(expand_return!(Vec<u8>).field_self_into().bulk())))
+        .expand(expand_return!(ReturnFailure).field(fun!(return_failure_code)))
+        .package(package!("returns")
+            .class(data_class!(ReturnArgA)).class(data_class!(ReturnArgB)).class(data_class!(ReturnArgOuter))
+            .class(data_class!(ReturnWideA)).class(data_class!(ReturnWideB)).class(data_class!(ReturnWideError))
+            .fun(fun!(return_limited)).fun(fun!(return_wide_error))
+            .fun(fun!(return_ownership).expand_return(expand_return!(ReturnOwner)
+                .field(fun!(return_owner_value)).field(fun!(return_owner_resource))))
+            .fun(fun!(return_single_ownership).expand_return(expand_return!(ReturnOwner).field(fun!(return_owner_resource))))
+            .fun(fun!(return_domain)).fun(fun!(return_pair).expand_return(expand_return!(ReturnPair).field(fun!(return_pair_first)).field(fun!(return_pair_second))))
+            .fun(fun!(return_wide).expand_return(wide_return)))
+        .package(package!("nullability")
+            .class(ptr_class!(NullabilityHandle)).class(enum_class!(NullabilityChoice)).class(data_class!(NullabilityValue))
+            .fun(fun!(nullability_handle_new)).fun(fun!(nullability_handle_read)).fun(fun!(nullability_handle_optional))
+            .fun(fun!(nullability_text)).fun(fun!(nullability_text_optional))
+            .fun(fun!(nullability_bytes)).fun(fun!(nullability_bytes_optional))
+            .fun(fun!(nullability_wide)).fun(fun!(nullability_wide_optional))
+            .fun(fun!(nullability_value_sum).expand_param("value", expand_param!(NullabilityValue).variant_self().variant(fun!(nullability_value_new))))
+            .fun(fun!(nullability_value_bulk).expand_param("value", expand_param!(NullabilityValue).variant_self().variant(fun!(nullability_value_new)).bulk()))
+            .fun(fun!(nullability_value_optional).expand_param("value", expand_param!(NullabilityValue).variant(fun!(nullability_value_new))))
+            .fun(fun!(nullability_values)).fun(fun!(nullability_values_optional)).fun(fun!(nullability_handles_optional))
+            .fun(fun!(nullability_text_callback)).fun(fun!(nullability_optional_text_callback))
+            .fun(fun!(nullability_callback_choose).expand_param("value",expand_param!(NullabilityValue).variant_self().variant(fun!(nullability_value_from_callback)))))
+        .expand(expand_param!(ParameterPoint).variant(fun!(parameter_point)))
+        .package(package!("paramnames")
+            .class(data_class!(ParameterPoint)).class(data_class!(WireNamedFields))
+            .fun(fun!(parameter_sum)).fun(fun!(parameter_optional))
+            .fun(fun!(parameter_bulk_sum).expand_param("point", expand_param!(ParameterPoint).variant(fun!(parameter_point)).bulk()))
+            .fun(fun!(parameter_sum_object).expand_param("point", expand_param!(ParameterPoint).variant_self()))
+            .fun(fun!(parameter_variants).expand_param("point", expand_param!(ParameterPoint).variant_self().variant(fun!(parameter_point))))
+            .fun(fun!(parameter_collisions)).fun(fun!(parameter_escaped_names))
+            .fun(fun!(parameter_record)).fun(fun!(parameter_records)))
+        .package(package!("gc")
+            .class(ptr_class!(GcResource).gc_managed())
+            .class(ptr_class!(PlainResource))
+            .fun(fun!(gc_resource_new)).fun(fun!(gc_resource_value))
+            .fun(fun!(gc_resource_consume)).fun(fun!(gc_resource_fail))
+            .fun(fun!(gc_resource_pair)).fun(fun!(gc_resource_drops))
+            .fun(fun!(gc_resource_three)).fun(fun!(gc_resource_consume_rows))
+            .fun(fun!(gc_resource_read_rows).expand_param("values",
+                expand_param!(GcReadNumber).variant(fun!(gc_read_number))))
+            .fun(fun!(gc_resource_emit)).fun(fun!(gc_resource_hold))
+            .fun(fun!(gc_resource_return))
+            .fun(fun!(gc_resource_emit_owned).expand_param("callback",
+                callback!(impl Fn(GcResource)).name("GcOwnedCallback")
+                    .expand_param(0, expand_return!(GcResource).field_self_into())))
+            .fun(fun!(gc_resource_rows).callback_return())
+            .fun(fun!(plain_resource_new)).fun(fun!(plain_resource_value)))
+        .package(package!("runtimecosts")
+            .fun(fun!(buffer_views_optional_text).expand_return(expand_return!(Option<String>).field_self().field(fun!(buffer_views_optional_text_len))))
+            .fun(fun!(buffer_views_optional_bytes).expand_return(expand_return!(Option<Vec<u8>>).field_self().field(fun!(buffer_views_optional_bytes_len))))
+            .fun(fun!(buffer_views_text).expand_return(expand_return!(String).field_self().field(fun!(buffer_views_text_len))))
+            .fun(fun!(buffer_views_bytes).expand_return(expand_return!(Vec<u8>).field_self().field(fun!(buffer_views_bytes_len)))))
+        .package(package!("buffers")
+            .class(data_class!(JniBufferRow)).class(data_class!(JniBufferResourceRow))
+            .fun(fun!(jni_buffer_resource)).fun(fun!(jni_buffer_domain_failure)).fun(fun!(jni_buffer_resource_rows).expand_return(expand_return!(Vec<JniBufferResourceRow>).field_self()))
+            .fun(fun!(jni_buffer_text)).fun(fun!(jni_buffer_string))
+            .fun(fun!(jni_buffer_bytes)).fun(fun!(jni_buffer_vec))
+            .fun(fun!(jni_buffer_cow)).fun(fun!(jni_buffer_optional_cow))
+            .fun(fun!(jni_buffer_cow_rows))
+            .fun(fun!(jni_buffer_cow_rows_plain).expand_return(expand_return!(Vec<std::borrow::Cow<'static,[u8]>>)
+                .element_objects(expand_return!(std::borrow::Cow<'static,[u8]>).field_self())))
+            .fun(fun!(jni_buffer_cow_callback))
+            .fun(fun!(jni_buffer_cow_input).expand_param("value",expand_param!(std::borrow::Cow<'_,[u8]>)
+                .variant(fun!(jni_buffer_cow_from_slice))))
+            .fun(fun!(jni_buffer_optional_text)).fun(fun!(jni_buffer_optional_bytes))
+            .fun(fun!(jni_buffer_owned_optional))
+            .fun(fun!(jni_buffer_owned).expand_return(expand_return!(JniBufferRow)
+                .field(fun!(jni_buffer_row_text)).field(fun!(jni_buffer_row_bytes))))
+            .fun(fun!(jni_buffer_rows))
+            .fun(fun!(jni_buffer_wide).expand_return(wide_buffer_views))
+            .fun(fun!(jni_buffer_callback)).fun(fun!(jni_buffer_failure)).fun(fun!(jni_buffer_worker))
+            .fun(fun!(jni_buffer_owned_callback).expand_param("callback",
+                callback!(impl Fn(Option<JniBufferRow>)).name("OwnedBufferViews")
+                    .expand_param(0, expand_return!(JniBufferRow)
+                        .field(fun!(jni_buffer_row_text)).field(fun!(jni_buffer_row_bytes))))))
+        .expand(expand_return!(&GetterLeaf).field_self_cloned())
+        .expand(expand_return!(GetterChild)
+            .field(fun!(getter_child_number)).field(fun!(getter_child_name)))
+        .package(package!("getters")
+            .class(ptr_class!(GetterOwner)).class(ptr_class!(GetterLeaf))
+            .class(data_class!(GetterDetails))
+            .fun(fun!(getter_owner_new).expand_return(expand_return!(GetterOwner)
+                .field_self_into()
+                .field(fun!(getter_owner_child)).field(fun!(getter_owner_optional))
+                .field(fun!(getter_owner_container)).field(fun!(getter_owner_rows))
+                .field(fun!(getter_owner_leaf))))
+            .fun(fun!(getter_owner_failure).expand_return(expand_return!(GetterOwner)
+                .field_self_into().field(fun!(getter_owner_leaf)).field(fun!(getter_owner_fail))))
+            .fun(fun!(getter_owner_id)).fun(fun!(getter_leaf_id))
+            .fun(fun!(getter_owner_cow_bytes))
+            .fun(fun!(getter_static_leaf).expand_return(expand_return!(GetterLeaf).field_self_cloned()))
+            .fun(fun!(getter_owner_read).expand_return(expand_return!(GetterChild)
+                .field(fun!(getter_child_number)).field(fun!(getter_child_name))))
+            .fun(fun!(getter_counts))
+            .fun(fun!(getter_two_clones_new).expand_return(expand_return!(GetterOwner)
+                .field(fun!(getter_owner_leaf).expand_return(expand_return!(GetterLeaf)
+                    .field_self_cloned().field_self_cloned()))))
+            .fun(fun!(getter_fields_new).expand_return(expand_return!(GetterOwner)
+                .field_self_into().fields(fields!(getter_owner_details))))
+            .fun(fun!(getter_callback).expand_param("callback",
+                callback!(impl Fn(&GetterOwner)).name("GetterObserver")
+                    .expand_param(0, getter_views()))))
+        .expand(expand_param!(CallbackConfigValue).variant(fun!(callback_config_from_number)))
+        .expand(expand_return!(CallbackConfigValue).field(fun!(callback_config_number)))
+        .expand(expand_return!(CallbackBoundaryPanic).field(fun!(callback_boundary_view)))
+        .expand(expand_return!(CallbackBoundaryError).fields_into(fields!(callback_boundary_error_into)))
+        .package(package!("nativeoutputs")
+            .fun(fun!(jni_output_optional)
+                     .expand_return(expand_return!(CallbackRow).field_self_cloned())
+                     .output(
+                         expand_return!(Vec<Option<Vec<CallbackRow>>>).element_objects(
+                             expand_return!(Option<Vec<CallbackRow>>).optional(
+                                 expand_return!(Vec<CallbackRow>)
+                                     .element_objects(expand_return!(CallbackRow).default()),
+                             ),
+                         ),
+                     ))
+            .fun(fun!(jni_output_mixed))
+            .fun(fun!(jni_output_mixed_frames).callback_return_only()
+                .expand_return(expand_return!(Vec<CallbackRowResource>).field_self_cloned().bulk()))
+            .fun(fun!(jni_output_fold_drop).callback_return_only())
+            .fun(fun!(c_output_rows)
+                     .name("jniOutputRows")
+                     .expand_return(expand_return!(CallbackRow).field_self_cloned())
+                     .output(
+                         expand_return!(Vec<CallbackRow>)
+                             .element_objects(expand_return!(CallbackRow).default()),
+                     ))
+            .fun(fun!(c_output_nested)
+                     .name("jniOutputNested")
+                     .expand_return(expand_return!(CallbackRow).field_self_cloned())
+                     .output(
+                         expand_return!(Vec<Vec<CallbackRow>>).element_objects(
+                             expand_return!(Vec<CallbackRow>)
+                                 .element_objects(expand_return!(CallbackRow).default()),
+                         ),
+                     ))
+            .fun(fun!(c_output_pair)
+                     .name("jniOutputPair")
+                     .expand_return(expand_return!(CallbackRow).field_self_cloned())
+                     .output(
+                         expand_return!(NativeBulkNested).fields_into(
+                             fields!()
+                                 .field(
+                                     "first",
+                                     expand_return!(Vec<CallbackRow>)
+                                         .element_objects(expand_return!(CallbackRow).default()),
+                                 )
+                                 .field(
+                                     "second",
+                                     expand_return!(Vec<CallbackRow>)
+                                         .element_objects(expand_return!(CallbackRow).default()),
+                                 ),
+                         ),
+                     ))
+            .fun(fun!(jni_output_fold).name("jniOutput")
+                .expand_return(expand_return!(CallbackRow).field_self_cloned()).callback_return_only()))
+        .package(package!("callbackboundaries")
+            .class(ptr_class!(CallbackBoundaryHandler))
+            .fun(fun!(callback_boundary_register)).fun(fun!(callback_boundary_fire))
+            .fun(fun!(callback_boundary_fold).callback_return())
+            .fun(fun!(callback_boundary_faults)).fun(fun!(callback_boundary_conversion))
+            .fun(fun!(callback_boundary_borrowed)).fun(fun!(callback_boundary_strings)))
+        .package(package!("callbackconfig")
+            .class(callback!(impl Fn(CallbackConfigValue, i64) -> CallbackConfigValue)
+                .name("ConfiguredHandler")
+                .expand_param(0, expand_return!(CallbackConfigValue).field(fun!(callback_config_number).name("number")))
+                .expand_return(expand_param!(CallbackConfigValue).variant(fun!(callback_config_from_flag))))
+            .class(callback!(impl Fn(bool) -> i16).name("UnusedHandler"))
+            .class(callback!(impl Fn(CallbackConfigValue) -> i64).name("TypeDefaultHandler"))
+            .class(ptr_class!(CallbackConfigHandler))
+            .fun(fun!(callback_config_default))
+            .fun(fun!(callback_config_type_default))
+            .fun(fun!(callback_config_argument).expand_param("callback",
+                callback!(impl Fn(CallbackConfigValue, i64) -> CallbackConfigValue)
+                    .name("FlagArgumentHandler")
+                    .expand_param(0, expand_return!(CallbackConfigValue).field(fun!(callback_config_positive)))))
+            .fun(fun!(callback_config_return).expand_param("callback",
+                callback!(impl Fn(CallbackConfigValue, i64) -> CallbackConfigValue)
+                    .name("NumberReturnHandler")
+                    .expand_return(expand_param!(CallbackConfigValue).variant(fun!(callback_config_from_number)))))
+            .fun(fun!(callback_config_pair)
+                .expand_param("first", callback!(impl Fn(CallbackConfigValue, i64) -> CallbackConfigValue))
+                .expand_param("second", callback!(impl Fn(CallbackConfigValue, i64) -> CallbackConfigValue)
+                    .name("FlagArgumentHandler")
+                    .expand_param(0, expand_return!(CallbackConfigValue).field(fun!(callback_config_positive)))))
+            .fun(fun!(callback_config_nested).expand_param(
+                     "handlers",
+                     expand_param!(CallbackConfigHandler).variant(
+                         fun!(callback_config_handler).expand_param(
+                             "callback",
+                             callback!(impl Fn(CallbackConfigValue, i64) -> CallbackConfigValue)
+                                 .name("NestedHandler")
+                                 .expand_param(
+                                     0,
+                                     expand_return!(CallbackConfigValue)
+                                         .field(fun!(callback_config_positive)),
+                                 )
+                                 .expand_return(
+                                     expand_param!(CallbackConfigValue)
+                                         .variant(fun!(callback_config_from_number)),
+                                 ),
+                         ),
+                     ),
+                 ))
+            .fun(fun!(callback_config_optional).expand_param("handler", expand_param!(CallbackConfigHandler).variant(fun!(callback_config_handler))))
+            .fun(fun!(callback_config_ordinary)))
+        .expand(expand_param!(CallbackConstructor).variant(fun!(callback_constructor_from)))
+        .expand(expand_param!(CallbackConstructorEnvelope).variant(fun!(callback_constructor_wrap)))
+        // Clone-failure coverage explicitly opts these row fields into copying.
+        .expand(expand_return!(CallbackRow).field_self_cloned())
+        .expand(expand_return!(CallbackTransferred).field_self_into())
+        .expand(expand_return!(Vec<CallbackTransferredRow>).field_self_into())
+        .expand(expand_return!(Vec<CallbackObservedRow>).field_self_cloned())
+        .expand(expand_return!(CallbackProjected).field(fun!(callback_projected_id).name("id")).field_self_into())
+        .error_mapper(syn::parse_quote!(String),fun!(callback_return_error_message))
+        .package(package!("callbackreturns")
+            .class(data_class!(CallbackWireRow))
+            .class(data_class!(CallbackFixedResult))
+            .class(data_class!(CallbackNestedBatch))
+            .class(data_class!(CallbackOptionalBatch))
+            .fun(fun!(callback_mixed_optional_batches).expand_param(
+                     "callback",
+                     callback!(impl Fn() -> Vec<CallbackOptionalBatch>)
+                         .name("MixedOptionalBatchesCallback")
+                         .expand_return(
+                             expand_param!(Vec<CallbackOptionalBatch>).element(
+                                 expand_param!(CallbackOptionalBatch).variant_record(
+                                     param_fields!().field(
+                                         "rows",
+                                         expand_param!(Vec<CallbackFixedResult>)
+                                             .element(callback_result_row_input())
+                                             .bulk(),
+                                     ),
+                                 ),
+                             ),
+                         ),
+                 ))
+            .class(data_class!(CallbackScalarBatch))
+            .fun(fun!(callback_mixed_scalars).expand_param(
+                     "callback",
+                     callback!(impl Fn() -> Vec<CallbackScalarBatch>)
+                         .name("MixedScalarBatchesCallback")
+                         .expand_return(
+                             expand_param!(Vec<CallbackScalarBatch>).element(
+                                 expand_param!(CallbackScalarBatch).variant_record(
+                                     param_fields!().field(
+                                         "rows",
+                                         expand_param!(Vec<CallbackReturnRecord>)
+                                             .element(
+                                                 expand_param!(CallbackReturnRecord)
+                                                     .variant_record(param_fields!()),
+                                             )
+                                             .bulk(),
+                                     ),
+                                 ),
+                             ),
+                         ),
+                 ))
+            .fun(fun!(callback_return_resource_audit_start)).fun(fun!(callback_return_resource_audit_finish))
+            .fun(fun!(callback_mixed_batch).expand_param("callback",
+                callback!(impl Fn() -> CallbackNestedBatch).name("MixedBatchCallback")
+                    .expand_return(callback_mixed_batch_input(true, false))))
+            .fun(fun!(callback_mixed_batches_echo).expand_param(
+                     "batches",
+                     expand_param!(Vec<CallbackNestedBatch>)
+                         .element(callback_mixed_batch_input(false, true)),
+                 ))
+            .fun(fun!(callback_mixed_batches).expand_param(
+                     "callback",
+                     callback!(impl Fn() -> Vec<CallbackNestedBatch>)
+                         .name("MixedBatchesCallback")
+                         .expand_return(
+                             expand_param!(Vec<CallbackNestedBatch>)
+                                 .element(callback_mixed_batch_input(true, true)),
+                         ),
+                 ))
+            .fun(fun!(callback_nested_batch_echo).expand_param(
+                     "batch",
+                     expand_param!(CallbackNestedBatch).variant_record(
+                         param_fields!()
+                             .field("groups", callback_nested_rows_input())
+                             .field(
+                                 "tail",
+                                 expand_param!(Vec<CallbackFixedResult>)
+                                     .element(callback_result_row_input()),
+                             ),
+                     ),
+                 ))
+            .fun(fun!(callback_nested_results).expand_param("callback",
+                callback!(impl Fn() -> Vec<Option<Vec<CallbackFixedResult>>>).name("NestedResultsCallback")
+                    .expand_return(callback_nested_rows_input())))
+            .fun(fun!(callback_nested_batch).expand_param(
+                     "callback",
+                     callback!(impl Fn() -> CallbackNestedBatch)
+                         .name("NestedBatchCallback")
+                         .expand_return(
+                             expand_param!(CallbackNestedBatch).variant_record(
+                                 param_fields!()
+                                     .field(
+                                         "observed",
+                                         expand_param!(CallbackReturnResource).variant(
+                                             fun!(callback_return_resource_copy).expand_param(
+                                                 "value",
+                                                 expand_param!(&CallbackReturnResource).variant_self(),
+                                             ),
+                                         ),
+                                     )
+                                     .field("groups", callback_nested_rows_input())
+                                     .field(
+                                         "marker",
+                                         expand_param!(char).variant(
+                                             fun!(callback_fixed_marker).expand_param(
+                                                 "value",
+                                                 expand_param!(char).variant_self(),
+                                             ),
+                                         ),
+                                     )
+                                     .field(
+                                         "tail",
+                                         expand_param!(Vec<CallbackFixedResult>)
+                                             .element(callback_result_row_input()),
+                                     ),
+                             ),
+                         ),
+                 ))
+            .fun(fun!(callback_fixed_result).expand_param(
+                     "callback",
+                     callback!(impl Fn() -> CallbackFixedResult)
+                         .name("FixedResultCallback")
+                         .expand_return(expand_param!(CallbackFixedResult).variant_record(
+                             param_fields!().field(
+                                 "character",
+                                 expand_param!(char).variant(
+                                     fun!(callback_fixed_marker).expand_param(
+                                         "value",
+                                         expand_param!(char).variant_self(),
+                                     ),
+                                 ),
+                             ),
+                         )),
+                 ))
+            .fun(fun!(callback_fixed_results).expand_param(
+                     "callback",
+                     callback!(impl Fn() -> Vec<CallbackFixedResult>)
+                         .name("FixedResultsCallback")
+                         .expand_return(expand_param!(Vec<CallbackFixedResult>).element(
+                             expand_param!(CallbackFixedResult).variant_record(
+                                 param_fields!().field(
+                                     "character",
+                                     expand_param!(char).variant(
+                                         fun!(callback_fixed_marker).expand_param(
+                                             "value",
+                                             expand_param!(char).variant_self(),
+                                         ),
+                                     ),
+                                 ),
+                             ),
+                         )),
+                 ))
+            .fun(fun!(callback_fixed_optional_results).expand_param(
+                     "callback",
+                     callback!(impl Fn() -> Option<Vec<CallbackFixedResult>>)
+                         .name("OptionalFixedResultsCallback")
+                         .expand_return(expand_param!(Option<Vec<CallbackFixedResult>>).optional(
+                             expand_param!(Vec<CallbackFixedResult>).element(
+                                 expand_param!(CallbackFixedResult).variant_record(param_fields!()),
+                             ),
+                         )),
+                 ))
+            .fun(fun!(callback_fixed_borrowed_results).expand_param(
+                     "callback",
+                     callback!(impl Fn() -> Vec<CallbackFixedResult>)
+                         .name("BorrowedFixedResultsCallback")
+                         .expand_return(
+                             expand_param!(Vec<CallbackFixedResult>).element(
+                                 expand_param!(CallbackFixedResult).variant_record(
+                                     param_fields!()
+                                         .field(
+                                             "first",
+                                             expand_param!(CallbackReturnResource).variant(
+                                                 fun!(callback_return_resource_copy).expand_param(
+                                                     "value",
+                                                     expand_param!(&CallbackReturnResource)
+                                                         .variant_self(),
+                                                 ),
+                                             ),
+                                         )
+                                         .field(
+                                             "character",
+                                             expand_param!(char).variant(
+                                                 fun!(callback_fixed_marker).expand_param(
+                                                     "value",
+                                                     expand_param!(char).variant_self(),
+                                                 ),
+                                             ),
+                                         ),
+                                 ),
+                             ),
+                         ),
+                 ))
+            .fun(fun!(callback_return_wire_rows_catch).expand_param(
+                     "callback",
+                     callback!(impl Fn() -> Vec<CallbackWireRow>).expand_return(
+                         expand_param!(Vec<CallbackWireRow>)
+                             .element(expand_param!(CallbackWireRow).variant_record(param_fields!())),
+                     ),
+                 ))
+            .fun(fun!(callback_return_wire_row_catch).expand_param(
+                     "callback",
+                     callback!(impl Fn() -> CallbackWireRow).expand_return(
+                         expand_param!(CallbackWireRow).variant_record(param_fields!()),
+                     ),
+                 ))
+            .class(data_class!(CallbackReturnRecord)).class(enum_class!(CallbackReturnChoice))
+            .class(ptr_class!(CallbackReturnResource)).class(ptr_class!(CallbackReturnJob)).class(ptr_class!(CallbackReturnHandler))
+            .fun(fun!(callback_return_i64)).fun(fun!(callback_return_i8)).fun(fun!(callback_return_i16)).fun(fun!(callback_return_f32)).fun(fun!(callback_return_u128)).fun(fun!(callback_return_zero)).fun(fun!(callback_return_bool))
+            .fun(fun!(callback_return_char)).fun(fun!(callback_return_float)).fun(fun!(callback_return_unsigned)).fun(fun!(callback_return_wide))
+            .fun(fun!(callback_return_text)).fun(fun!(callback_return_bytes)).fun(fun!(callback_return_optional)).fun(fun!(callback_return_vector))
+            .fun(fun!(callback_return_record)).fun(fun!(callback_return_enum))
+            .fun(fun!(callback_return_resource_new)).fun(fun!(callback_return_resource_live))
+            .fun(fun!(callback_return_owned)).fun(fun!(callback_return_take)).fun(fun!(callback_return_owned_optional)).fun(fun!(callback_return_owned_vector))
+            .fun(fun!(callback_return_spawn)).fun(fun!(callback_return_join))
+            .fun(fun!(callback_return_handler_new)).fun(fun!(callback_return_handler_call)).fun(fun!(callback_return_catch))
+            .fun(fun!(callback_return_handler_many).expand_param("handlers",expand_param!(CallbackReturnHandler).variant(fun!(callback_return_handler_wrap))))
+            .fun(fun!(callback_return_char_catch)).fun(fun!(callback_return_owned_vector_catch)).fun(fun!(callback_return_unit))
+            .fun(fun!(callback_return_handler_value).expand_param("handler",expand_param!(CallbackReturnHandler).variant(fun!(callback_return_handler_wrap)))))
+        .package(package!("typedrows")
+            .class(data_class!(RowLeaf)).class(data_class!(Row2)).class(data_class!(Row4))
+            .class(data_class!(Row8)).class(data_class!(Row16)).class(data_class!(Row32)).class(data_class!(Row64))
+            .class(data_class!(Row127)).class(data_class!(WideRow))
+            .fun(fun!(typed_rows_worker).expand_param("callback", callback!(impl Fn(Vec<CallbackRow>) + Send + Sync + 'static)
+                .name("OrdinaryCallbackRowVecCallback").expand_param(0, expand_return!(Vec<CallbackRow>).field_self())))
+            .fun(fun!(typed_rows_limit).expand_return(expand_return!(Vec<Row127>).field_self_into()))
+            .fun(fun!(typed_rows_wide).expand_return(expand_return!(Vec<WideRow>).field_self_into()))
+            .fun(fun!(typed_rows_mixed).expand_return(expand_return!(Vec<Vec<WideRow>>).field_self_into())))
+        // Malformed-row probes below deliberately exercise ordinary array transport.
+        .package(package!("callbacks")
+            .class(data_class!(CallbackRecord)).class(data_class!(CallbackEnvelope))
+            .class(ptr_class!(CallbackSet)).class(ptr_class!(CallbackJob))
+            .class(ptr_class!(CallbackOwned)).class(ptr_class!(CallbackTransferred))
+            .class(ptr_class!(CallbackProjected))
+            .class(ptr_class!(CallbackConstructor)).class(ptr_class!(CallbackConstructorEnvelope))
+            .class(ptr_class!(CallbackConstructorJob))
+            .class(data_class!(CallbackObservedRow)).fun(fun!(callback_rows_ref)).fun(fun!(callback_row_return_cleanup_failure))
+            .class(ptr_class!(CallbackUniqueResource)).class(data_class!(CallbackUniqueRow))
+            .fun(fun!(callback_unique_resource_id)).fun(fun!(callback_rows_unique)).fun(fun!(callback_rows_unique_error))
+            .class(ptr_class!(CallbackRowResource))
+            .class(data_class!(CallbackRow)).class(data_class!(CallbackRowDetail))
+            .class(data_class!(CallbackNestedRow)).class(data_class!(CallbackTransferredRow))
+            .fun(fun!(callback_row_resource_id)).fun(fun!(callback_row_resource_live)).fun(fun!(callback_row_resource_drops))
+            .fun(fun!(callback_row_resource_hold))
+            // Raw ordinary-array probes are separate from default scoped callback tests.
+            .fun(fun!(callback_rows_owned_probe).expand_param("callback",callback!(impl Fn(Vec<CallbackRow>)).name("OrdinaryCallbackRowVecCallback").expand_param(0,expand_return!(Vec<CallbackRow>).field_self())))
+            .fun(fun!(callback_rows_optional_probe).expand_param("callback",callback!(impl Fn(Option<Vec<Option<CallbackRow>>>)).name("OrdinaryOptionalOptionalCallbackRowVecCallback").expand_param(0,expand_return!(Option<Vec<Option<CallbackRow>>>).field_self())))
+            .fun(fun!(callback_rows_nested_probe).expand_param("callback",callback!(impl Fn(Vec<Vec<Option<CallbackNestedRow>>>)).name("OrdinaryOptionalCallbackNestedRowVecVecCallback").expand_param(0,expand_return!(Vec<Vec<Option<CallbackNestedRow>>>).field_self())))
+            .fun(fun!(callback_rows_pair_probe).expand_param("callback",callback!(impl Fn(Vec<CallbackRow>, Vec<CallbackRow>)).name("OrdinaryCallbackRowVecCallbackRowVecCallback").expand_param(0,expand_return!(Vec<CallbackRow>).field_self()).expand_param(1,expand_return!(Vec<CallbackRow>).field_self())))
+            .fun(fun!(callback_rows_transferred_probe).expand_param("callback",callback!(impl Fn(Vec<CallbackTransferredRow>)).name("OrdinaryCallbackTransferredRowVecCallback").expand_param(0,expand_return!(Vec<CallbackTransferredRow>).field_self())))
+            .fun(fun!(callback_rows_transferred_pair_probe).expand_param("callback",callback!(impl Fn(Vec<CallbackTransferredRow>, Vec<CallbackRow>)).name("OrdinaryCallbackTransferredRowVecCallbackRowVecCallback").expand_param(0,expand_return!(Vec<CallbackTransferredRow>).field_self()).expand_param(1,expand_return!(Vec<CallbackRow>).field_self())))
+            .fun(fun!(callback_rows_owned)).fun(fun!(callback_rows_borrowed))
+            .fun(fun!(callback_rows_optional)).fun(fun!(callback_rows_nested))
+            .fun(fun!(callback_rows_pair)).fun(fun!(callback_row_handles))
+            .fun(fun!(callback_rows_transferred)).fun(fun!(callback_rows_transferred_pair)).fun(fun!(callback_rows_conversion_failure))
+            .fun(fun!(callback_rows_spawn)).fun(fun!(callback_row_job_finished))
+            .class(ptr_class!(CallbackReentry))
+            .fun(fun!(callback_reentry_new)).fun(fun!(callback_reentry_read))
+            .fun(fun!(callback_reentry_write)).fun(fun!(callback_reentry_take))
+            .fun(fun!(callback_reentry_shared)).fun(fun!(callback_reentry_exclusive))
+            .fun(fun!(callback_reentry_consuming)).fun(fun!(callback_reentry_pair))
+            .fun(fun!(callback_reentry_mixed)).fun(fun!(callback_reentry_worker))
+            .fun(fun!(callback_reentry_probe))
+            .fun(fun!(callback_reentry_optional))
+            .fun(fun!(callback_reentry_constructed).expand_param("value",expand_param!(CallbackReentry).variant(fun!(callback_reentry_clone))))
+            .fun(fun!(callback_constructor_new)).fun(fun!(callback_constructor_fire))
+            .fun(fun!(callback_constructor_owned_fire).expand_param("handler",expand_param!(CallbackConstructor).variant(fun!(callback_constructor_owned))))
+            .fun(fun!(callback_constructor_pair)).fun(fun!(callback_constructor_mixed))
+            .fun(fun!(callback_constructor_set_fire).expand_param("callbacks",expand_param!(CallbackSet).variant(fun!(callback_set_new))))
+            .fun(fun!(callback_constructor_nested))
+            .fun(fun!(callback_constructor_spawn))
+            .fun(fun!(callback_constructor_run))
+            .fun(fun!(callback_constructor_selected).expand_param("handler",expand_param!(CallbackConstructor).variant(fun!(callback_constructor_new)).variant_self()))
+            .fun(fun!(callback_constructor_optional)).fun(fun!(callback_constructor_list))
+            .fun(fun!(callback_constructor_checked))
+            .fun(fun!(callback_set_new)).fun(fun!(callback_set_fire))
+            .fun(fun!(callback_set_spawn)).fun(fun!(callback_job_join))
+            .fun(fun!(callback_owned_new)).fun(fun!(callback_owned_id)).fun(fun!(callback_owned_drops))
+            .fun(fun!(callback_owned_fire)).fun(fun!(callback_owned_borrow))
+            .fun(fun!(callback_transferred_id)).fun(fun!(callback_transferred_drops))
+            .fun(fun!(callback_transferred_fire)).fun(fun!(callback_projection_fire))
+            .fun(fun!(callback_projected_id)).fun(fun!(callback_preflight))
+            .fun(fun!(callback_scalars)).fun(fun!(callback_texts))
+            .fun(fun!(callback_optional_owned)).fun(fun!(callback_envelope)).fun(fun!(callback_primitives))
+            .fun(fun!(callback_enums)))
+        .package(package!("cleanup")
+            .class(data_class!(OutputCleanupRow))
+            .fun(fun!(native_bulk_rows).expand_return(expand_return!(CallbackRow).field_self_cloned().bulk()))
+            .fun(fun!(native_bulk_nested).expand_return(expand_return!(CallbackRow).field_self_cloned().bulk()))
+            .fun(fun!(native_bulk_pair).output(
+                     expand_return!(NativeBulkNested).fields_into(
+                         fields!()
+                             .field("first", expand_return!(Vec<CallbackRow>).default())
+                             .field("second", expand_return!(Vec<CallbackRow>).default()),
+                     ),
+                 ))
+            .fun(fun!(native_bulk_callback).expand_param("callback", callback!(impl Fn(Vec<Vec<CallbackRow>>)).name("NativeBulkCallback")))
+            .fun(fun!(output_cleanup_surround).output(
+                     expand_return!(OutputCleanupSurround).fields_into(
+                         fields!()
+                             .field("before", expand_return!(OwnedResource).default())
+                             .field(
+                                 "values",
+                                 expand_return!(Vec<Option<Vec<OutputCleanupRow>>>).field_self(),
+                             )
+                             .field("after", expand_return!(OwnedResource).default()),
+                     ),
+                 ))
+            .fun(fun!(output_cleanup_surround_bulk).output(
+                     expand_return!(OutputCleanupSurround).fields_into(
+                         fields!()
+                             .field("before", expand_return!(OwnedResource).default())
+                             .field(
+                                 "values",
+                                 expand_return!(Vec<Option<Vec<OutputCleanupRow>>>).default(),
+                             )
+                             .field("after", expand_return!(OwnedResource).default()),
+                     ),
+                 ))
+            .fun(fun!(output_cleanup_rows).callback_return().output(expand_return!(Vec<OutputCleanupRow>).field_self()))
+            .fun(fun!(output_cleanup_rows_bulk).callback_return().expand_return(expand_return!(OutputCleanupRow).field_self_into().bulk()))
+            .fun(fun!(output_cleanup_nested).callback_return().output(expand_return!(Vec<Option<Vec<OutputCleanupRow>>>).field_self()))
+            .fun(fun!(output_cleanup_nested_bulk).callback_return().expand_return(expand_return!(OutputCleanupRow).field_self_into().bulk()))
+            .fun(fun!(output_cleanup_callback).expand_param("callback",callback!(impl Fn(Vec<Option<Vec<OutputCleanupRow>>>)).name("OutputCleanupCallback").expand_param(0, expand_return!(Vec<Option<Vec<OutputCleanupRow>>>).field_self())))
+            .fun(fun!(output_cleanup_callback_bulk).expand_param("callback",callback!(impl Fn(Vec<Option<Vec<OutputCleanupRow>>>)).name("OutputCleanupBulkCallback").expand_param(0,expand_return!(OutputCleanupRow).field_self_into().bulk()))))
+        .on_configure(|flat| {
+
+use prebindgen_conversions::{OutputConversion, Outcomes, WireNode};
+            // Compile a mixed prepared tree directly: declaration defaults
+            // deliberately lift inner bulk modifiers to the enclosing sequence.
+            let sequence = |element,mode| prebindgen_jni::operations::JniOutput::Unary { operation: prebindgen_jni::operations::JniOutputUnary::Sequence { delivery: prebindgen_declarations::SequenceDelivery::Value, mode }, child: Box::new(element),  };
+            let recipe=sequence(prebindgen_jni::operations::JniOutput::Branch { operation: prebindgen_jni::operations::JniOutputBranch::Combine, children: vec![prebindgen_jni::operations::JniOutput::Unary { operation: prebindgen_jni::operations::JniOutputUnary::Bulk, child: Box::new(sequence(prebindgen_jni::operations::JniOutput::Leaf(prebindgen_jni::operations::JniOutputLeafOp::Value),Some(prebindgen_declarations::ProjectionMode::Borrowed))) }] },None);
+            let conversion=prebindgen_declarations::compile_output(flat,&prebindgen_jni::JniCodec::raw(),"jni_output_mixed",&recipe,&())?;
+            prebindgen_declarations::bind_prepared_output(&mut flat.function_mut("jni_output_mixed")?.metadata[0],conversion);
+            let declarations=prebindgen_jni::JniSourceResolver::default();
+            let recipe=declarations.resolve_output(flat,&prebindgen_jni::JniCodec::raw(),&flat.function("collection_probe")?.ret.ty,&expand_return!(Vec<char>).field_self().into(),&())?;
+            let output=prebindgen_declarations::compile_output(flat,&prebindgen_jni::JniCodec::raw(),"collection_probe",&recipe,&())?;
+            let Outcomes { success, source_error: None, binding_failure: Some(_) } = output.output_outcomes() else {
+                return Err("collection probe must declare success and binding failure only".into());
+            };
+            let logical = success;
+            let WireNode::Container {meta: prebindgen_jni::JniOutputWireContainer::KListArrayRows | prebindgen_jni::JniOutputWireContainer::KListClassRows, child: element, wires: controls}=logical else {return Err("expected sequence".into());};
+            assert_eq!(controls.len(),1);
+            assert_eq!(prebindgen_conversions::wire_definitions(std::iter::once(logical)).count(),2);
+            assert!(matches!(prebindgen_conversions::wire_definitions(std::iter::once(element.as_ref())).next().unwrap().kind, prebindgen_jni::JniWire::RScalar {
+                primitive: prebindgen_flat::Primitive::Char, ..
+            }));
+            assert!(matches!(output.result_packet_fields()?.next().unwrap().kind, prebindgen_jni::JniWire::KRowArray { .. }));
+            Ok(())
+        })
+        .expand(expand_param!(Vec<i64>).variant_self())
+        .expand(expand_return!(CollectionError).fields_into(fields!(collection_error_into)))
+        .expand(expand_return!(ResultFailure).field(fun!(result_error_code).name("code")))
+        .error_mapper(syn::parse_quote!(StorageError), fun!(storage_error_message))
+        .error_class(syn::parse_quote!(StorageError), "java.lang.IllegalStateException")
+        .expand(expand_return!(CDropError).fields_into(fields!(result_drop_error_into)))
+        .expand(expand_return!(CPanicOutput).field(fun!(c_panic_output_value)))
+        .expand(expand_return!(CResultError).fields_into(fields!(result_pair_error_into)))
+        .expand(expand_return!(CResultPair).fields_into(fields!(c_result_pair_into)))
+        .expand(expand_return!(CResourceError).fields_into(fields!(result_resource_error_into)))
+        .expand(expand_return!(CRichError).fields_into(fields!(result_rich_error_into)))
+        .package(package!("collections").class(data_class!(Payload))
+            .class(data_class!(SequenceScalars))
+            .fun(fun!(collection_scalars).callback_return())
+            .fun(fun!(collection_u128).callback_return())
+            .fun(fun!(collection_construct_all).expand_param("values",expand_param!(CollectionItem).variant(fun!(collection_construct))))
+.fun(fun!(collection_make_items).expand_return(expand_return!(CollectionItem).fields_into(fields!(collection_item_into))))
+.fun(fun!(collection_bundle).expand_return(expand_return!(CollectionBundle).fields_into(fields!(collection_bundle_into))))
+.fun(fun!(collection_optional_handles).callback_return())
+.fun(fun!(collection_nested_handles).callback_return())
+.fun(fun!(collection_numbers).expand_return(expand_return!(CollectionNumbers).fields(fields!(collection_numbers_view))))
+.fun(fun!(collection_resource_ids).expand_param("values",expand_param!(OwnedResource).variant(fun!(collection_resource_clone))))
+.fun(fun!(collection_i64).callback_return())
+            .fun(fun!(collection_text).expand_param("values",expand_param!(Vec<String>).variant_self()).callback_return())
+            .fun(fun!(collection_bytes).callback_return())
+            .fun(fun!(collection_nested).callback_return())
+            .fun(fun!(collection_options).callback_return())
+            .fun(fun!(collection_optional).callback_return())
+            .fun(fun!(collection_optional_items).callback_return())
+            .fun(fun!(collection_enum).callback_return())
+            .fun(fun!(collection_probe))
+            .fun(fun!(collection_borrow).callback_return().expand_return(expand_return!(i64).field_self_cloned().bulk()))
+            .fun(fun!(collection_slice).callback_return())
+            .fun(fun!(collection_resource_new))
+            .fun(fun!(collection_handles).callback_return())
+            .fun(fun!(collection_alias))
+            .fun(fun!(collection_result).callback_return())
+            .fun(fun!(collection_fail))
+            .fun(fun!(collection_result_optional).callback_return().expand_return(expand_return!(OwnedResource).field_self_into().bulk()))
+            .fun(fun!(sequence_late_drop).callback_return_only().expand_return(expand_return!(Vec<CPanicOutput>).field(fun!(sequence_late_view))))
+            .fun(fun!(sequence_scalars).callback_return_only().expand_return(expand_return!(SequenceScalars).fields_into(fields!(sequence_scalars_into)).bulk()))
+            .fun(fun!(sequence_parts).callback_return_only().expand_return(expand_return!(SequencePart).fields_into(fields!(sequence_part_into))))
+
+            .fun(fun!(storage_put_slice).expand_param("payloads",expand_param!(Payload).variant_self()))
+            .fun(fun!(storage_get_vec).callback_return().expand_return(expand_return!(Payload).field_self_into())))
+        .package(package!("results")
+            .fun(fun!(c_result_error_drop))
+            .fun(fun!(c_result_late_niche))
+            .fun(fun!(c_result_resource_error))
+            .fun(fun!(c_result_rich_error))
+            .fun(fun!(result_scalar))
+            .fun(fun!(result_unit_error))
+            .fun(fun!(result_unit))
+            .fun(fun!(result_optional))
+            .fun(fun!(result_text))
+            .fun(fun!(result_record))
+            .fun(fun!(result_owned))
+            .fun(fun!(result_other).on_error(fun!(result_string_message)).expand_return(expand_return!(i64).field_self()))
+            .fun(fun!(storage_try_with_label))
+            .fun(fun!(result_error_drops)))
+        .package(package!("enums")
+            .fun(fun!(enum_boundary_probe)).class(enum_class!(Priority))
+            .class(ptr_class!(PayloadHandle).name("EnumPayload"))
+            .fun(fun!(enum_payload_new).expand_return(expand_return!(PayloadHandle).field_self_into()))
+            .fun(fun!(payload_priority)).class(enum_class!(SparseCode).name("Code"))
+            .class(enum_class!(EnumNames).variant_name("name","Name").variant_name("ordinal","Ordinal").variant_name("entries","Entries").variant_name("kotlin","Kotlin")).class(data_class!(EnumRecord))
+            .fun(fun!(priority_weight)).fun(fun!(priority_or))
+            .fun(fun!(sparse_echo)).fun(fun!(sparse_optional)).fun(fun!(sparse_nested))
+            .fun(fun!(sparse_ref)).fun(fun!(sparse_borrowed)).fun(fun!(enum_record_echo)).fun(fun!(enum_names_echo)))
+        .expand(expand_param!(TextNicheInput).variant(fun!(text_niche_input_new)))
+        .expand(expand_param!(BytesNicheInput).variant(fun!(bytes_niche_input_new)))
+        .expand(expand_param!(ResourceChoice).variant(fun!(resource_choice_new)))
+        .expand(expand_param!(NicheChoiceHandle).variant(fun!(niche_choice_new)).variant_self())
+        .expand(expand_param!(OptionCtor).variant(fun!(option_ctor_new)).variant_self())
+        .expand(expand_param!(OptionChoice).variant(fun!(option_choice_new)).variant_self())
+        .package(package!("options")
+            .class(ptr_class!(NicheChoiceHandle)).fun(fun!(niche_choice_new)).fun(fun!(niche_choice_id))
+            .fun(fun!(option_nested_u32))
+            .fun(fun!(option_triple_text)).fun(fun!(option_triple_bytes))
+            .fun(fun!(option_triple_i64)).fun(fun!(option_triple_unit))
+            .fun(fun!(optional_text_input_len)).fun(fun!(optional_bytes_input_len))
+            .fun(fun!(nested_niche_choice_id))
+            .fun(fun!(option_nested_projection_views).expand_return(expand_return!(ProjectionHandle).field_self_into().field_self_cloned()))
+            .class(ptr_class!(OptionChoice))
+            .class(ptr_class!(OptionCtor)).fun(fun!(option_ctor_new)).fun(fun!(option_ctor_id)).fun(fun!(option_nested_resource))
+            .fun(fun!(option_choice_id))
+            .fun(fun!(option_str_echo)).fun(fun!(option_slice_echo)).fun(fun!(option_str_len)).fun(fun!(option_slice_len)).fun(fun!(option_string_len)).fun(fun!(option_i64_ref))
+            .fun(fun!(option_resource_pair)).fun(fun!(resource_choice_id))
+            .fun(fun!(optional_pair_new).expand_return(expand_return!(OptionalPair).fields_into(fields!(optional_pair_into).field("present",expand_return!(OwnedResource).field_self_into()))))
+            .fun(fun!(option_projection_views).expand_return(expand_return!(ProjectionHandle).field_self_into().field_self_cloned()))
+            .class(data_class!(OptionalFields))
+            .class(data_class!(OptionalBytes)).fun(fun!(optional_bytes_echo))
+            .fun(fun!(option_resource_mut)).fun(fun!(option_projection_ref)
+                .expand_return(expand_return!(ProjectionHandle).field_self_cloned()))
+            .class(data_class!(OptionalResource))
+            .fun(fun!(option_i64)).fun(fun!(option_char)).fun(fun!(option_u8)).fun(fun!(option_bool))
+            .fun(fun!(option_text)).fun(fun!(option_bytes)).fun(fun!(option_unit))
+            .fun(fun!(option_nested)).fun(fun!(option_nested_char))
+            .fun(fun!(option_resource_new)).fun(fun!(option_resource_echo).expand_param("value",expand_param!(OwnedResource).variant_self())).fun(fun!(option_resource_id))
+            .fun(fun!(optional_fields_echo))
+            .fun(fun!(optional_field_new).expand_return(expand_return!(OptionalField).fields(fields!(optional_field_fields))))
+            .fun(fun!(optional_resource_new)))
         .source(perftest_flat::PREBINDGEN_OUT_DIR)
-        .source_named(cov_helpers::PREBINDGEN_OUT_DIR, "cov_helpers")
+        /* Unsupported: multiple source streams.
+.source_named(cov_helpers::PREBINDGEN_OUT_DIR, "cov_helpers")
+*/
         .set_package_prefix("io.prebindgen.covertest")
         .set_jni_native_init("io.prebindgen.covertest.NativeLibrary.ensureLoaded()")
         // Every naming tier used here is configured. The harness hook is a
@@ -131,12 +1409,23 @@ fn main() {
         // (the domain names are already the desired Kotlin names) — registering
         // closures, and the method hook strips the flat class prefix. The
         // generated-interface hook deliberately keeps its `ClassApi` default.
-        .set_harness_name_mangle(|_| "CovNative".to_string())
-        .set_fun_name_mangle(|_, n| n.to_string())
-        .set_ptr_class_name_mangle(|_, n| n.to_string())
-        .set_data_class_name_mangle(|_, n| n.to_string())
-        .set_enum_name_mangle(|_, n| n.to_string())
-        .set_method_name_mangle(|_, class, n| {
+        /* Unsupported: this builder feature is not implemented.
+.set_harness_name_mangle(|_| "CovNative".to_string())
+*/
+        /* Unsupported: this builder feature is not implemented.
+.set_fun_name_mangle(|_, n| n.to_string())
+*/
+        /* Unsupported: this builder feature is not implemented.
+.set_ptr_class_name_mangle(|_, n| n.to_string())
+*/
+        /* Unsupported: this builder feature is not implemented.
+.set_data_class_name_mangle(|_, n| n.to_string())
+*/
+        /* Unsupported: this builder feature is not implemented.
+.set_enum_name_mangle(|_, n| n.to_string())
+*/
+        /* Unsupported: this builder feature is not implemented.
+.set_method_name_mangle(|_, class, n| {
             // #86: force an underscored method name onto ONE harness extern —
             // the Kotlin `external fun` keeps this verbatim name while the
             // Rust export symbol needs the JNI `_1` escape
@@ -146,44 +1435,54 @@ fn main() {
             }
             strip_flat_class_prefix(class, n)
         })
+*/
         // `Millis` newtype: a canonical single-value conversion to a bare
         // `Long` (no generated class) via two ordinary `#[prebindgen]` fns —
         // defined in the SEPARATE `covertest-helpers` source crate, proving
         // the multi-source model (generated calls carry the
         // `cov_helpers::` prefix). The Kotlin surface (`Long`) derives
         // from the fns' `i64` side; nothing is stated verbatim.
-        .convert(
+        /* Unsupported: this builder feature is not implemented.
+.convert(
             convert!(Millis)
                 .input(fun!(millis_from_long))
                 .output(fun!(millis_value)),
         )
+*/
         // `Celsius`: canonical conversion via `From`/`Into` impls in the flat
         // crate — the repr (`i32`) is stated, the impls do the work.
-        .convert(convert!(Celsius).input(from!(i32)).output(into!(i32)))
+        /* Unsupported: this builder feature is not implemented.
+.convert(convert!(Celsius).input(from!(i32)).output(into!(i32)))
+*/
         // `Percent`: fallible in BOTH directions. `Option<Percent>` below
         // forces both raw stage error types through the structural Option
         // converter, where they normalize to the binding error channel.
-        .convert(
+        /* Unsupported: this builder feature is not implemented.
+.convert(
             convert!(Percent)
                 .input(try_from!(i32))
                 .output(fun!(crate::percent_out).sig(sig!((p: Percent) -> Result<i32, String>))),
         )
+*/
         // `Label`: conversions are plain fns in THIS binding crate (see
         // src/lib.rs) — no #[prebindgen], no helper crate — declared with
         // the ONE binding-local vocabulary, `fun!(crate::…).sig(sig!(…))`.
         // The input is FALLIBLE: the sig's `Result<Label, String>` return IS
         // the error channel (empty labels route the Err to onError).
-        .convert(
+        /* Unsupported: this builder feature is not implemented.
+.convert(
             convert!(Label)
                 .input(fun!(crate::label_in).sig(sig!((s: String) -> Result<Label, String>)))
                 .output(fun!(crate::label_out).sig(sig!((l: Label) -> String))),
         )
+*/
         // Keep Rust's standard `Duration` as the semantic type while exposing
         // bounded u64 milliseconds. Values above one day are invalid; one of
         // those representations becomes the `Option<Duration>` None marker,
         // so nullable Kotlin `ULong?` crosses JNI as a raw primitive `Long`
         // without JObject/boxed-Long allocation.
-        .convert(
+        /* Unsupported: this builder feature is not implemented.
+.convert(
             convert!(Duration)
                 .input(fun!(crate::duration_from_millis).sig(sig!((ms: u64) -> Duration)))
                 .output(
@@ -191,6 +1490,7 @@ fn main() {
                 )
                 .valid_range(0u64..=86_400_000u64),
         )
+*/
         // ── Base-package types ──────────────────────────────────────────────
         // `Payload` as a Kotlin `data class` (fields cross as decoupled leaves,
         // reassembled via a generated `fromParts`). A data class can carry
@@ -200,30 +1500,38 @@ fn main() {
         // `PayloadApi` exposes its fields + `labelLen()`, and the
         // hand-written `Timestamped` interface extends it (#54).
         .package(
-            package!().class(
+            package!()/* Unsupported: this class kind or its binding is not available yet.
+.class(
                 data_class!(Payload)
                     .interface()
                     .implements("io.prebindgen.covertest.Timestamped")
                     .method(fun!(payload_label_len)),
-            ),
+            )
+*/,
         )
         // `Option<Holder>` where `Holder` has a REQUIRED handle field: the
         // absent case passes pointer 0 for it, so the field decodes must stay
         // inside the presence gate or `null` becomes a binding error instead of
         // `None` (PR#294 review).
-        .package(package!().class(data_class!(Holder)))
+        .package(package!()/* Unsupported: this class kind or its binding is not available yet.
+.class(data_class!(Holder))
+*/)
         // #218's last row: a data class that only REACHES a handle, through
         // another data class. `Dossier`'s cascade is a one-liner that assumes
         // `Holder` above was independently made `AutoCloseable` — the JVM
         // harness is what ties the two decisions together, since an emission
         // test never compiles the inner class.
-        .package(package!().class(data_class!(Dossier)))
+        .package(package!()/* Unsupported: this class kind or its binding is not available yet.
+.class(data_class!(Dossier))
+*/)
         // A data class whose FIELDS carry transparent wrappers (#289 + #292):
         // `boxed: Box<Option<i64>>` must cross exactly as `plain: Option<i64>`
         // does — the decoupled `(present, value)` pair — with the `Box` put back
         // on the Rust side. Peeling the field by path segment answered "not
         // optional" and boxed it instead.
-        .package(package!().class(data_class!(WrappedFields)))
+        .package(package!()/* Unsupported: this class kind or its binding is not available yet.
+.class(data_class!(WrappedFields))
+*/)
         // ── Subpackage `model`: enum + value class + nested data class ──────
         .package(
             package!("model")
@@ -232,86 +1540,136 @@ fn main() {
                 // generated interface on an ENUM with a per-decl name, and the
                 // hand-written `Ranked` (which extends `PriorityKind`) is
                 // attached via `.implements` (#54).
-                .class(
+                /* Unsupported: enum interface/implements customization.
+.class(
                     enum_class!(Priority)
                         .interface_name("PriorityKind")
                         .implements("io.prebindgen.covertest.Ranked"),
                 )
+*/
                 // `Reading` as a Kotlin `sealed interface` — a data-carrying
                 // enum whose alternatives are nested classes, with the
                 // payload-less one a `data object`. `variant!(Labeled)
                 // .name("Tagged")` exercises the per-variant rename (which
                 // also renames its `fromParts` slots).
-                .class(sealed_class!(Reading).variant(variant!(Labeled).name("Tagged")))
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(sealed_class!(Reading).variant(variant!(Labeled).name("Tagged")))
+*/
                 // `Lookup` is the sum in RETURN position whose groups own
                 // resources: one alternative carries an opaque handle, one
                 // carries nothing at all. Because it reaches an owned handle it
                 // is emitted `AutoCloseable`, and each variant class overrides
                 // `close()` — that is what lets a container cascade into it
                 // with the same one-liner a handle field gets (#218).
-                .class(sealed_class!(Lookup))
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(sealed_class!(Lookup))
+*/
                 // …and `Verdict` is that container: the sum in DATA-CLASS FIELD
                 // position, the third place a handle is reached through.
                 // `Holder` above is the plain-handle field it must match.
-                .class(data_class!(Verdict))
-                // `Report`'s output boundary is DERIVED from its value form
-                // (`.fields_self_into(fields!(report_into_struct))` below) instead of
-                // being restated field by field — #213. The form it names is
-                // the CONSUMING one, so the fields are moved, not cloned.
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(data_class!(Verdict))
+*/
+                // Report now projects the reduced value form through a borrowing
+                // getter, then delivers its owned handle. The original consuming
+                // expansion remains commented below.
                 .class(ptr_class!(Report))
+                .class(ptr_class!(ReportStruct))
                 // #220: the same derived-boundary idea with an `Option<sum>`
                 // FIELD — the shape that used to be refused on a value form
                 // while a `data_class` accepted it.
-                .class(ptr_class!(Probe))
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(ptr_class!(Probe))
+*/
                 // #142: two bounded-`convert!` leaves — one with a niche of its
                 // own, one without — reached through a CONDITIONAL hoist, so both
                 // are nullable. Only the niche-carrying one keeps a sentinel in
                 // its wrap; the other's absence is the ancestor's `?.`.
-                .class(ptr_class!(Span))
-                .class(ptr_class!(SpanHolder))
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(ptr_class!(Span))
+*/
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(ptr_class!(SpanHolder))
+*/
                 // `Hold`'s payload is a CONVERTED type, so its leaf crosses
                 // through the `convert!(Duration)` chain; `HoldPolicy` puts
                 // that same payload in the data-class-field position.
-                .class(sealed_class!(Hold))
-                .class(data_class!(HoldPolicy))
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(sealed_class!(Hold))
+*/
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(data_class!(HoldPolicy))
+*/
                 // `Observation` carries that sum as a data-class FIELD —
                 // required (`reading`) and optional (`fallback`) — beside
                 // ordinary flattened leaves, so the tag-gated groups must
                 // interleave with them on one `fromParts` call.
-                .class(data_class!(Observation))
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(data_class!(Observation))
+*/
                 // `Marker`'s `Option<enum>` payload is not leaf-shaped, so the
                 // sum degrades to a whole-object crossing instead of failing —
                 // and that path is what reads an enum property back.
-                .class(sealed_class!(Marker))
-                .class(data_class!(Tagged))
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(sealed_class!(Marker))
+*/
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(data_class!(Tagged))
+*/
                 // `Annotated` exercises a NESTED data-class field (`payload`,
                 // recursive fromParts / recursive leaf decode) plus Option<prim> and
                 // Option<enum> FIELDS (each a decoupled `(present, value)` leaf pair).
-                .class(data_class!(Annotated))
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(data_class!(Annotated))
+*/
                 // #144: a NON-NULL enum field (`RepliesConfig.priority`) reached
                 // through an outer `Option<CacheConfig>` param. The outer
                 // optional propagates `nullable_context` into the non-optional
                 // nested struct, so its enum field must decode with exactly one
                 // Elvis default (regression guard for the dead `?: 0 ?: 0`).
-                .class(data_class!(RepliesConfig))
-                .class(data_class!(CacheConfig))
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(data_class!(RepliesConfig))
+*/
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(data_class!(CacheConfig))
+*/
                 // Compose the bounded `Option<Duration>` niche through a
                 // data-class field. Explicit JObject input makes the runtime
                 // execute the whole-object decoder as well as the primitive-
                 // niche `fromParts` encoder (#138).
-                .class(data_class!(DurationBoundary).jobject_input())
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(data_class!(DurationBoundary).jobject_input())
+*/
                 // These small nested classes form a 127-Long-leaf tree. Its
                 // constructor is legal, but flattening the root function input
                 // would consume 256 JVM slots, so it keeps one JObject input.
-                .class(data_class!(ObjectBoundaryLeaf))
-                .class(data_class!(ObjectBoundary2))
-                .class(data_class!(ObjectBoundary4))
-                .class(data_class!(ObjectBoundary8))
-                .class(data_class!(ObjectBoundary16))
-                .class(data_class!(ObjectBoundary32))
-                .class(data_class!(ObjectBoundary64))
-                .class(data_class!(ObjectBoundary63))
-                .class(data_class!(ObjectBoundary).jobject_input())
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(data_class!(ObjectBoundaryLeaf))
+*/
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(data_class!(ObjectBoundary2))
+*/
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(data_class!(ObjectBoundary4))
+*/
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(data_class!(ObjectBoundary8))
+*/
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(data_class!(ObjectBoundary16))
+*/
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(data_class!(ObjectBoundary32))
+*/
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(data_class!(ObjectBoundary64))
+*/
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(data_class!(ObjectBoundary63))
+*/
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(data_class!(ObjectBoundary).jobject_input())
+*/
                 // Fixed-width unsigned mappings: Int / Long widening plus
                 // ULong over a raw jlong bit pattern.
                 .class(data_class!(Unsigned))
@@ -320,34 +1678,47 @@ fn main() {
                 // instance methods (`secs()` / `nanos()`) whose receiver crosses
                 // as those field leaves, and `Vec<Stamp>` surfaces as
                 // `List<Stamp>`.
-                .class(
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(
                     data_class!(Stamp)
                         .method(fun!(stamp_secs))
                         .method(fun!(stamp_nanos)),
                 )
+*/
                 // `BlobValue` is the array-backed EQUALITY probe: a raw-bytes
                 // field beside a scalar, plus a nested data class. Both compare
                 // by identity in Kotlin unless the binding says otherwise.
-                .class(data_class!(BlobValue).jobject_input())
+                /* Unsupported: direct jobject input is not available yet.
+.class(data_class!(BlobValue).jobject_input())
+*/
+                // Value records cross as fields and are reconstructed automatically.
+                .class(data_class!(BlobValue))
+                .class(data_class!(Stamp))
                 // Fixed-size arrays of every JNI-primitive element.
-                .class(data_class!(Arrays)),
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(data_class!(Arrays))
+*/,
         )
         // ── Subpackage `errors`: the Result error channel ───────────────────
-        .package(package!("errors").class(
+        .package(package!("errors")/* Unsupported: this class kind or its binding is not available yet.
+.class(
             // `StorageError` is the `E` of a fallible `Result`; its
             // boundary shape is declared with `expand_return!` below.
             ptr_class!(StorageError).method(fun!(storage_error_message)),
-        ))
+        )
+*/)
         // `StorageError`'s default return fields make the generated `onError`
         // handler receive the decomposed error: the `message` string (name
         // inherited from the class member) plus — via `.field_self()` — the
         // error handle itself (an owned `StorageError` the handler must
         // `close()`).
-        .expand(
+        /* Unsupported: this expansion needs unsupported conversions.
+.expand(
             expand_return!(StorageError)
                 .field(fun!(storage_error_message))
                 .field_self(),
         )
+*/
         // ── Subpackage `analytics`: param-variant / return-field defaults on `Summary`
         .package(
             package!("analytics")
@@ -358,7 +1729,8 @@ fn main() {
                 // `.gc_managed()` exercise: unreachable Summary handles are
                 // freed by the shared Cleaner; close/take/by-value consumption
                 // settle the release ticket first (see the Test.kt section).
-                .class(
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(
                     ptr_class!(Summary)
                         .gc_managed()
                         .constructor(fun!(summary_new).name("of"))
@@ -383,12 +1755,14 @@ fn main() {
                                 .sig(sig!((count: i64, mean: f64) -> Result<Summary, String>)),
                         ),
                 )
+*/
                 // `Archive` holds the latest `Summary` and returns it BORROWED
                 // (`Option<&Summary>`) — the JVM binding clones it into a fresh owned
                 // handle (the zenoh-flat borrowed-accessor shape). Its Kotlin class is
                 // RENAMED via the per-declaration `.name()` override (the type-level
                 // dual of the per-fn `.name`; literal, bypasses the mangle closures).
-                .class(ptr_class!(Archive).name("SummaryVault")),
+                .class(ptr_class!(Archive).name("SummaryVault"))
+                .class(ptr_class!(Summary).name("SummaryValue")),
         )
         // `Summary` default input: rebuilt from the `of` constructor's
         // ingredients OR passed as an existing handle (runtime-selected). This
@@ -401,6 +1775,7 @@ fn main() {
                 .variant(fun!(summary_new))
                 .variant_self(),
         )
+
         // `Summary` default output: decomposed `(count, total)` leaves, names
         // inherited from the class members.
         .expand(
@@ -408,6 +1783,7 @@ fn main() {
                 .field(fun!(summary_count))
                 .field(fun!(summary_total)),
         )
+
         // `Report` default output DERIVED from its value form (#213): the
         // leaves come from `ReportStruct`'s fields, so the list cannot drift
         // from the struct the way a restated one does. Each field still crosses
@@ -415,18 +1791,26 @@ fn main() {
         // into `(count, total)` rather than becoming a handle, `origin` inlines
         // its `Stamp` fields, `taken` stays one `Stamp?` leaf, and `outcome`
         // decomposes into a selector plus one group per alternative.
-        .expand(expand_return!(Report).fields_self_into(fields!(report_into_struct)))
+        /* Unsupported: this expansion needs unsupported conversions.
+.expand(expand_return!(Report).fields_into(fields!(report_into_struct)))
+*/
         // #142: `Span`'s value form is two bounded leaves; `SpanHolder` reaches
         // it through an `Option`, so both become nullable. `delay` keeps its own
         // niche sentinel, `required` takes none — a sentinel is the leaf's own
         // `None`, never an ancestor's.
-        .expand(expand_return!(Span).fields(fields!(span_to_struct)))
-        .expand(expand_return!(SpanHolder).field(fun!(span_holder_span)))
+        /* Unsupported: this expansion needs unsupported conversions.
+.expand(expand_return!(Span).fields(fields!(span_to_struct)))
+*/
+        /* Unsupported: this expansion needs unsupported conversions.
+.expand(expand_return!(SpanHolder).field(fun!(span_holder_span)))
+*/
         // #220: `ProbeStruct.outcome` is `Option<Lookup>`. Its whole segment
         // gates together — one tuple bind whose absent arm defaults every slot
         // — because a sum's leaves are not independent. The selector boxes, so
         // JVM null is "no sum" and cannot be read as `Lookup.Absent` (tag 0).
-        .expand(expand_return!(Probe).fields(fields!(probe_to_struct)))
+        /* Unsupported: this expansion needs unsupported conversions.
+.expand(expand_return!(Probe).fields(fields!(probe_to_struct)))
+*/
         // `Ledger` reaches that same derived boundary through an `Option`, so
         // `Report`'s value form is hoisted CONDITIONALLY — built in the `Some`
         // arm, its leaves (the sum among them) sharing one `match`, null in the
@@ -434,11 +1818,13 @@ fn main() {
         // hands over a borrow, `archived` an owned report the by-value form
         // takes directly — `Report` is not `Clone`, so cloning it here would not
         // compile.
-        .expand(
+        /* Unsupported: this expansion needs unsupported conversions.
+.expand(
             expand_return!(Ledger)
                 .field(fun!(ledger_filed))
                 .field(fun!(ledger_archived)),
         )
+*/
         // ── Base-package handle type: `Storage` + scalar members ────────────
         // Back in the base package so the typed handle classes live alongside
         // `Payload`.
@@ -447,25 +1833,35 @@ fn main() {
                 // `#[prebindgen]` consts: each surfaces as a generated nullary JNI
                 // getter extern + an eagerly-initialized top-level Kotlin `val`
                 // (`COVER_MAGIC: Long`, `COVER_TAG: String`) in the base package.
-                .constant(constant!(COVER_MAGIC))
-                .constant(constant!(COVER_TAG))
+                /* Unsupported: this builder feature is not implemented.
+.constant(constant!(COVER_MAGIC))
+*/
+                /* Unsupported: this builder feature is not implemented.
+.constant(constant!(COVER_TAG))
+*/
                 // Fn-sourced constant: a nullary `#[prebindgen]` fn surfaced
                 // as an eagerly-initialized top-level `val`
                 // (`COVER_TAG_RUNTIME: String`) — the value comes from the
                 // fn at class-load, not from a Rust `const`.
-                .constant(constant!(COVER_TAG_RUNTIME).fun(fun!(cover_tag_runtime)))
+                /* Unsupported: this builder feature is not implemented.
+.constant(constant!(COVER_TAG_RUNTIME).fun(fun!(cover_tag_runtime)))
+*/
                 // Binding-local-fn-sourced constant (`.with`, the const
                 // analog of convert!'s `_with`): a nullary fn in THIS crate,
                 // named by path, stated value type.
-                .constant(constant!(COVER_VERSION).with(ty!(String), path!(crate::cover_version)))
+                /* Unsupported: this builder feature is not implemented.
+.constant(constant!(COVER_VERSION).with(ty!(String), path!(crate::cover_version)))
+*/
                 // Expression-sourced constant: an arbitrary binding-defined
                 // expression (composing source-crate items via
                 // `use perftest_flat::*;`) evaluated once at class-load —
                 // no dedicated accessor fn in the source crate.
-                .constant(
+                /* Unsupported: this builder feature is not implemented.
+.constant(
                     constant!(COVER_BANNER)
                         .expr(ty!(String), expr!(format!("{COVER_TAG}:{COVER_MAGIC:#x}"))),
                 )
+*/
                 .class(
                     ptr_class!(Storage)
                         // #54: emit the generated `StorageApi` interface (the
@@ -474,20 +1870,36 @@ fn main() {
                         // `StorageApi` — so its defaults call `len()`/`peek()`
                         // with full compiler checking, no hand-editing of
                         // generated code.
-                        .interface()
-                        .implements("io.prebindgen.covertest.CovResource")
-                        .method(fun!(storage_len))
-                        .method(fun!(storage_contains))
-                        .constructor(fun!(storage_with_payload)),
+                        /* Unsupported: this builder feature is not implemented.
+.interface()
+*/
+                        /* Unsupported: this builder feature is not implemented.
+.implements("io.prebindgen.covertest.CovResource")
+*/
+                        /* Unsupported: this builder feature is not implemented.
+.method(fun!(storage_len))
+*/
+                        /* Unsupported: this builder feature is not implemented.
+.method(fun!(storage_contains))
+*/
+                        /* Unsupported: this builder feature is not implemented.
+.constructor(fun!(storage_with_payload))
+*/,
                 )
                 // The callback-handler handles (single payload / whole batch / owned
                 // storage handle).
-                .class(ptr_class!(PayloadHandler))
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(ptr_class!(PayloadHandler))
+*/
                 // `StorageHandler`'s callback receives an OWNED opaque handle
                 // (`Fn(Storage)`): the raw pointer crosses and the generated Kotlin
                 // proxy wraps it into a typed `Storage` and closes it after `run`.
-                .class(ptr_class!(StorageHandler))
-                .class(ptr_class!(PayloadVecHandler)),
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(ptr_class!(StorageHandler))
+*/
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(ptr_class!(PayloadVecHandler))
+*/,
         )
         // ── JNI native-symbol escaping probe (#86) ──────────────────────────
         // Underscores in EVERY symbol component: the `esc_pkg` subpackage and
@@ -497,89 +1909,150 @@ fn main() {
         // extern (`…_escape_1probe_1value`). Kotlin names stay verbatim; the
         // JVM only resolves these if the generator escapes per the JNI spec.
         .package(
-            package!("esc_pkg").class(
+            package!("esc_pkg")/* Unsupported: this class kind or its binding is not available yet.
+.class(
                 ptr_class!(EscapeProbe)
                     .name("Esc_Probe")
                     .constructor(fun!(escape_probe_new))
                     .method(fun!(escape_probe_value)),
-            ),
+            )
+*/,
         )
         // ── Free functions, grouped by subpackage ───────────────────────────
-        // model: enum return/param/option + value-class return + Vec<value> +
-        //        Option<scalar>.
+        // model: value-class return, Vec<value> and Option<scalar>.
+        // Enum entry points are bound in the `enums` package above.
         .package(
             package!("model")
-                .fun(fun!(payload_priority))
-                .fun(fun!(priority_weight))
-                .fun(fun!(priority_or))
                 .fun(fun!(stamp_new))
-                .fun(fun!(stamp_series))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(stamp_series))
+*/
                 // The three convert!-source-kind fns (conversions declared
                 // below): Into/From traits, TryFrom trait, binding-local fns.
-                .fun(fun!(celsius_double))
-                .fun(fun!(percent_scale))
-                .fun(fun!(percent_optional))
-                .fun(fun!(percent_invalid_output))
-                .fun(fun!(label_reverse))
-                .fun(fun!(label_series_echo))
-                .fun(fun!(annotated_new))
-                .fun(fun!(annotated_alternate_value))
-                .fun(fun!(annotated_ttl))
-                .fun(fun!(annotated_priority))
-                .fun(fun!(annotated_payload_value))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(celsius_double))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(percent_scale))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(percent_optional))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(percent_invalid_output))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(label_reverse))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(label_series_echo))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(annotated_new))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(annotated_alternate_value))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(annotated_ttl))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(annotated_priority))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(annotated_payload_value))
+*/
                 // A sum as a data-class field, crossing OUT: the tag plus every
                 // variant's group ride the parent's single `fromParts`.
-                .fun(fun!(observation_new))
-                .fun(fun!(observation_which))
-                .fun(fun!(tagged_new))
-                .fun(fun!(tagged_rank))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(observation_new))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(observation_which))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(tagged_new))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(tagged_rank))
+*/
                 // The same `Option<enum>` payload in RETURN position — the
                 // `synth_sum_leaves` path, which the struct field above does
                 // not reach (it degrades to the whole-object crossing).
-                .fun(fun!(marker_of))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(marker_of))
+*/
                 // A sum as the function's OWN return (and callback argument):
                 // the tag + groups ride the hoisted builder / folder singleton
                 // instead of a parent's `fromParts`. All four positions —
                 // bare, `Option`, `Vec`, callback — plus a group owning a
                 // native handle.
-                .fun(fun!(reading_of))
-                .fun(fun!(reading_maybe))
-                .fun(fun!(reading_series))
-                .fun(fun!(reading_each))
-                .fun(fun!(lookup_of))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(reading_of))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(reading_maybe))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(reading_series))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(reading_each))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(lookup_of))
+*/
                 // #161: the two positions the four above do not reach — a
                 // handle-carrying sum arriving through a CALLBACK, and a sum
                 // returned BORROWED (`&E` / `Option<&E>`).
-                .fun(fun!(lookup_each))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(lookup_each))
+*/
                 // #218: the same handle reached through a data-class FIELD, so
                 // the JVM harness can assert the container's cascade closes it.
-                .fun(fun!(verdict_new))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(verdict_new))
+*/
                 // …and reached one level deeper still, through a nested data
                 // class rather than a sum.
-                .fun(fun!(dossier_new))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(dossier_new))
+*/
                 // #213: the output boundary DERIVED from the type's value form
                 // rather than restated. `report_each` delivers the decomposed
                 // `Report` in one crossing; the leaf list comes from
                 // `ReportStruct`'s fields, so it cannot drift from it.
-                .fun(fun!(report_each))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(report_each))
+*/
                 // #220: the value form whose `outcome` field is `Option<sum>`.
                 // `probe_each` walks the absent case and every alternative, so
                 // one crossing covers the gate and the groups it gates.
-                .fun(fun!(probe_new))
-                .fun(fun!(probe_each))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(probe_new))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(probe_each))
+*/
                 // The same derived boundary reached through an `Option` — a
                 // CONDITIONAL hoist. `ledger_each` delivers both at once, so one
                 // crossing covers the borrowed payload, the owned one, and the
                 // sum each report carries.
-                .fun(fun!(ledger_each))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(ledger_each))
+*/
                 // #142: the holder whose span is optional.
-                .fun(fun!(span_holder_new))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(span_holder_new))
+*/
                 // A transparent wrapper (`Box<Option<String>>`) in and out. The
                 // model erases the `Box`, so this must cross exactly as a
                 // `String?` — and because this crate compiles its generated
                 // binding, a converter that named the wrong type or bridged it
                 // with the wrong number of dereferences fails the build (#270).
-                .fun(fun!(boxed_note_echo))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(boxed_note_echo))
+*/
                 .fun(fun!(plain_note_echo))
                 // Transparent wrappers on the INPUT side (#292 item 3), one per
                 // specialized lowering. These rebuild their parameter rather
@@ -589,55 +2062,109 @@ fn main() {
                 // one shape cannot cover them all. Compiling this crate is the
                 // check: a missing `Box::new` is an `E0308`, invisible to any
                 // text assertion.
-                .fun(fun!(wrapped_fields_sum))
-                .fun(fun!(holder_tag_or))
-                .fun(fun!(boxed_payload_id))
-                .fun(fun!(boxed_opt_payload_id))
-                .fun(fun!(boxed_opt_priority_weight))
-                .fun(fun!(boxed_elem_id_sum))
-                .fun(fun!(boxed_run_id_sum))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(wrapped_fields_sum))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(holder_tag_or))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(boxed_payload_id))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(boxed_opt_payload_id))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(boxed_opt_priority_weight))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(boxed_elem_id_sum))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(boxed_run_id_sum))
+*/
                 // The two spellings of a borrowed run (#384). One type to the
                 // model, so both take the Vec-build path — and the compiled
                 // binding is what proves the emitter serves both, since the
                 // failure was an `E0308` rather than a wrong answer.
-                .fun(fun!(slice_id_sum))
-                .fun(fun!(ref_vec_id_sum))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(slice_id_sum))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(ref_vec_id_sum))
+*/
                 // The same wrapper over a DECOMPOSED return (#292). `Summary`
                 // has an output expansion, so this return takes no converter to
                 // name the spelling for it — the extern binds the value and
                 // matches it, and a `Box` match ergonomics cannot see through
                 // is an `E0308` that only compiling this crate catches.
-                .fun(fun!(boxed_latest))
-                .fun(fun!(ledger_new))
-                .fun(fun!(archive_set_reading))
-                .fun(fun!(archive_reading))
-                .fun(fun!(archive_reading_maybe))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(boxed_latest))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(ledger_new))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(archive_set_reading))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(archive_reading))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(archive_reading_maybe))
+*/
                 // A sum payload that is a CONVERTED type (`convert!(Duration)`),
                 // so its boundary conversion is a chain rather than one wire
                 // converter — exercised as the function's own return and as a
                 // (required + optional) data-class field, the two encoders.
-                .fun(fun!(hold_echo))
-                .fun(fun!(hold_policy_echo))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(hold_echo))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(hold_policy_echo))
+*/
                 // #144: `Option<CacheConfig>` input reaching a non-null enum
                 // field through the nested `RepliesConfig`.
-                .fun(fun!(cache_config_weight))
-                .fun(fun!(object_boundary_value))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(cache_config_weight))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(object_boundary_value))
+*/
                 .fun(fun!(unsigned_round_trip))
                 .fun(fun!(unsigned_optional))
-                .fun(fun!(unsigned_data_maybe))
-                .fun(fun!(unsigned_emit))
-                .fun(fun!(unsigned_series))
+                /* Unsupported: borrowed data-class inputs.
+.fun(fun!(unsigned_data_maybe))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(unsigned_emit))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(unsigned_series))
+*/
                 .fun(fun!(blob_value_new))
                 .fun(fun!(blob_value_echo))
-                .fun(fun!(arrays_echo))
-                .fun(fun!(duration_optional))
-                .fun(fun!(boxed_duration_echo))
-                .fun(fun!(duration_boundary_echo))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(arrays_echo))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(duration_optional))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(boxed_duration_echo))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(duration_boundary_echo))
+*/
                 // The converted analogue of `unsigned_emit`: a whole-value
                 // callback argument, which encodes on its own path rather than
                 // through the data-class or sum emitters.
-                .fun(fun!(duration_emit))
-                .fun(fun!(duration_out_of_range)),
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(duration_emit))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(duration_out_of_range))
+*/,
         )
         // analytics: the param-variant / return-field matrix (type default /
         // per-fn override, in + out). Per-fn overrides reuse the SAME
@@ -645,28 +2172,39 @@ fn main() {
         // identity-only set is the plain form.
         .package(
             package!("analytics")
-                .fun(fun!(storage_summary))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(storage_summary))
+*/
                 // Binding-local FREE FUNCTION: exported like any package fn;
                 // its `&Summary` param resolves through the ordinary borrow
                 // converter, its String return through the ordinary output
                 // converter.
-                .fun(
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(
                     fun!(crate::summary_describe)
                         .sig(sig!((s: &Summary, verbose: bool) -> String))
                         .name("describeSummary"),
                 )
+*/
                 // Single split (#52) on the CLASS-DEFAULT `Summary` variants:
                 // `storageMatchesSummary(count, total, …)` / `(expected, …)`.
-                .fun(fun!(storage_matches_summary).split_on_param("expected"))
-                .fun(
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(storage_matches_summary).split_on_param("expected"))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(
                     fun!(storage_summary_handle)
                         .expand_return(expand_return!(Summary).field_self()),
                 )
-                .fun(
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(
                     fun!(summary_total_raw)
                         .expand_param("s", expand_param!(Summary).variant_self()),
                 )
-                .fun(
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(
                     fun!(storage_summary_full).expand_return(
                         expand_return!(Summary)
                             .field(fun!(summary_count).name("count"))
@@ -674,13 +2212,15 @@ fn main() {
                             .field_self(),
                     ),
                 )
+*/
                 // Binding-local CONDITIONAL field (`field!` + `.with(ty, path)`):
                 // the handle leaf is delivered only when the binding-side
                 // predicate (`crate::summary_if_nonempty`, src/lib.rs) says
                 // re-using the value is worth it — nullable identity leaf,
                 // null when the condition fails. The condition is binding
                 // policy, so it lives in THIS crate, not the source crate.
-                .fun(
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(
                     fun!(storage_summary_probe).expand_return(
                         expand_return!(Summary)
                             .field(fun!(summary_count).name("count"))
@@ -692,12 +2232,14 @@ fn main() {
                             ),
                     ),
                 )
+*/
                 // Per-fn split (#52): a per-fn `.expand_param` variant override
                 // (demoing the override) whose `expected` param is then split
                 // into typed overloads `storageExpectSummary(count, total, …)` /
                 // `(expected, …)` on top of the selector form (which Test.kt
                 // still calls directly).
-                .fun(
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(
                     fun!(storage_expect_summary)
                         .expand_param(
                             "expected",
@@ -707,42 +2249,55 @@ fn main() {
                         )
                         .split_on_param("expected"),
                 )
+*/
                 // Cartesian-product split (#52): TWO `Summary` params each split
                 // → the 2×2 product of typed overloads (all combinations
                 // distinct: build/build, build/handle, handle/build, handle/handle).
-                .fun(
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(
                     fun!(summary_prefer)
                         .split_on_param("primary")
                         .split_on_param("fallback"),
                 )
+*/
                 // Split × builder-delivered return (#87): both params split AND
                 // the `Summary` return crosses via the decomposed builder, so
                 // the wrapper is generic — every overload must re-declare `<R>`.
-                .fun(
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(
                     fun!(summary_merge)
                         .split_on_param("primary")
                         .split_on_param("fallback"),
                 )
+*/
                 // Optional combined-selector expansion: `Option<&Summary>` under
                 // the dual-arm type default — the selector also encodes absence
                 // (`-1` = `None`); the borrow-identity arm clones, so the
                 // caller's handle survives the call.
-                .fun(fun!(summary_total_opt))
+                /* Unsupported: helper source requires multiple source streams.
+.fun(fun!(summary_total_opt))
+*/
                 // Record-built generic folds (#105): `Vec<Summary>` and
                 // `Option<Vec<Summary>>` returns cross as the caller-supplied
                 // `<A>(acc, fold)` surface — decomposed `(count, total)`
                 // leaves per element. The `Option` form returns `A?`: null =
                 // `None` (the fold never invoked), `Some(empty)` = the
                 // untouched accumulator.
-                .fun(fun!(summary_series))
-                .fun(fun!(summary_series_opt))
-                // The borrowed-accessor trio. `archive_latest` suppresses the default
-                // Summary return-field default so the BORROWED handle path (clone into a
-                // fresh owned handle, null when absent) is what crosses.
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(summary_series))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(summary_series_opt))
+*/
+                // The borrowed accessor returns a fresh cloned handle when present.
+                // The owned Summary expansion does not apply to &Summary.
                 .fun(fun!(archive_new))
+                .fun(fun!(archive_store))
+                .fun(fun!(archive_latest).expand_return(expand_return!(Summary).field_self_cloned()))
                 // Single split (#52) on the CLASS-DEFAULT variants, consuming arm.
-                .fun(fun!(archive_store).split_on_param("s"))
-                .fun(fun!(archive_latest).expand_return(expand_return!(Summary).field_self())),
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(archive_store).split_on_param("s"))
+*/,
         )
         // storage: the perf surface (handles, callbacks, Vec, Option) plus the
         // fallible constructor and the Millis wrapper.
@@ -750,43 +2305,181 @@ fn main() {
             package!("storage")
                 .fun(fun!(storage_new))
                 .fun(fun!(storage_get))
-                .fun(fun!(storage_put_by_take))
-                .fun(fun!(storage_put_by_read))
-                .fun(fun!(storage_put_slice))
-                .fun(fun!(storage_get_vec))
-                .fun(fun!(payload_handler_new))
-                .fun(fun!(storage_callback))
-                .fun(fun!(payload_vec_handler_new))
-                .fun(fun!(storage_callback_vec))
-                .fun(fun!(storage_try_with_label))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(storage_put_by_take))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(storage_put_by_read))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(storage_put_slice))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(storage_get_vec).callback_return())
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(payload_handler_new))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(storage_callback))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(payload_vec_handler_new))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(storage_callback_vec))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(storage_try_with_label))
+*/
                 // Two-caller error split (#45): both channels on one wrapper.
-                .fun(fun!(storage_try_from_stamp))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(storage_try_from_stamp))
+*/
                 // Vec<opaque-handle> returns (plain + under the Option niche).
-                .fun(fun!(storage_shards))
-                .fun(fun!(storage_shards_opt))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(storage_shards))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(storage_shards_opt))
+*/
                 // Owned-handle-in-callback pair.
-                .fun(fun!(storage_handler_new))
-                .fun(fun!(storage_emit))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(storage_handler_new))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(storage_emit))
+*/
                 // A 3-opaque-handle call (sorted N-ary handle locking).
-                .fun(fun!(storage_total_len))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(storage_total_len))
+*/
                 // Vec<String> return (single-leaf string fold).
-                .fun(fun!(storage_labels))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(storage_labels))
+*/
                 // Option<data-class> input.
                 .fun(fun!(storage_put_opt))
                 // `.name(...)`: per-function Kotlin rename override. The default name
                 // would be `millisAdd`; force it to `addMillis` to exercise the
                 // override path (the Rust symbol/extern is unaffected).
-                .fun(fun!(millis_add).name("addMillis")),
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(millis_add).name("addMillis"))
+*/,
         )
         // Plain String return, declared in the BASE package (mirroring the
         // base-package classes).
-        .package(package!().fun(fun!(string_new)))
+        .package(
+            package!()
+                .fun(fun!(string_new))
+                .fun(fun!(string_len).expand_param("s",expand_param!(&String).reconstruct()))
+                .fun(fun!(i64_ref_double))
+                // Explicit identity declarations give text and bytes, like the defaults.
+                .fun(
+                    fun!(text_echo)
+                        .expand_param("s", expand_param!(String).variant_self())
+                        .expand_return(expand_return!(String).field_self()),
+                )
+                .fun(
+                    fun!(bytes_echo)
+                        .expand_param("b", expand_param!(Vec<u8>).variant_self())
+                        .expand_return(expand_return!(Vec<u8>).field_self()),
+                ),
+        )
+        // Report projects its supported Summary, Stamp and label fields.
+        // Project those fields before handing ownership of the Report to Kotlin.
+        .expand(expand_return!(Report).fields(fields!(report_to_struct).field("origin", expand_return!(Stamp).field_self())).field_self())
+        .expand(expand_param!(Report).variant_self().variant(fun!(report_new)))
+        .package(package!().fun(fun!(report_new)).fun(fun!(report_into_struct)))
+        .expand(expand_return!(Stamp).field(fun!(stamp_secs)).field(fun!(stamp_nanos)))
+        .expand(expand_return!(Payload).fields(fields!(payload_to_struct)))
+        .expand(expand_param!(Payload).variant(fun!(payload_new)))
+        .package(package!().fun(fun!(payload_new)).fun(fun!(storage_with_payload)).fun(fun!(summary_new)).fun(fun!(summary_total_raw)))
+        .package(
+            package!("primitives")
+                .fun(fun!(primitive_i8))
+                .fun(fun!(primitive_i16))
+                .fun(fun!(primitive_i32))
+                .fun(fun!(primitive_i64))
+                .fun(fun!(primitive_i128))
+                .fun(fun!(primitive_isize))
+                .fun(fun!(primitive_u8))
+                .fun(fun!(primitive_u16))
+                .fun(fun!(primitive_u32))
+                .fun(fun!(primitive_u64))
+                .fun(fun!(primitive_u128))
+                .fun(fun!(primitive_usize))
+                .fun(fun!(primitive_f32))
+                .fun(fun!(primitive_f64))
+                .fun(fun!(primitive_bool))
+                .fun(fun!(primitive_char))
+                .fun(fun!(primitive_unit)),
+        )
+        .package(package!()
+            .fun(fun!(report_label).expand_param("report", expand_param!(Report).variant(fun!(report_from_summary))))
+            .fun(fun!(report_relabel).expand_param("report", expand_param!(Report).variant_self()))
+            .fun(fun!(storage_len)).fun(fun!(storage_contains)).fun(fun!(storage_total_len)).fun(fun!(storage_accumulate_lengths))
+            .fun(fun!(storage_put_by_take)).fun(fun!(summary_merge))
+            .fun(fun!(storage_summary_handle).expand_return(expand_return!(Summary).field_self())))
+        .package(package!("resources")
+            .class(data_class!(ProjectionPair)).class(ptr_class!(ProjectionHandle))
+            .fun(fun!(projection_pair_borrowed).expand_return(expand_return!(ProjectionPair).field_self_cloned()))
+            .fun(fun!(projection_pair_owned)).fun(fun!(projection_pair_callback))
+            .fun(fun!(projection_pair_mixed).expand_return(expand_return!(ProjectionPair).project_self(
+                prebindgen_jni::Projection::owned().field("first", prebindgen_jni::Projection::borrowed()))))
+            .fun(fun!(projection_pair_views).expand_return(expand_return!(ProjectionPair).field_self_into().field_self_cloned()))
+            .fun(fun!(projection_clones)).fun(fun!(projection_drops)))
+        .package(package!("resources")
+            .class(data_class!(ResourceBundle))
+            .class(data_class!(ResourcePair))
+            .class(ptr_class!(OwnedResource))
+            .fun(fun!(resource_bundle_new).expand_return(expand_return!(ResourceBundle).project_self(
+                prebindgen_jni::Projection::owned().field("details", prebindgen_jni::Projection::borrowed()))))
+            .fun(fun!(resource_bundle_default))
+            .fun(fun!(resource_bundle_fields).expand_return(expand_return!(ResourceBundle).fields_into(
+                fields!(resource_bundle_into)
+                    .field("pair", expand_return!(ResourcePair).field_self_into())
+                    .field("details", expand_return!(DataFloats).field_self_cloned()))))
+            .fun(fun!(api_record_new).expand_return(
+                expand_return!(ApiRecord).fields_into(
+                    fields!(api_record_into)
+                    .field("omitted", expand_return!(OwnedResource))
+                    .field("omitted_opt", expand_return!(OwnedResource))
+                    .field("omitted_vec", expand_return!(OwnedResource)))))
+            .fun(fun!(api_record_views).expand_return(expand_return!(ApiRecord)
+                .field(fun!(api_record_count).name("count"))
+                .field(fun!(api_record_label).name("label"))))
+            .fun(fun!(api_record_rows).callback_return_only().expand_return(expand_return!(ApiRecord)
+                .field(fun!(api_record_count).name("count"))
+                .field(fun!(api_record_label).name("label"))))
+            .fun(fun!(owned_resource_id))
+            .fun(fun!(owned_resource_drops)))
+        .package(package!("resourceViews")
+            .fun(fun!(resource_bundle_views).expand_return(
+                expand_return!(ResourceBundle).field_self_into().field(fun!(resource_bundle_label)))))
+        .package(package!("values")
+            .class(data_class!(DataEnvelope).name("Envelope"))
+            .class(data_class!(DataFloats))
+                .class(data_class!(DataPrimitives))
+                .fun(fun!(data_primitives_echo).expand_param("value", expand_param!(DataPrimitives).variant_self().variant(fun!(data_primitives_zero))))
+                .fun(fun!(data_primitives_zero))
+            .fun(fun!(data_envelope_echo))
+                .fun(fun!(data_with_storage))
+                .fun(fun!(data_envelope_constructed).expand_param("value", expand_param!(DataEnvelope).variant(fun!(data_envelope_from_blob))))
+            .fun(fun!(data_floats_echo))
+            .fun(fun!(blob_value_selected).expand_param("value",
+                expand_param!(BlobValue).variant_self().variant(fun!(blob_value_new))))
+            .fun(fun!(blob_value_views).expand_return(
+                expand_return!(BlobValue).field_self_cloned().field_self().field(fun!(blob_value_copy)))))
         // The deliberately-unbound group (C-tier shapes with no JVM mapping):
         // acknowledged so the build log stays free of "skipping undeclared"
         // warnings without emitting anything.
-        .ignore(fun!(string_len))
-        .ignore(matching(|name| name.starts_with("storage_get_into_")))
-        .ignore(fun!(storage_put_by_read_and_update));
+        /* Unsupported: ignore diagnostics are not implemented.
+.ignore(matching(|name| name.starts_with("storage_get_into_")))
+*/
+        /* Unsupported: ignore diagnostics are not implemented.
+.ignore(fun!(storage_put_by_read_and_update))
+*/;
 
     // Two prebindgen sources: the flat crate plus the binding-side helper crate
     // (conversion fns for `convert!`). The registry records each fn's origin from
@@ -796,36 +2489,225 @@ fn main() {
     // so the stamp recorded at capture time (`covertest-helpers`) would not
     // resolve from this crate — `source_named` overrides it with the name this
     // crate actually uses, per directory.
-    let crate_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+    /* Unsupported: source-tree artifact publishing and the old surface report.
+        let crate_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
 
-    // Rust JNI wrappers → src/generated_bindings.rs (committed; included by lib.rs).
-    let rust_dest = std::path::Path::new(&crate_dir)
-        .join("src")
-        .join("generated_bindings.rs");
-    let jni = binding.build().expect("build failed");
-    let rust_path = jni.write_rust(&rust_dest).expect("write_rust failed");
-    println!(
-        "cargo:warning=Generated bindings at: {}",
-        rust_path.display()
-    );
+        // Rust JNI wrappers → src/generated_bindings.rs (committed; included by lib.rs).
+        let rust_dest = std::path::Path::new(&crate_dir)
+            .join("src")
+            .join("generated_bindings.rs");
+        let jni = binding.build().expect("build failed");
+        let rust_path = jni.write_rust(&rust_dest).expect("write_rust failed");
+        println!(
+            "cargo:warning=Generated bindings at: {}",
+            rust_path.display()
+        );
 
-    // Kotlin classes → kotlin/generated/** (picked up by the Gradle source set).
-    let kotlin_root = std::path::Path::new(&crate_dir)
-        .join("kotlin")
-        .join("generated");
-    // The root is prebindgen-owned: `write_kotlin` replaces marked output,
-    // so no consumer-side cleanup is needed.
-    for path in jni.write_kotlin(&kotlin_root).expect("write_kotlin failed") {
-        println!("cargo:warning=Wrote {}", path.display());
-    }
-
-    // The resolved-surface report (C7): committed next to the regen so a
-    // decl's effect is reviewable in a PR without reading generated Kotlin.
-    std::fs::write(
-        std::path::Path::new(&crate_dir)
+        // Kotlin classes → kotlin/generated/ ** (picked up by the Gradle source set).
+        let kotlin_root = std::path::Path::new(&crate_dir)
             .join("kotlin")
-            .join("REPORT.md"),
-        jni.report(),
+            .join("generated");
+        // The root is prebindgen-owned: `write_kotlin` replaces marked output,
+        // so no consumer-side cleanup is needed.
+        for path in jni.write_kotlin(&kotlin_root).expect("write_kotlin failed") {
+            println!("cargo:warning=Wrote {}", path.display());
+        }
+
+        // The resolved-surface report (C7): committed next to the regen so a
+        // decl's effect is reviewable in a PR without reading generated Kotlin.
+        std::fs::write(
+            std::path::Path::new(&crate_dir)
+                .join("kotlin")
+                .join("REPORT.md"),
+            jni.report(),
+        )
+        .expect("write REPORT.md");
+
+    */
+    let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
+    let configured = binding
+        .package(
+            package!("scopedinputs")
+                .fun(fun!(scoped_input_new))
+                .fun(fun!(scoped_input_id))
+                .fun(fun!(scoped_input_drops))
+                .fun(fun!(scoped_input_pair))
+                .fun(
+                    fun!(scoped_input_failure).expand_param(
+                        "second",
+                        expand_param!(OwnedResource).variant(
+                            fun!(scoped_input_checked)
+                                .expand_param(
+                                    "mode",
+                                    expand_param!(i64).variant(
+                                        fun!(scoped_input_mode).expand_param(
+                                            "mode",
+                                            expand_param!(i64).variant_self(),
+                                        ),
+                                    ),
+                                )
+                                .expand_param("value", expand_param!(OwnedResource).variant_self()),
+                        ),
+                    ),
+                ),
+        )
+        .configure()
+        .expect("configure supported declarations");
+    let point = configured
+        .resolve_type(&syn::parse_quote!(ParameterPoint))
+        .unwrap();
+    assert!(configured
+        .record(&point)
+        .unwrap()
+        .fields
+        .iter()
+        .all(|field| { field.metadata.kotlin_type.is_empty() }));
+    let resolved =
+        prebindgen_jni::resolve(configured).expect("resolve class and call declarations");
+    assert!(resolved
+        .record(&point)
+        .unwrap()
+        .fields
+        .iter()
+        .all(|field| { field.metadata.kotlin_type == "kotlin.Long" }));
+    let mut prepared = prebindgen_jni::compile(resolved).expect("compile supported declarations");
+    assert_eq!(
+        prepared
+            .function("canonical_millis_echo")
+            .unwrap()
+            .metadata
+            .len(),
+        2
+    );
+    for name in ["scoped_input_pair", "scoped_input_failure"] {
+        let ty = prepared.function(name).unwrap().params[0].ty.ty.clone();
+        let leaf = prebindgen_declarations::Codec::input_leaf(
+            &prebindgen_jni::JniCodec::raw(),
+            prebindgen_declarations::InputLeaf::new(
+                &prepared,
+                &ty,
+                &(),
+                syn::parse_quote!(scoped_first),
+                syn::parse_quote!(scoped_first_value),
+                &Default::default(),
+            ),
+        )
+        .unwrap();
+        prebindgen_declarations::bind_prepared_input(
+            &mut prepared.function_mut(name).unwrap().metadata[0],
+            0,
+            leaf.into(),
+        )
+        .unwrap();
+    }
+    let mut jni = prebindgen_jni::generate(&prepared).expect("generate mixed input declarations");
+    // Test-only constructor fault injection: handwritten OutputCleanupRow has
+    // the exact generated fields plus an init hook that can throw or take a
+    // handle. All Rust/JNI and collection-decoder code remains generated.
+    assert!(jni
+        .kotlin
+        .remove("io/prebindgen/covertest/cleanup/OutputCleanupRow.kt")
+        .is_some());
+    // A handwritten read-only getter changes its result on a second read. This
+    // exercises input snapshots without changing the declared record surface.
+    assert!(jni
+        .kotlin
+        .remove("io/prebindgen/covertest/typeinputs/TypeInputRow.kt")
+        .is_some());
+    assert!(jni
+        .kotlin
+        .remove("io/prebindgen/covertest/typeinputs/TypeInputHolder.kt")
+        .is_some());
+    // Class/function placement survives moving the native runtime to another root.
+    let relocated = JniGen::builder()
+        .source(perftest_flat::PREBINDGEN_OUT_DIR)
+        .set_package_prefix("com.prebindgen.paramnames")
+        .set_jni_native_init("io.prebindgen.covertest.NativeLibrary.ensureLoaded()")
+        .on_configure(|flat| {
+            flat.metadata.package = "org.prebindgen.paramnames".into();
+            Ok(())
+        })
+        .package(
+            package!()
+                .class(data_class!(ParameterPoint))
+                .fun(fun!(parameter_external)),
+        )
+        .build()
+        .unwrap();
+    jni.rust.push_str(&format!(
+        "\nmod relocated_parameter_names {{ {} }}\n",
+        relocated.rust
+    ));
+    for (path, source) in relocated.kotlin {
+        assert!(jni.kotlin.insert(path, source).is_none());
+    }
+    let independent = input_contracts::generate().expect("generate independent input converter");
+    independent.write_rust("input-contracts.rs").unwrap();
+    for (path, source) in independent.kotlin {
+        assert!(jni.kotlin.insert(path, source).is_none());
+    }
+    let independent = output_contracts::generate().expect("generate independent output converters");
+    independent.write_rust("output-contracts.rs").unwrap();
+    for (path, source) in independent.kotlin {
+        assert!(jni.kotlin.insert(path, source).is_none());
+    }
+    let isolated =
+        output_contracts::generate_isolated_error().expect("isolated custom error output");
+    isolated.write_rust("isolated-errors.rs").unwrap();
+    for (path, source) in isolated.kotlin {
+        assert!(jni.kotlin.insert(path, source).is_none());
+    }
+    for native_check in [
+        "__prebindgen_input_aliases",
+        "DynamicInputs",
+        "FixedInputs",
+        "SharedInputs",
+    ] {
+        assert!(
+            !jni.rust.contains(native_check),
+            "JNI must not emit native alias validation: {native_check}"
+        );
+    }
+    jni.write_rust("bindings.rs").unwrap();
+    std::fs::write(out.join("output-rows.pro"), jni.proguard_rules()).unwrap();
+    let kotlin = out.join("kotlin");
+    if kotlin.exists() {
+        std::fs::remove_dir_all(&kotlin).unwrap();
+    }
+    jni.write_kotlin(&kotlin).unwrap();
+}
+
+fn callback_result_row_input() -> prebindgen_jni::DeclJniExpandParam {
+    expand_param!(CallbackFixedResult).variant_record(param_fields!().field(
+        "character",
+        expand_param!(char).variant(fun!(callback_fixed_marker)),
+    ))
+}
+fn callback_nested_rows_input() -> prebindgen_jni::DeclJniExpandParam {
+    expand_param!(Vec<Option<Vec<CallbackFixedResult>>>).element(
+        expand_param!(Option<Vec<CallbackFixedResult>>)
+            .optional(expand_param!(Vec<CallbackFixedResult>).element(callback_result_row_input())),
     )
-    .expect("write REPORT.md");
+}
+fn callback_mixed_batch_input(
+    borrowed: bool,
+    bulk_tail: bool,
+) -> prebindgen_jni::DeclJniExpandParam {
+    let observed = if borrowed {
+        expand_param!(CallbackReturnResource).variant(fun!(callback_return_resource_copy))
+    } else {
+        expand_param!(CallbackReturnResource).variant_self()
+    };
+    let tail = expand_param!(Vec<CallbackFixedResult>).element(callback_result_row_input());
+    let tail = if bulk_tail { tail.bulk() } else { tail };
+    expand_param!(CallbackNestedBatch).variant_record(
+        param_fields!()
+            .field("observed", observed)
+            .field("groups", callback_nested_rows_input().bulk())
+            .field(
+                "marker",
+                expand_param!(char).variant(fun!(callback_fixed_marker)),
+            )
+            .field("tail", tail),
+    )
 }

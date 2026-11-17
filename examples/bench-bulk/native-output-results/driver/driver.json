@@ -1,0 +1,121 @@
+{
+  "builds": {
+    "before": {
+      "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-native-output-baseline",
+      "commit": "dea0fbcea7f8d067dad3f150ec3837316de6145e",
+      "dirty_paths": [],
+      "profile": "release",
+      "profile_environment": {},
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8",
+      "path_dependency_repositories": [
+        {
+          "repository": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-native-output-baseline",
+          "commit": "dea0fbcea7f8d067dad3f150ec3837316de6145e",
+          "packages": [
+            "prebindgen",
+            "prebindgen-conversions",
+            "prebindgen-declarations",
+            "prebindgen-flat",
+            "prebindgen-jni",
+            "prebindgen-jni-runtime",
+            "prebindgen-proc-macro",
+            "prebindgen-reprc",
+            "prebindgen-runtime"
+          ],
+          "contains_fixture": true
+        }
+      ],
+      "cargo_config_sha256": {},
+      "cargo": "cargo 1.98.0 (797e8a9bc 2026-08-05)",
+      "dependency_lock_sha256": "50aec39504ae6c12f747a6737ac6ff1de1aa0ea743f3fb86370345e7d07a551f",
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "native_allocations": false,
+      "kotlin": "info: kotlinc-jvm 2.4.21 (JRE 11.0.29+7)",
+      "fixture_sha256": {
+        "flat.rs": "c6bbecbf78d9c60aa6ea0ff5d09f129e5b3bc3838add408300ee4cb4c084dc2e",
+        "bindings.rs": "43134d021f67499143b58866598e49cc00320deaee9464e8c144a7cbfef68845",
+        "Bench.kt": "b8572ad9f0b02220a1235a61cf40c201d0dfa7eca3ba2e7d5a991e104b9a5884",
+        "AllocationBench.kt": "b639a9d46117d1d013140ef413b94a033cab778cbf547c76eb6918f7780fe792",
+        "native_allocations.rs": "280a2ccd7efb4e33dbadbaf4b0e3cc2041c9644f8775736b828aed3ba8cb78d3",
+        "run.py": "4442840bdcd52c838a6f9f555baf7b7742aa68b21d75189e1e81e02ca3ff99c1",
+        "Cargo.lock.snapshot": "50aec39504ae6c12f747a6737ac6ff1de1aa0ea743f3fb86370345e7d07a551f"
+      },
+      "jar": "/tmp/native-output-before-normal/bench.jar",
+      "library": "/tmp/native-output-before-normal/target/release/libbulk_bench.so",
+      "jar_sha256": "45b7a920d22faad7cfa84226d45651d62ffe0a8222e34c70ba5bb15915adc05c",
+      "native_sha256": "7def28150d404cfe7d2ddcf35d23bb56a5e12a65263684e206b3cf22d9595dbc"
+    },
+    "after": {
+      "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-native-output-owners",
+      "commit": "7b358a8fc5a326bc28c2e79c58ac11ed894a4264",
+      "dirty_paths": [],
+      "profile": "release",
+      "profile_environment": {},
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8",
+      "path_dependency_repositories": [
+        {
+          "repository": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-native-output-owners",
+          "commit": "7b358a8fc5a326bc28c2e79c58ac11ed894a4264",
+          "packages": [
+            "prebindgen",
+            "prebindgen-conversions",
+            "prebindgen-declarations",
+            "prebindgen-flat",
+            "prebindgen-jni",
+            "prebindgen-jni-runtime",
+            "prebindgen-proc-macro",
+            "prebindgen-reprc",
+            "prebindgen-runtime"
+          ],
+          "contains_fixture": true
+        }
+      ],
+      "cargo_config_sha256": {},
+      "cargo": "cargo 1.98.0 (797e8a9bc 2026-08-05)",
+      "dependency_lock_sha256": "50aec39504ae6c12f747a6737ac6ff1de1aa0ea743f3fb86370345e7d07a551f",
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "native_allocations": false,
+      "kotlin": "info: kotlinc-jvm 2.4.21 (JRE 11.0.29+7)",
+      "fixture_sha256": {
+        "flat.rs": "c6bbecbf78d9c60aa6ea0ff5d09f129e5b3bc3838add408300ee4cb4c084dc2e",
+        "bindings.rs": "43134d021f67499143b58866598e49cc00320deaee9464e8c144a7cbfef68845",
+        "Bench.kt": "b8572ad9f0b02220a1235a61cf40c201d0dfa7eca3ba2e7d5a991e104b9a5884",
+        "AllocationBench.kt": "b639a9d46117d1d013140ef413b94a033cab778cbf547c76eb6918f7780fe792",
+        "native_allocations.rs": "280a2ccd7efb4e33dbadbaf4b0e3cc2041c9644f8775736b828aed3ba8cb78d3",
+        "run.py": "4442840bdcd52c838a6f9f555baf7b7742aa68b21d75189e1e81e02ca3ff99c1",
+        "Cargo.lock.snapshot": "50aec39504ae6c12f747a6737ac6ff1de1aa0ea743f3fb86370345e7d07a551f"
+      },
+      "jar": "/tmp/native-output-after-normal-v3/bench.jar",
+      "library": "/tmp/native-output-after-normal-v3/target/release/libbulk_bench.so",
+      "jar_sha256": "45b7a920d22faad7cfa84226d45651d62ffe0a8222e34c70ba5bb15915adc05c",
+      "native_sha256": "112d07bd328d79873e55ba422afc85cd047fd64d77a61f027806efa3f94e264b"
+    }
+  },
+  "original_source_sha256": "b8572ad9f0b02220a1235a61cf40c201d0dfa7eca3ba2e7d5a991e104b9a5884",
+  "instrumented_source_sha256": "88035b24d4b4326d9714d7e59fdff3dc4ae2d3783e5e0d208defced55f3ffd35",
+  "driver_jar": "/tmp/native-output-final-driver/driver.jar",
+  "driver_jar_sha256": "172c5a401f755f766e6445208d0b2475599271b7d3e17a7b5e7b17c32012dac6",
+  "compiler": "info: kotlinc-jvm 2.4.21 (JRE 11.0.29+7)",
+  "compile_command": [
+    "/snap/kotlin/current/bin/kotlinc",
+    "-cp",
+    "/tmp/native-output-before-normal/bench.jar",
+    "/tmp/native-output-final-driver/Bench.kt",
+    "-nowarn",
+    "-d",
+    "/tmp/native-output-final-driver/driver.jar"
+  ],
+  "prepare_sha256": "7e963071c915089081197e6c8b74944427287edb0225d3f1a4c9f39566de3dbd"
+}

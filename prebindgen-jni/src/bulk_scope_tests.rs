@@ -1,0 +1,205 @@
+//! Bulk is an inherited encoding, not a second sequence delivery policy.
+use super::*;
+
+use prebindgen_conversions::{InputConversion, WireNode};
+use prebindgen_declarations::SequenceDelivery;
+
+fn sequence(child: JniOutput) -> JniOutput {
+    JniOutput::Unary {
+        operation: JniOutputUnary::Sequence {
+            delivery: SequenceDelivery::Value,
+            mode: None,
+        },
+        child: Box::new(child),
+    }
+}
+fn prepared() -> (JniBindings, JniOutputPlan<JniWire>) {
+    let source = syn::parse_file("pub fn rows()->Vec<Vec<i64>>{}").unwrap();
+    let model = JniGen::builder()
+        .items(
+            source
+                .items
+                .into_iter()
+                .map(|item| (item, Default::default())),
+        )
+        .set_package_prefix("test")
+        .package(package!().fun(fun!(rows)))
+        .prepare()
+        .unwrap();
+    let recipe = sequence(sequence(JniOutput::Leaf(JniOutputLeafOp::Value))).bulk();
+    let codec = JniCodec::raw();
+    let mut plan = prebindgen_declarations::Compiler::new(&model, &codec, "ret".into())
+        .output_root(
+            &model.function("rows").unwrap().ret.ty,
+            &recipe,
+            &(),
+            prebindgen_conversions::source_result_expr(),
+            false,
+            true,
+        )
+        .unwrap();
+    plan.outcomes.binding_failure = codec.binding_failure_layout(&()).unwrap();
+    codec.finish_output(&mut plan, &()).unwrap();
+    (model, plan)
+}
+fn prefer_jvm_rows(node: &mut JniOutputWireNode) {
+    match node {
+        WireNode::Annotation { child, .. } | WireNode::Chain { child, .. } => {
+            prefer_jvm_rows(child)
+        }
+        WireNode::Container { meta, child, .. } => {
+            if matches!(
+                meta,
+                JniOutputWireContainer::KListArrayRows | JniOutputWireContainer::KListClassRows
+            ) {
+                *meta = JniOutputWireContainer::KListClassRows;
+            }
+            prefer_jvm_rows(child);
+        }
+        WireNode::Branch { children, .. } => children.iter_mut().for_each(prefer_jvm_rows),
+        WireNode::Leaf(_) => {}
+    }
+}
+
+#[test]
+fn one_bulk_scope_controls_nested_rows_and_overrides_ordinary_jvm_preferences() {
+    let (mut model, mut plan) = prepared();
+    assert_eq!(
+        prebindgen_conversions::wire_definitions(std::iter::once(&plan.outcomes.success))
+            .filter(|wire| matches!(wire.kind, JniWire::FrameRowRange { .. }))
+            .count(),
+        2
+    );
+    bindings::set_output(&mut model, "rows", plan.clone().into()).unwrap();
+    let original = generate(&model).unwrap();
+    let shape = group::error_wire_shape(&plan.outcomes.success).unwrap();
+    // Changing an ordinary JVM preference must not add JVM row classes or alter
+    // decoding, cleanup or native code inside the inherited bulk scope.
+    prefer_jvm_rows(&mut plan.outcomes.success);
+    assert_eq!(
+        shape,
+        group::error_wire_shape(&plan.outcomes.success).unwrap()
+    );
+    bindings::set_output(&mut model, "rows", plan.into()).unwrap();
+    let changed = generate(&model).unwrap();
+    assert_eq!(original.rust, changed.rust);
+    assert_eq!(original.kotlin, changed.kotlin);
+}
+
+#[test]
+fn complete_boundaries_reject_native_rows_without_a_scope_and_object_rows_inside_it() {
+    let (_, plan) = prepared();
+    let mut root = plan.outcomes.success;
+    let WireNode::Container {
+        meta: JniOutputWireContainer::BulkFrame,
+        child,
+        ..
+    } = &mut root
+    else {
+        panic!()
+    };
+    // A partial conversion can be validated before the compiler attaches Bulk.
+    group::validate_fragment(child).unwrap();
+    assert!(group::validate_layout(child)
+        .unwrap_err()
+        .contains("incompatible"));
+    let WireNode::Container { wires, .. } = child.as_mut() else {
+        panic!()
+    };
+    wires[0].kind = JniWire::KRowArray {
+        condition: "true".into(),
+        null_niche_available: true,
+    };
+    assert!(group::validate_layout(&root)
+        .unwrap_err()
+        .contains("incompatible"));
+}
+
+#[test]
+fn bulk_scope_does_not_leak_to_the_next_function_parameter() {
+    let source = syn::parse_file("pub fn mixed(packed:Vec<i64>,ordinary:Vec<i64>){}").unwrap();
+    let model = JniGen::builder()
+        .items(
+            source
+                .items
+                .into_iter()
+                .map(|item| (item, Default::default())),
+        )
+        .set_package_prefix("test")
+        .package(package!().fun(fun!(mixed).expand_param("packed", JniInputConfig::auto().bulk())))
+        .prepare()
+        .unwrap();
+    let call = model.function("mixed").unwrap().metadata[0].call().unwrap();
+    let packed = group::argument_parameters(call.inputs[0].input_node()).collect::<Vec<_>>();
+    let ordinary = group::argument_parameters(call.inputs[1].input_node()).collect::<Vec<_>>();
+    assert!(matches!(packed[0].kind, JniWire::KBulkBytes { .. }));
+    assert!(
+        matches!(ordinary.as_slice(), [wire] if matches!(wire.kind, JniWire::KRowArray { .. }))
+    );
+    generate(&model).unwrap();
+}
+
+#[test]
+fn native_row_compatibility_distinguishes_enum_unions_from_selector_fields() {
+    let model = JniGen::builder()
+        .items(
+            syn::parse_file("pub enum Event { A(i64), B(i64) }pub fn rows()->Vec<Event>{}")
+                .unwrap()
+                .items
+                .into_iter()
+                .map(|item| (item, Default::default())),
+        )
+        .set_package_prefix("test")
+        .package(package!().class(sealed_class!(Event)).fun(fun!(rows)))
+        .prepare()
+        .unwrap();
+    let source = model.type_ref(&syn::parse_quote!(Event)).unwrap();
+    let leaf = |name: &str| {
+        WireNode::Leaf(vec![prebindgen_conversions::Wire {
+            name: syn::parse_str(name).unwrap(),
+            kind: JniWire::scalar(Primitive::I64),
+        }])
+    };
+    let rows = |meta: JniInputWireBranch| {
+        let element: JniInputWireNode = WireNode::Branch {
+            meta,
+            controls: vec![prebindgen_conversions::Wire {
+                name: syn::parse_quote!(tag),
+                kind: JniWire::selector(),
+            }],
+            children: vec![leaf("a"), leaf("b")],
+        };
+        // Derive each layout independently. Neither wire tree retains one.
+        let layout = bulk::record(&element, &model.types).unwrap();
+        let node = WireNode::Container {
+            meta: JniInputWireContainer::BulkFrame,
+            wires: vec![prebindgen_conversions::Wire {
+                name: syn::parse_quote!(frame),
+                kind: JniWire::KBulkBytes {
+                    null_niche_available: false,
+                },
+            }],
+            child: Box::new(WireNode::Container {
+                meta: JniInputWireContainer::KList,
+                wires: vec![prebindgen_conversions::Wire {
+                    name: syn::parse_quote!(rows),
+                    kind: JniWire::FrameRowRange {
+                        condition: "true".into(),
+                    },
+                }],
+                child: Box::new(element),
+            }),
+        };
+        group::validate_layout(&node).unwrap();
+        (node, layout)
+    };
+    let (enumeration, enum_layout) = rows(JniInputWireBranch::KEnumParams { r_type: source });
+    let (selector, selector_layout) = rows(JniInputWireBranch::RChoices);
+    assert_ne!(enum_layout.key, selector_layout.key);
+    assert!(enum_layout.definitions.to_string().contains("union"));
+    assert!(!selector_layout.definitions.to_string().contains("union"));
+    assert_ne!(
+        group::error_wire_shape(&enumeration).unwrap(),
+        group::error_wire_shape(&selector).unwrap()
+    );
+}

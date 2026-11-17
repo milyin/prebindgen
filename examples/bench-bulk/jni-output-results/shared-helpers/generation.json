@@ -1,0 +1,29 @@
+[
+  {
+    "file": "examples/covertest-kotlin/generated/bindings.rs",
+    "before_lines": 92445,
+    "after_lines": 90222,
+    "before_bytes": 4281020,
+    "after_bytes": 4132737,
+    "before_local_cleanup_definitions": 81,
+    "after_shared_cleanup_definitions": 30
+  },
+  {
+    "file": "examples/bench-bulk/generated/plain.rs",
+    "before_lines": 7330,
+    "after_lines": 7265,
+    "before_bytes": 349039,
+    "after_bytes": 345208,
+    "before_local_cleanup_definitions": 6,
+    "after_shared_cleanup_definitions": 3
+  },
+  {
+    "file": "examples/bench-bulk/generated/bulk.rs",
+    "before_lines": 7791,
+    "after_lines": 7743,
+    "before_bytes": 360671,
+    "after_bytes": 358237,
+    "before_local_cleanup_definitions": 4,
+    "after_shared_cleanup_definitions": 3
+  }
+]

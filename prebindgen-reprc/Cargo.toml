@@ -1,0 +1,18 @@
+[package]
+name = "prebindgen-reprc"
+description = "Shared C-representation records and target-measured layouts for prebindgen"
+repository.workspace = true
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+syn.workspace = true
+quote.workspace = true
+proc-macro2.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

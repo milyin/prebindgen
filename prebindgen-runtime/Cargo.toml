@@ -1,0 +1,9 @@
+[package]
+name = "prebindgen-runtime"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+tracing = { version = "0.1", default-features = false, features = ["std"] }

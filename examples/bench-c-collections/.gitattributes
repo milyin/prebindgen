@@ -1,0 +1,2 @@
+# Preserve the measured RFC-style CSV bytes and their recorded hashes.
+results/**/*.csv whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol

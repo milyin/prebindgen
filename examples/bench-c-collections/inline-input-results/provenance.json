@@ -1,0 +1,828 @@
+{
+  "builds": {
+    "4ffb3ab7f5535f557fc3a4be2d3864ecf9ae133403819e787bce1bdc746f3971": {
+      "revisions": {
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-inline-owner-input-rows-base": "4aa79f6c51842995e6a0cd1d98f170ac5d81140b",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-inline-owner-input-rows": "32ca5b6506581e7691c0519d8bd9934ecbcc4cef"
+      },
+      "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-inline-owner-input-rows-base",
+      "count_allocations": true,
+      "alias_checks": true,
+      "fixture_sha256": {
+        "flat.rs": "bde401f5c55c3f7d4d7315b132c53337c21ac9f615615130df0e718623fab423",
+        "bindings.rs": "0cdbd5d1752754adb0df6074f7932d2d8014bc0239a189b078d4f316e2091b07",
+        "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+        "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+        "input-driver.c": "23bbc741574c7b73fccc06481f081cd749f2ec8a749408aff1fd5016df13b041",
+        "build.py": "0ba2154e33008f3963aba8ade65d779fd740f5d8108a21722b11b7f2288786a9",
+        "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+      },
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+      "compile_command": [
+        "cc",
+        "-std=gnu11",
+        "-O3",
+        "-fno-plt",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-inline-owner-input-rows/examples/bench-c-collections/driver.c",
+        "-I/tmp/c-alias-bench-target/release/build/c-collection-bench-17bbd3a580afd43d/out",
+        "-L/tmp/c-inline-before-count/frozen",
+        "-lc_collection_bench",
+        "-Wl,-rpath,/tmp/c-inline-before-count/frozen",
+        "-ldl",
+        "-o",
+        "/tmp/c-inline-before-count/driver"
+      ],
+      "cargo_command": [
+        "cargo",
+        "build",
+        "--offline",
+        "--locked",
+        "--release",
+        "--message-format=json",
+        "--features",
+        "count-allocations"
+      ],
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "lock_sha256": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d",
+      "cargo_configs": {},
+      "profile_environment": {},
+      "library": "/tmp/c-inline-before-count/frozen/libc_collection_bench.so",
+      "library_sha256": "4ffb3ab7f5535f557fc3a4be2d3864ecf9ae133403819e787bce1bdc746f3971",
+      "driver": "/tmp/c-inline-before-count/driver",
+      "driver_sha256": "ba36a2628406a093e352fcd11462b226d168646f20882393883f6a76376c6523",
+      "input_driver": "/tmp/c-inline-before-count/input-driver",
+      "input_driver_sha256": "df5b39be7fae5235bfe9ef5936b549859d4df46d7754fb57f91d52cd14bdff37",
+      "input_compile_command": [
+        "cc",
+        "-std=gnu11",
+        "-O3",
+        "-fno-plt",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-inline-owner-input-rows/examples/bench-c-collections/input-driver.c",
+        "-I/tmp/c-alias-bench-target/release/build/c-collection-bench-17bbd3a580afd43d/out",
+        "-L/tmp/c-inline-before-count/frozen",
+        "-lc_collection_bench",
+        "-Wl,-rpath,/tmp/c-inline-before-count/frozen",
+        "-ldl",
+        "-o",
+        "/tmp/c-inline-before-count/input-driver"
+      ],
+      "header_sha256": "70b2f019bb66f89e585cd9fc69cd6626e9be4abad4c3a48844172c1982ddd254",
+      "header_abi_sha256": "c70740c4cb781d7e4edf43757162225f75f6cc94090a73c2199b5aa19efe0779",
+      "bindings_sha256": "358e4dc4f8d0c2e15f1d1a6505e3fde2f047fd95e9654e8096a7b54928803006"
+    },
+    "1781e534d93b6d54a2eb04b693c49a69edc912ddb7a209f62fd2fa047b17ff42": {
+      "revisions": {
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-inline-owner-input-rows": "32ca5b6506581e7691c0519d8bd9934ecbcc4cef"
+      },
+      "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-inline-owner-input-rows",
+      "count_allocations": true,
+      "alias_checks": true,
+      "fixture_sha256": {
+        "flat.rs": "bde401f5c55c3f7d4d7315b132c53337c21ac9f615615130df0e718623fab423",
+        "bindings.rs": "0cdbd5d1752754adb0df6074f7932d2d8014bc0239a189b078d4f316e2091b07",
+        "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+        "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+        "input-driver.c": "23bbc741574c7b73fccc06481f081cd749f2ec8a749408aff1fd5016df13b041",
+        "build.py": "0ba2154e33008f3963aba8ade65d779fd740f5d8108a21722b11b7f2288786a9",
+        "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+      },
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+      "compile_command": [
+        "cc",
+        "-std=gnu11",
+        "-O3",
+        "-fno-plt",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-inline-owner-input-rows/examples/bench-c-collections/driver.c",
+        "-I/tmp/c-alias-bench-target/release/build/c-collection-bench-b68b25b15a1dfc8e/out",
+        "-L/tmp/c-inline-after-count/frozen",
+        "-lc_collection_bench",
+        "-Wl,-rpath,/tmp/c-inline-after-count/frozen",
+        "-ldl",
+        "-o",
+        "/tmp/c-inline-after-count/driver"
+      ],
+      "cargo_command": [
+        "cargo",
+        "build",
+        "--offline",
+        "--locked",
+        "--release",
+        "--message-format=json",
+        "--features",
+        "count-allocations"
+      ],
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "lock_sha256": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d",
+      "cargo_configs": {},
+      "profile_environment": {},
+      "library": "/tmp/c-inline-after-count/frozen/libc_collection_bench.so",
+      "library_sha256": "1781e534d93b6d54a2eb04b693c49a69edc912ddb7a209f62fd2fa047b17ff42",
+      "driver": "/tmp/c-inline-after-count/driver",
+      "driver_sha256": "58dcd677abd4e6eae5b35016b537592777618b2b852befe78667aef8bc6dff68",
+      "input_driver": "/tmp/c-inline-after-count/input-driver",
+      "input_driver_sha256": "ffc9c9cf2ba907848df66bc0086ef71679231b2dd3cadb6f5b64ab5bcb1d0437",
+      "input_compile_command": [
+        "cc",
+        "-std=gnu11",
+        "-O3",
+        "-fno-plt",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-inline-owner-input-rows/examples/bench-c-collections/input-driver.c",
+        "-I/tmp/c-alias-bench-target/release/build/c-collection-bench-b68b25b15a1dfc8e/out",
+        "-L/tmp/c-inline-after-count/frozen",
+        "-lc_collection_bench",
+        "-Wl,-rpath,/tmp/c-inline-after-count/frozen",
+        "-ldl",
+        "-o",
+        "/tmp/c-inline-after-count/input-driver"
+      ],
+      "header_sha256": "70b2f019bb66f89e585cd9fc69cd6626e9be4abad4c3a48844172c1982ddd254",
+      "header_abi_sha256": "c70740c4cb781d7e4edf43757162225f75f6cc94090a73c2199b5aa19efe0779",
+      "bindings_sha256": "015685ad02a3082a37f33f9afda7032ba01bfa994a72afc335e9d9a8c308973c"
+    },
+    "ddeb213c9e011d004e0f7193e235c9e70ffc62df64cbabaf183e06854e18e911": {
+      "revisions": {
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-inline-owner-input-rows-base": "4aa79f6c51842995e6a0cd1d98f170ac5d81140b",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-inline-owner-input-rows": "32ca5b6506581e7691c0519d8bd9934ecbcc4cef"
+      },
+      "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-inline-owner-input-rows-base",
+      "count_allocations": true,
+      "alias_checks": false,
+      "fixture_sha256": {
+        "flat.rs": "bde401f5c55c3f7d4d7315b132c53337c21ac9f615615130df0e718623fab423",
+        "bindings.rs": "0cdbd5d1752754adb0df6074f7932d2d8014bc0239a189b078d4f316e2091b07",
+        "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+        "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+        "input-driver.c": "23bbc741574c7b73fccc06481f081cd749f2ec8a749408aff1fd5016df13b041",
+        "build.py": "0ba2154e33008f3963aba8ade65d779fd740f5d8108a21722b11b7f2288786a9",
+        "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+      },
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+      "compile_command": [
+        "cc",
+        "-std=gnu11",
+        "-O3",
+        "-fno-plt",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-inline-owner-input-rows/examples/bench-c-collections/driver.c",
+        "-I/tmp/c-alias-bench-target/release/build/c-collection-bench-17bbd3a580afd43d/out",
+        "-L/tmp/c-inline-before-unchecked-count/frozen",
+        "-lc_collection_bench",
+        "-Wl,-rpath,/tmp/c-inline-before-unchecked-count/frozen",
+        "-ldl",
+        "-o",
+        "/tmp/c-inline-before-unchecked-count/driver"
+      ],
+      "cargo_command": [
+        "cargo",
+        "build",
+        "--offline",
+        "--locked",
+        "--release",
+        "--message-format=json",
+        "--features",
+        "count-allocations"
+      ],
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "lock_sha256": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d",
+      "cargo_configs": {},
+      "profile_environment": {},
+      "library": "/tmp/c-inline-before-unchecked-count/frozen/libc_collection_bench.so",
+      "library_sha256": "ddeb213c9e011d004e0f7193e235c9e70ffc62df64cbabaf183e06854e18e911",
+      "driver": "/tmp/c-inline-before-unchecked-count/driver",
+      "driver_sha256": "d6c027507970a9299a042a9d169771f90b7a70908409f3dcf6084f6ecd5e6e5a",
+      "input_driver": "/tmp/c-inline-before-unchecked-count/input-driver",
+      "input_driver_sha256": "a90135cf2b61d73a017c78f23dc40c60a197b94a400e58d04b6ae62304199f30",
+      "input_compile_command": [
+        "cc",
+        "-std=gnu11",
+        "-O3",
+        "-fno-plt",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-inline-owner-input-rows/examples/bench-c-collections/input-driver.c",
+        "-I/tmp/c-alias-bench-target/release/build/c-collection-bench-17bbd3a580afd43d/out",
+        "-L/tmp/c-inline-before-unchecked-count/frozen",
+        "-lc_collection_bench",
+        "-Wl,-rpath,/tmp/c-inline-before-unchecked-count/frozen",
+        "-ldl",
+        "-o",
+        "/tmp/c-inline-before-unchecked-count/input-driver"
+      ],
+      "header_sha256": "65569d8b89bba10d7af75f75bcb36a51f80efad8a9c5bd8d8981c73a2968c3c7",
+      "header_abi_sha256": "c70740c4cb781d7e4edf43757162225f75f6cc94090a73c2199b5aa19efe0779",
+      "bindings_sha256": "58345ad19066b7aaab1714b5ff03eacdc036ce36bc22e1605a508d28dba48089"
+    },
+    "b233747dcdda235fc26bb75ad28297ca65ca2065fc1040e5ec547d7d058f39ed": {
+      "revisions": {
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-inline-owner-input-rows": "32ca5b6506581e7691c0519d8bd9934ecbcc4cef"
+      },
+      "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-inline-owner-input-rows",
+      "count_allocations": true,
+      "alias_checks": false,
+      "fixture_sha256": {
+        "flat.rs": "bde401f5c55c3f7d4d7315b132c53337c21ac9f615615130df0e718623fab423",
+        "bindings.rs": "0cdbd5d1752754adb0df6074f7932d2d8014bc0239a189b078d4f316e2091b07",
+        "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+        "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+        "input-driver.c": "23bbc741574c7b73fccc06481f081cd749f2ec8a749408aff1fd5016df13b041",
+        "build.py": "0ba2154e33008f3963aba8ade65d779fd740f5d8108a21722b11b7f2288786a9",
+        "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+      },
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+      "compile_command": [
+        "cc",
+        "-std=gnu11",
+        "-O3",
+        "-fno-plt",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-inline-owner-input-rows/examples/bench-c-collections/driver.c",
+        "-I/tmp/c-alias-bench-target/release/build/c-collection-bench-b68b25b15a1dfc8e/out",
+        "-L/tmp/c-inline-after-unchecked-count/frozen",
+        "-lc_collection_bench",
+        "-Wl,-rpath,/tmp/c-inline-after-unchecked-count/frozen",
+        "-ldl",
+        "-o",
+        "/tmp/c-inline-after-unchecked-count/driver"
+      ],
+      "cargo_command": [
+        "cargo",
+        "build",
+        "--offline",
+        "--locked",
+        "--release",
+        "--message-format=json",
+        "--features",
+        "count-allocations"
+      ],
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "lock_sha256": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d",
+      "cargo_configs": {},
+      "profile_environment": {},
+      "library": "/tmp/c-inline-after-unchecked-count/frozen/libc_collection_bench.so",
+      "library_sha256": "b233747dcdda235fc26bb75ad28297ca65ca2065fc1040e5ec547d7d058f39ed",
+      "driver": "/tmp/c-inline-after-unchecked-count/driver",
+      "driver_sha256": "4d7384537860b0c3c6fd3d1fcb13d6dd3be73e613c6cec9d12ba78499cede7da",
+      "input_driver": "/tmp/c-inline-after-unchecked-count/input-driver",
+      "input_driver_sha256": "a44baf2740a9c9ac659d6223bbd4af163e573ad5338e2b4bcdbc6271f4431782",
+      "input_compile_command": [
+        "cc",
+        "-std=gnu11",
+        "-O3",
+        "-fno-plt",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-inline-owner-input-rows/examples/bench-c-collections/input-driver.c",
+        "-I/tmp/c-alias-bench-target/release/build/c-collection-bench-b68b25b15a1dfc8e/out",
+        "-L/tmp/c-inline-after-unchecked-count/frozen",
+        "-lc_collection_bench",
+        "-Wl,-rpath,/tmp/c-inline-after-unchecked-count/frozen",
+        "-ldl",
+        "-o",
+        "/tmp/c-inline-after-unchecked-count/input-driver"
+      ],
+      "header_sha256": "65569d8b89bba10d7af75f75bcb36a51f80efad8a9c5bd8d8981c73a2968c3c7",
+      "header_abi_sha256": "c70740c4cb781d7e4edf43757162225f75f6cc94090a73c2199b5aa19efe0779",
+      "bindings_sha256": "306fb78ebd1018cb309c8cb262d7489b5aa8c905de010018a58433503e9ff514"
+    },
+    "889563095f358914a0286915cf4bf5f33fecfad451eaceb6764dc6101c2b67f5": {
+      "revisions": {
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-inline-owner-input-rows-base": "4aa79f6c51842995e6a0cd1d98f170ac5d81140b",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-inline-owner-input-rows": "32ca5b6506581e7691c0519d8bd9934ecbcc4cef"
+      },
+      "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-inline-owner-input-rows-base",
+      "count_allocations": false,
+      "alias_checks": true,
+      "fixture_sha256": {
+        "flat.rs": "bde401f5c55c3f7d4d7315b132c53337c21ac9f615615130df0e718623fab423",
+        "bindings.rs": "0cdbd5d1752754adb0df6074f7932d2d8014bc0239a189b078d4f316e2091b07",
+        "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+        "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+        "input-driver.c": "23bbc741574c7b73fccc06481f081cd749f2ec8a749408aff1fd5016df13b041",
+        "build.py": "0ba2154e33008f3963aba8ade65d779fd740f5d8108a21722b11b7f2288786a9",
+        "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+      },
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+      "compile_command": [
+        "cc",
+        "-std=gnu11",
+        "-O3",
+        "-fno-plt",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-inline-owner-input-rows/examples/bench-c-collections/driver.c",
+        "-I/tmp/c-alias-bench-target/release/build/c-collection-bench-e6aef131b668cebe/out",
+        "-L/tmp/c-inline-before-time/frozen",
+        "-lc_collection_bench",
+        "-Wl,-rpath,/tmp/c-inline-before-time/frozen",
+        "-ldl",
+        "-o",
+        "/tmp/c-inline-before-time/driver"
+      ],
+      "cargo_command": [
+        "cargo",
+        "build",
+        "--offline",
+        "--locked",
+        "--release",
+        "--message-format=json"
+      ],
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "lock_sha256": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d",
+      "cargo_configs": {},
+      "profile_environment": {},
+      "library": "/tmp/c-inline-before-time/frozen/libc_collection_bench.so",
+      "library_sha256": "889563095f358914a0286915cf4bf5f33fecfad451eaceb6764dc6101c2b67f5",
+      "driver": "/tmp/c-inline-before-time/driver",
+      "driver_sha256": "151e0a248a9c7b117e1969dd32bf72ed8202cf21220639fcc055e3326a96cf3a",
+      "input_driver": "/tmp/c-inline-before-time/input-driver",
+      "input_driver_sha256": "bebc9b52915f8deeb323dbc9e8eebd2dbde223a4bd806fe0521676ff5c9cbcdc",
+      "input_compile_command": [
+        "cc",
+        "-std=gnu11",
+        "-O3",
+        "-fno-plt",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-inline-owner-input-rows/examples/bench-c-collections/input-driver.c",
+        "-I/tmp/c-alias-bench-target/release/build/c-collection-bench-e6aef131b668cebe/out",
+        "-L/tmp/c-inline-before-time/frozen",
+        "-lc_collection_bench",
+        "-Wl,-rpath,/tmp/c-inline-before-time/frozen",
+        "-ldl",
+        "-o",
+        "/tmp/c-inline-before-time/input-driver"
+      ],
+      "header_sha256": "70b2f019bb66f89e585cd9fc69cd6626e9be4abad4c3a48844172c1982ddd254",
+      "header_abi_sha256": "c70740c4cb781d7e4edf43757162225f75f6cc94090a73c2199b5aa19efe0779",
+      "bindings_sha256": "358e4dc4f8d0c2e15f1d1a6505e3fde2f047fd95e9654e8096a7b54928803006"
+    },
+    "fadee8fcb5a9dcd777fb78380f420afb79e47a1e6144ee2e943b07e9b66690e7": {
+      "revisions": {
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-inline-owner-input-rows": "32ca5b6506581e7691c0519d8bd9934ecbcc4cef"
+      },
+      "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-inline-owner-input-rows",
+      "count_allocations": false,
+      "alias_checks": true,
+      "fixture_sha256": {
+        "flat.rs": "bde401f5c55c3f7d4d7315b132c53337c21ac9f615615130df0e718623fab423",
+        "bindings.rs": "0cdbd5d1752754adb0df6074f7932d2d8014bc0239a189b078d4f316e2091b07",
+        "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+        "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+        "input-driver.c": "23bbc741574c7b73fccc06481f081cd749f2ec8a749408aff1fd5016df13b041",
+        "build.py": "0ba2154e33008f3963aba8ade65d779fd740f5d8108a21722b11b7f2288786a9",
+        "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+      },
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+      "compile_command": [
+        "cc",
+        "-std=gnu11",
+        "-O3",
+        "-fno-plt",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-inline-owner-input-rows/examples/bench-c-collections/driver.c",
+        "-I/tmp/c-alias-bench-target/release/build/c-collection-bench-8b42a5f2829bfd1d/out",
+        "-L/tmp/c-inline-after-time/frozen",
+        "-lc_collection_bench",
+        "-Wl,-rpath,/tmp/c-inline-after-time/frozen",
+        "-ldl",
+        "-o",
+        "/tmp/c-inline-after-time/driver"
+      ],
+      "cargo_command": [
+        "cargo",
+        "build",
+        "--offline",
+        "--locked",
+        "--release",
+        "--message-format=json"
+      ],
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "lock_sha256": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d",
+      "cargo_configs": {},
+      "profile_environment": {},
+      "library": "/tmp/c-inline-after-time/frozen/libc_collection_bench.so",
+      "library_sha256": "fadee8fcb5a9dcd777fb78380f420afb79e47a1e6144ee2e943b07e9b66690e7",
+      "driver": "/tmp/c-inline-after-time/driver",
+      "driver_sha256": "ff18a071869cbb01fb5f47b110be4ae7074590357e0fa75e80eb80745a90d976",
+      "input_driver": "/tmp/c-inline-after-time/input-driver",
+      "input_driver_sha256": "76ff953d758de27d87df8ac0e5156499ff1ad3ccd4b942c0f7be1a27dd7ada75",
+      "input_compile_command": [
+        "cc",
+        "-std=gnu11",
+        "-O3",
+        "-fno-plt",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-inline-owner-input-rows/examples/bench-c-collections/input-driver.c",
+        "-I/tmp/c-alias-bench-target/release/build/c-collection-bench-8b42a5f2829bfd1d/out",
+        "-L/tmp/c-inline-after-time/frozen",
+        "-lc_collection_bench",
+        "-Wl,-rpath,/tmp/c-inline-after-time/frozen",
+        "-ldl",
+        "-o",
+        "/tmp/c-inline-after-time/input-driver"
+      ],
+      "header_sha256": "70b2f019bb66f89e585cd9fc69cd6626e9be4abad4c3a48844172c1982ddd254",
+      "header_abi_sha256": "c70740c4cb781d7e4edf43757162225f75f6cc94090a73c2199b5aa19efe0779",
+      "bindings_sha256": "015685ad02a3082a37f33f9afda7032ba01bfa994a72afc335e9d9a8c308973c"
+    },
+    "e7e083e6632a38329fb81279f40f6cfd2b7e03f5e08a43ed8ebc71209796fee7": {
+      "revisions": {
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-inline-owner-input-rows": "32ca5b6506581e7691c0519d8bd9934ecbcc4cef",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-inline-owner-input-rows-base": "4aa79f6c51842995e6a0cd1d98f170ac5d81140b"
+      },
+      "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-inline-owner-input-rows-base",
+      "count_allocations": false,
+      "alias_checks": false,
+      "fixture_sha256": {
+        "flat.rs": "bde401f5c55c3f7d4d7315b132c53337c21ac9f615615130df0e718623fab423",
+        "bindings.rs": "0cdbd5d1752754adb0df6074f7932d2d8014bc0239a189b078d4f316e2091b07",
+        "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+        "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+        "input-driver.c": "23bbc741574c7b73fccc06481f081cd749f2ec8a749408aff1fd5016df13b041",
+        "build.py": "0ba2154e33008f3963aba8ade65d779fd740f5d8108a21722b11b7f2288786a9",
+        "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+      },
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+      "compile_command": [
+        "cc",
+        "-std=gnu11",
+        "-O3",
+        "-fno-plt",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-inline-owner-input-rows/examples/bench-c-collections/driver.c",
+        "-I/tmp/c-alias-bench-target/release/build/c-collection-bench-e6aef131b668cebe/out",
+        "-L/tmp/c-inline-before-unchecked-time/frozen",
+        "-lc_collection_bench",
+        "-Wl,-rpath,/tmp/c-inline-before-unchecked-time/frozen",
+        "-ldl",
+        "-o",
+        "/tmp/c-inline-before-unchecked-time/driver"
+      ],
+      "cargo_command": [
+        "cargo",
+        "build",
+        "--offline",
+        "--locked",
+        "--release",
+        "--message-format=json"
+      ],
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "lock_sha256": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d",
+      "cargo_configs": {},
+      "profile_environment": {},
+      "library": "/tmp/c-inline-before-unchecked-time/frozen/libc_collection_bench.so",
+      "library_sha256": "e7e083e6632a38329fb81279f40f6cfd2b7e03f5e08a43ed8ebc71209796fee7",
+      "driver": "/tmp/c-inline-before-unchecked-time/driver",
+      "driver_sha256": "2b6c122d2644edcebcb53d23593ad9ce32e3e76efe79b6b426c28444b61c1c15",
+      "input_driver": "/tmp/c-inline-before-unchecked-time/input-driver",
+      "input_driver_sha256": "b02333faefdfcb595ab4b0ee3711718a96360ddf04ab9b7469c6b0006687dd01",
+      "input_compile_command": [
+        "cc",
+        "-std=gnu11",
+        "-O3",
+        "-fno-plt",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-inline-owner-input-rows/examples/bench-c-collections/input-driver.c",
+        "-I/tmp/c-alias-bench-target/release/build/c-collection-bench-e6aef131b668cebe/out",
+        "-L/tmp/c-inline-before-unchecked-time/frozen",
+        "-lc_collection_bench",
+        "-Wl,-rpath,/tmp/c-inline-before-unchecked-time/frozen",
+        "-ldl",
+        "-o",
+        "/tmp/c-inline-before-unchecked-time/input-driver"
+      ],
+      "header_sha256": "65569d8b89bba10d7af75f75bcb36a51f80efad8a9c5bd8d8981c73a2968c3c7",
+      "header_abi_sha256": "c70740c4cb781d7e4edf43757162225f75f6cc94090a73c2199b5aa19efe0779",
+      "bindings_sha256": "58345ad19066b7aaab1714b5ff03eacdc036ce36bc22e1605a508d28dba48089"
+    },
+    "2ba6d049e769d2e1bb5e12e7f521076cd3ceebe25cec77177705fe0e968703f5": {
+      "revisions": {
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-inline-owner-input-rows": "32ca5b6506581e7691c0519d8bd9934ecbcc4cef"
+      },
+      "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-inline-owner-input-rows",
+      "count_allocations": false,
+      "alias_checks": false,
+      "fixture_sha256": {
+        "flat.rs": "bde401f5c55c3f7d4d7315b132c53337c21ac9f615615130df0e718623fab423",
+        "bindings.rs": "0cdbd5d1752754adb0df6074f7932d2d8014bc0239a189b078d4f316e2091b07",
+        "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+        "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+        "input-driver.c": "23bbc741574c7b73fccc06481f081cd749f2ec8a749408aff1fd5016df13b041",
+        "build.py": "0ba2154e33008f3963aba8ade65d779fd740f5d8108a21722b11b7f2288786a9",
+        "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+      },
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+      "compile_command": [
+        "cc",
+        "-std=gnu11",
+        "-O3",
+        "-fno-plt",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-inline-owner-input-rows/examples/bench-c-collections/driver.c",
+        "-I/tmp/c-alias-bench-target/release/build/c-collection-bench-8b42a5f2829bfd1d/out",
+        "-L/tmp/c-inline-after-unchecked-time/frozen",
+        "-lc_collection_bench",
+        "-Wl,-rpath,/tmp/c-inline-after-unchecked-time/frozen",
+        "-ldl",
+        "-o",
+        "/tmp/c-inline-after-unchecked-time/driver"
+      ],
+      "cargo_command": [
+        "cargo",
+        "build",
+        "--offline",
+        "--locked",
+        "--release",
+        "--message-format=json"
+      ],
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "lock_sha256": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d",
+      "cargo_configs": {},
+      "profile_environment": {},
+      "library": "/tmp/c-inline-after-unchecked-time/frozen/libc_collection_bench.so",
+      "library_sha256": "2ba6d049e769d2e1bb5e12e7f521076cd3ceebe25cec77177705fe0e968703f5",
+      "driver": "/tmp/c-inline-after-unchecked-time/driver",
+      "driver_sha256": "06b3d06692c2756b973b96637657fcd4d956285c9a9c919529e2e452098d3e2e",
+      "input_driver": "/tmp/c-inline-after-unchecked-time/input-driver",
+      "input_driver_sha256": "6bc4e5ff125b2211fe76823d35a0f5ef8be0d2818550b866697e8001e71a0293",
+      "input_compile_command": [
+        "cc",
+        "-std=gnu11",
+        "-O3",
+        "-fno-plt",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-inline-owner-input-rows/examples/bench-c-collections/input-driver.c",
+        "-I/tmp/c-alias-bench-target/release/build/c-collection-bench-8b42a5f2829bfd1d/out",
+        "-L/tmp/c-inline-after-unchecked-time/frozen",
+        "-lc_collection_bench",
+        "-Wl,-rpath,/tmp/c-inline-after-unchecked-time/frozen",
+        "-ldl",
+        "-o",
+        "/tmp/c-inline-after-unchecked-time/input-driver"
+      ],
+      "header_sha256": "65569d8b89bba10d7af75f75bcb36a51f80efad8a9c5bd8d8981c73a2968c3c7",
+      "header_abi_sha256": "c70740c4cb781d7e4edf43757162225f75f6cc94090a73c2199b5aa19efe0779",
+      "bindings_sha256": "306fb78ebd1018cb309c8cb262d7489b5aa8c905de010018a58433503e9ff514"
+    }
+  },
+  "runs": {
+    "checked-count": {
+      "settings": {
+        "before": "/tmp/c-inline-before-count",
+        "after": "/tmp/c-inline-after-count",
+        "output": "/tmp/c-inline-counts",
+        "kind": "count",
+        "forks": 1,
+        "same_build": null,
+        "smoke": false,
+        "cases": "native,native_mixed,handles,numbers,tagged",
+        "sizes": "0,1,8,64,512,4096",
+        "batches": 3,
+        "target_ms": 20
+      },
+      "affinity": [
+        0,
+        1
+      ],
+      "platform": "Linux-6.8.0-138-generic-x86_64-with-glibc2.39",
+      "cpu": "Architecture:                            x86_64\nCPU op-mode(s):                          32-bit, 64-bit\nAddress sizes:                           48 bits physical, 48 bits virtual\nByte Order:                              Little Endian\nCPU(s):                                  2\nOn-line CPU(s) list:                     0,1\nVendor ID:                               AuthenticAMD\nModel name:                              AMD EPYC 7713 64-Core Processor\nCPU family:                              25\nModel:                                   1\nThread(s) per core:                      1\nCore(s) per socket:                      2\nSocket(s):                               1\nStepping:                                1\nBogoMIPS:                                4000.00\nFlags:                                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm rep_good nopl cpuid extd_apicid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw perfctr_core ssbd ibrs ibpb stibp vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms rdseed adx smap clflushopt clwb sha_ni xsaveopt xsavec xgetbv1 xsaves clzero xsaveerptr wbnoinvd arat umip pku ospke vaes vpclmulqdq rdpid overflow_recov succor fsrm\nHypervisor vendor:                       KVM\nVirtualization type:                     full\nL1d cache:                               128 KiB (2 instances)\nL1i cache:                               128 KiB (2 instances)\nL2 cache:                                1 MiB (2 instances)\nL3 cache:                                32 MiB (2 instances)\nNUMA node(s):                            1\nNUMA node0 CPU(s):                       0,1\nVulnerability Gather data sampling:      Not affected\nVulnerability Indirect target selection: Not affected\nVulnerability Itlb multihit:             Not affected\nVulnerability L1tf:                      Not affected\nVulnerability Mds:                       Not affected\nVulnerability Meltdown:                  Not affected\nVulnerability Mmio stale data:           Not affected\nVulnerability Reg file data sampling:    Not affected\nVulnerability Retbleed:                  Not affected\nVulnerability Spec rstack overflow:      Vulnerable: Safe RET, no microcode\nVulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl\nVulnerability Spectre v1:                Mitigation; usercopy/swapgs barriers and __user pointer sanitization\nVulnerability Spectre v2:                Mitigation; Retpolines; IBPB conditional; IBRS_FW; STIBP disabled; RSB filling; PBRSB-eIBRS Not affected; BHI Not affected\nVulnerability Srbds:                     Not affected\nVulnerability Tsa:                       Vulnerable: Clear CPU buffers attempted, no microcode\nVulnerability Tsx async abort:           Not affected\nVulnerability Vmscape:                   Not affected\n",
+      "loader_environment": {},
+      "samples_sha256": "57002012ad317aef66435216be909f9d6da3cf4b907d868ef5fb4afc39ed976c",
+      "runner_sha256": "93306d507ba04f9020fbde7d930eb087d6366262b85e9596d3d36d8e7649927b",
+      "driver_sha256": "df5b39be7fae5235bfe9ef5936b549859d4df46d7754fb57f91d52cd14bdff37",
+      "libraries": {
+        "before": "4ffb3ab7f5535f557fc3a4be2d3864ecf9ae133403819e787bce1bdc746f3971",
+        "after": "1781e534d93b6d54a2eb04b693c49a69edc912ddb7a209f62fd2fa047b17ff42"
+      }
+    },
+    "unchecked-count": {
+      "settings": {
+        "before": "/tmp/c-inline-before-unchecked-count",
+        "after": "/tmp/c-inline-after-unchecked-count",
+        "output": "/tmp/c-inline-unchecked-counts",
+        "kind": "count",
+        "forks": 1,
+        "same_build": null,
+        "smoke": false,
+        "cases": "native,native_mixed,handles,numbers,tagged",
+        "sizes": "0,1,8,64,512,4096",
+        "batches": 3,
+        "target_ms": 20
+      },
+      "affinity": [
+        0,
+        1
+      ],
+      "platform": "Linux-6.8.0-138-generic-x86_64-with-glibc2.39",
+      "cpu": "Architecture:                            x86_64\nCPU op-mode(s):                          32-bit, 64-bit\nAddress sizes:                           48 bits physical, 48 bits virtual\nByte Order:                              Little Endian\nCPU(s):                                  2\nOn-line CPU(s) list:                     0,1\nVendor ID:                               AuthenticAMD\nModel name:                              AMD EPYC 7713 64-Core Processor\nCPU family:                              25\nModel:                                   1\nThread(s) per core:                      1\nCore(s) per socket:                      2\nSocket(s):                               1\nStepping:                                1\nBogoMIPS:                                4000.00\nFlags:                                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm rep_good nopl cpuid extd_apicid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw perfctr_core ssbd ibrs ibpb stibp vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms rdseed adx smap clflushopt clwb sha_ni xsaveopt xsavec xgetbv1 xsaves clzero xsaveerptr wbnoinvd arat umip pku ospke vaes vpclmulqdq rdpid overflow_recov succor fsrm\nHypervisor vendor:                       KVM\nVirtualization type:                     full\nL1d cache:                               128 KiB (2 instances)\nL1i cache:                               128 KiB (2 instances)\nL2 cache:                                1 MiB (2 instances)\nL3 cache:                                32 MiB (2 instances)\nNUMA node(s):                            1\nNUMA node0 CPU(s):                       0,1\nVulnerability Gather data sampling:      Not affected\nVulnerability Indirect target selection: Not affected\nVulnerability Itlb multihit:             Not affected\nVulnerability L1tf:                      Not affected\nVulnerability Mds:                       Not affected\nVulnerability Meltdown:                  Not affected\nVulnerability Mmio stale data:           Not affected\nVulnerability Reg file data sampling:    Not affected\nVulnerability Retbleed:                  Not affected\nVulnerability Spec rstack overflow:      Vulnerable: Safe RET, no microcode\nVulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl\nVulnerability Spectre v1:                Mitigation; usercopy/swapgs barriers and __user pointer sanitization\nVulnerability Spectre v2:                Mitigation; Retpolines; IBPB conditional; IBRS_FW; STIBP disabled; RSB filling; PBRSB-eIBRS Not affected; BHI Not affected\nVulnerability Srbds:                     Not affected\nVulnerability Tsa:                       Vulnerable: Clear CPU buffers attempted, no microcode\nVulnerability Tsx async abort:           Not affected\nVulnerability Vmscape:                   Not affected\n",
+      "loader_environment": {},
+      "samples_sha256": "c829d2d3f6a0f7cb686f3ab00fa394d1475f698f181686365933aaafe9268e51",
+      "runner_sha256": "93306d507ba04f9020fbde7d930eb087d6366262b85e9596d3d36d8e7649927b",
+      "driver_sha256": "a90135cf2b61d73a017c78f23dc40c60a197b94a400e58d04b6ae62304199f30",
+      "libraries": {
+        "before": "ddeb213c9e011d004e0f7193e235c9e70ffc62df64cbabaf183e06854e18e911",
+        "after": "b233747dcdda235fc26bb75ad28297ca65ca2065fc1040e5ec547d7d058f39ed"
+      }
+    },
+    "checked-time": {
+      "settings": {
+        "before": "/tmp/c-inline-before-time",
+        "after": "/tmp/c-inline-after-time",
+        "output": "/tmp/c-inline-times",
+        "kind": "time",
+        "forks": 6,
+        "same_build": null,
+        "smoke": false,
+        "cases": "native,native_mixed,handles,numbers,tagged",
+        "sizes": "1,64,512,4096",
+        "batches": 8,
+        "target_ms": 20
+      },
+      "affinity": [
+        1
+      ],
+      "platform": "Linux-6.8.0-138-generic-x86_64-with-glibc2.39",
+      "cpu": "Architecture:                            x86_64\nCPU op-mode(s):                          32-bit, 64-bit\nAddress sizes:                           48 bits physical, 48 bits virtual\nByte Order:                              Little Endian\nCPU(s):                                  2\nOn-line CPU(s) list:                     0,1\nVendor ID:                               AuthenticAMD\nModel name:                              AMD EPYC 7713 64-Core Processor\nCPU family:                              25\nModel:                                   1\nThread(s) per core:                      1\nCore(s) per socket:                      2\nSocket(s):                               1\nStepping:                                1\nBogoMIPS:                                4000.00\nFlags:                                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm rep_good nopl cpuid extd_apicid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw perfctr_core ssbd ibrs ibpb stibp vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms rdseed adx smap clflushopt clwb sha_ni xsaveopt xsavec xgetbv1 xsaves clzero xsaveerptr wbnoinvd arat umip pku ospke vaes vpclmulqdq rdpid overflow_recov succor fsrm\nHypervisor vendor:                       KVM\nVirtualization type:                     full\nL1d cache:                               128 KiB (2 instances)\nL1i cache:                               128 KiB (2 instances)\nL2 cache:                                1 MiB (2 instances)\nL3 cache:                                32 MiB (2 instances)\nNUMA node(s):                            1\nNUMA node0 CPU(s):                       0,1\nVulnerability Gather data sampling:      Not affected\nVulnerability Indirect target selection: Not affected\nVulnerability Itlb multihit:             Not affected\nVulnerability L1tf:                      Not affected\nVulnerability Mds:                       Not affected\nVulnerability Meltdown:                  Not affected\nVulnerability Mmio stale data:           Not affected\nVulnerability Reg file data sampling:    Not affected\nVulnerability Retbleed:                  Not affected\nVulnerability Spec rstack overflow:      Vulnerable: Safe RET, no microcode\nVulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl\nVulnerability Spectre v1:                Mitigation; usercopy/swapgs barriers and __user pointer sanitization\nVulnerability Spectre v2:                Mitigation; Retpolines; IBPB conditional; IBRS_FW; STIBP disabled; RSB filling; PBRSB-eIBRS Not affected; BHI Not affected\nVulnerability Srbds:                     Not affected\nVulnerability Tsa:                       Vulnerable: Clear CPU buffers attempted, no microcode\nVulnerability Tsx async abort:           Not affected\nVulnerability Vmscape:                   Not affected\n",
+      "loader_environment": {},
+      "samples_sha256": "8aa3a721e1856bfffbbab0e65422f5824783401bc0c07d83f470b7bd5700a145",
+      "runner_sha256": "93306d507ba04f9020fbde7d930eb087d6366262b85e9596d3d36d8e7649927b",
+      "driver_sha256": "bebc9b52915f8deeb323dbc9e8eebd2dbde223a4bd806fe0521676ff5c9cbcdc",
+      "libraries": {
+        "before": "889563095f358914a0286915cf4bf5f33fecfad451eaceb6764dc6101c2b67f5",
+        "after": "fadee8fcb5a9dcd777fb78380f420afb79e47a1e6144ee2e943b07e9b66690e7"
+      }
+    },
+    "unchecked-time": {
+      "settings": {
+        "before": "/tmp/c-inline-before-unchecked-time",
+        "after": "/tmp/c-inline-after-unchecked-time",
+        "output": "/tmp/c-inline-unchecked-times",
+        "kind": "time",
+        "forks": 6,
+        "same_build": null,
+        "smoke": false,
+        "cases": "native,native_mixed,handles,numbers,tagged",
+        "sizes": "1,64,512,4096",
+        "batches": 8,
+        "target_ms": 20
+      },
+      "affinity": [
+        1
+      ],
+      "platform": "Linux-6.8.0-138-generic-x86_64-with-glibc2.39",
+      "cpu": "Architecture:                            x86_64\nCPU op-mode(s):                          32-bit, 64-bit\nAddress sizes:                           48 bits physical, 48 bits virtual\nByte Order:                              Little Endian\nCPU(s):                                  2\nOn-line CPU(s) list:                     0,1\nVendor ID:                               AuthenticAMD\nModel name:                              AMD EPYC 7713 64-Core Processor\nCPU family:                              25\nModel:                                   1\nThread(s) per core:                      1\nCore(s) per socket:                      2\nSocket(s):                               1\nStepping:                                1\nBogoMIPS:                                4000.00\nFlags:                                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm rep_good nopl cpuid extd_apicid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw perfctr_core ssbd ibrs ibpb stibp vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms rdseed adx smap clflushopt clwb sha_ni xsaveopt xsavec xgetbv1 xsaves clzero xsaveerptr wbnoinvd arat umip pku ospke vaes vpclmulqdq rdpid overflow_recov succor fsrm\nHypervisor vendor:                       KVM\nVirtualization type:                     full\nL1d cache:                               128 KiB (2 instances)\nL1i cache:                               128 KiB (2 instances)\nL2 cache:                                1 MiB (2 instances)\nL3 cache:                                32 MiB (2 instances)\nNUMA node(s):                            1\nNUMA node0 CPU(s):                       0,1\nVulnerability Gather data sampling:      Not affected\nVulnerability Indirect target selection: Not affected\nVulnerability Itlb multihit:             Not affected\nVulnerability L1tf:                      Not affected\nVulnerability Mds:                       Not affected\nVulnerability Meltdown:                  Not affected\nVulnerability Mmio stale data:           Not affected\nVulnerability Reg file data sampling:    Not affected\nVulnerability Retbleed:                  Not affected\nVulnerability Spec rstack overflow:      Vulnerable: Safe RET, no microcode\nVulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl\nVulnerability Spectre v1:                Mitigation; usercopy/swapgs barriers and __user pointer sanitization\nVulnerability Spectre v2:                Mitigation; Retpolines; IBPB conditional; IBRS_FW; STIBP disabled; RSB filling; PBRSB-eIBRS Not affected; BHI Not affected\nVulnerability Srbds:                     Not affected\nVulnerability Tsa:                       Vulnerable: Clear CPU buffers attempted, no microcode\nVulnerability Tsx async abort:           Not affected\nVulnerability Vmscape:                   Not affected\n",
+      "loader_environment": {},
+      "samples_sha256": "1f6ae78f7a96391533732d3a332061bf2f4da9b3d508df06a74c2cf832f073b4",
+      "runner_sha256": "8e58bc79346746d11056430bbaa766c7a697a3e7746b52b3aca72571f7182691",
+      "driver_sha256": "b02333faefdfcb595ab4b0ee3711718a96360ddf04ab9b7469c6b0006687dd01",
+      "libraries": {
+        "before": "e7e083e6632a38329fb81279f40f6cfd2b7e03f5e08a43ed8ebc71209796fee7",
+        "after": "2ba6d049e769d2e1bb5e12e7f521076cd3ceebe25cec77177705fe0e968703f5"
+      }
+    },
+    "checked-repeat": {
+      "settings": {
+        "before": "/tmp/c-inline-before-time",
+        "after": "/tmp/c-inline-final-after-time",
+        "output": "/tmp/c-inline-final-times",
+        "kind": "time",
+        "forks": 6,
+        "same_build": null,
+        "smoke": false,
+        "cases": "native,native_mixed,handles,numbers",
+        "sizes": "1,512,4096",
+        "batches": 8,
+        "target_ms": 20
+      },
+      "affinity": [
+        1
+      ],
+      "platform": "Linux-6.8.0-138-generic-x86_64-with-glibc2.39",
+      "cpu": "Architecture:                            x86_64\nCPU op-mode(s):                          32-bit, 64-bit\nAddress sizes:                           48 bits physical, 48 bits virtual\nByte Order:                              Little Endian\nCPU(s):                                  2\nOn-line CPU(s) list:                     0,1\nVendor ID:                               AuthenticAMD\nModel name:                              AMD EPYC 7713 64-Core Processor\nCPU family:                              25\nModel:                                   1\nThread(s) per core:                      1\nCore(s) per socket:                      2\nSocket(s):                               1\nStepping:                                1\nBogoMIPS:                                4000.00\nFlags:                                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm rep_good nopl cpuid extd_apicid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw perfctr_core ssbd ibrs ibpb stibp vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms rdseed adx smap clflushopt clwb sha_ni xsaveopt xsavec xgetbv1 xsaves clzero xsaveerptr wbnoinvd arat umip pku ospke vaes vpclmulqdq rdpid overflow_recov succor fsrm\nHypervisor vendor:                       KVM\nVirtualization type:                     full\nL1d cache:                               128 KiB (2 instances)\nL1i cache:                               128 KiB (2 instances)\nL2 cache:                                1 MiB (2 instances)\nL3 cache:                                32 MiB (2 instances)\nNUMA node(s):                            1\nNUMA node0 CPU(s):                       0,1\nVulnerability Gather data sampling:      Not affected\nVulnerability Indirect target selection: Not affected\nVulnerability Itlb multihit:             Not affected\nVulnerability L1tf:                      Not affected\nVulnerability Mds:                       Not affected\nVulnerability Meltdown:                  Not affected\nVulnerability Mmio stale data:           Not affected\nVulnerability Reg file data sampling:    Not affected\nVulnerability Retbleed:                  Not affected\nVulnerability Spec rstack overflow:      Vulnerable: Safe RET, no microcode\nVulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl\nVulnerability Spectre v1:                Mitigation; usercopy/swapgs barriers and __user pointer sanitization\nVulnerability Spectre v2:                Mitigation; Retpolines; IBPB conditional; IBRS_FW; STIBP disabled; RSB filling; PBRSB-eIBRS Not affected; BHI Not affected\nVulnerability Srbds:                     Not affected\nVulnerability Tsa:                       Vulnerable: Clear CPU buffers attempted, no microcode\nVulnerability Tsx async abort:           Not affected\nVulnerability Vmscape:                   Not affected\n",
+      "loader_environment": {},
+      "samples_sha256": "5dbfddd8780e249c87ef11c1617fb944ffdc2dda173f352aa83f588326b7b601",
+      "runner_sha256": "8e58bc79346746d11056430bbaa766c7a697a3e7746b52b3aca72571f7182691",
+      "driver_sha256": "bebc9b52915f8deeb323dbc9e8eebd2dbde223a4bd806fe0521676ff5c9cbcdc",
+      "libraries": {
+        "before": "889563095f358914a0286915cf4bf5f33fecfad451eaceb6764dc6101c2b67f5",
+        "after": "fadee8fcb5a9dcd777fb78380f420afb79e47a1e6144ee2e943b07e9b66690e7"
+      }
+    },
+    "checked-identical-library": {
+      "settings": {
+        "before": "/tmp/c-inline-before-time",
+        "after": "/tmp/c-inline-after-time",
+        "output": "/tmp/c-inline-aa-times",
+        "kind": "time",
+        "forks": 4,
+        "same_build": "before",
+        "smoke": false,
+        "cases": "native,native_mixed,handles,numbers",
+        "sizes": "1,512",
+        "batches": 8,
+        "target_ms": 20
+      },
+      "affinity": [
+        1
+      ],
+      "platform": "Linux-6.8.0-138-generic-x86_64-with-glibc2.39",
+      "cpu": "Architecture:                            x86_64\nCPU op-mode(s):                          32-bit, 64-bit\nAddress sizes:                           48 bits physical, 48 bits virtual\nByte Order:                              Little Endian\nCPU(s):                                  2\nOn-line CPU(s) list:                     0,1\nVendor ID:                               AuthenticAMD\nModel name:                              AMD EPYC 7713 64-Core Processor\nCPU family:                              25\nModel:                                   1\nThread(s) per core:                      1\nCore(s) per socket:                      2\nSocket(s):                               1\nStepping:                                1\nBogoMIPS:                                4000.00\nFlags:                                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm rep_good nopl cpuid extd_apicid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw perfctr_core ssbd ibrs ibpb stibp vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms rdseed adx smap clflushopt clwb sha_ni xsaveopt xsavec xgetbv1 xsaves clzero xsaveerptr wbnoinvd arat umip pku ospke vaes vpclmulqdq rdpid overflow_recov succor fsrm\nHypervisor vendor:                       KVM\nVirtualization type:                     full\nL1d cache:                               128 KiB (2 instances)\nL1i cache:                               128 KiB (2 instances)\nL2 cache:                                1 MiB (2 instances)\nL3 cache:                                32 MiB (2 instances)\nNUMA node(s):                            1\nNUMA node0 CPU(s):                       0,1\nVulnerability Gather data sampling:      Not affected\nVulnerability Indirect target selection: Not affected\nVulnerability Itlb multihit:             Not affected\nVulnerability L1tf:                      Not affected\nVulnerability Mds:                       Not affected\nVulnerability Meltdown:                  Not affected\nVulnerability Mmio stale data:           Not affected\nVulnerability Reg file data sampling:    Not affected\nVulnerability Retbleed:                  Not affected\nVulnerability Spec rstack overflow:      Vulnerable: Safe RET, no microcode\nVulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl\nVulnerability Spectre v1:                Mitigation; usercopy/swapgs barriers and __user pointer sanitization\nVulnerability Spectre v2:                Mitigation; Retpolines; IBPB conditional; IBRS_FW; STIBP disabled; RSB filling; PBRSB-eIBRS Not affected; BHI Not affected\nVulnerability Srbds:                     Not affected\nVulnerability Tsa:                       Vulnerable: Clear CPU buffers attempted, no microcode\nVulnerability Tsx async abort:           Not affected\nVulnerability Vmscape:                   Not affected\n",
+      "loader_environment": {},
+      "samples_sha256": "c1c85089f96e1bdc5f7ed2bb7518d85b53a1fe4cf5b14e3c27cf21a266b16cb4",
+      "runner_sha256": "8e58bc79346746d11056430bbaa766c7a697a3e7746b52b3aca72571f7182691",
+      "driver_sha256": "bebc9b52915f8deeb323dbc9e8eebd2dbde223a4bd806fe0521676ff5c9cbcdc",
+      "libraries": {
+        "before": "889563095f358914a0286915cf4bf5f33fecfad451eaceb6764dc6101c2b67f5",
+        "after": "889563095f358914a0286915cf4bf5f33fecfad451eaceb6764dc6101c2b67f5"
+      }
+    }
+  }
+}

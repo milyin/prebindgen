@@ -1,0 +1,3079 @@
+{
+  "builds": {
+    "before": {
+      "revisions": {
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-output-baseline": "3b9acfffa730d426d098f5e4d514bc6e2facaa1b"
+      },
+      "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-output-baseline",
+      "count_allocations": false,
+      "fixture_sha256": {
+        "flat.rs": "d01975a629ba16fa75291b80a8d58612e24a64aa973f8bd31050209456866360",
+        "bindings.rs": "337bb58d748643ac2b68087aba01b64b7cb375f8ed7718882d300f715d6744a0",
+        "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+        "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+        "build.py": "26187e8173c005b311825918115daa772e8fdc6cf81a431f3e0a6f06a877c8e3",
+        "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+      },
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+      "compile_command": [
+        "cc",
+        "-std=gnu11",
+        "-O3",
+        "-fno-plt",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-output-baseline/examples/bench-c-collections/driver.c",
+        "-I/tmp/c-output-before-normal-v3/target/release/build/c-collection-bench-5cd4c567c6f37856/out",
+        "-L/tmp/c-output-before-normal-v3/target/release",
+        "-lc_collection_bench",
+        "-Wl,-rpath,/tmp/c-output-before-normal-v3/target/release",
+        "-ldl",
+        "-o",
+        "/tmp/c-output-before-normal-v3/driver"
+      ],
+      "cargo_command": [
+        "cargo",
+        "build",
+        "--offline",
+        "--locked",
+        "--release",
+        "--message-format=json"
+      ],
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "lock_sha256": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d",
+      "cargo_configs": {},
+      "profile_environment": {},
+      "library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "library_sha256": "eb23da49505a173e963769a50e75c1d7dd06b2f3cae767c4d30d4e2f8ba376bb",
+      "driver": "/tmp/c-output-before-normal-v3/driver",
+      "driver_sha256": "4a0ec724e3fe760fae513ef26a52e2a847445932bb842a50688e8102230b659e",
+      "header_sha256": "38071ffbbc36afb1f5113ffa3aac0136d8e6b54e073c1db14c74c60256b3f40b",
+      "bindings_sha256": "ffea54f5199fa8da0374299145305123b348805fdf71edd9f9520a7e10db2470"
+    },
+    "after": {
+      "revisions": {
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-output-owners": "1c2e5ecf26698db059f6fa6547508c112b7ec012"
+      },
+      "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-output-owners",
+      "count_allocations": false,
+      "fixture_sha256": {
+        "flat.rs": "d01975a629ba16fa75291b80a8d58612e24a64aa973f8bd31050209456866360",
+        "bindings.rs": "337bb58d748643ac2b68087aba01b64b7cb375f8ed7718882d300f715d6744a0",
+        "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+        "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+        "build.py": "26187e8173c005b311825918115daa772e8fdc6cf81a431f3e0a6f06a877c8e3",
+        "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+      },
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+      "compile_command": [
+        "cc",
+        "-std=gnu11",
+        "-O3",
+        "-fno-plt",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-output-owners/examples/bench-c-collections/driver.c",
+        "-I/tmp/c-output-after-normal/target/release/build/c-collection-bench-2ccd1a380737f4eb/out",
+        "-L/tmp/c-output-after-normal/target/release",
+        "-lc_collection_bench",
+        "-Wl,-rpath,/tmp/c-output-after-normal/target/release",
+        "-ldl",
+        "-o",
+        "/tmp/c-output-after-normal/driver"
+      ],
+      "cargo_command": [
+        "cargo",
+        "build",
+        "--offline",
+        "--locked",
+        "--release",
+        "--message-format=json"
+      ],
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "lock_sha256": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d",
+      "cargo_configs": {},
+      "profile_environment": {},
+      "library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "library_sha256": "b700d60afe86b7d31fb0a3f722df6cb74d538565c49f6f31dc6791a0cda93ca0",
+      "driver": "/tmp/c-output-after-normal/driver",
+      "driver_sha256": "d6b1162d06eaf3228d345c741aae8df2c4f72dadfcc875657e2ec2ecead6eb3f",
+      "header_sha256": "38071ffbbc36afb1f5113ffa3aac0136d8e6b54e073c1db14c74c60256b3f40b",
+      "bindings_sha256": "2e33accbf2cea7c2eade7ac1ae9ae86b53e0c83adfd6c5ea2eea7a6eff16d060"
+    }
+  },
+  "effective_builds": {
+    "before": {
+      "revisions": {
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-output-baseline": "3b9acfffa730d426d098f5e4d514bc6e2facaa1b"
+      },
+      "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-output-baseline",
+      "count_allocations": false,
+      "fixture_sha256": {
+        "flat.rs": "d01975a629ba16fa75291b80a8d58612e24a64aa973f8bd31050209456866360",
+        "bindings.rs": "337bb58d748643ac2b68087aba01b64b7cb375f8ed7718882d300f715d6744a0",
+        "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+        "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+        "build.py": "26187e8173c005b311825918115daa772e8fdc6cf81a431f3e0a6f06a877c8e3",
+        "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+      },
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+      "compile_command": [
+        "cc",
+        "-std=gnu11",
+        "-O3",
+        "-fno-plt",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-output-baseline/examples/bench-c-collections/driver.c",
+        "-I/tmp/c-output-before-normal-v3/target/release/build/c-collection-bench-5cd4c567c6f37856/out",
+        "-L/tmp/c-output-before-normal-v3/target/release",
+        "-lc_collection_bench",
+        "-Wl,-rpath,/tmp/c-output-before-normal-v3/target/release",
+        "-ldl",
+        "-o",
+        "/tmp/c-output-before-normal-v3/driver"
+      ],
+      "cargo_command": [
+        "cargo",
+        "build",
+        "--offline",
+        "--locked",
+        "--release",
+        "--message-format=json"
+      ],
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "lock_sha256": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d",
+      "cargo_configs": {},
+      "profile_environment": {},
+      "library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "library_sha256": "eb23da49505a173e963769a50e75c1d7dd06b2f3cae767c4d30d4e2f8ba376bb",
+      "driver": "/tmp/c-output-before-normal-v3/driver",
+      "driver_sha256": "4a0ec724e3fe760fae513ef26a52e2a847445932bb842a50688e8102230b659e",
+      "header_sha256": "38071ffbbc36afb1f5113ffa3aac0136d8e6b54e073c1db14c74c60256b3f40b",
+      "bindings_sha256": "ffea54f5199fa8da0374299145305123b348805fdf71edd9f9520a7e10db2470"
+    },
+    "after": {
+      "revisions": {
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-output-owners": "1c2e5ecf26698db059f6fa6547508c112b7ec012"
+      },
+      "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-output-owners",
+      "count_allocations": false,
+      "fixture_sha256": {
+        "flat.rs": "d01975a629ba16fa75291b80a8d58612e24a64aa973f8bd31050209456866360",
+        "bindings.rs": "337bb58d748643ac2b68087aba01b64b7cb375f8ed7718882d300f715d6744a0",
+        "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+        "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+        "build.py": "26187e8173c005b311825918115daa772e8fdc6cf81a431f3e0a6f06a877c8e3",
+        "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+      },
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+      "compile_command": [
+        "cc",
+        "-std=gnu11",
+        "-O3",
+        "-fno-plt",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-output-owners/examples/bench-c-collections/driver.c",
+        "-I/tmp/c-output-after-normal/target/release/build/c-collection-bench-2ccd1a380737f4eb/out",
+        "-L/tmp/c-output-after-normal/target/release",
+        "-lc_collection_bench",
+        "-Wl,-rpath,/tmp/c-output-after-normal/target/release",
+        "-ldl",
+        "-o",
+        "/tmp/c-output-after-normal/driver"
+      ],
+      "cargo_command": [
+        "cargo",
+        "build",
+        "--offline",
+        "--locked",
+        "--release",
+        "--message-format=json"
+      ],
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "lock_sha256": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d",
+      "cargo_configs": {},
+      "profile_environment": {},
+      "library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "library_sha256": "b700d60afe86b7d31fb0a3f722df6cb74d538565c49f6f31dc6791a0cda93ca0",
+      "driver": "/tmp/c-output-after-normal/driver",
+      "driver_sha256": "d6b1162d06eaf3228d345c741aae8df2c4f72dadfcc875657e2ec2ecead6eb3f",
+      "header_sha256": "38071ffbbc36afb1f5113ffa3aac0136d8e6b54e073c1db14c74c60256b3f40b",
+      "bindings_sha256": "2e33accbf2cea7c2eade7ac1ae9ae86b53e0c83adfd6c5ea2eea7a6eff16d060"
+    }
+  },
+  "driver_sha256": "4a0ec724e3fe760fae513ef26a52e2a847445932bb842a50688e8102230b659e",
+  "settings": {
+    "before": "/tmp/c-output-before-normal-v3",
+    "after": "/tmp/c-output-after-normal",
+    "output": "/tmp/c-output-latency",
+    "kind": "time",
+    "forks": 4,
+    "same_build": null,
+    "smoke": false
+  },
+  "cells": [
+    [
+      "handles",
+      1
+    ],
+    [
+      "handles",
+      64
+    ],
+    [
+      "handles",
+      512
+    ],
+    [
+      "records",
+      1
+    ],
+    [
+      "records",
+      64
+    ],
+    [
+      "records",
+      512
+    ],
+    [
+      "nested",
+      1
+    ],
+    [
+      "nested",
+      64
+    ],
+    [
+      "nested",
+      512
+    ],
+    [
+      "many",
+      1
+    ],
+    [
+      "many",
+      64
+    ],
+    [
+      "many",
+      512
+    ],
+    [
+      "numbers",
+      1
+    ],
+    [
+      "numbers",
+      64
+    ],
+    [
+      "numbers",
+      512
+    ],
+    [
+      "control",
+      1
+    ]
+  ],
+  "runs": [
+    {
+      "id": "0-records-512-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "records",
+        "512",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "3a510d239b9b91552f28ceb27ce1fc52ecd94499155d8838326b3b512096ca5d"
+    },
+    {
+      "id": "0-records-512-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "records",
+        "512",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "32c1cfb369fb99bf9f32cacdd8bb3619e044e137bf535f4f8079cccf81e0124f"
+    },
+    {
+      "id": "0-handles-64-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "handles",
+        "64",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "8526f3146354ec15b1404618fd0cf4f257f8e4a05d1ff18bf2a1e18a44d2f572"
+    },
+    {
+      "id": "0-handles-64-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "handles",
+        "64",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "872367f8ef2001cb35426fe6386ad0ecfb44db58fe4b743f8d2d3632fa50a4cd"
+    },
+    {
+      "id": "0-many-512-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "many",
+        "512",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "9f59396f148d9eb186c8f07ab463e1acc8f22b9815c573f4f8caf4787d705d71"
+    },
+    {
+      "id": "0-many-512-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "many",
+        "512",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "b55391671f6c2ac9bc5c1e0d4437bb5944ad870f1566488e53c6a168cef8460e"
+    },
+    {
+      "id": "0-nested-64-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "nested",
+        "64",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "5d2e9b0e8957e58af92fcfe217c31a660f8ade8df18680b22438889a845cc348"
+    },
+    {
+      "id": "0-nested-64-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "nested",
+        "64",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "19f8e53ce1ed65afa1c4431cefc00c2664fb32f74a3e6b686465ea3c34e10e49"
+    },
+    {
+      "id": "0-nested-1-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "nested",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "61d70f9a4efaf31ab1ac33aee9f45011464e50a02b637df8664df711a3c1acb9"
+    },
+    {
+      "id": "0-nested-1-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "nested",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "0698c9a25a8205e1a81abfda88bbc07486099af4747b86c9a205df4a7a880706"
+    },
+    {
+      "id": "0-nested-512-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "nested",
+        "512",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "ed16696e4e87e0f5b2dee2ee7cb4c142c6fe584cdabb425f4fc236029746f7d1"
+    },
+    {
+      "id": "0-nested-512-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "nested",
+        "512",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "eae067ec3d74c7ad449151597517662e015399421b345c1cda7d2ec197f0822b"
+    },
+    {
+      "id": "0-records-64-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "records",
+        "64",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "5f589805e957062205fe72c2b798106f1164f733d3b9c9a03dc692d97a09504e"
+    },
+    {
+      "id": "0-records-64-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "records",
+        "64",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "ac2d181fd71d8b5faf746e6cab67e97c8170754732e4a4249e7d8d2af0acc16e"
+    },
+    {
+      "id": "0-handles-1-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "handles",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "c4dcddaee1fa236775fda80207879ee85b5b5dddbf3fa3a47c66873b6bedc94e"
+    },
+    {
+      "id": "0-handles-1-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "handles",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "22e7f63ea0fa1d70bc3a7d72a22663d843b7e180a6aecab5d7f3e8fa91e000db"
+    },
+    {
+      "id": "0-numbers-1-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "numbers",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "1ca219ee49dbb4e3041795b400d93694eadee2afde1b8ca7331ced139dd49f27"
+    },
+    {
+      "id": "0-numbers-1-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "numbers",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "b7886c469b0bd2569c3be47fd9079bf62d9086a3ddb5ef4eca7599d4663998b3"
+    },
+    {
+      "id": "0-many-64-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "many",
+        "64",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "971382efda79a5dd98fd61b4d0da3d3f36848625954b215c07e86d11ffc87ab7"
+    },
+    {
+      "id": "0-many-64-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "many",
+        "64",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "8d0272eb8a39488f4fb7b60fe059f5a875159b399ca48d786eee5de56a96eeff"
+    },
+    {
+      "id": "0-many-1-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "many",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "28296a97aff517f090a200860d1a8853bcfd5538d05557cb9b39e2882a7c2392"
+    },
+    {
+      "id": "0-many-1-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "many",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "256af1e51b2f88f0d29e180008196be9b541fba2b487b19b87c8cec76b9f2296"
+    },
+    {
+      "id": "0-records-1-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "records",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "d0d9d4ea3b25148747505312921351c99602c86c6eba42dfd87f51416d710aee"
+    },
+    {
+      "id": "0-records-1-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "records",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "77e669aec0ebc276e7dafafb2fae4be985ff98efd7dd70a4b78c7cb92bb820e5"
+    },
+    {
+      "id": "0-numbers-64-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "numbers",
+        "64",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "a97ec8c43a683d97fb59839f3291f1ca3a5da178347d954e7d23169a60d550a7"
+    },
+    {
+      "id": "0-numbers-64-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "numbers",
+        "64",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "63cfd5718ba8904a617352a7c21e634b27143948fd18293626ae74996064f22c"
+    },
+    {
+      "id": "0-numbers-512-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "numbers",
+        "512",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "41b8b279fccffaae7ef12b143918d7015388c3135525e28a4db0b9e187d6d6ce"
+    },
+    {
+      "id": "0-numbers-512-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "numbers",
+        "512",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "183ba691097a6629c10dd635fe3ea8c03dcff51e9ae0be110b2983816f68b832"
+    },
+    {
+      "id": "0-control-1-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "control",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "5f394be7c0b2b60a691d636c53938cecfc05d73bfb34a2917c7d46b6fc271f16"
+    },
+    {
+      "id": "0-control-1-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "control",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "7a18889be065c21e1ce26ef160601038da29847e15d458afbc0df89dd6b5ddfe"
+    },
+    {
+      "id": "0-handles-512-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "handles",
+        "512",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "ef11e8d5cbaa1bb357496f4aa43916c78e8e628515fd88642eadad1d631916ba"
+    },
+    {
+      "id": "0-handles-512-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "handles",
+        "512",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "0b148c26360c13cb38239f2710565887142109bbccdb7d74eef6c5551fef6bfd"
+    },
+    {
+      "id": "1-many-512-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "many",
+        "512",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "55a6cbb56f470dec1be5c68309f70145679175080fde1784e404dda0e644455d"
+    },
+    {
+      "id": "1-many-512-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "many",
+        "512",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "e90e21875bc12e7cce007238da9306fce724fadb637006a446f9f1c664cb7510"
+    },
+    {
+      "id": "1-handles-512-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "handles",
+        "512",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "c098ea848abb7353a3cf60e5892313e487a77ef374465b6a007b27727014f21f"
+    },
+    {
+      "id": "1-handles-512-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "handles",
+        "512",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "2815dd9b39416895f3c18e330e0e2c51286002d4aca9e113670e84e579ca446f"
+    },
+    {
+      "id": "1-handles-64-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "handles",
+        "64",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "8c2b01c24c111646b6bde0017376461afe2827593b6beb021dcc71ab16d9c2f2"
+    },
+    {
+      "id": "1-handles-64-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "handles",
+        "64",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "89d05eecc8225c4a8101b67ff4352fe582050354bb45add9f3cc6a6fbd733dfc"
+    },
+    {
+      "id": "1-numbers-1-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "numbers",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "11e890e8d8277d55db885c363cef07222f5dcaea3db8eb92ab30a8a5448f70da"
+    },
+    {
+      "id": "1-numbers-1-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "numbers",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "15ea54ceb0da3a9fee6f607a464d45b7ee50a5bb84221260a0fb10676970fc47"
+    },
+    {
+      "id": "1-nested-512-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "nested",
+        "512",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "09aee1ebdaea4c7edb83c0ce74042d90bfb6b7c89a817f9ba9ce459fa89170f7"
+    },
+    {
+      "id": "1-nested-512-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "nested",
+        "512",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "5868f2edd46145ee6b9ea3933bc4d150d23ed66ebc110fab2bc7feda6da3f2ac"
+    },
+    {
+      "id": "1-records-64-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "records",
+        "64",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "92b3aaf6cec1785da42acb6edaf26e99a99c9a8a5dc35ab5fba6cb69cae1d655"
+    },
+    {
+      "id": "1-records-64-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "records",
+        "64",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "2f1f4d1fd7dd74b302e41b98579a0d0371ce008fe9c8dcad6d673e7e877d696c"
+    },
+    {
+      "id": "1-numbers-64-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "numbers",
+        "64",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "3c9d0ed847c64ffdeded20c92fb4c123d37d5801ccb1d6432d035729ce478462"
+    },
+    {
+      "id": "1-numbers-64-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "numbers",
+        "64",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "a5292416695216344a26a58f53e53be0109f95d4862a59b2e1122db30535cbf2"
+    },
+    {
+      "id": "1-many-64-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "many",
+        "64",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "55de000316bb03edbc9821e978979a06441b62869a3723a2ec4339280ff429d0"
+    },
+    {
+      "id": "1-many-64-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "many",
+        "64",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "b15fdd5e135174ec9a61d81763b9d022654e24abf8a5cb55f317ccd57cc406dc"
+    },
+    {
+      "id": "1-control-1-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "control",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "03ece20dd7b9c80795456b1830237c0d304229933c5a99c54ee134bba85637af"
+    },
+    {
+      "id": "1-control-1-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "control",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "19ff9d85aa01b73d538b2ec30371f2f03d14006e9ef48681a2305446673e5a1a"
+    },
+    {
+      "id": "1-records-1-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "records",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "2cb40e608305f075deeb2403c4f5f6606c2345432e6f74217a153b7c29affee1"
+    },
+    {
+      "id": "1-records-1-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "records",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "4f8eec5c00c4f702b8dd43d4c9c6a9b1612a5143a3118c98283352740992d779"
+    },
+    {
+      "id": "1-handles-1-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "handles",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "b1c015175b2783b06e11e5244cf6c115dfb4ecad92f99dea0a08e365f9f9524c"
+    },
+    {
+      "id": "1-handles-1-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "handles",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "a120c140bf2dc6986e0bcc8d0c7972b3767bd0da9f1f5851e6efa1a0bd24ceb1"
+    },
+    {
+      "id": "1-many-1-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "many",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "af3cb14f71bfc2cd189f866e640b5e87a52ff0ae6d50f27022d1f1fd970cb6c7"
+    },
+    {
+      "id": "1-many-1-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "many",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "138985826e9bd8ed747d5e9c2e2e3e0845e804a36cd7ecb72bb6c51b65539bec"
+    },
+    {
+      "id": "1-nested-64-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "nested",
+        "64",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "ca46af86c617d410e72d9be2650b00ce78a700365dc2be25b7ddd5f8a030bf5b"
+    },
+    {
+      "id": "1-nested-64-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "nested",
+        "64",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "fda75f4ad2b5ec86e644456b984d1c85dd6e3635ee9d7f5a38d062f4acb1d058"
+    },
+    {
+      "id": "1-numbers-512-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "numbers",
+        "512",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "82835a1ab118acfd05ea7591855b7cc2613de5dd09c684256df6f30433a9efd9"
+    },
+    {
+      "id": "1-numbers-512-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "numbers",
+        "512",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "898fac59287ba16c7f238315cc324de88a310f76271d690d4e2c913ce9bcfec5"
+    },
+    {
+      "id": "1-records-512-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "records",
+        "512",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "cb068f0044656b0373e43b8baf3e09c209907bdc7cce70a349e51fbc724d2316"
+    },
+    {
+      "id": "1-records-512-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "records",
+        "512",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "ea41b5d02c5c1f44ae19e177a179aa6043f0e0d46b4bb6fde689c781cb7c1d18"
+    },
+    {
+      "id": "1-nested-1-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "nested",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "bcb99f5dd8c1a0dd2963c553db0afabf2e98a68a2221f2c9f75ce699661f72f3"
+    },
+    {
+      "id": "1-nested-1-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "nested",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "aecb7587ca5418e72b934ee2ddeb8b0e10c52497f4d826e3121715c096259b36"
+    },
+    {
+      "id": "2-handles-1-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "handles",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "682205547d20e1a885f0b5a48a15beafbc185bc7194a2e6ee00c12085a9f7d84"
+    },
+    {
+      "id": "2-handles-1-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "handles",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "594aaa007f10ec8fed3125bae207c3acdb12fbc46980d7b270e3c49c6dbb4b76"
+    },
+    {
+      "id": "2-control-1-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "control",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "5b401064c2e55fb854509f4d2127a01a9bb4231cfe2fa4d1ed230413ff68df55"
+    },
+    {
+      "id": "2-control-1-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "control",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "a20fd39ed4e08a6c723d22cf17b331dae152892f3fe105ed6907ee7ffb037db9"
+    },
+    {
+      "id": "2-records-512-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "records",
+        "512",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "d932eb20312b6b82c6a0b6dee35d6ba0fb022af57960dca26bcee0c94bf8c357"
+    },
+    {
+      "id": "2-records-512-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "records",
+        "512",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "f8189a4f258acea77c657b61a6af88c8c46471711da2cc7ccd55eca77bac5e72"
+    },
+    {
+      "id": "2-nested-512-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "nested",
+        "512",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "66e81ccc3d1c111ae273e450dd096aad247ca34161c51bf3fcaca044838dc4c4"
+    },
+    {
+      "id": "2-nested-512-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "nested",
+        "512",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "39a5131cd89db27088f4b44eb11db03dc9996b321f12c4c91b00f207cbd37186"
+    },
+    {
+      "id": "2-numbers-64-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "numbers",
+        "64",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "8fc40b03c7c794b718b092d4a5f24158cb17628d1f24be5adcad98d800082aea"
+    },
+    {
+      "id": "2-numbers-64-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "numbers",
+        "64",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "48523cb2edf0231f8fb31784dda0a7f6ffa5ae88cee2e395252df5531069abb8"
+    },
+    {
+      "id": "2-nested-64-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "nested",
+        "64",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "3eda4b7591ca27cf00b4fc605b487842396f2ddc82954d78200800881dd8a89c"
+    },
+    {
+      "id": "2-nested-64-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "nested",
+        "64",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "a4422d0a1513956ff1d46a43e3fc64de5f12cd38cf1641e6916bac274c6c9673"
+    },
+    {
+      "id": "2-records-1-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "records",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "fc1d675c71dce22b5a3eed6fdf95d99e77b971c74bb6bbfffd293d9fb38a4ef3"
+    },
+    {
+      "id": "2-records-1-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "records",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "83f0b05efc4ca89504d33960e8d212331690d1b16f7263069ea011859538d2a1"
+    },
+    {
+      "id": "2-many-512-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "many",
+        "512",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "fc33483749518a04d0d0f6e39d5edfea307dd829bf9c2ff5eaecc326c413f5d1"
+    },
+    {
+      "id": "2-many-512-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "many",
+        "512",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "bbbbe569ef5021b0004a2d05216469310dbf166568e172380ffb4208544cba65"
+    },
+    {
+      "id": "2-nested-1-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "nested",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "aae110229568fa766de90eb0711dd4c73f9be2c4dc76d29d0cb853d4656671fb"
+    },
+    {
+      "id": "2-nested-1-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "nested",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "89de9d3b54ecd07d1f5e32e67c1874b13a41f52dc3e3be1881f2c78f518f7ceb"
+    },
+    {
+      "id": "2-handles-64-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "handles",
+        "64",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "35531d87efdf27661a0ecf3d3be98b12a83107037d05acf39e4cb95ca0640aea"
+    },
+    {
+      "id": "2-handles-64-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "handles",
+        "64",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "8df755367368e0643bbbb1127eb8ccb92fbf13bcac8275a4974f03ddb57577d4"
+    },
+    {
+      "id": "2-many-1-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "many",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "124245177e656042206ba652d97f9e9e1e6e3474aed0c357908f674b5d816fdc"
+    },
+    {
+      "id": "2-many-1-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "many",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "022bf3a8f06583fe34c66bcbce072696455fa124192852aa7a9bee4a7bda23cf"
+    },
+    {
+      "id": "2-handles-512-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "handles",
+        "512",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "a8faf41a1889a78cac588810f8bf05987f7209eb392d4ae2c36172fcb5e5af2f"
+    },
+    {
+      "id": "2-handles-512-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "handles",
+        "512",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "4d27c23cc97c7049834f7972b9e74c2100df4799dff8e1a123ff4c72fdad5da6"
+    },
+    {
+      "id": "2-numbers-512-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "numbers",
+        "512",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "b95702c9f10dbc341b9888841060cb2368f90017b2175173a8b38aa0576f0c37"
+    },
+    {
+      "id": "2-numbers-512-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "numbers",
+        "512",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "af7562d57c17b4438eeb56ceb32e28a65e1a786a8f6d9e13ea03820721d1b333"
+    },
+    {
+      "id": "2-many-64-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "many",
+        "64",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "f60c19106c51fdf514254dc5ac52ce175f3f58e8ce49eb766e834cdc9dd8a33f"
+    },
+    {
+      "id": "2-many-64-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "many",
+        "64",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "7e1cea6094ed0fd4f603fe12f7bfaabd24fa8f9d2ea85c7a21ce8f1d940a7ab9"
+    },
+    {
+      "id": "2-numbers-1-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "numbers",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "ed036a9f6413de6dceb8777af6fc8b0c146b2e2d0874aa998df9acfb9ea2b8a1"
+    },
+    {
+      "id": "2-numbers-1-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "numbers",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "083bd8a942f0cce3c3da49c645ee24a7f7d3e50f0a878eed6e231d8372eebf30"
+    },
+    {
+      "id": "2-records-64-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "records",
+        "64",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "0b7ee07ee133fdf20c19d7335f81cf6ad4ff2da1f921681d3190357d602bfbe8"
+    },
+    {
+      "id": "2-records-64-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "records",
+        "64",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "64f17b988cefd9a26e01c2881b8beb179acb6eb9f3ea554ce1db28b38a539fc3"
+    },
+    {
+      "id": "3-numbers-64-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "numbers",
+        "64",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "5ce929233484f2fa4602cfc1047abd5203dd730eb232fe8b7d5fe1b07a304cf2"
+    },
+    {
+      "id": "3-numbers-64-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "numbers",
+        "64",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "03eeda930b24c2a642e22747e8845fd8c861be7a225ed275c961be59d82cee5d"
+    },
+    {
+      "id": "3-numbers-512-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "numbers",
+        "512",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "6e1358fe0b0371495d3428299fcb01df9a97b5d4d1b7ea3948f3a0c470248bf2"
+    },
+    {
+      "id": "3-numbers-512-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "numbers",
+        "512",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "b238d6daf8a22cb33deea2f325a2473a11beaea6f8340d51db7348ac73b38696"
+    },
+    {
+      "id": "3-numbers-1-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "numbers",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "e793d3f2436f5f640efc26432d7ef95e9462a16943fd5cbfce07ba103ea9d6b4"
+    },
+    {
+      "id": "3-numbers-1-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "numbers",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "dd759d6ddaac23973f8c18d7d4b5c8069990547f380e64d6d956954f9c7d64eb"
+    },
+    {
+      "id": "3-nested-64-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "nested",
+        "64",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "abfdda3f772b1165f49649d22ac2ccc9efa7e392264aea73500d22694473a652"
+    },
+    {
+      "id": "3-nested-64-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "nested",
+        "64",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "46a35cdba6e696bcbaaacd79e5abc52cadbbe4b898cb8f5af641ec74783c3187"
+    },
+    {
+      "id": "3-nested-512-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "nested",
+        "512",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "18ccac959b950d66901575315c9abfaf39d586cbebb42f4bfe60f7c278d9f81d"
+    },
+    {
+      "id": "3-nested-512-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "nested",
+        "512",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "44b6e829e92a95e3b0923e55ab7a447c4b8165912e04cdb37f93e05340f824d4"
+    },
+    {
+      "id": "3-many-512-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "many",
+        "512",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "ee53eb84ef6a5acb077bea03c35f174e37df674284a2b546b80e9ab8e1c74883"
+    },
+    {
+      "id": "3-many-512-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "many",
+        "512",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "6215eb960260cb61a0ab4cbd5cce176453e3722fb29290723cd57c082ed786f4"
+    },
+    {
+      "id": "3-many-64-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "many",
+        "64",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "496da8c5168243583bf7323acc78c20bc7a9257ea781620e9e48d11aff06a07c"
+    },
+    {
+      "id": "3-many-64-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "many",
+        "64",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "8f0cb1d07c13d2caf029bda7835593b2bc63ada0599054cfed34be03d6ec94de"
+    },
+    {
+      "id": "3-records-64-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "records",
+        "64",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "5ef8a3a20b3d8258e845848478193610229b66c4df1e757ef8aff2d6556e39ff"
+    },
+    {
+      "id": "3-records-64-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "records",
+        "64",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "6208bc57ce6b96c27dfb4d493c77961b986cd991d31cba1abb12c72fc2bcfd68"
+    },
+    {
+      "id": "3-nested-1-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "nested",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "c22b5818bc20cda572533b75d9f53df466e65477c562c4b4950a90b467c1c03f"
+    },
+    {
+      "id": "3-nested-1-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "nested",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "d4998a70cc9105cb566ec510209e6f5831d845eb2e47a6eed17ce6d8973dbce5"
+    },
+    {
+      "id": "3-records-512-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "records",
+        "512",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "471440ff3504ff6ad8a8a133583e55814e74a4da724cb72ccb5eb8a253601a23"
+    },
+    {
+      "id": "3-records-512-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "records",
+        "512",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "25dbc5441114f5f623ae3b21192883e11ac5e1a40af8c2b72324c048768d8591"
+    },
+    {
+      "id": "3-many-1-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "many",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "6734f45728acbf2ae1d0e71738ec8b62e0c4aee0900bc6945273652ed87b1c14"
+    },
+    {
+      "id": "3-many-1-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "many",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "092835e76c74419649f1d9ee1c119724dfba993408c51ec355e0f2e996f71c83"
+    },
+    {
+      "id": "3-handles-1-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "handles",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "75bb22211247df4a281f3923da4314bbf75955bd7ac33ab1112d120ac3cd159f"
+    },
+    {
+      "id": "3-handles-1-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "handles",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "b112657a165564511e013468403679e4fba74386ad42b58986d8b30794cba1c2"
+    },
+    {
+      "id": "3-records-1-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "records",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "558bf58dccaeda09c1b6b4694235e288b491039e82d5d15f5c2ae0c63730c746"
+    },
+    {
+      "id": "3-records-1-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "records",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "97143674f77660207ed88f8772da432a80c516ba4a9a1a4b271fe0f5ff72abaa"
+    },
+    {
+      "id": "3-handles-512-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "handles",
+        "512",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "53b7920549feda115da24d4d686f1ebf33a1649f75cfa9e7aeed4699e4e218f2"
+    },
+    {
+      "id": "3-handles-512-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "handles",
+        "512",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "c73465a02de42a3bb81954e31c41d2450af9007c3444e1e13ff4ea3da92bbe05"
+    },
+    {
+      "id": "3-control-1-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "control",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "2b007d0c90a531aa9ec5b94efa5de8e4cbc52a531e8f277567d6e74d370faadb"
+    },
+    {
+      "id": "3-control-1-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "control",
+        "1",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "d8ae75877a2bc140384163b4347505bd7ca072208318f72ed0480cf8ac03d294"
+    },
+    {
+      "id": "3-handles-64-after",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "handles",
+        "64",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-after-normal/target/release/libc_collection_bench.so",
+      "stdout_sha256": "85143e7eb4c9ef5b381d8f359893311ceb3cf88562780c33347bd45dcb2fe253"
+    },
+    {
+      "id": "3-handles-64-before",
+      "command": [
+        "/tmp/c-output-before-normal-v3/driver",
+        "time",
+        "handles",
+        "64",
+        "20",
+        "20"
+      ],
+      "loaded_library": "/tmp/c-output-before-normal-v3/target/release/libc_collection_bench.so",
+      "stdout_sha256": "6c5aa5f71ac93dd1c56bba2a5e7a3aa2e70f2d6553697c3e848e64e5589aa571"
+    }
+  ],
+  "summary": [
+    {
+      "case": "control",
+      "size": 1,
+      "before": {
+        "wall_ns": 3.068048882484436,
+        "cpu_ns": 3.0675218403339386,
+        "min_wall_ns": 2.9473394215106965,
+        "max_wall_ns": 3.3116079747676848,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 2.9473394215106965,
+            "cpu_ns": 2.9472421407699585
+          },
+          {
+            "fork": 1,
+            "wall_ns": 3.0440668165683746,
+            "cpu_ns": 3.042845666408539
+          },
+          {
+            "fork": 2,
+            "wall_ns": 3.3116079747676848,
+            "cpu_ns": 3.3110339641571045
+          },
+          {
+            "fork": 3,
+            "wall_ns": 3.0920309484004975,
+            "cpu_ns": 3.0921980142593384
+          }
+        ]
+      },
+      "after": {
+        "wall_ns": 2.9747352451086044,
+        "cpu_ns": 2.974538177251816,
+        "min_wall_ns": 2.9381607830524445,
+        "max_wall_ns": 2.991061973571777,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 2.991061973571777,
+            "cpu_ns": 2.9860804677009583
+          },
+          {
+            "fork": 1,
+            "wall_ns": 2.9381607830524445,
+            "cpu_ns": 2.938163459300995
+          },
+          {
+            "fork": 2,
+            "wall_ns": 2.9819145083427427,
+            "cpu_ns": 2.9815043807029724
+          },
+          {
+            "fork": 3,
+            "wall_ns": 2.967555981874466,
+            "cpu_ns": 2.967571973800659
+          }
+        ]
+      },
+      "wall_change_percent": -3.041465144462374,
+      "cpu_change_percent": -3.0312306781163922,
+      "paired_wall_changes_percent": [
+        1.4834583265835866,
+        -3.479096875912846,
+        -9.955691281606803,
+        -4.025670137306426
+      ]
+    },
+    {
+      "case": "handles",
+      "size": 1,
+      "before": {
+        "wall_ns": 68.51190571784974,
+        "cpu_ns": 68.39840745925903,
+        "min_wall_ns": 65.58719215393066,
+        "max_wall_ns": 68.89524717330933,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 68.89524717330933,
+            "cpu_ns": 68.65598011016846
+          },
+          {
+            "fork": 1,
+            "wall_ns": 65.58719215393066,
+            "cpu_ns": 65.56367301940918
+          },
+          {
+            "fork": 2,
+            "wall_ns": 68.14796323776245,
+            "cpu_ns": 68.14083480834961
+          },
+          {
+            "fork": 3,
+            "wall_ns": 68.87584819793702,
+            "cpu_ns": 68.85477638244629
+          }
+        ]
+      },
+      "after": {
+        "wall_ns": 47.73872075080871,
+        "cpu_ns": 47.729339599609375,
+        "min_wall_ns": 47.33531455993652,
+        "max_wall_ns": 52.174396991729736,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 47.91081705093384,
+            "cpu_ns": 47.88919639587402
+          },
+          {
+            "fork": 1,
+            "wall_ns": 52.174396991729736,
+            "cpu_ns": 52.15067672729492
+          },
+          {
+            "fork": 2,
+            "wall_ns": 47.56662445068359,
+            "cpu_ns": 47.56948280334473
+          },
+          {
+            "fork": 3,
+            "wall_ns": 47.33531455993652,
+            "cpu_ns": 47.334394454956055
+          }
+        ]
+      },
+      "wall_change_percent": -30.320547574009304,
+      "cpu_change_percent": -30.218639040625362,
+      "paired_wall_changes_percent": [
+        -30.458458287533453,
+        -20.450326842352993,
+        -30.20095951403906,
+        -31.274436833208664
+      ]
+    },
+    {
+      "case": "handles",
+      "size": 64,
+      "before": {
+        "wall_ns": 1533.759454345703,
+        "cpu_ns": 1533.7857818603516,
+        "min_wall_ns": 1476.3290161132813,
+        "max_wall_ns": 1653.6981109619142,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 1572.2657653808594,
+            "cpu_ns": 1572.2238159179688
+          },
+          {
+            "fork": 1,
+            "wall_ns": 1653.6981109619142,
+            "cpu_ns": 1653.7286071777344
+          },
+          {
+            "fork": 2,
+            "wall_ns": 1476.3290161132813,
+            "cpu_ns": 1476.115234375
+          },
+          {
+            "fork": 3,
+            "wall_ns": 1495.2531433105469,
+            "cpu_ns": 1495.3477478027344
+          }
+        ]
+      },
+      "after": {
+        "wall_ns": 1285.667024230957,
+        "cpu_ns": 1285.6503295898438,
+        "min_wall_ns": 1257.5615966796875,
+        "max_wall_ns": 1327.8242980957032,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 1289.5833801269532,
+            "cpu_ns": 1289.55615234375
+          },
+          {
+            "fork": 1,
+            "wall_ns": 1257.5615966796875,
+            "cpu_ns": 1257.4619445800781
+          },
+          {
+            "fork": 2,
+            "wall_ns": 1327.8242980957032,
+            "cpu_ns": 1327.8305053710938
+          },
+          {
+            "fork": 3,
+            "wall_ns": 1281.750668334961,
+            "cpu_ns": 1281.7445068359375
+          }
+        ]
+      },
+      "wall_change_percent": -16.17544585702857,
+      "cpu_change_percent": -16.177973169730432,
+      "paired_wall_changes_percent": [
+        -17.979300413338862,
+        -23.95458467638958,
+        -10.059052988645123,
+        -14.27868424358456
+      ]
+    },
+    {
+      "case": "handles",
+      "size": 512,
+      "before": {
+        "wall_ns": 16949.76641845703,
+        "cpu_ns": 16948.121459960938,
+        "min_wall_ns": 16733.988696289063,
+        "max_wall_ns": 17064.510034179686,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 16733.988696289063,
+            "cpu_ns": 16728.68896484375
+          },
+          {
+            "fork": 1,
+            "wall_ns": 16884.612182617188,
+            "cpu_ns": 16881.2431640625
+          },
+          {
+            "fork": 2,
+            "wall_ns": 17064.510034179686,
+            "cpu_ns": 17059.175537109375
+          },
+          {
+            "fork": 3,
+            "wall_ns": 17014.920654296875,
+            "cpu_ns": 17014.999755859375
+          }
+        ]
+      },
+      "after": {
+        "wall_ns": 16469.473229980467,
+        "cpu_ns": 16469.415649414062,
+        "min_wall_ns": 16145.712451171876,
+        "max_wall_ns": 16865.980102539062,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 16770.46745605469,
+            "cpu_ns": 16770.455810546875
+          },
+          {
+            "fork": 1,
+            "wall_ns": 16865.980102539062,
+            "cpu_ns": 16857.415283203125
+          },
+          {
+            "fork": 2,
+            "wall_ns": 16145.712451171876,
+            "cpu_ns": 16144.329345703125
+          },
+          {
+            "fork": 3,
+            "wall_ns": 16168.47900390625,
+            "cpu_ns": 16168.37548828125
+          }
+        ]
+      },
+      "wall_change_percent": -2.833627181750187,
+      "cpu_change_percent": -2.8245361096673305,
+      "paired_wall_changes_percent": [
+        0.21799201868539786,
+        -0.11034947013652818,
+        -5.38425997094254,
+        -4.974702307394352
+      ]
+    },
+    {
+      "case": "many",
+      "size": 1,
+      "before": {
+        "wall_ns": 109.7809518814087,
+        "cpu_ns": 109.7741928100586,
+        "min_wall_ns": 109.25273628234864,
+        "max_wall_ns": 114.17190017700196,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 114.17190017700196,
+            "cpu_ns": 114.15438842773438
+          },
+          {
+            "fork": 1,
+            "wall_ns": 109.98604717254639,
+            "cpu_ns": 109.96943092346191
+          },
+          {
+            "fork": 2,
+            "wall_ns": 109.575856590271,
+            "cpu_ns": 109.57895469665527
+          },
+          {
+            "fork": 3,
+            "wall_ns": 109.25273628234864,
+            "cpu_ns": 109.07717704772949
+          }
+        ]
+      },
+      "after": {
+        "wall_ns": 75.90055179595947,
+        "cpu_ns": 75.8327865600586,
+        "min_wall_ns": 74.24003973007203,
+        "max_wall_ns": 84.59964046478271,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 76.64332332611085,
+            "cpu_ns": 76.52186584472656
+          },
+          {
+            "fork": 1,
+            "wall_ns": 75.1577802658081,
+            "cpu_ns": 75.14370727539062
+          },
+          {
+            "fork": 2,
+            "wall_ns": 74.24003973007203,
+            "cpu_ns": 74.24006652832031
+          },
+          {
+            "fork": 3,
+            "wall_ns": 84.59964046478271,
+            "cpu_ns": 84.58523941040039
+          }
+        ]
+      },
+      "wall_change_percent": -30.861820292876185,
+      "cpu_change_percent": -30.919294764233474,
+      "paired_wall_changes_percent": [
+        -32.87023934322731,
+        -31.666077472626707,
+        -32.24781257455975,
+        -22.565197592720608
+      ]
+    },
+    {
+      "case": "many",
+      "size": 64,
+      "before": {
+        "wall_ns": 7820.230804443359,
+        "cpu_ns": 7819.6021728515625,
+        "min_wall_ns": 7412.183813476562,
+        "max_wall_ns": 8356.249853515625,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 8356.249853515625,
+            "cpu_ns": 8349.356689453125
+          },
+          {
+            "fork": 1,
+            "wall_ns": 7412.183813476562,
+            "cpu_ns": 7411.8065185546875
+          },
+          {
+            "fork": 2,
+            "wall_ns": 7947.642150878906,
+            "cpu_ns": 7946.4237060546875
+          },
+          {
+            "fork": 3,
+            "wall_ns": 7692.8194580078125,
+            "cpu_ns": 7692.7806396484375
+          }
+        ]
+      },
+      "after": {
+        "wall_ns": 5426.282525634766,
+        "cpu_ns": 5426.619323730469,
+        "min_wall_ns": 5303.121655273438,
+        "max_wall_ns": 5697.931018066406,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 5526.145422363281,
+            "cpu_ns": 5526.362060546875
+          },
+          {
+            "fork": 1,
+            "wall_ns": 5697.931018066406,
+            "cpu_ns": 5696.1851806640625
+          },
+          {
+            "fork": 2,
+            "wall_ns": 5326.41962890625,
+            "cpu_ns": 5326.8765869140625
+          },
+          {
+            "fork": 3,
+            "wall_ns": 5303.121655273438,
+            "cpu_ns": 5302.3365478515625
+          }
+        ]
+      },
+      "wall_change_percent": -30.612245836125208,
+      "cpu_change_percent": -30.6023605322168,
+      "paired_wall_changes_percent": [
+        -33.86811644893155,
+        -23.127499783442552,
+        -32.981134180566784,
+        -31.064004761567976
+      ]
+    },
+    {
+      "case": "many",
+      "size": 512,
+      "before": {
+        "wall_ns": 59470.16572265625,
+        "cpu_ns": 59291.64599609375,
+        "min_wall_ns": 57744.0998046875,
+        "max_wall_ns": 63750.68623046875,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 63750.68623046875,
+            "cpu_ns": 63750.015625
+          },
+          {
+            "fork": 1,
+            "wall_ns": 58987.0400390625,
+            "cpu_ns": 58849.2822265625
+          },
+          {
+            "fork": 2,
+            "wall_ns": 57744.0998046875,
+            "cpu_ns": 57647.2802734375
+          },
+          {
+            "fork": 3,
+            "wall_ns": 59953.29140625,
+            "cpu_ns": 59734.009765625
+          }
+        ]
+      },
+      "after": {
+        "wall_ns": 43641.70014648438,
+        "cpu_ns": 43642.2978515625,
+        "min_wall_ns": 41662.08779296875,
+        "max_wall_ns": 49957.5208984375,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 41870.4365234375,
+            "cpu_ns": 41870.3583984375
+          },
+          {
+            "fork": 1,
+            "wall_ns": 45412.96376953125,
+            "cpu_ns": 45414.2373046875
+          },
+          {
+            "fork": 2,
+            "wall_ns": 41662.08779296875,
+            "cpu_ns": 41629.876953125
+          },
+          {
+            "fork": 3,
+            "wall_ns": 49957.5208984375,
+            "cpu_ns": 49943.958984375
+          }
+        ]
+      },
+      "wall_change_percent": -26.61580875693058,
+      "cpu_change_percent": -26.39385006373791,
+      "paired_wall_changes_percent": [
+        -34.321590873438936,
+        -23.011963747532004,
+        -27.850485272286228,
+        -16.67259673881801
+      ]
+    },
+    {
+      "case": "nested",
+      "size": 1,
+      "before": {
+        "wall_ns": 141.4024803161621,
+        "cpu_ns": 141.353666305542,
+        "min_wall_ns": 138.18093547821044,
+        "max_wall_ns": 144.618510055542,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 143.10205841064453,
+            "cpu_ns": 143.0792694091797
+          },
+          {
+            "fork": 1,
+            "wall_ns": 139.7029022216797,
+            "cpu_ns": 139.6280632019043
+          },
+          {
+            "fork": 2,
+            "wall_ns": 144.618510055542,
+            "cpu_ns": 144.6211395263672
+          },
+          {
+            "fork": 3,
+            "wall_ns": 138.18093547821044,
+            "cpu_ns": 138.14119911193848
+          }
+        ]
+      },
+      "after": {
+        "wall_ns": 87.89556121826172,
+        "cpu_ns": 87.80558013916016,
+        "min_wall_ns": 84.94732913970947,
+        "max_wall_ns": 91.08753089904785,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 88.2657527923584,
+            "cpu_ns": 88.24098777770996
+          },
+          {
+            "fork": 1,
+            "wall_ns": 87.52536964416504,
+            "cpu_ns": 87.37017250061035
+          },
+          {
+            "fork": 2,
+            "wall_ns": 84.94732913970947,
+            "cpu_ns": 84.88582992553711
+          },
+          {
+            "fork": 3,
+            "wall_ns": 91.08753089904785,
+            "cpu_ns": 91.0945930480957
+          }
+        ]
+      },
+      "wall_change_percent": -37.840155970577136,
+      "cpu_change_percent": -37.88234685801171,
+      "paired_wall_changes_percent": [
+        -38.31971826773331,
+        -37.34892528912511,
+        -41.26109506515818,
+        -34.08097102265507
+      ]
+    },
+    {
+      "case": "nested",
+      "size": 64,
+      "before": {
+        "wall_ns": 1594.6814331054688,
+        "cpu_ns": 1592.6769104003906,
+        "min_wall_ns": 1558.2774230957032,
+        "max_wall_ns": 1635.0371032714843,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 1627.5991516113281,
+            "cpu_ns": 1627.5945739746094
+          },
+          {
+            "fork": 1,
+            "wall_ns": 1558.2774230957032,
+            "cpu_ns": 1554.3330078125
+          },
+          {
+            "fork": 2,
+            "wall_ns": 1635.0371032714843,
+            "cpu_ns": 1634.8582763671875
+          },
+          {
+            "fork": 3,
+            "wall_ns": 1561.7637145996093,
+            "cpu_ns": 1557.7592468261719
+          }
+        ]
+      },
+      "after": {
+        "wall_ns": 1287.6745300292969,
+        "cpu_ns": 1285.3348999023438,
+        "min_wall_ns": 1279.063998413086,
+        "max_wall_ns": 1496.7555938720702,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 1496.7555938720702,
+            "cpu_ns": 1496.7481079101562
+          },
+          {
+            "fork": 1,
+            "wall_ns": 1293.2149047851562,
+            "cpu_ns": 1289.5834655761719
+          },
+          {
+            "fork": 2,
+            "wall_ns": 1279.063998413086,
+            "cpu_ns": 1279.1335754394531
+          },
+          {
+            "fork": 3,
+            "wall_ns": 1282.1341552734375,
+            "cpu_ns": 1281.0863342285156
+          }
+        ]
+      },
+      "wall_change_percent": -19.251926855278512,
+      "cpu_change_percent": -19.29719759802273,
+      "paired_wall_changes_percent": [
+        -8.039052957831927,
+        -17.00996975134047,
+        -21.771561278098527,
+        -17.90472891079178
+      ]
+    },
+    {
+      "case": "nested",
+      "size": 512,
+      "before": {
+        "wall_ns": 17230.02634277344,
+        "cpu_ns": 17211.26318359375,
+        "min_wall_ns": 16970.169775390626,
+        "max_wall_ns": 17450.358642578125,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 17450.358642578125,
+            "cpu_ns": 17447.49560546875
+          },
+          {
+            "fork": 1,
+            "wall_ns": 16970.169775390626,
+            "cpu_ns": 16970.028564453125
+          },
+          {
+            "fork": 2,
+            "wall_ns": 17432.893505859374,
+            "cpu_ns": 17428.43359375
+          },
+          {
+            "fork": 3,
+            "wall_ns": 17027.1591796875,
+            "cpu_ns": 16994.0927734375
+          }
+        ]
+      },
+      "after": {
+        "wall_ns": 15680.009606933594,
+        "cpu_ns": 15679.564086914062,
+        "min_wall_ns": 15354.716381835937,
+        "max_wall_ns": 16217.51953125,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 15542.677758789063,
+            "cpu_ns": 15541.472412109375
+          },
+          {
+            "fork": 1,
+            "wall_ns": 15354.716381835937,
+            "cpu_ns": 15354.982421875
+          },
+          {
+            "fork": 2,
+            "wall_ns": 15817.341455078125,
+            "cpu_ns": 15817.65576171875
+          },
+          {
+            "fork": 3,
+            "wall_ns": 16217.51953125,
+            "cpu_ns": 16212.6962890625
+          }
+        ]
+      },
+      "wall_change_percent": -8.996020696683082,
+      "cpu_change_percent": -8.899399656730278,
+      "paired_wall_changes_percent": [
+        -10.932043993264429,
+        -9.519370842696851,
+        -9.267262776763053,
+        -4.754989601573456
+      ]
+    },
+    {
+      "case": "numbers",
+      "size": 1,
+      "before": {
+        "wall_ns": 37.251402258872986,
+        "cpu_ns": 37.21386790275574,
+        "min_wall_ns": 36.41093521118164,
+        "max_wall_ns": 40.03417067527771,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 36.41093521118164,
+            "cpu_ns": 36.39127969741821
+          },
+          {
+            "fork": 1,
+            "wall_ns": 36.906936693191525,
+            "cpu_ns": 36.90686368942261
+          },
+          {
+            "fork": 2,
+            "wall_ns": 40.03417067527771,
+            "cpu_ns": 40.03502130508423
+          },
+          {
+            "fork": 3,
+            "wall_ns": 37.595867824554446,
+            "cpu_ns": 37.52087211608887
+          }
+        ]
+      },
+      "after": {
+        "wall_ns": 33.79425082206726,
+        "cpu_ns": 33.79577326774597,
+        "min_wall_ns": 33.28435583114624,
+        "max_wall_ns": 34.72770857810974,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 33.28435583114624,
+            "cpu_ns": 33.25847005844116
+          },
+          {
+            "fork": 1,
+            "wall_ns": 34.72770857810974,
+            "cpu_ns": 34.715412616729736
+          },
+          {
+            "fork": 2,
+            "wall_ns": 34.20152635574341,
+            "cpu_ns": 34.20400047302246
+          },
+          {
+            "fork": 3,
+            "wall_ns": 33.38697528839111,
+            "cpu_ns": 33.38754606246948
+          }
+        ]
+      },
+      "wall_change_percent": -9.280594090876825,
+      "cpu_change_percent": -9.18500233284445,
+      "paired_wall_changes_percent": [
+        -8.586924125681994,
+        -5.90465725507856,
+        -14.56916484381211,
+        -11.195093449643522
+      ]
+    },
+    {
+      "case": "numbers",
+      "size": 64,
+      "before": {
+        "wall_ns": 128.3755757331848,
+        "cpu_ns": 128.26416492462158,
+        "min_wall_ns": 125.61674194335937,
+        "max_wall_ns": 157.3964515686035,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 157.3964515686035,
+            "cpu_ns": 157.3945655822754
+          },
+          {
+            "fork": 1,
+            "wall_ns": 125.61674194335937,
+            "cpu_ns": 125.61349868774414
+          },
+          {
+            "fork": 2,
+            "wall_ns": 129.62221279144288,
+            "cpu_ns": 129.42803382873535
+          },
+          {
+            "fork": 3,
+            "wall_ns": 127.12893867492676,
+            "cpu_ns": 127.10029602050781
+          }
+        ]
+      },
+      "after": {
+        "wall_ns": 64.55769391059874,
+        "cpu_ns": 64.55819320678711,
+        "min_wall_ns": 63.99239044189453,
+        "max_wall_ns": 66.93287954330444,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 64.07625970840454,
+            "cpu_ns": 64.07555675506592
+          },
+          {
+            "fork": 1,
+            "wall_ns": 65.03912811279297,
+            "cpu_ns": 65.0408296585083
+          },
+          {
+            "fork": 2,
+            "wall_ns": 66.93287954330444,
+            "cpu_ns": 66.93180561065674
+          },
+          {
+            "fork": 3,
+            "wall_ns": 63.99239044189453,
+            "cpu_ns": 63.99262619018555
+          }
+        ]
+      },
+      "wall_change_percent": -49.711856369956884,
+      "cpu_change_percent": -49.6677865990655,
+      "paired_wall_changes_percent": [
+        -59.28989562990499,
+        -48.22415618602882,
+        -48.36310991620175,
+        -49.66339599080162
+      ]
+    },
+    {
+      "case": "numbers",
+      "size": 512,
+      "before": {
+        "wall_ns": 799.1431373596191,
+        "cpu_ns": 798.7530670166016,
+        "min_wall_ns": 789.0946701049804,
+        "max_wall_ns": 801.0728927612305,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 797.9971206665039,
+            "cpu_ns": 798.0138549804688
+          },
+          {
+            "fork": 1,
+            "wall_ns": 801.0728927612305,
+            "cpu_ns": 800.4085540771484
+          },
+          {
+            "fork": 2,
+            "wall_ns": 789.0946701049804,
+            "cpu_ns": 789.1281585693359
+          },
+          {
+            "fork": 3,
+            "wall_ns": 800.2891540527344,
+            "cpu_ns": 799.4922790527344
+          }
+        ]
+      },
+      "after": {
+        "wall_ns": 350.24916114807127,
+        "cpu_ns": 350.25683212280273,
+        "min_wall_ns": 343.2621391296387,
+        "max_wall_ns": 356.335758972168,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 353.95616912841797,
+            "cpu_ns": 353.9675750732422
+          },
+          {
+            "fork": 1,
+            "wall_ns": 346.5421531677246,
+            "cpu_ns": 346.5460891723633
+          },
+          {
+            "fork": 2,
+            "wall_ns": 343.2621391296387,
+            "cpu_ns": 343.1814422607422
+          },
+          {
+            "fork": 3,
+            "wall_ns": 356.335758972168,
+            "cpu_ns": 356.28273010253906
+          }
+        ]
+      },
+      "wall_change_percent": -56.17191154199237,
+      "cpu_change_percent": -56.14954776561467,
+      "paired_wall_changes_percent": [
+        -55.6444302915797,
+        -56.74024719857601,
+        -56.49924500390158,
+        -55.47412367546749
+      ]
+    },
+    {
+      "case": "records",
+      "size": 1,
+      "before": {
+        "wall_ns": 84.39677505493164,
+        "cpu_ns": 84.10534477233887,
+        "min_wall_ns": 83.3200008392334,
+        "max_wall_ns": 152.65027332305908,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 152.65027332305908,
+            "cpu_ns": 152.6292552947998
+          },
+          {
+            "fork": 1,
+            "wall_ns": 84.85292129516601,
+            "cpu_ns": 84.26888084411621
+          },
+          {
+            "fork": 2,
+            "wall_ns": 83.3200008392334,
+            "cpu_ns": 83.32022285461426
+          },
+          {
+            "fork": 3,
+            "wall_ns": 83.94062881469726,
+            "cpu_ns": 83.94180870056152
+          }
+        ]
+      },
+      "after": {
+        "wall_ns": 66.73128323554992,
+        "cpu_ns": 66.73317909240723,
+        "min_wall_ns": 64.2175129890442,
+        "max_wall_ns": 134.68330039978028,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 134.68330039978028,
+            "cpu_ns": 134.68645858764648
+          },
+          {
+            "fork": 1,
+            "wall_ns": 64.5720422744751,
+            "cpu_ns": 64.57380294799805
+          },
+          {
+            "fork": 2,
+            "wall_ns": 64.2175129890442,
+            "cpu_ns": 64.21876049041748
+          },
+          {
+            "fork": 3,
+            "wall_ns": 68.89052419662475,
+            "cpu_ns": 68.8925552368164
+          }
+        ]
+      },
+      "wall_change_percent": -20.93147730808874,
+      "cpu_change_percent": -20.65524578367238,
+      "paired_wall_changes_percent": [
+        -11.770023421612008,
+        -23.901214844616437,
+        -22.926653453889912,
+        -17.92946375383522
+      ]
+    },
+    {
+      "case": "records",
+      "size": 64,
+      "before": {
+        "wall_ns": 4303.054016113281,
+        "cpu_ns": 4303.040710449219,
+        "min_wall_ns": 4089.1709106445314,
+        "max_wall_ns": 4565.124365234375,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 4089.1709106445314,
+            "cpu_ns": 4088.8710327148438
+          },
+          {
+            "fork": 1,
+            "wall_ns": 4379.72953491211,
+            "cpu_ns": 4379.74560546875
+          },
+          {
+            "fork": 2,
+            "wall_ns": 4226.378497314453,
+            "cpu_ns": 4226.3358154296875
+          },
+          {
+            "fork": 3,
+            "wall_ns": 4565.124365234375,
+            "cpu_ns": 4565.248474121094
+          }
+        ]
+      },
+      "after": {
+        "wall_ns": 3964.859265136719,
+        "cpu_ns": 3964.1094665527344,
+        "min_wall_ns": 3887.656298828125,
+        "max_wall_ns": 4443.637524414063,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 3889.3247131347657,
+            "cpu_ns": 3887.1321411132812
+          },
+          {
+            "fork": 1,
+            "wall_ns": 4040.3938171386717,
+            "cpu_ns": 4040.5018310546875
+          },
+          {
+            "fork": 2,
+            "wall_ns": 3887.656298828125,
+            "cpu_ns": 3887.7171020507812
+          },
+          {
+            "fork": 3,
+            "wall_ns": 4443.637524414063,
+            "cpu_ns": 4443.644714355469
+          }
+        ]
+      },
+      "wall_change_percent": -7.859412168895696,
+      "cpu_change_percent": -7.876552110544677,
+      "paired_wall_changes_percent": [
+        -4.887205790042803,
+        -7.747869247826678,
+        -8.014478558926053,
+        -2.661194550262269
+      ]
+    },
+    {
+      "case": "records",
+      "size": 512,
+      "before": {
+        "wall_ns": 34137.125805664065,
+        "cpu_ns": 34132.66259765625,
+        "min_wall_ns": 33241.7677734375,
+        "max_wall_ns": 34846.90678710937,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 34846.90678710937,
+            "cpu_ns": 34830.81005859375
+          },
+          {
+            "fork": 1,
+            "wall_ns": 34337.13525390625,
+            "cpu_ns": 34334.5732421875
+          },
+          {
+            "fork": 2,
+            "wall_ns": 33937.11635742187,
+            "cpu_ns": 33930.751953125
+          },
+          {
+            "fork": 3,
+            "wall_ns": 33241.7677734375,
+            "cpu_ns": 33244.681640625
+          }
+        ]
+      },
+      "after": {
+        "wall_ns": 31898.933154296872,
+        "cpu_ns": 31890.6826171875,
+        "min_wall_ns": 30947.38515625,
+        "max_wall_ns": 32288.79599609375,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 31662.317822265624,
+            "cpu_ns": 31653.33056640625
+          },
+          {
+            "fork": 1,
+            "wall_ns": 32288.79599609375,
+            "cpu_ns": 32283.1787109375
+          },
+          {
+            "fork": 2,
+            "wall_ns": 32135.548486328124,
+            "cpu_ns": 32128.03466796875
+          },
+          {
+            "fork": 3,
+            "wall_ns": 30947.38515625,
+            "cpu_ns": 30947.4130859375
+          }
+        ]
+      },
+      "wall_change_percent": -6.5564765590072955,
+      "cpu_change_percent": -6.568429796691855,
+      "paired_wall_changes_percent": [
+        -9.13879956203687,
+        -5.965376094033581,
+        -5.308547291171828,
+        -6.902107712276595
+      ]
+    }
+  ],
+  "affinity": [
+    0,
+    1
+  ],
+  "platform": "Linux-6.8.0-138-generic-x86_64-with-glibc2.39",
+  "cpu": "Architecture:                            x86_64\nCPU op-mode(s):                          32-bit, 64-bit\nAddress sizes:                           48 bits physical, 48 bits virtual\nByte Order:                              Little Endian\nCPU(s):                                  2\nOn-line CPU(s) list:                     0,1\nVendor ID:                               AuthenticAMD\nModel name:                              AMD EPYC 7713 64-Core Processor\nCPU family:                              25\nModel:                                   1\nThread(s) per core:                      1\nCore(s) per socket:                      2\nSocket(s):                               1\nStepping:                                1\nBogoMIPS:                                4000.00\nFlags:                                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm rep_good nopl cpuid extd_apicid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw perfctr_core ssbd ibrs ibpb stibp vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms rdseed adx smap clflushopt clwb sha_ni xsaveopt xsavec xgetbv1 xsaves clzero xsaveerptr wbnoinvd arat umip pku ospke vaes vpclmulqdq rdpid overflow_recov succor fsrm\nHypervisor vendor:                       KVM\nVirtualization type:                     full\nL1d cache:                               128 KiB (2 instances)\nL1i cache:                               128 KiB (2 instances)\nL2 cache:                                1 MiB (2 instances)\nL3 cache:                                32 MiB (2 instances)\nNUMA node(s):                            1\nNUMA node0 CPU(s):                       0,1\nVulnerability Gather data sampling:      Not affected\nVulnerability Indirect target selection: Not affected\nVulnerability Itlb multihit:             Not affected\nVulnerability L1tf:                      Not affected\nVulnerability Mds:                       Not affected\nVulnerability Meltdown:                  Not affected\nVulnerability Mmio stale data:           Not affected\nVulnerability Reg file data sampling:    Not affected\nVulnerability Retbleed:                  Not affected\nVulnerability Spec rstack overflow:      Vulnerable: Safe RET, no microcode\nVulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl\nVulnerability Spectre v1:                Mitigation; usercopy/swapgs barriers and __user pointer sanitization\nVulnerability Spectre v2:                Mitigation; Retpolines; IBPB conditional; IBRS_FW; STIBP disabled; RSB filling; PBRSB-eIBRS Not affected; BHI Not affected\nVulnerability Srbds:                     Not affected\nVulnerability Tsa:                       Vulnerable: Clear CPU buffers attempted, no microcode\nVulnerability Tsx async abort:           Not affected\nVulnerability Vmscape:                   Not affected\n",
+  "loader_environment": {},
+  "samples_sha256": "e4034aefb6d0fb417b159bb4f550e3a5b387c54462bf64082ef62b9ea9277925",
+  "runner_sha256": "1c7c2ac19e04335961b8443b7298639615f22779fafeec49f156f2edc43ec339"
+}

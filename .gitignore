@@ -3,3 +3,7 @@
 /examples/*/build/
 Cargo.lock
 .vscode/
+/site-build/
+
+# Per-run benchmark stdout stays local; retain JSON/CSV measurements.
+/examples/**/raw/*.log

@@ -1,0 +1,213 @@
+//! Kotlin/JNI declarations stored on their Flat owners.
+use super::*;
+use prebindgen_conversions::InputConversion;
+use std::rc::Rc;
+
+/// Borrowed roots at function and callback boundaries. Each root keeps its direction.
+#[derive(Clone, Copy)]
+pub(crate) enum BoundaryNode<'a> {
+    Input(&'a JniInputWireNode),
+    Output(&'a JniOutputWireNode),
+}
+impl<'a> BoundaryNode<'a> {
+    pub(crate) fn wires(self) -> Vec<&'a prebindgen_conversions::Wire<JniWire>> {
+        match self {
+            Self::Input(node) => {
+                prebindgen_conversions::wire_definitions(std::iter::once(node)).collect()
+            }
+            Self::Output(node) => {
+                prebindgen_conversions::wire_definitions(std::iter::once(node)).collect()
+            }
+        }
+    }
+}
+
+/// Prepared boundary roots, including typed error converters and declarations
+/// whose callback interfaces are emitted without a direct exported occurrence.
+pub(crate) fn nodes<I: KotlinInputConversion, O: KotlinOutputConversion>(
+    flat: &Flat<JniSchema<I, O>>,
+) -> Result<Vec<BoundaryNode<'_>>> {
+    let mut nodes = Vec::new();
+    for source in flat.functions.values() {
+        for binding in &source.metadata {
+            let call = binding.call()?;
+            for plan in &call.inputs {
+                nodes.push(BoundaryNode::Input(plan.input_node()));
+            }
+            let outcomes = call.output.output_outcomes();
+            nodes.extend(
+                std::iter::once(&outcomes.success)
+                    .chain(outcomes.source_error.iter())
+                    .chain(outcomes.binding_failure.iter())
+                    .map(BoundaryNode::Output),
+            );
+            if let Some(output) = binding
+                .metadata
+                .error
+                .as_deref()
+                .and_then(|e| e.output.as_ref())
+            {
+                nodes.push(BoundaryNode::Output(&output.output_outcomes().success));
+            }
+        }
+    }
+    for input in crate::callback::declarations(flat)? {
+        nodes.push(BoundaryNode::Input(input.input_node()));
+    }
+    Ok(nodes)
+}
+
+/// Metadata schema for a Kotlin/JNI binding model.
+/// `InConverter` and `OutConverter` select the converters stored in each export.
+/// Source parameter/return attachments are unit; type metadata keeps the JNI
+/// representation. Default containers also accept custom converters through their
+/// owned containers. No schema value is needed to construct Flat.
+pub struct JniSchema<InConverter = JniInputConverter, OutConverter = JniOutputConverter>(
+    std::marker::PhantomData<fn() -> (InConverter, OutConverter)>,
+);
+impl<InConverter, OutConverter> prebindgen_flat::Schema for JniSchema<InConverter, OutConverter> {
+    type Parameter = ();
+    type Return = ();
+    type Module = JniModule;
+    type Function = Vec<JniBinding<InConverter, OutConverter>>;
+    type Type = JniType;
+    type Field = data::JniField;
+    type Variant = ();
+    type Record = ();
+    type Enum = ();
+    type PayloadEnum = ();
+}
+/// Settings shared by the generated Kotlin/JNI module.
+#[derive(Clone, Debug, Default)]
+pub struct JniModule {
+    /// Root Kotlin package containing JNINative and shared infrastructure.
+    pub package: String,
+    /// Kotlin initialization statements in JNINative.
+    pub native_init: String,
+    /// Use bulk for materialized collection outputs with automatic transport.
+    pub bulk_collection_outputs: bool,
+}
+/// Export and placement decisions belonging to one function.
+#[derive(Clone, Debug, Default)]
+pub struct JniFunction {
+    /// This export delivers a returned sequence through a visitor/folder.
+    pub callback_return: bool,
+    /// Fully qualified destination package.
+    pub package: String,
+    /// Destination function name.
+    pub name: String,
+    /// Declaration order used when rendering functions.
+    pub order: usize,
+    pub(crate) error: Option<Rc<errors::ErrorBinding>>,
+}
+/// Kotlin/JNI declaration information shared by occurrences of a Rust type.
+#[derive(Clone, Debug, Default)]
+pub struct JniType {
+    /// Standalone callback interface attached to its canonical callback type.
+    /// Configured selects this type's input default; later stages retain its recipe/converter.
+    pub callback:
+        Option<prebindgen_conversions::BindingState<(), crate::JniInput, crate::JniInputConverter>>,
+    /// Input/output defaults stored on this type, including callback signatures.
+    pub defaults:
+        prebindgen_declarations::DeclTypeDefaults<crate::JniInputConfig, crate::JniOutputConfig>,
+    /// Canonical value conversions selected for this source type.
+    pub conversion: prebindgen_conversions::ValueConversions,
+    pub(crate) class: Option<Rc<Class>>,
+    pub(crate) errors: BTreeMap<bool, Rc<errors::ErrorBinding>>,
+    pub(crate) error_class: Option<String>,
+}
+
+impl JniType {
+    pub(crate) fn enumeration(&self) -> Option<&Rc<JniEnum>> {
+        match &self.class.as_ref()?.representation {
+            ClassRepresentation::Enum(enumeration) => Some(enumeration),
+            _ => None,
+        }
+    }
+}
+
+/// One JNI export attached to its original source function.
+pub type JniBinding<I = JniInputConverter, O = JniOutputConverter> =
+    prebindgen_declarations::DeclBinding<
+        crate::JniInputConfig,
+        crate::JniOutputConfig,
+        crate::JniInput,
+        crate::JniOutput,
+        I,
+        O,
+        JniFunction,
+    >;
+
+// Borrow the actual Flat type table, independent of its export converter types.
+pub(crate) type JniTypes = BTreeMap<String, prebindgen_flat::TypeInfo<JniType, data::JniField>>;
+
+pub(crate) fn handle_classes(types: &JniTypes) -> impl Iterator<Item = (&syn::Type, &Class)> {
+    let mut classes = types
+        .values()
+        .filter_map(|source| {
+            source
+                .metadata
+                .class
+                .as_deref()
+                .filter(|class| matches!(class.representation, ClassRepresentation::Handle { .. }))
+                .map(|class| (&source.ty, class))
+        })
+        .collect::<Vec<_>>();
+    // Preserve emitted declaration order across captured and external types.
+    classes.sort_by_key(|(ty, _)| type_key(ty));
+    classes.into_iter()
+}
+
+pub(crate) fn source_handle<'a>(
+    types: &'a JniTypes,
+    ty: &syn::Type,
+) -> Result<(&'a syn::Type, &'a Class)> {
+    let source = types
+        .values()
+        .find(|entry| prebindgen_flat::same_type(&entry.ty, ty))
+        .ok_or_else(|| format!("unregistered JNI source type `{}`", type_key(ty)))?;
+    let class = source
+        .metadata
+        .class
+        .as_deref()
+        .filter(|class| matches!(class.representation, ClassRepresentation::Handle { .. }))
+        .ok_or_else(|| format!("no handle class for `{}`", type_key(ty)))?;
+    Ok((&source.ty, class))
+}
+
+pub(crate) fn source_type<'a>(
+    types: &'a JniTypes,
+    reference: &prebindgen_flat::TypeRef,
+) -> Result<&'a prebindgen_flat::TypeInfo<JniType, data::JniField>> {
+    types
+        .get(reference.key())
+        .ok_or_else(|| format!("missing JNI source type entry `{}`", reference.key()))
+}
+pub(crate) fn source_data_class<'a>(
+    types: &'a JniTypes,
+    reference: &prebindgen_flat::TypeRef,
+) -> Result<(&'a prebindgen_flat::Record<data::JniField>, &'a Class)> {
+    let source = source_type(types, reference)?;
+    let class = source
+        .metadata
+        .class
+        .as_deref()
+        .filter(|class| matches!(class.representation, ClassRepresentation::Data { .. }))
+        .ok_or("record conversion requires a declared data class")?;
+    match &source.definition {
+        prebindgen_flat::TypeDefinition::Record(record) => Ok((record, class)),
+        _ => Err(format!("`{}` is not a source record", reference.key())),
+    }
+}
+pub(crate) fn source_enum<'a>(
+    types: &'a JniTypes,
+    reference: &prebindgen_flat::TypeRef,
+) -> Result<&'a prebindgen_flat::PayloadEnum<(), data::JniField>> {
+    match &source_type(types, reference)?.definition {
+        prebindgen_flat::TypeDefinition::PayloadEnum(enumeration) => Ok(enumeration),
+        _ => Err(format!(
+            "`{}` is not a source payload enum",
+            reference.key()
+        )),
+    }
+}

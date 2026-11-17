@@ -1,0 +1,8 @@
+running 1 test
+mutable byte budget: size=0, deliveries=1000, direct_allocations=0, vec_accessor_allocations=0, expanded_allocations=1 (source Vec only)
+mutable byte budget: size=1, deliveries=1000, direct_allocations=0, vec_accessor_allocations=0, expanded_allocations=1 (source Vec only)
+mutable byte budget: size=65536, deliveries=1000, direct_allocations=0, vec_accessor_allocations=0, expanded_allocations=1 (source Vec only)
+test alias_allocations::mutable_byte_loans_and_vec_accessors_do_not_allocate_or_copy ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.00s
+

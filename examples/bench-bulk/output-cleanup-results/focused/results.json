@@ -1,0 +1,796 @@
+{
+  "builds": {
+    "before": {
+      "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-output-cleanup-baseline",
+      "commit": "7956e5e058be6fc28273540b35366498156ace85",
+      "dirty_paths": [],
+      "profile": "release",
+      "profile_environment": {},
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8",
+      "path_dependency_repositories": [
+        {
+          "repository": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-output-cleanup-baseline",
+          "commit": "7956e5e058be6fc28273540b35366498156ace85",
+          "packages": [
+            "prebindgen",
+            "prebindgen-conversions",
+            "prebindgen-declarations",
+            "prebindgen-flat",
+            "prebindgen-jni",
+            "prebindgen-jni-runtime",
+            "prebindgen-proc-macro",
+            "prebindgen-reprc",
+            "prebindgen-runtime"
+          ],
+          "contains_fixture": true
+        }
+      ],
+      "cargo_config_sha256": {},
+      "cargo": "cargo 1.98.0 (797e8a9bc 2026-08-05)",
+      "dependency_lock_sha256": "50aec39504ae6c12f747a6737ac6ff1de1aa0ea743f3fb86370345e7d07a551f",
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "kotlin": "info: kotlinc-jvm 2.4.21 (JRE 11.0.29+7)",
+      "fixture_sha256": {
+        "flat.rs": "c6bbecbf78d9c60aa6ea0ff5d09f129e5b3bc3838add408300ee4cb4c084dc2e",
+        "bindings.rs": "43134d021f67499143b58866598e49cc00320deaee9464e8c144a7cbfef68845",
+        "Bench.kt": "b8572ad9f0b02220a1235a61cf40c201d0dfa7eca3ba2e7d5a991e104b9a5884",
+        "run.py": "15a04143ddcf1522f03425b285716689a086ecab3a3081366c9d3cdf8f87656e",
+        "Cargo.lock.snapshot": "50aec39504ae6c12f747a6737ac6ff1de1aa0ea743f3fb86370345e7d07a551f"
+      },
+      "jar": "/tmp/output-cleanup-before/bench.jar",
+      "library": "/tmp/output-cleanup-before/target/release/libbulk_bench.so",
+      "jar_sha256": "af93a675cb6ea0520daedfeb082e6126098df851c1140507d13fa5fe71799980",
+      "native_sha256": "7401f34dfe5e1dfe1e2c351017c9cfeb0f208ef83528c07290867909a0904480"
+    },
+    "after": {
+      "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-output-cleanup",
+      "commit": "86991f627d211415770a33710331b8fb77283ab1",
+      "dirty_paths": [],
+      "profile": "release",
+      "profile_environment": {},
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8",
+      "path_dependency_repositories": [
+        {
+          "repository": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-output-cleanup",
+          "commit": "86991f627d211415770a33710331b8fb77283ab1",
+          "packages": [
+            "prebindgen",
+            "prebindgen-conversions",
+            "prebindgen-declarations",
+            "prebindgen-flat",
+            "prebindgen-jni",
+            "prebindgen-jni-runtime",
+            "prebindgen-proc-macro",
+            "prebindgen-reprc",
+            "prebindgen-runtime"
+          ],
+          "contains_fixture": true
+        }
+      ],
+      "cargo_config_sha256": {},
+      "cargo": "cargo 1.98.0 (797e8a9bc 2026-08-05)",
+      "dependency_lock_sha256": "50aec39504ae6c12f747a6737ac6ff1de1aa0ea743f3fb86370345e7d07a551f",
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "kotlin": "info: kotlinc-jvm 2.4.21 (JRE 11.0.29+7)",
+      "fixture_sha256": {
+        "flat.rs": "c6bbecbf78d9c60aa6ea0ff5d09f129e5b3bc3838add408300ee4cb4c084dc2e",
+        "bindings.rs": "43134d021f67499143b58866598e49cc00320deaee9464e8c144a7cbfef68845",
+        "Bench.kt": "b8572ad9f0b02220a1235a61cf40c201d0dfa7eca3ba2e7d5a991e104b9a5884",
+        "run.py": "15a04143ddcf1522f03425b285716689a086ecab3a3081366c9d3cdf8f87656e",
+        "Cargo.lock.snapshot": "50aec39504ae6c12f747a6737ac6ff1de1aa0ea743f3fb86370345e7d07a551f"
+      },
+      "jar": "/tmp/output-cleanup-after-v2/bench.jar",
+      "library": "/tmp/output-cleanup-after-v2/target/release/libbulk_bench.so",
+      "jar_sha256": "93d8d95b910fbef43051672ec322f61d57f682885d7a20e865b39b50ca714e63",
+      "native_sha256": "58f93e4f5d639ea6ec063099af45a76761c012897ceaafac9ef485356a9b6833"
+    }
+  },
+  "affinity": [
+    0,
+    1
+  ],
+  "platform": "Linux-6.8.0-138-generic-x86_64-with-glibc2.39",
+  "cpu": "Architecture:                            x86_64\nCPU op-mode(s):                          32-bit, 64-bit\nAddress sizes:                           48 bits physical, 48 bits virtual\nByte Order:                              Little Endian\nCPU(s):                                  2\nOn-line CPU(s) list:                     0,1\nVendor ID:                               AuthenticAMD\nModel name:                              AMD EPYC 7713 64-Core Processor\nCPU family:                              25\nModel:                                   1\nThread(s) per core:                      1\nCore(s) per socket:                      2\nSocket(s):                               1\nStepping:                                1\nBogoMIPS:                                4000.00\nFlags:                                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm rep_good nopl cpuid extd_apicid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw perfctr_core ssbd ibrs ibpb stibp vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms rdseed adx smap clflushopt clwb sha_ni xsaveopt xsavec xgetbv1 xsaves clzero xsaveerptr wbnoinvd arat umip pku ospke vaes vpclmulqdq rdpid overflow_recov succor fsrm\nHypervisor vendor:                       KVM\nVirtualization type:                     full\nL1d cache:                               128 KiB (2 instances)\nL1i cache:                               128 KiB (2 instances)\nL2 cache:                                1 MiB (2 instances)\nL3 cache:                                32 MiB (2 instances)\nNUMA node(s):                            1\nNUMA node0 CPU(s):                       0,1\nVulnerability Gather data sampling:      Not affected\nVulnerability Indirect target selection: Not affected\nVulnerability Itlb multihit:             Not affected\nVulnerability L1tf:                      Not affected\nVulnerability Mds:                       Not affected\nVulnerability Meltdown:                  Not affected\nVulnerability Mmio stale data:           Not affected\nVulnerability Reg file data sampling:    Not affected\nVulnerability Retbleed:                  Not affected\nVulnerability Spec rstack overflow:      Vulnerable: Safe RET, no microcode\nVulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl\nVulnerability Spectre v1:                Mitigation; usercopy/swapgs barriers and __user pointer sanitization\nVulnerability Spectre v2:                Mitigation; Retpolines; IBPB conditional; IBRS_FW; STIBP disabled; RSB filling; PBRSB-eIBRS Not affected; BHI Not affected\nVulnerability Srbds:                     Not affected\nVulnerability Tsa:                       Vulnerable: Clear CPU buffers attempted, no microcode\nVulnerability Tsx async abort:           Not affected\nVulnerability Vmscape:                   Not affected\n",
+  "java": "openjdk version \"11.0.29\" 2025-10-21\nOpenJDK Runtime Environment Temurin-11.0.29+7 (build 11.0.29+7)\nOpenJDK 64-Bit Server VM Temurin-11.0.29+7 (build 11.0.29+7, mixed mode)\n",
+  "jvm_flags": [
+    "-Xms256m",
+    "-Xmx256m",
+    "-XX:+UseG1GC",
+    "-XX:ActiveProcessorCount=2",
+    "-XX:+PrintCommandLineFlags"
+  ],
+  "orders": [
+    {
+      "trial": 0,
+      "treatment": "before-bulk",
+      "seconds": 13.024495840072632,
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:+PrintCommandLineFlags",
+        "-Djava.library.path=/tmp/output-cleanup-before/target/release",
+        "-jar",
+        "/tmp/output-cleanup-before/bench.jar",
+        "bulk",
+        "1,64,512",
+        "20",
+        "15",
+        "30",
+        "0",
+        "64,4096,65536",
+        "control,handles_input,owned_handles_roundtrip,owned_handle_records_roundtrip,nested_owned_handles_roundtrip"
+      ]
+    },
+    {
+      "trial": 0,
+      "treatment": "after-bulk",
+      "seconds": 12.878708124160767,
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:+PrintCommandLineFlags",
+        "-Djava.library.path=/tmp/output-cleanup-after-v2/target/release",
+        "-jar",
+        "/tmp/output-cleanup-after-v2/bench.jar",
+        "bulk",
+        "1,64,512",
+        "20",
+        "15",
+        "30",
+        "0",
+        "64,4096,65536",
+        "control,handles_input,owned_handles_roundtrip,owned_handle_records_roundtrip,nested_owned_handles_roundtrip"
+      ]
+    },
+    {
+      "trial": 1,
+      "treatment": "after-bulk",
+      "seconds": 14.07811713218689,
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:+PrintCommandLineFlags",
+        "-Djava.library.path=/tmp/output-cleanup-after-v2/target/release",
+        "-jar",
+        "/tmp/output-cleanup-after-v2/bench.jar",
+        "bulk",
+        "1,64,512",
+        "20",
+        "15",
+        "30",
+        "1",
+        "64,4096,65536",
+        "control,handles_input,owned_handles_roundtrip,owned_handle_records_roundtrip,nested_owned_handles_roundtrip"
+      ]
+    },
+    {
+      "trial": 1,
+      "treatment": "before-bulk",
+      "seconds": 14.45924186706543,
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:+PrintCommandLineFlags",
+        "-Djava.library.path=/tmp/output-cleanup-before/target/release",
+        "-jar",
+        "/tmp/output-cleanup-before/bench.jar",
+        "bulk",
+        "1,64,512",
+        "20",
+        "15",
+        "30",
+        "1",
+        "64,4096,65536",
+        "control,handles_input,owned_handles_roundtrip,owned_handle_records_roundtrip,nested_owned_handles_roundtrip"
+      ]
+    },
+    {
+      "trial": 2,
+      "treatment": "before-bulk",
+      "seconds": 14.017209768295288,
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:+PrintCommandLineFlags",
+        "-Djava.library.path=/tmp/output-cleanup-before/target/release",
+        "-jar",
+        "/tmp/output-cleanup-before/bench.jar",
+        "bulk",
+        "1,64,512",
+        "20",
+        "15",
+        "30",
+        "2",
+        "64,4096,65536",
+        "control,handles_input,owned_handles_roundtrip,owned_handle_records_roundtrip,nested_owned_handles_roundtrip"
+      ]
+    },
+    {
+      "trial": 2,
+      "treatment": "after-bulk",
+      "seconds": 13.216564416885376,
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:+PrintCommandLineFlags",
+        "-Djava.library.path=/tmp/output-cleanup-after-v2/target/release",
+        "-jar",
+        "/tmp/output-cleanup-after-v2/bench.jar",
+        "bulk",
+        "1,64,512",
+        "20",
+        "15",
+        "30",
+        "2",
+        "64,4096,65536",
+        "control,handles_input,owned_handles_roundtrip,owned_handle_records_roundtrip,nested_owned_handles_roundtrip"
+      ]
+    },
+    {
+      "trial": 3,
+      "treatment": "after-bulk",
+      "seconds": 13.973269701004028,
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:+PrintCommandLineFlags",
+        "-Djava.library.path=/tmp/output-cleanup-after-v2/target/release",
+        "-jar",
+        "/tmp/output-cleanup-after-v2/bench.jar",
+        "bulk",
+        "1,64,512",
+        "20",
+        "15",
+        "30",
+        "3",
+        "64,4096,65536",
+        "control,handles_input,owned_handles_roundtrip,owned_handle_records_roundtrip,nested_owned_handles_roundtrip"
+      ]
+    },
+    {
+      "trial": 3,
+      "treatment": "before-bulk",
+      "seconds": 13.769908666610718,
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:+PrintCommandLineFlags",
+        "-Djava.library.path=/tmp/output-cleanup-before/target/release",
+        "-jar",
+        "/tmp/output-cleanup-before/bench.jar",
+        "bulk",
+        "1,64,512",
+        "20",
+        "15",
+        "30",
+        "3",
+        "64,4096,65536",
+        "control,handles_input,owned_handles_roundtrip,owned_handle_records_roundtrip,nested_owned_handles_roundtrip"
+      ]
+    }
+  ],
+  "warmup": 20,
+  "batches": 15,
+  "batch_target_ms": 30,
+  "samples_sha256": "9bb346f26bf3fce2b484e0436f9418ab56babfafb11f94e0250a6cfc75c96289",
+  "runner_sha256": "9efa79e7a0d36818de9f7f0c1b382e4cea72598e89e2e767edb03d6bce70fcc2",
+  "summary": [
+    {
+      "mode": "bulk",
+      "case": "control",
+      "size": 1,
+      "before": {
+        "ns": 14.027760557136698,
+        "min_ns": 13.634271738135773,
+        "max_ns": 14.941071022163253,
+        "trial_medians": [
+          14.408342466172327,
+          13.634271738135773,
+          14.941071022163253,
+          13.647178648101072
+        ],
+        "jvm_bytes": 0.0
+      },
+      "after": {
+        "ns": 15.29014403740728,
+        "min_ns": 13.398931504594124,
+        "max_ns": 16.492876623479606,
+        "trial_medians": [
+          13.398931504594124,
+          16.492876623479606,
+          14.44369679641939,
+          16.136591278395173
+        ],
+        "jvm_bytes": 0.0
+      },
+      "speedup": 0.9174380910224151,
+      "latency_change_percent": 8.999180411789531,
+      "paired_speedups": [
+        1.0753351833489189,
+        0.8266763918385066,
+        1.0344353826277468,
+        0.8457287175868979
+      ]
+    },
+    {
+      "mode": "bulk",
+      "case": "handles_input",
+      "size": 1,
+      "before": {
+        "ns": 257.92484339159967,
+        "min_ns": 231.7122825993244,
+        "max_ns": 299.00651579990813,
+        "trial_medians": [
+          257.4507594195246,
+          258.3989273636748,
+          231.7122825993244,
+          299.00651579990813
+        ],
+        "jvm_bytes": 384.0
+      },
+      "after": {
+        "ns": 275.25091869478115,
+        "min_ns": 242.40206619779872,
+        "max_ns": 289.1177665288617,
+        "trial_medians": [
+          242.40206619779872,
+          277.9266545742058,
+          289.1177665288617,
+          272.57518281535647
+        ],
+        "jvm_bytes": 384.0
+      },
+      "speedup": 0.937053524161371,
+      "latency_change_percent": 6.717489899519213,
+      "paired_speedups": [
+        1.0620815385684306,
+        0.9297378395014028,
+        0.8014460175908744,
+        1.0969689636141833
+      ]
+    },
+    {
+      "mode": "bulk",
+      "case": "handles_input",
+      "size": 64,
+      "before": {
+        "ns": 1875.2913794519045,
+        "min_ns": 1841.458637551075,
+        "max_ns": 2105.950343305542,
+        "trial_medians": [
+          1894.4346745027124,
+          1856.1480844010964,
+          1841.458637551075,
+          2105.950343305542
+        ],
+        "jvm_bytes": 2616.0
+      },
+      "after": {
+        "ns": 1911.7347048704164,
+        "min_ns": 1840.141600970285,
+        "max_ns": 1981.9088367653076,
+        "trial_medians": [
+          1916.3467012461256,
+          1907.122708494707,
+          1840.141600970285,
+          1981.9088367653076
+        ],
+        "jvm_bytes": 2608.0
+      },
+      "speedup": 0.9809370383214432,
+      "latency_change_percent": 1.9433420223561981,
+      "paired_speedups": [
+        0.988565729401071,
+        0.9732714503023012,
+        1.0007157256702939,
+        1.0625868880743696
+      ]
+    },
+    {
+      "mode": "bulk",
+      "case": "handles_input",
+      "size": 512,
+      "before": {
+        "ns": 14815.447734244011,
+        "min_ns": 12058.820969747203,
+        "max_ns": 19680.112768758227,
+        "trial_medians": [
+          16856.68342776204,
+          19680.112768758227,
+          12058.820969747203,
+          12774.212040725984
+        ],
+        "jvm_bytes": 16528.0
+      },
+      "after": {
+        "ns": 12700.164921192358,
+        "min_ns": 12488.903050564146,
+        "max_ns": 14050.643151626202,
+        "trial_medians": [
+          12488.903050564146,
+          12755.810234541577,
+          12644.519607843138,
+          14050.643151626202
+        ],
+        "jvm_bytes": 16520.0
+      },
+      "speedup": 1.166555538938077,
+      "latency_change_percent": -14.277549021771707,
+      "paired_speedups": [
+        1.3497329076472089,
+        1.5428351791771147,
+        0.9536796449164713,
+        0.9091549691266279
+      ]
+    },
+    {
+      "mode": "bulk",
+      "case": "nested_owned_handles_roundtrip",
+      "size": 1,
+      "before": {
+        "ns": 1705.8383883601384,
+        "min_ns": 1477.293627859137,
+        "max_ns": 1733.651357596765,
+        "trial_medians": [
+          1732.655074352746,
+          1733.651357596765,
+          1679.021702367531,
+          1477.293627859137
+        ],
+        "jvm_bytes": 1640.0
+      },
+      "after": {
+        "ns": 1497.878363389525,
+        "min_ns": 1374.5486077887283,
+        "max_ns": 1641.8700540063926,
+        "trial_medians": [
+          1448.1884498480242,
+          1641.8700540063926,
+          1547.5682769310256,
+          1374.5486077887283
+        ],
+        "jvm_bytes": 1216.0
+      },
+      "speedup": 1.1388363902259886,
+      "latency_change_percent": -12.191074277002889,
+      "paired_speedups": [
+        1.1964292869029403,
+        1.055900467498273,
+        1.0849419230130446,
+        1.0747481896880293
+      ]
+    },
+    {
+      "mode": "bulk",
+      "case": "nested_owned_handles_roundtrip",
+      "size": 64,
+      "before": {
+        "ns": 9581.654052729848,
+        "min_ns": 8707.254525304765,
+        "max_ns": 10169.070290858726,
+        "trial_medians": [
+          9383.166875391358,
+          9780.141230068337,
+          10169.070290858726,
+          8707.254525304765
+        ],
+        "jvm_bytes": 10840.0
+      },
+      "after": {
+        "ns": 8365.28307459567,
+        "min_ns": 7824.664110881746,
+        "max_ns": 8505.173839184597,
+        "trial_medians": [
+          8255.729759910664,
+          8474.836389280677,
+          8505.173839184597,
+          7824.664110881746
+        ],
+        "jvm_bytes": 7896.0
+      },
+      "speedup": 1.145407031332645,
+      "latency_change_percent": -12.694791227487789,
+      "paired_speedups": [
+        1.1365641982318102,
+        1.1540212436948827,
+        1.195633444199378,
+        1.112795949054938
+      ]
+    },
+    {
+      "mode": "bulk",
+      "case": "nested_owned_handles_roundtrip",
+      "size": 512,
+      "before": {
+        "ns": 73570.05674467678,
+        "min_ns": 63340.40966386555,
+        "max_ns": 92397.8526645768,
+        "trial_medians": [
+          63340.40966386555,
+          92397.8526645768,
+          73530.34151785714,
+          73609.77197149643
+        ],
+        "jvm_bytes": 74024.0
+      },
+      "after": {
+        "ns": 65844.57087692057,
+        "min_ns": 58595.009765625,
+        "max_ns": 85237.89398280802,
+        "trial_medians": [
+          58595.009765625,
+          85237.89398280802,
+          63013.98026315789,
+          68675.16149068323
+        ],
+        "jvm_bytes": 53160.0
+      },
+      "speedup": 1.1173291247078976,
+      "latency_change_percent": -10.500856203723396,
+      "paired_speedups": [
+        1.0809864170553387,
+        1.0839997135923243,
+        1.1668893348869729,
+        1.0718543702512102
+      ]
+    },
+    {
+      "mode": "bulk",
+      "case": "owned_handle_records_roundtrip",
+      "size": 1,
+      "before": {
+        "ns": 930.3573049685446,
+        "min_ns": 908.7945663404851,
+        "max_ns": 964.149301019075,
+        "trial_medians": [
+          908.7945663404851,
+          964.149301019075,
+          935.4567621295894,
+          925.2578478074997
+        ],
+        "jvm_bytes": 848.0
+      },
+      "after": {
+        "ns": 901.5916973469389,
+        "min_ns": 846.2180324178298,
+        "max_ns": 914.2044472681067,
+        "trial_medians": [
+          914.2044472681067,
+          897.7627669452182,
+          905.4206277486595,
+          846.2180324178298
+        ],
+        "jvm_bytes": 816.0
+      },
+      "speedup": 1.031905359938709,
+      "latency_change_percent": -3.091888188331926,
+      "paired_speedups": [
+        0.9940824167462893,
+        1.0739466332511733,
+        1.0331736802325955,
+        1.093403605645032
+      ]
+    },
+    {
+      "mode": "bulk",
+      "case": "owned_handle_records_roundtrip",
+      "size": 64,
+      "before": {
+        "ns": 10916.209361100131,
+        "min_ns": 10560.254448398577,
+        "max_ns": 11186.53823953824,
+        "trial_medians": [
+          10736.327673410404,
+          11186.53823953824,
+          10560.254448398577,
+          11096.091048789858
+        ],
+        "jvm_bytes": 12624.0
+      },
+      "after": {
+        "ns": 10943.483840114684,
+        "min_ns": 10444.053138373753,
+        "max_ns": 11444.742759146342,
+        "trial_medians": [
+          11444.742759146342,
+          10734.657410746484,
+          11152.310269482885,
+          10444.053138373753
+        ],
+        "jvm_bytes": 10064.0
+      },
+      "speedup": 0.9975076968712124,
+      "latency_change_percent": 0.24985302234807882,
+      "paired_speedups": [
+        0.938101266175704,
+        1.0420955053804863,
+        0.9469118230413293,
+        1.0624315006614027
+      ]
+    },
+    {
+      "mode": "bulk",
+      "case": "owned_handle_records_roundtrip",
+      "size": 512,
+      "before": {
+        "ns": 78433.90438558291,
+        "min_ns": 73100.85820895522,
+        "max_ns": 82410.8575,
+        "trial_medians": [
+          77713.89320388349,
+          82410.8575,
+          73100.85820895522,
+          79153.91556728233
+        ],
+        "jvm_bytes": 93720.0
+      },
+      "after": {
+        "ns": 74596.29820264393,
+        "min_ns": 69906.72494172494,
+        "max_ns": 80459.98805970149,
+        "trial_medians": [
+          69906.72494172494,
+          76811.72110552764,
+          72380.8752997602,
+          80459.98805970149
+        ],
+        "jvm_bytes": 73240.0
+      },
+      "speedup": 1.051444994931437,
+      "latency_change_percent": -4.8927899395052705,
+      "paired_speedups": [
+        1.1116797885849565,
+        1.072894296780305,
+        1.0099471428911748,
+        0.9837674287069238
+      ]
+    },
+    {
+      "mode": "bulk",
+      "case": "owned_handles_roundtrip",
+      "size": 1,
+      "before": {
+        "ns": 868.3698819422066,
+        "min_ns": 834.7723664924362,
+        "max_ns": 934.7587430139554,
+        "trial_medians": [
+          836.9961628530316,
+          934.7587430139554,
+          834.7723664924362,
+          899.7436010313817
+        ],
+        "jvm_bytes": 816.0
+      },
+      "after": {
+        "ns": 910.0991031050729,
+        "min_ns": 841.3805566854553,
+        "max_ns": 985.1600544866337,
+        "trial_medians": [
+          905.8640101969592,
+          914.3341960131867,
+          841.3805566854553,
+          985.1600544866337
+        ],
+        "jvm_bytes": 784.0
+      },
+      "speedup": 0.9541487064205484,
+      "latency_change_percent": 4.80546619944191,
+      "paired_speedups": [
+        0.9239755122527123,
+        1.0223381637587512,
+        0.9921460150932754,
+        0.9132968769224382
+      ]
+    },
+    {
+      "mode": "bulk",
+      "case": "owned_handles_roundtrip",
+      "size": 64,
+      "before": {
+        "ns": 8227.153543943368,
+        "min_ns": 7710.591087811271,
+        "max_ns": 8689.726174033149,
+        "trial_medians": [
+          8689.726174033149,
+          7970.835331734613,
+          8483.471756152125,
+          7710.591087811271
+        ],
+        "jvm_bytes": 10064.0
+      },
+      "after": {
+        "ns": 7983.827486879023,
+        "min_ns": 7707.677792041079,
+        "max_ns": 8242.032151690024,
+        "trial_medians": [
+          8011.182964329643,
+          7707.677792041079,
+          8242.032151690024,
+          7956.472009428403
+        ],
+        "jvm_bytes": 7504.0
+      },
+      "speedup": 1.0304773690894797,
+      "latency_change_percent": -2.957597129610834,
+      "paired_speedups": [
+        1.0846995022738548,
+        1.0341422600676522,
+        1.0292936984494283,
+        0.9690967401976952
+      ]
+    },
+    {
+      "mode": "bulk",
+      "case": "owned_handles_roundtrip",
+      "size": 512,
+      "before": {
+        "ns": 64091.57349784208,
+        "min_ns": 63682.32484076433,
+        "max_ns": 67105.94626168224,
+        "trial_medians": [
+          63990.71806167401,
+          64192.42893401015,
+          67105.94626168224,
+          63682.32484076433
+        ],
+        "jvm_bytes": 73240.0
+      },
+      "after": {
+        "ns": 61737.451654120356,
+        "min_ns": 60907.5081300813,
+        "max_ns": 63002.59943977591,
+        "trial_medians": [
+          61208.13152400835,
+          63002.59943977591,
+          62266.77178423236,
+          60907.5081300813
+        ],
+        "jvm_bytes": 52760.0
+      },
+      "speedup": 1.0381311793837964,
+      "latency_change_percent": -3.6730598349266397,
+      "paired_speedups": [
+        1.04546105996675,
+        1.0188854032185068,
+        1.0777168036624518,
+        1.0455578761284536
+      ]
+    }
+  ]
+}
