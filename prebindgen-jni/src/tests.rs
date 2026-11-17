@@ -16,6 +16,126 @@ fn flat(source: &str) -> JniBindings {
 }
 
 #[test]
+fn occurrence_diagnostics_keep_export_alias_and_source_result() {
+    for name in ["read", "readRenamed"] {
+        let error = JniGen::builder()
+            .flat(flat("pub fn read()->i64{}"))
+            .set_package_prefix("test")
+            .package(package!().fun(fun!(read).name(name).expand_return(JniOutputConfig::None)))
+            .build()
+            .err()
+            .unwrap();
+        println!("{error}");
+        assert_eq!(
+            error,
+            format!(
+                "read (export `test.{name}`): function `read` result: None output requires unit"
+            )
+        );
+    }
+}
+
+#[test]
+fn occurrence_diagnostics_resolve_explicit_nested_children() {
+    let mut flat = flat("pub fn read()->i64{}");
+    let resolver = JniSourceResolver::new(&mut flat, vec![], vec![], vec![]).unwrap();
+    for (ty, operation, label) in [
+        (
+            syn::parse_quote!(Option<i64>),
+            JniInputUnary::Optional,
+            "optional payload",
+        ),
+        (
+            syn::parse_quote!(Vec<i64>),
+            JniInputUnary::Sequence,
+            "element",
+        ),
+    ] {
+        let tree = JniInputConfig::Unary {
+            operation,
+            child: Box::new(JniInputConfig::None),
+        };
+        let error = resolver
+            .resolve_input(&flat, &JniCodec::raw(), &ty, &tree, &())
+            .unwrap_err();
+        println!("{error}");
+        assert_eq!(error, format!("{label}: None input requires unit"));
+    }
+    let tree = JniInputConfig::Branch {
+        operation: JniInputBranch::Selector,
+        children: vec![JniInputConfig::None],
+    };
+    let error = resolver
+        .resolve_input(&flat, &JniCodec::raw(), &syn::parse_quote!(i64), &tree, &())
+        .unwrap_err();
+    println!("{error}");
+    assert_eq!(error, "alternative 0: None input requires unit");
+    for (ty, operation, label) in [
+        (
+            syn::parse_quote!(Option<i64>),
+            JniOutputUnary::Optional,
+            "optional payload",
+        ),
+        (
+            syn::parse_quote!(Vec<i64>),
+            JniOutputUnary::Sequence {
+                delivery: prebindgen_declarations::SequenceDelivery::Value,
+                mode: None,
+            },
+            "element",
+        ),
+    ] {
+        let tree = JniOutputConfig::Unary {
+            operation,
+            child: Box::new(JniOutputConfig::None),
+        };
+        let error = resolver
+            .resolve_output(&flat, &JniCodec::raw(), &ty, &tree, &())
+            .unwrap_err();
+        println!("{error}");
+        assert_eq!(error, format!("{label}: None output requires unit"));
+    }
+    let tree = JniOutput::Unary {
+        operation: JniOutputUnary::Optional,
+        child: Box::new(JniOutput::None),
+    };
+    let error = prebindgen_declarations::compile_output_value(
+        &flat,
+        &JniCodec::raw(),
+        &syn::parse_quote!(Option<i64>),
+        &tree,
+        &(),
+    )
+    .err()
+    .unwrap();
+    println!("{error}");
+    assert_eq!(error, "optional payload: None output requires unit");
+    for (children, label) in [
+        (vec![JniOutputConfig::None, JniOutputConfig::value()], "Ok"),
+        (vec![JniOutputConfig::value(), JniOutputConfig::None], "Err"),
+    ] {
+        let tree = JniOutputConfig::Branch {
+            operation: JniOutputBranch::Result {
+                handler: "test.ErrorHandler".into(),
+                preserve_message_mapper: false,
+            },
+            children,
+        };
+        let error = resolver
+            .resolve_output(
+                &flat,
+                &JniCodec::raw(),
+                &syn::parse_quote!(Result<i64,i64>),
+                &tree,
+                &(),
+            )
+            .unwrap_err();
+        println!("{error}");
+        assert_eq!(error, format!("Result {label}: None output requires unit"));
+    }
+}
+
+#[test]
 fn kotlin_preflight_removes_native_row_staging_for_both_transports() {
     let source = "pub type Handle=String;pub enum Kind{A,B}pub struct Row{pub h:Handle,pub text:Option<String>,pub bytes:Option<Vec<u8>>,pub kind:Option<Kind>}pub fn rows(values:Vec<Row>)->usize{}";
     let recipe = JniInputConfig::Unary {

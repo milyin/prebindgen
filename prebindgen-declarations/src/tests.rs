@@ -404,6 +404,50 @@ fn parse(source: &str) -> TestBindings<TestWire> {
 fn model() -> TestBindings<TestWire> {
     parse("pub struct Payload { pub data: Vec<u8> } pub fn make(s: String) -> Payload {} pub fn foo(x: Payload, y: Payload) -> Payload {}")
 }
+
+#[test]
+fn occurrence_diagnostics_preserve_named_enum_and_alternative_details() {
+    let flat = parse("pub enum Event { Data { value:i64 } } pub fn send(event:Event){} pub fn select(value:i64){}");
+    let recipe = TestInput::Branch {
+        operation: TestInputBranch::Enum { value: false },
+        children: vec![TestInput::Branch {
+            operation: TestInputBranch::Variant,
+            children: vec![TestInput::None],
+        }],
+    };
+    let error = compile_input(
+        &flat,
+        &TEST_CODEC,
+        "send",
+        "event",
+        &recipe,
+        &Extra::default(),
+    )
+    .unwrap_err();
+    println!("{error}");
+    assert_eq!(
+        error,
+        "function `send` parameter `event`: crate :: Event::Data.value: None input requires unit"
+    );
+    let recipe = TestInput::Branch {
+        operation: TestInputBranch::Selector,
+        children: vec![TestInput::None],
+    };
+    let error = compile_input(
+        &flat,
+        &TEST_CODEC,
+        "select",
+        "value",
+        &recipe,
+        &Extra::default(),
+    )
+    .unwrap_err();
+    println!("{error}");
+    assert_eq!(
+        error,
+        "function `select` parameter `value`: alternative 0: None input requires unit"
+    );
+}
 fn extra(name: &'static str) -> Extra {
     Extra { name, copy: false }
 }
@@ -1288,7 +1332,7 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
                 }
             )
             .unwrap_err(),
-        "take: finalization failed"
+        "take: function `take` result: finalization failed"
     );
     assert!(flat.function("take").unwrap().params[0].ty.slot.is_none());
     assert!(flat.function("take").unwrap().ret.slot.is_none());
@@ -2328,7 +2372,7 @@ fn failed_metadata_construction_preserves_installed_conversions() {
             },
         )
         .unwrap_err();
-        assert_eq!(error, expected);
+        assert_eq!(error, format!("function `f` parameter `v`: {expected}"));
         assert_eq!(
             flat.function("f").unwrap().params[0]
                 .ty
@@ -2354,7 +2398,7 @@ fn failed_metadata_construction_preserves_installed_conversions() {
         },
     )
     .unwrap_err();
-    assert_eq!(error, "optional metadata rejected");
+    assert_eq!(error, "function `f` result: optional metadata rejected");
     assert_eq!(
         flat.function("f")
             .unwrap()

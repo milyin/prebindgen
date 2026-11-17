@@ -557,7 +557,10 @@ impl JniSourceResolver {
                 let inner = option_inner(ty).ok_or("optional recipe requires Option<T>")?;
                 Ok(InputNode::Unary {
                     operation: JniInputUnary::Optional,
-                    child: Box::new(resolve(inner, child, stack)?),
+                    child: Box::new(
+                        resolve(inner, child, stack)
+                            .map_err(|e| format!("optional payload: {e}"))?,
+                    ),
                 })
             }
             InputNode::Unary {
@@ -568,7 +571,9 @@ impl JniSourceResolver {
                     sequence_parts(ty).ok_or("sequence input requires Vec<T>, &[T] or &Vec<T>")?;
                 Ok(InputNode::Unary {
                     operation: JniInputUnary::Sequence,
-                    child: Box::new(resolve(element, child, stack)?),
+                    child: Box::new(
+                        resolve(element, child, stack).map_err(|e| format!("element: {e}"))?,
+                    ),
                 })
             }
             InputNode::Branch {
@@ -619,7 +624,11 @@ impl JniSourceResolver {
                     operation: JniInputBranch::Selector,
                     children: arms
                         .iter()
-                        .map(|child| resolve(ty, child, stack))
+                        .enumerate()
+                        .map(|(index, child)| {
+                            resolve(ty, child, stack)
+                                .map_err(|e| format!("alternative {index}: {e}"))
+                        })
                         .collect::<Result<_>>()?,
                 })
             }
@@ -685,7 +694,10 @@ impl JniSourceResolver {
                         handler: handler.clone(),
                         preserve_message_mapper: *preserve_message_mapper,
                     },
-                    children: vec![resolve(ok, success, stack)?, resolve(err, error, stack)?],
+                    children: vec![
+                        resolve(ok, success, stack).map_err(|e| format!("Result Ok: {e}"))?,
+                        resolve(err, error, stack).map_err(|e| format!("Result Err: {e}"))?,
+                    ],
                 })
             }
 
@@ -980,7 +992,10 @@ impl JniSourceResolver {
                 let inner = option_inner(ty).ok_or("optional recipe requires Option<T>")?;
                 Ok(OutputNode::Unary {
                     operation: JniOutputUnary::Optional,
-                    child: Box::new(resolve(inner, child, stack)?),
+                    child: Box::new(
+                        resolve(inner, child, stack)
+                            .map_err(|e| format!("optional payload: {e}"))?,
+                    ),
                 })
             }
             OutputNode::Unary {
@@ -994,7 +1009,9 @@ impl JniSourceResolver {
                         delivery: *delivery,
                         mode: *mode,
                     },
-                    child: Box::new(resolve(ty, element, stack)?),
+                    child: Box::new(
+                        resolve(ty, element, stack).map_err(|e| format!("element: {e}"))?,
+                    ),
                 })
             }
             OutputNode::Branch {
@@ -1136,9 +1153,11 @@ impl JniSourceResolver {
                 let (success, failure) =
                     result_parts(ty).ok_or("Result recipe requires Result<T, E>")?;
                 if let Some(name) = error {
-                    prebindgen_declarations::validate_error_mapper(flat, failure, name)?;
+                    prebindgen_declarations::validate_error_mapper(flat, failure, name)
+                        .map_err(|e| format!("Result Err: {e}"))?;
                 }
-                let handler = crate::errors::handler_name(flat, failure, error.is_some())?;
+                let handler = crate::errors::handler_name(flat, failure, error.is_some())
+                    .map_err(|e| format!("Result Err: {e}"))?;
                 let failure_output = if let Some(name) = error {
                     let conversion = ValueConversion {
                         representation: syn::parse_quote!(String),
@@ -1152,7 +1171,7 @@ impl JniSourceResolver {
                         &JniOutputConfig::value(),
                         extra,
                         stack,
-                    )?
+                    )
                 } else {
                     self.output(
                         flat,
@@ -1162,14 +1181,18 @@ impl JniSourceResolver {
                         extra,
                         stack,
                         false,
-                    )?
-                };
+                    )
+                }
+                .map_err(|e| format!("Result Err: {e}"))?;
                 Ok(OutputNode::Branch {
                     operation: JniOutputBranch::Result {
                         handler,
                         preserve_message_mapper: error.is_some(),
                     },
-                    children: vec![resolve(success, ok, stack)?, failure_output],
+                    children: vec![
+                        resolve(success, ok, stack).map_err(|e| format!("Result Ok: {e}"))?,
+                        failure_output,
+                    ],
                 })
             }
         }

@@ -32,7 +32,9 @@ pub fn record_input<C: Codec>(
         let target = format_ident!("{var}_field_{index}");
         values.push(quote!(#name:#target));
         child.node = WireNode::Annotation {
-            meta: codec.input_field(&name)?,
+            meta: codec
+                .input_field(&name)
+                .map_err(|e| format!("field `{name}`: {e}"))?,
             child: Box::new(std::mem::take(&mut child.node)),
         };
         plans.push((target, child));
@@ -98,13 +100,16 @@ pub fn record_output<C: Codec>(
     let mut names = std::collections::BTreeSet::new();
     for (index, name) in fields.enumerate() {
         check_field(&mut names, &name)?;
-        let mut child = convert(index, quote!(&#var.#name))?;
+        let mut child =
+            convert(index, quote!(&#var.#name)).map_err(|e| format!("field `{name}`: {e}"))?;
         codec.prefix_output(
             &mut child.outcomes.success,
             ComponentSegment::Field(name.to_string()),
         );
         child.outcomes.success = WireNode::Annotation {
-            meta: codec.output_field(&name)?,
+            meta: codec
+                .output_field(&name)
+                .map_err(|e| format!("field `{name}`: {e}"))?,
             child: Box::new(std::mem::take(&mut child.outcomes.success)),
         };
         append(&mut out, child)?;
@@ -155,13 +160,16 @@ pub fn record_output_owned<C: Codec>(
     let mut names = std::collections::BTreeSet::new();
     for (index, name) in fields.enumerate() {
         check_field(&mut names, &name)?;
-        let mut child = convert(index, quote!(#var.#name))?;
+        let mut child =
+            convert(index, quote!(#var.#name)).map_err(|e| format!("field `{name}`: {e}"))?;
         codec.prefix_output(
             &mut child.outcomes.success,
             ComponentSegment::Field(name.to_string()),
         );
         child.outcomes.success = WireNode::Annotation {
-            meta: codec.output_field(&name)?,
+            meta: codec
+                .output_field(&name)
+                .map_err(|e| format!("field `{name}`: {e}"))?,
             child: Box::new(std::mem::take(&mut child.outcomes.success)),
         };
         append(&mut out, child)?;

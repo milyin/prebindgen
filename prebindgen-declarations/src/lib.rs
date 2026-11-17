@@ -215,16 +215,19 @@ pub fn compile_input<C: Codec>(
     let wire = format_ident!("p{index}_callback");
     let value = format_ident!("p{index}_callback_value");
     let names = matches!(recipe, InputNode::Arrow { .. }).then_some((&wire, &value));
-    let mut plan = compiler.input_named(
-        &f.params[index].ty.ty,
-        recipe,
-        extra,
-        &Condition::default(),
-        names,
-    )?;
-    codec.finish_input(&mut plan, extra)?;
-    codec.validate_input(&plan)?;
-    Ok(plan.into())
+    (|| {
+        let mut plan = compiler.input_named(
+            &f.params[index].ty.ty,
+            recipe,
+            extra,
+            &Condition::default(),
+            names,
+        )?;
+        codec.finish_input(&mut plan, extra)?;
+        codec.validate_input(&plan)?;
+        Ok(plan.into())
+    })()
+    .map_err(|e: String| format!("function `{function}` parameter `{parameter}`: {e}"))
 }
 
 /// Compile a resolved description for one source result without modifying its slot.
@@ -243,6 +246,7 @@ pub fn compile_output<C: Codec>(
     extra: &C::Extra,
 ) -> Result<C::Output> {
     compile_output_value(flat, codec, &flat.function(function)?.ret.ty, recipe, extra)
+        .map_err(|e| format!("function `{function}` result: {e}"))
 }
 
 /// Compile the output conversion of a source value, such as a function result or an error.
@@ -293,10 +297,13 @@ pub fn compile_callback_return<C: Codec>(
         input_role: std::cell::Cell::new(InputRole::CallbackResult),
         ..Compiler::new(flat, codec, "callback_return".into())
     };
-    let mut plan = compiler.input(ty, recipe, extra, &Condition::default())?;
-    codec.finish_input(&mut plan, extra)?;
-    codec.validate_input(&plan)?;
-    Ok(plan.into())
+    (|| {
+        let mut plan = compiler.input(ty, recipe, extra, &Condition::default())?;
+        codec.finish_input(&mut plan, extra)?;
+        codec.validate_input(&plan)?;
+        Ok(plan.into())
+    })()
+    .map_err(|e: String| format!("callback result: {e}"))
 }
 
 /// Compile one Rust-to-foreign callback argument with independent local names.
@@ -321,6 +328,7 @@ pub fn compile_callback_argument<C: Codec>(
         extra,
         OutputPosition::CallbackArgument { index, borrowed },
     )
+    .map_err(|e| format!("callback argument {index}: {e}"))
 }
 
 enum OutputPosition {

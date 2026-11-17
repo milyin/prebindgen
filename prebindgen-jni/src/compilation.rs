@@ -404,8 +404,9 @@ impl<C: Codec<InOps = JniInputOps, OutOps = JniOutputOps, CompileState = JniComp
             {
                 let tag = self.name();
                 let payload = self.name();
-                let child =
-                    self.output_return(payload_ty, inner, extra, quote!(#payload), false)?;
+                let child = self
+                    .output_return(payload_ty, inner, extra, quote!(#payload), false)
+                    .map_err(|e| format!("optional payload: {e}"))?;
                 return optional_output(self.codec, extra, tag, payload, value, false, child);
             }
         }

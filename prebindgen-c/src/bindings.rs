@@ -267,3 +267,111 @@ pub(crate) fn set_output(
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod diagnostic_tests {
+    use super::*;
+
+    #[test]
+    fn occurrence_diagnostics_retain_c_export_and_explicit_children() {
+        let mut flat: CBindings = Flat::parse(
+            syn::parse_file("pub fn read()->i64{}")
+                .unwrap()
+                .items
+                .into_iter()
+                .map(|i| (i, Default::default())),
+        )
+        .unwrap();
+        let resolver = CSourceResolver::new(&mut flat, vec![], vec![], vec![]).unwrap();
+        for (ty, operation, label) in [
+            (
+                syn::parse_quote!(Option<i64>),
+                CInputUnary::Optional,
+                "optional payload",
+            ),
+            (
+                syn::parse_quote!(Vec<i64>),
+                CInputUnary::Sequence,
+                "element",
+            ),
+        ] {
+            let tree = CInputConfig::Unary {
+                operation,
+                child: Box::new(CInputConfig::None),
+            };
+            let error = resolver
+                .resolve_input(&flat, &CCodec::raw(), &ty, &tree, &())
+                .unwrap_err();
+            println!("{error}");
+            assert_eq!(error, format!("{label}: None input requires unit"));
+        }
+        let tree = CInputConfig::Branch {
+            operation: CInputBranch::Selector,
+            children: vec![CInputConfig::None],
+        };
+        let error = resolver
+            .resolve_input(&flat, &CCodec::raw(), &syn::parse_quote!(i64), &tree, &())
+            .unwrap_err();
+        println!("{error}");
+        assert_eq!(error, "alternative 0: None input requires unit");
+        for (ty, operation, label) in [
+            (
+                syn::parse_quote!(Option<i64>),
+                COutputUnary::Optional,
+                "optional payload",
+            ),
+            (
+                syn::parse_quote!(Vec<i64>),
+                COutputUnary::Sequence {
+                    delivery: prebindgen_declarations::SequenceDelivery::Value,
+                    mode: None,
+                },
+                "element",
+            ),
+            (
+                syn::parse_quote!(Result<i64,i64>),
+                COutputUnary::Result { error: None },
+                "Result Ok",
+            ),
+        ] {
+            let tree = COutputConfig::Unary {
+                operation,
+                child: Box::new(COutputConfig::None),
+            };
+            let error = resolver
+                .resolve_output(&flat, &CCodec::raw(), &ty, &tree, &())
+                .unwrap_err();
+            println!("{error}");
+            assert_eq!(error, format!("{label}: None output requires unit"));
+        }
+        let tree = COutput::Unary {
+            operation: COutputUnary::Optional,
+            child: Box::new(COutput::None),
+        };
+        let error = prebindgen_declarations::compile_output_value(
+            &flat,
+            &CCodec::raw(),
+            &syn::parse_quote!(Option<i64>),
+            &tree,
+            &(),
+        )
+        .err()
+        .unwrap();
+        println!("{error}");
+        assert_eq!(error, "optional payload: None output requires unit");
+        let error = Cbindgen::new(flat)
+            .function(
+                crate::fun!(read)
+                    .name("read_alias")
+                    .expand_return(COutputConfig::None),
+            )
+            .build()
+            .err()
+            .unwrap();
+        println!("{error}");
+        assert_eq!(
+            error,
+            "read_alias: function `read` result: None output requires unit"
+        );
+    }
+}
