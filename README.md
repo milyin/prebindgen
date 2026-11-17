@@ -40,6 +40,12 @@ Unsupported declarations, record fields and matching constructor arguments are
 commented in the flat sources and `build.rs` files as the checklist for future
 work. The retained records demonstrate the supported shapes of the real examples.
 
+Language-adapter authors can start with the separate
+[minimal public-API adapter](examples/adapter-minimal/README.md). It compiles and
+runs emitted Rust for `i64`/unit calls and checks an unsupported optional-input
+recipe. Its independent workspace is run explicitly rather than by root workspace
+checks; the [adapter guide](docs/declaration-codec.md) explains the next contracts.
+
 | Example | Currently active |
 |---|---|
 | [example-flat](examples/example-flat) | Calculator/Error aliases, Caption and Foo with primitive fields |
@@ -816,6 +822,10 @@ hooks are directional; source-error and binding-failure payloads use output tree
 of `Codec::Schema`, which selects the source attachments. `Codec::Context` selects
 the context passed to converter emission. `Codec::finish_input` and `finish_output`
 attach glue after recursive composition; the latter also runs for unit results.
+`compile_output_root` returns a complete `Codec::Output`; its default uses
+`Compiler::finish_output_plan` to finalize and validate an ordinary composed plan.
+Nested output hooks still return plans. See the
+[root/Result migration](docs/declaration-codec.md#root-and-result-migration).
 
 `compile_input` and `compile_output` compile resolved trees against a source
 position. The C/JNI `bind_input` and `bind_output` helpers first resolve their
@@ -1009,14 +1019,14 @@ are not read or acquired. If conversion or source construction fails, Rust drops
 initialized values and unpublished outputs. Earlier owned inputs remain consumed;
 constructor side effects are not rolled back.
 
-Low-level adapters constructing `prebindgen_conversions::Resource` use
-`records_consumption: false` for compiler-managed ownership counts. Set it to
-`true` when acquisition updates `__prebindgen_input_consumed` after each successful
-move. `registered` means preparation already accounts for the resource. `count` is
-the number of resources represented when active; address identities are no longer
-stored or rendered by the shared protocol.
-`allocation_type` identifies an independently owned allocation class used by
-Kotlin's handle preflight; C loans can use `None` for interior pointers.
+Low-level stored inputs use `InputPlan::code` to bind the target and evaluate the
+remaining call through a continuation exactly once. `InputPlan::storage` contains
+only inert backing-storage declarations that can enclose optional/selector
+branches. Compose children with `InputPlan::new` / `bind` so borrowed backing owners
+remain alive through later arguments and the source call. The former `Resource`,
+`records_consumption` and `registered` preparation fields are removed. Ownership
+takes still report completed transfers before later failures/unwinds; wire access
+metadata and the language's handle/consumption contract describe those transfers.
 
 Low-level JNI adapters read class settings from `KotlinContext::source_types`,
 the canonical Flat declarations, and provide `KotlinInput::handle_inputs`.
@@ -2130,14 +2140,21 @@ not yet supported. Spell both generic arguments explicitly using `Result`,
 `std::result::Result`, or `core::result::Result`; one-argument aliases such as
 `io::Result<T>` are not resolved. Named opaque aliases remain opaque.
 
-Adapter authors use their own result operation (`COutputUnary::Result` or `JniOutputUnary::Result`) through the corresponding binding helper.
-The declaration compiler validates any selected mapper and unwraps the result
-before preparing the success conversion. `Codec::source_error` receives
-the owned error and an optional mapper expression and returns a `SourceErrorPlan`
-containing both the error payload tree and its propagation expression. Its default
-requires an explicit mapper and delegates to `Codec::mapped_error` for routing.
-C can preserve declared error fields;
-JNI preserves typed outputs or explicitly mapped messages for its domain callback. No Result-specific wire type, niche, or group metadata is introduced.
+Adapter authors use their own result operation through the corresponding binding
+helper. C keeps `COutputUnary::Result`; its shared `Codec::source_error` path
+returns a `SourceErrorPlan` pairing the payload tree with propagation. The default
+requires an explicit mapper and delegates to `mapped_error`.
+
+JNI configuration uses `JniOutputUnary::ConfigResult`; the resolved
+`JniOutputBranch::Result` owns ordinary Ok/Err conversion children. The compiled
+return converter owns both payload converters, replacing the separate error-binding
+lifecycle and generated error helpers. Custom Kotlin output wrappers forward
+`domain_error()` and `with_domain_error()` along with outcomes, native fragments,
+delivery and Kotlin projections. An explicit mapper still accepts E or &E, even
+when E itself is a reference: `&str` and `&&str` remain distinct mapper arguments.
+Typed outputs, explicit mapped messages and the separate binding-failure handler
+retain their behavior. See the [migration guide](docs/declaration-codec.md#root-and-result-migration)
+and [complete custom wrapper](examples/covertest-kotlin/build_support/output_contracts.rs).
 
 ## Fieldless enums
 
@@ -2465,7 +2482,9 @@ Adapter API migration for the logical schema:
 - Stored plans expose `InputPlan::node` and `OutputPlan::outcomes`.
   `OutputPlan::values` and sequence-hook reads remain keyed by binding name.
   `match_output_fields` matches expressions to selected destination fields.
-- Codecs implement complete `optional` and `alternatives` operations as needed.
+- Codecs implement complete `input_optional`, `output_optional` and
+  `alternatives` operations as needed. Selector and group/field hooks also keep
+  input and output metadata independent.
   Niche helpers take native-scope wires and adapter-supplied wire operations;
   `Codec::Niche` and the separate mandatory niche/metadata hooks are removed.
 - `SequenceInput<W, Container>` / `SequenceOutput<W, Container>` return container
@@ -2473,10 +2492,12 @@ Adapter API migration for the logical schema:
   eligibility and sequence callback signatures belong to the adapters.
 - `staged::emit_call` receives the generated function's parameter names for
   reserving locals; it never derives a parameter list from the logical tree.
-- Codecs prepare source errors through `source_error`, which returns both layout
-  and propagation, and binding failures through `binding_failure_layout`.
-  `mapped_error` retains the convenience for explicitly mapped String errors.
-  C/JNI output signatures, typed error handlers and ownership rules are retained.
+- The shared `source_error` path pairs layout and propagation; `mapped_error`
+  retains the explicit String-mapper convenience. JNI Result roots instead own
+  ordinary Ok/Err converters, and custom output wrappers preserve that ownership
+  through `domain_error` / `with_domain_error`. `binding_failure_layout` describes
+  the separate binding-failure channel. See the
+  [root migration](docs/declaration-codec.md#root-and-result-migration).
 
 ## Comparison to other solutions
 
