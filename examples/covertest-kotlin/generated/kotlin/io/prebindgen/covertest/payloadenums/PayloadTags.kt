@@ -1,0 +1,37 @@
+package io.prebindgen.covertest.payloadenums
+
+public const val RESULT_I64_STRING_EA70563B5EB1A062_ERR_TAG: Int = 1
+public const val RESULT_I64_STRING_EA70563B5EB1A062_OK_TAG: Int = 0
+public const val RESULT_RESULT_I64_STRING_STRING_7B424CF42FDEBEEE_ERR_TAG: Int = 1
+public const val RESULT_RESULT_I64_STRING_STRING_7B424CF42FDEBEEE_OK_TAG: Int = 0
+public const val RESULT_UNIT_STRING_5BB39813B0A5EBE6_ERR_TAG: Int = 1
+public const val RESULT_UNIT_STRING_5BB39813B0A5EBE6_OK_TAG: Int = 0
+public const val WIRE_BARE_COUNT_TAG: Int = 0
+public const val WIRE_BARE_PACKET_TAG: Int = 1
+public const val WIRE_BENCH_COUNT_TAG: Int = 0
+public const val WIRE_BENCH_PAIR_TAG: Int = 1
+public const val WIRE_CHECKED_EVENT_DATA_TAG: Int = 1
+public const val WIRE_CHECKED_EVENT_EMPTY_TAG: Int = 0
+public const val WIRE_COMPOSITE_OWNED_EVENT_DATA_TAG: Int = 1
+public const val WIRE_COMPOSITE_OWNED_EVENT_EMPTY_TAG: Int = 0
+public const val WIRE_EMPTY_NAMED_TAG: Int = 2
+public const val WIRE_EMPTY_TUPLE_TAG: Int = 1
+public const val WIRE_EMPTY_UNIT_TAG: Int = 0
+public const val WIRE_ERROR_KIND_CODE_TAG: Int = 0
+public const val WIRE_ERROR_KIND_MESSAGE_TAG: Int = 1
+public const val WIRE_EVENT_COUNT_TAG: Int = 1
+public const val WIRE_EVENT_EMPTY_RECORD_TAG: Int = 4
+public const val WIRE_EVENT_EMPTY_TUPLE_TAG: Int = 3
+public const val WIRE_EVENT_IDLE_TAG: Int = 0
+public const val WIRE_EVENT_PACKET_TAG: Int = 2
+public const val WIRE_INSTRUMENTATION_TIMESTAMP_CUSTOM_TAG: Int = 1
+public const val WIRE_INSTRUMENTATION_TIMESTAMP_UHLC_TAG: Int = 0
+public const val WIRE_NICHE_EVENT_DATA_TAG: Int = 1
+public const val WIRE_NICHE_EVENT_EMPTY_TAG: Int = 0
+public const val WIRE_OWNED_EVENT_EMPTY_TAG: Int = 0
+public const val WIRE_OWNED_EVENT_PAIR_TAG: Int = 1
+public const val WIRE_OWNED_EVENT_TEXT_TAG: Int = 2
+public const val WIRE_RECOVERY_MODE_HEARTBEAT_TAG: Int = 1
+public const val WIRE_RECOVERY_MODE_PERIODIC_QUERIES_TAG: Int = 0
+public const val WIRE_SELF_NAME_OTHER_TAG: Int = 1
+public const val WIRE_SELF_NAME_WIRE_SELF_NAME_TAG: Int = 0

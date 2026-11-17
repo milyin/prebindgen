@@ -30,7 +30,7 @@
 // callback types mirror the C closure structs. Item-level allows would be
 // captured into the `#[prebindgen]` records and drift the committed golden
 // bindings, so silence these lints crate-wide instead.
-#![allow(clippy::ptr_arg, clippy::type_complexity)]
+#![allow(clippy::ptr_arg, clippy::type_complexity, clippy::too_many_arguments)]
 
 // Disabled: unsupported by the current binding subset
 // use std::mem::MaybeUninit;
@@ -41,6 +41,34 @@ use prebindgen_proc_macro::{features, prebindgen, prebindgen_out_dir};
 // generator features (see [`ext`]); not used by the `perftest-*` benchmarks.
 // Re-exported at the crate root so one `source_module = perftest_flat` reaches
 // both the perf surface and the coverage surface.
+mod canonical_values;
+pub use canonical_values::*;
+mod bulk;
+mod enum_inputs;
+mod inline_inputs;
+pub use bulk::*;
+pub use enum_inputs::*;
+pub use inline_inputs::*;
+mod borrowed_getters;
+mod jni_buffers;
+mod return_results;
+pub use return_results::*;
+mod runtime_costs;
+mod typed_rows;
+pub use jni_buffers::*;
+pub use runtime_costs::*;
+pub use typed_rows::*;
+pub mod callback_returns;
+mod parameter_names;
+pub use parameter_names::*;
+mod gc_handles;
+pub use borrowed_getters::*;
+pub use callback_returns::*;
+pub use gc_handles::*;
+mod callback_config;
+pub use callback_config::*;
+mod callback_boundaries;
+pub use callback_boundaries::*;
 pub mod ext;
 pub use ext::*;
 
@@ -141,16 +169,12 @@ pub fn storage_new() -> Storage {
     Storage::default()
 }
 
-// Disabled: unsupported by the current binding subset
-// /// Return a clone of the **first** stored payload, or `None` if the storage is empty
-// /// (by value; crosses by reinterpret, the `label` becoming a fresh owned `string_t *`
-// /// the C caller must drop). Across the C ABI an `Option<Payload>` lowers to
-// /// `bool storage_get(const storage_t *, payload_t *out)` (true + writes `*out` if
-// /// present); in Kotlin it surfaces as a nullable `Payload?`.
-// #[prebindgen]
-// pub fn storage_get(s: &Storage) -> Option<Payload> {
-//     s.payloads.first().cloned()
-// }
+/// Return a clone of the first stored payload, or `None` for empty storage.
+/// The binding declarations project its fields and preserve optional presence.
+#[prebindgen]
+pub fn storage_get(s: &Storage) -> Option<Payload> {
+    s.payloads.first().cloned()
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Five parameter-passing semantics for a `Payload` value struct, demonstrating the
@@ -253,35 +277,28 @@ pub fn storage_put_by_take(s: &mut Storage, payload: Payload) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Array (slice / Vec) API: store and retrieve a whole batch in one FFI call,
-// amortizing per-call boundary overhead. The slice input crosses as
-// `(const payload_t *, size_t)` in C (zero-copy reinterpret — `Payload` is
-// `#[repr(C)]`) and as a `List<Payload>` in Kotlin; the `Vec` return crosses as a
-// malloc'd `(payload_t *, size_t)` array in C and a `List<Payload>` in Kotlin.
+// using the same element converters as single values. C transports typed row
+// buffers and Kotlin transports lists. Input rows are decoded into a temporary
+// Rust collection; output rows are a separate allocation owned by the caller.
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Disabled: unsupported by the current binding subset
-// /// Replace the stored batch with a clone of `payloads`. The single-payload puts
-// /// are the array-of-one case of this.
-// #[prebindgen]
-// pub fn storage_put_slice(s: &mut Storage, payloads: &[Payload]) {
-//     s.payloads = payloads.to_vec();
-// }
+/// Replace the stored batch with a clone of `payloads`. The single-payload puts
+/// are the array-of-one case of this.
+#[prebindgen]
+pub fn storage_put_slice(s: &mut Storage, payloads: &[Payload]) {
+    s.payloads = payloads.to_vec();
+}
 
-// Disabled: unsupported by the current binding subset
-// /// Return a clone of the **whole** stored batch, or `None` if the storage is empty
-// /// (each `label` becoming a fresh owned `string_t *` the C caller must drop). A
-// /// returned `Some` is always non-empty (empty storage is `None`). [`storage_get`] is
-// /// the first-element case of this. Across the C ABI `Option<Vec<Payload>>` lowers to
-// /// `bool storage_get_vec(const storage_t *, payload_t **out, size_t *out_len)`; in
-// /// Kotlin it surfaces as a nullable `List<Payload>?`.
-// #[prebindgen]
-// pub fn storage_get_vec(s: &Storage) -> Option<Vec<Payload>> {
-//     if s.payloads.is_empty() {
-//         None
-//     } else {
-//         Some(s.payloads.clone())
-//     }
-// }
+/// Clone the stored batch, or return None when it is empty. Bindings expose
+/// generated row arrays in C and `List<Payload>?` in Kotlin.
+#[prebindgen]
+pub fn storage_get_vec(s: &Storage) -> Option<Vec<Payload>> {
+    if s.payloads.is_empty() {
+        None
+    } else {
+        Some(s.payloads.clone())
+    }
+}
 
 // Disabled: unsupported by the current binding subset
 // /// Prepare a reusable [`PayloadVecHandler`] from a whole-batch callback `f`. Like
@@ -520,3 +537,25 @@ pub fn payload_new(id: i64, seq: i32, value: f64, flag: bool) -> Payload {
 pub fn payload_to_struct(value: &Payload) -> Payload {
     value.clone()
 }
+
+mod callbacks;
+pub use callbacks::*;
+
+mod inline_owners;
+pub use inline_owners::*;
+
+pub mod nullability;
+pub use nullability::*;
+mod buffer_inputs;
+pub use buffer_inputs::*;
+mod alias_options;
+pub use alias_options::*;
+
+mod collection_cleanup;
+pub use collection_cleanup::*;
+
+mod type_inputs;
+pub use type_inputs::*;
+
+mod shared_inputs;
+pub use shared_inputs::*;

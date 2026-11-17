@@ -1,0 +1,4185 @@
+{
+  "driver": {
+    "builds": {
+      "before": {
+        "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-output-cleanup-baseline",
+        "commit": "7956e5e058be6fc28273540b35366498156ace85",
+        "dirty_paths": [],
+        "profile": "release",
+        "profile_environment": {},
+        "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8",
+        "path_dependency_repositories": [
+          {
+            "repository": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-output-cleanup-baseline",
+            "commit": "7956e5e058be6fc28273540b35366498156ace85",
+            "packages": [
+              "prebindgen",
+              "prebindgen-conversions",
+              "prebindgen-declarations",
+              "prebindgen-flat",
+              "prebindgen-jni",
+              "prebindgen-jni-runtime",
+              "prebindgen-proc-macro",
+              "prebindgen-reprc",
+              "prebindgen-runtime"
+            ],
+            "contains_fixture": true
+          }
+        ],
+        "cargo_config_sha256": {},
+        "cargo": "cargo 1.98.0 (797e8a9bc 2026-08-05)",
+        "dependency_lock_sha256": "50aec39504ae6c12f747a6737ac6ff1de1aa0ea743f3fb86370345e7d07a551f",
+        "cargo_profile": {
+          "opt_level": "3",
+          "debuginfo": 0,
+          "debug_assertions": false,
+          "overflow_checks": false,
+          "test": false
+        },
+        "kotlin": "info: kotlinc-jvm 2.4.21 (JRE 11.0.29+7)",
+        "fixture_sha256": {
+          "flat.rs": "c6bbecbf78d9c60aa6ea0ff5d09f129e5b3bc3838add408300ee4cb4c084dc2e",
+          "bindings.rs": "43134d021f67499143b58866598e49cc00320deaee9464e8c144a7cbfef68845",
+          "Bench.kt": "b8572ad9f0b02220a1235a61cf40c201d0dfa7eca3ba2e7d5a991e104b9a5884",
+          "run.py": "15a04143ddcf1522f03425b285716689a086ecab3a3081366c9d3cdf8f87656e",
+          "Cargo.lock.snapshot": "50aec39504ae6c12f747a6737ac6ff1de1aa0ea743f3fb86370345e7d07a551f"
+        },
+        "jar": "/tmp/output-cleanup-before/bench.jar",
+        "library": "/tmp/output-cleanup-before/target/release/libbulk_bench.so",
+        "jar_sha256": "af93a675cb6ea0520daedfeb082e6126098df851c1140507d13fa5fe71799980",
+        "native_sha256": "7401f34dfe5e1dfe1e2c351017c9cfeb0f208ef83528c07290867909a0904480"
+      },
+      "after": {
+        "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-output-cleanup",
+        "commit": "86991f627d211415770a33710331b8fb77283ab1",
+        "dirty_paths": [],
+        "profile": "release",
+        "profile_environment": {},
+        "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8",
+        "path_dependency_repositories": [
+          {
+            "repository": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-output-cleanup",
+            "commit": "86991f627d211415770a33710331b8fb77283ab1",
+            "packages": [
+              "prebindgen",
+              "prebindgen-conversions",
+              "prebindgen-declarations",
+              "prebindgen-flat",
+              "prebindgen-jni",
+              "prebindgen-jni-runtime",
+              "prebindgen-proc-macro",
+              "prebindgen-reprc",
+              "prebindgen-runtime"
+            ],
+            "contains_fixture": true
+          }
+        ],
+        "cargo_config_sha256": {},
+        "cargo": "cargo 1.98.0 (797e8a9bc 2026-08-05)",
+        "dependency_lock_sha256": "50aec39504ae6c12f747a6737ac6ff1de1aa0ea743f3fb86370345e7d07a551f",
+        "cargo_profile": {
+          "opt_level": "3",
+          "debuginfo": 0,
+          "debug_assertions": false,
+          "overflow_checks": false,
+          "test": false
+        },
+        "kotlin": "info: kotlinc-jvm 2.4.21 (JRE 11.0.29+7)",
+        "fixture_sha256": {
+          "flat.rs": "c6bbecbf78d9c60aa6ea0ff5d09f129e5b3bc3838add408300ee4cb4c084dc2e",
+          "bindings.rs": "43134d021f67499143b58866598e49cc00320deaee9464e8c144a7cbfef68845",
+          "Bench.kt": "b8572ad9f0b02220a1235a61cf40c201d0dfa7eca3ba2e7d5a991e104b9a5884",
+          "run.py": "15a04143ddcf1522f03425b285716689a086ecab3a3081366c9d3cdf8f87656e",
+          "Cargo.lock.snapshot": "50aec39504ae6c12f747a6737ac6ff1de1aa0ea743f3fb86370345e7d07a551f"
+        },
+        "jar": "/tmp/output-cleanup-after-v2/bench.jar",
+        "library": "/tmp/output-cleanup-after-v2/target/release/libbulk_bench.so",
+        "jar_sha256": "93d8d95b910fbef43051672ec322f61d57f682885d7a20e865b39b50ca714e63",
+        "native_sha256": "58f93e4f5d639ea6ec063099af45a76761c012897ceaafac9ef485356a9b6833"
+      }
+    },
+    "original_source_sha256": "b8572ad9f0b02220a1235a61cf40c201d0dfa7eca3ba2e7d5a991e104b9a5884",
+    "instrumented_source_sha256": "88035b24d4b4326d9714d7e59fdff3dc4ae2d3783e5e0d208defced55f3ffd35",
+    "driver_jar": "/tmp/output-cleanup-isolated-driver-v3/driver.jar",
+    "driver_jar_sha256": "172c5a401f755f766e6445208d0b2475599271b7d3e17a7b5e7b17c32012dac6",
+    "compiler": "info: kotlinc-jvm 2.4.21 (JRE 11.0.29+7)",
+    "compile_command": [
+      "/snap/kotlin/current/bin/kotlinc",
+      "-cp",
+      "/tmp/output-cleanup-before/bench.jar",
+      "/tmp/output-cleanup-isolated-driver-v3/Bench.kt",
+      "-nowarn",
+      "-d",
+      "/tmp/output-cleanup-isolated-driver-v3/driver.jar"
+    ],
+    "prepare_sha256": "7e963071c915089081197e6c8b74944427287edb0225d3f1a4c9f39566de3dbd"
+  },
+  "effective_builds": {
+    "before": {
+      "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-output-cleanup-baseline",
+      "commit": "7956e5e058be6fc28273540b35366498156ace85",
+      "dirty_paths": [],
+      "profile": "release",
+      "profile_environment": {},
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8",
+      "path_dependency_repositories": [
+        {
+          "repository": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-output-cleanup-baseline",
+          "commit": "7956e5e058be6fc28273540b35366498156ace85",
+          "packages": [
+            "prebindgen",
+            "prebindgen-conversions",
+            "prebindgen-declarations",
+            "prebindgen-flat",
+            "prebindgen-jni",
+            "prebindgen-jni-runtime",
+            "prebindgen-proc-macro",
+            "prebindgen-reprc",
+            "prebindgen-runtime"
+          ],
+          "contains_fixture": true
+        }
+      ],
+      "cargo_config_sha256": {},
+      "cargo": "cargo 1.98.0 (797e8a9bc 2026-08-05)",
+      "dependency_lock_sha256": "50aec39504ae6c12f747a6737ac6ff1de1aa0ea743f3fb86370345e7d07a551f",
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "kotlin": "info: kotlinc-jvm 2.4.21 (JRE 11.0.29+7)",
+      "fixture_sha256": {
+        "flat.rs": "c6bbecbf78d9c60aa6ea0ff5d09f129e5b3bc3838add408300ee4cb4c084dc2e",
+        "bindings.rs": "43134d021f67499143b58866598e49cc00320deaee9464e8c144a7cbfef68845",
+        "Bench.kt": "b8572ad9f0b02220a1235a61cf40c201d0dfa7eca3ba2e7d5a991e104b9a5884",
+        "run.py": "15a04143ddcf1522f03425b285716689a086ecab3a3081366c9d3cdf8f87656e",
+        "Cargo.lock.snapshot": "50aec39504ae6c12f747a6737ac6ff1de1aa0ea743f3fb86370345e7d07a551f"
+      },
+      "jar": "/tmp/output-cleanup-before/bench.jar",
+      "library": "/tmp/output-cleanup-before/target/release/libbulk_bench.so",
+      "jar_sha256": "af93a675cb6ea0520daedfeb082e6126098df851c1140507d13fa5fe71799980",
+      "native_sha256": "7401f34dfe5e1dfe1e2c351017c9cfeb0f208ef83528c07290867909a0904480"
+    },
+    "after": {
+      "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-output-cleanup-baseline",
+      "commit": "7956e5e058be6fc28273540b35366498156ace85",
+      "dirty_paths": [],
+      "profile": "release",
+      "profile_environment": {},
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8",
+      "path_dependency_repositories": [
+        {
+          "repository": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-output-cleanup-baseline",
+          "commit": "7956e5e058be6fc28273540b35366498156ace85",
+          "packages": [
+            "prebindgen",
+            "prebindgen-conversions",
+            "prebindgen-declarations",
+            "prebindgen-flat",
+            "prebindgen-jni",
+            "prebindgen-jni-runtime",
+            "prebindgen-proc-macro",
+            "prebindgen-reprc",
+            "prebindgen-runtime"
+          ],
+          "contains_fixture": true
+        }
+      ],
+      "cargo_config_sha256": {},
+      "cargo": "cargo 1.98.0 (797e8a9bc 2026-08-05)",
+      "dependency_lock_sha256": "50aec39504ae6c12f747a6737ac6ff1de1aa0ea743f3fb86370345e7d07a551f",
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "kotlin": "info: kotlinc-jvm 2.4.21 (JRE 11.0.29+7)",
+      "fixture_sha256": {
+        "flat.rs": "c6bbecbf78d9c60aa6ea0ff5d09f129e5b3bc3838add408300ee4cb4c084dc2e",
+        "bindings.rs": "43134d021f67499143b58866598e49cc00320deaee9464e8c144a7cbfef68845",
+        "Bench.kt": "b8572ad9f0b02220a1235a61cf40c201d0dfa7eca3ba2e7d5a991e104b9a5884",
+        "run.py": "15a04143ddcf1522f03425b285716689a086ecab3a3081366c9d3cdf8f87656e",
+        "Cargo.lock.snapshot": "50aec39504ae6c12f747a6737ac6ff1de1aa0ea743f3fb86370345e7d07a551f"
+      },
+      "jar": "/tmp/output-cleanup-before/bench.jar",
+      "library": "/tmp/output-cleanup-before/target/release/libbulk_bench.so",
+      "jar_sha256": "af93a675cb6ea0520daedfeb082e6126098df851c1140507d13fa5fe71799980",
+      "native_sha256": "7401f34dfe5e1dfe1e2c351017c9cfeb0f208ef83528c07290867909a0904480"
+    }
+  },
+  "settings": {
+    "driver": "/tmp/output-cleanup-isolated-driver-v3",
+    "output": "/tmp/output-cleanup-isolated-aa",
+    "forks": 4,
+    "warmup": 256,
+    "batches": 24,
+    "target_ms": 50,
+    "min_warmup_ms": 3000,
+    "compile_quiet_ms": 1000,
+    "max_warmup_ms": 20000,
+    "smoke": false,
+    "pilot": false,
+    "cells": "bulk:control:1,bulk:owned_handles_roundtrip:1,plain:owned_handle_records_roundtrip:512",
+    "same_build": "before",
+    "native_version": null
+  },
+  "cells": [
+    [
+      "bulk",
+      "control",
+      1
+    ],
+    [
+      "bulk",
+      "owned_handles_roundtrip",
+      1
+    ],
+    [
+      "plain",
+      "owned_handle_records_roundtrip",
+      512
+    ]
+  ],
+  "jvm_flags": [
+    "-Xms256m",
+    "-Xmx256m",
+    "-XX:+UseG1GC",
+    "-XX:ActiveProcessorCount=2",
+    "-XX:+UnlockDiagnosticVMOptions",
+    "-XX:+LogCompilation",
+    "-XX:+PrintCommandLineFlags",
+    "-XX:CompileCommand=exclude,BenchKt::main",
+    "-XX:CompileCommand=dontinline,BenchKt::main$sample",
+    "-XX:CompileCommand=option,BenchKt::main$sample,double,CompileThresholdScaling,0.01",
+    "-XX:CompileCommand=exclude,BenchKt::main$gcCount",
+    "-XX:CompileCommand=exclude,BenchKt::main$gcTime"
+  ],
+  "warmup_environment": {
+    "PB_MIN_WARMUP_MS": "3000",
+    "PB_COMPILE_QUIET_MS": "1000",
+    "PB_MAX_WARMUP_MS": "20000"
+  },
+  "affinity": [
+    0,
+    1
+  ],
+  "platform": "Linux-6.8.0-138-generic-x86_64-with-glibc2.39",
+  "java_environment": {},
+  "cpu": "Architecture:                            x86_64\nCPU op-mode(s):                          32-bit, 64-bit\nAddress sizes:                           48 bits physical, 48 bits virtual\nByte Order:                              Little Endian\nCPU(s):                                  2\nOn-line CPU(s) list:                     0,1\nVendor ID:                               AuthenticAMD\nModel name:                              AMD EPYC 7713 64-Core Processor\nCPU family:                              25\nModel:                                   1\nThread(s) per core:                      1\nCore(s) per socket:                      2\nSocket(s):                               1\nStepping:                                1\nBogoMIPS:                                4000.00\nFlags:                                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm rep_good nopl cpuid extd_apicid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw perfctr_core ssbd ibrs ibpb stibp vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms rdseed adx smap clflushopt clwb sha_ni xsaveopt xsavec xgetbv1 xsaves clzero xsaveerptr wbnoinvd arat umip pku ospke vaes vpclmulqdq rdpid overflow_recov succor fsrm\nHypervisor vendor:                       KVM\nVirtualization type:                     full\nL1d cache:                               128 KiB (2 instances)\nL1i cache:                               128 KiB (2 instances)\nL2 cache:                                1 MiB (2 instances)\nL3 cache:                                32 MiB (2 instances)\nNUMA node(s):                            1\nNUMA node0 CPU(s):                       0,1\nVulnerability Gather data sampling:      Not affected\nVulnerability Indirect target selection: Not affected\nVulnerability Itlb multihit:             Not affected\nVulnerability L1tf:                      Not affected\nVulnerability Mds:                       Not affected\nVulnerability Meltdown:                  Not affected\nVulnerability Mmio stale data:           Not affected\nVulnerability Reg file data sampling:    Not affected\nVulnerability Retbleed:                  Not affected\nVulnerability Spec rstack overflow:      Vulnerable: Safe RET, no microcode\nVulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl\nVulnerability Spectre v1:                Mitigation; usercopy/swapgs barriers and __user pointer sanitization\nVulnerability Spectre v2:                Mitigation; Retpolines; IBPB conditional; IBRS_FW; STIBP disabled; RSB filling; PBRSB-eIBRS Not affected; BHI Not affected\nVulnerability Srbds:                     Not affected\nVulnerability Tsa:                       Vulnerable: Clear CPU buffers attempted, no microcode\nVulnerability Tsx async abort:           Not affected\nVulnerability Vmscape:                   Not affected\n",
+  "cpu_quota": null,
+  "java": "openjdk version \"11.0.29\" 2025-10-21\nOpenJDK Runtime Environment Temurin-11.0.29+7 (build 11.0.29+7)\nOpenJDK 64-Bit Server VM Temurin-11.0.29+7 (build 11.0.29+7, mixed mode)\n",
+  "runs": [
+    {
+      "id": "0-bulk-owned_handles_roundtrip-1-before",
+      "version": "before",
+      "mode": "bulk",
+      "case": "owned_handles_roundtrip",
+      "size": 1,
+      "fork": 0,
+      "seconds": 5.488982200622559,
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:+UnlockDiagnosticVMOptions",
+        "-XX:+LogCompilation",
+        "-XX:+PrintCommandLineFlags",
+        "-XX:CompileCommand=exclude,BenchKt::main",
+        "-XX:CompileCommand=dontinline,BenchKt::main$sample",
+        "-XX:CompileCommand=option,BenchKt::main$sample,double,CompileThresholdScaling,0.01",
+        "-XX:CompileCommand=exclude,BenchKt::main$gcCount",
+        "-XX:CompileCommand=exclude,BenchKt::main$gcTime",
+        "-XX:LogFile=/tmp/output-cleanup-isolated-aa/raw/0-bulk-owned_handles_roundtrip-1-before-jit.xml",
+        "-Xlog:gc*,safepoint:file=/tmp/output-cleanup-isolated-aa/raw/0-bulk-owned_handles_roundtrip-1-before-gc.log:uptimemillis,level,tags",
+        "-Djava.library.path=/tmp/output-cleanup-before/target/release",
+        "-cp",
+        "/tmp/output-cleanup-isolated-driver-v3/driver.jar:/tmp/output-cleanup-before/bench.jar",
+        "BenchKt",
+        "bulk",
+        "1",
+        "256",
+        "24",
+        "50",
+        "0",
+        "64",
+        "owned_handles_roundtrip"
+      ],
+      "warmup": {
+        "batches": 631,
+        "end_ms": 4066,
+        "quiet_ms": 1007,
+        "stable": true
+      },
+      "phases": {
+        "start": {
+          "uptime_ms": 4067,
+          "compilation_ms": 581
+        },
+        "end": {
+          "uptime_ms": 5352,
+          "compilation_ms": 586
+        }
+      },
+      "effective_flags": [
+        "-XX:ActiveProcessorCount=2 -XX:CompileCommand=exclude,BenchKt::main -XX:CompileCommand=dontinline,BenchKt::main$sample -XX:CompileCommand=option,BenchKt::main$sample,double,CompileThresholdScaling,0.01 -XX:CompileCommand=exclude,BenchKt::main$gcCount -XX:CompileCommand=exclude,BenchKt::main$gcTime -XX:G1ConcRefinementThreads=2 -XX:GCDrainStackTargetSize=64 -XX:InitialHeapSize=268435456 -XX:+LogCompilation -XX:LogFile=/tmp/output-cleanup-isolated-aa/raw/0-bulk-owned_handles_roundtrip-1-before-jit.xml -XX:MaxHeapSize=268435456 -XX:+PrintCommandLineFlags -XX:ReservedCodeCacheSize=251658240 -XX:+SegmentedCodeCache -XX:+UnlockDiagnosticVMOptions -XX:+UseCompressedClassPointers -XX:+UseCompressedOops -XX:+UseG1GC "
+      ],
+      "compilations_during_measurement": [
+        {
+          "stamp": 4.068,
+          "method": "java.nio.Buffer position ()I",
+          "compiler": "c1",
+          "level": "1"
+        },
+        {
+          "stamp": 4.068,
+          "method": "java.nio.Buffer limit ()I",
+          "compiler": "c1",
+          "level": "1"
+        },
+        {
+          "stamp": 4.221,
+          "method": "java.lang.Integer stringSize (I)I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.221,
+          "method": "java.lang.Integer getChars (II[B)I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.327,
+          "method": "java.lang.StringBuilder append (I)Ljava/lang/StringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.327,
+          "method": "java.lang.AbstractStringBuilder append (I)Ljava/lang/AbstractStringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.328,
+          "method": "java.lang.String checkBoundsOffCount (III)V",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.776,
+          "method": "java.nio.ByteBuffer arrayOffset ()I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.869,
+          "method": "java.lang.StringLatin1 inflate ([BI[CII)V",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.871,
+          "method": "java.nio.ByteBuffer position (I)Ljava/nio/ByteBuffer;",
+          "compiler": "c2",
+          "level": "4"
+        },
+        {
+          "stamp": 5.012,
+          "method": "java.nio.CharBuffer arrayOffset ()I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 5.277,
+          "method": "java.lang.StringBuilder append (J)Ljava/lang/StringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 5.278,
+          "method": "java.lang.AbstractStringBuilder append (J)Ljava/lang/AbstractStringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        }
+      ],
+      "binding_driver_compilations": [],
+      "stdout_sha256": "fb49d4373d703883f1095b127934a7d73d1ff3db1a4297b367a3b732de41738a",
+      "gc_sha256": "6c505acdcb8b896f3ae6a712de47f8aad5d56903f5a98c9dacda4c6bbc0d8d08",
+      "jit_sha256": "c016a4aaf2cea89f3162a45352c4f5be462d23c367b75109e921a9b3ffc5d20a"
+    },
+    {
+      "id": "0-bulk-owned_handles_roundtrip-1-after",
+      "version": "after",
+      "mode": "bulk",
+      "case": "owned_handles_roundtrip",
+      "size": 1,
+      "fork": 0,
+      "seconds": 4.741455554962158,
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:+UnlockDiagnosticVMOptions",
+        "-XX:+LogCompilation",
+        "-XX:+PrintCommandLineFlags",
+        "-XX:CompileCommand=exclude,BenchKt::main",
+        "-XX:CompileCommand=dontinline,BenchKt::main$sample",
+        "-XX:CompileCommand=option,BenchKt::main$sample,double,CompileThresholdScaling,0.01",
+        "-XX:CompileCommand=exclude,BenchKt::main$gcCount",
+        "-XX:CompileCommand=exclude,BenchKt::main$gcTime",
+        "-XX:LogFile=/tmp/output-cleanup-isolated-aa/raw/0-bulk-owned_handles_roundtrip-1-after-jit.xml",
+        "-Xlog:gc*,safepoint:file=/tmp/output-cleanup-isolated-aa/raw/0-bulk-owned_handles_roundtrip-1-after-gc.log:uptimemillis,level,tags",
+        "-Djava.library.path=/tmp/output-cleanup-before/target/release",
+        "-cp",
+        "/tmp/output-cleanup-isolated-driver-v3/driver.jar:/tmp/output-cleanup-before/bench.jar",
+        "BenchKt",
+        "bulk",
+        "1",
+        "256",
+        "24",
+        "50",
+        "0",
+        "64",
+        "owned_handles_roundtrip"
+      ],
+      "warmup": {
+        "batches": 354,
+        "end_ms": 3420,
+        "quiet_ms": 2262,
+        "stable": true
+      },
+      "phases": {
+        "start": {
+          "uptime_ms": 3420,
+          "compilation_ms": 590
+        },
+        "end": {
+          "uptime_ms": 4627,
+          "compilation_ms": 597
+        }
+      },
+      "effective_flags": [
+        "-XX:ActiveProcessorCount=2 -XX:CompileCommand=exclude,BenchKt::main -XX:CompileCommand=dontinline,BenchKt::main$sample -XX:CompileCommand=option,BenchKt::main$sample,double,CompileThresholdScaling,0.01 -XX:CompileCommand=exclude,BenchKt::main$gcCount -XX:CompileCommand=exclude,BenchKt::main$gcTime -XX:G1ConcRefinementThreads=2 -XX:GCDrainStackTargetSize=64 -XX:InitialHeapSize=268435456 -XX:+LogCompilation -XX:LogFile=/tmp/output-cleanup-isolated-aa/raw/0-bulk-owned_handles_roundtrip-1-after-jit.xml -XX:MaxHeapSize=268435456 -XX:+PrintCommandLineFlags -XX:ReservedCodeCacheSize=251658240 -XX:+SegmentedCodeCache -XX:+UnlockDiagnosticVMOptions -XX:+UseCompressedClassPointers -XX:+UseCompressedOops -XX:+UseG1GC "
+      ],
+      "compilations_during_measurement": [
+        {
+          "stamp": 3.421,
+          "method": "java.nio.Buffer position ()I",
+          "compiler": "c1",
+          "level": "1"
+        },
+        {
+          "stamp": 3.421,
+          "method": "java.nio.Buffer limit ()I",
+          "compiler": "c1",
+          "level": "1"
+        },
+        {
+          "stamp": 3.572,
+          "method": "java.lang.Integer stringSize (I)I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.573,
+          "method": "java.lang.Integer getChars (II[B)I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.672,
+          "method": "java.lang.StringBuilder append (I)Ljava/lang/StringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.672,
+          "method": "java.lang.AbstractStringBuilder append (I)Ljava/lang/AbstractStringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.673,
+          "method": "java.lang.String checkBoundsOffCount (III)V",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.773,
+          "method": "java.nio.Buffer <init> (IIII)V",
+          "compiler": "c2",
+          "level": "4"
+        },
+        {
+          "stamp": 4.123,
+          "method": "sun.management.VMManagementImpl getUptime0 ()J",
+          "compiler": "",
+          "level": "0"
+        },
+        {
+          "stamp": 4.124,
+          "method": "java.nio.ByteBuffer arrayOffset ()I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.221,
+          "method": "java.lang.StringLatin1 inflate ([BI[CII)V",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.369,
+          "method": "java.nio.CharBuffer arrayOffset ()I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.579,
+          "method": "java.lang.StringBuilder append (J)Ljava/lang/StringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.58,
+          "method": "java.lang.AbstractStringBuilder append (J)Ljava/lang/AbstractStringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        }
+      ],
+      "binding_driver_compilations": [],
+      "stdout_sha256": "7cc04f3d32e7d05b1b2b83312c54348b7e4639fb525e6594e94749546f2aec53",
+      "gc_sha256": "597143aece96d5717eee2c9d76e942cc64134f98871796d56133c19d0f88ad55",
+      "jit_sha256": "21ec3c0e0900fe026690e109efbe586f551439648e9eae93f553127922cad96d"
+    },
+    {
+      "id": "0-bulk-control-1-before",
+      "version": "before",
+      "mode": "bulk",
+      "case": "control",
+      "size": 1,
+      "fork": 0,
+      "seconds": 4.5685906410217285,
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:+UnlockDiagnosticVMOptions",
+        "-XX:+LogCompilation",
+        "-XX:+PrintCommandLineFlags",
+        "-XX:CompileCommand=exclude,BenchKt::main",
+        "-XX:CompileCommand=dontinline,BenchKt::main$sample",
+        "-XX:CompileCommand=option,BenchKt::main$sample,double,CompileThresholdScaling,0.01",
+        "-XX:CompileCommand=exclude,BenchKt::main$gcCount",
+        "-XX:CompileCommand=exclude,BenchKt::main$gcTime",
+        "-XX:LogFile=/tmp/output-cleanup-isolated-aa/raw/0-bulk-control-1-before-jit.xml",
+        "-Xlog:gc*,safepoint:file=/tmp/output-cleanup-isolated-aa/raw/0-bulk-control-1-before-gc.log:uptimemillis,level,tags",
+        "-Djava.library.path=/tmp/output-cleanup-before/target/release",
+        "-cp",
+        "/tmp/output-cleanup-isolated-driver-v3/driver.jar:/tmp/output-cleanup-before/bench.jar",
+        "BenchKt",
+        "bulk",
+        "1",
+        "256",
+        "24",
+        "50",
+        "0",
+        "64",
+        "control"
+      ],
+      "warmup": {
+        "batches": 352,
+        "end_ms": 3288,
+        "quiet_ms": 2393,
+        "stable": true
+      },
+      "phases": {
+        "start": {
+          "uptime_ms": 3289,
+          "compilation_ms": 237
+        },
+        "end": {
+          "uptime_ms": 4511,
+          "compilation_ms": 242
+        }
+      },
+      "effective_flags": [
+        "-XX:ActiveProcessorCount=2 -XX:CompileCommand=exclude,BenchKt::main -XX:CompileCommand=dontinline,BenchKt::main$sample -XX:CompileCommand=option,BenchKt::main$sample,double,CompileThresholdScaling,0.01 -XX:CompileCommand=exclude,BenchKt::main$gcCount -XX:CompileCommand=exclude,BenchKt::main$gcTime -XX:G1ConcRefinementThreads=2 -XX:GCDrainStackTargetSize=64 -XX:InitialHeapSize=268435456 -XX:+LogCompilation -XX:LogFile=/tmp/output-cleanup-isolated-aa/raw/0-bulk-control-1-before-jit.xml -XX:MaxHeapSize=268435456 -XX:+PrintCommandLineFlags -XX:ReservedCodeCacheSize=251658240 -XX:+SegmentedCodeCache -XX:+UnlockDiagnosticVMOptions -XX:+UseCompressedClassPointers -XX:+UseCompressedOops -XX:+UseG1GC "
+      ],
+      "compilations_during_measurement": [
+        {
+          "stamp": 3.34,
+          "method": "java.nio.Buffer position ()I",
+          "compiler": "c1",
+          "level": "1"
+        },
+        {
+          "stamp": 3.39,
+          "method": "java.nio.Buffer limit ()I",
+          "compiler": "c1",
+          "level": "1"
+        },
+        {
+          "stamp": 3.54,
+          "method": "java.lang.String checkBoundsOffCount (III)V",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.593,
+          "method": "java.lang.Integer stringSize (I)I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.594,
+          "method": "java.lang.Integer getChars (II[B)I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.644,
+          "method": "java.lang.StringBuilder append (I)Ljava/lang/StringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.644,
+          "method": "java.lang.AbstractStringBuilder append (I)Ljava/lang/AbstractStringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.796,
+          "method": "java.nio.Buffer position (I)Ljava/nio/Buffer;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.003,
+          "method": "java.nio.ByteBuffer arrayOffset ()I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.051,
+          "method": "sun.management.VMManagementImpl getUptime0 ()J",
+          "compiler": "",
+          "level": "0"
+        },
+        {
+          "stamp": 4.052,
+          "method": "java.lang.StringLatin1 inflate ([BI[CII)V",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.26,
+          "method": "java.nio.CharBuffer arrayOffset ()I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.461,
+          "method": "java.lang.StringBuilder append (J)Ljava/lang/StringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.462,
+          "method": "java.lang.AbstractStringBuilder append (J)Ljava/lang/AbstractStringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        }
+      ],
+      "binding_driver_compilations": [],
+      "stdout_sha256": "191f32afcbe585f076fef7ab0aa74c797452b078231b50f881a411c3294a8b30",
+      "gc_sha256": "8cae9a49d06eadfe81767e14f1694db51ac5dc4a9dd08b157ef53b7e0d344ec8",
+      "jit_sha256": "f01d214b37516dfa453ce5b4985ec274f59493db695a7b5f783f2f8da864492e"
+    },
+    {
+      "id": "0-bulk-control-1-after",
+      "version": "after",
+      "mode": "bulk",
+      "case": "control",
+      "size": 1,
+      "fork": 0,
+      "seconds": 4.6462366580963135,
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:+UnlockDiagnosticVMOptions",
+        "-XX:+LogCompilation",
+        "-XX:+PrintCommandLineFlags",
+        "-XX:CompileCommand=exclude,BenchKt::main",
+        "-XX:CompileCommand=dontinline,BenchKt::main$sample",
+        "-XX:CompileCommand=option,BenchKt::main$sample,double,CompileThresholdScaling,0.01",
+        "-XX:CompileCommand=exclude,BenchKt::main$gcCount",
+        "-XX:CompileCommand=exclude,BenchKt::main$gcTime",
+        "-XX:LogFile=/tmp/output-cleanup-isolated-aa/raw/0-bulk-control-1-after-jit.xml",
+        "-Xlog:gc*,safepoint:file=/tmp/output-cleanup-isolated-aa/raw/0-bulk-control-1-after-gc.log:uptimemillis,level,tags",
+        "-Djava.library.path=/tmp/output-cleanup-before/target/release",
+        "-cp",
+        "/tmp/output-cleanup-isolated-driver-v3/driver.jar:/tmp/output-cleanup-before/bench.jar",
+        "BenchKt",
+        "bulk",
+        "1",
+        "256",
+        "24",
+        "50",
+        "0",
+        "64",
+        "control"
+      ],
+      "warmup": {
+        "batches": 382,
+        "end_ms": 3314,
+        "quiet_ms": 2511,
+        "stable": true
+      },
+      "phases": {
+        "start": {
+          "uptime_ms": 3314,
+          "compilation_ms": 222
+        },
+        "end": {
+          "uptime_ms": 4588,
+          "compilation_ms": 228
+        }
+      },
+      "effective_flags": [
+        "-XX:ActiveProcessorCount=2 -XX:CompileCommand=exclude,BenchKt::main -XX:CompileCommand=dontinline,BenchKt::main$sample -XX:CompileCommand=option,BenchKt::main$sample,double,CompileThresholdScaling,0.01 -XX:CompileCommand=exclude,BenchKt::main$gcCount -XX:CompileCommand=exclude,BenchKt::main$gcTime -XX:G1ConcRefinementThreads=2 -XX:GCDrainStackTargetSize=64 -XX:InitialHeapSize=268435456 -XX:+LogCompilation -XX:LogFile=/tmp/output-cleanup-isolated-aa/raw/0-bulk-control-1-after-jit.xml -XX:MaxHeapSize=268435456 -XX:+PrintCommandLineFlags -XX:ReservedCodeCacheSize=251658240 -XX:+SegmentedCodeCache -XX:+UnlockDiagnosticVMOptions -XX:+UseCompressedClassPointers -XX:+UseCompressedOops -XX:+UseG1GC "
+      ],
+      "compilations_during_measurement": [
+        {
+          "stamp": 3.315,
+          "method": "sun.management.VMManagementImpl getUptime0 ()J",
+          "compiler": "",
+          "level": "0"
+        },
+        {
+          "stamp": 3.368,
+          "method": "java.nio.Buffer position ()I",
+          "compiler": "c1",
+          "level": "1"
+        },
+        {
+          "stamp": 3.418,
+          "method": "java.nio.Buffer limit ()I",
+          "compiler": "c1",
+          "level": "1"
+        },
+        {
+          "stamp": 3.576,
+          "method": "java.lang.String checkBoundsOffCount (III)V",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.627,
+          "method": "java.lang.Integer stringSize (I)I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.627,
+          "method": "java.lang.Integer getChars (II[B)I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.679,
+          "method": "java.lang.StringBuilder append (I)Ljava/lang/StringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.68,
+          "method": "java.lang.AbstractStringBuilder append (I)Ljava/lang/AbstractStringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.838,
+          "method": "java.nio.Buffer position (I)Ljava/nio/Buffer;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.046,
+          "method": "java.nio.ByteBuffer arrayOffset ()I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.1,
+          "method": "java.lang.StringLatin1 inflate ([BI[CII)V",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.15,
+          "method": "java.lang.Math min (II)I",
+          "compiler": "c2",
+          "level": "4"
+        },
+        {
+          "stamp": 4.309,
+          "method": "java.nio.CharBuffer arrayOffset ()I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.538,
+          "method": "java.lang.StringBuilder append (J)Ljava/lang/StringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.539,
+          "method": "java.lang.AbstractStringBuilder append (J)Ljava/lang/AbstractStringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        }
+      ],
+      "binding_driver_compilations": [],
+      "stdout_sha256": "fbd1e943d5b65bcd67b330fa7a759db5a2079565c5725961537d6df338663b59",
+      "gc_sha256": "4d420d3305aa6c0900785519d060475efaf92718a4f8f712b840afb8b8ba4f91",
+      "jit_sha256": "d0fb72f84f13babb35d52fac7722a6ad8daad395360607a5378ae705c70561d1"
+    },
+    {
+      "id": "0-plain-owned_handle_records_roundtrip-512-before",
+      "version": "before",
+      "mode": "plain",
+      "case": "owned_handle_records_roundtrip",
+      "size": 512,
+      "fork": 0,
+      "seconds": 8.317460536956787,
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:+UnlockDiagnosticVMOptions",
+        "-XX:+LogCompilation",
+        "-XX:+PrintCommandLineFlags",
+        "-XX:CompileCommand=exclude,BenchKt::main",
+        "-XX:CompileCommand=dontinline,BenchKt::main$sample",
+        "-XX:CompileCommand=option,BenchKt::main$sample,double,CompileThresholdScaling,0.01",
+        "-XX:CompileCommand=exclude,BenchKt::main$gcCount",
+        "-XX:CompileCommand=exclude,BenchKt::main$gcTime",
+        "-XX:LogFile=/tmp/output-cleanup-isolated-aa/raw/0-plain-owned_handle_records_roundtrip-512-before-jit.xml",
+        "-Xlog:gc*,safepoint:file=/tmp/output-cleanup-isolated-aa/raw/0-plain-owned_handle_records_roundtrip-512-before-gc.log:uptimemillis,level,tags",
+        "-Djava.library.path=/tmp/output-cleanup-before/target/release",
+        "-cp",
+        "/tmp/output-cleanup-isolated-driver-v3/driver.jar:/tmp/output-cleanup-before/bench.jar",
+        "BenchKt",
+        "plain",
+        "512",
+        "256",
+        "24",
+        "50",
+        "0",
+        "64",
+        "owned_handle_records_roundtrip"
+      ],
+      "warmup": {
+        "batches": 290,
+        "end_ms": 6107,
+        "quiet_ms": 1091,
+        "stable": true
+      },
+      "phases": {
+        "start": {
+          "uptime_ms": 6107,
+          "compilation_ms": 733
+        },
+        "end": {
+          "uptime_ms": 8194,
+          "compilation_ms": 871
+        }
+      },
+      "effective_flags": [
+        "-XX:ActiveProcessorCount=2 -XX:CompileCommand=exclude,BenchKt::main -XX:CompileCommand=dontinline,BenchKt::main$sample -XX:CompileCommand=option,BenchKt::main$sample,double,CompileThresholdScaling,0.01 -XX:CompileCommand=exclude,BenchKt::main$gcCount -XX:CompileCommand=exclude,BenchKt::main$gcTime -XX:G1ConcRefinementThreads=2 -XX:GCDrainStackTargetSize=64 -XX:InitialHeapSize=268435456 -XX:+LogCompilation -XX:LogFile=/tmp/output-cleanup-isolated-aa/raw/0-plain-owned_handle_records_roundtrip-512-before-jit.xml -XX:MaxHeapSize=268435456 -XX:+PrintCommandLineFlags -XX:ReservedCodeCacheSize=251658240 -XX:+SegmentedCodeCache -XX:+UnlockDiagnosticVMOptions -XX:+UseCompressedClassPointers -XX:+UseCompressedOops -XX:+UseG1GC "
+      ],
+      "compilations_during_measurement": [
+        {
+          "stamp": 6.108,
+          "method": "java.nio.Buffer position ()I",
+          "compiler": "c1",
+          "level": "1"
+        },
+        {
+          "stamp": 6.109,
+          "method": "java.nio.Buffer limit ()I",
+          "compiler": "c1",
+          "level": "1"
+        },
+        {
+          "stamp": 6.402,
+          "method": "java.lang.Integer stringSize (I)I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 6.403,
+          "method": "java.lang.Integer getChars (II[B)I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 6.5,
+          "method": "java.lang.StringBuilder append (I)Ljava/lang/StringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 6.501,
+          "method": "java.lang.AbstractStringBuilder append (I)Ljava/lang/AbstractStringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 6.501,
+          "method": "java.util.TimSort countRunAndMakeAscending ([Ljava/lang/Object;IILjava/util/Comparator;)I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 6.523,
+          "method": "java.util.TimSort mergeLo (IIII)V",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 6.586,
+          "method": "java.lang.String checkBoundsOffCount (III)V",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 6.811,
+          "method": "java.util.TimSort countRunAndMakeAscending ([Ljava/lang/Object;IILjava/util/Comparator;)I",
+          "compiler": "c2",
+          "level": "4"
+        },
+        {
+          "stamp": 6.963,
+          "method": "java.nio.Buffer position (I)Ljava/nio/Buffer;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 6.99,
+          "method": "java.util.TimSort mergeLo (IIII)V",
+          "compiler": "c2",
+          "level": "4"
+        },
+        {
+          "stamp": 7.429,
+          "method": "java.lang.StringLatin1 inflate ([BI[CII)V",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 7.429,
+          "method": "java.nio.ByteBuffer arrayOffset ()I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 7.463,
+          "method": "java.util.TimSort sort ([Ljava/lang/Object;IILjava/util/Comparator;[Ljava/lang/Object;II)V",
+          "compiler": "c2",
+          "level": "4"
+        },
+        {
+          "stamp": 7.815,
+          "method": "java.nio.CharBuffer arrayOffset ()I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 8.068,
+          "method": "kotlin.jvm.internal.Intrinsics checkNotNullExpressionValue (Ljava/lang/Object;Ljava/lang/String;)V",
+          "compiler": "c2",
+          "level": "4"
+        },
+        {
+          "stamp": 8.118,
+          "method": "java.lang.StringBuilder append (J)Ljava/lang/StringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 8.119,
+          "method": "java.lang.AbstractStringBuilder append (J)Ljava/lang/AbstractStringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        }
+      ],
+      "binding_driver_compilations": [],
+      "stdout_sha256": "843a0efe129a83237e020a76649c883b7fcfbad87dc9032896bcbb4cf4a8a0ef",
+      "gc_sha256": "2bdab57e9d7c5ad161b74430387d2308f743a6872b4d4fdfafb9140a87650482",
+      "jit_sha256": "5056c171c59634a7c242a8a099b0abdfa93f9c7074d51dbaf64f20393ad28b6d"
+    },
+    {
+      "id": "0-plain-owned_handle_records_roundtrip-512-after",
+      "version": "after",
+      "mode": "plain",
+      "case": "owned_handle_records_roundtrip",
+      "size": 512,
+      "fork": 0,
+      "seconds": 9.052038669586182,
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:+UnlockDiagnosticVMOptions",
+        "-XX:+LogCompilation",
+        "-XX:+PrintCommandLineFlags",
+        "-XX:CompileCommand=exclude,BenchKt::main",
+        "-XX:CompileCommand=dontinline,BenchKt::main$sample",
+        "-XX:CompileCommand=option,BenchKt::main$sample,double,CompileThresholdScaling,0.01",
+        "-XX:CompileCommand=exclude,BenchKt::main$gcCount",
+        "-XX:CompileCommand=exclude,BenchKt::main$gcTime",
+        "-XX:LogFile=/tmp/output-cleanup-isolated-aa/raw/0-plain-owned_handle_records_roundtrip-512-after-jit.xml",
+        "-Xlog:gc*,safepoint:file=/tmp/output-cleanup-isolated-aa/raw/0-plain-owned_handle_records_roundtrip-512-after-gc.log:uptimemillis,level,tags",
+        "-Djava.library.path=/tmp/output-cleanup-before/target/release",
+        "-cp",
+        "/tmp/output-cleanup-isolated-driver-v3/driver.jar:/tmp/output-cleanup-before/bench.jar",
+        "BenchKt",
+        "plain",
+        "512",
+        "256",
+        "24",
+        "50",
+        "0",
+        "64",
+        "owned_handle_records_roundtrip"
+      ],
+      "warmup": {
+        "batches": 332,
+        "end_ms": 7704,
+        "quiet_ms": 1038,
+        "stable": true
+      },
+      "phases": {
+        "start": {
+          "uptime_ms": 7704,
+          "compilation_ms": 752
+        },
+        "end": {
+          "uptime_ms": 8940,
+          "compilation_ms": 757
+        }
+      },
+      "effective_flags": [
+        "-XX:ActiveProcessorCount=2 -XX:CompileCommand=exclude,BenchKt::main -XX:CompileCommand=dontinline,BenchKt::main$sample -XX:CompileCommand=option,BenchKt::main$sample,double,CompileThresholdScaling,0.01 -XX:CompileCommand=exclude,BenchKt::main$gcCount -XX:CompileCommand=exclude,BenchKt::main$gcTime -XX:G1ConcRefinementThreads=2 -XX:GCDrainStackTargetSize=64 -XX:InitialHeapSize=268435456 -XX:+LogCompilation -XX:LogFile=/tmp/output-cleanup-isolated-aa/raw/0-plain-owned_handle_records_roundtrip-512-after-jit.xml -XX:MaxHeapSize=268435456 -XX:+PrintCommandLineFlags -XX:ReservedCodeCacheSize=251658240 -XX:+SegmentedCodeCache -XX:+UnlockDiagnosticVMOptions -XX:+UseCompressedClassPointers -XX:+UseCompressedOops -XX:+UseG1GC "
+      ],
+      "compilations_during_measurement": [
+        {
+          "stamp": 7.705,
+          "method": "java.nio.Buffer position ()I",
+          "compiler": "c1",
+          "level": "1"
+        },
+        {
+          "stamp": 7.757,
+          "method": "java.nio.Buffer limit ()I",
+          "compiler": "c1",
+          "level": "1"
+        },
+        {
+          "stamp": 7.859,
+          "method": "java.lang.Integer stringSize (I)I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 7.859,
+          "method": "java.lang.Integer getChars (II[B)I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 7.91,
+          "method": "java.lang.StringBuilder append (I)Ljava/lang/StringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 7.91,
+          "method": "java.lang.AbstractStringBuilder append (I)Ljava/lang/AbstractStringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 7.962,
+          "method": "java.lang.String checkBoundsOffCount (III)V",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 8.175,
+          "method": "java.nio.Buffer position (I)Ljava/nio/Buffer;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 8.431,
+          "method": "java.lang.StringLatin1 inflate ([BI[CII)V",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 8.431,
+          "method": "java.nio.ByteBuffer arrayOffset ()I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 8.685,
+          "method": "java.nio.CharBuffer arrayOffset ()I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 8.888,
+          "method": "java.lang.StringBuilder append (J)Ljava/lang/StringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 8.889,
+          "method": "java.lang.AbstractStringBuilder append (J)Ljava/lang/AbstractStringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        }
+      ],
+      "binding_driver_compilations": [],
+      "stdout_sha256": "476e676d6c511896e72f793ce1243deef67d5f8d52eb28cc5cd5febc18f715c1",
+      "gc_sha256": "0466b82290ed2e513f383f276862fc8acc828d35f230e22c59d42cfba1cf66b1",
+      "jit_sha256": "ca53cab34b1c47e87d7cc969897a85e1949403d7cec10158dd7f302a389942ff"
+    },
+    {
+      "id": "1-bulk-owned_handles_roundtrip-1-after",
+      "version": "after",
+      "mode": "bulk",
+      "case": "owned_handles_roundtrip",
+      "size": 1,
+      "fork": 1,
+      "seconds": 4.851330518722534,
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:+UnlockDiagnosticVMOptions",
+        "-XX:+LogCompilation",
+        "-XX:+PrintCommandLineFlags",
+        "-XX:CompileCommand=exclude,BenchKt::main",
+        "-XX:CompileCommand=dontinline,BenchKt::main$sample",
+        "-XX:CompileCommand=option,BenchKt::main$sample,double,CompileThresholdScaling,0.01",
+        "-XX:CompileCommand=exclude,BenchKt::main$gcCount",
+        "-XX:CompileCommand=exclude,BenchKt::main$gcTime",
+        "-XX:LogFile=/tmp/output-cleanup-isolated-aa/raw/1-bulk-owned_handles_roundtrip-1-after-jit.xml",
+        "-Xlog:gc*,safepoint:file=/tmp/output-cleanup-isolated-aa/raw/1-bulk-owned_handles_roundtrip-1-after-gc.log:uptimemillis,level,tags",
+        "-Djava.library.path=/tmp/output-cleanup-before/target/release",
+        "-cp",
+        "/tmp/output-cleanup-isolated-driver-v3/driver.jar:/tmp/output-cleanup-before/bench.jar",
+        "BenchKt",
+        "bulk",
+        "1",
+        "256",
+        "24",
+        "50",
+        "1",
+        "64",
+        "owned_handles_roundtrip"
+      ],
+      "warmup": {
+        "batches": 362,
+        "end_ms": 3410,
+        "quiet_ms": 2297,
+        "stable": true
+      },
+      "phases": {
+        "start": {
+          "uptime_ms": 3411,
+          "compilation_ms": 525
+        },
+        "end": {
+          "uptime_ms": 4753,
+          "compilation_ms": 531
+        }
+      },
+      "effective_flags": [
+        "-XX:ActiveProcessorCount=2 -XX:CompileCommand=exclude,BenchKt::main -XX:CompileCommand=dontinline,BenchKt::main$sample -XX:CompileCommand=option,BenchKt::main$sample,double,CompileThresholdScaling,0.01 -XX:CompileCommand=exclude,BenchKt::main$gcCount -XX:CompileCommand=exclude,BenchKt::main$gcTime -XX:G1ConcRefinementThreads=2 -XX:GCDrainStackTargetSize=64 -XX:InitialHeapSize=268435456 -XX:+LogCompilation -XX:LogFile=/tmp/output-cleanup-isolated-aa/raw/1-bulk-owned_handles_roundtrip-1-after-jit.xml -XX:MaxHeapSize=268435456 -XX:+PrintCommandLineFlags -XX:ReservedCodeCacheSize=251658240 -XX:+SegmentedCodeCache -XX:+UnlockDiagnosticVMOptions -XX:+UseCompressedClassPointers -XX:+UseCompressedOops -XX:+UseG1GC "
+      ],
+      "compilations_during_measurement": [
+        {
+          "stamp": 3.411,
+          "method": "java.nio.Buffer position ()I",
+          "compiler": "c1",
+          "level": "1"
+        },
+        {
+          "stamp": 3.459,
+          "method": "java.nio.Buffer limit ()I",
+          "compiler": "c1",
+          "level": "1"
+        },
+        {
+          "stamp": 3.556,
+          "method": "java.lang.Integer stringSize (I)I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.556,
+          "method": "java.lang.Integer getChars (II[B)I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.658,
+          "method": "java.lang.StringBuilder append (I)Ljava/lang/StringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.659,
+          "method": "java.lang.AbstractStringBuilder append (I)Ljava/lang/AbstractStringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.9,
+          "method": "sun.management.VMManagementImpl getUptime0 ()J",
+          "compiler": "",
+          "level": "0"
+        },
+        {
+          "stamp": 4.147,
+          "method": "java.nio.ByteBuffer arrayOffset ()I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.257,
+          "method": "java.lang.StringLatin1 inflate ([BI[CII)V",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.315,
+          "method": "java.nio.Buffer <init> (IIII)V",
+          "compiler": "c2",
+          "level": "4"
+        },
+        {
+          "stamp": 4.432,
+          "method": "java.nio.CharBuffer arrayOffset ()I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.686,
+          "method": "java.lang.StringBuilder append (J)Ljava/lang/StringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.686,
+          "method": "java.lang.AbstractStringBuilder append (J)Ljava/lang/AbstractStringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        }
+      ],
+      "binding_driver_compilations": [],
+      "stdout_sha256": "7d343dd94a50b19e89945e5f3d4784c4feefa56aa94de3188348b17d3ceef3b4",
+      "gc_sha256": "f1c697d544bbf37ec5eec24d49477898872bd4daf45cac84c5c6ed7a9d897c86",
+      "jit_sha256": "a5d29f761ec3e15f9d4b49e6c755e163ec80c374948c17af54c085fa8ddb3c58"
+    },
+    {
+      "id": "1-bulk-owned_handles_roundtrip-1-before",
+      "version": "before",
+      "mode": "bulk",
+      "case": "owned_handles_roundtrip",
+      "size": 1,
+      "fork": 1,
+      "seconds": 4.7785964012146,
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:+UnlockDiagnosticVMOptions",
+        "-XX:+LogCompilation",
+        "-XX:+PrintCommandLineFlags",
+        "-XX:CompileCommand=exclude,BenchKt::main",
+        "-XX:CompileCommand=dontinline,BenchKt::main$sample",
+        "-XX:CompileCommand=option,BenchKt::main$sample,double,CompileThresholdScaling,0.01",
+        "-XX:CompileCommand=exclude,BenchKt::main$gcCount",
+        "-XX:CompileCommand=exclude,BenchKt::main$gcTime",
+        "-XX:LogFile=/tmp/output-cleanup-isolated-aa/raw/1-bulk-owned_handles_roundtrip-1-before-jit.xml",
+        "-Xlog:gc*,safepoint:file=/tmp/output-cleanup-isolated-aa/raw/1-bulk-owned_handles_roundtrip-1-before-gc.log:uptimemillis,level,tags",
+        "-Djava.library.path=/tmp/output-cleanup-before/target/release",
+        "-cp",
+        "/tmp/output-cleanup-isolated-driver-v3/driver.jar:/tmp/output-cleanup-before/bench.jar",
+        "BenchKt",
+        "bulk",
+        "1",
+        "256",
+        "24",
+        "50",
+        "1",
+        "64",
+        "owned_handles_roundtrip"
+      ],
+      "warmup": {
+        "batches": 410,
+        "end_ms": 3389,
+        "quiet_ms": 2473,
+        "stable": true
+      },
+      "phases": {
+        "start": {
+          "uptime_ms": 3389,
+          "compilation_ms": 566
+        },
+        "end": {
+          "uptime_ms": 4668,
+          "compilation_ms": 575
+        }
+      },
+      "effective_flags": [
+        "-XX:ActiveProcessorCount=2 -XX:CompileCommand=exclude,BenchKt::main -XX:CompileCommand=dontinline,BenchKt::main$sample -XX:CompileCommand=option,BenchKt::main$sample,double,CompileThresholdScaling,0.01 -XX:CompileCommand=exclude,BenchKt::main$gcCount -XX:CompileCommand=exclude,BenchKt::main$gcTime -XX:G1ConcRefinementThreads=2 -XX:GCDrainStackTargetSize=64 -XX:InitialHeapSize=268435456 -XX:+LogCompilation -XX:LogFile=/tmp/output-cleanup-isolated-aa/raw/1-bulk-owned_handles_roundtrip-1-before-jit.xml -XX:MaxHeapSize=268435456 -XX:+PrintCommandLineFlags -XX:ReservedCodeCacheSize=251658240 -XX:+SegmentedCodeCache -XX:+UnlockDiagnosticVMOptions -XX:+UseCompressedClassPointers -XX:+UseCompressedOops -XX:+UseG1GC "
+      ],
+      "compilations_during_measurement": [
+        {
+          "stamp": 3.392,
+          "method": "java.nio.Buffer position ()I",
+          "compiler": "c1",
+          "level": "1"
+        },
+        {
+          "stamp": 3.443,
+          "method": "java.nio.Buffer limit ()I",
+          "compiler": "c1",
+          "level": "1"
+        },
+        {
+          "stamp": 3.547,
+          "method": "java.lang.Integer stringSize (I)I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.548,
+          "method": "java.lang.Integer getChars (II[B)I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.649,
+          "method": "java.lang.StringBuilder append (I)Ljava/lang/StringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.649,
+          "method": "java.lang.AbstractStringBuilder append (I)Ljava/lang/AbstractStringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.65,
+          "method": "java.lang.String checkBoundsOffCount (III)V",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.811,
+          "method": "java.nio.Buffer <init> (IIII)V",
+          "compiler": "c2",
+          "level": "4"
+        },
+        {
+          "stamp": 4.121,
+          "method": "java.nio.ByteBuffer arrayOffset ()I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.224,
+          "method": "java.lang.StringLatin1 inflate ([BI[CII)V",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.401,
+          "method": "java.nio.CharBuffer arrayOffset ()I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.614,
+          "method": "java.lang.StringBuilder append (J)Ljava/lang/StringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.615,
+          "method": "java.lang.AbstractStringBuilder append (J)Ljava/lang/AbstractStringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        }
+      ],
+      "binding_driver_compilations": [],
+      "stdout_sha256": "87693e41e492f4b1ead33105432d6db7c0244179a88270d25765f84e2b3f5537",
+      "gc_sha256": "6b26ade177cd9d44121fd123182a86f837b270eaa476bc0325b231153e483825",
+      "jit_sha256": "68bec6892ba69068e630dbd767b58d28728196e193ab33c9af023913878b3e67"
+    },
+    {
+      "id": "1-plain-owned_handle_records_roundtrip-512-after",
+      "version": "after",
+      "mode": "plain",
+      "case": "owned_handle_records_roundtrip",
+      "size": 512,
+      "fork": 1,
+      "seconds": 6.907273054122925,
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:+UnlockDiagnosticVMOptions",
+        "-XX:+LogCompilation",
+        "-XX:+PrintCommandLineFlags",
+        "-XX:CompileCommand=exclude,BenchKt::main",
+        "-XX:CompileCommand=dontinline,BenchKt::main$sample",
+        "-XX:CompileCommand=option,BenchKt::main$sample,double,CompileThresholdScaling,0.01",
+        "-XX:CompileCommand=exclude,BenchKt::main$gcCount",
+        "-XX:CompileCommand=exclude,BenchKt::main$gcTime",
+        "-XX:LogFile=/tmp/output-cleanup-isolated-aa/raw/1-plain-owned_handle_records_roundtrip-512-after-jit.xml",
+        "-Xlog:gc*,safepoint:file=/tmp/output-cleanup-isolated-aa/raw/1-plain-owned_handle_records_roundtrip-512-after-gc.log:uptimemillis,level,tags",
+        "-Djava.library.path=/tmp/output-cleanup-before/target/release",
+        "-cp",
+        "/tmp/output-cleanup-isolated-driver-v3/driver.jar:/tmp/output-cleanup-before/bench.jar",
+        "BenchKt",
+        "plain",
+        "512",
+        "256",
+        "24",
+        "50",
+        "1",
+        "64",
+        "owned_handle_records_roundtrip"
+      ],
+      "warmup": {
+        "batches": 291,
+        "end_ms": 5465,
+        "quiet_ms": 2048,
+        "stable": true
+      },
+      "phases": {
+        "start": {
+          "uptime_ms": 5465,
+          "compilation_ms": 682
+        },
+        "end": {
+          "uptime_ms": 6816,
+          "compilation_ms": 707
+        }
+      },
+      "effective_flags": [
+        "-XX:ActiveProcessorCount=2 -XX:CompileCommand=exclude,BenchKt::main -XX:CompileCommand=dontinline,BenchKt::main$sample -XX:CompileCommand=option,BenchKt::main$sample,double,CompileThresholdScaling,0.01 -XX:CompileCommand=exclude,BenchKt::main$gcCount -XX:CompileCommand=exclude,BenchKt::main$gcTime -XX:G1ConcRefinementThreads=2 -XX:GCDrainStackTargetSize=64 -XX:InitialHeapSize=268435456 -XX:+LogCompilation -XX:LogFile=/tmp/output-cleanup-isolated-aa/raw/1-plain-owned_handle_records_roundtrip-512-after-jit.xml -XX:MaxHeapSize=268435456 -XX:+PrintCommandLineFlags -XX:ReservedCodeCacheSize=251658240 -XX:+SegmentedCodeCache -XX:+UnlockDiagnosticVMOptions -XX:+UseCompressedClassPointers -XX:+UseCompressedOops -XX:+UseG1GC "
+      ],
+      "compilations_during_measurement": [
+        {
+          "stamp": 5.466,
+          "method": "java.nio.Buffer position ()I",
+          "compiler": "c1",
+          "level": "1"
+        },
+        {
+          "stamp": 5.466,
+          "method": "java.nio.Buffer limit ()I",
+          "compiler": "c1",
+          "level": "1"
+        },
+        {
+          "stamp": 5.635,
+          "method": "java.lang.Integer stringSize (I)I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 5.636,
+          "method": "java.lang.Integer getChars (II[B)I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 5.694,
+          "method": "java.lang.StringBuilder append (I)Ljava/lang/StringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 5.695,
+          "method": "java.lang.AbstractStringBuilder append (I)Ljava/lang/AbstractStringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 5.755,
+          "method": "java.lang.String checkBoundsOffCount (III)V",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 5.982,
+          "method": "java.nio.Buffer position (I)Ljava/nio/Buffer;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 6.237,
+          "method": "java.util.TimSort sort ([Ljava/lang/Object;IILjava/util/Comparator;[Ljava/lang/Object;II)V",
+          "compiler": "c2",
+          "level": "4"
+        },
+        {
+          "stamp": 6.258,
+          "method": "java.lang.StringLatin1 inflate ([BI[CII)V",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 6.259,
+          "method": "java.nio.ByteBuffer arrayOffset ()I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 6.539,
+          "method": "java.nio.CharBuffer arrayOffset ()I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 6.652,
+          "method": "kotlin.jvm.internal.Intrinsics checkNotNullExpressionValue (Ljava/lang/Object;Ljava/lang/String;)V",
+          "compiler": "c2",
+          "level": "4"
+        },
+        {
+          "stamp": 6.761,
+          "method": "java.lang.StringBuilder append (J)Ljava/lang/StringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 6.762,
+          "method": "java.lang.AbstractStringBuilder append (J)Ljava/lang/AbstractStringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        }
+      ],
+      "binding_driver_compilations": [],
+      "stdout_sha256": "1708ffcfe164dff6817b3196ddc5d45df9f343792f72a27471bf9f4aa163abcb",
+      "gc_sha256": "e2ad64283cec97370c497957dd313a0c1335a144599c4ae7369a6536a608232a",
+      "jit_sha256": "d7212ef46eabbdd63696a6caa687b2fbad60cfb301eedbe99d9b348174624b38"
+    },
+    {
+      "id": "1-plain-owned_handle_records_roundtrip-512-before",
+      "version": "before",
+      "mode": "plain",
+      "case": "owned_handle_records_roundtrip",
+      "size": 512,
+      "fork": 1,
+      "seconds": 6.962043762207031,
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:+UnlockDiagnosticVMOptions",
+        "-XX:+LogCompilation",
+        "-XX:+PrintCommandLineFlags",
+        "-XX:CompileCommand=exclude,BenchKt::main",
+        "-XX:CompileCommand=dontinline,BenchKt::main$sample",
+        "-XX:CompileCommand=option,BenchKt::main$sample,double,CompileThresholdScaling,0.01",
+        "-XX:CompileCommand=exclude,BenchKt::main$gcCount",
+        "-XX:CompileCommand=exclude,BenchKt::main$gcTime",
+        "-XX:LogFile=/tmp/output-cleanup-isolated-aa/raw/1-plain-owned_handle_records_roundtrip-512-before-jit.xml",
+        "-Xlog:gc*,safepoint:file=/tmp/output-cleanup-isolated-aa/raw/1-plain-owned_handle_records_roundtrip-512-before-gc.log:uptimemillis,level,tags",
+        "-Djava.library.path=/tmp/output-cleanup-before/target/release",
+        "-cp",
+        "/tmp/output-cleanup-isolated-driver-v3/driver.jar:/tmp/output-cleanup-before/bench.jar",
+        "BenchKt",
+        "plain",
+        "512",
+        "256",
+        "24",
+        "50",
+        "1",
+        "64",
+        "owned_handle_records_roundtrip"
+      ],
+      "warmup": {
+        "batches": 292,
+        "end_ms": 5468,
+        "quiet_ms": 1288,
+        "stable": true
+      },
+      "phases": {
+        "start": {
+          "uptime_ms": 5468,
+          "compilation_ms": 669
+        },
+        "end": {
+          "uptime_ms": 6855,
+          "compilation_ms": 724
+        }
+      },
+      "effective_flags": [
+        "-XX:ActiveProcessorCount=2 -XX:CompileCommand=exclude,BenchKt::main -XX:CompileCommand=dontinline,BenchKt::main$sample -XX:CompileCommand=option,BenchKt::main$sample,double,CompileThresholdScaling,0.01 -XX:CompileCommand=exclude,BenchKt::main$gcCount -XX:CompileCommand=exclude,BenchKt::main$gcTime -XX:G1ConcRefinementThreads=2 -XX:GCDrainStackTargetSize=64 -XX:InitialHeapSize=268435456 -XX:+LogCompilation -XX:LogFile=/tmp/output-cleanup-isolated-aa/raw/1-plain-owned_handle_records_roundtrip-512-before-jit.xml -XX:MaxHeapSize=268435456 -XX:+PrintCommandLineFlags -XX:ReservedCodeCacheSize=251658240 -XX:+SegmentedCodeCache -XX:+UnlockDiagnosticVMOptions -XX:+UseCompressedClassPointers -XX:+UseCompressedOops -XX:+UseG1GC "
+      ],
+      "compilations_during_measurement": [
+        {
+          "stamp": 5.469,
+          "method": "java.nio.Buffer position ()I",
+          "compiler": "c1",
+          "level": "1"
+        },
+        {
+          "stamp": 5.469,
+          "method": "java.nio.Buffer limit ()I",
+          "compiler": "c1",
+          "level": "1"
+        },
+        {
+          "stamp": 5.565,
+          "method": "java.util.TimSort mergeHi (IIII)V",
+          "compiler": "c2",
+          "level": "4"
+        },
+        {
+          "stamp": 5.618,
+          "method": "java.util.TimSort sort ([Ljava/lang/Object;IILjava/util/Comparator;[Ljava/lang/Object;II)V",
+          "compiler": "c2",
+          "level": "4"
+        },
+        {
+          "stamp": 5.639,
+          "method": "java.lang.Integer stringSize (I)I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 5.64,
+          "method": "java.lang.Integer getChars (II[B)I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 5.696,
+          "method": "java.lang.StringBuilder append (I)Ljava/lang/StringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 5.697,
+          "method": "java.lang.AbstractStringBuilder append (I)Ljava/lang/AbstractStringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 5.753,
+          "method": "java.lang.String checkBoundsOffCount (III)V",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 6.002,
+          "method": "java.nio.Buffer position (I)Ljava/nio/Buffer;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 6.287,
+          "method": "java.lang.StringLatin1 inflate ([BI[CII)V",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 6.287,
+          "method": "java.nio.ByteBuffer arrayOffset ()I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 6.573,
+          "method": "java.nio.CharBuffer arrayOffset ()I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 6.642,
+          "method": "kotlin.jvm.internal.Intrinsics checkNotNullExpressionValue (Ljava/lang/Object;Ljava/lang/String;)V",
+          "compiler": "c2",
+          "level": "4"
+        },
+        {
+          "stamp": 6.801,
+          "method": "java.lang.StringBuilder append (J)Ljava/lang/StringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 6.801,
+          "method": "java.lang.AbstractStringBuilder append (J)Ljava/lang/AbstractStringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        }
+      ],
+      "binding_driver_compilations": [],
+      "stdout_sha256": "bbaa9bf14adc260f042ce20109e5607ae42d217999c0152163e7389205fbef55",
+      "gc_sha256": "33e9c073b4d371ade0d344155bdf3635de4bae662f72e0fca47373f44be6e9d5",
+      "jit_sha256": "1a3cd57c40988228afa9c4923fde56d39d5d9d6175f909021ae15bf3ab0d7af5"
+    },
+    {
+      "id": "1-bulk-control-1-after",
+      "version": "after",
+      "mode": "bulk",
+      "case": "control",
+      "size": 1,
+      "fork": 1,
+      "seconds": 4.605368375778198,
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:+UnlockDiagnosticVMOptions",
+        "-XX:+LogCompilation",
+        "-XX:+PrintCommandLineFlags",
+        "-XX:CompileCommand=exclude,BenchKt::main",
+        "-XX:CompileCommand=dontinline,BenchKt::main$sample",
+        "-XX:CompileCommand=option,BenchKt::main$sample,double,CompileThresholdScaling,0.01",
+        "-XX:CompileCommand=exclude,BenchKt::main$gcCount",
+        "-XX:CompileCommand=exclude,BenchKt::main$gcTime",
+        "-XX:LogFile=/tmp/output-cleanup-isolated-aa/raw/1-bulk-control-1-after-jit.xml",
+        "-Xlog:gc*,safepoint:file=/tmp/output-cleanup-isolated-aa/raw/1-bulk-control-1-after-gc.log:uptimemillis,level,tags",
+        "-Djava.library.path=/tmp/output-cleanup-before/target/release",
+        "-cp",
+        "/tmp/output-cleanup-isolated-driver-v3/driver.jar:/tmp/output-cleanup-before/bench.jar",
+        "BenchKt",
+        "bulk",
+        "1",
+        "256",
+        "24",
+        "50",
+        "1",
+        "64",
+        "control"
+      ],
+      "warmup": {
+        "batches": 352,
+        "end_ms": 3292,
+        "quiet_ms": 2386,
+        "stable": true
+      },
+      "phases": {
+        "start": {
+          "uptime_ms": 3292,
+          "compilation_ms": 202
+        },
+        "end": {
+          "uptime_ms": 4545,
+          "compilation_ms": 208
+        }
+      },
+      "effective_flags": [
+        "-XX:ActiveProcessorCount=2 -XX:CompileCommand=exclude,BenchKt::main -XX:CompileCommand=dontinline,BenchKt::main$sample -XX:CompileCommand=option,BenchKt::main$sample,double,CompileThresholdScaling,0.01 -XX:CompileCommand=exclude,BenchKt::main$gcCount -XX:CompileCommand=exclude,BenchKt::main$gcTime -XX:G1ConcRefinementThreads=2 -XX:GCDrainStackTargetSize=64 -XX:InitialHeapSize=268435456 -XX:+LogCompilation -XX:LogFile=/tmp/output-cleanup-isolated-aa/raw/1-bulk-control-1-after-jit.xml -XX:MaxHeapSize=268435456 -XX:+PrintCommandLineFlags -XX:ReservedCodeCacheSize=251658240 -XX:+SegmentedCodeCache -XX:+UnlockDiagnosticVMOptions -XX:+UseCompressedClassPointers -XX:+UseCompressedOops -XX:+UseG1GC "
+      ],
+      "compilations_during_measurement": [
+        {
+          "stamp": 3.342,
+          "method": "java.nio.Buffer position ()I",
+          "compiler": "c1",
+          "level": "1"
+        },
+        {
+          "stamp": 3.39,
+          "method": "java.nio.Buffer limit ()I",
+          "compiler": "c1",
+          "level": "1"
+        },
+        {
+          "stamp": 3.54,
+          "method": "java.lang.String checkBoundsOffCount (III)V",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.588,
+          "method": "java.lang.Integer stringSize (I)I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.589,
+          "method": "java.lang.Integer getChars (II[B)I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.638,
+          "method": "java.lang.StringBuilder append (I)Ljava/lang/StringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.639,
+          "method": "java.lang.AbstractStringBuilder append (I)Ljava/lang/AbstractStringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.825,
+          "method": "java.nio.Buffer position (I)Ljava/nio/Buffer;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.049,
+          "method": "java.nio.ByteBuffer arrayOffset ()I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.1,
+          "method": "sun.management.VMManagementImpl getUptime0 ()J",
+          "compiler": "",
+          "level": "0"
+        },
+        {
+          "stamp": 4.1,
+          "method": "java.lang.StringLatin1 inflate ([BI[CII)V",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.299,
+          "method": "java.nio.CharBuffer arrayOffset ()I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.3,
+          "method": "java.lang.String length ()I",
+          "compiler": "c2",
+          "level": "4"
+        },
+        {
+          "stamp": 4.495,
+          "method": "java.lang.StringBuilder append (J)Ljava/lang/StringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.497,
+          "method": "java.lang.Long stringSize (J)I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.497,
+          "method": "java.lang.Long getChars (JI[B)I",
+          "compiler": "c1",
+          "level": "3"
+        }
+      ],
+      "binding_driver_compilations": [],
+      "stdout_sha256": "078a71c1851e32ef76e45b4b34e45c779d99f4004942aa42e770d1851a9ddcec",
+      "gc_sha256": "e936e3f17d99191a1264640382f72dc3f6b4f84e7543636af00daa05b6255d85",
+      "jit_sha256": "7750f0c80fdaee7aa2e1dc25392b8a7d05a29680d21299654dad2e107d89473f"
+    },
+    {
+      "id": "1-bulk-control-1-before",
+      "version": "before",
+      "mode": "bulk",
+      "case": "control",
+      "size": 1,
+      "fork": 1,
+      "seconds": 4.313420057296753,
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:+UnlockDiagnosticVMOptions",
+        "-XX:+LogCompilation",
+        "-XX:+PrintCommandLineFlags",
+        "-XX:CompileCommand=exclude,BenchKt::main",
+        "-XX:CompileCommand=dontinline,BenchKt::main$sample",
+        "-XX:CompileCommand=option,BenchKt::main$sample,double,CompileThresholdScaling,0.01",
+        "-XX:CompileCommand=exclude,BenchKt::main$gcCount",
+        "-XX:CompileCommand=exclude,BenchKt::main$gcTime",
+        "-XX:LogFile=/tmp/output-cleanup-isolated-aa/raw/1-bulk-control-1-before-jit.xml",
+        "-Xlog:gc*,safepoint:file=/tmp/output-cleanup-isolated-aa/raw/1-bulk-control-1-before-gc.log:uptimemillis,level,tags",
+        "-Djava.library.path=/tmp/output-cleanup-before/target/release",
+        "-cp",
+        "/tmp/output-cleanup-isolated-driver-v3/driver.jar:/tmp/output-cleanup-before/bench.jar",
+        "BenchKt",
+        "bulk",
+        "1",
+        "256",
+        "24",
+        "50",
+        "1",
+        "64",
+        "control"
+      ],
+      "warmup": {
+        "batches": 432,
+        "end_ms": 3300,
+        "quiet_ms": 2612,
+        "stable": true
+      },
+      "phases": {
+        "start": {
+          "uptime_ms": 3300,
+          "compilation_ms": 232
+        },
+        "end": {
+          "uptime_ms": 4256,
+          "compilation_ms": 238
+        }
+      },
+      "effective_flags": [
+        "-XX:ActiveProcessorCount=2 -XX:CompileCommand=exclude,BenchKt::main -XX:CompileCommand=dontinline,BenchKt::main$sample -XX:CompileCommand=option,BenchKt::main$sample,double,CompileThresholdScaling,0.01 -XX:CompileCommand=exclude,BenchKt::main$gcCount -XX:CompileCommand=exclude,BenchKt::main$gcTime -XX:G1ConcRefinementThreads=2 -XX:GCDrainStackTargetSize=64 -XX:InitialHeapSize=268435456 -XX:+LogCompilation -XX:LogFile=/tmp/output-cleanup-isolated-aa/raw/1-bulk-control-1-before-jit.xml -XX:MaxHeapSize=268435456 -XX:+PrintCommandLineFlags -XX:ReservedCodeCacheSize=251658240 -XX:+SegmentedCodeCache -XX:+UnlockDiagnosticVMOptions -XX:+UseCompressedClassPointers -XX:+UseCompressedOops -XX:+UseG1GC "
+      ],
+      "compilations_during_measurement": [
+        {
+          "stamp": 3.348,
+          "method": "java.nio.Buffer position ()I",
+          "compiler": "c1",
+          "level": "1"
+        },
+        {
+          "stamp": 3.389,
+          "method": "java.nio.Buffer limit ()I",
+          "compiler": "c1",
+          "level": "1"
+        },
+        {
+          "stamp": 3.504,
+          "method": "java.lang.String checkBoundsOffCount (III)V",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.542,
+          "method": "java.lang.Integer stringSize (I)I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.542,
+          "method": "java.lang.Integer getChars (II[B)I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.581,
+          "method": "java.lang.StringBuilder append (I)Ljava/lang/StringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.582,
+          "method": "java.lang.AbstractStringBuilder append (I)Ljava/lang/AbstractStringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.696,
+          "method": "java.nio.Buffer position (I)Ljava/nio/Buffer;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.858,
+          "method": "java.nio.ByteBuffer arrayOffset ()I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.897,
+          "method": "java.lang.StringLatin1 inflate ([BI[CII)V",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.938,
+          "method": "java.lang.Math min (II)I",
+          "compiler": "c2",
+          "level": "4"
+        },
+        {
+          "stamp": 4.058,
+          "method": "java.nio.CharBuffer arrayOffset ()I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.214,
+          "method": "java.lang.StringBuilder append (J)Ljava/lang/StringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.215,
+          "method": "java.lang.AbstractStringBuilder append (J)Ljava/lang/AbstractStringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        }
+      ],
+      "binding_driver_compilations": [],
+      "stdout_sha256": "30cbb309db003270caffe1f4802d4b93dc7f726934fc7e3e2c3396521fb0bcb4",
+      "gc_sha256": "44a7501b52f79bcee250402c78a27c5ab1241f6682a51893bdd2e258ede8dec3",
+      "jit_sha256": "236bda110c17e33d4be0b18c79104f2e27b01f7c2fca2bd8e3c3e9beb6f317d6"
+    },
+    {
+      "id": "2-bulk-owned_handles_roundtrip-1-before",
+      "version": "before",
+      "mode": "bulk",
+      "case": "owned_handles_roundtrip",
+      "size": 1,
+      "fork": 2,
+      "seconds": 4.406907796859741,
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:+UnlockDiagnosticVMOptions",
+        "-XX:+LogCompilation",
+        "-XX:+PrintCommandLineFlags",
+        "-XX:CompileCommand=exclude,BenchKt::main",
+        "-XX:CompileCommand=dontinline,BenchKt::main$sample",
+        "-XX:CompileCommand=option,BenchKt::main$sample,double,CompileThresholdScaling,0.01",
+        "-XX:CompileCommand=exclude,BenchKt::main$gcCount",
+        "-XX:CompileCommand=exclude,BenchKt::main$gcTime",
+        "-XX:LogFile=/tmp/output-cleanup-isolated-aa/raw/2-bulk-owned_handles_roundtrip-1-before-jit.xml",
+        "-Xlog:gc*,safepoint:file=/tmp/output-cleanup-isolated-aa/raw/2-bulk-owned_handles_roundtrip-1-before-gc.log:uptimemillis,level,tags",
+        "-Djava.library.path=/tmp/output-cleanup-before/target/release",
+        "-cp",
+        "/tmp/output-cleanup-isolated-driver-v3/driver.jar:/tmp/output-cleanup-before/bench.jar",
+        "BenchKt",
+        "bulk",
+        "1",
+        "256",
+        "24",
+        "50",
+        "2",
+        "64",
+        "owned_handles_roundtrip"
+      ],
+      "warmup": {
+        "batches": 354,
+        "end_ms": 3362,
+        "quiet_ms": 2001,
+        "stable": true
+      },
+      "phases": {
+        "start": {
+          "uptime_ms": 3362,
+          "compilation_ms": 547
+        },
+        "end": {
+          "uptime_ms": 4312,
+          "compilation_ms": 551
+        }
+      },
+      "effective_flags": [
+        "-XX:ActiveProcessorCount=2 -XX:CompileCommand=exclude,BenchKt::main -XX:CompileCommand=dontinline,BenchKt::main$sample -XX:CompileCommand=option,BenchKt::main$sample,double,CompileThresholdScaling,0.01 -XX:CompileCommand=exclude,BenchKt::main$gcCount -XX:CompileCommand=exclude,BenchKt::main$gcTime -XX:G1ConcRefinementThreads=2 -XX:GCDrainStackTargetSize=64 -XX:InitialHeapSize=268435456 -XX:+LogCompilation -XX:LogFile=/tmp/output-cleanup-isolated-aa/raw/2-bulk-owned_handles_roundtrip-1-before-jit.xml -XX:MaxHeapSize=268435456 -XX:+PrintCommandLineFlags -XX:ReservedCodeCacheSize=251658240 -XX:+SegmentedCodeCache -XX:+UnlockDiagnosticVMOptions -XX:+UseCompressedClassPointers -XX:+UseCompressedOops -XX:+UseG1GC "
+      ],
+      "compilations_during_measurement": [
+        {
+          "stamp": 3.364,
+          "method": "java.nio.Buffer position ()I",
+          "compiler": "c1",
+          "level": "1"
+        },
+        {
+          "stamp": 3.364,
+          "method": "java.nio.Buffer limit ()I",
+          "compiler": "c1",
+          "level": "1"
+        },
+        {
+          "stamp": 3.487,
+          "method": "java.lang.Integer stringSize (I)I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.487,
+          "method": "java.lang.Integer getChars (II[B)I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.565,
+          "method": "java.lang.StringBuilder append (I)Ljava/lang/StringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.565,
+          "method": "java.lang.AbstractStringBuilder append (I)Ljava/lang/AbstractStringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.566,
+          "method": "java.lang.String checkBoundsOffCount (III)V",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.918,
+          "method": "sun.management.VMManagementImpl getUptime0 ()J",
+          "compiler": "",
+          "level": "0"
+        },
+        {
+          "stamp": 3.918,
+          "method": "java.nio.ByteBuffer arrayOffset ()I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.001,
+          "method": "java.lang.StringLatin1 inflate ([BI[CII)V",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.115,
+          "method": "java.nio.CharBuffer arrayOffset ()I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.274,
+          "method": "java.lang.StringBuilder append (J)Ljava/lang/StringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.274,
+          "method": "java.lang.AbstractStringBuilder append (J)Ljava/lang/AbstractStringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        }
+      ],
+      "binding_driver_compilations": [],
+      "stdout_sha256": "6e8a889b30fa32945c80e208c9408e87ec9a201b8ecbe1004d34e0d6f8294c07",
+      "gc_sha256": "3b3cd37b202f738fbb13b5201b5ee702c0ccfaf0db7e5bf6f8d3cbefbdb4b390",
+      "jit_sha256": "a66dd3e1aa8bd58db74adbfeba9808c3b55e845c92b2f8c4a29e4e856df71e21"
+    },
+    {
+      "id": "2-bulk-owned_handles_roundtrip-1-after",
+      "version": "after",
+      "mode": "bulk",
+      "case": "owned_handles_roundtrip",
+      "size": 1,
+      "fork": 2,
+      "seconds": 4.559526205062866,
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:+UnlockDiagnosticVMOptions",
+        "-XX:+LogCompilation",
+        "-XX:+PrintCommandLineFlags",
+        "-XX:CompileCommand=exclude,BenchKt::main",
+        "-XX:CompileCommand=dontinline,BenchKt::main$sample",
+        "-XX:CompileCommand=option,BenchKt::main$sample,double,CompileThresholdScaling,0.01",
+        "-XX:CompileCommand=exclude,BenchKt::main$gcCount",
+        "-XX:CompileCommand=exclude,BenchKt::main$gcTime",
+        "-XX:LogFile=/tmp/output-cleanup-isolated-aa/raw/2-bulk-owned_handles_roundtrip-1-after-jit.xml",
+        "-Xlog:gc*,safepoint:file=/tmp/output-cleanup-isolated-aa/raw/2-bulk-owned_handles_roundtrip-1-after-gc.log:uptimemillis,level,tags",
+        "-Djava.library.path=/tmp/output-cleanup-before/target/release",
+        "-cp",
+        "/tmp/output-cleanup-isolated-driver-v3/driver.jar:/tmp/output-cleanup-before/bench.jar",
+        "BenchKt",
+        "bulk",
+        "1",
+        "256",
+        "24",
+        "50",
+        "2",
+        "64",
+        "owned_handles_roundtrip"
+      ],
+      "warmup": {
+        "batches": 373,
+        "end_ms": 3405,
+        "quiet_ms": 2361,
+        "stable": true
+      },
+      "phases": {
+        "start": {
+          "uptime_ms": 3406,
+          "compilation_ms": 521
+        },
+        "end": {
+          "uptime_ms": 4456,
+          "compilation_ms": 527
+        }
+      },
+      "effective_flags": [
+        "-XX:ActiveProcessorCount=2 -XX:CompileCommand=exclude,BenchKt::main -XX:CompileCommand=dontinline,BenchKt::main$sample -XX:CompileCommand=option,BenchKt::main$sample,double,CompileThresholdScaling,0.01 -XX:CompileCommand=exclude,BenchKt::main$gcCount -XX:CompileCommand=exclude,BenchKt::main$gcTime -XX:G1ConcRefinementThreads=2 -XX:GCDrainStackTargetSize=64 -XX:InitialHeapSize=268435456 -XX:+LogCompilation -XX:LogFile=/tmp/output-cleanup-isolated-aa/raw/2-bulk-owned_handles_roundtrip-1-after-jit.xml -XX:MaxHeapSize=268435456 -XX:+PrintCommandLineFlags -XX:ReservedCodeCacheSize=251658240 -XX:+SegmentedCodeCache -XX:+UnlockDiagnosticVMOptions -XX:+UseCompressedClassPointers -XX:+UseCompressedOops -XX:+UseG1GC "
+      ],
+      "compilations_during_measurement": [
+        {
+          "stamp": 3.406,
+          "method": "java.nio.Buffer position ()I",
+          "compiler": "c1",
+          "level": "1"
+        },
+        {
+          "stamp": 3.407,
+          "method": "java.nio.Buffer limit ()I",
+          "compiler": "c1",
+          "level": "1"
+        },
+        {
+          "stamp": 3.532,
+          "method": "java.lang.Integer stringSize (I)I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.532,
+          "method": "java.lang.Integer getChars (II[B)I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.625,
+          "method": "java.lang.StringBuilder append (I)Ljava/lang/StringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.625,
+          "method": "java.lang.AbstractStringBuilder append (I)Ljava/lang/AbstractStringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.626,
+          "method": "java.lang.String checkBoundsOffCount (III)V",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.886,
+          "method": "java.nio.Buffer <init> (IIII)V",
+          "compiler": "c2",
+          "level": "4"
+        },
+        {
+          "stamp": 4.01,
+          "method": "java.nio.ByteBuffer arrayOffset ()I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.092,
+          "method": "java.lang.StringLatin1 inflate ([BI[CII)V",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.22,
+          "method": "java.nio.CharBuffer arrayOffset ()I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.413,
+          "method": "java.lang.StringBuilder append (J)Ljava/lang/StringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.413,
+          "method": "java.lang.AbstractStringBuilder append (J)Ljava/lang/AbstractStringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        }
+      ],
+      "binding_driver_compilations": [],
+      "stdout_sha256": "002d06d83a8b67659712ad44b0b3e135f9a6bcd83a49cce84a51401514480d45",
+      "gc_sha256": "fc5182b3c21e3d23c7cada6c1ba31776d5235efba46a43d3ae2bb1279bdafd27",
+      "jit_sha256": "851299e6615df4352848bb0fb5e3de2579de35409d12beb466c65844da5b4604"
+    },
+    {
+      "id": "2-bulk-control-1-before",
+      "version": "before",
+      "mode": "bulk",
+      "case": "control",
+      "size": 1,
+      "fork": 2,
+      "seconds": 4.494100093841553,
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:+UnlockDiagnosticVMOptions",
+        "-XX:+LogCompilation",
+        "-XX:+PrintCommandLineFlags",
+        "-XX:CompileCommand=exclude,BenchKt::main",
+        "-XX:CompileCommand=dontinline,BenchKt::main$sample",
+        "-XX:CompileCommand=option,BenchKt::main$sample,double,CompileThresholdScaling,0.01",
+        "-XX:CompileCommand=exclude,BenchKt::main$gcCount",
+        "-XX:CompileCommand=exclude,BenchKt::main$gcTime",
+        "-XX:LogFile=/tmp/output-cleanup-isolated-aa/raw/2-bulk-control-1-before-jit.xml",
+        "-Xlog:gc*,safepoint:file=/tmp/output-cleanup-isolated-aa/raw/2-bulk-control-1-before-gc.log:uptimemillis,level,tags",
+        "-Djava.library.path=/tmp/output-cleanup-before/target/release",
+        "-cp",
+        "/tmp/output-cleanup-isolated-driver-v3/driver.jar:/tmp/output-cleanup-before/bench.jar",
+        "BenchKt",
+        "bulk",
+        "1",
+        "256",
+        "24",
+        "50",
+        "2",
+        "64",
+        "control"
+      ],
+      "warmup": {
+        "batches": 389,
+        "end_ms": 3305,
+        "quiet_ms": 2522,
+        "stable": true
+      },
+      "phases": {
+        "start": {
+          "uptime_ms": 3305,
+          "compilation_ms": 230
+        },
+        "end": {
+          "uptime_ms": 4419,
+          "compilation_ms": 235
+        }
+      },
+      "effective_flags": [
+        "-XX:ActiveProcessorCount=2 -XX:CompileCommand=exclude,BenchKt::main -XX:CompileCommand=dontinline,BenchKt::main$sample -XX:CompileCommand=option,BenchKt::main$sample,double,CompileThresholdScaling,0.01 -XX:CompileCommand=exclude,BenchKt::main$gcCount -XX:CompileCommand=exclude,BenchKt::main$gcTime -XX:G1ConcRefinementThreads=2 -XX:GCDrainStackTargetSize=64 -XX:InitialHeapSize=268435456 -XX:+LogCompilation -XX:LogFile=/tmp/output-cleanup-isolated-aa/raw/2-bulk-control-1-before-jit.xml -XX:MaxHeapSize=268435456 -XX:+PrintCommandLineFlags -XX:ReservedCodeCacheSize=251658240 -XX:+SegmentedCodeCache -XX:+UnlockDiagnosticVMOptions -XX:+UseCompressedClassPointers -XX:+UseCompressedOops -XX:+UseG1GC "
+      ],
+      "compilations_during_measurement": [
+        {
+          "stamp": 3.354,
+          "method": "java.nio.Buffer position ()I",
+          "compiler": "c1",
+          "level": "1"
+        },
+        {
+          "stamp": 3.4,
+          "method": "java.nio.Buffer limit ()I",
+          "compiler": "c1",
+          "level": "1"
+        },
+        {
+          "stamp": 3.533,
+          "method": "java.lang.String checkBoundsOffCount (III)V",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.576,
+          "method": "java.lang.Integer stringSize (I)I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.576,
+          "method": "java.lang.Integer getChars (II[B)I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.622,
+          "method": "java.lang.StringBuilder append (I)Ljava/lang/StringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.623,
+          "method": "java.lang.AbstractStringBuilder append (I)Ljava/lang/AbstractStringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.759,
+          "method": "java.nio.Buffer position (I)Ljava/nio/Buffer;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.934,
+          "method": "java.nio.ByteBuffer arrayOffset ()I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.977,
+          "method": "java.lang.StringLatin1 inflate ([BI[CII)V",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.021,
+          "method": "java.lang.Math min (II)I",
+          "compiler": "c2",
+          "level": "4"
+        },
+        {
+          "stamp": 4.16,
+          "method": "java.nio.CharBuffer arrayOffset ()I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.35,
+          "method": "java.lang.StringBuilder append (J)Ljava/lang/StringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.351,
+          "method": "java.lang.AbstractStringBuilder append (J)Ljava/lang/AbstractStringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        }
+      ],
+      "binding_driver_compilations": [],
+      "stdout_sha256": "f9e60f5dead93b85caf3f8cd6ce1bb73d8635f266ba4190b9d36c5dfed695ff6",
+      "gc_sha256": "593388d674383ae4252613a5f33a985b26ae52614ebc5ed58b5b607eb686f4d5",
+      "jit_sha256": "c1b16bedf1ef42fc646e2bc8ea36c23124c6286f096b66c354b3799da1f369c2"
+    },
+    {
+      "id": "2-bulk-control-1-after",
+      "version": "after",
+      "mode": "bulk",
+      "case": "control",
+      "size": 1,
+      "fork": 2,
+      "seconds": 4.646641731262207,
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:+UnlockDiagnosticVMOptions",
+        "-XX:+LogCompilation",
+        "-XX:+PrintCommandLineFlags",
+        "-XX:CompileCommand=exclude,BenchKt::main",
+        "-XX:CompileCommand=dontinline,BenchKt::main$sample",
+        "-XX:CompileCommand=option,BenchKt::main$sample,double,CompileThresholdScaling,0.01",
+        "-XX:CompileCommand=exclude,BenchKt::main$gcCount",
+        "-XX:CompileCommand=exclude,BenchKt::main$gcTime",
+        "-XX:LogFile=/tmp/output-cleanup-isolated-aa/raw/2-bulk-control-1-after-jit.xml",
+        "-Xlog:gc*,safepoint:file=/tmp/output-cleanup-isolated-aa/raw/2-bulk-control-1-after-gc.log:uptimemillis,level,tags",
+        "-Djava.library.path=/tmp/output-cleanup-before/target/release",
+        "-cp",
+        "/tmp/output-cleanup-isolated-driver-v3/driver.jar:/tmp/output-cleanup-before/bench.jar",
+        "BenchKt",
+        "bulk",
+        "1",
+        "256",
+        "24",
+        "50",
+        "2",
+        "64",
+        "control"
+      ],
+      "warmup": {
+        "batches": 384,
+        "end_ms": 3362,
+        "quiet_ms": 2423,
+        "stable": true
+      },
+      "phases": {
+        "start": {
+          "uptime_ms": 3362,
+          "compilation_ms": 299
+        },
+        "end": {
+          "uptime_ms": 4559,
+          "compilation_ms": 303
+        }
+      },
+      "effective_flags": [
+        "-XX:ActiveProcessorCount=2 -XX:CompileCommand=exclude,BenchKt::main -XX:CompileCommand=dontinline,BenchKt::main$sample -XX:CompileCommand=option,BenchKt::main$sample,double,CompileThresholdScaling,0.01 -XX:CompileCommand=exclude,BenchKt::main$gcCount -XX:CompileCommand=exclude,BenchKt::main$gcTime -XX:G1ConcRefinementThreads=2 -XX:GCDrainStackTargetSize=64 -XX:InitialHeapSize=268435456 -XX:+LogCompilation -XX:LogFile=/tmp/output-cleanup-isolated-aa/raw/2-bulk-control-1-after-jit.xml -XX:MaxHeapSize=268435456 -XX:+PrintCommandLineFlags -XX:ReservedCodeCacheSize=251658240 -XX:+SegmentedCodeCache -XX:+UnlockDiagnosticVMOptions -XX:+UseCompressedClassPointers -XX:+UseCompressedOops -XX:+UseG1GC "
+      ],
+      "compilations_during_measurement": [
+        {
+          "stamp": 3.362,
+          "method": "sun.management.VMManagementImpl getUptime0 ()J",
+          "compiler": "",
+          "level": "0"
+        },
+        {
+          "stamp": 3.412,
+          "method": "java.nio.Buffer position ()I",
+          "compiler": "c1",
+          "level": "1"
+        },
+        {
+          "stamp": 3.46,
+          "method": "java.nio.Buffer limit ()I",
+          "compiler": "c1",
+          "level": "1"
+        },
+        {
+          "stamp": 3.61,
+          "method": "java.lang.String checkBoundsOffCount (III)V",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.657,
+          "method": "java.lang.Integer stringSize (I)I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.657,
+          "method": "java.lang.Integer getChars (II[B)I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.706,
+          "method": "java.lang.StringBuilder append (I)Ljava/lang/StringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.706,
+          "method": "java.lang.AbstractStringBuilder append (I)Ljava/lang/AbstractStringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.855,
+          "method": "java.nio.Buffer position (I)Ljava/nio/Buffer;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.053,
+          "method": "java.nio.ByteBuffer arrayOffset ()I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.103,
+          "method": "java.lang.StringLatin1 inflate ([BI[CII)V",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.303,
+          "method": "java.nio.CharBuffer arrayOffset ()I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.508,
+          "method": "java.lang.StringBuilder append (J)Ljava/lang/StringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.508,
+          "method": "java.lang.AbstractStringBuilder append (J)Ljava/lang/AbstractStringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        }
+      ],
+      "binding_driver_compilations": [],
+      "stdout_sha256": "6a9732fcc06aaca56ee69454ec44060dceb628e69a71279fe068b2613ba439d2",
+      "gc_sha256": "7fde9906d09efc90fe7472912bdc0263c81f338e2d764cc811a5711e55497530",
+      "jit_sha256": "b1676225cec9c1c70cd0d67c837e1ba3e41124294f2f54d3ee99be4a19de6351"
+    },
+    {
+      "id": "2-plain-owned_handle_records_roundtrip-512-before",
+      "version": "before",
+      "mode": "plain",
+      "case": "owned_handle_records_roundtrip",
+      "size": 512,
+      "fork": 2,
+      "seconds": 7.771181344985962,
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:+UnlockDiagnosticVMOptions",
+        "-XX:+LogCompilation",
+        "-XX:+PrintCommandLineFlags",
+        "-XX:CompileCommand=exclude,BenchKt::main",
+        "-XX:CompileCommand=dontinline,BenchKt::main$sample",
+        "-XX:CompileCommand=option,BenchKt::main$sample,double,CompileThresholdScaling,0.01",
+        "-XX:CompileCommand=exclude,BenchKt::main$gcCount",
+        "-XX:CompileCommand=exclude,BenchKt::main$gcTime",
+        "-XX:LogFile=/tmp/output-cleanup-isolated-aa/raw/2-plain-owned_handle_records_roundtrip-512-before-jit.xml",
+        "-Xlog:gc*,safepoint:file=/tmp/output-cleanup-isolated-aa/raw/2-plain-owned_handle_records_roundtrip-512-before-gc.log:uptimemillis,level,tags",
+        "-Djava.library.path=/tmp/output-cleanup-before/target/release",
+        "-cp",
+        "/tmp/output-cleanup-isolated-driver-v3/driver.jar:/tmp/output-cleanup-before/bench.jar",
+        "BenchKt",
+        "plain",
+        "512",
+        "256",
+        "24",
+        "50",
+        "2",
+        "64",
+        "owned_handle_records_roundtrip"
+      ],
+      "warmup": {
+        "batches": 302,
+        "end_ms": 6223,
+        "quiet_ms": 1010,
+        "stable": true
+      },
+      "phases": {
+        "start": {
+          "uptime_ms": 6224,
+          "compilation_ms": 663
+        },
+        "end": {
+          "uptime_ms": 7662,
+          "compilation_ms": 670
+        }
+      },
+      "effective_flags": [
+        "-XX:ActiveProcessorCount=2 -XX:CompileCommand=exclude,BenchKt::main -XX:CompileCommand=dontinline,BenchKt::main$sample -XX:CompileCommand=option,BenchKt::main$sample,double,CompileThresholdScaling,0.01 -XX:CompileCommand=exclude,BenchKt::main$gcCount -XX:CompileCommand=exclude,BenchKt::main$gcTime -XX:G1ConcRefinementThreads=2 -XX:GCDrainStackTargetSize=64 -XX:InitialHeapSize=268435456 -XX:+LogCompilation -XX:LogFile=/tmp/output-cleanup-isolated-aa/raw/2-plain-owned_handle_records_roundtrip-512-before-jit.xml -XX:MaxHeapSize=268435456 -XX:+PrintCommandLineFlags -XX:ReservedCodeCacheSize=251658240 -XX:+SegmentedCodeCache -XX:+UnlockDiagnosticVMOptions -XX:+UseCompressedClassPointers -XX:+UseCompressedOops -XX:+UseG1GC "
+      ],
+      "compilations_during_measurement": [
+        {
+          "stamp": 6.339,
+          "method": "java.nio.Buffer position ()I",
+          "compiler": "c1",
+          "level": "1"
+        },
+        {
+          "stamp": 6.396,
+          "method": "java.lang.Integer stringSize (I)I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 6.396,
+          "method": "java.lang.Integer getChars (II[B)I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 6.396,
+          "method": "java.nio.Buffer limit ()I",
+          "compiler": "c1",
+          "level": "1"
+        },
+        {
+          "stamp": 6.453,
+          "method": "java.lang.StringBuilder append (I)Ljava/lang/StringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 6.454,
+          "method": "java.lang.AbstractStringBuilder append (I)Ljava/lang/AbstractStringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 6.51,
+          "method": "java.lang.String checkBoundsOffCount (III)V",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 6.76,
+          "method": "java.nio.Buffer position (I)Ljava/nio/Buffer;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 6.848,
+          "method": "kotlin.jvm.internal.Intrinsics checkNotNullExpressionValue (Ljava/lang/Object;Ljava/lang/String;)V",
+          "compiler": "c2",
+          "level": "4"
+        },
+        {
+          "stamp": 7.07,
+          "method": "java.lang.StringLatin1 inflate ([BI[CII)V",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 7.071,
+          "method": "java.nio.ByteBuffer arrayOffset ()I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 7.071,
+          "method": "java.lang.String length ()I",
+          "compiler": "c2",
+          "level": "4"
+        },
+        {
+          "stamp": 7.369,
+          "method": "java.nio.CharBuffer arrayOffset ()I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 7.607,
+          "method": "java.lang.StringBuilder append (J)Ljava/lang/StringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 7.607,
+          "method": "java.lang.AbstractStringBuilder append (J)Ljava/lang/AbstractStringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        }
+      ],
+      "binding_driver_compilations": [],
+      "stdout_sha256": "712288c773ae141580515e065eb6549b10e3958d2fa7844131017147ee2bbc26",
+      "gc_sha256": "a8204d4a350facf464dd9265243109e186232d9b3c3d8cd1f48dc4721f16742a",
+      "jit_sha256": "782c199f44b5e7658508586df464f6d51d056a51e49e84be6a565b5a309e1dad"
+    },
+    {
+      "id": "2-plain-owned_handle_records_roundtrip-512-after",
+      "version": "after",
+      "mode": "plain",
+      "case": "owned_handle_records_roundtrip",
+      "size": 512,
+      "fork": 2,
+      "seconds": 7.842110633850098,
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:+UnlockDiagnosticVMOptions",
+        "-XX:+LogCompilation",
+        "-XX:+PrintCommandLineFlags",
+        "-XX:CompileCommand=exclude,BenchKt::main",
+        "-XX:CompileCommand=dontinline,BenchKt::main$sample",
+        "-XX:CompileCommand=option,BenchKt::main$sample,double,CompileThresholdScaling,0.01",
+        "-XX:CompileCommand=exclude,BenchKt::main$gcCount",
+        "-XX:CompileCommand=exclude,BenchKt::main$gcTime",
+        "-XX:LogFile=/tmp/output-cleanup-isolated-aa/raw/2-plain-owned_handle_records_roundtrip-512-after-jit.xml",
+        "-Xlog:gc*,safepoint:file=/tmp/output-cleanup-isolated-aa/raw/2-plain-owned_handle_records_roundtrip-512-after-gc.log:uptimemillis,level,tags",
+        "-Djava.library.path=/tmp/output-cleanup-before/target/release",
+        "-cp",
+        "/tmp/output-cleanup-isolated-driver-v3/driver.jar:/tmp/output-cleanup-before/bench.jar",
+        "BenchKt",
+        "plain",
+        "512",
+        "256",
+        "24",
+        "50",
+        "2",
+        "64",
+        "owned_handle_records_roundtrip"
+      ],
+      "warmup": {
+        "batches": 304,
+        "end_ms": 6319,
+        "quiet_ms": 1012,
+        "stable": true
+      },
+      "phases": {
+        "start": {
+          "uptime_ms": 6320,
+          "compilation_ms": 757
+        },
+        "end": {
+          "uptime_ms": 7744,
+          "compilation_ms": 799
+        }
+      },
+      "effective_flags": [
+        "-XX:ActiveProcessorCount=2 -XX:CompileCommand=exclude,BenchKt::main -XX:CompileCommand=dontinline,BenchKt::main$sample -XX:CompileCommand=option,BenchKt::main$sample,double,CompileThresholdScaling,0.01 -XX:CompileCommand=exclude,BenchKt::main$gcCount -XX:CompileCommand=exclude,BenchKt::main$gcTime -XX:G1ConcRefinementThreads=2 -XX:GCDrainStackTargetSize=64 -XX:InitialHeapSize=268435456 -XX:+LogCompilation -XX:LogFile=/tmp/output-cleanup-isolated-aa/raw/2-plain-owned_handle_records_roundtrip-512-after-jit.xml -XX:MaxHeapSize=268435456 -XX:+PrintCommandLineFlags -XX:ReservedCodeCacheSize=251658240 -XX:+SegmentedCodeCache -XX:+UnlockDiagnosticVMOptions -XX:+UseCompressedClassPointers -XX:+UseCompressedOops -XX:+UseG1GC "
+      ],
+      "compilations_during_measurement": [
+        {
+          "stamp": 6.32,
+          "method": "java.nio.Buffer position ()I",
+          "compiler": "c1",
+          "level": "1"
+        },
+        {
+          "stamp": 6.382,
+          "method": "java.nio.Buffer limit ()I",
+          "compiler": "c1",
+          "level": "1"
+        },
+        {
+          "stamp": 6.465,
+          "method": "java.util.TimSort mergeHi (IIII)V",
+          "compiler": "c2",
+          "level": "4"
+        },
+        {
+          "stamp": 6.506,
+          "method": "java.lang.Integer stringSize (I)I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 6.507,
+          "method": "java.lang.Integer getChars (II[B)I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 6.568,
+          "method": "java.lang.StringBuilder append (I)Ljava/lang/StringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 6.569,
+          "method": "java.lang.AbstractStringBuilder append (I)Ljava/lang/AbstractStringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 6.63,
+          "method": "java.lang.String checkBoundsOffCount (III)V",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 6.816,
+          "method": "kotlin.jvm.internal.Intrinsics checkNotNullExpressionValue (Ljava/lang/Object;Ljava/lang/String;)V",
+          "compiler": "c2",
+          "level": "4"
+        },
+        {
+          "stamp": 6.871,
+          "method": "java.nio.Buffer position (I)Ljava/nio/Buffer;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 7.166,
+          "method": "java.lang.StringLatin1 inflate ([BI[CII)V",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 7.166,
+          "method": "java.nio.ByteBuffer arrayOffset ()I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 7.454,
+          "method": "java.nio.CharBuffer arrayOffset ()I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 7.687,
+          "method": "java.lang.StringBuilder append (J)Ljava/lang/StringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 7.687,
+          "method": "java.lang.AbstractStringBuilder append (J)Ljava/lang/AbstractStringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        }
+      ],
+      "binding_driver_compilations": [],
+      "stdout_sha256": "b81332896de9e32aa214ba29ead6c26e00b632786ae0337835e199a0896a9182",
+      "gc_sha256": "0749dc85c176bce02ac53ebb6ba6a9b81bb4c19bb37718e89405e2497dc3c80d",
+      "jit_sha256": "abb0a7def58936c4f221334622111cb1d91d89f9ec795b058e7c6b5db7d7bae6"
+    },
+    {
+      "id": "3-bulk-owned_handles_roundtrip-1-after",
+      "version": "after",
+      "mode": "bulk",
+      "case": "owned_handles_roundtrip",
+      "size": 1,
+      "fork": 3,
+      "seconds": 4.694736003875732,
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:+UnlockDiagnosticVMOptions",
+        "-XX:+LogCompilation",
+        "-XX:+PrintCommandLineFlags",
+        "-XX:CompileCommand=exclude,BenchKt::main",
+        "-XX:CompileCommand=dontinline,BenchKt::main$sample",
+        "-XX:CompileCommand=option,BenchKt::main$sample,double,CompileThresholdScaling,0.01",
+        "-XX:CompileCommand=exclude,BenchKt::main$gcCount",
+        "-XX:CompileCommand=exclude,BenchKt::main$gcTime",
+        "-XX:LogFile=/tmp/output-cleanup-isolated-aa/raw/3-bulk-owned_handles_roundtrip-1-after-jit.xml",
+        "-Xlog:gc*,safepoint:file=/tmp/output-cleanup-isolated-aa/raw/3-bulk-owned_handles_roundtrip-1-after-gc.log:uptimemillis,level,tags",
+        "-Djava.library.path=/tmp/output-cleanup-before/target/release",
+        "-cp",
+        "/tmp/output-cleanup-isolated-driver-v3/driver.jar:/tmp/output-cleanup-before/bench.jar",
+        "BenchKt",
+        "bulk",
+        "1",
+        "256",
+        "24",
+        "50",
+        "3",
+        "64",
+        "owned_handles_roundtrip"
+      ],
+      "warmup": {
+        "batches": 426,
+        "end_ms": 3407,
+        "quiet_ms": 2412,
+        "stable": true
+      },
+      "phases": {
+        "start": {
+          "uptime_ms": 3408,
+          "compilation_ms": 531
+        },
+        "end": {
+          "uptime_ms": 4592,
+          "compilation_ms": 539
+        }
+      },
+      "effective_flags": [
+        "-XX:ActiveProcessorCount=2 -XX:CompileCommand=exclude,BenchKt::main -XX:CompileCommand=dontinline,BenchKt::main$sample -XX:CompileCommand=option,BenchKt::main$sample,double,CompileThresholdScaling,0.01 -XX:CompileCommand=exclude,BenchKt::main$gcCount -XX:CompileCommand=exclude,BenchKt::main$gcTime -XX:G1ConcRefinementThreads=2 -XX:GCDrainStackTargetSize=64 -XX:InitialHeapSize=268435456 -XX:+LogCompilation -XX:LogFile=/tmp/output-cleanup-isolated-aa/raw/3-bulk-owned_handles_roundtrip-1-after-jit.xml -XX:MaxHeapSize=268435456 -XX:+PrintCommandLineFlags -XX:ReservedCodeCacheSize=251658240 -XX:+SegmentedCodeCache -XX:+UnlockDiagnosticVMOptions -XX:+UseCompressedClassPointers -XX:+UseCompressedOops -XX:+UseG1GC "
+      ],
+      "compilations_during_measurement": [
+        {
+          "stamp": 3.409,
+          "method": "java.nio.Buffer position ()I",
+          "compiler": "c1",
+          "level": "1"
+        },
+        {
+          "stamp": 3.409,
+          "method": "java.nio.Buffer limit ()I",
+          "compiler": "c1",
+          "level": "1"
+        },
+        {
+          "stamp": 3.571,
+          "method": "java.lang.Integer stringSize (I)I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.571,
+          "method": "java.lang.Integer getChars (II[B)I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.677,
+          "method": "java.lang.StringBuilder append (I)Ljava/lang/StringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.678,
+          "method": "java.lang.AbstractStringBuilder append (I)Ljava/lang/AbstractStringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.679,
+          "method": "java.lang.String checkBoundsOffCount (III)V",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.115,
+          "method": "java.nio.ByteBuffer arrayOffset ()I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.213,
+          "method": "java.lang.StringLatin1 inflate ([BI[CII)V",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.356,
+          "method": "java.nio.CharBuffer arrayOffset ()I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.358,
+          "method": "java.nio.Buffer <init> (IIII)V",
+          "compiler": "c2",
+          "level": "4"
+        },
+        {
+          "stamp": 4.546,
+          "method": "java.lang.StringBuilder append (J)Ljava/lang/StringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.547,
+          "method": "java.lang.AbstractStringBuilder append (J)Ljava/lang/AbstractStringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        }
+      ],
+      "binding_driver_compilations": [],
+      "stdout_sha256": "7b4b6cb6ee45f0ff547686813337b63c709b1b0e41b5e5879e1268acd241adb4",
+      "gc_sha256": "1b2a064c23a83e22ea6ef226467ded093a49e908c97460846bbe11454267eb98",
+      "jit_sha256": "dacd25e3e6a9afe1a3240105ce986a725f7c260f64989383b9d3936964b54093"
+    },
+    {
+      "id": "3-bulk-owned_handles_roundtrip-1-before",
+      "version": "before",
+      "mode": "bulk",
+      "case": "owned_handles_roundtrip",
+      "size": 1,
+      "fork": 3,
+      "seconds": 4.651822090148926,
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:+UnlockDiagnosticVMOptions",
+        "-XX:+LogCompilation",
+        "-XX:+PrintCommandLineFlags",
+        "-XX:CompileCommand=exclude,BenchKt::main",
+        "-XX:CompileCommand=dontinline,BenchKt::main$sample",
+        "-XX:CompileCommand=option,BenchKt::main$sample,double,CompileThresholdScaling,0.01",
+        "-XX:CompileCommand=exclude,BenchKt::main$gcCount",
+        "-XX:CompileCommand=exclude,BenchKt::main$gcTime",
+        "-XX:LogFile=/tmp/output-cleanup-isolated-aa/raw/3-bulk-owned_handles_roundtrip-1-before-jit.xml",
+        "-Xlog:gc*,safepoint:file=/tmp/output-cleanup-isolated-aa/raw/3-bulk-owned_handles_roundtrip-1-before-gc.log:uptimemillis,level,tags",
+        "-Djava.library.path=/tmp/output-cleanup-before/target/release",
+        "-cp",
+        "/tmp/output-cleanup-isolated-driver-v3/driver.jar:/tmp/output-cleanup-before/bench.jar",
+        "BenchKt",
+        "bulk",
+        "1",
+        "256",
+        "24",
+        "50",
+        "3",
+        "64",
+        "owned_handles_roundtrip"
+      ],
+      "warmup": {
+        "batches": 388,
+        "end_ms": 3403,
+        "quiet_ms": 2395,
+        "stable": true
+      },
+      "phases": {
+        "start": {
+          "uptime_ms": 3404,
+          "compilation_ms": 573
+        },
+        "end": {
+          "uptime_ms": 4549,
+          "compilation_ms": 580
+        }
+      },
+      "effective_flags": [
+        "-XX:ActiveProcessorCount=2 -XX:CompileCommand=exclude,BenchKt::main -XX:CompileCommand=dontinline,BenchKt::main$sample -XX:CompileCommand=option,BenchKt::main$sample,double,CompileThresholdScaling,0.01 -XX:CompileCommand=exclude,BenchKt::main$gcCount -XX:CompileCommand=exclude,BenchKt::main$gcTime -XX:G1ConcRefinementThreads=2 -XX:GCDrainStackTargetSize=64 -XX:InitialHeapSize=268435456 -XX:+LogCompilation -XX:LogFile=/tmp/output-cleanup-isolated-aa/raw/3-bulk-owned_handles_roundtrip-1-before-jit.xml -XX:MaxHeapSize=268435456 -XX:+PrintCommandLineFlags -XX:ReservedCodeCacheSize=251658240 -XX:+SegmentedCodeCache -XX:+UnlockDiagnosticVMOptions -XX:+UseCompressedClassPointers -XX:+UseCompressedOops -XX:+UseG1GC "
+      ],
+      "compilations_during_measurement": [
+        {
+          "stamp": 3.405,
+          "method": "java.nio.Buffer position ()I",
+          "compiler": "c1",
+          "level": "1"
+        },
+        {
+          "stamp": 3.452,
+          "method": "java.nio.Buffer limit ()I",
+          "compiler": "c1",
+          "level": "1"
+        },
+        {
+          "stamp": 3.545,
+          "method": "java.lang.Integer stringSize (I)I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.546,
+          "method": "java.lang.Integer getChars (II[B)I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.547,
+          "method": "java.nio.Buffer <init> (IIII)V",
+          "compiler": "c2",
+          "level": "4"
+        },
+        {
+          "stamp": 3.638,
+          "method": "java.lang.StringBuilder append (I)Ljava/lang/StringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.639,
+          "method": "java.lang.AbstractStringBuilder append (I)Ljava/lang/AbstractStringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.639,
+          "method": "java.lang.String checkBoundsOffCount (III)V",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.072,
+          "method": "java.nio.ByteBuffer arrayOffset ()I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.169,
+          "method": "java.lang.StringLatin1 inflate ([BI[CII)V",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.313,
+          "method": "java.nio.CharBuffer arrayOffset ()I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.503,
+          "method": "java.lang.StringBuilder append (J)Ljava/lang/StringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.504,
+          "method": "java.lang.AbstractStringBuilder append (J)Ljava/lang/AbstractStringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        }
+      ],
+      "binding_driver_compilations": [],
+      "stdout_sha256": "3b7423bdd65f9231c97f16fa3e735d43cdc03070b2ba16df9274091fc3fe3244",
+      "gc_sha256": "ec46cb1868e9926a4dd7431ea552eed9f5a73d6a6ec27e636001f882776192aa",
+      "jit_sha256": "1703c4926407df7a827dbd66d8bf2cd0528f55fc1f37b07924caa91e54145860"
+    },
+    {
+      "id": "3-plain-owned_handle_records_roundtrip-512-after",
+      "version": "after",
+      "mode": "plain",
+      "case": "owned_handle_records_roundtrip",
+      "size": 512,
+      "fork": 3,
+      "seconds": 8.542715787887573,
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:+UnlockDiagnosticVMOptions",
+        "-XX:+LogCompilation",
+        "-XX:+PrintCommandLineFlags",
+        "-XX:CompileCommand=exclude,BenchKt::main",
+        "-XX:CompileCommand=dontinline,BenchKt::main$sample",
+        "-XX:CompileCommand=option,BenchKt::main$sample,double,CompileThresholdScaling,0.01",
+        "-XX:CompileCommand=exclude,BenchKt::main$gcCount",
+        "-XX:CompileCommand=exclude,BenchKt::main$gcTime",
+        "-XX:LogFile=/tmp/output-cleanup-isolated-aa/raw/3-plain-owned_handle_records_roundtrip-512-after-jit.xml",
+        "-Xlog:gc*,safepoint:file=/tmp/output-cleanup-isolated-aa/raw/3-plain-owned_handle_records_roundtrip-512-after-gc.log:uptimemillis,level,tags",
+        "-Djava.library.path=/tmp/output-cleanup-before/target/release",
+        "-cp",
+        "/tmp/output-cleanup-isolated-driver-v3/driver.jar:/tmp/output-cleanup-before/bench.jar",
+        "BenchKt",
+        "plain",
+        "512",
+        "256",
+        "24",
+        "50",
+        "3",
+        "64",
+        "owned_handle_records_roundtrip"
+      ],
+      "warmup": {
+        "batches": 312,
+        "end_ms": 6818,
+        "quiet_ms": 1041,
+        "stable": true
+      },
+      "phases": {
+        "start": {
+          "uptime_ms": 6818,
+          "compilation_ms": 720
+        },
+        "end": {
+          "uptime_ms": 8415,
+          "compilation_ms": 725
+        }
+      },
+      "effective_flags": [
+        "-XX:ActiveProcessorCount=2 -XX:CompileCommand=exclude,BenchKt::main -XX:CompileCommand=dontinline,BenchKt::main$sample -XX:CompileCommand=option,BenchKt::main$sample,double,CompileThresholdScaling,0.01 -XX:CompileCommand=exclude,BenchKt::main$gcCount -XX:CompileCommand=exclude,BenchKt::main$gcTime -XX:G1ConcRefinementThreads=2 -XX:GCDrainStackTargetSize=64 -XX:InitialHeapSize=268435456 -XX:+LogCompilation -XX:LogFile=/tmp/output-cleanup-isolated-aa/raw/3-plain-owned_handle_records_roundtrip-512-after-jit.xml -XX:MaxHeapSize=268435456 -XX:+PrintCommandLineFlags -XX:ReservedCodeCacheSize=251658240 -XX:+SegmentedCodeCache -XX:+UnlockDiagnosticVMOptions -XX:+UseCompressedClassPointers -XX:+UseCompressedOops -XX:+UseG1GC "
+      ],
+      "compilations_during_measurement": [
+        {
+          "stamp": 6.819,
+          "method": "java.nio.Buffer position ()I",
+          "compiler": "c1",
+          "level": "1"
+        },
+        {
+          "stamp": 6.819,
+          "method": "java.nio.Buffer limit ()I",
+          "compiler": "c1",
+          "level": "1"
+        },
+        {
+          "stamp": 6.823,
+          "method": "kotlin.jvm.internal.Intrinsics checkNotNullExpressionValue (Ljava/lang/Object;Ljava/lang/String;)V",
+          "compiler": "c2",
+          "level": "4"
+        },
+        {
+          "stamp": 6.99,
+          "method": "java.lang.Integer stringSize (I)I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 6.991,
+          "method": "java.lang.Integer getChars (II[B)I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 7.048,
+          "method": "java.lang.StringBuilder append (I)Ljava/lang/StringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 7.049,
+          "method": "java.lang.AbstractStringBuilder append (I)Ljava/lang/AbstractStringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 7.106,
+          "method": "java.lang.String checkBoundsOffCount (III)V",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 7.334,
+          "method": "java.nio.Buffer position (I)Ljava/nio/Buffer;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 7.66,
+          "method": "java.nio.ByteBuffer arrayOffset ()I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 7.716,
+          "method": "java.lang.StringLatin1 inflate ([BI[CII)V",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 8.036,
+          "method": "java.nio.CharBuffer arrayOffset ()I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 8.336,
+          "method": "java.lang.StringBuilder append (J)Ljava/lang/StringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 8.337,
+          "method": "java.lang.AbstractStringBuilder append (J)Ljava/lang/AbstractStringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        }
+      ],
+      "binding_driver_compilations": [],
+      "stdout_sha256": "d9e0cfe9bdffef0c41a3f7dcdb586a408e69ba73161977fd9e590f717fac90fa",
+      "gc_sha256": "df369826403e9dbdf230859917ce9ec79d1f312357d26dc106ce84b5c4789ca6",
+      "jit_sha256": "c5760a27f6df119aeeab2d29b5f88c2521f5c498fe6485a474dcd4cac8decfb7"
+    },
+    {
+      "id": "3-plain-owned_handle_records_roundtrip-512-before",
+      "version": "before",
+      "mode": "plain",
+      "case": "owned_handle_records_roundtrip",
+      "size": 512,
+      "fork": 3,
+      "seconds": 8.00493311882019,
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:+UnlockDiagnosticVMOptions",
+        "-XX:+LogCompilation",
+        "-XX:+PrintCommandLineFlags",
+        "-XX:CompileCommand=exclude,BenchKt::main",
+        "-XX:CompileCommand=dontinline,BenchKt::main$sample",
+        "-XX:CompileCommand=option,BenchKt::main$sample,double,CompileThresholdScaling,0.01",
+        "-XX:CompileCommand=exclude,BenchKt::main$gcCount",
+        "-XX:CompileCommand=exclude,BenchKt::main$gcTime",
+        "-XX:LogFile=/tmp/output-cleanup-isolated-aa/raw/3-plain-owned_handle_records_roundtrip-512-before-jit.xml",
+        "-Xlog:gc*,safepoint:file=/tmp/output-cleanup-isolated-aa/raw/3-plain-owned_handle_records_roundtrip-512-before-gc.log:uptimemillis,level,tags",
+        "-Djava.library.path=/tmp/output-cleanup-before/target/release",
+        "-cp",
+        "/tmp/output-cleanup-isolated-driver-v3/driver.jar:/tmp/output-cleanup-before/bench.jar",
+        "BenchKt",
+        "plain",
+        "512",
+        "256",
+        "24",
+        "50",
+        "3",
+        "64",
+        "owned_handle_records_roundtrip"
+      ],
+      "warmup": {
+        "batches": 299,
+        "end_ms": 6480,
+        "quiet_ms": 1029,
+        "stable": true
+      },
+      "phases": {
+        "start": {
+          "uptime_ms": 6480,
+          "compilation_ms": 683
+        },
+        "end": {
+          "uptime_ms": 7900,
+          "compilation_ms": 688
+        }
+      },
+      "effective_flags": [
+        "-XX:ActiveProcessorCount=2 -XX:CompileCommand=exclude,BenchKt::main -XX:CompileCommand=dontinline,BenchKt::main$sample -XX:CompileCommand=option,BenchKt::main$sample,double,CompileThresholdScaling,0.01 -XX:CompileCommand=exclude,BenchKt::main$gcCount -XX:CompileCommand=exclude,BenchKt::main$gcTime -XX:G1ConcRefinementThreads=2 -XX:GCDrainStackTargetSize=64 -XX:InitialHeapSize=268435456 -XX:+LogCompilation -XX:LogFile=/tmp/output-cleanup-isolated-aa/raw/3-plain-owned_handle_records_roundtrip-512-before-jit.xml -XX:MaxHeapSize=268435456 -XX:+PrintCommandLineFlags -XX:ReservedCodeCacheSize=251658240 -XX:+SegmentedCodeCache -XX:+UnlockDiagnosticVMOptions -XX:+UseCompressedClassPointers -XX:+UseCompressedOops -XX:+UseG1GC "
+      ],
+      "compilations_during_measurement": [
+        {
+          "stamp": 6.481,
+          "method": "java.nio.Buffer position ()I",
+          "compiler": "c1",
+          "level": "1"
+        },
+        {
+          "stamp": 6.481,
+          "method": "java.nio.Buffer limit ()I",
+          "compiler": "c1",
+          "level": "1"
+        },
+        {
+          "stamp": 6.652,
+          "method": "java.lang.Integer stringSize (I)I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 6.652,
+          "method": "java.lang.Integer getChars (II[B)I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 6.71,
+          "method": "java.lang.StringBuilder append (I)Ljava/lang/StringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 6.711,
+          "method": "java.lang.AbstractStringBuilder append (I)Ljava/lang/AbstractStringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 6.764,
+          "method": "java.lang.String checkBoundsOffCount (III)V",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 7.01,
+          "method": "java.nio.Buffer position (I)Ljava/nio/Buffer;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 7.262,
+          "method": "kotlin.jvm.internal.Intrinsics checkNotNullExpressionValue (Ljava/lang/Object;Ljava/lang/String;)V",
+          "compiler": "c2",
+          "level": "4"
+        },
+        {
+          "stamp": 7.302,
+          "method": "java.lang.StringLatin1 inflate ([BI[CII)V",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 7.302,
+          "method": "java.nio.ByteBuffer arrayOffset ()I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 7.603,
+          "method": "java.nio.CharBuffer arrayOffset ()I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 7.844,
+          "method": "java.lang.StringBuilder append (J)Ljava/lang/StringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 7.844,
+          "method": "java.lang.AbstractStringBuilder append (J)Ljava/lang/AbstractStringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        }
+      ],
+      "binding_driver_compilations": [],
+      "stdout_sha256": "3058d0d08a3ef5d287d1d56413aad44afa10cd0e314e127295e22ac6e531586a",
+      "gc_sha256": "df0e7d05b867f569dc50c378020dfd105b458f4d5db21c52b9e2df61d9720d51",
+      "jit_sha256": "e47718829c9be83a4128830ed0fca27f1fa80222dc37d696f2848b832769393f"
+    },
+    {
+      "id": "3-bulk-control-1-after",
+      "version": "after",
+      "mode": "bulk",
+      "case": "control",
+      "size": 1,
+      "fork": 3,
+      "seconds": 4.529062986373901,
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:+UnlockDiagnosticVMOptions",
+        "-XX:+LogCompilation",
+        "-XX:+PrintCommandLineFlags",
+        "-XX:CompileCommand=exclude,BenchKt::main",
+        "-XX:CompileCommand=dontinline,BenchKt::main$sample",
+        "-XX:CompileCommand=option,BenchKt::main$sample,double,CompileThresholdScaling,0.01",
+        "-XX:CompileCommand=exclude,BenchKt::main$gcCount",
+        "-XX:CompileCommand=exclude,BenchKt::main$gcTime",
+        "-XX:LogFile=/tmp/output-cleanup-isolated-aa/raw/3-bulk-control-1-after-jit.xml",
+        "-Xlog:gc*,safepoint:file=/tmp/output-cleanup-isolated-aa/raw/3-bulk-control-1-after-gc.log:uptimemillis,level,tags",
+        "-Djava.library.path=/tmp/output-cleanup-before/target/release",
+        "-cp",
+        "/tmp/output-cleanup-isolated-driver-v3/driver.jar:/tmp/output-cleanup-before/bench.jar",
+        "BenchKt",
+        "bulk",
+        "1",
+        "256",
+        "24",
+        "50",
+        "3",
+        "64",
+        "control"
+      ],
+      "warmup": {
+        "batches": 406,
+        "end_ms": 3325,
+        "quiet_ms": 2592,
+        "stable": true
+      },
+      "phases": {
+        "start": {
+          "uptime_ms": 3326,
+          "compilation_ms": 193
+        },
+        "end": {
+          "uptime_ms": 4472,
+          "compilation_ms": 198
+        }
+      },
+      "effective_flags": [
+        "-XX:ActiveProcessorCount=2 -XX:CompileCommand=exclude,BenchKt::main -XX:CompileCommand=dontinline,BenchKt::main$sample -XX:CompileCommand=option,BenchKt::main$sample,double,CompileThresholdScaling,0.01 -XX:CompileCommand=exclude,BenchKt::main$gcCount -XX:CompileCommand=exclude,BenchKt::main$gcTime -XX:G1ConcRefinementThreads=2 -XX:GCDrainStackTargetSize=64 -XX:InitialHeapSize=268435456 -XX:+LogCompilation -XX:LogFile=/tmp/output-cleanup-isolated-aa/raw/3-bulk-control-1-after-jit.xml -XX:MaxHeapSize=268435456 -XX:+PrintCommandLineFlags -XX:ReservedCodeCacheSize=251658240 -XX:+SegmentedCodeCache -XX:+UnlockDiagnosticVMOptions -XX:+UseCompressedClassPointers -XX:+UseCompressedOops -XX:+UseG1GC "
+      ],
+      "compilations_during_measurement": [
+        {
+          "stamp": 3.374,
+          "method": "java.nio.Buffer position ()I",
+          "compiler": "c1",
+          "level": "1"
+        },
+        {
+          "stamp": 3.427,
+          "method": "java.nio.Buffer limit ()I",
+          "compiler": "c1",
+          "level": "1"
+        },
+        {
+          "stamp": 3.582,
+          "method": "java.lang.String checkBoundsOffCount (III)V",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.629,
+          "method": "java.lang.Integer stringSize (I)I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.63,
+          "method": "java.lang.Integer getChars (II[B)I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.676,
+          "method": "java.lang.StringBuilder append (I)Ljava/lang/StringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.677,
+          "method": "java.lang.AbstractStringBuilder append (I)Ljava/lang/AbstractStringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.822,
+          "method": "java.nio.Buffer position (I)Ljava/nio/Buffer;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.008,
+          "method": "java.nio.ByteBuffer arrayOffset ()I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.059,
+          "method": "java.lang.StringLatin1 inflate ([BI[CII)V",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.195,
+          "method": "java.lang.Math min (II)I",
+          "compiler": "c2",
+          "level": "4"
+        },
+        {
+          "stamp": 4.244,
+          "method": "java.nio.CharBuffer arrayOffset ()I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.428,
+          "method": "java.lang.StringBuilder append (J)Ljava/lang/StringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.429,
+          "method": "java.lang.AbstractStringBuilder append (J)Ljava/lang/AbstractStringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        }
+      ],
+      "binding_driver_compilations": [],
+      "stdout_sha256": "6666d7e49fc951a42c33b7073efd1da3b39b8bc017d96b0592c4d972302910b3",
+      "gc_sha256": "ecbdca5cb2e1e7e6bda30546fbfce8139ebdc3068845f1f2e4f5d04a09cac48b",
+      "jit_sha256": "9782a48c866c7c8e7d810013488e561b6e72da1ca05f4ae614295b2a221a63ca"
+    },
+    {
+      "id": "3-bulk-control-1-before",
+      "version": "before",
+      "mode": "bulk",
+      "case": "control",
+      "size": 1,
+      "fork": 3,
+      "seconds": 4.2369771003723145,
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:+UnlockDiagnosticVMOptions",
+        "-XX:+LogCompilation",
+        "-XX:+PrintCommandLineFlags",
+        "-XX:CompileCommand=exclude,BenchKt::main",
+        "-XX:CompileCommand=dontinline,BenchKt::main$sample",
+        "-XX:CompileCommand=option,BenchKt::main$sample,double,CompileThresholdScaling,0.01",
+        "-XX:CompileCommand=exclude,BenchKt::main$gcCount",
+        "-XX:CompileCommand=exclude,BenchKt::main$gcTime",
+        "-XX:LogFile=/tmp/output-cleanup-isolated-aa/raw/3-bulk-control-1-before-jit.xml",
+        "-Xlog:gc*,safepoint:file=/tmp/output-cleanup-isolated-aa/raw/3-bulk-control-1-before-gc.log:uptimemillis,level,tags",
+        "-Djava.library.path=/tmp/output-cleanup-before/target/release",
+        "-cp",
+        "/tmp/output-cleanup-isolated-driver-v3/driver.jar:/tmp/output-cleanup-before/bench.jar",
+        "BenchKt",
+        "bulk",
+        "1",
+        "256",
+        "24",
+        "50",
+        "3",
+        "64",
+        "control"
+      ],
+      "warmup": {
+        "batches": 376,
+        "end_ms": 3267,
+        "quiet_ms": 2488,
+        "stable": true
+      },
+      "phases": {
+        "start": {
+          "uptime_ms": 3267,
+          "compilation_ms": 207
+        },
+        "end": {
+          "uptime_ms": 4178,
+          "compilation_ms": 212
+        }
+      },
+      "effective_flags": [
+        "-XX:ActiveProcessorCount=2 -XX:CompileCommand=exclude,BenchKt::main -XX:CompileCommand=dontinline,BenchKt::main$sample -XX:CompileCommand=option,BenchKt::main$sample,double,CompileThresholdScaling,0.01 -XX:CompileCommand=exclude,BenchKt::main$gcCount -XX:CompileCommand=exclude,BenchKt::main$gcTime -XX:G1ConcRefinementThreads=2 -XX:GCDrainStackTargetSize=64 -XX:InitialHeapSize=268435456 -XX:+LogCompilation -XX:LogFile=/tmp/output-cleanup-isolated-aa/raw/3-bulk-control-1-before-jit.xml -XX:MaxHeapSize=268435456 -XX:+PrintCommandLineFlags -XX:ReservedCodeCacheSize=251658240 -XX:+SegmentedCodeCache -XX:+UnlockDiagnosticVMOptions -XX:+UseCompressedClassPointers -XX:+UseCompressedOops -XX:+UseG1GC "
+      ],
+      "compilations_during_measurement": [
+        {
+          "stamp": 3.306,
+          "method": "java.nio.Buffer position ()I",
+          "compiler": "c1",
+          "level": "1"
+        },
+        {
+          "stamp": 3.343,
+          "method": "java.nio.Buffer limit ()I",
+          "compiler": "c1",
+          "level": "1"
+        },
+        {
+          "stamp": 3.388,
+          "method": "sun.management.VMManagementImpl getUptime0 ()J",
+          "compiler": "",
+          "level": "0"
+        },
+        {
+          "stamp": 3.472,
+          "method": "java.lang.String checkBoundsOffCount (III)V",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.508,
+          "method": "java.lang.Integer stringSize (I)I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.509,
+          "method": "java.lang.Integer getChars (II[B)I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.545,
+          "method": "java.lang.StringBuilder append (I)Ljava/lang/StringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.546,
+          "method": "java.lang.AbstractStringBuilder append (I)Ljava/lang/AbstractStringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.657,
+          "method": "java.nio.Buffer position (I)Ljava/nio/Buffer;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.806,
+          "method": "java.nio.ByteBuffer arrayOffset ()I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.843,
+          "method": "java.lang.StringLatin1 inflate ([BI[CII)V",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 3.993,
+          "method": "java.nio.CharBuffer arrayOffset ()I",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.142,
+          "method": "java.lang.StringBuilder append (J)Ljava/lang/StringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        },
+        {
+          "stamp": 4.142,
+          "method": "java.lang.AbstractStringBuilder append (J)Ljava/lang/AbstractStringBuilder;",
+          "compiler": "c1",
+          "level": "3"
+        }
+      ],
+      "binding_driver_compilations": [],
+      "stdout_sha256": "3b0c016aac0ce86f7ebec7bff3dc893367c33106dd9ac99e9badef1b7824ecf6",
+      "gc_sha256": "acc1ea10f7aaef3d207901ed5396aad0b3d7fc2b6196c414447671a7208fb257",
+      "jit_sha256": "b5ddaee06dff7d41f4bf2ef70d7e0bb8c7e9c0c45bf8e64af74192457c87d7a6"
+    }
+  ],
+  "summary": [
+    {
+      "mode": "bulk",
+      "case": "control",
+      "size": 1,
+      "before": {
+        "wall_ns": 14.26921286967733,
+        "min_wall_ns": 13.129521934197985,
+        "max_wall_ns": 15.07559515800929,
+        "cpu_ns": 14.26581812833043,
+        "jvm_bytes": 0.0,
+        "batch_median_ns": 14.033604454273643,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 15.07559515800929,
+            "cpu_ns": 15.012630776454097,
+            "jvm_bytes": 0.0,
+            "batch_median_ns": 15.01503235911684,
+            "gc_count": 0,
+            "gc_ms": 0,
+            "compilation_ms": 5
+          },
+          {
+            "fork": 1,
+            "wall_ns": 13.872544116672477,
+            "cpu_ns": 13.871453275751751,
+            "jvm_bytes": 0.0,
+            "batch_median_ns": 13.630680044187262,
+            "gc_count": 0,
+            "gc_ms": 0,
+            "compilation_ms": 6
+          },
+          {
+            "fork": 2,
+            "wall_ns": 14.665881622682184,
+            "cpu_ns": 14.660182980909111,
+            "jvm_bytes": 0.0,
+            "batch_median_ns": 14.436528864360024,
+            "gc_count": 0,
+            "gc_ms": 0,
+            "compilation_ms": 5
+          },
+          {
+            "fork": 3,
+            "wall_ns": 13.129521934197985,
+            "cpu_ns": 13.124357678156366,
+            "jvm_bytes": 0.0,
+            "batch_median_ns": 12.899098404227598,
+            "gc_count": 0,
+            "gc_ms": 0,
+            "compilation_ms": 5
+          }
+        ],
+        "total_gc": 0
+      },
+      "after": {
+        "wall_ns": 15.006475537801268,
+        "min_wall_ns": 14.368797828231218,
+        "max_wall_ns": 15.385796663810677,
+        "cpu_ns": 14.642133331053582,
+        "jvm_bytes": 0.0,
+        "batch_median_ns": 14.564142203938871,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 14.368797828231218,
+            "cpu_ns": 14.369302579468428,
+            "jvm_bytes": 0.0,
+            "batch_median_ns": 14.257234023513245,
+            "gc_count": 0,
+            "gc_ms": 0,
+            "compilation_ms": 6
+          },
+          {
+            "fork": 1,
+            "wall_ns": 15.350346052869348,
+            "cpu_ns": 14.627606160686991,
+            "jvm_bytes": 0.0,
+            "batch_median_ns": 14.7370083961241,
+            "gc_count": 0,
+            "gc_ms": 0,
+            "compilation_ms": 5
+          },
+          {
+            "fork": 2,
+            "wall_ns": 15.385796663810677,
+            "cpu_ns": 15.339890361987749,
+            "jvm_bytes": 0.0,
+            "batch_median_ns": 15.319486944301989,
+            "gc_count": 0,
+            "gc_ms": 0,
+            "compilation_ms": 4
+          },
+          {
+            "fork": 3,
+            "wall_ns": 14.66260502273319,
+            "cpu_ns": 14.656660501420175,
+            "jvm_bytes": 0.0,
+            "batch_median_ns": 14.391276011753645,
+            "gc_count": 0,
+            "gc_ms": 0,
+            "compilation_ms": 5
+          }
+        ],
+        "total_gc": 0
+      },
+      "wall_change_percent": 5.166806850927652,
+      "cpu_change_percent": 2.637880276742277,
+      "paired_wall_changes_percent": [
+        -4.688354405713591,
+        10.652710301499791,
+        4.908774389771953,
+        11.676610132635833
+      ]
+    },
+    {
+      "mode": "bulk",
+      "case": "owned_handles_roundtrip",
+      "size": 1,
+      "before": {
+        "wall_ns": 916.7548881055927,
+        "min_wall_ns": 884.0641263734128,
+        "max_wall_ns": 936.7588008172919,
+        "cpu_ns": 908.9738841628891,
+        "jvm_bytes": 768.0,
+        "batch_median_ns": 890.6592236135149,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 936.7588008172919,
+            "cpu_ns": 929.3056458128425,
+            "jvm_bytes": 768.0,
+            "batch_median_ns": 889.4940196009554,
+            "gc_count": 6,
+            "gc_ms": 6,
+            "compilation_ms": 5
+          },
+          {
+            "fork": 1,
+            "wall_ns": 884.0641263734128,
+            "cpu_ns": 878.3468939633683,
+            "jvm_bytes": 768.0,
+            "batch_median_ns": 864.5120838121887,
+            "gc_count": 7,
+            "gc_ms": 6,
+            "compilation_ms": 9
+          },
+          {
+            "fork": 2,
+            "wall_ns": 929.9326784575787,
+            "cpu_ns": 921.1876313490283,
+            "jvm_bytes": 768.0,
+            "batch_median_ns": 919.2257432288839,
+            "gc_count": 5,
+            "gc_ms": 6,
+            "compilation_ms": 4
+          },
+          {
+            "fork": 3,
+            "wall_ns": 903.5770977536066,
+            "cpu_ns": 896.7601369767501,
+            "jvm_bytes": 768.0,
+            "batch_median_ns": 891.8244276260743,
+            "gc_count": 6,
+            "gc_ms": 6,
+            "compilation_ms": 7
+          }
+        ],
+        "total_gc": 24
+      },
+      "after": {
+        "wall_ns": 935.1567670555289,
+        "min_wall_ns": 866.5842168963209,
+        "max_wall_ns": 1056.779375913032,
+        "cpu_ns": 926.1534431703112,
+        "jvm_bytes": 768.0,
+        "batch_median_ns": 906.0044835975721,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 866.5842168963209,
+            "cpu_ns": 860.2110886073028,
+            "jvm_bytes": 768.0,
+            "batch_median_ns": 859.1570938928127,
+            "gc_count": 7,
+            "gc_ms": 7,
+            "compilation_ms": 7
+          },
+          {
+            "fork": 1,
+            "wall_ns": 1056.779375913032,
+            "cpu_ns": 1049.9956680389814,
+            "jvm_bytes": 768.0,
+            "batch_median_ns": 1024.79443738261,
+            "gc_count": 6,
+            "gc_ms": 6,
+            "compilation_ms": 6
+          },
+          {
+            "fork": 2,
+            "wall_ns": 910.4530471922163,
+            "cpu_ns": 902.4714189702123,
+            "jvm_bytes": 768.0,
+            "batch_median_ns": 877.3123002026703,
+            "gc_count": 5,
+            "gc_ms": 4,
+            "compilation_ms": 5
+          },
+          {
+            "fork": 3,
+            "wall_ns": 959.8604869188414,
+            "cpu_ns": 949.8354673704102,
+            "jvm_bytes": 768.0,
+            "batch_median_ns": 934.6966669924739,
+            "gc_count": 6,
+            "gc_ms": 9,
+            "compilation_ms": 8
+          }
+        ],
+        "total_gc": 24
+      },
+      "wall_change_percent": 2.0072845194163413,
+      "cpu_change_percent": 1.8899947849704724,
+      "paired_wall_changes_percent": [
+        -7.491211596810832,
+        19.536506955454435,
+        -2.0947356423340335,
+        6.228952604615756
+      ]
+    },
+    {
+      "mode": "plain",
+      "case": "owned_handle_records_roundtrip",
+      "size": 512,
+      "before": {
+        "wall_ns": 3711250.078125,
+        "min_wall_ns": 3599896.4505208335,
+        "max_wall_ns": 5411558.841145833,
+        "cpu_ns": 3690194.2578125,
+        "jvm_bytes": 228200.5625,
+        "batch_median_ns": 3685028.6875,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 5411558.841145833,
+            "cpu_ns": 5375517.395833333,
+            "jvm_bytes": 222327.25,
+            "batch_median_ns": 5525102.96875,
+            "gc_count": 1,
+            "gc_ms": 5,
+            "compilation_ms": 137
+          },
+          {
+            "fork": 1,
+            "wall_ns": 3599896.4505208335,
+            "cpu_ns": 3599746.015625,
+            "jvm_bytes": 228118.75,
+            "batch_median_ns": 3563368.375,
+            "gc_count": 0,
+            "gc_ms": 0,
+            "compilation_ms": 55
+          },
+          {
+            "fork": 2,
+            "wall_ns": 3733871.3802083335,
+            "cpu_ns": 3698652.578125,
+            "jvm_bytes": 229026.375,
+            "batch_median_ns": 3701352.125,
+            "gc_count": 1,
+            "gc_ms": 5,
+            "compilation_ms": 7
+          },
+          {
+            "fork": 3,
+            "wall_ns": 3688628.7760416665,
+            "cpu_ns": 3681735.9375,
+            "jvm_bytes": 228282.375,
+            "batch_median_ns": 3668705.25,
+            "gc_count": 1,
+            "gc_ms": 2,
+            "compilation_ms": 5
+          }
+        ],
+        "total_gc": 3
+      },
+      "after": {
+        "wall_ns": 3602170.932291667,
+        "min_wall_ns": 3205599.3723958335,
+        "max_wall_ns": 4142899.0546875,
+        "cpu_ns": 3591463.6979166665,
+        "jvm_bytes": 224605.9375,
+        "batch_median_ns": 3554414.796875,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 3205599.3723958335,
+            "cpu_ns": 3205393.984375,
+            "jvm_bytes": 221000.625,
+            "batch_median_ns": 3179526.03125,
+            "gc_count": 0,
+            "gc_ms": 0,
+            "compilation_ms": 5
+          },
+          {
+            "fork": 1,
+            "wall_ns": 3506679.4192708335,
+            "cpu_ns": 3497926.0416666665,
+            "jvm_bytes": 216139.75,
+            "batch_median_ns": 3482215.59375,
+            "gc_count": 1,
+            "gc_ms": 3,
+            "compilation_ms": 25
+          },
+          {
+            "fork": 2,
+            "wall_ns": 3697662.4453125,
+            "cpu_ns": 3685001.3541666665,
+            "jvm_bytes": 228211.25,
+            "batch_median_ns": 3654229.9375,
+            "gc_count": 1,
+            "gc_ms": 5,
+            "compilation_ms": 42
+          },
+          {
+            "fork": 3,
+            "wall_ns": 4142899.0546875,
+            "cpu_ns": 4142070.78125,
+            "jvm_bytes": 228402.625,
+            "batch_median_ns": 3626614.0,
+            "gc_count": 0,
+            "gc_ms": 0,
+            "compilation_ms": 5
+          }
+        ],
+        "total_gc": 2
+      },
+      "wall_change_percent": -2.9391483607173696,
+      "cpu_change_percent": -2.6754840801893054,
+      "paired_wall_changes_percent": [
+        -40.76384519701377,
+        -2.589436461054684,
+        -0.969742425723652,
+        12.315424137999575
+      ]
+    }
+  ],
+  "runner_sha256": "bed866b90817ea30e1f92ac3d0b5801d28e496649f5f9847e514954a90c82553",
+  "samples_sha256": "a229f1dc8ce792a1cff3f0906be21d093a2b23d5b1c3d4a2db6e0debd77f20df"
+}

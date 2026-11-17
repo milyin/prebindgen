@@ -1,0 +1,404 @@
+{
+  "settings": {
+    "before": "../prebindgen-c-borrowed-collection-views",
+    "output": "/tmp/shared-input-study5",
+    "target_dir": "/tmp/alias-role-target",
+    "sizes": "0,1,16,128,512,8192,65536",
+    "forks": 4,
+    "batches": 9,
+    "target_ms": 10,
+    "build_only": false,
+    "prepared": true,
+    "aa": false
+  },
+  "core": 0,
+  "platform": "Linux-6.8.0-138-generic-x86_64-with-glibc2.39",
+  "libc": [
+    "glibc",
+    "2.39"
+  ],
+  "cpuinfo": "processor\t: 0\nvendor_id\t: AuthenticAMD\ncpu family\t: 25\nmodel\t\t: 1\nmodel name\t: AMD EPYC 7713 64-Core Processor\nstepping\t: 1\nmicrocode\t: 0xa0011de\ncpu MHz\t\t: 2000.000\ncache size\t: 512 KB\nphysical id\t: 0\nsiblings\t: 2\ncore id\t\t: 0\ncpu cores\t: 2\napicid\t\t: 0\ninitial apicid\t: 0\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 16\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm rep_good nopl cpuid extd_apicid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw perfctr_core ssbd ibrs ibpb stibp vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms rdseed adx smap clflushopt clwb sha_ni xsaveopt xsavec xgetbv1 xsaves clzero xsaveerptr wbnoinvd arat umip pku ospke vaes vpclmulqdq rdpid overflow_recov succor fsrm\nbugs\t\t: sysret_ss_attrs null_seg spectre_v1 spectre_v2 spec_store_bypass srso ibpb_no_ret tsa\nbogomips\t: 4000.00\nTLB size\t: 1024 4K pages\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 48 bits physical, 48 bits virtual\npower management:\n\n",
+  "runner_sha256": "e79578f32b9b692869fbd2ef382eeeedfba2d13316ae7101429c958f4f073413",
+  "builds": {
+    "('before', 'time')": {
+      "revisions": {
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-borrowed-collection-views": "76afcae46fd18dcd6e47cb8b717c97ab67d44173",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-shared-input-views": "e35bbc94d0f27e703fb2b8a5886a336b3397404d"
+      },
+      "fixture_sha256": {
+        "flat.rs": "e6e8cedeb536022b0a33346426f66afb86a5f232cdb4c667f248e19e40e105ac",
+        "bindings.rs": "1a30761a508f36f6abbe78cc2cb033227633cd98d7d87588dd7f9ed291fcb5fb",
+        "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+        "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+        "input-driver.c": "0da8a0b544252477fc0a8b3caefd1bbc5ee09545f8ff8530e53f980edf276a5f",
+        "history-driver.c": "3ed809dad47ed274923a1e118407694bfd2e6c02a381124cf773122186dac8a5",
+        "build.py": "2817ce024a40578541cda04b884ab5a26c50dc20b72dbbb30df4428352623104",
+        "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+      },
+      "library_sha256": "b21473d6ee7e96dde20bbeb4f8fe528abf69ebfc9bb124117a86684a7c4ed0a6",
+      "header_sha256": "1eeba9869c0f94976851948996a2316c0d8208083b4a0e326f546bcaa43bd0d9",
+      "bindings_sha256": "6a7d3b2772c716992a8f09a06157cf8a5cdc6baa5e6417869cf36767eae02e8c",
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+      "count_allocations": false,
+      "alias_checks": true,
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "borrowed_driver_info": {
+        "command": [
+          "cc",
+          "-O3",
+          "-std=c11",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-I/tmp/shared-input-study5/before-time",
+          "-DDIRECT_VIEW=0",
+          "-DINPUT_CARRIER=bench_shared_input_inspect_p0_w1_rows",
+          "-DARRAY_CARRIER=bench_shared_input_array_p0_w1_rows",
+          "-DSUM_CARRIER=bench_shared_input_sum_p0_w1_rows",
+          "-DINPUT_ELEMENT=bench_shared_input_inspect_p0_w1_row",
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-shared-input-views/examples/bench-c-shared-inputs/driver.c",
+          "-L/tmp/shared-input-study5/before-time/frozen",
+          "-lc_collection_bench",
+          "-Wl,-rpath,/tmp/shared-input-study5/before-time/frozen",
+          "-ldl",
+          "-o",
+          "/tmp/shared-input-study5/before-time/borrowed-driver"
+        ],
+        "sha256": "8ad3b4c389ed6c8cd10c128aba13d24109c96f6d0059fe71909379cfe800dbbc",
+        "source_sha256": "c746e72a70111a2dcce870dbd156c47582b690668ff7a38dd3b00f36ab2f9e2f"
+      }
+    },
+    "('before', 'count')": {
+      "revisions": {
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-shared-input-views": "e35bbc94d0f27e703fb2b8a5886a336b3397404d",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-borrowed-collection-views": "76afcae46fd18dcd6e47cb8b717c97ab67d44173"
+      },
+      "fixture_sha256": {
+        "flat.rs": "e6e8cedeb536022b0a33346426f66afb86a5f232cdb4c667f248e19e40e105ac",
+        "bindings.rs": "1a30761a508f36f6abbe78cc2cb033227633cd98d7d87588dd7f9ed291fcb5fb",
+        "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+        "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+        "input-driver.c": "0da8a0b544252477fc0a8b3caefd1bbc5ee09545f8ff8530e53f980edf276a5f",
+        "history-driver.c": "3ed809dad47ed274923a1e118407694bfd2e6c02a381124cf773122186dac8a5",
+        "build.py": "2817ce024a40578541cda04b884ab5a26c50dc20b72dbbb30df4428352623104",
+        "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+      },
+      "library_sha256": "82cc0f62a6e826d1da758f19adb12168bc966862acebb9447d94f53f412a6c28",
+      "header_sha256": "1eeba9869c0f94976851948996a2316c0d8208083b4a0e326f546bcaa43bd0d9",
+      "bindings_sha256": "6a7d3b2772c716992a8f09a06157cf8a5cdc6baa5e6417869cf36767eae02e8c",
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+      "count_allocations": true,
+      "alias_checks": true,
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "borrowed_driver_info": {
+        "command": [
+          "cc",
+          "-O3",
+          "-std=c11",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-I/tmp/shared-input-study5/before-count",
+          "-DDIRECT_VIEW=0",
+          "-DINPUT_CARRIER=bench_shared_input_inspect_p0_w1_rows",
+          "-DARRAY_CARRIER=bench_shared_input_array_p0_w1_rows",
+          "-DSUM_CARRIER=bench_shared_input_sum_p0_w1_rows",
+          "-DINPUT_ELEMENT=bench_shared_input_inspect_p0_w1_row",
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-shared-input-views/examples/bench-c-shared-inputs/driver.c",
+          "-L/tmp/shared-input-study5/before-count/frozen",
+          "-lc_collection_bench",
+          "-Wl,-rpath,/tmp/shared-input-study5/before-count/frozen",
+          "-ldl",
+          "-o",
+          "/tmp/shared-input-study5/before-count/borrowed-driver"
+        ],
+        "sha256": "5e771d3c2f875a4a8a888d65b258bc3ac5f534be0e5617152d6e3057383e7d7b",
+        "source_sha256": "c746e72a70111a2dcce870dbd156c47582b690668ff7a38dd3b00f36ab2f9e2f"
+      }
+    },
+    "('after', 'time')": {
+      "revisions": {
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-shared-input-views": "e35bbc94d0f27e703fb2b8a5886a336b3397404d"
+      },
+      "fixture_sha256": {
+        "flat.rs": "e6e8cedeb536022b0a33346426f66afb86a5f232cdb4c667f248e19e40e105ac",
+        "bindings.rs": "1a30761a508f36f6abbe78cc2cb033227633cd98d7d87588dd7f9ed291fcb5fb",
+        "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+        "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+        "input-driver.c": "0da8a0b544252477fc0a8b3caefd1bbc5ee09545f8ff8530e53f980edf276a5f",
+        "history-driver.c": "3ed809dad47ed274923a1e118407694bfd2e6c02a381124cf773122186dac8a5",
+        "build.py": "2817ce024a40578541cda04b884ab5a26c50dc20b72dbbb30df4428352623104",
+        "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+      },
+      "library_sha256": "bc97341eb78bb3fdb3d0c4510ea2d93dfa21bbc04e17c8a528c0d4df4cdf1430",
+      "header_sha256": "25092f684c8bc7eba99e44316f337a91504a2db125cfa9f292d799b64665a54f",
+      "bindings_sha256": "f3c304c9bdd1b4201b4e976e655de135cb4d93d893339057d4c12b117f40d14d",
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+      "count_allocations": false,
+      "alias_checks": true,
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "borrowed_driver_info": {
+        "command": [
+          "cc",
+          "-O3",
+          "-std=c11",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-I/tmp/shared-input-study5/after-time",
+          "-DDIRECT_VIEW=1",
+          "-DINPUT_CARRIER=bench_i64_slice_view",
+          "-DARRAY_CARRIER=bench_i64_slice_view",
+          "-DSUM_CARRIER=bench_i64_slice_view",
+          "-DINPUT_ELEMENT=int64_t",
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-shared-input-views/examples/bench-c-shared-inputs/driver.c",
+          "-L/tmp/shared-input-study5/after-time/frozen",
+          "-lc_collection_bench",
+          "-Wl,-rpath,/tmp/shared-input-study5/after-time/frozen",
+          "-ldl",
+          "-o",
+          "/tmp/shared-input-study5/after-time/borrowed-driver"
+        ],
+        "sha256": "54987814ba7f98ffa84de1699b2c08ba5fe10c05b2efd32f9731d4636c412487",
+        "source_sha256": "c746e72a70111a2dcce870dbd156c47582b690668ff7a38dd3b00f36ab2f9e2f"
+      }
+    },
+    "('after', 'count')": {
+      "revisions": {
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-shared-input-views": "e35bbc94d0f27e703fb2b8a5886a336b3397404d"
+      },
+      "fixture_sha256": {
+        "flat.rs": "e6e8cedeb536022b0a33346426f66afb86a5f232cdb4c667f248e19e40e105ac",
+        "bindings.rs": "1a30761a508f36f6abbe78cc2cb033227633cd98d7d87588dd7f9ed291fcb5fb",
+        "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+        "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+        "input-driver.c": "0da8a0b544252477fc0a8b3caefd1bbc5ee09545f8ff8530e53f980edf276a5f",
+        "history-driver.c": "3ed809dad47ed274923a1e118407694bfd2e6c02a381124cf773122186dac8a5",
+        "build.py": "2817ce024a40578541cda04b884ab5a26c50dc20b72dbbb30df4428352623104",
+        "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+      },
+      "library_sha256": "0b050c975741d167de3a00994f42e9d93bfa437482f702f6a8dc8f3fdbed00ea",
+      "header_sha256": "25092f684c8bc7eba99e44316f337a91504a2db125cfa9f292d799b64665a54f",
+      "bindings_sha256": "f3c304c9bdd1b4201b4e976e655de135cb4d93d893339057d4c12b117f40d14d",
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+      "count_allocations": true,
+      "alias_checks": true,
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "borrowed_driver_info": {
+        "command": [
+          "cc",
+          "-O3",
+          "-std=c11",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-I/tmp/shared-input-study5/after-count",
+          "-DDIRECT_VIEW=1",
+          "-DINPUT_CARRIER=bench_i64_slice_view",
+          "-DARRAY_CARRIER=bench_i64_slice_view",
+          "-DSUM_CARRIER=bench_i64_slice_view",
+          "-DINPUT_ELEMENT=int64_t",
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-shared-input-views/examples/bench-c-shared-inputs/driver.c",
+          "-L/tmp/shared-input-study5/after-count/frozen",
+          "-lc_collection_bench",
+          "-Wl,-rpath,/tmp/shared-input-study5/after-count/frozen",
+          "-ldl",
+          "-o",
+          "/tmp/shared-input-study5/after-count/borrowed-driver"
+        ],
+        "sha256": "9575a2339348cd0bb32808152ef4668b111450b1e0cf3a0b8428308f3b31fef9",
+        "source_sha256": "c746e72a70111a2dcce870dbd156c47582b690668ff7a38dd3b00f36ab2f9e2f"
+      }
+    }
+  },
+  "aa_settings": {
+    "before": "../prebindgen-c-borrowed-collection-views",
+    "output": "/tmp/shared-input-study5",
+    "target_dir": "/tmp/alias-role-target",
+    "sizes": "0,1,16,128,512,8192,65536",
+    "forks": 4,
+    "batches": 9,
+    "target_ms": 10,
+    "build_only": false,
+    "prepared": true,
+    "aa": true
+  },
+  "initial": {
+    "settings": {
+      "before": "../prebindgen-c-borrowed-collection-views",
+      "output": "/tmp/shared-input-study3",
+      "target_dir": "/tmp/alias-role-target",
+      "sizes": "0,1,16,128,512,8192,65536",
+      "forks": 4,
+      "batches": 9,
+      "target_ms": 10,
+      "build_only": false,
+      "prepared": true,
+      "aa": false
+    },
+    "builds": {
+      "('before', 'time')": {
+        "revisions": {
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-borrowed-collection-views": "76afcae46fd18dcd6e47cb8b717c97ab67d44173",
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-shared-input-views": "cb4a214b20b0461caa6ecabc2f453708de9f3f81"
+        },
+        "library_sha256": "b21473d6ee7e96dde20bbeb4f8fe528abf69ebfc9bb124117a86684a7c4ed0a6",
+        "bindings_sha256": "6a7d3b2772c716992a8f09a06157cf8a5cdc6baa5e6417869cf36767eae02e8c",
+        "header_sha256": "1eeba9869c0f94976851948996a2316c0d8208083b4a0e326f546bcaa43bd0d9",
+        "borrowed_driver_info": {
+          "command": [
+            "cc",
+            "-O3",
+            "-std=c11",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-I/tmp/shared-input-study3/before-time",
+            "-DDIRECT_VIEW=0",
+            "-DINPUT_CARRIER=bench_shared_input_inspect_p0_w1_rows",
+            "-DARRAY_CARRIER=bench_shared_input_array_p0_w1_rows",
+            "-DSUM_CARRIER=bench_shared_input_sum_p0_w1_rows",
+            "-DINPUT_ELEMENT=bench_shared_input_inspect_p0_w1_row",
+            "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-shared-input-views/examples/bench-c-shared-inputs/driver.c",
+            "-L/tmp/shared-input-study3/before-time/frozen",
+            "-lc_collection_bench",
+            "-Wl,-rpath,/tmp/shared-input-study3/before-time/frozen",
+            "-ldl",
+            "-o",
+            "/tmp/shared-input-study3/before-time/borrowed-driver"
+          ],
+          "sha256": "69a64945839b87a30d5a6ad290c421641f368cb04f6f25ab90f1854a41359d35",
+          "source_sha256": "f43e25622a800168a139356a135b4988edaf84ab1a08b8238dcd166f2a49bfc9"
+        }
+      },
+      "('before', 'count')": {
+        "revisions": {
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-shared-input-views": "cb4a214b20b0461caa6ecabc2f453708de9f3f81",
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-borrowed-collection-views": "76afcae46fd18dcd6e47cb8b717c97ab67d44173"
+        },
+        "library_sha256": "82cc0f62a6e826d1da758f19adb12168bc966862acebb9447d94f53f412a6c28",
+        "bindings_sha256": "6a7d3b2772c716992a8f09a06157cf8a5cdc6baa5e6417869cf36767eae02e8c",
+        "header_sha256": "1eeba9869c0f94976851948996a2316c0d8208083b4a0e326f546bcaa43bd0d9",
+        "borrowed_driver_info": {
+          "command": [
+            "cc",
+            "-O3",
+            "-std=c11",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-I/tmp/shared-input-study3/before-count",
+            "-DDIRECT_VIEW=0",
+            "-DINPUT_CARRIER=bench_shared_input_inspect_p0_w1_rows",
+            "-DARRAY_CARRIER=bench_shared_input_array_p0_w1_rows",
+            "-DSUM_CARRIER=bench_shared_input_sum_p0_w1_rows",
+            "-DINPUT_ELEMENT=bench_shared_input_inspect_p0_w1_row",
+            "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-shared-input-views/examples/bench-c-shared-inputs/driver.c",
+            "-L/tmp/shared-input-study3/before-count/frozen",
+            "-lc_collection_bench",
+            "-Wl,-rpath,/tmp/shared-input-study3/before-count/frozen",
+            "-ldl",
+            "-o",
+            "/tmp/shared-input-study3/before-count/borrowed-driver"
+          ],
+          "sha256": "833a709982aa6c96184d94672d8a527f0af993ef454b76f209b146656dc08e62",
+          "source_sha256": "f43e25622a800168a139356a135b4988edaf84ab1a08b8238dcd166f2a49bfc9"
+        }
+      },
+      "('after', 'time')": {
+        "revisions": {
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-shared-input-views": "cb4a214b20b0461caa6ecabc2f453708de9f3f81"
+        },
+        "library_sha256": "7fb83ee92c9e908393bf4deb2dae81c4df518e13d797486a1215f8cdc0358c2f",
+        "bindings_sha256": "40b77b363d16ef0556901d342508eac277b8f606e37710e833a674ecee258289",
+        "header_sha256": "25092f684c8bc7eba99e44316f337a91504a2db125cfa9f292d799b64665a54f",
+        "borrowed_driver_info": {
+          "command": [
+            "cc",
+            "-O3",
+            "-std=c11",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-I/tmp/shared-input-study3/after-time",
+            "-DDIRECT_VIEW=1",
+            "-DINPUT_CARRIER=bench_i64_slice_view",
+            "-DARRAY_CARRIER=bench_i64_slice_view",
+            "-DSUM_CARRIER=bench_i64_slice_view",
+            "-DINPUT_ELEMENT=int64_t",
+            "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-shared-input-views/examples/bench-c-shared-inputs/driver.c",
+            "-L/tmp/shared-input-study3/after-time/frozen",
+            "-lc_collection_bench",
+            "-Wl,-rpath,/tmp/shared-input-study3/after-time/frozen",
+            "-ldl",
+            "-o",
+            "/tmp/shared-input-study3/after-time/borrowed-driver"
+          ],
+          "sha256": "7383935c6c532f8ff59a3dad3c608aeabbfe5867cdab80967e7cc08ecdf2eb73",
+          "source_sha256": "f43e25622a800168a139356a135b4988edaf84ab1a08b8238dcd166f2a49bfc9"
+        }
+      },
+      "('after', 'count')": {
+        "revisions": {
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-shared-input-views": "cb4a214b20b0461caa6ecabc2f453708de9f3f81"
+        },
+        "library_sha256": "821557112934b8afb41a17f8382fa81abb1a6fd88a9b6bd6b7a54caf2fffefee",
+        "bindings_sha256": "40b77b363d16ef0556901d342508eac277b8f606e37710e833a674ecee258289",
+        "header_sha256": "25092f684c8bc7eba99e44316f337a91504a2db125cfa9f292d799b64665a54f",
+        "borrowed_driver_info": {
+          "command": [
+            "cc",
+            "-O3",
+            "-std=c11",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-I/tmp/shared-input-study3/after-count",
+            "-DDIRECT_VIEW=1",
+            "-DINPUT_CARRIER=bench_i64_slice_view",
+            "-DARRAY_CARRIER=bench_i64_slice_view",
+            "-DSUM_CARRIER=bench_i64_slice_view",
+            "-DINPUT_ELEMENT=int64_t",
+            "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-shared-input-views/examples/bench-c-shared-inputs/driver.c",
+            "-L/tmp/shared-input-study3/after-count/frozen",
+            "-lc_collection_bench",
+            "-Wl,-rpath,/tmp/shared-input-study3/after-count/frozen",
+            "-ldl",
+            "-o",
+            "/tmp/shared-input-study3/after-count/borrowed-driver"
+          ],
+          "sha256": "a852a44049867a62abf727dec95137669eeb3418fad069accf5b6bd4bab5ddff",
+          "source_sha256": "f43e25622a800168a139356a135b4988edaf84ab1a08b8238dcd166f2a49bfc9"
+        }
+      }
+    }
+  }
+}

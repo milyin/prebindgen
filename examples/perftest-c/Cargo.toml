@@ -11,6 +11,9 @@ konst.workspace = true
 perftest-flat = {path = "../perftest-flat"}
 [build-dependencies]
 prebindgen-c.workspace = true
-prebindgen-registry.workspace = true
+prebindgen-declarations.workspace = true
 syn.workspace = true
 perftest-flat = {path = "../perftest-flat"}
+
+[features]
+layout-wide = ["perftest-flat/layout-wide"]

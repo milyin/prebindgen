@@ -16,6 +16,7 @@ pub struct TargetTriple {
     vendor: Option<String>,
     os: Option<String>,
     env: Option<String>,
+    pointer_width: Option<u32>,
 }
 
 fn extract_cfg_condition(s: &str, name: &str) -> Option<String> {
@@ -47,13 +48,18 @@ impl TargetTriple {
             return Ok(cached);
         }
         // run `rustc --print cfg --target <target_triple>` and capture the output
-        let output = std::process::Command::new("rustc")
-            .args(["--print", "cfg", "--target", &triple])
-            .output()
-            .map_err(|e| format!("Failed to run rustc: {e}"))?;
+        let output =
+            std::process::Command::new(std::env::var_os("RUSTC").unwrap_or_else(|| "rustc".into()))
+                .args(["--print", "cfg", "--target", &triple])
+                .output()
+                .map_err(|e| format!("Failed to run rustc: {e}"))?;
 
         if !output.status.success() {
-            return Err(format!("rustc failed with status: {}", output.status));
+            return Err(format!(
+                "rustc failed with status {}: {}",
+                output.status,
+                String::from_utf8_lossy(&output.stderr).trim()
+            ));
         }
 
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -61,6 +67,7 @@ impl TargetTriple {
         let mut vendor = None;
         let mut os = None;
         let mut env = None;
+        let mut pointer_width = None;
 
         for line in stdout.lines() {
             if let Some(a) = extract_cfg_condition(line, "target_arch") {
@@ -69,6 +76,8 @@ impl TargetTriple {
                 vendor = Some(v);
             } else if let Some(o) = extract_cfg_condition(line, "target_os") {
                 os = Some(o);
+            } else if let Some(width) = extract_cfg_condition(line, "target_pointer_width") {
+                pointer_width = width.parse().ok();
             } else if let Some(e) = extract_cfg_condition(line, "target_env") {
                 env = Some(e);
             }
@@ -80,6 +89,7 @@ impl TargetTriple {
             vendor,
             os,
             env,
+            pointer_width,
         };
 
         // Store in cache for subsequent calls.
@@ -90,6 +100,11 @@ impl TargetTriple {
         }
 
         Ok(parsed)
+    }
+
+    /// Pointer width in bits reported by the compiler for this target.
+    pub fn pointer_width(&self) -> Option<u32> {
+        self.pointer_width
     }
 
     /// Get the architecture as a canonical string used by Rust cfg target_arch.

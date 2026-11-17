@@ -45,6 +45,6 @@ fun checkPrimitives() {
     for (v in listOf(BigInteger.ZERO, two127, two128 - BigInteger.ONE)) check(primitiveU128(v) == v)
     rejects { primitiveI128(two127) }; rejects { primitiveI128(-two127 - BigInteger.ONE) }
     rejects { primitiveU128(two128) }; rejects { primitiveU128(BigInteger.valueOf(-1)) }
-    rejects { primitiveI128(null) }; rejects { primitiveU128(null) }
+    rejectNullPrecondition { primitiveI128(invalidJavaNull()) }; rejectNullPrecondition { primitiveU128(invalidJavaNull()) }
     primitiveUnit()
 }

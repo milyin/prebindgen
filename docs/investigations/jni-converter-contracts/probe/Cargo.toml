@@ -1,0 +1,21 @@
+[package]
+name = "jni-converter-contract-probe"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# An investigation tool, separate from the production workspace and its CI.
+[workspace]
+
+[features]
+independent-input = []
+independent-output = []
+
+[dependencies]
+prebindgen-flat = { path = "../../../../prebindgen-flat" }
+prebindgen-conversions = { path = "../../../../prebindgen-conversions" }
+prebindgen-declarations = { path = "../../../../prebindgen-declarations" }
+prebindgen-jni = { path = "../../../../prebindgen-jni" }
+proc-macro2 = "1.0"
+quote = "1.0"
+syn = { version = "2.0", features = ["full"] }

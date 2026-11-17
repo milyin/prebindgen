@@ -1,0 +1,1635 @@
+{
+  "baseline_generator": "e75d23177ebd77789cadbb0c11a0b908cefbe949",
+  "candidate_generator": "931d25d2b",
+  "fixture_commit": "931d25d2b",
+  "measurement_notes": "Subsequent hygiene changes add generator debug assertions and unused-variable attributes only; no runtime conversion change.",
+  "builds": {
+    "counts": {
+      "before": {
+        "revisions": {
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-buffer-input-row-replay-base": "e75d23177ebd77789cadbb0c11a0b908cefbe949",
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-buffer-input-row-replay": "931d25d2b255dc2e42a32163afc1024857a3609b"
+        },
+        "library_sha256": "4fa893d981db91dd03ee118aea2064f12567878ece5e8ea8cc09b0ac23d5f449",
+        "input_driver_sha256": "2b9897862c91c37125f4d4e473da8cf633a79c41541074aec47ccb7c68a05cb1",
+        "bindings_sha256": "3e06a70b895075bbc894d54b5877a4030f16c5b0f7cd3849ce8af0297b9c2b7a"
+      },
+      "after": {
+        "revisions": {
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-buffer-input-row-replay": "931d25d2b255dc2e42a32163afc1024857a3609b"
+        },
+        "library_sha256": "aa63afae70b9f4d5d4cc02005954e88b3fa9dc36c5da660bc61b8706b955a1c4",
+        "input_driver_sha256": "2097e923d3846698dc3579cdfa6fd4af4c854da5d8e926e1e67450a292c32293",
+        "bindings_sha256": "dfc5b5e3aebb72dd5238d6cd9a5ac63b0a15a2eb8d1fa6b603a1db053a02a991"
+      }
+    },
+    "time": {
+      "before": {
+        "revisions": {
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-buffer-input-row-replay-base": "e75d23177ebd77789cadbb0c11a0b908cefbe949",
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-buffer-input-row-replay": "931d25d2b255dc2e42a32163afc1024857a3609b"
+        },
+        "library_sha256": "47957124a38e99775e7aa9182f2cab4643a97c86c6fb435ba76f00fd841c18b9",
+        "input_driver_sha256": "618f22ec518d4ba400272db3d4ea638117eb6b327e9bc92f817eecc200a87f8f",
+        "bindings_sha256": "3e06a70b895075bbc894d54b5877a4030f16c5b0f7cd3849ce8af0297b9c2b7a"
+      },
+      "after": {
+        "revisions": {
+          "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-buffer-input-row-replay": "931d25d2b255dc2e42a32163afc1024857a3609b"
+        },
+        "library_sha256": "3a63c7586981c9f076106317e0bda043ec6a18377e67d0eb2545dc2a24fbcb9e",
+        "input_driver_sha256": "6a7847845bed1e5aa51b9c4894e7a1c890dc2d3907fb9fc3b1e43d2dda1f7602",
+        "bindings_sha256": "dfc5b5e3aebb72dd5238d6cd9a5ac63b0a15a2eb8d1fa6b603a1db053a02a991"
+      }
+    }
+  },
+  "allocation_counts": [
+    {
+      "case": "buffers",
+      "size": 0,
+      "before": {
+        "allocations": 0.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 0.0
+      },
+      "after": {
+        "allocations": 0.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 0.0
+      }
+    },
+    {
+      "case": "buffers",
+      "size": 1,
+      "before": {
+        "allocations": 5.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 126.0
+      },
+      "after": {
+        "allocations": 4.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 78.0
+      }
+    },
+    {
+      "case": "buffers",
+      "size": 64,
+      "before": {
+        "allocations": 131.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 8064.0
+      },
+      "after": {
+        "allocations": 130.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 4992.0
+      }
+    },
+    {
+      "case": "buffers",
+      "size": 512,
+      "before": {
+        "allocations": 1027.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 64512.0
+      },
+      "after": {
+        "allocations": 1026.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 39936.0
+      }
+    },
+    {
+      "case": "buffers",
+      "size": 4096,
+      "before": {
+        "allocations": 8195.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 516096.0
+      },
+      "after": {
+        "allocations": 8194.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 319488.0
+      }
+    },
+    {
+      "case": "buffers_large",
+      "size": 0,
+      "before": {
+        "allocations": 0.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 0.0
+      },
+      "after": {
+        "allocations": 0.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 0.0
+      }
+    },
+    {
+      "case": "buffers_large",
+      "size": 1,
+      "before": {
+        "allocations": 5.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 8312.0
+      },
+      "after": {
+        "allocations": 4.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 8264.0
+      }
+    },
+    {
+      "case": "buffers_large",
+      "size": 64,
+      "before": {
+        "allocations": 131.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 531968.0
+      },
+      "after": {
+        "allocations": 130.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 528896.0
+      }
+    },
+    {
+      "case": "buffers_large",
+      "size": 512,
+      "before": {
+        "allocations": 1027.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 4255744.0
+      },
+      "after": {
+        "allocations": 1026.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 4231168.0
+      }
+    },
+    {
+      "case": "buffers_large",
+      "size": 4096,
+      "before": {
+        "allocations": 8195.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 34045952.0
+      },
+      "after": {
+        "allocations": 8194.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 33849344.0
+      }
+    },
+    {
+      "case": "bytes",
+      "size": 0,
+      "before": {
+        "allocations": 0.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 0.0
+      },
+      "after": {
+        "allocations": 0.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 0.0
+      }
+    },
+    {
+      "case": "bytes",
+      "size": 1,
+      "before": {
+        "allocations": 4.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 83.0
+      },
+      "after": {
+        "allocations": 3.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 51.0
+      }
+    },
+    {
+      "case": "bytes",
+      "size": 64,
+      "before": {
+        "allocations": 67.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 5312.0
+      },
+      "after": {
+        "allocations": 66.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 3264.0
+      }
+    },
+    {
+      "case": "bytes",
+      "size": 512,
+      "before": {
+        "allocations": 515.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 42496.0
+      },
+      "after": {
+        "allocations": 514.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 26112.0
+      }
+    },
+    {
+      "case": "bytes",
+      "size": 4096,
+      "before": {
+        "allocations": 4099.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 339968.0
+      },
+      "after": {
+        "allocations": 4098.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 208896.0
+      }
+    },
+    {
+      "case": "bytes_large",
+      "size": 0,
+      "before": {
+        "allocations": 0.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 0.0
+      },
+      "after": {
+        "allocations": 0.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 0.0
+      }
+    },
+    {
+      "case": "bytes_large",
+      "size": 1,
+      "before": {
+        "allocations": 4.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 4176.0
+      },
+      "after": {
+        "allocations": 3.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 4144.0
+      }
+    },
+    {
+      "case": "bytes_large",
+      "size": 64,
+      "before": {
+        "allocations": 67.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 267264.0
+      },
+      "after": {
+        "allocations": 66.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 265216.0
+      }
+    },
+    {
+      "case": "bytes_large",
+      "size": 512,
+      "before": {
+        "allocations": 515.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 2138112.0
+      },
+      "after": {
+        "allocations": 514.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 2121728.0
+      }
+    },
+    {
+      "case": "bytes_large",
+      "size": 4096,
+      "before": {
+        "allocations": 4099.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 17104896.0
+      },
+      "after": {
+        "allocations": 4098.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 16973824.0
+      }
+    },
+    {
+      "case": "control",
+      "size": 1,
+      "before": {
+        "allocations": 0.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 0.0
+      },
+      "after": {
+        "allocations": 0.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 0.0
+      }
+    },
+    {
+      "case": "handles",
+      "size": 0,
+      "before": {
+        "allocations": 0.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 0.0
+      },
+      "after": {
+        "allocations": 0.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 0.0
+      }
+    },
+    {
+      "case": "handles",
+      "size": 1,
+      "before": {
+        "allocations": 2.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 24.0
+      },
+      "after": {
+        "allocations": 2.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 24.0
+      }
+    },
+    {
+      "case": "handles",
+      "size": 64,
+      "before": {
+        "allocations": 2.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 1536.0
+      },
+      "after": {
+        "allocations": 2.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 1536.0
+      }
+    },
+    {
+      "case": "handles",
+      "size": 512,
+      "before": {
+        "allocations": 2.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 12288.0
+      },
+      "after": {
+        "allocations": 2.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 12288.0
+      }
+    },
+    {
+      "case": "handles",
+      "size": 4096,
+      "before": {
+        "allocations": 2.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 98304.0
+      },
+      "after": {
+        "allocations": 2.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 98304.0
+      }
+    },
+    {
+      "case": "numbers",
+      "size": 0,
+      "before": {
+        "allocations": 0.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 0.0
+      },
+      "after": {
+        "allocations": 0.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 0.0
+      }
+    },
+    {
+      "case": "numbers",
+      "size": 1,
+      "before": {
+        "allocations": 1.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 8.0
+      },
+      "after": {
+        "allocations": 1.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 8.0
+      }
+    },
+    {
+      "case": "numbers",
+      "size": 64,
+      "before": {
+        "allocations": 1.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 512.0
+      },
+      "after": {
+        "allocations": 1.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 512.0
+      }
+    },
+    {
+      "case": "numbers",
+      "size": 512,
+      "before": {
+        "allocations": 1.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 4096.0
+      },
+      "after": {
+        "allocations": 1.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 4096.0
+      }
+    },
+    {
+      "case": "numbers",
+      "size": 4096,
+      "before": {
+        "allocations": 1.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 32768.0
+      },
+      "after": {
+        "allocations": 1.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 32768.0
+      }
+    },
+    {
+      "case": "text",
+      "size": 0,
+      "before": {
+        "allocations": 0.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 0.0
+      },
+      "after": {
+        "allocations": 0.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 0.0
+      }
+    },
+    {
+      "case": "text",
+      "size": 1,
+      "before": {
+        "allocations": 4.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 83.0
+      },
+      "after": {
+        "allocations": 3.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 51.0
+      }
+    },
+    {
+      "case": "text",
+      "size": 64,
+      "before": {
+        "allocations": 67.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 5312.0
+      },
+      "after": {
+        "allocations": 66.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 3264.0
+      }
+    },
+    {
+      "case": "text",
+      "size": 512,
+      "before": {
+        "allocations": 515.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 42496.0
+      },
+      "after": {
+        "allocations": 514.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 26112.0
+      }
+    },
+    {
+      "case": "text",
+      "size": 4096,
+      "before": {
+        "allocations": 4099.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 339968.0
+      },
+      "after": {
+        "allocations": 4098.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 208896.0
+      }
+    },
+    {
+      "case": "text_large",
+      "size": 0,
+      "before": {
+        "allocations": 0.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 0.0
+      },
+      "after": {
+        "allocations": 0.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 0.0
+      }
+    },
+    {
+      "case": "text_large",
+      "size": 1,
+      "before": {
+        "allocations": 4.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 4176.0
+      },
+      "after": {
+        "allocations": 3.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 4144.0
+      }
+    },
+    {
+      "case": "text_large",
+      "size": 64,
+      "before": {
+        "allocations": 67.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 267264.0
+      },
+      "after": {
+        "allocations": 66.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 265216.0
+      }
+    },
+    {
+      "case": "text_large",
+      "size": 512,
+      "before": {
+        "allocations": 515.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 2138112.0
+      },
+      "after": {
+        "allocations": 514.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 2121728.0
+      }
+    },
+    {
+      "case": "text_large",
+      "size": 4096,
+      "before": {
+        "allocations": 4099.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 17104896.0
+      },
+      "after": {
+        "allocations": 4098.0,
+        "reallocations": 0.0,
+        "requested_native_bytes": 16973824.0
+      }
+    }
+  ],
+  "latency": [
+    {
+      "case": "buffers",
+      "size": 0,
+      "before": {
+        "wall_ns": 20.172940413157143,
+        "cpu_ns": 20.141643683115642,
+        "min_wall_ns": 19.940631071726482,
+        "max_wall_ns": 20.351542154947918,
+        "fork_wall_ns": [19.940631071726482, 20.351542154947918, 20.327131271362305, 20.018749554951984],
+        "fork_cpu_ns": [19.863864580790203, 20.26386896769206, 20.29410203297933, 20.019418398539226]
+      },
+      "after": {
+        "wall_ns": 19.328790823618572,
+        "cpu_ns": 19.311656157175698,
+        "min_wall_ns": 19.019670009613037,
+        "max_wall_ns": 19.53699779510498,
+        "fork_wall_ns": [19.53699779510498, 19.019670009613037, 19.32822100321452, 19.329360644022625],
+        "fork_cpu_ns": [19.464394251505535, 19.016484419504803, 19.293546676635742, 19.329765637715656]
+      },
+      "wall_change_percent": -4.184563936886477,
+      "cpu_change_percent": -4.1207536931839766
+    },
+    {
+      "case": "buffers",
+      "size": 1,
+      "before": {
+        "wall_ns": 125.19489828745523,
+        "cpu_ns": 125.20436922709146,
+        "min_wall_ns": 120.9440434773763,
+        "max_wall_ns": 133.46421750386557,
+        "fork_wall_ns": [125.2446969350179, 125.14509963989258, 133.46421750386557, 120.9440434773763],
+        "fork_cpu_ns": [125.25550842285156, 125.15323003133138, 133.1316820780436, 120.93519846598308]
+      },
+      "after": {
+        "wall_ns": 106.59425226847331,
+        "cpu_ns": 106.60514513651529,
+        "min_wall_ns": 103.94162623087566,
+        "max_wall_ns": 114.33000055948894,
+        "fork_wall_ns": [104.40567080179851, 108.78283373514812, 114.33000055948894, 103.94162623087566],
+        "fork_cpu_ns": [104.42264556884766, 108.78764470418294, 113.25536092122395, 103.88669331868489]
+      },
+      "wall_change_percent": -14.857351436376975,
+      "cpu_change_percent": -14.855091883288452
+    },
+    {
+      "case": "buffers",
+      "size": 64,
+      "before": {
+        "wall_ns": 6575.657877604166,
+        "cpu_ns": 6558.769124348959,
+        "min_wall_ns": 6516.59716796875,
+        "max_wall_ns": 6675.4387613932295,
+        "fork_wall_ns": [6616.5369873046875, 6516.59716796875, 6675.4387613932295, 6534.7787679036455],
+        "fork_cpu_ns": [6596.598307291667, 6514.821370442708, 6673.4130859375, 6520.93994140625]
+      },
+      "after": {
+        "wall_ns": 5756.7160237630205,
+        "cpu_ns": 5757.5518798828125,
+        "min_wall_ns": 5628.0457763671875,
+        "max_wall_ns": 5879.111002604167,
+        "fork_wall_ns": [5879.111002604167, 5828.5678304036455, 5684.8642171223955, 5628.0457763671875],
+        "fork_cpu_ns": [5880.114339192708, 5829.150797526042, 5685.952962239583, 5599.858805338542]
+      },
+      "wall_change_percent": -12.454143282459306,
+      "cpu_change_percent": -12.215969632040945
+    },
+    {
+      "case": "buffers",
+      "size": 512,
+      "before": {
+        "wall_ns": 52507.10221354167,
+        "cpu_ns": 52515.3271484375,
+        "min_wall_ns": 51867.15625,
+        "max_wall_ns": 54419.792643229164,
+        "fork_wall_ns": [52328.646809895836, 51867.15625, 52685.5576171875, 54419.792643229164],
+        "fork_cpu_ns": [52339.606119791664, 51869.3359375, 52691.048177083336, 54086.526692708336]
+      },
+      "after": {
+        "wall_ns": 46223.54752604167,
+        "cpu_ns": 46137.26725260417,
+        "min_wall_ns": 46031.576497395836,
+        "max_wall_ns": 48623.998046875,
+        "fork_wall_ns": [46279.388997395836, 46031.576497395836, 48623.998046875, 46167.7060546875],
+        "fork_cpu_ns": [46131.116536458336, 45966.533203125, 48423.766276041664, 46143.41796875]
+      },
+      "wall_change_percent": -11.967056688722499,
+      "cpu_change_percent": -12.145139794722004
+    },
+    {
+      "case": "buffers_large",
+      "size": 0,
+      "before": {
+        "wall_ns": 21.39928452173869,
+        "cpu_ns": 21.326630115509033,
+        "min_wall_ns": 19.83128595352173,
+        "max_wall_ns": 22.8365265528361,
+        "fork_wall_ns": [19.83128595352173, 21.45905367533366, 22.8365265528361, 21.33951536814372],
+        "fork_cpu_ns": [19.831854502360027, 21.309256553649902, 22.749330202738445, 21.344003677368164]
+      },
+      "after": {
+        "wall_ns": 21.099663178126015,
+        "cpu_ns": 21.052967707316082,
+        "min_wall_ns": 19.5108544031779,
+        "max_wall_ns": 23.376808643341064,
+        "fork_wall_ns": [19.5108544031779, 19.560498078664143, 22.63882827758789, 23.376808643341064],
+        "fork_cpu_ns": [19.51310634613037, 19.53647295633952, 22.569462458292644, 23.343582153320312]
+      },
+      "wall_change_percent": -1.4001465483965192,
+      "cpu_change_percent": -1.2831957356166601
+    },
+    {
+      "case": "buffers_large",
+      "size": 1,
+      "before": {
+        "wall_ns": 3202.6139729817705,
+        "cpu_ns": 3202.4514770507812,
+        "min_wall_ns": 3141.4004109700522,
+        "max_wall_ns": 3440.9410196940103,
+        "fork_wall_ns": [3209.694864908854, 3440.9410196940103, 3141.4004109700522, 3195.5330810546875],
+        "fork_cpu_ns": [3210.2115885416665, 3423.1695556640625, 3141.629435221354, 3194.691365559896]
+      },
+      "after": {
+        "wall_ns": 3255.3820190429688,
+        "cpu_ns": 3243.108113606771,
+        "min_wall_ns": 3042.3370768229165,
+        "max_wall_ns": 3370.4869181315103,
+        "fork_wall_ns": [3370.4869181315103, 3042.3370768229165, 3265.2915852864585, 3245.472452799479],
+        "fork_cpu_ns": [3370.8587646484375, 3036.4937337239585, 3265.8028157552085, 3220.4134114583335]
+      },
+      "wall_change_percent": 1.6476555247171731,
+      "cpu_change_percent": 1.2695473092204868
+    },
+    {
+      "case": "buffers_large",
+      "size": 64,
+      "before": {
+        "wall_ns": 481932.1822916666,
+        "cpu_ns": 475693.3984375,
+        "min_wall_ns": 435922.7421875,
+        "max_wall_ns": 612332.7708333334,
+        "fork_wall_ns": [435922.7421875, 612332.7708333334, 484386.2578125, 479478.1067708333],
+        "fork_cpu_ns": [435618.4635416667, 610772.3958333334, 484449.7135416667, 466937.0833333333]
+      },
+      "after": {
+        "wall_ns": 482305.2434895834,
+        "cpu_ns": 482148.0338541667,
+        "min_wall_ns": 452815.9453125,
+        "max_wall_ns": 621150.6875,
+        "fork_wall_ns": [463517.0416666667, 452815.9453125, 621150.6875, 501093.4453125],
+        "fork_cpu_ns": [463490.8072916667, 450699.6614583333, 619966.171875, 500805.2604166667]
+      },
+      "wall_change_percent": 0.07740948034280493,
+      "cpu_change_percent": 1.3568898449858757
+    },
+    {
+      "case": "buffers_large",
+      "size": 512,
+      "before": {
+        "wall_ns": 4224306.322916666,
+        "cpu_ns": 4224448.229166666,
+        "min_wall_ns": 4213733.416666667,
+        "max_wall_ns": 4362766.333333333,
+        "fork_wall_ns": [4213733.416666667, 4362766.333333333, 4224868.625, 4223744.020833333],
+        "fork_cpu_ns": [4191879.375, 4354194.583333333, 4224928.333333333, 4223968.125]
+      },
+      "after": {
+        "wall_ns": 4380726.333333333,
+        "cpu_ns": 4369538.125,
+        "min_wall_ns": 4254296.729166667,
+        "max_wall_ns": 4444423.833333333,
+        "fork_wall_ns": [4254296.729166667, 4390802.583333333, 4370650.083333333, 4444423.833333333],
+        "fork_cpu_ns": [4254032.291666667, 4369063.125, 4370013.125, 4444415.416666667]
+      },
+      "wall_change_percent": 3.702856716808056,
+      "cpu_change_percent": 3.434528912713297
+    },
+    {
+      "case": "bytes",
+      "size": 0,
+      "before": {
+        "wall_ns": 21.488341808319092,
+        "cpu_ns": 21.483769416809082,
+        "min_wall_ns": 20.691638469696045,
+        "max_wall_ns": 22.056468804677326,
+        "fork_wall_ns": [20.691638469696045, 21.12049929300944, 22.056468804677326, 21.856184323628742],
+        "fork_cpu_ns": [20.69593906402588, 21.115142504374187, 21.913021405537922, 21.852396329243977]
+      },
+      "after": {
+        "wall_ns": 20.1764706770579,
+        "cpu_ns": 20.17930825551351,
+        "min_wall_ns": 19.8536319732666,
+        "max_wall_ns": 20.61750602722168,
+        "fork_wall_ns": [20.61750602722168, 20.19125986099243, 19.8536319732666, 20.16168149312337],
+        "fork_cpu_ns": [20.596742630004883, 20.194478034973145, 19.729126294453938, 20.164138476053875]
+      },
+      "wall_change_percent": -6.105036595952273,
+      "cpu_change_percent": -6.071844916911784
+    },
+    {
+      "case": "bytes",
+      "size": 1,
+      "before": {
+        "wall_ns": 98.58425331115723,
+        "cpu_ns": 98.59673182169595,
+        "min_wall_ns": 97.59484799702962,
+        "max_wall_ns": 105.1572945912679,
+        "fork_wall_ns": [105.1572945912679, 98.82043393452962, 97.59484799702962, 98.34807268778484],
+        "fork_cpu_ns": [105.12765248616536, 98.83479436238606, 97.60594685872395, 98.35866928100586]
+      },
+      "after": {
+        "wall_ns": 88.02529811859131,
+        "cpu_ns": 87.6589298248291,
+        "min_wall_ns": 86.67198816935222,
+        "max_wall_ns": 94.49093627929688,
+        "fork_wall_ns": [94.49093627929688, 88.1678975423177, 87.88269869486491, 86.67198816935222],
+        "fork_cpu_ns": [94.50045903523763, 87.8642972310384, 87.4535624186198, 86.67975107828777]
+      },
+      "wall_change_percent": -10.710590016074006,
+      "cpu_change_percent": -11.093473175811718
+    },
+    {
+      "case": "bytes",
+      "size": 64,
+      "before": {
+        "wall_ns": 2985.1471455891924,
+        "cpu_ns": 2980.0958251953125,
+        "min_wall_ns": 2924.3667805989585,
+        "max_wall_ns": 3136.2726440429688,
+        "fork_wall_ns": [2924.3667805989585, 3024.2151489257812, 2946.079142252604, 3136.2726440429688],
+        "fork_cpu_ns": [2922.407430013021, 3022.8377278645835, 2937.3539225260415, 3137.0540364583335]
+      },
+      "after": {
+        "wall_ns": 2837.343994140625,
+        "cpu_ns": 2835.6299845377603,
+        "min_wall_ns": 2791.6528930664062,
+        "max_wall_ns": 3039.5752766927085,
+        "fork_wall_ns": [3039.5752766927085, 2791.6528930664062, 2831.4425048828125, 2843.2454833984375],
+        "fork_cpu_ns": [3037.1504720052085, 2792.1321614583335, 2829.080607096354, 2842.1793619791665]
+      },
+      "wall_change_percent": -4.951285288129236,
+      "cpu_change_percent": -4.847691119062725
+    },
+    {
+      "case": "bytes",
+      "size": 512,
+      "before": {
+        "wall_ns": 23258.288981119793,
+        "cpu_ns": 23259.186197916664,
+        "min_wall_ns": 22743.166015625,
+        "max_wall_ns": 26236.255208333332,
+        "fork_wall_ns": [23271.289713541668, 22743.166015625, 26236.255208333332, 23245.288248697918],
+        "fork_cpu_ns": [23273.53515625, 22743.538411458332, 26219.475911458332, 23244.837239583332]
+      },
+      "after": {
+        "wall_ns": 21987.496337890625,
+        "cpu_ns": 21973.435872395836,
+        "min_wall_ns": 21672.614420572918,
+        "max_wall_ns": 25700.810709635418,
+        "fork_wall_ns": [21672.614420572918, 21844.987630208332, 25700.810709635418, 22130.005045572918],
+        "fork_cpu_ns": [21677.431640625, 21811.1083984375, 25520.3173828125, 22135.763346354168]
+      },
+      "wall_change_percent": -5.46382687161876,
+      "cpu_change_percent": -5.527924814652341
+    },
+    {
+      "case": "bytes_large",
+      "size": 0,
+      "before": {
+        "wall_ns": 20.316854635874428,
+        "cpu_ns": 20.299344857533775,
+        "min_wall_ns": 20.298527399698894,
+        "max_wall_ns": 21.164287249247234,
+        "fork_wall_ns": [20.306015332539875, 20.298527399698894, 20.327693939208984, 21.164287249247234],
+        "fork_cpu_ns": [20.219016075134277, 20.299372673034668, 20.29931704203288, 20.427098274230957]
+      },
+      "after": {
+        "wall_ns": 20.894380728403725,
+        "cpu_ns": 20.780111948649086,
+        "min_wall_ns": 20.30637772878011,
+        "max_wall_ns": 21.744404157002766,
+        "fork_wall_ns": [21.744404157002766, 20.30637772878011, 20.510106404622395, 21.27865505218506],
+        "fork_cpu_ns": [21.663193702697754, 20.309200286865234, 20.497597058614094, 21.062626838684082]
+      },
+      "wall_change_percent": 2.842595976985196,
+      "cpu_change_percent": 2.368387228698565
+    },
+    {
+      "case": "bytes_large",
+      "size": 1,
+      "before": {
+        "wall_ns": 222.7278289794922,
+        "cpu_ns": 222.68120447794595,
+        "min_wall_ns": 219.47273635864258,
+        "max_wall_ns": 229.46829986572266,
+        "fork_wall_ns": [229.46829986572266, 223.31258392333984, 219.47273635864258, 222.14307403564453],
+        "fork_cpu_ns": [229.50546264648438, 223.31652323404947, 219.15743509928384, 222.04588572184244]
+      },
+      "after": {
+        "wall_ns": 196.23962148030597,
+        "cpu_ns": 196.2593650817871,
+        "min_wall_ns": 188.59320576985678,
+        "max_wall_ns": 201.82016118367514,
+        "fork_wall_ns": [194.5501619974772, 197.92908096313477, 201.82016118367514, 188.59320576985678],
+        "fork_cpu_ns": [194.5593516031901, 197.95937856038412, 201.83329264322916, 188.50096384684244]
+      },
+      "wall_change_percent": -11.892634890103981,
+      "cpu_change_percent": -11.865320855481375
+    },
+    {
+      "case": "bytes_large",
+      "size": 64,
+      "before": {
+        "wall_ns": 11331.676513671875,
+        "cpu_ns": 11320.132649739582,
+        "min_wall_ns": 11276.456949869791,
+        "max_wall_ns": 11698.593098958334,
+        "fork_wall_ns": [11698.593098958334, 11360.970947265625, 11276.456949869791, 11302.382080078125],
+        "fork_cpu_ns": [11699.629720052084, 11361.720377604166, 11278.544921875, 11207.693684895834]
+      },
+      "after": {
+        "wall_ns": 13044.013509114584,
+        "cpu_ns": 13045.298665364582,
+        "min_wall_ns": 12280.734293619791,
+        "max_wall_ns": 13992.344075520834,
+        "fork_wall_ns": [12357.281331380209, 13730.745686848959, 13992.344075520834, 12280.734293619791],
+        "fork_cpu_ns": [12358.998209635416, 13731.59912109375, 13994.74365234375, 12276.72119140625]
+      },
+      "wall_change_percent": 15.111064928272032,
+      "cpu_change_percent": 15.239803887498503
+    },
+    {
+      "case": "bytes_large",
+      "size": 512,
+      "before": {
+        "wall_ns": 1383404.0885416665,
+        "cpu_ns": 1382506.0416666665,
+        "min_wall_ns": 1348143.5625,
+        "max_wall_ns": 1392587.84375,
+        "fork_wall_ns": [1348143.5625, 1392587.84375, 1381790.65625, 1385017.5208333333],
+        "fork_cpu_ns": [1348177.3958333333, 1383563.9583333333, 1381448.125, 1384957.1875]
+      },
+      "after": {
+        "wall_ns": 1337956.109375,
+        "cpu_ns": 1338059.6354166665,
+        "min_wall_ns": 1333562.6354166667,
+        "max_wall_ns": 1396194.6041666667,
+        "fork_wall_ns": [1333562.6354166667, 1336877.5208333333, 1396194.6041666667, 1339034.6979166667],
+        "fork_cpu_ns": [1332581.875, 1337086.25, 1396216.6666666667, 1339033.0208333333]
+      },
+      "wall_change_percent": -3.2852280503649633,
+      "cpu_change_percent": -3.2149158781554443
+    },
+    {
+      "case": "control",
+      "size": 1,
+      "before": {
+        "wall_ns": 4.334081331888835,
+        "cpu_ns": 4.338329633076986,
+        "min_wall_ns": 4.293140093485515,
+        "max_wall_ns": 4.482329686482747,
+        "fork_wall_ns": [4.482329686482747, 4.293140093485515, 4.351829210917155, 4.316333452860515],
+        "fork_cpu_ns": [4.488197962443034, 4.297189712524414, 4.3561045328776045, 4.320554733276367]
+      },
+      "after": {
+        "wall_ns": 4.358598391215006,
+        "cpu_ns": 4.34079647064209,
+        "min_wall_ns": 4.270188013712565,
+        "max_wall_ns": 4.9496205647786455,
+        "fork_wall_ns": [4.270188013712565, 4.9496205647786455, 4.34542973836263, 4.371767044067383],
+        "fork_cpu_ns": [4.274247487386067, 4.33164914449056, 4.34994379679362, 4.376538594563802]
+      },
+      "wall_change_percent": 0.5656806471485032,
+      "cpu_change_percent": 0.056861459910639844
+    },
+    {
+      "case": "handles",
+      "size": 0,
+      "before": {
+        "wall_ns": 18.550838549931846,
+        "cpu_ns": 18.55348825454712,
+        "min_wall_ns": 17.327442407608032,
+        "max_wall_ns": 20.0524476369222,
+        "fork_wall_ns": [17.872747898101807, 20.0524476369222, 19.228929201761883, 17.327442407608032],
+        "fork_cpu_ns": [17.87255843480428, 20.038681030273438, 19.23441807428996, 17.328495184580486]
+      },
+      "after": {
+        "wall_ns": 18.81210994720459,
+        "cpu_ns": 18.814091285069782,
+        "min_wall_ns": 17.788767258326214,
+        "max_wall_ns": 20.109378814697266,
+        "fork_wall_ns": [17.94171206156413, 19.68250783284505, 20.109378814697266, 17.788767258326214],
+        "fork_cpu_ns": [17.94324477513631, 19.684937795003254, 19.82836087544759, 17.75480031967163]
+      },
+      "wall_change_percent": 1.4084074774814104,
+      "cpu_change_percent": 1.404603958820494
+    },
+    {
+      "case": "handles",
+      "size": 1,
+      "before": {
+        "wall_ns": 62.30442587534586,
+        "cpu_ns": 62.2580607732137,
+        "min_wall_ns": 61.37717342376709,
+        "max_wall_ns": 63.53529040018717,
+        "fork_wall_ns": [63.53529040018717, 61.37717342376709, 62.84718577067057, 61.76166598002116],
+        "fork_cpu_ns": [63.518174489339195, 61.375414530436196, 62.81613032023112, 61.69999122619629]
+      },
+      "after": {
+        "wall_ns": 63.12727419535319,
+        "cpu_ns": 63.07889143625896,
+        "min_wall_ns": 62.146181424458824,
+        "max_wall_ns": 64.26208559672038,
+        "fork_wall_ns": [62.6961342493693, 64.26208559672038, 62.146181424458824, 63.558414141337074],
+        "fork_cpu_ns": [62.703819274902344, 64.26401774088542, 62.11939493815104, 63.45396359761556]
+      },
+      "wall_change_percent": 1.320689996652269,
+      "cpu_change_percent": 1.3184327504759397
+    },
+    {
+      "case": "handles",
+      "size": 64,
+      "before": {
+        "wall_ns": 1004.4425455729167,
+        "cpu_ns": 1005.1235961914062,
+        "min_wall_ns": 952.3020833333334,
+        "max_wall_ns": 1197.7398681640625,
+        "fork_wall_ns": [1197.7398681640625, 952.3020833333334, 1027.8696695963542, 981.0154215494791],
+        "fork_cpu_ns": [1189.8746744791667, 952.8584798177084, 1028.6163330078125, 981.630859375]
+      },
+      "after": {
+        "wall_ns": 1002.2664591471355,
+        "cpu_ns": 1001.7859903971354,
+        "min_wall_ns": 922.3114217122396,
+        "max_wall_ns": 1492.083760579427,
+        "fork_wall_ns": [924.3632405598959, 1080.169677734375, 1492.083760579427, 922.3114217122396],
+        "fork_cpu_ns": [922.8181966145834, 1080.7277425130208, 1492.5095621744792, 922.84423828125]
+      },
+      "wall_change_percent": -0.21664618204121355,
+      "cpu_change_percent": -0.3320592419596591
+    },
+    {
+      "case": "handles",
+      "size": 512,
+      "before": {
+        "wall_ns": 14328.204182942709,
+        "cpu_ns": 14293.734537760416,
+        "min_wall_ns": 14002.06396484375,
+        "max_wall_ns": 17188.07177734375,
+        "fork_wall_ns": [14376.670247395834, 14279.738118489584, 14002.06396484375, 17188.07177734375],
+        "fork_cpu_ns": [14378.673502604166, 14208.795572916666, 14002.610677083334, 17009.537760416668]
+      },
+      "after": {
+        "wall_ns": 14582.939534505207,
+        "cpu_ns": 14584.579264322918,
+        "min_wall_ns": 13985.227864583334,
+        "max_wall_ns": 15198.048828125,
+        "fork_wall_ns": [15198.048828125, 15006.0888671875, 13985.227864583334, 14159.790201822916],
+        "fork_cpu_ns": [15203.430989583334, 15010.017903645834, 13966.630859375, 14159.140625]
+      },
+      "wall_change_percent": 1.7778595859609059,
+      "cpu_change_percent": 2.034770729749913
+    },
+    {
+      "case": "numbers",
+      "size": 0,
+      "before": {
+        "wall_ns": 8.617840766906738,
+        "cpu_ns": 8.617545366287231,
+        "min_wall_ns": 8.55578358968099,
+        "max_wall_ns": 8.864391883214315,
+        "fork_wall_ns": [8.864391883214315, 8.664122581481934, 8.55578358968099, 8.571558952331543],
+        "fork_cpu_ns": [8.82810910542806, 8.662299315134684, 8.555530707041422, 8.57279141743978]
+      },
+      "after": {
+        "wall_ns": 8.172301570574444,
+        "cpu_ns": 8.172638813654583,
+        "min_wall_ns": 8.168678363164267,
+        "max_wall_ns": 8.417583465576172,
+        "fork_wall_ns": [8.417583465576172, 8.174518823623657, 8.170084317525228, 8.168678363164267],
+        "fork_cpu_ns": [8.418960571289062, 8.175554275512695, 8.168778419494629, 8.169723351796469]
+      },
+      "wall_change_percent": -5.169963200564165,
+      "cpu_change_percent": -5.162799077022228
+    },
+    {
+      "case": "numbers",
+      "size": 1,
+      "before": {
+        "wall_ns": 23.9815190633138,
+        "cpu_ns": 23.906284968058266,
+        "min_wall_ns": 23.576314290364582,
+        "max_wall_ns": 28.85780398050944,
+        "fork_wall_ns": [24.125566800435383, 23.576314290364582, 28.85780398050944, 23.83747132619222],
+        "fork_cpu_ns": [24.128751754760742, 23.56364568074544, 28.769267400105793, 23.683818181355793]
+      },
+      "after": {
+        "wall_ns": 22.98097324371338,
+        "cpu_ns": 22.97964413960775,
+        "min_wall_ns": 22.898407300313313,
+        "max_wall_ns": 30.340456008911133,
+        "fork_wall_ns": [22.90856393178304, 22.898407300313313, 30.340456008911133, 23.05338255564372],
+        "fork_cpu_ns": [22.91245460510254, 22.899920145670574, 30.244356791178387, 23.046833674112957]
+      },
+      "wall_change_percent": -4.172153636134867,
+      "cpu_change_percent": -3.876138972193388
+    },
+    {
+      "case": "numbers",
+      "size": 64,
+      "before": {
+        "wall_ns": 40.8062744140625,
+        "cpu_ns": 39.42138671875,
+        "min_wall_ns": 38.86474609375,
+        "max_wall_ns": 46.991780598958336,
+        "fork_wall_ns": [38.86474609375, 38.9794921875, 42.633056640625, 46.991780598958336],
+        "fork_cpu_ns": [39.256998697916664, 39.3756103515625, 43.04931640625, 39.4671630859375]
+      },
+      "after": {
+        "wall_ns": 37.56439208984375,
+        "cpu_ns": 37.97098795572917,
+        "min_wall_ns": 36.600138346354164,
+        "max_wall_ns": 38.459676106770836,
+        "fork_wall_ns": [36.600138346354164, 38.459676106770836, 37.412923177083336, 37.715861002604164],
+        "fork_cpu_ns": [36.994222005208336, 38.889363606770836, 37.831624348958336, 38.1103515625]
+      },
+      "wall_change_percent": -7.944568257624485,
+      "cpu_change_percent": -3.6792180177948275
+    },
+    {
+      "case": "numbers",
+      "size": 512,
+      "before": {
+        "wall_ns": 215.51920572916669,
+        "cpu_ns": 218.93473307291669,
+        "min_wall_ns": 201.484375,
+        "max_wall_ns": 247.39908854166666,
+        "fork_wall_ns": [247.39908854166666, 205.3515625, 225.68684895833334, 201.484375],
+        "fork_cpu_ns": [251.58203125, 208.7890625, 229.08040364583334, 204.93326822916666]
+      },
+      "after": {
+        "wall_ns": 207.08740234375,
+        "cpu_ns": 210.43212890625,
+        "min_wall_ns": 195.62174479166666,
+        "max_wall_ns": 240.01627604166666,
+        "fork_wall_ns": [240.01627604166666, 200.2099609375, 195.62174479166666, 213.96484375],
+        "fork_cpu_ns": [243.99576822916666, 203.466796875, 199.10481770833334, 217.3974609375]
+      },
+      "wall_change_percent": -3.912321111656547,
+      "cpu_change_percent": -3.883625063655327
+    },
+    {
+      "case": "text",
+      "size": 0,
+      "before": {
+        "wall_ns": 20.102027654647827,
+        "cpu_ns": 20.10393460591634,
+        "min_wall_ns": 19.98850695292155,
+        "max_wall_ns": 20.22520097096761,
+        "fork_wall_ns": [20.22520097096761, 20.016878922780354, 19.98850695292155, 20.1871763865153],
+        "fork_cpu_ns": [20.22730032602946, 20.017817815144856, 19.930259386698406, 20.190051396687824]
+      },
+      "after": {
+        "wall_ns": 19.83109505971273,
+        "cpu_ns": 19.78092988332113,
+        "min_wall_ns": 18.749221483866375,
+        "max_wall_ns": 20.23109785715739,
+        "fork_wall_ns": [19.704367637634277, 18.749221483866375, 20.23109785715739, 19.95782248179118],
+        "fork_cpu_ns": [19.70584551493327, 18.73645305633545, 20.177021026611328, 19.856014251708984]
+      },
+      "wall_change_percent": -1.3477873953300135,
+      "cpu_change_percent": -1.6066741606896917
+    },
+    {
+      "case": "text",
+      "size": 1,
+      "before": {
+        "wall_ns": 105.41601371765137,
+        "cpu_ns": 104.3420918782552,
+        "min_wall_ns": 102.44203186035156,
+        "max_wall_ns": 114.1303145090739,
+        "fork_wall_ns": [114.1303145090739, 104.37607002258301, 106.45595741271973, 102.44203186035156],
+        "fork_cpu_ns": [114.15220260620117, 102.20784505208333, 106.47633870442708, 102.08823521931966]
+      },
+      "after": {
+        "wall_ns": 92.87394014994302,
+        "cpu_ns": 92.74756113688152,
+        "min_wall_ns": 89.39340718587239,
+        "max_wall_ns": 95.22515106201172,
+        "fork_wall_ns": [89.39340718587239, 94.21696472167969, 95.22515106201172, 91.53091557820638],
+        "fork_cpu_ns": [88.85616938273112, 94.23891703287761, 95.24340947469075, 91.25620524088542]
+      },
+      "wall_change_percent": -11.897692888768606,
+      "cpu_change_percent": -11.112035931675601
+    },
+    {
+      "case": "text",
+      "size": 64,
+      "before": {
+        "wall_ns": 3213.9442749023438,
+        "cpu_ns": 3190.3864542643228,
+        "min_wall_ns": 3181.49951171875,
+        "max_wall_ns": 3233.9612426757812,
+        "fork_wall_ns": [3181.49951171875, 3207.4632975260415, 3233.9612426757812, 3220.425252278646],
+        "fork_cpu_ns": [3179.760538736979, 3201.0123697916665, 3234.362589518229, 3179.6954345703125]
+      },
+      "after": {
+        "wall_ns": 3115.2486470540366,
+        "cpu_ns": 3104.5416259765625,
+        "min_wall_ns": 3077.0266316731772,
+        "max_wall_ns": 3373.1663614908853,
+        "fork_wall_ns": [3373.1663614908853, 3083.5589803059897, 3077.0266316731772, 3146.9383138020835],
+        "fork_cpu_ns": [3368.545939127604, 3070.384521484375, 3077.5787353515625, 3131.5045166015625]
+      },
+      "wall_change_percent": -3.0708568477375353,
+      "cpu_change_percent": -2.6907344774178887
+    },
+    {
+      "case": "text",
+      "size": 512,
+      "before": {
+        "wall_ns": 25231.637858072914,
+        "cpu_ns": 25211.031901041664,
+        "min_wall_ns": 24697.856770833332,
+        "max_wall_ns": 44780.6015625,
+        "fork_wall_ns": [25005.87109375, 44780.6015625, 25457.404622395832, 24697.856770833332],
+        "fork_cpu_ns": [25009.0234375, 44729.168294270836, 25413.040364583332, 24646.505533854168]
+      },
+      "after": {
+        "wall_ns": 25117.270263671875,
+        "cpu_ns": 25124.962565104164,
+        "min_wall_ns": 23418.97021484375,
+        "max_wall_ns": 37525.098307291664,
+        "fork_wall_ns": [24093.364908854168, 37525.098307291664, 26141.175618489582, 23418.97021484375],
+        "fork_cpu_ns": [24096.927083333332, 37438.5595703125, 26152.998046875, 23267.2412109375]
+      },
+      "wall_change_percent": -0.4532705924377711,
+      "cpu_change_percent": -0.34139552984320254
+    },
+    {
+      "case": "text_large",
+      "size": 0,
+      "before": {
+        "wall_ns": 20.53161334991455,
+        "cpu_ns": 19.744555950164795,
+        "min_wall_ns": 19.647738456726074,
+        "max_wall_ns": 21.654510974884033,
+        "fork_wall_ns": [21.654510974884033, 19.84096558888753, 21.22226111094157, 19.647738456726074],
+        "fork_cpu_ns": [19.622518221537273, 19.838396708170574, 20.119110743204754, 19.650715192159016]
+      },
+      "after": {
+        "wall_ns": 19.178972959518433,
+        "cpu_ns": 19.142424265543617,
+        "min_wall_ns": 19.132627089818318,
+        "max_wall_ns": 19.223223050435383,
+        "fork_wall_ns": [19.20679521560669, 19.151150703430176, 19.223223050435383, 19.132627089818318],
+        "fork_cpu_ns": [19.150800704956055, 19.1090726852417, 19.200294812520344, 19.134047826131184]
+      },
+      "wall_change_percent": -6.588086222662803,
+      "cpu_change_percent": -3.0496086422047486
+    },
+    {
+      "case": "text_large",
+      "size": 1,
+      "before": {
+        "wall_ns": 3318.2706197102866,
+        "cpu_ns": 3299.4179280598955,
+        "min_wall_ns": 3007.499226888021,
+        "max_wall_ns": 3719.8604736328125,
+        "fork_wall_ns": [3621.0012410481772, 3015.539998372396, 3007.499226888021, 3719.8604736328125],
+        "fork_cpu_ns": [3600.3753662109375, 2998.460489908854, 2997.7325439453125, 3720.545654296875]
+      },
+      "after": {
+        "wall_ns": 3026.676483154297,
+        "cpu_ns": 3026.3107299804688,
+        "min_wall_ns": 2911.3320515950522,
+        "max_wall_ns": 3779.1746622721353,
+        "fork_wall_ns": [3779.1746622721353, 2911.3320515950522, 3074.4228719075522, 2978.9300944010415],
+        "fork_cpu_ns": [3744.2403157552085, 2902.6106770833335, 3074.5869954427085, 2978.034464518229]
+      },
+      "wall_change_percent": -8.787533326062736,
+      "cpu_change_percent": -8.277435718488013
+    },
+    {
+      "case": "text_large",
+      "size": 64,
+      "before": {
+        "wall_ns": 255941.33138020834,
+        "cpu_ns": 255881.90104166666,
+        "min_wall_ns": 245886.69791666666,
+        "max_wall_ns": 275807.53125,
+        "fork_wall_ns": [275807.53125, 245886.69791666666, 265858.0768229167, 246024.5859375],
+        "fork_cpu_ns": [275822.7734375, 243795.53385416666, 265862.5911458333, 245901.2109375]
+      },
+      "after": {
+        "wall_ns": 247774.61979166666,
+        "cpu_ns": 247487.109375,
+        "min_wall_ns": 241279.02734375,
+        "max_wall_ns": 281964.7825520833,
+        "fork_wall_ns": [246575.45963541666, 241279.02734375, 281964.7825520833, 248973.77994791666],
+        "fork_cpu_ns": [246484.0625, 241303.6328125, 281933.9973958333, 248490.15625]
+      },
+      "wall_change_percent": -3.1908529757586512,
+      "cpu_change_percent": -3.280728973988545
+    },
+    {
+      "case": "text_large",
+      "size": 512,
+      "before": {
+        "wall_ns": 2983358.385416667,
+        "cpu_ns": 2970751.770833333,
+        "min_wall_ns": 2768955.0416666665,
+        "max_wall_ns": 3339267.9791666665,
+        "fork_wall_ns": [3339267.9791666665, 2902913.3958333335, 2768955.0416666665, 3063803.375],
+        "fork_cpu_ns": [3339172.9166666665, 2892577.9166666665, 2758567.0833333335, 3048925.625]
+      },
+      "after": {
+        "wall_ns": 3051940.041666667,
+        "cpu_ns": 3035361.5625,
+        "min_wall_ns": 2834890.6666666665,
+        "max_wall_ns": 3111963.1875,
+        "fork_wall_ns": [3022890.4583333335, 3080989.625, 3111963.1875, 2834890.6666666665],
+        "fork_cpu_ns": [2992078.5416666665, 3078644.5833333335, 3100830.625, 2835266.25]
+      },
+      "wall_change_percent": 2.298807162600469,
+      "cpu_change_percent": 2.174863356171386
+    }
+  ],
+  "identical_build_control": [
+    {
+      "case": "buffers",
+      "size": 512,
+      "before": {
+        "wall_ns": 45565.59456380208,
+        "cpu_ns": 45447.102864583336,
+        "min_wall_ns": 45264.838216145836,
+        "max_wall_ns": 47632.529947916664,
+        "fork_wall_ns": [45325.4169921875, 45264.838216145836, 45805.772135416664, 47632.529947916664],
+        "fork_cpu_ns": [45171.416015625, 45269.788411458336, 45624.417317708336, 47634.222005208336]
+      },
+      "after": {
+        "wall_ns": 45611.561360677086,
+        "cpu_ns": 45329.1845703125,
+        "min_wall_ns": 45005.755859375,
+        "max_wall_ns": 47283.142252604164,
+        "fork_wall_ns": [45828.747395833336, 45005.755859375, 45394.375325520836, 47283.142252604164],
+        "fork_cpu_ns": [45296.73828125, 45012.763671875, 45361.630859375, 47291.982421875]
+      },
+      "wall_change_percent": 0.10088049396710375,
+      "cpu_change_percent": -0.259462731039628
+    },
+    {
+      "case": "buffers_large",
+      "size": 512,
+      "before": {
+        "wall_ns": 4378190.895833333,
+        "cpu_ns": 4367690.104166666,
+        "min_wall_ns": 4276118.604166667,
+        "max_wall_ns": 4488622.5625,
+        "fork_wall_ns": [4446490.270833333, 4276118.604166667, 4488622.5625, 4309891.520833333],
+        "fork_cpu_ns": [4425072.708333333, 4276352.916666667, 4487957.708333333, 4310307.5]
+      },
+      "after": {
+        "wall_ns": 4302025.489583333,
+        "cpu_ns": 4301342.395833334,
+        "min_wall_ns": 4262157.770833333,
+        "max_wall_ns": 4362833.604166667,
+        "fork_wall_ns": [4262157.770833333, 4282811.333333333, 4321239.645833333, 4362833.604166667],
+        "fork_cpu_ns": [4249134.375, 4281632.916666667, 4321051.875, 4361310.833333333]
+      },
+      "wall_change_percent": -1.7396547583725885,
+      "cpu_change_percent": -1.5190571389219643
+    },
+    {
+      "case": "control",
+      "size": 1,
+      "before": {
+        "wall_ns": 4.257721900939941,
+        "cpu_ns": 4.25733725229899,
+        "min_wall_ns": 4.247681617736816,
+        "max_wall_ns": 4.269136110941569,
+        "fork_wall_ns": [4.269136110941569, 4.2672475179036455, 4.248196283976237, 4.247681617736816],
+        "fork_cpu_ns": [4.273131688435872, 4.262371063232422, 4.25230344136556, 4.251702626546224]
+      },
+      "after": {
+        "wall_ns": 4.479168256123861,
+        "cpu_ns": 4.483656883239746,
+        "min_wall_ns": 4.409462610880534,
+        "max_wall_ns": 6.279420852661133,
+        "fork_wall_ns": [4.486474990844727, 6.279420852661133, 4.471861521402995, 4.409462610880534],
+        "fork_cpu_ns": [4.490874608357747, 6.27532958984375, 4.476439158121745, 4.320154190063477]
+      },
+      "wall_change_percent": 5.2010525895322735,
+      "cpu_change_percent": 5.315990195950326
+    },
+    {
+      "case": "text",
+      "size": 512,
+      "before": {
+        "wall_ns": 23258.787109375,
+        "cpu_ns": 23242.172037760418,
+        "min_wall_ns": 22766.798665364582,
+        "max_wall_ns": 25340.202311197918,
+        "fork_wall_ns": [22998.551920572918, 23519.022298177082, 25340.202311197918, 22766.798665364582],
+        "fork_cpu_ns": [22960.743815104168, 23523.600260416668, 25345.224609375, 22768.478190104168]
+      },
+      "after": {
+        "wall_ns": 23224.809244791668,
+        "cpu_ns": 23221.024576822914,
+        "min_wall_ns": 22987.311360677082,
+        "max_wall_ns": 24711.063151041668,
+        "fork_wall_ns": [22987.311360677082, 23454.118326822918, 22995.500162760418, 24711.063151041668],
+        "fork_cpu_ns": [22989.189453125, 23445.29296875, 22996.756184895832, 24668.888346354168]
+      },
+      "wall_change_percent": -0.14608614122288976,
+      "cpu_change_percent": -0.09098745548886678
+    },
+    {
+      "case": "text_large",
+      "size": 512,
+      "before": {
+        "wall_ns": 2939395.0416666665,
+        "cpu_ns": 2934068.333333333,
+        "min_wall_ns": 2754307.3333333335,
+        "max_wall_ns": 3084504.2291666665,
+        "fork_wall_ns": [2841940.6666666665, 3084504.2291666665, 3036849.4166666665, 2754307.3333333335],
+        "fork_cpu_ns": [2834516.875, 3085091.4583333335, 3033619.7916666665, 2754702.9166666665]
+      },
+      "after": {
+        "wall_ns": 2904150.25,
+        "cpu_ns": 2903004.6875,
+        "min_wall_ns": 2810136.5,
+        "max_wall_ns": 3090802.125,
+        "fork_wall_ns": [2810136.5, 2906667.75, 3090802.125, 2901632.75],
+        "fork_cpu_ns": [2798233.125, 2905704.1666666665, 3089428.5416666665, 2900305.2083333335]
+      },
+      "wall_change_percent": -1.1990491637586254,
+      "cpu_change_percent": -1.0587226439284114
+    }
+  ],
+  "large_payload_confirmation": [
+    {
+      "case": "buffers_large",
+      "size": 512,
+      "before": {
+        "wall_ns": 4312279.83984375,
+        "cpu_ns": 4301564.375,
+        "min_wall_ns": 4242500.3828125,
+        "max_wall_ns": 4611716.0546875,
+        "fork_wall_ns": [4611716.0546875, 4352343.75, 4242500.3828125, 4272215.9296875],
+        "fork_cpu_ns": [4611859.0625, 4351866.171875, 4239361.015625, 4251262.578125]
+      },
+      "after": {
+        "wall_ns": 4252627.56640625,
+        "cpu_ns": 4248506.875,
+        "min_wall_ns": 4192884.28125,
+        "max_wall_ns": 4699899.75,
+        "fork_wall_ns": [4699899.75, 4192884.28125, 4247512.9609375, 4257742.171875],
+        "fork_cpu_ns": [4699757.578125, 4192655.0, 4247457.109375, 4249556.640625]
+      },
+      "wall_change_percent": -1.3833117435083087,
+      "cpu_change_percent": -1.2334466109204745
+    },
+    {
+      "case": "bytes_large",
+      "size": 512,
+      "before": {
+        "wall_ns": 1349906.775390625,
+        "cpu_ns": 1346312.7734375,
+        "min_wall_ns": 1334474.33203125,
+        "max_wall_ns": 1365091.83984375,
+        "fork_wall_ns": [1365091.83984375, 1353588.3984375, 1334474.33203125, 1346225.15234375],
+        "fork_cpu_ns": [1353409.7265625, 1350562.96875, 1334382.1875, 1342062.578125]
+      },
+      "after": {
+        "wall_ns": 1344205.154296875,
+        "cpu_ns": 1337676.6015625,
+        "min_wall_ns": 1311528.1171875,
+        "max_wall_ns": 1418545.4765625,
+        "fork_wall_ns": [1418545.4765625, 1311528.1171875, 1353657.57421875, 1334752.734375],
+        "fork_cpu_ns": [1418586.6015625, 1307938.3203125, 1345576.953125, 1329776.25]
+      },
+      "wall_change_percent": -0.42237147021505494,
+      "cpu_change_percent": -0.6414684644898361
+    },
+    {
+      "case": "control",
+      "size": 1,
+      "before": {
+        "wall_ns": 4.298564910888672,
+        "cpu_ns": 4.296985864639282,
+        "min_wall_ns": 4.268706560134888,
+        "max_wall_ns": 4.4064576625823975,
+        "fork_wall_ns": [4.268706560134888, 4.295924425125122, 4.301205396652222, 4.4064576625823975],
+        "fork_cpu_ns": [4.253113269805908, 4.300060272216797, 4.293911457061768, 4.343385696411133]
+      },
+      "after": {
+        "wall_ns": 4.289023280143738,
+        "cpu_ns": 4.286506175994873,
+        "min_wall_ns": 4.245439052581787,
+        "max_wall_ns": 4.327827215194702,
+        "fork_wall_ns": [4.245439052581787, 4.288704872131348, 4.289341688156128, 4.327827215194702],
+        "fork_cpu_ns": [4.2493391036987305, 4.291081428527832, 4.281930923461914, 4.332010746002197]
+      },
+      "wall_change_percent": -0.22197247087659688,
+      "cpu_change_percent": -0.24388464320184156
+    },
+    {
+      "case": "text_large",
+      "size": 512,
+      "before": {
+        "wall_ns": 2832571.8203125,
+        "cpu_ns": 2829648.90625,
+        "min_wall_ns": 2762009.6953125,
+        "max_wall_ns": 3011454.7265625,
+        "fork_wall_ns": [2791958.53125, 2762009.6953125, 2873185.109375, 3011454.7265625],
+        "fork_cpu_ns": [2791957.578125, 2760896.5625, 2867340.234375, 2973671.875]
+      },
+      "after": {
+        "wall_ns": 2826085.953125,
+        "cpu_ns": 2814477.1875,
+        "min_wall_ns": 2772882.046875,
+        "max_wall_ns": 2891625.1875,
+        "fork_wall_ns": [2830069.5546875, 2772882.046875, 2891625.1875, 2822102.3515625],
+        "fork_cpu_ns": [2824955.3125, 2768340.859375, 2878299.140625, 2803999.0625]
+      },
+      "wall_change_percent": -0.22897450087547844,
+      "cpu_change_percent": -0.5361696539980421
+    }
+  ],
+  "settings": {
+    "counts": {
+      "before": "/tmp/c-buffer-replay-before-counts",
+      "after": "/tmp/c-buffer-replay-after-counts",
+      "output": "/tmp/c-buffer-replay-measure-counts",
+      "kind": "count",
+      "forks": 2,
+      "same_build": null,
+      "smoke": false,
+      "cases": "text,bytes,buffers,text_large,bytes_large,buffers_large,handles,numbers,control",
+      "sizes": "0,1,64,512,4096",
+      "batches": null,
+      "target_ms": 20
+    },
+    "time": {
+      "before": "/tmp/c-buffer-replay-before-time",
+      "after": "/tmp/c-buffer-replay-after-time",
+      "output": "/tmp/c-buffer-replay-measure-time",
+      "kind": "time",
+      "forks": 4,
+      "same_build": null,
+      "smoke": false,
+      "cases": "text,bytes,buffers,text_large,bytes_large,buffers_large,handles,numbers,control",
+      "sizes": "0,1,64,512",
+      "batches": 12,
+      "target_ms": 10
+    },
+    "aa": {
+      "before": "/tmp/c-buffer-replay-before-time",
+      "after": "/tmp/c-buffer-replay-after-time",
+      "output": "/tmp/c-buffer-replay-measure-aa",
+      "kind": "time",
+      "forks": 4,
+      "same_build": "after",
+      "smoke": false,
+      "cases": "text,text_large,buffers,buffers_large,control",
+      "sizes": "512",
+      "batches": 12,
+      "target_ms": 10
+    },
+    "large-confirm": {
+      "before": "/tmp/c-buffer-replay-before-time",
+      "after": "/tmp/c-buffer-replay-after-time",
+      "output": "/tmp/c-buffer-replay-measure-large-confirm",
+      "kind": "time",
+      "forks": 4,
+      "same_build": null,
+      "smoke": false,
+      "cases": "text_large,bytes_large,buffers_large,control",
+      "sizes": "512",
+      "batches": 16,
+      "target_ms": 20
+    }
+  },
+  "affinity": [0, 1],
+  "platform": "Linux-6.8.0-138-generic-x86_64-with-glibc2.39",
+  "sample_hashes": {
+    "counts": "220d5ead5fbbfcf5593f12f08679ca371232f21ff47f55693244fdc1d4f9e597",
+    "time": "da654ac3b50a0d5028f1a83a1a03c735c157c2b358d69359cc690ae36d72e08f",
+    "aa": "3b91a97457c694dedb8e5fc4b4aee6c0f40de2c3e2e9ec07f94cee42c7368f38",
+    "large-confirm": "b549fcf33643727f5ba5a9868451014287e485dcccdfa17fad31222d4d3dc04f"
+  },
+  "toolchain_and_fixture": {
+    "fixture_sha256": {
+      "flat.rs": "763d037aed3de1220b027cc151df9840f9ebba8e55d6b0ffec36a03e72613a59",
+      "bindings.rs": "4197e111545bb7a4cacac1edeb25edaaf0b152bc0679d96b80d46dc31648829e",
+      "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+      "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+      "input-driver.c": "1cc08719e5a184d51bf81f98d20e6667912c1a42c66e669344890883fee4d3b8",
+      "build.py": "fb6716d433e729fff2fb02e5b70bb99db692da89761e8188b84910175526be5d",
+      "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+    },
+    "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+    "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+    "cargo_profile": {
+      "opt_level": "3",
+      "debuginfo": 0,
+      "debug_assertions": false,
+      "overflow_checks": false,
+      "test": false
+    },
+    "header_abi_sha256": "fc869d9083529431e22b7d0dafbddac56528a0644268c6d9b72ec325d23b2c1c"
+  }
+}

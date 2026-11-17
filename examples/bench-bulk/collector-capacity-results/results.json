@@ -1,0 +1,2949 @@
+{
+  "builds": {
+    "before": {
+      "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-typed-array-rows",
+      "commit": "9c0491cea3e701b4ba4471248e7791e844fa6c04",
+      "dirty_paths": [],
+      "profile": "release",
+      "profile_environment": {
+        "CARGO_BUILD_JOBS": "1"
+      },
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8",
+      "path_dependency_repositories": [
+        {
+          "repository": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-typed-array-rows",
+          "commit": "9c0491cea3e701b4ba4471248e7791e844fa6c04",
+          "packages": [
+            "prebindgen",
+            "prebindgen-conversions",
+            "prebindgen-declarations",
+            "prebindgen-flat",
+            "prebindgen-jni",
+            "prebindgen-jni-runtime",
+            "prebindgen-proc-macro",
+            "prebindgen-reprc",
+            "prebindgen-runtime"
+          ],
+          "contains_fixture": true
+        }
+      ],
+      "cargo_config_sha256": {},
+      "cargo": "cargo 1.98.0 (797e8a9bc 2026-08-05)",
+      "dependency_lock_sha256": "50aec39504ae6c12f747a6737ac6ff1de1aa0ea743f3fb86370345e7d07a551f",
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "native_allocations": false,
+      "kotlin": "info: kotlinc-jvm 2.4.21 (JRE 11.0.29+7)",
+      "fixture_sha256": {
+        "flat.rs": "c6bbecbf78d9c60aa6ea0ff5d09f129e5b3bc3838add408300ee4cb4c084dc2e",
+        "bindings.rs": "d83672456f19ae19b7f119dadb41ee683552c80e7a49ca47ac6272486e80eebe",
+        "Bench.kt": "b8572ad9f0b02220a1235a61cf40c201d0dfa7eca3ba2e7d5a991e104b9a5884",
+        "AllocationBench.kt": "b639a9d46117d1d013140ef413b94a033cab778cbf547c76eb6918f7780fe792",
+        "native_allocations.rs": "280a2ccd7efb4e33dbadbaf4b0e3cc2041c9644f8775736b828aed3ba8cb78d3",
+        "run.py": "9698faa5c84be9ca04f4f79236543db1d216748ca24116bfba97948b0d31188e",
+        "Cargo.lock.snapshot": "50aec39504ae6c12f747a6737ac6ff1de1aa0ea743f3fb86370345e7d07a551f"
+      },
+      "jar": "/tmp/typed-object-after/bench.jar",
+      "library": "/tmp/typed-object-after/native/libbulk_bench.so",
+      "jar_sha256": "80397bf218a6097e1a54ac176ba98f2940802b96fe50a824ae95b834db825625",
+      "native_sha256": "9b72307befbdbad8d452059d8b43eb682fb8d59f685e24c57d80186d90391f22"
+    },
+    "after": {
+      "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-collector-capacity",
+      "commit": "2c8c1e8098ce36c5adc605d80e7b73473328fa6f",
+      "dirty_paths": [],
+      "profile": "release",
+      "profile_environment": {
+        "CARGO_BUILD_JOBS": "1"
+      },
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8",
+      "path_dependency_repositories": [
+        {
+          "repository": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-collector-capacity",
+          "commit": "2c8c1e8098ce36c5adc605d80e7b73473328fa6f",
+          "packages": [
+            "prebindgen",
+            "prebindgen-conversions",
+            "prebindgen-declarations",
+            "prebindgen-flat",
+            "prebindgen-jni",
+            "prebindgen-jni-runtime",
+            "prebindgen-proc-macro",
+            "prebindgen-reprc",
+            "prebindgen-runtime"
+          ],
+          "contains_fixture": true
+        }
+      ],
+      "cargo_config_sha256": {},
+      "cargo": "cargo 1.98.0 (797e8a9bc 2026-08-05)",
+      "dependency_lock_sha256": "50aec39504ae6c12f747a6737ac6ff1de1aa0ea743f3fb86370345e7d07a551f",
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "native_allocations": false,
+      "kotlin": "info: kotlinc-jvm 2.4.21 (JRE 11.0.29+7)",
+      "fixture_sha256": {
+        "flat.rs": "c6bbecbf78d9c60aa6ea0ff5d09f129e5b3bc3838add408300ee4cb4c084dc2e",
+        "bindings.rs": "d83672456f19ae19b7f119dadb41ee683552c80e7a49ca47ac6272486e80eebe",
+        "Bench.kt": "b8572ad9f0b02220a1235a61cf40c201d0dfa7eca3ba2e7d5a991e104b9a5884",
+        "AllocationBench.kt": "b639a9d46117d1d013140ef413b94a033cab778cbf547c76eb6918f7780fe792",
+        "native_allocations.rs": "280a2ccd7efb4e33dbadbaf4b0e3cc2041c9644f8775736b828aed3ba8cb78d3",
+        "run.py": "9698faa5c84be9ca04f4f79236543db1d216748ca24116bfba97948b0d31188e",
+        "Cargo.lock.snapshot": "50aec39504ae6c12f747a6737ac6ff1de1aa0ea743f3fb86370345e7d07a551f"
+      },
+      "jar": "/tmp/collector-hint-final/bench.jar",
+      "library": "/tmp/collector-hint-final/native/libbulk_bench.so",
+      "jar_sha256": "6121b9143bb72667a278e3af376c1e66366f6f42c2b0af5530676ef018e18ee1",
+      "native_sha256": "9ff0917012e0091774885d4e15a08659f730db5f43b8fc46bcb4f9d874190375"
+    }
+  },
+  "driver_sha256": "9dda45e208f54446407f15c0d15fcc3cd1ac1bbab8addbfa8069b6172ea62932",
+  "runner_sha256": "9ad686c19249e3d87047dbe04fbffb4bafc00f900e67cc42ec2f06ab2dbe4940",
+  "samples_sha256": "cf9f5543e6a7e8ff6ef9d88b35cb1c8fc35505ed37d35767beefe553609b2c06",
+  "settings": {
+    "before": "/tmp/typed-object-after",
+    "after": "/tmp/collector-hint-final",
+    "driver": "/tmp/primitive-frames-driver.jar",
+    "output": "/tmp/collector-hint-final-measures",
+    "forks": 4,
+    "counts": false,
+    "check_jni": false,
+    "cases": null,
+    "cell": [
+      "primitive_fold:0",
+      "primitive_fold:1",
+      "primitive_fold:11",
+      "primitive_fold:16",
+      "primitive_fold:32",
+      "primitive_fold:63",
+      "primitive_fold:64",
+      "primitive_fold:65",
+      "primitive_fold:512",
+      "fold_flat:512",
+      "fold_nested:64",
+      "control:1"
+    ]
+  },
+  "runs": [
+    {
+      "id": "0-primitive_fold-65-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/typed-object-after/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/typed-object-after/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "65",
+        "time"
+      ],
+      "output_sha256": "09d24971d6864a0e235724144229e3e3dbe19d4f8ed817cfa19832b45e6b7761"
+    },
+    {
+      "id": "0-primitive_fold-65-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/collector-hint-final/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/collector-hint-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "65",
+        "time"
+      ],
+      "output_sha256": "8e387a1b0d5879fc4fd184cb978ff9128305a97462519aa7af7d296d21cc25ff"
+    },
+    {
+      "id": "0-primitive_fold-63-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/typed-object-after/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/typed-object-after/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "63",
+        "time"
+      ],
+      "output_sha256": "739a453da7860945472f2d6cb1a6c88f736f20a82d18bf8a043062acb9ebfc26"
+    },
+    {
+      "id": "0-primitive_fold-63-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/collector-hint-final/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/collector-hint-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "63",
+        "time"
+      ],
+      "output_sha256": "40d4787e082256bd755e7e37fd182f85f5bf52121b71556154510c26ddfa0fce"
+    },
+    {
+      "id": "0-primitive_fold-512-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/typed-object-after/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/typed-object-after/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "512",
+        "time"
+      ],
+      "output_sha256": "571885e5c1f9d1704e0414f823577803313414ff31850e2d8188383ff85a6b79"
+    },
+    {
+      "id": "0-primitive_fold-512-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/collector-hint-final/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/collector-hint-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "512",
+        "time"
+      ],
+      "output_sha256": "410e74b006be4c1703e61312791808b661a437a4e86f28646f06c1a0bc50e0a9"
+    },
+    {
+      "id": "0-primitive_fold-0-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/typed-object-after/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/typed-object-after/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "0",
+        "time"
+      ],
+      "output_sha256": "f34e3206273ef483a43c519a162385069bf91bf204b59770e171b44ed127e99f"
+    },
+    {
+      "id": "0-primitive_fold-0-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/collector-hint-final/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/collector-hint-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "0",
+        "time"
+      ],
+      "output_sha256": "8fa05fd1fd72e411bae6cf495aaae14c666e50b7ee58b0241e04ab2de91d9b09"
+    },
+    {
+      "id": "0-control-1-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/typed-object-after/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/typed-object-after/bench.jar",
+        "bench.outputowners.DriverKt",
+        "control",
+        "1",
+        "time"
+      ],
+      "output_sha256": "9a0e97dbf632375af502020a566e7236325d0bea90e6bb60b4d4ff3481aca8a9"
+    },
+    {
+      "id": "0-control-1-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/collector-hint-final/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/collector-hint-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "control",
+        "1",
+        "time"
+      ],
+      "output_sha256": "127d8a7559498ca7881524894142895389b60c9b2f66678c5670259eb6315d29"
+    },
+    {
+      "id": "0-primitive_fold-64-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/typed-object-after/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/typed-object-after/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "64",
+        "time"
+      ],
+      "output_sha256": "551cff161bad68170bb3035f763991e2c4961d6fe819e8a0c58c5d81d2464594"
+    },
+    {
+      "id": "0-primitive_fold-64-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/collector-hint-final/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/collector-hint-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "64",
+        "time"
+      ],
+      "output_sha256": "4440f13fe425a9790131cce4160ce34eb112ad93f0157dcb7542058c218110dd"
+    },
+    {
+      "id": "0-primitive_fold-32-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/typed-object-after/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/typed-object-after/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "32",
+        "time"
+      ],
+      "output_sha256": "7ad4d8e3e0d76b62be3b4a5a33ef7a23e5c91e32cc267b04f9887690ed2d2bdf"
+    },
+    {
+      "id": "0-primitive_fold-32-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/collector-hint-final/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/collector-hint-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "32",
+        "time"
+      ],
+      "output_sha256": "05563335ac676bbc032f8380fe8419003ddd566ff4840767d2c6af90a2000764"
+    },
+    {
+      "id": "0-primitive_fold-16-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/typed-object-after/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/typed-object-after/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "16",
+        "time"
+      ],
+      "output_sha256": "a1c07a40e6b2cd5fb2cf90f7794787a2597d6c0fe6ce16c9bac5453b270f5e20"
+    },
+    {
+      "id": "0-primitive_fold-16-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/collector-hint-final/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/collector-hint-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "16",
+        "time"
+      ],
+      "output_sha256": "69741a0452988fcb37642b476001832a22c313e6810d57f45a8b79ea7df86473"
+    },
+    {
+      "id": "0-fold_flat-512-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/typed-object-after/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/typed-object-after/bench.jar",
+        "bench.outputowners.DriverKt",
+        "fold_flat",
+        "512",
+        "time"
+      ],
+      "output_sha256": "4746821caf1e3d6b521578b1b2cbce39ffbafc19ae497e83cc374fedc2593c4a"
+    },
+    {
+      "id": "0-fold_flat-512-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/collector-hint-final/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/collector-hint-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "fold_flat",
+        "512",
+        "time"
+      ],
+      "output_sha256": "e0d15b236e4d2dc0986900fd283ef1cd9d2f26f384852c406b33f1374a5e349a"
+    },
+    {
+      "id": "0-fold_nested-64-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/typed-object-after/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/typed-object-after/bench.jar",
+        "bench.outputowners.DriverKt",
+        "fold_nested",
+        "64",
+        "time"
+      ],
+      "output_sha256": "005511ab01d44bdf47c058ada444ed1960ae825148c59a6a78a6e55b473ba5ed"
+    },
+    {
+      "id": "0-fold_nested-64-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/collector-hint-final/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/collector-hint-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "fold_nested",
+        "64",
+        "time"
+      ],
+      "output_sha256": "de824d1b6fa8814e5b09bec55a51108c653e2e09b865b59ecfeaaf41905def3c"
+    },
+    {
+      "id": "0-primitive_fold-11-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/typed-object-after/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/typed-object-after/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "11",
+        "time"
+      ],
+      "output_sha256": "45058b10787b7e66a9da72e6058d2d303527b07e6855cb2408c40f8c31291264"
+    },
+    {
+      "id": "0-primitive_fold-11-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/collector-hint-final/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/collector-hint-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "11",
+        "time"
+      ],
+      "output_sha256": "ff594256d58d56289027eac5dae26b5dce08b8383d9dd8fa9fd2788b66d7fc70"
+    },
+    {
+      "id": "0-primitive_fold-1-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/typed-object-after/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/typed-object-after/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "1",
+        "time"
+      ],
+      "output_sha256": "369f2b17d9d5e0bce63e3fd6cbedce2f140a821b55d0042b28e8101f84c2010c"
+    },
+    {
+      "id": "0-primitive_fold-1-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/collector-hint-final/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/collector-hint-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "1",
+        "time"
+      ],
+      "output_sha256": "c00debeed9aca45a083507595ba549a22efd65587016cfb5d79983cc85f9684e"
+    },
+    {
+      "id": "1-primitive_fold-11-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/collector-hint-final/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/collector-hint-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "11",
+        "time"
+      ],
+      "output_sha256": "ea401aacd20b6a06f0ca93961680f1713f7f47523ab226072dcbc3a4b65c8450"
+    },
+    {
+      "id": "1-primitive_fold-11-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/typed-object-after/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/typed-object-after/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "11",
+        "time"
+      ],
+      "output_sha256": "0bf90dca004d96d25c94c52e2351d6464d4850bb8c1d81ee3a5614b14f247091"
+    },
+    {
+      "id": "1-primitive_fold-65-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/collector-hint-final/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/collector-hint-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "65",
+        "time"
+      ],
+      "output_sha256": "bdb316d4baf1f88e9f80fe2656d93ad1fff61e11bea0ae486fcd8975aaf314b9"
+    },
+    {
+      "id": "1-primitive_fold-65-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/typed-object-after/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/typed-object-after/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "65",
+        "time"
+      ],
+      "output_sha256": "6da83ccbe8286d6f6967ef0ef8fc738fbb8c6d7a73841e20389ccfec22d375ac"
+    },
+    {
+      "id": "1-primitive_fold-64-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/collector-hint-final/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/collector-hint-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "64",
+        "time"
+      ],
+      "output_sha256": "ac1bf9b84f1ea79b509561a8e1eed5ac31842587ec720ab57cf68b5f8154fd09"
+    },
+    {
+      "id": "1-primitive_fold-64-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/typed-object-after/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/typed-object-after/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "64",
+        "time"
+      ],
+      "output_sha256": "38a3684c2a9d6af17e21105e900bdedfb73a752d3c637b1b6465feb3590bcdb6"
+    },
+    {
+      "id": "1-primitive_fold-1-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/collector-hint-final/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/collector-hint-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "1",
+        "time"
+      ],
+      "output_sha256": "20abb693fb45e4f6b9a32de40180d0bd7eb88ecbe2e6f84944919ad649e8c610"
+    },
+    {
+      "id": "1-primitive_fold-1-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/typed-object-after/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/typed-object-after/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "1",
+        "time"
+      ],
+      "output_sha256": "0d4530f66b44917daf6372ba1cd090a561f0f6f76b0846d71d95d09b7c21581a"
+    },
+    {
+      "id": "1-primitive_fold-0-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/collector-hint-final/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/collector-hint-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "0",
+        "time"
+      ],
+      "output_sha256": "6c2f4b9a2317ac90f4b2cce28981c238032ecc61424205f77471d35e76d9cab5"
+    },
+    {
+      "id": "1-primitive_fold-0-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/typed-object-after/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/typed-object-after/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "0",
+        "time"
+      ],
+      "output_sha256": "96ff92d16db50fbec329985d7fb8bbc34a7d210660ad788037b8f0b551cd2cc1"
+    },
+    {
+      "id": "1-primitive_fold-32-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/collector-hint-final/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/collector-hint-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "32",
+        "time"
+      ],
+      "output_sha256": "4d0806ae957553185e73ee3143f0b7b3d2b4ba99b3f3efe3ac804a85ec9b5b6e"
+    },
+    {
+      "id": "1-primitive_fold-32-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/typed-object-after/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/typed-object-after/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "32",
+        "time"
+      ],
+      "output_sha256": "663192a1194725f640d2db692ec833651d1109a349d77379f2c93e7064bee54b"
+    },
+    {
+      "id": "1-fold_flat-512-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/collector-hint-final/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/collector-hint-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "fold_flat",
+        "512",
+        "time"
+      ],
+      "output_sha256": "2d27ffb3b26d2d304fc086814437cbfbca8f0a7557aad52330bbe0ee2d80aef0"
+    },
+    {
+      "id": "1-fold_flat-512-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/typed-object-after/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/typed-object-after/bench.jar",
+        "bench.outputowners.DriverKt",
+        "fold_flat",
+        "512",
+        "time"
+      ],
+      "output_sha256": "b9c382369ada942c2dea27987d756ec8cbb4da81aabe88cc4434e4bd0ecf54ac"
+    },
+    {
+      "id": "1-primitive_fold-512-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/collector-hint-final/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/collector-hint-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "512",
+        "time"
+      ],
+      "output_sha256": "a726f42c0a8306354376f5f14c142a2c1798529ce92ac06a204cb4c356076510"
+    },
+    {
+      "id": "1-primitive_fold-512-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/typed-object-after/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/typed-object-after/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "512",
+        "time"
+      ],
+      "output_sha256": "ca466da619094cac9119c2dd830e723363811fd82ef8aa690693ddd50bfd032f"
+    },
+    {
+      "id": "1-primitive_fold-63-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/collector-hint-final/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/collector-hint-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "63",
+        "time"
+      ],
+      "output_sha256": "8b8b478000d2de5e2aa47ebda1aedbbdb75704a9a81b95976a38bec511034aa0"
+    },
+    {
+      "id": "1-primitive_fold-63-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/typed-object-after/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/typed-object-after/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "63",
+        "time"
+      ],
+      "output_sha256": "1313310833b0b082bcf6668b8135d486451613a31e75d263b120774489d08caa"
+    },
+    {
+      "id": "1-primitive_fold-16-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/collector-hint-final/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/collector-hint-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "16",
+        "time"
+      ],
+      "output_sha256": "decee5b869b23b52f55a64ce7f67e18739b7da8ec783b6d669ea9d5efa52d240"
+    },
+    {
+      "id": "1-primitive_fold-16-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/typed-object-after/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/typed-object-after/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "16",
+        "time"
+      ],
+      "output_sha256": "d318e6be23ab76d6e81bf3739c27c674b79bf71fd37f3b429fbda134d4afdff0"
+    },
+    {
+      "id": "1-fold_nested-64-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/collector-hint-final/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/collector-hint-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "fold_nested",
+        "64",
+        "time"
+      ],
+      "output_sha256": "ef9ebf91437845b7f1674b49cee6defc3cc383837328f2f8bf5741e3a24e7c4c"
+    },
+    {
+      "id": "1-fold_nested-64-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/typed-object-after/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/typed-object-after/bench.jar",
+        "bench.outputowners.DriverKt",
+        "fold_nested",
+        "64",
+        "time"
+      ],
+      "output_sha256": "66b544eeba551aea10da29ad40f23e5f3d57882b6adb0521fce49f3b7c8ae489"
+    },
+    {
+      "id": "1-control-1-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/collector-hint-final/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/collector-hint-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "control",
+        "1",
+        "time"
+      ],
+      "output_sha256": "9ef9ae1d86e3d5ac074f07417b6b611a80db28f8d3b1a487afc8baf04134ef2a"
+    },
+    {
+      "id": "1-control-1-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/typed-object-after/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/typed-object-after/bench.jar",
+        "bench.outputowners.DriverKt",
+        "control",
+        "1",
+        "time"
+      ],
+      "output_sha256": "1d1471401036319b85be55216ca9ddcf6e39aecb0dcb528a94799f540e42712d"
+    },
+    {
+      "id": "2-fold_flat-512-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/typed-object-after/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/typed-object-after/bench.jar",
+        "bench.outputowners.DriverKt",
+        "fold_flat",
+        "512",
+        "time"
+      ],
+      "output_sha256": "97aad45090ef4efa5e731e5b19021619197b427c0833760ed19bf02946886f36"
+    },
+    {
+      "id": "2-fold_flat-512-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/collector-hint-final/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/collector-hint-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "fold_flat",
+        "512",
+        "time"
+      ],
+      "output_sha256": "469685320f90cb4df2c30013bf9604b42f87194268d3c123b492e481d65257db"
+    },
+    {
+      "id": "2-primitive_fold-0-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/typed-object-after/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/typed-object-after/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "0",
+        "time"
+      ],
+      "output_sha256": "9b690ca6e666b803ae0332a04c9893fdbf072de9793fb9ea192f6e81d6c1ac21"
+    },
+    {
+      "id": "2-primitive_fold-0-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/collector-hint-final/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/collector-hint-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "0",
+        "time"
+      ],
+      "output_sha256": "3d1c0986a07af3d775ed1c4445ec48c872f77ed7d6b382731dbdaf2a95bff7d6"
+    },
+    {
+      "id": "2-primitive_fold-65-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/typed-object-after/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/typed-object-after/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "65",
+        "time"
+      ],
+      "output_sha256": "4495d7d91a799c16ddb50b75643981f90e0b3e3f49b1a2da92d2ab74a9516e16"
+    },
+    {
+      "id": "2-primitive_fold-65-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/collector-hint-final/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/collector-hint-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "65",
+        "time"
+      ],
+      "output_sha256": "4cb2c53a18b5216e405c53b87101a8b70e6dd2a6d335835b8e5e8a72ade61f10"
+    },
+    {
+      "id": "2-primitive_fold-16-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/typed-object-after/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/typed-object-after/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "16",
+        "time"
+      ],
+      "output_sha256": "cfaadf8a044cd7f9cd691eb0613f23dd357c932a48f9fb04236055ac4b0e3dcc"
+    },
+    {
+      "id": "2-primitive_fold-16-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/collector-hint-final/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/collector-hint-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "16",
+        "time"
+      ],
+      "output_sha256": "8c7d72dd7e001b01ba82dc6fa46291f4efe912528918a417849502b14b2d44e8"
+    },
+    {
+      "id": "2-primitive_fold-512-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/typed-object-after/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/typed-object-after/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "512",
+        "time"
+      ],
+      "output_sha256": "5dc7f1c84f973825f69e47fe53e1e061f70b0238a914d7510aa03c0b4acd4cf6"
+    },
+    {
+      "id": "2-primitive_fold-512-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/collector-hint-final/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/collector-hint-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "512",
+        "time"
+      ],
+      "output_sha256": "dbaf06f4c3db99298b29b084d42e10348df300e306b7204cacb8299448647947"
+    },
+    {
+      "id": "2-primitive_fold-63-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/typed-object-after/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/typed-object-after/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "63",
+        "time"
+      ],
+      "output_sha256": "1cf17d9767dcef437154906213cd65f7bb20618793c5407e09d5e8ae85898a34"
+    },
+    {
+      "id": "2-primitive_fold-63-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/collector-hint-final/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/collector-hint-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "63",
+        "time"
+      ],
+      "output_sha256": "c986c11db3a83b5fe0dd64f6e6e2e14667a3a08b0b9ed70871a426735949fb2a"
+    },
+    {
+      "id": "2-primitive_fold-32-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/typed-object-after/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/typed-object-after/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "32",
+        "time"
+      ],
+      "output_sha256": "03e39006477f6af5be4426e2dc14b64284176fc777df37ec0ca97a0c114a11be"
+    },
+    {
+      "id": "2-primitive_fold-32-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/collector-hint-final/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/collector-hint-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "32",
+        "time"
+      ],
+      "output_sha256": "7cb47459e747006f03b6bc02e52bb62b4cc91469a11ff9d2f5e9704d8b4dc970"
+    },
+    {
+      "id": "2-primitive_fold-64-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/typed-object-after/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/typed-object-after/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "64",
+        "time"
+      ],
+      "output_sha256": "376504ec2f2e2916cda92967c21da8488e32d5395154df47e5b1aafa816c7276"
+    },
+    {
+      "id": "2-primitive_fold-64-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/collector-hint-final/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/collector-hint-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "64",
+        "time"
+      ],
+      "output_sha256": "9f48f6b2a1dd3990f2798deced594e9805a3b420f7a6c8ecba59f340e36243bf"
+    },
+    {
+      "id": "2-primitive_fold-1-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/typed-object-after/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/typed-object-after/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "1",
+        "time"
+      ],
+      "output_sha256": "e9a5cc92dee6c1fd49c63474bf4b0330681e92c62a51424a47bf82ff5c73d440"
+    },
+    {
+      "id": "2-primitive_fold-1-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/collector-hint-final/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/collector-hint-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "1",
+        "time"
+      ],
+      "output_sha256": "d74173e0f4b493b983dfe3f7128b9904a66bf15dade55c2ddeb9a1d5674b6c0f"
+    },
+    {
+      "id": "2-control-1-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/typed-object-after/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/typed-object-after/bench.jar",
+        "bench.outputowners.DriverKt",
+        "control",
+        "1",
+        "time"
+      ],
+      "output_sha256": "cfd100204c2d4cc82e1a32e626487c12d462969d0878ff20080a5d0d3461b98b"
+    },
+    {
+      "id": "2-control-1-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/collector-hint-final/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/collector-hint-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "control",
+        "1",
+        "time"
+      ],
+      "output_sha256": "47ceac47f4e9a60b1b0dac2bad4723ba75f893805b750ca2df8d56e9f03a0d9f"
+    },
+    {
+      "id": "2-fold_nested-64-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/typed-object-after/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/typed-object-after/bench.jar",
+        "bench.outputowners.DriverKt",
+        "fold_nested",
+        "64",
+        "time"
+      ],
+      "output_sha256": "650b5a18a250ca87127a39353fb3003dd77f96ef4e70e760662d943ecb251a0b"
+    },
+    {
+      "id": "2-fold_nested-64-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/collector-hint-final/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/collector-hint-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "fold_nested",
+        "64",
+        "time"
+      ],
+      "output_sha256": "84546001efb05da1dc6dea7d95296a11650fe70d0d9b92e0ea2cfb3221dbe9c4"
+    },
+    {
+      "id": "2-primitive_fold-11-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/typed-object-after/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/typed-object-after/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "11",
+        "time"
+      ],
+      "output_sha256": "aad8cf15432b86c186bd9efc629288d36492d00fe3e09a22b17bc92b498efba6"
+    },
+    {
+      "id": "2-primitive_fold-11-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/collector-hint-final/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/collector-hint-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "11",
+        "time"
+      ],
+      "output_sha256": "0c1396a8e5f7d58105b0f2ba0dc3bf06576690e94274c15906dd1ef52ae07031"
+    },
+    {
+      "id": "3-primitive_fold-63-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/collector-hint-final/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/collector-hint-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "63",
+        "time"
+      ],
+      "output_sha256": "4f4dbfb8baece0fa7d53f85cb786c68a96a502a91a448dd35a8fee87c316be02"
+    },
+    {
+      "id": "3-primitive_fold-63-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/typed-object-after/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/typed-object-after/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "63",
+        "time"
+      ],
+      "output_sha256": "bde4772f77895bcc893f68a7a8a1505851c578ad500d7b3e170a2c5592b23ca5"
+    },
+    {
+      "id": "3-primitive_fold-64-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/collector-hint-final/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/collector-hint-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "64",
+        "time"
+      ],
+      "output_sha256": "78c6e6d71724876fbff37fcff3c94ff1f1e9defa18731d6eb7884aa732e5d6d1"
+    },
+    {
+      "id": "3-primitive_fold-64-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/typed-object-after/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/typed-object-after/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "64",
+        "time"
+      ],
+      "output_sha256": "3e6ccca3aba24a92c23705f140d0df2637f1fbc18099f2d7d460d32e654df4ec"
+    },
+    {
+      "id": "3-fold_flat-512-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/collector-hint-final/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/collector-hint-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "fold_flat",
+        "512",
+        "time"
+      ],
+      "output_sha256": "a15fbec24fcf32d34848a45a2dbe8e517e04f362ae27e7c67beace87f3645efa"
+    },
+    {
+      "id": "3-fold_flat-512-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/typed-object-after/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/typed-object-after/bench.jar",
+        "bench.outputowners.DriverKt",
+        "fold_flat",
+        "512",
+        "time"
+      ],
+      "output_sha256": "fcab39bdd2dc9b868c87d79e7fd5fa77cf59d72173914b167f033d6d2d747bcd"
+    },
+    {
+      "id": "3-primitive_fold-65-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/collector-hint-final/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/collector-hint-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "65",
+        "time"
+      ],
+      "output_sha256": "adf546ab9de84037e2917bff763737c246bc964249fd7905351f481c01229b76"
+    },
+    {
+      "id": "3-primitive_fold-65-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/typed-object-after/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/typed-object-after/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "65",
+        "time"
+      ],
+      "output_sha256": "58228b7b88ee8756c2f5b8846fa334f94238aceec3f5ab4093bda5cbe6b795bf"
+    },
+    {
+      "id": "3-primitive_fold-512-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/collector-hint-final/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/collector-hint-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "512",
+        "time"
+      ],
+      "output_sha256": "79ee400b36b621800bdc45c18dd4e5e1ebe043fe3828c85f6ccb31ead320c164"
+    },
+    {
+      "id": "3-primitive_fold-512-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/typed-object-after/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/typed-object-after/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "512",
+        "time"
+      ],
+      "output_sha256": "cc8800ade7f27a00c12a8abb57e6a6d378ee9b28ac9ea8d28d883197e853782d"
+    },
+    {
+      "id": "3-primitive_fold-32-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/collector-hint-final/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/collector-hint-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "32",
+        "time"
+      ],
+      "output_sha256": "e4a014db1082476979aed22af346004aa1f25e867b6e1d1e0d93d62fddaa71e0"
+    },
+    {
+      "id": "3-primitive_fold-32-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/typed-object-after/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/typed-object-after/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "32",
+        "time"
+      ],
+      "output_sha256": "e507de6729c45d3f3b1b990563341814f23eeef67640a4ef3864ee9df04ab814"
+    },
+    {
+      "id": "3-control-1-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/collector-hint-final/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/collector-hint-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "control",
+        "1",
+        "time"
+      ],
+      "output_sha256": "7ec3b154c6a32d23b203285c0c15843cc5aaf60fbd29d93cf291ba177f67f9e0"
+    },
+    {
+      "id": "3-control-1-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/typed-object-after/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/typed-object-after/bench.jar",
+        "bench.outputowners.DriverKt",
+        "control",
+        "1",
+        "time"
+      ],
+      "output_sha256": "38b991a95f98e099546e6ba7889b362b5936abd79e894bb770a55020d0c74052"
+    },
+    {
+      "id": "3-primitive_fold-16-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/collector-hint-final/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/collector-hint-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "16",
+        "time"
+      ],
+      "output_sha256": "03a23627a54be0f045cc1955360174f5009c40f97d57e6a3dc34aa113e4a89f9"
+    },
+    {
+      "id": "3-primitive_fold-16-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/typed-object-after/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/typed-object-after/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "16",
+        "time"
+      ],
+      "output_sha256": "b7e842122beb87d91c6b920278d6bfc0583c19944fa3b0d382e10e6e572c113c"
+    },
+    {
+      "id": "3-primitive_fold-11-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/collector-hint-final/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/collector-hint-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "11",
+        "time"
+      ],
+      "output_sha256": "41987a3caff3e040fbef58c1b94236e954ef2e00a73beaf02f0ba29a6a518a21"
+    },
+    {
+      "id": "3-primitive_fold-11-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/typed-object-after/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/typed-object-after/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "11",
+        "time"
+      ],
+      "output_sha256": "f64814d9cb4cd9adc2ce2ba09bc6844e3fef5738219a847211e7a43a1c632133"
+    },
+    {
+      "id": "3-primitive_fold-1-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/collector-hint-final/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/collector-hint-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "1",
+        "time"
+      ],
+      "output_sha256": "bd193ec12af93ee920da464fa7843e6cdec6964aebd419c4bd1e955353ddde79"
+    },
+    {
+      "id": "3-primitive_fold-1-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/typed-object-after/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/typed-object-after/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "1",
+        "time"
+      ],
+      "output_sha256": "1516513b061debe77b6e4083cd0882386d2fdfd8759f59e2aac4957ac97d4679"
+    },
+    {
+      "id": "3-primitive_fold-0-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/collector-hint-final/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/collector-hint-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "0",
+        "time"
+      ],
+      "output_sha256": "564394b5b1570680ab5f43f1a4634b18aa5a68b58cb98c6ba7824bc33f801616"
+    },
+    {
+      "id": "3-primitive_fold-0-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/typed-object-after/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/typed-object-after/bench.jar",
+        "bench.outputowners.DriverKt",
+        "primitive_fold",
+        "0",
+        "time"
+      ],
+      "output_sha256": "459e59e50b6c14cc8b7560e3eec0297cc2de403db749cf75a66d77e9fda51ed2"
+    },
+    {
+      "id": "3-fold_nested-64-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/collector-hint-final/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/collector-hint-final/bench.jar",
+        "bench.outputowners.DriverKt",
+        "fold_nested",
+        "64",
+        "time"
+      ],
+      "output_sha256": "128dd09e5a9c2d71be391c6ad0c9fa58f0b3f4e74762d6d7d76603ff5ab4836a"
+    },
+    {
+      "id": "3-fold_nested-64-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Djava.library.path=/tmp/typed-object-after/native",
+        "-cp",
+        "/tmp/primitive-frames-driver.jar:/tmp/typed-object-after/bench.jar",
+        "bench.outputowners.DriverKt",
+        "fold_nested",
+        "64",
+        "time"
+      ],
+      "output_sha256": "06764102d51417f2711321a4561dd2b7333b0dd4328a6336f3ec51b570bb7dfb"
+    }
+  ],
+  "summary": [
+    {
+      "case": "control",
+      "size": 1,
+      "before": {
+        "nanos": {
+          "median": 13.126856486002604,
+          "min": 12.657822450002035,
+          "max": 13.805781682332357
+        },
+        "cpu_nanos": {
+          "median": 13.099489212036133,
+          "min": 12.602388064066568,
+          "max": 13.807770411173502
+        },
+        "jvm_bytes": {
+          "median": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "forks": [
+          {
+            "nanos": 12.8289901415507,
+            "cpu_nanos": 12.830273310343424,
+            "jvm_bytes": 0.0
+          },
+          {
+            "nanos": 13.805781682332357,
+            "cpu_nanos": 13.807770411173502,
+            "jvm_bytes": 0.0
+          },
+          {
+            "nanos": 12.657822450002035,
+            "cpu_nanos": 12.602388064066568,
+            "jvm_bytes": 0.0
+          },
+          {
+            "nanos": 13.424722830454508,
+            "cpu_nanos": 13.368705113728842,
+            "jvm_bytes": 0.0
+          }
+        ]
+      },
+      "after": {
+        "nanos": {
+          "median": 12.929951588312786,
+          "min": 12.562416315078735,
+          "max": 13.21864684422811
+        },
+        "cpu_nanos": {
+          "median": 12.90401856104533,
+          "min": 12.564860979715982,
+          "max": 13.219062487284342
+        },
+        "jvm_bytes": {
+          "median": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "forks": [
+          {
+            "nanos": 13.153152465820312,
+            "cpu_nanos": 13.152316411336264,
+            "jvm_bytes": 0.0
+          },
+          {
+            "nanos": 13.21864684422811,
+            "cpu_nanos": 13.219062487284342,
+            "jvm_bytes": 0.0
+          },
+          {
+            "nanos": 12.706750710805258,
+            "cpu_nanos": 12.655720710754395,
+            "jvm_bytes": 0.0
+          },
+          {
+            "nanos": 12.562416315078735,
+            "cpu_nanos": 12.564860979715982,
+            "jvm_bytes": 0.0
+          }
+        ]
+      }
+    },
+    {
+      "case": "fold_flat",
+      "size": 512,
+      "before": {
+        "nanos": {
+          "median": 979898.6848958333,
+          "min": 970391.3645833334,
+          "max": 1039017.9479166666
+        },
+        "cpu_nanos": {
+          "median": 979363.59375,
+          "min": 970462.34375,
+          "max": 1000750.15625
+        },
+        "jvm_bytes": {
+          "median": 83280.0,
+          "min": 83280.0,
+          "max": 83280.0
+        },
+        "forks": [
+          {
+            "nanos": 970391.3645833334,
+            "cpu_nanos": 970462.34375,
+            "jvm_bytes": 83280.0
+          },
+          {
+            "nanos": 985047.59375,
+            "cpu_nanos": 983565.3645833334,
+            "jvm_bytes": 83280.0
+          },
+          {
+            "nanos": 1039017.9479166666,
+            "cpu_nanos": 1000750.15625,
+            "jvm_bytes": 83280.0
+          },
+          {
+            "nanos": 974749.7760416666,
+            "cpu_nanos": 975161.8229166666,
+            "jvm_bytes": 83280.0
+          }
+        ]
+      },
+      "after": {
+        "nanos": {
+          "median": 1024674.3203125,
+          "min": 1012977.4427083334,
+          "max": 1026350.1145833334
+        },
+        "cpu_nanos": {
+          "median": 1021978.6458333333,
+          "min": 1012349.3229166666,
+          "max": 1025262.34375
+        },
+        "jvm_bytes": {
+          "median": 78608.0,
+          "min": 78608.0,
+          "max": 78608.0
+        },
+        "forks": [
+          {
+            "nanos": 1012977.4427083334,
+            "cpu_nanos": 1012349.3229166666,
+            "jvm_bytes": 78608.0
+          },
+          {
+            "nanos": 1025314.4947916666,
+            "cpu_nanos": 1020170.1041666666,
+            "jvm_bytes": 78608.0
+          },
+          {
+            "nanos": 1024034.1458333334,
+            "cpu_nanos": 1023787.1875,
+            "jvm_bytes": 78608.0
+          },
+          {
+            "nanos": 1026350.1145833334,
+            "cpu_nanos": 1025262.34375,
+            "jvm_bytes": 78608.0
+          }
+        ]
+      }
+    },
+    {
+      "case": "fold_nested",
+      "size": 64,
+      "before": {
+        "nanos": {
+          "median": 288159.7858072917,
+          "min": 275741.5182291667,
+          "max": 340304.76171875
+        },
+        "cpu_nanos": {
+          "median": 288087.7018229167,
+          "min": 275799.0494791667,
+          "max": 337930.078125
+        },
+        "jvm_bytes": {
+          "median": 52978.96875,
+          "min": 52873.9375,
+          "max": 53053.0
+        },
+        "forks": [
+          {
+            "nanos": 340304.76171875,
+            "cpu_nanos": 337930.078125,
+            "jvm_bytes": 52934.4375
+          },
+          {
+            "nanos": 289449.9791666667,
+            "cpu_nanos": 289362.4869791667,
+            "jvm_bytes": 53023.5
+          },
+          {
+            "nanos": 275741.5182291667,
+            "cpu_nanos": 275799.0494791667,
+            "jvm_bytes": 53053.0
+          },
+          {
+            "nanos": 286869.5924479167,
+            "cpu_nanos": 286812.9166666667,
+            "jvm_bytes": 52873.9375
+          }
+        ]
+      },
+      "after": {
+        "nanos": {
+          "median": 296285.9075520834,
+          "min": 282032.6653645833,
+          "max": 317990.7669270833
+        },
+        "cpu_nanos": {
+          "median": 294371.8619791666,
+          "min": 281366.8489583333,
+          "max": 312183.6458333333
+        },
+        "jvm_bytes": {
+          "median": 52340.53125,
+          "min": 52295.6875,
+          "max": 52361.9375
+        },
+        "forks": [
+          {
+            "nanos": 304640.6015625,
+            "cpu_nanos": 304154.9609375,
+            "jvm_bytes": 52361.9375
+          },
+          {
+            "nanos": 282032.6653645833,
+            "cpu_nanos": 281366.8489583333,
+            "jvm_bytes": 52326.0
+          },
+          {
+            "nanos": 287931.2135416667,
+            "cpu_nanos": 284588.7630208333,
+            "jvm_bytes": 52355.0625
+          },
+          {
+            "nanos": 317990.7669270833,
+            "cpu_nanos": 312183.6458333333,
+            "jvm_bytes": 52295.6875
+          }
+        ]
+      }
+    },
+    {
+      "case": "primitive_fold",
+      "size": 0,
+      "before": {
+        "nanos": {
+          "median": 890.9171752929688,
+          "min": 859.0456212361654,
+          "max": 901.955462137858
+        },
+        "cpu_nanos": {
+          "median": 890.7599512736002,
+          "min": 859.0657806396484,
+          "max": 901.9181060791016
+        },
+        "jvm_bytes": {
+          "median": 80.0,
+          "min": 80.0,
+          "max": 80.0
+        },
+        "forks": [
+          {
+            "nanos": 901.955462137858,
+            "cpu_nanos": 901.2535349527994,
+            "jvm_bytes": 80.0
+          },
+          {
+            "nanos": 901.7868855794271,
+            "cpu_nanos": 901.9181060791016,
+            "jvm_bytes": 80.0
+          },
+          {
+            "nanos": 880.0474650065104,
+            "cpu_nanos": 880.266367594401,
+            "jvm_bytes": 80.0
+          },
+          {
+            "nanos": 859.0456212361654,
+            "cpu_nanos": 859.0657806396484,
+            "jvm_bytes": 80.0
+          }
+        ]
+      },
+      "after": {
+        "nanos": {
+          "median": 862.9834060668945,
+          "min": 839.6951599121094,
+          "max": 1034.2318369547527
+        },
+        "cpu_nanos": {
+          "median": 862.9233169555664,
+          "min": 839.773915608724,
+          "max": 1034.4825744628906
+        },
+        "jvm_bytes": {
+          "median": 80.0,
+          "min": 80.0,
+          "max": 80.0
+        },
+        "forks": [
+          {
+            "nanos": 853.6718724568685,
+            "cpu_nanos": 853.7789154052734,
+            "jvm_bytes": 80.0
+          },
+          {
+            "nanos": 839.6951599121094,
+            "cpu_nanos": 839.773915608724,
+            "jvm_bytes": 80.0
+          },
+          {
+            "nanos": 872.2949396769205,
+            "cpu_nanos": 872.0677185058594,
+            "jvm_bytes": 80.0
+          },
+          {
+            "nanos": 1034.2318369547527,
+            "cpu_nanos": 1034.4825744628906,
+            "jvm_bytes": 80.0
+          }
+        ]
+      }
+    },
+    {
+      "case": "primitive_fold",
+      "size": 1,
+      "before": {
+        "nanos": {
+          "median": 1203.4337997436523,
+          "min": 1180.6485290527344,
+          "max": 1232.9720967610676
+        },
+        "cpu_nanos": {
+          "median": 1199.3943786621094,
+          "min": 1180.8390299479167,
+          "max": 1233.0118815104167
+        },
+        "jvm_bytes": {
+          "median": 240.0,
+          "min": 240.0,
+          "max": 240.0
+        },
+        "forks": [
+          {
+            "nanos": 1219.0250142415364,
+            "cpu_nanos": 1212.5592549641926,
+            "jvm_bytes": 240.0
+          },
+          {
+            "nanos": 1180.6485290527344,
+            "cpu_nanos": 1180.8390299479167,
+            "jvm_bytes": 240.0
+          },
+          {
+            "nanos": 1187.8425852457683,
+            "cpu_nanos": 1186.2295023600261,
+            "jvm_bytes": 240.0
+          },
+          {
+            "nanos": 1232.9720967610676,
+            "cpu_nanos": 1233.0118815104167,
+            "jvm_bytes": 240.0
+          }
+        ]
+      },
+      "after": {
+        "nanos": {
+          "median": 1183.4572143554688,
+          "min": 1175.4581909179688,
+          "max": 1338.239293416341
+        },
+        "cpu_nanos": {
+          "median": 1182.784194946289,
+          "min": 1175.592041015625,
+          "max": 1338.4090169270833
+        },
+        "jvm_bytes": {
+          "median": 240.0,
+          "min": 240.0,
+          "max": 240.0
+        },
+        "forks": [
+          {
+            "nanos": 1175.4581909179688,
+            "cpu_nanos": 1175.592041015625,
+            "jvm_bytes": 240.0
+          },
+          {
+            "nanos": 1181.1395568847656,
+            "cpu_nanos": 1179.6237691243489,
+            "jvm_bytes": 240.0
+          },
+          {
+            "nanos": 1185.7748718261719,
+            "cpu_nanos": 1185.9446207682292,
+            "jvm_bytes": 240.0
+          },
+          {
+            "nanos": 1338.239293416341,
+            "cpu_nanos": 1338.4090169270833,
+            "jvm_bytes": 240.0
+          }
+        ]
+      }
+    },
+    {
+      "case": "primitive_fold",
+      "size": 11,
+      "before": {
+        "nanos": {
+          "median": 3439.672607421875,
+          "min": 3315.4342651367188,
+          "max": 3551.8394673665366
+        },
+        "cpu_nanos": {
+          "median": 3407.2579956054688,
+          "min": 3304.932657877604,
+          "max": 3534.0084838867188
+        },
+        "jvm_bytes": {
+          "median": 1360.0,
+          "min": 1360.0,
+          "max": 1360.0
+        },
+        "forks": [
+          {
+            "nanos": 3315.4342651367188,
+            "cpu_nanos": 3304.932657877604,
+            "jvm_bytes": 1360.0
+          },
+          {
+            "nanos": 3405.631795247396,
+            "cpu_nanos": 3373.502197265625,
+            "jvm_bytes": 1360.0
+          },
+          {
+            "nanos": 3473.713419596354,
+            "cpu_nanos": 3441.0137939453125,
+            "jvm_bytes": 1360.0
+          },
+          {
+            "nanos": 3551.8394673665366,
+            "cpu_nanos": 3534.0084838867188,
+            "jvm_bytes": 1360.0
+          }
+        ]
+      },
+      "after": {
+        "nanos": {
+          "median": 3422.119125366211,
+          "min": 3399.924601236979,
+          "max": 3501.2597859700522
+        },
+        "cpu_nanos": {
+          "median": 3412.460479736328,
+          "min": 3395.9847005208335,
+          "max": 3495.3863525390625
+        },
+        "jvm_bytes": {
+          "median": 1360.0,
+          "min": 1360.0,
+          "max": 1360.0
+        },
+        "forks": [
+          {
+            "nanos": 3399.924601236979,
+            "cpu_nanos": 3395.9847005208335,
+            "jvm_bytes": 1360.0
+          },
+          {
+            "nanos": 3416.1764119466147,
+            "cpu_nanos": 3414.5662434895835,
+            "jvm_bytes": 1360.0
+          },
+          {
+            "nanos": 3501.2597859700522,
+            "cpu_nanos": 3495.3863525390625,
+            "jvm_bytes": 1360.0
+          },
+          {
+            "nanos": 3428.061838785807,
+            "cpu_nanos": 3410.3547159830728,
+            "jvm_bytes": 1360.0
+          }
+        ]
+      }
+    },
+    {
+      "case": "primitive_fold",
+      "size": 16,
+      "before": {
+        "nanos": {
+          "median": 4478.427978515625,
+          "min": 4394.061421712239,
+          "max": 8042.87250773112
+        },
+        "cpu_nanos": {
+          "median": 4460.304056803385,
+          "min": 4301.8178304036455,
+          "max": 8018.5923258463545
+        },
+        "jvm_bytes": {
+          "median": 1984.0,
+          "min": 1984.0,
+          "max": 1984.0
+        },
+        "forks": [
+          {
+            "nanos": 4394.061421712239,
+            "cpu_nanos": 4301.8178304036455,
+            "jvm_bytes": 1984.0
+          },
+          {
+            "nanos": 4428.990152994792,
+            "cpu_nanos": 4429.165852864583,
+            "jvm_bytes": 1984.0
+          },
+          {
+            "nanos": 8042.87250773112,
+            "cpu_nanos": 8018.5923258463545,
+            "jvm_bytes": 1984.0
+          },
+          {
+            "nanos": 4527.865804036458,
+            "cpu_nanos": 4491.4422607421875,
+            "jvm_bytes": 1984.0
+          }
+        ]
+      },
+      "after": {
+        "nanos": {
+          "median": 4455.061019897461,
+          "min": 4405.4144287109375,
+          "max": 4480.829559326172
+        },
+        "cpu_nanos": {
+          "median": 4436.3991292317705,
+          "min": 4337.188720703125,
+          "max": 4460.1295979817705
+        },
+        "jvm_bytes": {
+          "median": 1984.0,
+          "min": 1984.0,
+          "max": 1984.0
+        },
+        "forks": [
+          {
+            "nanos": 4475.28608194987,
+            "cpu_nanos": 4460.1295979817705,
+            "jvm_bytes": 1984.0
+          },
+          {
+            "nanos": 4480.829559326172,
+            "cpu_nanos": 4436.6054280598955,
+            "jvm_bytes": 1984.0
+          },
+          {
+            "nanos": 4405.4144287109375,
+            "cpu_nanos": 4337.188720703125,
+            "jvm_bytes": 1984.0
+          },
+          {
+            "nanos": 4434.835957845052,
+            "cpu_nanos": 4436.1928304036455,
+            "jvm_bytes": 1984.0
+          }
+        ]
+      }
+    },
+    {
+      "case": "primitive_fold",
+      "size": 32,
+      "before": {
+        "nanos": {
+          "median": 7865.036631266275,
+          "min": 7694.174235026042,
+          "max": 8063.2137451171875
+        },
+        "cpu_nanos": {
+          "median": 7801.983642578125,
+          "min": 7622.6226806640625,
+          "max": 7981.9460042317705
+        },
+        "jvm_bytes": {
+          "median": 3800.0,
+          "min": 3800.0,
+          "max": 3800.0
+        },
+        "forks": [
+          {
+            "nanos": 8063.2137451171875,
+            "cpu_nanos": 7981.9460042317705,
+            "jvm_bytes": 3800.0
+          },
+          {
+            "nanos": 7694.174235026042,
+            "cpu_nanos": 7622.6226806640625,
+            "jvm_bytes": 3800.0
+          },
+          {
+            "nanos": 7738.073994954427,
+            "cpu_nanos": 7706.501057942708,
+            "jvm_bytes": 3800.0
+          },
+          {
+            "nanos": 7991.999267578125,
+            "cpu_nanos": 7897.466227213542,
+            "jvm_bytes": 3800.0
+          }
+        ]
+      },
+      "after": {
+        "nanos": {
+          "median": 7955.374572753906,
+          "min": 7834.175842285156,
+          "max": 8203.837158203125
+        },
+        "cpu_nanos": {
+          "median": 7883.273111979167,
+          "min": 7725.425211588542,
+          "max": 8159.5888264973955
+        },
+        "jvm_bytes": {
+          "median": 3800.0,
+          "min": 3800.0,
+          "max": 3800.0
+        },
+        "forks": [
+          {
+            "nanos": 7885.829203287761,
+            "cpu_nanos": 7835.834147135417,
+            "jvm_bytes": 3800.0
+          },
+          {
+            "nanos": 8024.919942220052,
+            "cpu_nanos": 7930.712076822917,
+            "jvm_bytes": 3800.0
+          },
+          {
+            "nanos": 8203.837158203125,
+            "cpu_nanos": 8159.5888264973955,
+            "jvm_bytes": 3800.0
+          },
+          {
+            "nanos": 7834.175842285156,
+            "cpu_nanos": 7725.425211588542,
+            "jvm_bytes": 3800.0
+          }
+        ]
+      }
+    },
+    {
+      "case": "primitive_fold",
+      "size": 63,
+      "before": {
+        "nanos": {
+          "median": 14433.118591308594,
+          "min": 14133.4658203125,
+          "max": 15774.636474609375
+        },
+        "cpu_nanos": {
+          "median": 14306.846923828125,
+          "min": 14005.728352864584,
+          "max": 15659.4580078125
+        },
+        "jvm_bytes": {
+          "median": 7552.0,
+          "min": 7552.0,
+          "max": 7552.0
+        },
+        "forks": [
+          {
+            "nanos": 14219.826985677084,
+            "cpu_nanos": 14005.728352864584,
+            "jvm_bytes": 7552.0
+          },
+          {
+            "nanos": 14646.410196940104,
+            "cpu_nanos": 14537.846272786459,
+            "jvm_bytes": 7552.0
+          },
+          {
+            "nanos": 14133.4658203125,
+            "cpu_nanos": 14075.847574869791,
+            "jvm_bytes": 7552.0
+          },
+          {
+            "nanos": 15774.636474609375,
+            "cpu_nanos": 15659.4580078125,
+            "jvm_bytes": 7552.0
+          }
+        ]
+      },
+      "after": {
+        "nanos": {
+          "median": 14800.77880859375,
+          "min": 13970.198160807291,
+          "max": 15650.540852864584
+        },
+        "cpu_nanos": {
+          "median": 14636.780192057291,
+          "min": 13884.806722005209,
+          "max": 15462.958170572916
+        },
+        "jvm_bytes": {
+          "median": 7552.0,
+          "min": 7552.0,
+          "max": 7552.0
+        },
+        "forks": [
+          {
+            "nanos": 15650.540852864584,
+            "cpu_nanos": 15462.958170572916,
+            "jvm_bytes": 7552.0
+          },
+          {
+            "nanos": 14750.013916015625,
+            "cpu_nanos": 14578.160807291666,
+            "jvm_bytes": 7552.0
+          },
+          {
+            "nanos": 13970.198160807291,
+            "cpu_nanos": 13884.806722005209,
+            "jvm_bytes": 7552.0
+          },
+          {
+            "nanos": 14851.543701171875,
+            "cpu_nanos": 14695.399576822916,
+            "jvm_bytes": 7552.0
+          }
+        ]
+      }
+    },
+    {
+      "case": "primitive_fold",
+      "size": 64,
+      "before": {
+        "nanos": {
+          "median": 15115.323506673176,
+          "min": 14384.992513020834,
+          "max": 15913.64111328125
+        },
+        "cpu_nanos": {
+          "median": 15001.267700195312,
+          "min": 14218.955891927084,
+          "max": 15678.626302083334
+        },
+        "jvm_bytes": {
+          "median": 7656.0,
+          "min": 7656.0,
+          "max": 7656.0
+        },
+        "forks": [
+          {
+            "nanos": 14514.4755859375,
+            "cpu_nanos": 14516.300455729166,
+            "jvm_bytes": 7656.0
+          },
+          {
+            "nanos": 15913.64111328125,
+            "cpu_nanos": 15678.626302083334,
+            "jvm_bytes": 7656.0
+          },
+          {
+            "nanos": 14384.992513020834,
+            "cpu_nanos": 14218.955891927084,
+            "jvm_bytes": 7656.0
+          },
+          {
+            "nanos": 15716.171427408854,
+            "cpu_nanos": 15486.234944661459,
+            "jvm_bytes": 7656.0
+          }
+        ]
+      },
+      "after": {
+        "nanos": {
+          "median": 14580.343343098959,
+          "min": 14173.968424479166,
+          "max": 15509.490112304688
+        },
+        "cpu_nanos": {
+          "median": 14518.638712565104,
+          "min": 14105.466715494791,
+          "max": 15437.10693359375
+        },
+        "jvm_bytes": {
+          "median": 7008.0,
+          "min": 7008.0,
+          "max": 7008.0
+        },
+        "forks": [
+          {
+            "nanos": 14928.326985677084,
+            "cpu_nanos": 14929.054361979166,
+            "jvm_bytes": 7008.0
+          },
+          {
+            "nanos": 15509.490112304688,
+            "cpu_nanos": 15437.10693359375,
+            "jvm_bytes": 7008.0
+          },
+          {
+            "nanos": 14173.968424479166,
+            "cpu_nanos": 14108.223063151041,
+            "jvm_bytes": 7008.0
+          },
+          {
+            "nanos": 14232.359700520834,
+            "cpu_nanos": 14105.466715494791,
+            "jvm_bytes": 7008.0
+          }
+        ]
+      }
+    },
+    {
+      "case": "primitive_fold",
+      "size": 65,
+      "before": {
+        "nanos": {
+          "median": 15044.026285807291,
+          "min": 14744.892415364584,
+          "max": 15637.002360026041
+        },
+        "cpu_nanos": {
+          "median": 14687.215169270834,
+          "min": 14531.651204427084,
+          "max": 15322.412109375
+        },
+        "jvm_bytes": {
+          "median": 7760.0,
+          "min": 7760.0,
+          "max": 7760.0
+        },
+        "forks": [
+          {
+            "nanos": 15248.419352213541,
+            "cpu_nanos": 14711.250813802084,
+            "jvm_bytes": 7760.0
+          },
+          {
+            "nanos": 14744.892415364584,
+            "cpu_nanos": 14531.651204427084,
+            "jvm_bytes": 7760.0
+          },
+          {
+            "nanos": 14839.633219401041,
+            "cpu_nanos": 14663.179524739584,
+            "jvm_bytes": 7760.0
+          },
+          {
+            "nanos": 15637.002360026041,
+            "cpu_nanos": 15322.412109375,
+            "jvm_bytes": 7760.0
+          }
+        ]
+      },
+      "after": {
+        "nanos": {
+          "median": 15164.853637695312,
+          "min": 14730.938639322916,
+          "max": 15639.945068359375
+        },
+        "cpu_nanos": {
+          "median": 15163.611246744793,
+          "min": 14731.053059895834,
+          "max": 15643.360188802084
+        },
+        "jvm_bytes": {
+          "median": 7120.0,
+          "min": 7120.0,
+          "max": 7120.0
+        },
+        "forks": [
+          {
+            "nanos": 15171.535481770834,
+            "cpu_nanos": 15168.748372395834,
+            "jvm_bytes": 7120.0
+          },
+          {
+            "nanos": 15158.171793619791,
+            "cpu_nanos": 15158.47412109375,
+            "jvm_bytes": 7120.0
+          },
+          {
+            "nanos": 14730.938639322916,
+            "cpu_nanos": 14731.053059895834,
+            "jvm_bytes": 7120.0
+          },
+          {
+            "nanos": 15639.945068359375,
+            "cpu_nanos": 15643.360188802084,
+            "jvm_bytes": 7120.0
+          }
+        ]
+      }
+    },
+    {
+      "case": "primitive_fold",
+      "size": 512,
+      "before": {
+        "nanos": {
+          "median": 111064.86539713542,
+          "min": 107821.658203125,
+          "max": 113997.95703125
+        },
+        "cpu_nanos": {
+          "median": 109894.41243489583,
+          "min": 106117.18098958333,
+          "max": 113016.455078125
+        },
+        "jvm_bytes": {
+          "median": 60088.0,
+          "min": 60088.0,
+          "max": 60088.0
+        },
+        "forks": [
+          {
+            "nanos": 108495.77701822917,
+            "cpu_nanos": 107215.45247395833,
+            "jvm_bytes": 60088.0
+          },
+          {
+            "nanos": 107821.658203125,
+            "cpu_nanos": 106117.18098958333,
+            "jvm_bytes": 60088.0
+          },
+          {
+            "nanos": 113633.95377604167,
+            "cpu_nanos": 113016.455078125,
+            "jvm_bytes": 60088.0
+          },
+          {
+            "nanos": 113997.95703125,
+            "cpu_nanos": 112573.37239583333,
+            "jvm_bytes": 60088.0
+          }
+        ]
+      },
+      "after": {
+        "nanos": {
+          "median": 110200.20751953125,
+          "min": 104870.36881510417,
+          "max": 115104.0771484375
+        },
+        "cpu_nanos": {
+          "median": 109679.30013020833,
+          "min": 104370.009765625,
+          "max": 113638.58072916667
+        },
+        "jvm_bytes": {
+          "median": 55416.0,
+          "min": 55416.0,
+          "max": 55416.0
+        },
+        "forks": [
+          {
+            "nanos": 104870.36881510417,
+            "cpu_nanos": 104370.009765625,
+            "jvm_bytes": 55416.0
+          },
+          {
+            "nanos": 115104.0771484375,
+            "cpu_nanos": 113638.58072916667,
+            "jvm_bytes": 55416.0
+          },
+          {
+            "nanos": 110884.27604166667,
+            "cpu_nanos": 110679.30989583333,
+            "jvm_bytes": 55416.0
+          },
+          {
+            "nanos": 109516.13899739583,
+            "cpu_nanos": 108679.29036458333,
+            "jvm_bytes": 55416.0
+          }
+        ]
+      }
+    }
+  ]
+}

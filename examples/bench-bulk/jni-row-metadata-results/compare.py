@@ -1,0 +1,53 @@
+"""Compare frozen JNI row-metadata builds; keep raw observations outside Git."""
+import argparse, hashlib, json, os, platform, statistics, subprocess
+from pathlib import Path
+p=argparse.ArgumentParser(__doc__)
+p.add_argument('--before',type=Path,required=True)
+p.add_argument('--after',type=Path,required=True)
+p.add_argument('--output',type=Path,required=True)
+p.add_argument('--forks',type=int,default=6)
+p.add_argument('--aa',action='store_true')
+a=p.parse_args(); assert a.forks>0 and a.forks%2==0
+root=a.output.resolve();root.mkdir(parents=True,exist_ok=True);assert not list(root.iterdir())
+(root/'raw').mkdir()
+sha=lambda path:hashlib.sha256(Path(path).read_bytes()).hexdigest()
+info={v:json.loads((d/'build.json').read_text()) for v,d in [('before',a.before),('after',a.after)]}
+for key in ['fixture_sha256','kotlin_sources_sha256','rustc','dependency_lock_sha256','cargo_config_sha256','cargo_profile','profile_environment']:
+ assert info['before'][key]==info['after'][key],key
+for d in info.values():
+ assert not d['native_allocations']
+ assert sha(d['jar'])==d['jar_sha256'] and sha(d['library'])==d['native_sha256']
+flags=['-Xms256m','-Xmx256m','-XX:+UseG1GC','-XX:ActiveProcessorCount=2']
+groups=[(mode, '1,512', 'numbers_input,records_input,owned_handle_records_roundtrip,callback_owned_records') for mode in ['plain','bulk']]
+groups += [('plain','1','callback_owned_record,control'), ('bulk','1','callback_owned_record')]
+if a.aa: groups=[('plain','1,512','records_input,callback_owned_records'),('bulk','512','records_input'),('plain','1','control')]
+samples=[];runs=[]
+for fork in range(a.forks):
+ for group,(mode,sizes,cases) in enumerate(groups):
+  for version in (['before','after'] if (fork+group)%2==0 else ['after','before']):
+   d=info['before' if a.aa else version]
+   # Exact same generated Kotlin/driver bytecode for both libraries.
+   cmd=['java',*flags,'-Djava.library.path='+str(Path(d['library']).parent),'-cp',info['before']['jar'],'BenchKt',mode,sizes,'10','11','30',str(fork),'64',cases]
+   result=subprocess.run(cmd,capture_output=True,text=True)
+   ident=f'{fork}-{group}-{version}';log=root/'raw'/f'{ident}.log';log.write_text(result.stdout+result.stderr);result.check_returncode()
+   selected=[]
+   for line in result.stdout.splitlines():
+    if line.startswith('BULK_BENCH,'):
+     _,m,case,n,batch,it,nanos,bytes_=line.split(',')
+     assert m==mode and case in cases.split(',') and n in sizes.split(',')
+     selected.append(dict(fork=fork,version=version,mode=m,case=case,size=int(n),batch=int(batch),iterations=int(it),ns_per_call=int(nanos)/int(it),jvm_bytes_per_call=int(bytes_)/int(it)))
+   assert len(selected)==len(cases.split(','))*len(sizes.split(','))*11
+   samples.extend(selected);runs.append(dict(id=ident,command=cmd,stdout_sha256=sha(log)))
+   (root/'progress.json').write_text(json.dumps(dict(runs=runs,samples=samples)))
+   print(ident,flush=True)
+summary=[]
+for mode,case,size in sorted({(s['mode'],s['case'],s['size']) for s in samples}):
+ row=dict(mode=mode,case=case,size=size)
+ for metric in ['ns_per_call','jvm_bytes_per_call']:
+  fm={v:[statistics.median(s[metric] for s in samples if (s['version'],s['mode'],s['case'],s['size'],s['fork'])==(v,mode,case,size,f)) for f in range(a.forks)] for v in info}
+  row[metric]={v:dict(median=statistics.median(vals),min=min(vals),max=max(vals),fork_medians=vals) for v,vals in fm.items()}
+  row[metric]['paired_after_before']=statistics.median(y/x if x else 1.0 for x,y in zip(fm['before'],fm['after']))
+ summary.append(row)
+for d in info.values():assert sha(d['library'])==d['native_sha256'] and sha(d['jar'])==d['jar_sha256']
+(root/'results.json').write_text(json.dumps(dict(builds=info,settings=dict(forks=a.forks,aa=a.aa,warmup=10,batches=11,target_ms=30),affinity=sorted(os.sched_getaffinity(0)),platform=platform.platform(),java=subprocess.run(['java','-version'],capture_output=True,text=True).stderr,flags=flags,runs=runs,summary=summary,runner_sha256=sha(__file__),samples_sha256=hashlib.sha256(json.dumps(samples,sort_keys=True).encode()).hexdigest()),indent=2)+'\n')
+print('Finished',root,flush=True)

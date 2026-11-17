@@ -1,0 +1,31 @@
+{
+  "comparison": "configured paths on the same implementation; no latency measurement",
+  "payload_bytes": 65536,
+  "c": {
+    "deliveries": 1000,
+    "shared": {
+      "allocations": 0,
+      "clones": 0,
+      "copied_bytes": 0
+    },
+    "explicit_copy": {
+      "allocations": 2000,
+      "clones": 1000,
+      "copied_bytes": 65536000
+    }
+  },
+  "jni": {
+    "deliveries": 32,
+    "allocation_counter": "native allocations >= 65536 bytes; excludes descriptor and JVM allocations",
+    "explicit_copy": {
+      "large_allocations": 32,
+      "clones": 32,
+      "copied_bytes": 2097152
+    },
+    "scalar_expansion": {
+      "large_allocations": 0,
+      "clones": 0,
+      "copied_bytes": 0
+    }
+  }
+}

@@ -67,6 +67,7 @@ thread_local! {
 #[derive(Clone)]
 pub struct Source {
     crate_name: String,
+    features_prefix: String,
     items: HashMap<String, Vec<(syn::Item, SourceLocation)>>,
     // Configuration needed to build a CfgFilter at iteration time
     features_constant: Option<String>,
@@ -121,7 +122,7 @@ impl Source {
                 input_dir.display()
             )
         });
-        let crate_name = crate_name_override.unwrap_or(stored_crate_name);
+        let crate_name = crate_name_override.unwrap_or_else(|| stored_crate_name.clone());
 
         let groups = Self::discover_groups(input_dir);
         let mut items = HashMap::new();
@@ -149,6 +150,7 @@ impl Source {
 
         Self {
             crate_name,
+            features_prefix: stored_crate_name,
             items,
             features_constant,
             features_list,
@@ -161,6 +163,7 @@ impl Source {
     pub fn init_doctest_simulate() {
         let source = Self {
             crate_name: "source_ffi".to_string(),
+            features_prefix: "source_ffi".to_string(),
             items: HashMap::from([
                 (
                     "structs".to_string(),
@@ -211,6 +214,33 @@ impl Source {
     /// ```
     pub fn crate_name(&self) -> &str {
         &self.crate_name
+    }
+
+    /// Require the captured source feature set and return its target-side guard.
+    ///
+    /// External build artifacts can use this to check their recorded features
+    /// against the declarations read here and the source library compiled later.
+    /// The returned constant must be included in the generated Rust. Feature
+    /// filtering must be enabled so the library's exported constant is checked.
+    pub fn require_features(&self, expected: &[String]) -> Result<syn::ItemConst, String> {
+        if self.features_constant.is_none() {
+            return Err(format!(
+                "source `{}` must enable feature verification for external build artifacts",
+                self.crate_name
+            ));
+        }
+        let mut expected = expected.to_vec();
+        expected.sort();
+        expected.dedup();
+        if expected != self.features_list {
+            return Err(format!(
+                "opaque layout features for `{}` differ: artifact {:?}, captured source {:?}",
+                self.crate_name, expected, self.features_list
+            ));
+        }
+        self.build_cfg_filter()
+            .take_feature_guard()
+            .ok_or_else(|| "source feature verification did not produce a target guard".into())
     }
 
     /// Returns an iterator over items from specific groups
@@ -303,7 +333,7 @@ impl Source {
             let features_list = self
                 .features_list
                 .iter()
-                .map(|f| format!("{}/{}", self.crate_name, f))
+                .map(|f| format!("{}/{}", self.features_prefix, f))
                 .join(" ");
             builder = builder.predefined_features(qualified_const, features_list);
         }

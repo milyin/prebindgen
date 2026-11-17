@@ -1,0 +1,3112 @@
+{
+  "builds": {
+    "before_count": {
+      "commit": "634b548ad5c5957b9a3e4bb399a27bf9297ce4c4",
+      "native_allocations": true,
+      "native_sha256": "33afa1fafa9d1bfe25b49b36f0eb3f8afeea6b5705d9e6b55f55bbae3e2bc1be",
+      "jar_sha256": "c6854ab8a73d175ba0a711ae81ace24a413eb12c8418b51581ef58b57096a2d5",
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "dependency_lock_sha256": "4d243392ec8bc6988f9433c5f2fd7f262dc60bd4b38a1b96813f230a4f1ea442",
+      "path_dependency_repositories": [
+        {
+          "commit": "498b8fa9e48ec864aa42803e0478a7adec4763d9",
+          "packages": [],
+          "contains_fixture": true
+        },
+        {
+          "commit": "634b548ad5c5957b9a3e4bb399a27bf9297ce4c4",
+          "packages": [
+            "prebindgen",
+            "prebindgen-conversions",
+            "prebindgen-declarations",
+            "prebindgen-flat",
+            "prebindgen-jni",
+            "prebindgen-jni-runtime",
+            "prebindgen-proc-macro",
+            "prebindgen-reprc",
+            "prebindgen-runtime"
+          ],
+          "contains_fixture": false
+        }
+      ]
+    },
+    "after_count": {
+      "commit": "910120e9bdcacf34a56ec15fefa1e79595ee4b9b",
+      "native_allocations": true,
+      "native_sha256": "9f0193ba4aea0faf82b46757fea9792be4a047b6f786e77c083525ce45bf89f8",
+      "jar_sha256": "c6854ab8a73d175ba0a711ae81ace24a413eb12c8418b51581ef58b57096a2d5",
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "dependency_lock_sha256": "4d243392ec8bc6988f9433c5f2fd7f262dc60bd4b38a1b96813f230a4f1ea442",
+      "path_dependency_repositories": [
+        {
+          "commit": "910120e9bdcacf34a56ec15fefa1e79595ee4b9b",
+          "packages": [
+            "prebindgen",
+            "prebindgen-conversions",
+            "prebindgen-declarations",
+            "prebindgen-flat",
+            "prebindgen-jni",
+            "prebindgen-jni-runtime",
+            "prebindgen-proc-macro",
+            "prebindgen-reprc",
+            "prebindgen-runtime"
+          ],
+          "contains_fixture": true
+        }
+      ]
+    },
+    "before_timing": {
+      "commit": "634b548ad5c5957b9a3e4bb399a27bf9297ce4c4",
+      "native_allocations": false,
+      "native_sha256": "7ad99ea70fe1b8f125c941766b2ba8d33adf25303646c925f68c7a7303b180fe",
+      "jar_sha256": "c6854ab8a73d175ba0a711ae81ace24a413eb12c8418b51581ef58b57096a2d5",
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "dependency_lock_sha256": "4d243392ec8bc6988f9433c5f2fd7f262dc60bd4b38a1b96813f230a4f1ea442",
+      "path_dependency_repositories": [
+        {
+          "commit": "498b8fa9e48ec864aa42803e0478a7adec4763d9",
+          "packages": [],
+          "contains_fixture": true
+        },
+        {
+          "commit": "634b548ad5c5957b9a3e4bb399a27bf9297ce4c4",
+          "packages": [
+            "prebindgen",
+            "prebindgen-conversions",
+            "prebindgen-declarations",
+            "prebindgen-flat",
+            "prebindgen-jni",
+            "prebindgen-jni-runtime",
+            "prebindgen-proc-macro",
+            "prebindgen-reprc",
+            "prebindgen-runtime"
+          ],
+          "contains_fixture": false
+        }
+      ]
+    },
+    "after_timing": {
+      "commit": "910120e9bdcacf34a56ec15fefa1e79595ee4b9b",
+      "native_allocations": false,
+      "native_sha256": "d6cf553d26ccab48d697904a6abf6ba7bac9c544c5308da1b10f3cd3cc19417d",
+      "jar_sha256": "c6854ab8a73d175ba0a711ae81ace24a413eb12c8418b51581ef58b57096a2d5",
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "dependency_lock_sha256": "4d243392ec8bc6988f9433c5f2fd7f262dc60bd4b38a1b96813f230a4f1ea442",
+      "path_dependency_repositories": [
+        {
+          "commit": "910120e9bdcacf34a56ec15fefa1e79595ee4b9b",
+          "packages": [
+            "prebindgen",
+            "prebindgen-conversions",
+            "prebindgen-declarations",
+            "prebindgen-flat",
+            "prebindgen-jni",
+            "prebindgen-jni-runtime",
+            "prebindgen-proc-macro",
+            "prebindgen-reprc",
+            "prebindgen-runtime"
+          ],
+          "contains_fixture": true
+        }
+      ]
+    }
+  },
+  "environment": {
+    "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8",
+    "cargo": "cargo 1.98.0 (797e8a9bc 2026-08-05)",
+    "kotlin": "info: kotlinc-jvm 2.4.21 (JRE 11.0.29+7)",
+    "cargo_config_sha256": {},
+    "profile_environment": {
+      "CARGO_BUILD_JOBS": "1"
+    }
+  },
+  "platform": "Linux-6.8.0-138-generic-x86_64-with-glibc2.39",
+  "affinity": [
+    0,
+    1
+  ],
+  "java": "openjdk version \"11.0.29\" 2025-10-21\nOpenJDK Runtime Environment Temurin-11.0.29+7 (build 11.0.29+7)\nOpenJDK 64-Bit Server VM Temurin-11.0.29+7 (build 11.0.29+7, mixed mode)\n",
+  "jvm_flags": [
+    "-Xms256m",
+    "-Xmx256m",
+    "-XX:+UseG1GC",
+    "-XX:ActiveProcessorCount=2"
+  ],
+  "fixture_sha256": {
+    "flat.rs": "e547d828b3e9f7103d1df9ea69446cdc3bebd6d718faeabab5407357e6eda6da",
+    "bindings.rs": "b55dc35fb675ab839d59af6e123f31ee306740458f512ea7cc30ebbb1b0fa8f4",
+    "Bench.kt": "fbf822b066c90d47e617683b8f13e019ec4149b06a1c0dc61e7c8307ef32d216",
+    "AllocationBench.kt": "5eb7e8bc3a235dc7d3af8bf3e16baa748803d2dd5f168692d9506e3bd0315bb4",
+    "native_allocations.rs": "280a2ccd7efb4e33dbadbaf4b0e3cc2041c9644f8775736b828aed3ba8cb78d3",
+    "run.py": "66131b59e5f095c839760967fab83087e71d124d64d403e1950f71769c01d875",
+    "Cargo.lock.snapshot": "4d243392ec8bc6988f9433c5f2fd7f262dc60bd4b38a1b96813f230a4f1ea442"
+  },
+  "generated_kotlin_sha256": {
+    "bench/bulk/BufferRecord.kt": "65962132d525b230ed12b1e84ca536d725a9fc87d8a0b0a9bbb3a35103568b6e",
+    "bench/bulk/BulkInputs.kt": "c84a559e5267e3b1c32c2e3a6924281c83d99d966ce5c41496aa1717dc7fed06",
+    "bench/bulk/BulkLayouts.kt": "dc9d87f1822056b742fe8763fd216b570eb6d55da5075822aa6b09f284bbcaba",
+    "bench/bulk/BulkRuntime.kt": "64d3b4bc6fce75134e4c9123670c22405589f4b7d41d879d46182451c01747c6",
+    "bench/bulk/Functions.kt": "162fd018be8a178b463f6bab57efb6884f8020032d24caada7950fdb93e85702",
+    "bench/bulk/HandleRecord.kt": "af4b0574c3e63faf2d623b3f57043d692196a07829c93e103ead0b77e619d040",
+    "bench/bulk/Handler.kt": "fbb9fb4b48c8b065ab43dd160a1528ace789244e2e494b58ab7568f995c649f7",
+    "bench/bulk/InputHandle.kt": "d97ff84c5c5357123bc17fc7031d654843869b220660e5c181592ee02a69cf40",
+    "bench/bulk/JNINative.kt": "38046bb7e360c2f490429aca624acf09c13be7f66fbafd991f90f3acbb455f88",
+    "bench/bulk/JniErrorHandler.kt": "914bd702585497d5eeadf41629d1ebf15110588c158d7b4a04caa875ded13261",
+    "bench/bulk/NativeHandle.kt": "061f556bd4146ccf26398885f232275c409d7b29b03edfb1cf020bb3f7da585e",
+    "bench/bulk/OwnedRecordsCallback.kt": "e5b4c6e3926f8f8fb7b31b9b8f2c50050fc7d38894728318f8aa24a420c29118",
+    "bench/bulk/Packet.kt": "8b5be54285e70b21837b0ba6e51e618255584865c4bb3b3d51b4fe7a8e6043b1",
+    "bench/bulk/Return_Empty_ErrorEmpty_a7ee757e32992e01.kt": "dcfee6f698d8b85134b9ff651c50275d1f9ec7cb2436c0887e20c27ba700441d",
+    "bench/bulk/Row.kt": "2b527711ba0e2895e4a6eca5204c4782bce594c3c94492c5b1fff9bbd12462db",
+    "bench/bulk/RowReturnCallback.kt": "99734d9281026522ff4365f0129b8554f59f9dd96ff5bf6165dabb708f3da433",
+    "bench/bulk/RowReturnHandler.kt": "c9a3f40f91b63a09d89701378bbd013ca10fb355140e98167b9b6867d8ef734b",
+    "bench/bulk/RowsCallback.kt": "028b8a6389db4a5ffb89c52074da90fc6407c9acd773b5e31fd1bc11cbf87b70",
+    "bench/bulk/WideRow.kt": "dfe3f510158a39d9a9638032130c299c20118f8139f2e4d2e3c491f64f93e0c9",
+    "bench/bulk/WideRowReturnCallback.kt": "4db24345085afa459dfc999453b4aef5644d458a4e56b966163439237155c5d1",
+    "bench/bulk/WideRowReturnHandler.kt": "690af7af1da86d5da28ad13a270b3c6d928466d0b570c126857d0d0c49278bd3",
+    "bench/plain/BufferRecord.kt": "21878521971775bcb0e058d42eba250b8111bbfa8a4a74aa73d4e9ee54321e21",
+    "bench/plain/Functions.kt": "7630d8c647e06afaf090ccf8e49b1e2feac478d19124a5f08636c4982fbed829",
+    "bench/plain/HandleRecord.kt": "9db1f8154e187714b4c0d300e3478eb0c97f3fbfa9a4edb0c4459acecbb2e7b9",
+    "bench/plain/Handler.kt": "d9cf7f52a6b31dfedcf8981bbcdba8cfb7f32b9a7d260e512d9c6462c1faf92f",
+    "bench/plain/InputHandle.kt": "7f0d7971941d7d35a6bad8d182c4957d1847eb2b2128767b95319ac8a458b517",
+    "bench/plain/JNINative.kt": "c579056926f8e11be986df597ac6f496f0c87813465c69b9c92dbf59bee22864",
+    "bench/plain/JniErrorHandler.kt": "87cf684cdaa5337029502148811187f5db65c440875b8a45d746f40f0327a083",
+    "bench/plain/NativeHandle.kt": "488c0b263386968a44151d2a4200cd31d6662f39bc22625d6ec57f155814d2cd",
+    "bench/plain/OwnedRecordsCallback.kt": "33f8e759da39622355d981dcf6d4c728bdd30311c2dcc8fd181dafe7b3c1023c",
+    "bench/plain/Packet.kt": "d74f2694c667e54b259c29ac8d7e7c09e2bcc0fa8ffc544daab511f5aa24fc05",
+    "bench/plain/Return_Empty_ErrorEmpty_a7ee757e32992e01.kt": "3ce669199b3e84432564b88fb5e21b3c5500e03be4f9b8dd9828e12a505b673e",
+    "bench/plain/Return_Long_Long_Long32_ErrorEmpty_6fba61a9625e2221.kt": "89bcdf04ab77573d42f4f8c5e698f2222ddfe96cd4a409bf6a45424d09cd88a3",
+    "bench/plain/Return_Long_Long_Long8_ErrorEmpty_f77363a35e75c509.kt": "de90da808476ed71e3e5becef963973d8a22af9e04305d296b39e6dd09a377d8",
+    "bench/plain/Row.kt": "e57b379aa3fe32c91baea37a11f7f2ad2d5fa0807a4da615c004e65dbede5da7",
+    "bench/plain/RowReturnCallback.kt": "8d602a3cb7bd2135d1dd9fcd9c66c87ebd300dadd2268017ebf59f4a4e1c7983",
+    "bench/plain/RowReturnHandler.kt": "298678970fc974ee68c908d9abe64e59b9809940fe2d214c745de412e3b856ed",
+    "bench/plain/RowsCallback.kt": "de23625952e3b0bfb06c9b98e11c11d64456ad782053b166611fdb86458ff2de",
+    "bench/plain/WideRow.kt": "f9821961721958627156da165a92a389fb8fd6c336b869b0cff111f02fc839d5",
+    "bench/plain/WideRowReturnCallback.kt": "a01664aae72724691dcb65f968eb0600b06f8a05844ac558c0b3a33b6b038e6c",
+    "bench/plain/WideRowReturnHandler.kt": "86c15bac85855a10bed00cc4dcc98c79e60a33dc1f05f57fcae466d807c8be5e"
+  },
+  "allocation_settings": {
+    "forks": 2,
+    "samples_per_process": 10,
+    "warmup_calls": 1000,
+    "scope": "calling-thread Rust allocator",
+    "counts_identical_across_all_samples": true
+  },
+  "allocations": [
+    {
+      "mode": "bulk",
+      "case": "buffers",
+      "size": 0,
+      "before": {
+        "allocations": 2,
+        "reallocations": 0,
+        "requested_native_bytes": 32
+      },
+      "after": {
+        "allocations": 2,
+        "reallocations": 0,
+        "requested_native_bytes": 32
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "buffers",
+      "size": 1,
+      "before": {
+        "allocations": 8,
+        "reallocations": 3,
+        "requested_native_bytes": 872
+      },
+      "after": {
+        "allocations": 7,
+        "reallocations": 3,
+        "requested_native_bytes": 824
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "buffers",
+      "size": 8,
+      "before": {
+        "allocations": 29,
+        "reallocations": 4,
+        "requested_native_bytes": 8464
+      },
+      "after": {
+        "allocations": 28,
+        "reallocations": 4,
+        "requested_native_bytes": 8080
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "buffers",
+      "size": 64,
+      "before": {
+        "allocations": 197,
+        "reallocations": 4,
+        "requested_native_bytes": 65808
+      },
+      "after": {
+        "allocations": 196,
+        "reallocations": 4,
+        "requested_native_bytes": 62736
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "buffers",
+      "size": 512,
+      "before": {
+        "allocations": 1541,
+        "reallocations": 4,
+        "requested_native_bytes": 524560
+      },
+      "after": {
+        "allocations": 1540,
+        "reallocations": 4,
+        "requested_native_bytes": 499984
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "buffers",
+      "size": 4096,
+      "before": {
+        "allocations": 12293,
+        "reallocations": 4,
+        "requested_native_bytes": 4194576
+      },
+      "after": {
+        "allocations": 12292,
+        "reallocations": 4,
+        "requested_native_bytes": 3997968
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "callback_records",
+      "size": 0,
+      "before": {
+        "allocations": 10,
+        "reallocations": 6,
+        "requested_native_bytes": 210
+      },
+      "after": {
+        "allocations": 10,
+        "reallocations": 6,
+        "requested_native_bytes": 210
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "callback_records",
+      "size": 1,
+      "before": {
+        "allocations": 15,
+        "reallocations": 7,
+        "requested_native_bytes": 426
+      },
+      "after": {
+        "allocations": 14,
+        "reallocations": 7,
+        "requested_native_bytes": 394
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "callback_records",
+      "size": 8,
+      "before": {
+        "allocations": 22,
+        "reallocations": 8,
+        "requested_native_bytes": 1346
+      },
+      "after": {
+        "allocations": 21,
+        "reallocations": 8,
+        "requested_native_bytes": 1090
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "callback_records",
+      "size": 64,
+      "before": {
+        "allocations": 78,
+        "reallocations": 11,
+        "requested_native_bytes": 9858
+      },
+      "after": {
+        "allocations": 77,
+        "reallocations": 11,
+        "requested_native_bytes": 7810
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "callback_records",
+      "size": 512,
+      "before": {
+        "allocations": 526,
+        "reallocations": 14,
+        "requested_native_bytes": 77954
+      },
+      "after": {
+        "allocations": 525,
+        "reallocations": 14,
+        "requested_native_bytes": 61570
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "callback_records",
+      "size": 4096,
+      "before": {
+        "allocations": 4110,
+        "reallocations": 17,
+        "requested_native_bytes": 622722
+      },
+      "after": {
+        "allocations": 4109,
+        "reallocations": 17,
+        "requested_native_bytes": 491650
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "control",
+      "size": 1,
+      "before": {
+        "allocations": 0,
+        "reallocations": 0,
+        "requested_native_bytes": 0
+      },
+      "after": {
+        "allocations": 0,
+        "reallocations": 0,
+        "requested_native_bytes": 0
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "flat",
+      "size": 0,
+      "before": {
+        "allocations": 2,
+        "reallocations": 0,
+        "requested_native_bytes": 32
+      },
+      "after": {
+        "allocations": 2,
+        "reallocations": 0,
+        "requested_native_bytes": 32
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "flat",
+      "size": 1,
+      "before": {
+        "allocations": 6,
+        "reallocations": 1,
+        "requested_native_bytes": 120
+      },
+      "after": {
+        "allocations": 6,
+        "reallocations": 1,
+        "requested_native_bytes": 120
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "flat",
+      "size": 8,
+      "before": {
+        "allocations": 13,
+        "reallocations": 1,
+        "requested_native_bytes": 560
+      },
+      "after": {
+        "allocations": 13,
+        "reallocations": 1,
+        "requested_native_bytes": 560
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "flat",
+      "size": 64,
+      "before": {
+        "allocations": 69,
+        "reallocations": 1,
+        "requested_native_bytes": 4144
+      },
+      "after": {
+        "allocations": 69,
+        "reallocations": 1,
+        "requested_native_bytes": 4144
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "flat",
+      "size": 512,
+      "before": {
+        "allocations": 517,
+        "reallocations": 1,
+        "requested_native_bytes": 32816
+      },
+      "after": {
+        "allocations": 517,
+        "reallocations": 1,
+        "requested_native_bytes": 32816
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "flat",
+      "size": 4096,
+      "before": {
+        "allocations": 4101,
+        "reallocations": 1,
+        "requested_native_bytes": 262192
+      },
+      "after": {
+        "allocations": 4101,
+        "reallocations": 1,
+        "requested_native_bytes": 262192
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "nested_many",
+      "size": 0,
+      "before": {
+        "allocations": 2,
+        "reallocations": 0,
+        "requested_native_bytes": 32
+      },
+      "after": {
+        "allocations": 2,
+        "reallocations": 0,
+        "requested_native_bytes": 32
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "nested_many",
+      "size": 1,
+      "before": {
+        "allocations": 7,
+        "reallocations": 2,
+        "requested_native_bytes": 224
+      },
+      "after": {
+        "allocations": 7,
+        "reallocations": 2,
+        "requested_native_bytes": 224
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "nested_many",
+      "size": 8,
+      "before": {
+        "allocations": 35,
+        "reallocations": 4,
+        "requested_native_bytes": 1424
+      },
+      "after": {
+        "allocations": 35,
+        "reallocations": 4,
+        "requested_native_bytes": 1424
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "nested_many",
+      "size": 64,
+      "before": {
+        "allocations": 259,
+        "reallocations": 7,
+        "requested_native_bytes": 11280
+      },
+      "after": {
+        "allocations": 259,
+        "reallocations": 7,
+        "requested_native_bytes": 11280
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "nested_many",
+      "size": 512,
+      "before": {
+        "allocations": 2051,
+        "reallocations": 10,
+        "requested_native_bytes": 90128
+      },
+      "after": {
+        "allocations": 2051,
+        "reallocations": 10,
+        "requested_native_bytes": 90128
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "records",
+      "size": 0,
+      "before": {
+        "allocations": 2,
+        "reallocations": 0,
+        "requested_native_bytes": 32
+      },
+      "after": {
+        "allocations": 2,
+        "reallocations": 0,
+        "requested_native_bytes": 32
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "records",
+      "size": 1,
+      "before": {
+        "allocations": 6,
+        "reallocations": 1,
+        "requested_native_bytes": 152
+      },
+      "after": {
+        "allocations": 5,
+        "reallocations": 1,
+        "requested_native_bytes": 120
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "records",
+      "size": 8,
+      "before": {
+        "allocations": 13,
+        "reallocations": 1,
+        "requested_native_bytes": 880
+      },
+      "after": {
+        "allocations": 12,
+        "reallocations": 1,
+        "requested_native_bytes": 624
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "records",
+      "size": 64,
+      "before": {
+        "allocations": 69,
+        "reallocations": 1,
+        "requested_native_bytes": 6704
+      },
+      "after": {
+        "allocations": 68,
+        "reallocations": 1,
+        "requested_native_bytes": 4656
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "records",
+      "size": 512,
+      "before": {
+        "allocations": 517,
+        "reallocations": 1,
+        "requested_native_bytes": 53296
+      },
+      "after": {
+        "allocations": 516,
+        "reallocations": 1,
+        "requested_native_bytes": 36912
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "records",
+      "size": 4096,
+      "before": {
+        "allocations": 4101,
+        "reallocations": 1,
+        "requested_native_bytes": 426032
+      },
+      "after": {
+        "allocations": 4100,
+        "reallocations": 1,
+        "requested_native_bytes": 294960
+      }
+    },
+    {
+      "mode": "plain",
+      "case": "control",
+      "size": 1,
+      "before": {
+        "allocations": 0,
+        "reallocations": 0,
+        "requested_native_bytes": 0
+      },
+      "after": {
+        "allocations": 0,
+        "reallocations": 0,
+        "requested_native_bytes": 0
+      }
+    },
+    {
+      "mode": "plain",
+      "case": "flat",
+      "size": 512,
+      "before": {
+        "allocations": 3076,
+        "reallocations": 2049,
+        "requested_native_bytes": 89121
+      },
+      "after": {
+        "allocations": 3076,
+        "reallocations": 2049,
+        "requested_native_bytes": 89121
+      }
+    },
+    {
+      "mode": "plain",
+      "case": "records",
+      "size": 512,
+      "before": {
+        "allocations": 5124,
+        "reallocations": 3585,
+        "requested_native_bytes": 145953
+      },
+      "after": {
+        "allocations": 5124,
+        "reallocations": 3585,
+        "requested_native_bytes": 145953
+      }
+    }
+  ],
+  "latency_settings": {
+    "forks": 6,
+    "aa": false,
+    "warmup": 6,
+    "batches": 9,
+    "target_ms": 20
+  },
+  "latency": [
+    {
+      "mode": "bulk",
+      "case": "callback_owned_records",
+      "size": 1,
+      "ns_per_call": {
+        "before": {
+          "median": 3595.93158867892,
+          "min": 3475.3169798190675,
+          "max": 3747.0314488955446,
+          "fork_medians": [
+            3688.594858322387,
+            3527.4598540145985,
+            3611.310154905336,
+            3475.3169798190675,
+            3580.553022452504,
+            3747.0314488955446
+          ]
+        },
+        "after": {
+          "median": 3480.8006908730626,
+          "min": 3330.535465694398,
+          "max": 3674.1172860552338,
+          "fork_medians": [
+            3425.3292598967296,
+            3633.650948320863,
+            3674.1172860552338,
+            3429.955904973509,
+            3330.535465694398,
+            3531.6454767726163
+          ]
+        },
+        "paired_after_before": 0.9647329406510123
+      },
+      "jvm_bytes_per_call": {
+        "before": {
+          "median": 824.0,
+          "min": 824.0,
+          "max": 824.0,
+          "fork_medians": [
+            824.0,
+            824.0,
+            824.0,
+            824.0,
+            824.0,
+            824.0
+          ]
+        },
+        "after": {
+          "median": 824.0,
+          "min": 824.0,
+          "max": 824.0,
+          "fork_medians": [
+            824.0,
+            824.0,
+            824.0,
+            824.0,
+            824.0,
+            824.0
+          ]
+        },
+        "paired_after_before": 1.0
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "callback_owned_records",
+      "size": 8,
+      "ns_per_call": {
+        "before": {
+          "median": 4436.6794458054155,
+          "min": 4334.534068786502,
+          "max": 4769.456816059757,
+          "fork_medians": [
+            4769.456816059757,
+            4726.805600933489,
+            4389.441952506596,
+            4404.005556790398,
+            4469.353334820433,
+            4334.534068786502
+          ]
+        },
+        "after": {
+          "median": 4441.867171630803,
+          "min": 4349.359269723973,
+          "max": 5042.71390503876,
+          "fork_medians": [
+            5042.71390503876,
+            4422.100464704581,
+            4461.633878557024,
+            4384.166013071896,
+            4349.359269723973,
+            4656.538159111933
+          ]
+        },
+        "paired_after_before": 1.0059709172918316
+      },
+      "jvm_bytes_per_call": {
+        "before": {
+          "median": 1624.0,
+          "min": 1624.0,
+          "max": 1624.0,
+          "fork_medians": [
+            1624.0,
+            1624.0,
+            1624.0,
+            1624.0,
+            1624.0,
+            1624.0
+          ]
+        },
+        "after": {
+          "median": 1624.0,
+          "min": 1624.0,
+          "max": 1624.0,
+          "fork_medians": [
+            1624.0,
+            1624.0,
+            1624.0,
+            1624.0,
+            1624.0,
+            1624.0
+          ]
+        },
+        "paired_after_before": 1.0
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "callback_owned_records",
+      "size": 64,
+      "ns_per_call": {
+        "before": {
+          "median": 13978.143042361895,
+          "min": 13647.786265432098,
+          "max": 15120.078266946191,
+          "fork_medians": [
+            14396.547692307693,
+            13647.786265432098,
+            13725.58819492107,
+            14077.969675599436,
+            15120.078266946191,
+            13878.316409124356
+          ]
+        },
+        "after": {
+          "median": 14043.24314381732,
+          "min": 13586.318212593094,
+          "max": 15153.239245283019,
+          "fork_medians": [
+            14055.311706629054,
+            14428.851262862489,
+            14031.174581005587,
+            13586.318212593094,
+            13706.381502890174,
+            15153.239245283019
+          ]
+        },
+        "paired_after_before": 0.9992806830102912
+      },
+      "jvm_bytes_per_call": {
+        "before": {
+          "median": 10088.0,
+          "min": 10088.0,
+          "max": 10088.0,
+          "fork_medians": [
+            10088.0,
+            10088.0,
+            10088.0,
+            10088.0,
+            10088.0,
+            10088.0
+          ]
+        },
+        "after": {
+          "median": 10088.0,
+          "min": 10088.0,
+          "max": 10088.0,
+          "fork_medians": [
+            10088.0,
+            10088.0,
+            10088.0,
+            10088.0,
+            10088.0,
+            10088.0
+          ]
+        },
+        "paired_after_before": 1.0
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "callback_owned_records",
+      "size": 512,
+      "ns_per_call": {
+        "before": {
+          "median": 80884.32206909751,
+          "min": 74085.87826086956,
+          "max": 83434.43169398907,
+          "fork_medians": [
+            80888.73251028807,
+            82687.12878787878,
+            78966.28682170542,
+            74085.87826086956,
+            83434.43169398907,
+            80879.91162790697
+          ]
+        },
+        "after": {
+          "median": 82206.45340061179,
+          "min": 77776.28340080971,
+          "max": 89590.27906976744,
+          "fork_medians": [
+            79930.85483870968,
+            82843.5037593985,
+            89590.27906976744,
+            81569.40304182509,
+            86203.39230769231,
+            77776.28340080971
+          ]
+        },
+        "paired_after_before": 1.0175392149176794
+      },
+      "jvm_bytes_per_call": {
+        "before": {
+          "median": 73264.0,
+          "min": 73264.0,
+          "max": 73264.0,
+          "fork_medians": [
+            73264.0,
+            73264.0,
+            73264.0,
+            73264.0,
+            73264.0,
+            73264.0
+          ]
+        },
+        "after": {
+          "median": 73264.0,
+          "min": 73264.0,
+          "max": 73264.0,
+          "fork_medians": [
+            73264.0,
+            73264.0,
+            73264.0,
+            73264.0,
+            73264.0,
+            73264.0
+          ]
+        },
+        "paired_after_before": 1.0
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "callback_owned_records",
+      "size": 4096,
+      "ns_per_call": {
+        "before": {
+          "median": 589064.3712121212,
+          "min": 565008.0571428571,
+          "max": 638804.8518518518,
+          "fork_medians": [
+            599542.1818181818,
+            565008.0571428571,
+            577206.2352941176,
+            638804.8518518518,
+            594581.4090909091,
+            583547.3333333334
+          ]
+        },
+        "after": {
+          "median": 583788.3714285714,
+          "min": 552155.3333333334,
+          "max": 616659.7419354839,
+          "fork_medians": [
+            598424.4,
+            616659.7419354839,
+            552155.3333333334,
+            569152.3428571429,
+            554667.3823529412,
+            601651.1428571428
+          ]
+        },
+        "paired_after_before": 0.9773676727528072
+      },
+      "jvm_bytes_per_call": {
+        "before": {
+          "median": 575488.6623093681,
+          "min": 574485.2571428572,
+          "max": 576600.0,
+          "fork_medians": [
+            576600.0,
+            574485.2571428572,
+            576357.1764705882,
+            574620.1481481482,
+            574544.0,
+            576600.0
+          ]
+        },
+        "after": {
+          "median": 576100.6451612903,
+          "min": 568392.0,
+          "max": 576600.0,
+          "fork_medians": [
+            568392.0,
+            575601.2903225806,
+            576600.0,
+            576600.0,
+            573276.7058823529,
+            576600.0
+          ]
+        },
+        "paired_after_before": 1.0002106536877866
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "handles_input",
+      "size": 8,
+      "ns_per_call": {
+        "before": {
+          "median": 468.31648783670823,
+          "min": 411.2773974986658,
+          "max": 589.2444583203247,
+          "fork_medians": [
+            439.50620808998485,
+            548.6046693933197,
+            483.8443458796219,
+            589.2444583203247,
+            452.78862979379454,
+            411.2773974986658
+          ]
+        },
+        "after": {
+          "median": 448.3337809252775,
+          "min": 428.48047050877983,
+          "max": 495.9260081391047,
+          "fork_medians": [
+            441.46919970730914,
+            447.20964315136797,
+            449.457918699187,
+            495.9260081391047,
+            428.48047050877983,
+            465.61014967707314
+          ]
+        },
+        "paired_after_before": 0.9376226807946488
+      },
+      "jvm_bytes_per_call": {
+        "before": {
+          "median": 520.0,
+          "min": 520.0,
+          "max": 544.0,
+          "fork_medians": [
+            520.0,
+            520.0,
+            544.0,
+            536.0,
+            520.0,
+            520.0
+          ]
+        },
+        "after": {
+          "median": 520.0,
+          "min": 520.0,
+          "max": 544.0,
+          "fork_medians": [
+            520.0,
+            520.0,
+            544.0,
+            536.0,
+            520.0,
+            520.0
+          ]
+        },
+        "paired_after_before": 1.0
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "handles_input",
+      "size": 512,
+      "ns_per_call": {
+        "before": {
+          "median": 12313.591992526948,
+          "min": 11877.872514619883,
+          "max": 14879.675062972292,
+          "fork_medians": [
+            11877.872514619883,
+            14879.675062972292,
+            12023.961842105264,
+            12134.209189842806,
+            12656.3624208304,
+            12492.97479521109
+          ]
+        },
+        "after": {
+          "median": 13373.924283557488,
+          "min": 12079.003280839896,
+          "max": 13886.126846220677,
+          "fork_medians": [
+            13886.126846220677,
+            13339.372093023256,
+            13578.17116524029,
+            12429.428484479611,
+            13408.476474091722,
+            12079.003280839896
+          ]
+        },
+        "paired_after_before": 1.041877636003493
+      },
+      "jvm_bytes_per_call": {
+        "before": {
+          "median": 16464.0,
+          "min": 16416.0,
+          "max": 16488.0,
+          "fork_medians": [
+            16464.0,
+            16480.0,
+            16488.0,
+            16432.0,
+            16464.0,
+            16416.0
+          ]
+        },
+        "after": {
+          "median": 16440.0,
+          "min": 16416.0,
+          "max": 16488.0,
+          "fork_medians": [
+            16416.0,
+            16416.0,
+            16488.0,
+            16480.0,
+            16464.0,
+            16416.0
+          ]
+        },
+        "paired_after_before": 1.0
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "numbers_input",
+      "size": 8,
+      "ns_per_call": {
+        "before": {
+          "median": 205.01458729960643,
+          "min": 195.9843266107712,
+          "max": 267.41384567273866,
+          "fork_medians": [
+            267.41384567273866,
+            195.9843266107712,
+            204.43334652359115,
+            219.40889576568526,
+            205.5958280756217,
+            202.50771452690677
+          ]
+        },
+        "after": {
+          "median": 214.34937363049943,
+          "min": 200.87254137616108,
+          "max": 232.8940427739207,
+          "fork_medians": [
+            232.8940427739207,
+            214.31598505072077,
+            200.87254137616108,
+            216.61975523524612,
+            203.53849639112798,
+            214.3827622102781
+          ]
+        },
+        "paired_after_before": 0.9886406265632115
+      },
+      "jvm_bytes_per_call": {
+        "before": {
+          "median": 272.0,
+          "min": 272.0,
+          "max": 320.0,
+          "fork_medians": [
+            272.0,
+            272.0,
+            320.0,
+            272.0,
+            272.0,
+            272.0
+          ]
+        },
+        "after": {
+          "median": 272.0,
+          "min": 272.0,
+          "max": 320.0,
+          "fork_medians": [
+            272.0,
+            272.0,
+            320.0,
+            272.0,
+            272.0,
+            272.0
+          ]
+        },
+        "paired_after_before": 1.0
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "numbers_input",
+      "size": 512,
+      "ns_per_call": {
+        "before": {
+          "median": 2038.2804874313292,
+          "min": 1530.9670443814919,
+          "max": 2522.065467957584,
+          "fork_medians": [
+            1878.2727851121363,
+            2480.4403742783197,
+            1867.8919914084074,
+            2198.288189750522,
+            1530.9670443814919,
+            2522.065467957584
+          ]
+        },
+        "after": {
+          "median": 1899.2169395626559,
+          "min": 1676.4126751384815,
+          "max": 5713.685722661976,
+          "fork_medians": [
+            1676.4126751384815,
+            1875.214118071854,
+            5713.685722661976,
+            1706.7742456896551,
+            1923.2197610534577,
+            2638.837275827924
+          ]
+        },
+        "paired_after_before": 0.9694144670209986
+      },
+      "jvm_bytes_per_call": {
+        "before": {
+          "median": 6320.0,
+          "min": 6320.0,
+          "max": 6368.0,
+          "fork_medians": [
+            6320.0,
+            6320.0,
+            6368.0,
+            6320.0,
+            6320.0,
+            6320.0
+          ]
+        },
+        "after": {
+          "median": 6320.0,
+          "min": 6320.0,
+          "max": 6368.0,
+          "fork_medians": [
+            6320.0,
+            6320.0,
+            6368.0,
+            6320.0,
+            6320.0,
+            6320.0
+          ]
+        },
+        "paired_after_before": 1.0
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "owned_buffer_records_roundtrip",
+      "size": 1,
+      "ns_per_call": {
+        "before": {
+          "median": 1736.659666176356,
+          "min": 1694.5921429775753,
+          "max": 2093.3219604356523,
+          "fork_medians": [
+            1702.46797314462,
+            1744.5326208739118,
+            1694.5921429775753,
+            1728.7867114788005,
+            2093.3219604356523,
+            1946.562451209992
+          ]
+        },
+        "after": {
+          "median": 1762.0005185419334,
+          "min": 1704.340483486551,
+          "max": 2067.1701393022977,
+          "fork_medians": [
+            2067.1701393022977,
+            1757.1933144676336,
+            1766.8077226162331,
+            1734.5932510572193,
+            1704.340483486551,
+            1904.7435979173308
+          ]
+        },
+        "paired_after_before": 1.0053080462113924
+      },
+      "jvm_bytes_per_call": {
+        "before": {
+          "median": 2312.0,
+          "min": 2312.0,
+          "max": 2312.0,
+          "fork_medians": [
+            2312.0,
+            2312.0,
+            2312.0,
+            2312.0,
+            2312.0,
+            2312.0
+          ]
+        },
+        "after": {
+          "median": 2312.0,
+          "min": 2312.0,
+          "max": 2360.0,
+          "fork_medians": [
+            2312.0,
+            2312.0,
+            2360.0,
+            2312.0,
+            2312.0,
+            2312.0
+          ]
+        },
+        "paired_after_before": 1.0
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "owned_buffer_records_roundtrip",
+      "size": 8,
+      "ns_per_call": {
+        "before": {
+          "median": 7491.714502544748,
+          "min": 6949.176920403198,
+          "max": 8690.897304832713,
+          "fork_medians": [
+            7440.672017511857,
+            7542.75698757764,
+            6949.176920403198,
+            7188.661592505855,
+            8690.897304832713,
+            7791.697547683923
+          ]
+        },
+        "after": {
+          "median": 7602.982931139903,
+          "min": 7173.1286370597245,
+          "max": 8789.94247603168,
+          "fork_medians": [
+            8323.822635135135,
+            7173.1286370597245,
+            7514.805847076462,
+            7691.160015203344,
+            7287.873631002527,
+            8789.94247603168
+          ]
+        },
+        "paired_after_before": 1.0756483118166784
+      },
+      "jvm_bytes_per_call": {
+        "before": {
+          "median": 14560.0,
+          "min": 14560.0,
+          "max": 14560.0,
+          "fork_medians": [
+            14560.0,
+            14560.0,
+            14560.0,
+            14560.0,
+            14560.0,
+            14560.0
+          ]
+        },
+        "after": {
+          "median": 14560.0,
+          "min": 14560.0,
+          "max": 14944.0,
+          "fork_medians": [
+            14560.0,
+            14560.0,
+            14944.0,
+            14560.0,
+            14560.0,
+            14560.0
+          ]
+        },
+        "paired_after_before": 1.0
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "owned_buffer_records_roundtrip",
+      "size": 64,
+      "ns_per_call": {
+        "before": {
+          "median": 56931.04010226704,
+          "min": 54531.42627345845,
+          "max": 67446.90415335463,
+          "fork_medians": [
+            57301.90506329114,
+            55202.395280235985,
+            54531.42627345845,
+            56560.17514124294,
+            67446.90415335463,
+            60534.28440366973
+          ]
+        },
+        "after": {
+          "median": 57846.03772683859,
+          "min": 55882.071856287424,
+          "max": 65579.28289473684,
+          "fork_medians": [
+            65579.28289473684,
+            58754.333333333336,
+            56937.74212034384,
+            55882.071856287424,
+            56151.61609907121,
+            60452.30909090909
+          ]
+        },
+        "paired_after_before": 1.021386471459319
+      },
+      "jvm_bytes_per_call": {
+        "before": {
+          "median": 110832.0,
+          "min": 110832.0,
+          "max": 110832.0,
+          "fork_medians": [
+            110832.0,
+            110832.0,
+            110832.0,
+            110832.0,
+            110832.0,
+            110832.0
+          ]
+        },
+        "after": {
+          "median": 110832.0,
+          "min": 110832.0,
+          "max": 113904.0,
+          "fork_medians": [
+            110832.0,
+            110832.0,
+            113904.0,
+            110832.0,
+            110832.0,
+            110832.0
+          ]
+        },
+        "paired_after_before": 1.0
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "owned_buffer_records_roundtrip",
+      "size": 512,
+      "ns_per_call": {
+        "before": {
+          "median": 451269.4913536076,
+          "min": 429526.14634146343,
+          "max": 558802.0285714286,
+          "fork_medians": [
+            436918.4186046512,
+            429526.14634146343,
+            430426.93333333335,
+            470537.8695652174,
+            558802.0285714286,
+            465620.5641025641
+          ]
+        },
+        "after": {
+          "median": 425942.44237588655,
+          "min": 419039.6170212766,
+          "max": 498394.46341463417,
+          "fork_medians": [
+            498394.46341463417,
+            419039.6170212766,
+            423710.4680851064,
+            428174.4166666667,
+            421710.4583333333,
+            488052.1666666667
+          ]
+        },
+        "paired_after_before": 0.9799908123636889
+      },
+      "jvm_bytes_per_call": {
+        "before": {
+          "median": 876472.0,
+          "min": 876472.0,
+          "max": 876472.0,
+          "fork_medians": [
+            876472.0,
+            876472.0,
+            876472.0,
+            876472.0,
+            876472.0,
+            876472.0
+          ]
+        },
+        "after": {
+          "median": 876472.0,
+          "min": 876472.0,
+          "max": 901048.0,
+          "fork_medians": [
+            876472.0,
+            876472.0,
+            901048.0,
+            876472.0,
+            876472.0,
+            876472.0
+          ]
+        },
+        "paired_after_before": 1.0
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "owned_buffer_records_roundtrip",
+      "size": 4096,
+      "ns_per_call": {
+        "before": {
+          "median": 3952294.4375,
+          "min": 3613487.25,
+          "max": 4315265.4375,
+          "fork_medians": [
+            4315265.4375,
+            3780955.4375,
+            3613487.25,
+            3788461.625,
+            4249453.5,
+            4116127.25
+          ]
+        },
+        "after": {
+          "median": 4233867.90625,
+          "min": 3685845.9375,
+          "max": 4451564.1875,
+          "fork_medians": [
+            4253061.75,
+            4353140.4375,
+            4451564.1875,
+            3686171.5625,
+            3685845.9375,
+            4214674.0625
+          ]
+        },
+        "paired_after_before": 1.00476341713094
+      },
+      "jvm_bytes_per_call": {
+        "before": {
+          "median": 6998876.5,
+          "min": 6997456.0,
+          "max": 6999520.0,
+          "fork_medians": [
+            6997456.0,
+            6998233.0,
+            6997979.0,
+            6999520.0,
+            6999520.0,
+            6999520.0
+          ]
+        },
+        "after": {
+          "median": 6999520.0,
+          "min": 6993741.0,
+          "max": 7195612.0,
+          "fork_medians": [
+            6999520.0,
+            6999005.0,
+            7195612.0,
+            6999520.0,
+            6999520.0,
+            6993741.0
+          ]
+        },
+        "paired_after_before": 1.0000551567802902
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "owned_handle_records_roundtrip",
+      "size": 1,
+      "ns_per_call": {
+        "before": {
+          "median": 943.8351063285862,
+          "min": 905.9383944904768,
+          "max": 986.6396676102639,
+          "fork_medians": [
+            955.3250071777204,
+            917.6630204982075,
+            986.6396676102639,
+            932.345205479452,
+            905.9383944904768,
+            960.1299323173258
+          ]
+        },
+        "after": {
+          "median": 895.9460860006277,
+          "min": 865.4129542410232,
+          "max": 925.6041187827526,
+          "fork_medians": [
+            871.5755533330434,
+            890.9794073797988,
+            865.4129542410232,
+            925.6041187827526,
+            917.7854857874052,
+            900.9127646214567
+          ]
+        },
+        "paired_after_before": 0.9546230036950577
+      },
+      "jvm_bytes_per_call": {
+        "before": {
+          "median": 816.0,
+          "min": 816.0,
+          "max": 816.0,
+          "fork_medians": [
+            816.0,
+            816.0,
+            816.0,
+            816.0,
+            816.0,
+            816.0
+          ]
+        },
+        "after": {
+          "median": 816.0,
+          "min": 816.0,
+          "max": 816.0,
+          "fork_medians": [
+            816.0,
+            816.0,
+            816.0,
+            816.0,
+            816.0,
+            816.0
+          ]
+        },
+        "paired_after_before": 1.0
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "owned_handle_records_roundtrip",
+      "size": 8,
+      "ns_per_call": {
+        "before": {
+          "median": 1654.9046414645932,
+          "min": 1612.5812520272461,
+          "max": 1725.6390099355065,
+          "fork_medians": [
+            1698.6234389049855,
+            1625.1277841001463,
+            1725.6390099355065,
+            1617.4867230814123,
+            1684.6814988290398,
+            1612.5812520272461
+          ]
+        },
+        "after": {
+          "median": 1664.3746458157143,
+          "min": 1580.7352519199933,
+          "max": 1822.41763425254,
+          "fork_medians": [
+            1678.9978246318608,
+            1580.7352519199933,
+            1666.212669683258,
+            1633.0579791952262,
+            1662.536621948171,
+            1822.41763425254
+          ]
+        },
+        "paired_after_before": 0.9876506602841033
+      },
+      "jvm_bytes_per_call": {
+        "before": {
+          "median": 1600.0,
+          "min": 1600.0,
+          "max": 1600.0,
+          "fork_medians": [
+            1600.0,
+            1600.0,
+            1600.0,
+            1600.0,
+            1600.0,
+            1600.0
+          ]
+        },
+        "after": {
+          "median": 1600.0,
+          "min": 1600.0,
+          "max": 1600.0,
+          "fork_medians": [
+            1600.0,
+            1600.0,
+            1600.0,
+            1600.0,
+            1600.0,
+            1600.0
+          ]
+        },
+        "paired_after_before": 1.0
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "owned_handle_records_roundtrip",
+      "size": 64,
+      "ns_per_call": {
+        "before": {
+          "median": 10368.465060416343,
+          "min": 9166.974383301707,
+          "max": 11029.20038412292,
+          "fork_medians": [
+            10705.973642593568,
+            9166.974383301707,
+            10861.1237006237,
+            9481.992934526614,
+            10030.956478239119,
+            11029.20038412292
+          ]
+        },
+        "after": {
+          "median": 10230.866577680834,
+          "min": 9809.837265286471,
+          "max": 10499.423097112862,
+          "fork_medians": [
+            9959.54,
+            10367.224027572624,
+            10094.509127789046,
+            9809.837265286471,
+            10499.423097112862,
+            10456.249738766981
+          ]
+        },
+        "paired_after_before": 0.9913134729489259
+      },
+      "jvm_bytes_per_call": {
+        "before": {
+          "median": 10064.0,
+          "min": 10064.0,
+          "max": 10064.0,
+          "fork_medians": [
+            10064.0,
+            10064.0,
+            10064.0,
+            10064.0,
+            10064.0,
+            10064.0
+          ]
+        },
+        "after": {
+          "median": 10064.0,
+          "min": 10064.0,
+          "max": 10064.0,
+          "fork_medians": [
+            10064.0,
+            10064.0,
+            10064.0,
+            10064.0,
+            10064.0,
+            10064.0
+          ]
+        },
+        "paired_after_before": 1.0
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "owned_handle_records_roundtrip",
+      "size": 512,
+      "ns_per_call": {
+        "before": {
+          "median": 68058.8411506338,
+          "min": 66630.89726027397,
+          "max": 97253.91836734694,
+          "fork_medians": [
+            73251.83161512027,
+            66630.89726027397,
+            67410.76821192053,
+            68706.91408934708,
+            67332.00727272728,
+            97253.91836734694
+          ]
+        },
+        "after": {
+          "median": 69384.87185175362,
+          "min": 65581.94098360656,
+          "max": 70595.39436619719,
+          "fork_medians": [
+            69063.7785467128,
+            65581.94098360656,
+            68836.26116838488,
+            69832.73103448276,
+            70595.39436619719,
+            69705.96515679442
+          ]
+        },
+        "paired_after_before": 1.0003214987196531
+      },
+      "jvm_bytes_per_call": {
+        "before": {
+          "median": 73240.0,
+          "min": 73240.0,
+          "max": 73240.0,
+          "fork_medians": [
+            73240.0,
+            73240.0,
+            73240.0,
+            73240.0,
+            73240.0,
+            73240.0
+          ]
+        },
+        "after": {
+          "median": 73240.0,
+          "min": 73240.0,
+          "max": 73240.0,
+          "fork_medians": [
+            73240.0,
+            73240.0,
+            73240.0,
+            73240.0,
+            73240.0,
+            73240.0
+          ]
+        },
+        "paired_after_before": 1.0
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "owned_handle_records_roundtrip",
+      "size": 4096,
+      "ns_per_call": {
+        "before": {
+          "median": 555337.1748366014,
+          "min": 519929.5263157895,
+          "max": 651431.0666666667,
+          "fork_medians": [
+            577140.9411764706,
+            651431.0666666667,
+            529175.4594594594,
+            519929.5263157895,
+            538762.5555555555,
+            571911.7941176471
+          ]
+        },
+        "after": {
+          "median": 542768.0578078078,
+          "min": 526580.8421052631,
+          "max": 586162.5625,
+          "fork_medians": [
+            540702.2777777778,
+            526580.8421052631,
+            536382.1176470588,
+            586162.5625,
+            544833.8378378379,
+            554834.2580645161
+          ]
+        },
+        "paired_after_before": 0.9907042509539028
+      },
+      "jvm_bytes_per_call": {
+        "before": {
+          "median": 576576.0,
+          "min": 576576.0,
+          "max": 576576.0,
+          "fork_medians": [
+            576576.0,
+            576576.0,
+            576576.0,
+            576576.0,
+            576576.0,
+            576576.0
+          ]
+        },
+        "after": {
+          "median": 576376.2580645161,
+          "min": 573877.5,
+          "max": 576576.0,
+          "fork_medians": [
+            576576.0,
+            576576.0,
+            576576.0,
+            573877.5,
+            574512.0,
+            576176.5161290322
+          ]
+        },
+        "paired_after_before": 0.9996535722342174
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "owned_handles_roundtrip",
+      "size": 1,
+      "ns_per_call": {
+        "before": {
+          "median": 885.7837857560559,
+          "min": 851.7262572379519,
+          "max": 968.2935752674917,
+          "fork_medians": [
+            883.206547777482,
+            968.2935752674917,
+            851.7262572379519,
+            888.3610237346297,
+            860.224876557724,
+            918.6396629657261
+          ]
+        },
+        "after": {
+          "median": 879.2486902963924,
+          "min": 866.4390515322718,
+          "max": 954.6462588170209,
+          "fork_medians": [
+            871.9663106465174,
+            954.6462588170209,
+            884.4752561208543,
+            945.5182437936801,
+            866.4390515322718,
+            874.0221244719306
+          ]
+        },
+        "paired_after_before": 0.9972486362517763
+      },
+      "jvm_bytes_per_call": {
+        "before": {
+          "median": 784.0,
+          "min": 784.0,
+          "max": 784.0,
+          "fork_medians": [
+            784.0,
+            784.0,
+            784.0,
+            784.0,
+            784.0,
+            784.0
+          ]
+        },
+        "after": {
+          "median": 784.0,
+          "min": 784.0,
+          "max": 784.0,
+          "fork_medians": [
+            784.0,
+            784.0,
+            784.0,
+            784.0,
+            784.0,
+            784.0
+          ]
+        },
+        "paired_after_before": 1.0
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "owned_handles_roundtrip",
+      "size": 8,
+      "ns_per_call": {
+        "before": {
+          "median": 1428.5705546537042,
+          "min": 1371.0433402244537,
+          "max": 1607.7059929686861,
+          "fork_medians": [
+            1607.7059929686861,
+            1417.2165049908617,
+            1455.9992618291872,
+            1386.3110189982729,
+            1439.9246043165467,
+            1371.0433402244537
+          ]
+        },
+        "after": {
+          "median": 1455.4971699424423,
+          "min": 1369.593532851737,
+          "max": 1505.8712744284312,
+          "fork_medians": [
+            1505.8712744284312,
+            1453.7828942402052,
+            1492.7376323692113,
+            1369.593532851737,
+            1457.2114456446793,
+            1388.430339265851
+          ]
+        },
+        "paired_after_before": 1.0123434809318397
+      },
+      "jvm_bytes_per_call": {
+        "before": {
+          "median": 1280.0,
+          "min": 1280.0,
+          "max": 1280.0,
+          "fork_medians": [
+            1280.0,
+            1280.0,
+            1280.0,
+            1280.0,
+            1280.0,
+            1280.0
+          ]
+        },
+        "after": {
+          "median": 1280.0,
+          "min": 1280.0,
+          "max": 1280.0,
+          "fork_medians": [
+            1280.0,
+            1280.0,
+            1280.0,
+            1280.0,
+            1280.0,
+            1280.0
+          ]
+        },
+        "paired_after_before": 1.0
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "owned_handles_roundtrip",
+      "size": 64,
+      "ns_per_call": {
+        "before": {
+          "median": 7280.186365196826,
+          "min": 6872.856355494317,
+          "max": 7714.397310513447,
+          "fork_medians": [
+            7375.328908554572,
+            6950.796222302943,
+            7185.04382183908,
+            6872.856355494317,
+            7540.000377216144,
+            7714.397310513447
+          ]
+        },
+        "after": {
+          "median": 7111.010866691713,
+          "min": 6956.230205790024,
+          "max": 7969.355140186916,
+          "fork_medians": [
+            7149.527208480566,
+            7072.4945249028615,
+            6960.95313681028,
+            6956.230205790024,
+            7969.355140186916,
+            7538.6461538461535
+          ]
+        },
+        "paired_after_before": 0.994674330084415
+      },
+      "jvm_bytes_per_call": {
+        "before": {
+          "median": 7504.0,
+          "min": 7504.0,
+          "max": 7504.0,
+          "fork_medians": [
+            7504.0,
+            7504.0,
+            7504.0,
+            7504.0,
+            7504.0,
+            7504.0
+          ]
+        },
+        "after": {
+          "median": 7504.0,
+          "min": 7504.0,
+          "max": 7504.0,
+          "fork_medians": [
+            7504.0,
+            7504.0,
+            7504.0,
+            7504.0,
+            7504.0,
+            7504.0
+          ]
+        },
+        "paired_after_before": 1.0
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "owned_handles_roundtrip",
+      "size": 512,
+      "ns_per_call": {
+        "before": {
+          "median": 59469.85573730168,
+          "min": 56933.66206896552,
+          "max": 71798.6449704142,
+          "fork_medians": [
+            60899.12765957447,
+            57045.38613861386,
+            58040.5838150289,
+            56933.66206896552,
+            62277.767441860466,
+            71798.6449704142
+          ]
+        },
+        "after": {
+          "median": 59480.103352769685,
+          "min": 57485.23563218391,
+          "max": 63137.16719242902,
+          "fork_medians": [
+            62773.38036809816,
+            59687.90670553936,
+            58331.81308411215,
+            57485.23563218391,
+            63137.16719242902,
+            59272.3
+          ]
+        },
+        "paired_after_before": 1.0117437336767972
+      },
+      "jvm_bytes_per_call": {
+        "before": {
+          "median": 52760.0,
+          "min": 52760.0,
+          "max": 52760.0,
+          "fork_medians": [
+            52760.0,
+            52760.0,
+            52760.0,
+            52760.0,
+            52760.0,
+            52760.0
+          ]
+        },
+        "after": {
+          "median": 52760.0,
+          "min": 52760.0,
+          "max": 52760.0,
+          "fork_medians": [
+            52760.0,
+            52760.0,
+            52760.0,
+            52760.0,
+            52760.0,
+            52760.0
+          ]
+        },
+        "paired_after_before": 1.0
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "owned_handles_roundtrip",
+      "size": 4096,
+      "ns_per_call": {
+        "before": {
+          "median": 466573.87043189374,
+          "min": 460505.5,
+          "max": 481780.05,
+          "fork_medians": [
+            481780.05,
+            460505.5,
+            462214.6285714286,
+            465998.88372093026,
+            467525.5238095238,
+            467148.85714285716
+          ]
+        },
+        "after": {
+          "median": 467951.75779920595,
+          "min": 449448.8,
+          "max": 536867.8,
+          "fork_medians": [
+            536867.8,
+            449448.8,
+            479318.5853658537,
+            455255.0227272727,
+            479609.8048780488,
+            456584.93023255817
+          ]
+        },
+        "paired_after_before": 1.001616849010619
+      },
+      "jvm_bytes_per_call": {
+        "before": {
+          "median": 410672.0,
+          "min": 410672.0,
+          "max": 412736.0,
+          "fork_medians": [
+            412736.0,
+            410672.0,
+            411733.4857142857,
+            410672.0,
+            410672.0,
+            410672.0
+          ]
+        },
+        "after": {
+          "median": 411704.0,
+          "min": 404528.0,
+          "max": 412736.0,
+          "fork_medians": [
+            412736.0,
+            408624.0,
+            412736.0,
+            412736.0,
+            410672.0,
+            404528.0
+          ]
+        },
+        "paired_after_before": 1.0
+      }
+    },
+    {
+      "mode": "plain",
+      "case": "owned_handle_records_roundtrip",
+      "size": 1,
+      "ns_per_call": {
+        "before": {
+          "median": 4456.471929099083,
+          "min": 4302.091806091806,
+          "max": 5151.856772673734,
+          "fork_medians": [
+            4392.161948650428,
+            5151.856772673734,
+            4302.091806091806,
+            4520.781909547739,
+            4748.8105195085145,
+            4324.15161987041
+          ]
+        },
+        "after": {
+          "median": 4465.134282584885,
+          "min": 4178.6378066378065,
+          "max": 4748.270098730606,
+          "fork_medians": [
+            4533.6,
+            4390.503254769921,
+            4722.234340779676,
+            4748.270098730606,
+            4396.66856516977,
+            4178.6378066378065
+          ]
+        },
+        "paired_after_before": 0.9992754814555658
+      },
+      "jvm_bytes_per_call": {
+        "before": {
+          "median": 624.0,
+          "min": 624.0,
+          "max": 624.0,
+          "fork_medians": [
+            624.0,
+            624.0,
+            624.0,
+            624.0,
+            624.0,
+            624.0
+          ]
+        },
+        "after": {
+          "median": 624.0,
+          "min": 624.0,
+          "max": 624.0,
+          "fork_medians": [
+            624.0,
+            624.0,
+            624.0,
+            624.0,
+            624.0,
+            624.0
+          ]
+        },
+        "paired_after_before": 1.0
+      }
+    },
+    {
+      "mode": "plain",
+      "case": "owned_handle_records_roundtrip",
+      "size": 512,
+      "ns_per_call": {
+        "before": {
+          "median": 1705047.96875,
+          "min": 1611815.75,
+          "max": 3302439.625,
+          "fork_medians": [
+            1770803.9375,
+            1743720.8125,
+            1612465.8125,
+            1666375.125,
+            3302439.625,
+            1611815.75
+          ]
+        },
+        "after": {
+          "median": 1665852.3125,
+          "min": 1617830.125,
+          "max": 1755489.5625,
+          "fork_medians": [
+            1755489.5625,
+            1684302.6875,
+            1655311.375,
+            1663040.75,
+            1668663.875,
+            1617830.125
+          ]
+        },
+        "paired_after_before": 0.9946753818856249
+      },
+      "jvm_bytes_per_call": {
+        "before": {
+          "median": 149452.0,
+          "min": 126512.0,
+          "max": 172344.0,
+          "fork_medians": [
+            126624.0,
+            172248.0,
+            126512.0,
+            172248.0,
+            172344.0,
+            126656.0
+          ]
+        },
+        "after": {
+          "median": 149404.0,
+          "min": 126176.0,
+          "max": 172368.0,
+          "fork_medians": [
+            126432.0,
+            172368.0,
+            126560.0,
+            172248.0,
+            172344.0,
+            126176.0
+          ]
+        },
+        "paired_after_before": 1.0
+      }
+    },
+    {
+      "mode": "plain",
+      "case": "owned_handles_roundtrip",
+      "size": 1,
+      "ns_per_call": {
+        "before": {
+          "median": 3207.939850428392,
+          "min": 3097.350055213756,
+          "max": 4335.877700476016,
+          "fork_medians": [
+            3273.6478572813653,
+            3142.231843575419,
+            3097.350055213756,
+            3138.910784778146,
+            4335.877700476016,
+            3673.991135734072
+          ]
+        },
+        "after": {
+          "median": 3287.883694148231,
+          "min": 3008.2596701649177,
+          "max": 3521.881190178943,
+          "fork_medians": [
+            3096.6062060140753,
+            3422.8881769641494,
+            3521.881190178943,
+            3008.2596701649177,
+            3152.8792113323125,
+            3472.406086799928
+          ]
+        },
+        "paired_after_before": 0.9521480393395276
+      },
+      "jvm_bytes_per_call": {
+        "before": {
+          "median": 592.0,
+          "min": 592.0,
+          "max": 592.0,
+          "fork_medians": [
+            592.0,
+            592.0,
+            592.0,
+            592.0,
+            592.0,
+            592.0
+          ]
+        },
+        "after": {
+          "median": 592.0,
+          "min": 592.0,
+          "max": 592.0,
+          "fork_medians": [
+            592.0,
+            592.0,
+            592.0,
+            592.0,
+            592.0,
+            592.0
+          ]
+        },
+        "paired_after_before": 1.0
+      }
+    },
+    {
+      "mode": "plain",
+      "case": "owned_handles_roundtrip",
+      "size": 512,
+      "ns_per_call": {
+        "before": {
+          "median": 1131758.4166666665,
+          "min": 1048808.5263157894,
+          "max": 1179295.7222222222,
+          "fork_medians": [
+            1179295.7222222222,
+            1070844.5555555555,
+            1048808.5263157894,
+            1173137.8333333333,
+            1152894.5,
+            1110622.3333333333
+          ]
+        },
+        "after": {
+          "median": 1097970.8194444445,
+          "min": 1056157.8333333333,
+          "max": 1111978.8823529412,
+          "fork_medians": [
+            1072114.0,
+            1056157.8333333333,
+            1105933.388888889,
+            1090008.25,
+            1111978.8823529412,
+            1109221.7222222222
+          ]
+        },
+        "paired_after_before": 0.9753977221299914
+      },
+      "jvm_bytes_per_call": {
+        "before": {
+          "median": 121640.63157894736,
+          "min": 98624.0,
+          "max": 143776.0,
+          "fork_medians": [
+            98624.0,
+            143776.0,
+            99849.26315789473,
+            143672.0,
+            143432.0,
+            99440.0
+          ]
+        },
+        "after": {
+          "median": 121592.0,
+          "min": 99200.0,
+          "max": 164158.11764705883,
+          "fork_medians": [
+            99200.0,
+            143792.0,
+            99440.0,
+            143744.0,
+            164158.11764705883,
+            99440.0
+          ]
+        },
+        "paired_after_before": 1.0003062128544222
+      }
+    }
+  ],
+  "aa_settings": {
+    "forks": 4,
+    "aa": true,
+    "warmup": 6,
+    "batches": 9,
+    "target_ms": 20
+  },
+  "aa": [
+    {
+      "mode": "bulk",
+      "case": "callback_owned_records",
+      "size": 1,
+      "ns_per_call": {
+        "before": {
+          "median": 3495.350869845247,
+          "min": 3382.8086586780055,
+          "max": 3543.8399750934,
+          "fork_medians": [
+            3543.8399750934,
+            3541.324764521193,
+            3382.8086586780055,
+            3449.3769751693003
+          ]
+        },
+        "after": {
+          "median": 3600.1971694174617,
+          "min": 3452.9351000540833,
+          "max": 4556.3482240139465,
+          "fork_medians": [
+            3452.9351000540833,
+            3550.176108374384,
+            3650.218230460539,
+            4556.3482240139465
+          ]
+        },
+        "paired_after_before": 1.0407745074137251
+      },
+      "jvm_bytes_per_call": {
+        "before": {
+          "median": 824.0,
+          "min": 824.0,
+          "max": 824.0,
+          "fork_medians": [
+            824.0,
+            824.0,
+            824.0,
+            824.0
+          ]
+        },
+        "after": {
+          "median": 824.0,
+          "min": 824.0,
+          "max": 824.0,
+          "fork_medians": [
+            824.0,
+            824.0,
+            824.0,
+            824.0
+          ]
+        },
+        "paired_after_before": 1.0
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "callback_owned_records",
+      "size": 512,
+      "ns_per_call": {
+        "before": {
+          "median": 76592.34828101644,
+          "min": 74993.1046511628,
+          "max": 82893.40485829959,
+          "fork_medians": [
+            77014.33333333333,
+            76170.36322869956,
+            74993.1046511628,
+            82893.40485829959
+          ]
+        },
+        "after": {
+          "median": 95400.55304790352,
+          "min": 74248.56296296297,
+          "max": 115117.23333333334,
+          "fork_medians": [
+            74248.56296296297,
+            92054.09160305343,
+            115117.23333333334,
+            98747.01449275362
+          ]
+        },
+        "paired_after_before": 1.1998909750344433
+      },
+      "jvm_bytes_per_call": {
+        "before": {
+          "median": 73264.0,
+          "min": 73264.0,
+          "max": 73264.0,
+          "fork_medians": [
+            73264.0,
+            73264.0,
+            73264.0,
+            73264.0
+          ]
+        },
+        "after": {
+          "median": 73264.0,
+          "min": 73264.0,
+          "max": 73264.0,
+          "fork_medians": [
+            73264.0,
+            73264.0,
+            73264.0,
+            73264.0
+          ]
+        },
+        "paired_after_before": 1.0
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "callback_owned_records",
+      "size": 4096,
+      "ns_per_call": {
+        "before": {
+          "median": 593606.8235294118,
+          "min": 559946.8857142857,
+          "max": 829471.2307692308,
+          "fork_medians": [
+            559946.8857142857,
+            579341.8235294118,
+            829471.2307692308,
+            607871.8235294118
+          ]
+        },
+        "after": {
+          "median": 629255.5691176471,
+          "min": 566356.6,
+          "max": 758775.5,
+          "fork_medians": [
+            584462.0882352941,
+            566356.6,
+            758775.5,
+            674049.05
+          ]
+        },
+        "paired_after_before": 1.010683774308614
+      },
+      "jvm_bytes_per_call": {
+        "before": {
+          "median": 576478.5882352941,
+          "min": 574560.0,
+          "max": 576600.0,
+          "fork_medians": [
+            576600.0,
+            576357.1764705882,
+            576600.0,
+            574560.0
+          ]
+        },
+        "after": {
+          "median": 575568.0,
+          "min": 574536.0,
+          "max": 576616.0,
+          "fork_medians": [
+            574536.0,
+            574536.0,
+            576600.0,
+            576616.0
+          ]
+        },
+        "paired_after_before": 0.9984200973415995
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "handles_input",
+      "size": 512,
+      "ns_per_call": {
+        "before": {
+          "median": 14444.704990919985,
+          "min": 12439.095669036846,
+          "max": 27376.843166542196,
+          "fork_medians": [
+            12439.095669036846,
+            13688.383606557378,
+            27376.843166542196,
+            15201.026375282592
+          ]
+        },
+        "after": {
+          "median": 17889.075180464282,
+          "min": 11909.462868117798,
+          "max": 35840.0808678501,
+          "fork_medians": [
+            11909.462868117798,
+            23346.157955865274,
+            35840.0808678501,
+            12431.99240506329
+          ]
+        },
+        "paired_after_before": 1.133280237234821
+      },
+      "jvm_bytes_per_call": {
+        "before": {
+          "median": 16400.0,
+          "min": 16400.0,
+          "max": 16504.0,
+          "fork_medians": [
+            16400.0,
+            16504.0,
+            16400.0,
+            16400.0
+          ]
+        },
+        "after": {
+          "median": 16400.0,
+          "min": 16400.0,
+          "max": 16480.0,
+          "fork_medians": [
+            16400.0,
+            16400.0,
+            16480.0,
+            16400.0
+          ]
+        },
+        "paired_after_before": 1.0
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "numbers_input",
+      "size": 512,
+      "ns_per_call": {
+        "before": {
+          "median": 2324.201193946088,
+          "min": 2015.0906271536871,
+          "max": 4678.20308370044,
+          "fork_medians": [
+            4678.20308370044,
+            2015.0906271536871,
+            2152.2702641165756,
+            2496.132123775601
+          ]
+        },
+        "after": {
+          "median": 2201.6105350661587,
+          "min": 1785.6549818840579,
+          "max": 2546.1835880933227,
+          "fork_medians": [
+            2546.1835880933227,
+            1785.6549818840579,
+            2507.42451324609,
+            1895.7965568862276
+          ]
+        },
+        "paired_after_before": 0.8228174754482511
+      },
+      "jvm_bytes_per_call": {
+        "before": {
+          "median": 6320.0,
+          "min": 6320.0,
+          "max": 6320.0,
+          "fork_medians": [
+            6320.0,
+            6320.0,
+            6320.0,
+            6320.0
+          ]
+        },
+        "after": {
+          "median": 6320.0,
+          "min": 6320.0,
+          "max": 6320.0,
+          "fork_medians": [
+            6320.0,
+            6320.0,
+            6320.0,
+            6320.0
+          ]
+        },
+        "paired_after_before": 1.0
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "owned_buffer_records_roundtrip",
+      "size": 1,
+      "ns_per_call": {
+        "before": {
+          "median": 1848.38504865738,
+          "min": 1781.52655538695,
+          "max": 2436.053198588998,
+          "fork_medians": [
+            1781.52655538695,
+            2436.053198588998,
+            1849.9693925016281,
+            1846.8007048131317
+          ]
+        },
+        "after": {
+          "median": 2060.98693700439,
+          "min": 1849.5099605251078,
+          "max": 2778.9978065365212,
+          "fork_medians": [
+            1933.9400940502965,
+            1849.5099605251078,
+            2188.0337799584827,
+            2778.9978065365212
+          ]
+        },
+        "paired_after_before": 1.1341463713630737
+      },
+      "jvm_bytes_per_call": {
+        "before": {
+          "median": 2312.0,
+          "min": 2312.0,
+          "max": 2360.0,
+          "fork_medians": [
+            2360.0,
+            2312.0,
+            2312.0,
+            2312.0
+          ]
+        },
+        "after": {
+          "median": 2312.0,
+          "min": 2312.0,
+          "max": 2360.0,
+          "fork_medians": [
+            2360.0,
+            2312.0,
+            2312.0,
+            2312.0
+          ]
+        },
+        "paired_after_before": 1.0
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "owned_buffer_records_roundtrip",
+      "size": 512,
+      "ns_per_call": {
+        "before": {
+          "median": 488797.4749552773,
+          "min": 425447.25531914894,
+          "max": 578637.1578947369,
+          "fork_medians": [
+            425447.25531914894,
+            512147.46153846156,
+            578637.1578947369,
+            465447.488372093
+          ]
+        },
+        "after": {
+          "median": 513140.6983173077,
+          "min": 449417.7727272727,
+          "max": 621435.9310344828,
+          "fork_medians": [
+            476078.78125,
+            449417.7727272727,
+            621435.9310344828,
+            550202.6153846154
+          ]
+        },
+        "paired_after_before": 1.09648627390682
+      },
+      "jvm_bytes_per_call": {
+        "before": {
+          "median": 876472.0,
+          "min": 876472.0,
+          "max": 901048.0,
+          "fork_medians": [
+            901048.0,
+            876472.0,
+            876472.0,
+            876472.0
+          ]
+        },
+        "after": {
+          "median": 876480.0,
+          "min": 876472.0,
+          "max": 901048.0,
+          "fork_medians": [
+            901048.0,
+            876472.0,
+            876472.0,
+            876488.0
+          ]
+        },
+        "paired_after_before": 1.0
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "owned_buffer_records_roundtrip",
+      "size": 4096,
+      "ns_per_call": {
+        "before": {
+          "median": 4252208.125,
+          "min": 3898527.1875,
+          "max": 5134583.5,
+          "fork_medians": [
+            3898527.1875,
+            4106845.3125,
+            5134583.5,
+            4397570.9375
+          ]
+        },
+        "after": {
+          "median": 4106580.625,
+          "min": 3960871.5625,
+          "max": 4259229.75,
+          "fork_medians": [
+            3960871.5625,
+            4201339.125,
+            4259229.75,
+            4011822.125
+          ]
+        },
+        "paired_after_before": 0.9641365829081209
+      },
+      "jvm_bytes_per_call": {
+        "before": {
+          "median": 6999004.0,
+          "min": 6987216.0,
+          "max": 7195354.0,
+          "fork_medians": [
+            7195354.0,
+            6987216.0,
+            6999520.0,
+            6998488.0
+          ]
+        },
+        "after": {
+          "median": 6998488.0,
+          "min": 6991328.0,
+          "max": 7196128.0,
+          "fork_medians": [
+            7196128.0,
+            6991328.0,
+            6997456.0,
+            6999520.0
+          ]
+        },
+        "paired_after_before": 1.0001275149175157
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "owned_handle_records_roundtrip",
+      "size": 1,
+      "ns_per_call": {
+        "before": {
+          "median": 954.093747153547,
+          "min": 911.6012309685779,
+          "max": 988.7992819029572,
+          "fork_medians": [
+            925.6568781843446,
+            911.6012309685779,
+            982.5306161227495,
+            988.7992819029572
+          ]
+        },
+        "after": {
+          "median": 1003.2223820446823,
+          "min": 938.9677494523932,
+          "max": 1183.0175227796135,
+          "fork_medians": [
+            955.9316106899795,
+            938.9677494523932,
+            1050.5131533993851,
+            1183.0175227796135
+          ]
+        },
+        "paired_after_before": 1.0509487403331914
+      },
+      "jvm_bytes_per_call": {
+        "before": {
+          "median": 816.0,
+          "min": 816.0,
+          "max": 816.0,
+          "fork_medians": [
+            816.0,
+            816.0,
+            816.0,
+            816.0
+          ]
+        },
+        "after": {
+          "median": 816.0,
+          "min": 816.0,
+          "max": 816.0,
+          "fork_medians": [
+            816.0,
+            816.0,
+            816.0,
+            816.0
+          ]
+        },
+        "paired_after_before": 1.0
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "owned_handle_records_roundtrip",
+      "size": 512,
+      "ns_per_call": {
+        "before": {
+          "median": 68236.12168156929,
+          "min": 67278.10211267606,
+          "max": 69440.85873605948,
+          "fork_medians": [
+            69440.85873605948,
+            68519.96825396825,
+            67952.27510917031,
+            67278.10211267606
+          ]
+        },
+        "after": {
+          "median": 81299.45755555556,
+          "min": 72124.48,
+          "max": 83944.0971659919,
+          "fork_medians": [
+            83944.0971659919,
+            79072.244,
+            72124.48,
+            83526.6711111111
+          ]
+        },
+        "paired_after_before": 1.1814301728501135
+      },
+      "jvm_bytes_per_call": {
+        "before": {
+          "median": 73240.0,
+          "min": 73240.0,
+          "max": 73240.0,
+          "fork_medians": [
+            73240.0,
+            73240.0,
+            73240.0,
+            73240.0
+          ]
+        },
+        "after": {
+          "median": 73240.0,
+          "min": 73240.0,
+          "max": 73240.0,
+          "fork_medians": [
+            73240.0,
+            73240.0,
+            73240.0,
+            73240.0
+          ]
+        },
+        "paired_after_before": 1.0
+      }
+    },
+    {
+      "mode": "bulk",
+      "case": "owned_handle_records_roundtrip",
+      "size": 4096,
+      "ns_per_call": {
+        "before": {
+          "median": 543432.9871977239,
+          "min": 528046.8684210526,
+          "max": 579113.2105263158,
+          "fork_medians": [
+            546322.947368421,
+            540543.027027027,
+            579113.2105263158,
+            528046.8684210526
+          ]
+        },
+        "after": {
+          "median": 562250.4388888888,
+          "min": 525098.7105263158,
+          "max": 717571.0689655172,
+          "fork_medians": [
+            554502.2777777778,
+            525098.7105263158,
+            569998.6,
+            717571.0689655172
+          ]
+        },
+        "paired_after_before": 0.9996163467706141
+      },
+      "jvm_bytes_per_call": {
+        "before": {
+          "median": 574520.0,
+          "min": 572464.0,
+          "max": 576576.0,
+          "fork_medians": [
+            576576.0,
+            572464.0,
+            576576.0,
+            572464.0
+          ]
+        },
+        "after": {
+          "median": 576576.0,
+          "min": 576576.0,
+          "max": 576576.0,
+          "fork_medians": [
+            576576.0,
+            576576.0,
+            576576.0,
+            576576.0
+          ]
+        },
+        "paired_after_before": 1.0035914922161044
+      }
+    }
+  ],
+  "local_evidence_sha256": {
+    "counts": "447cc433423a16e570861a74ac736c6c3367c637eac3d4bcd49f5e5a7dbc3385",
+    "latency": "353ccafde594c7ce48e8bd11b6e373c9166b74377081e4ee22331e84f88ea595",
+    "aa": "bf3213d49d1f2c39805cbfa2c3c3e0e7aa6f42eef50bd7b7799ab1ab675b66d5"
+  },
+  "measurement_runner_sha256": {
+    "counts": "3f6c2a228b179b7a11a619c9645f07e925258554036c28d08d683667e0755deb",
+    "latency": "f9a80df72fd99c262dddf6f3794cab9c6bb22678a1e5a5d4238f37d01c737830",
+    "aa": "f9a80df72fd99c262dddf6f3794cab9c6bb22678a1e5a5d4238f37d01c737830"
+  }
+}

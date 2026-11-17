@@ -1,0 +1,222 @@
+{
+  "builds": {
+    "before": {
+      "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-shared-output-cleanup",
+      "commit": "839a14f4571b1a01cbb74854689f182cec1903db",
+      "dirty_paths": [],
+      "profile": "release",
+      "profile_environment": {
+        "CARGO_BUILD_JOBS": "1"
+      },
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8",
+      "path_dependency_repositories": [
+        {
+          "repository": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-shared-output-cleanup",
+          "commit": "839a14f4571b1a01cbb74854689f182cec1903db",
+          "packages": [
+            "prebindgen",
+            "prebindgen-conversions",
+            "prebindgen-declarations",
+            "prebindgen-flat",
+            "prebindgen-jni",
+            "prebindgen-jni-runtime",
+            "prebindgen-proc-macro",
+            "prebindgen-reprc",
+            "prebindgen-runtime"
+          ],
+          "contains_fixture": true
+        }
+      ],
+      "cargo_config_sha256": {},
+      "cargo": "cargo 1.98.0 (797e8a9bc 2026-08-05)",
+      "dependency_lock_sha256": "50aec39504ae6c12f747a6737ac6ff1de1aa0ea743f3fb86370345e7d07a551f",
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "native_allocations": false,
+      "kotlin": "info: kotlinc-jvm 2.4.21 (JRE 11.0.29+7)",
+      "fixture_sha256": {
+        "flat.rs": "c6bbecbf78d9c60aa6ea0ff5d09f129e5b3bc3838add408300ee4cb4c084dc2e",
+        "bindings.rs": "d83672456f19ae19b7f119dadb41ee683552c80e7a49ca47ac6272486e80eebe",
+        "Bench.kt": "b8572ad9f0b02220a1235a61cf40c201d0dfa7eca3ba2e7d5a991e104b9a5884",
+        "AllocationBench.kt": "b639a9d46117d1d013140ef413b94a033cab778cbf547c76eb6918f7780fe792",
+        "native_allocations.rs": "280a2ccd7efb4e33dbadbaf4b0e3cc2041c9644f8775736b828aed3ba8cb78d3",
+        "run.py": "9698faa5c84be9ca04f4f79236543db1d216748ca24116bfba97948b0d31188e",
+        "Cargo.lock.snapshot": "50aec39504ae6c12f747a6737ac6ff1de1aa0ea743f3fb86370345e7d07a551f"
+      },
+      "jar": "/tmp/shared-cleanup-after-normal/bench.jar",
+      "library": "/tmp/shared-cleanup-after-normal/native/libbulk_bench.so",
+      "jar_sha256": "8f318cbd6ab7be8d1ee066caa59e591316b1e55ff771c4a3be13a60882491e66",
+      "native_sha256": "c4130d975327a6907e082216669dddddc5e1929b1c5dcc59fd5e2241f0cc843a"
+    },
+    "after": {
+      "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-callback-fold-cleanup",
+      "commit": "c0750a412a932c1f79246602cc06d02718d68243",
+      "dirty_paths": [],
+      "profile": "release",
+      "profile_environment": {
+        "CARGO_BUILD_JOBS": "1"
+      },
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8",
+      "path_dependency_repositories": [
+        {
+          "repository": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-callback-fold-cleanup",
+          "commit": "c0750a412a932c1f79246602cc06d02718d68243",
+          "packages": [
+            "prebindgen",
+            "prebindgen-conversions",
+            "prebindgen-declarations",
+            "prebindgen-flat",
+            "prebindgen-jni",
+            "prebindgen-jni-runtime",
+            "prebindgen-proc-macro",
+            "prebindgen-reprc",
+            "prebindgen-runtime"
+          ],
+          "contains_fixture": true
+        }
+      ],
+      "cargo_config_sha256": {},
+      "cargo": "cargo 1.98.0 (797e8a9bc 2026-08-05)",
+      "dependency_lock_sha256": "50aec39504ae6c12f747a6737ac6ff1de1aa0ea743f3fb86370345e7d07a551f",
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "native_allocations": false,
+      "kotlin": "info: kotlinc-jvm 2.4.21 (JRE 11.0.29+7)",
+      "fixture_sha256": {
+        "flat.rs": "c6bbecbf78d9c60aa6ea0ff5d09f129e5b3bc3838add408300ee4cb4c084dc2e",
+        "bindings.rs": "d83672456f19ae19b7f119dadb41ee683552c80e7a49ca47ac6272486e80eebe",
+        "Bench.kt": "b8572ad9f0b02220a1235a61cf40c201d0dfa7eca3ba2e7d5a991e104b9a5884",
+        "AllocationBench.kt": "b639a9d46117d1d013140ef413b94a033cab778cbf547c76eb6918f7780fe792",
+        "native_allocations.rs": "280a2ccd7efb4e33dbadbaf4b0e3cc2041c9644f8775736b828aed3ba8cb78d3",
+        "run.py": "9698faa5c84be9ca04f4f79236543db1d216748ca24116bfba97948b0d31188e",
+        "Cargo.lock.snapshot": "50aec39504ae6c12f747a6737ac6ff1de1aa0ea743f3fb86370345e7d07a551f"
+      },
+      "jar": "/tmp/callback-fold-after-normal/bench.jar",
+      "library": "/tmp/callback-fold-after-normal/native/libbulk_bench.so",
+      "jar_sha256": "4b0ea369919360ad442a465bcaa3d46117714dd3477ef4503b47b0a41846d0c1",
+      "native_sha256": "e52fb4edfc877de21f93c28281b198c30de8ace4df974d745cbfe30aea2493c0"
+    }
+  },
+  "driver_sha256": "9dda45e208f54446407f15c0d15fcc3cd1ac1bbab8addbfa8069b6172ea62932",
+  "runner_sha256": "9ad686c19249e3d87047dbe04fbffb4bafc00f900e67cc42ec2f06ab2dbe4940",
+  "samples_sha256": "524d22bf8feadd9b03151499875f156af0255bafcfd9de3cc6ccb9909d8b915a",
+  "settings": {
+    "before": "/tmp/shared-cleanup-after-normal",
+    "after": "/tmp/callback-fold-after-normal",
+    "driver": "/tmp/callback-fold-driver.jar",
+    "output": "/tmp/callback-fold-diagnostic",
+    "forks": 1,
+    "counts": false,
+    "check_jni": true,
+    "cases": null,
+    "cell": [
+      "fold_wide_nested:8"
+    ]
+  },
+  "runs": [
+    {
+      "id": "0-fold_wide_nested-8-before",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Xcheck:jni",
+        "-Djava.library.path=/tmp/shared-cleanup-after-normal/native",
+        "-cp",
+        "/tmp/callback-fold-driver.jar:/tmp/shared-cleanup-after-normal/bench.jar",
+        "bench.outputowners.DriverKt",
+        "fold_wide_nested",
+        "8",
+        "time"
+      ],
+      "output_sha256": "fe3b23adf5361b750494f72e2e458b863b37d707b09eb2ac949f23e22099bd3b"
+    },
+    {
+      "id": "0-fold_wide_nested-8-after",
+      "command": [
+        "java",
+        "-Xms256m",
+        "-Xmx256m",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=2",
+        "-XX:-UsePerfData",
+        "-Xcheck:jni",
+        "-Djava.library.path=/tmp/callback-fold-after-normal/native",
+        "-cp",
+        "/tmp/callback-fold-driver.jar:/tmp/callback-fold-after-normal/bench.jar",
+        "bench.outputowners.DriverKt",
+        "fold_wide_nested",
+        "8",
+        "time"
+      ],
+      "output_sha256": "66a84f4d10ad959d4f4bb3a6bdcc11cf1b8d7b591b8eb1d514c88db3d4d3c539"
+    }
+  ],
+  "summary": [
+    {
+      "case": "fold_wide_nested",
+      "size": 8,
+      "before": {
+        "nanos": {
+          "median": 54107.8935546875,
+          "min": 54107.8935546875,
+          "max": 54107.8935546875
+        },
+        "cpu_nanos": {
+          "median": 54092.112630208336,
+          "min": 54092.112630208336,
+          "max": 54092.112630208336
+        },
+        "jvm_bytes": {
+          "median": 3055.984375,
+          "min": 3055.984375,
+          "max": 3055.984375
+        },
+        "forks": [
+          {
+            "nanos": 54107.8935546875,
+            "cpu_nanos": 54092.112630208336,
+            "jvm_bytes": 3055.984375
+          }
+        ]
+      },
+      "after": {
+        "nanos": {
+          "median": 53910.067708333336,
+          "min": 53910.067708333336,
+          "max": 53910.067708333336
+        },
+        "cpu_nanos": {
+          "median": 53901.344401041664,
+          "min": 53901.344401041664,
+          "max": 53901.344401041664
+        },
+        "jvm_bytes": {
+          "median": 3040.015625,
+          "min": 3040.015625,
+          "max": 3040.015625
+        },
+        "forks": [
+          {
+            "nanos": 53910.067708333336,
+            "cpu_nanos": 53901.344401041664,
+            "jvm_bytes": 3040.015625
+          }
+        ]
+      }
+    }
+  ]
+}

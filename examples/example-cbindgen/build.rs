@@ -1,5 +1,5 @@
 //! Migrated from main; unsupported declarations remain commented in place.
-use prebindgen_registry::fun;
+use prebindgen_c::fun;
 use syn::parse_quote as pq;
 
 fn main() {
@@ -76,9 +76,9 @@ fn main() {
     */
     /* Unsupported: this declaration requires unsupported conversions or builder options.
     cbindgen = cbindgen.convert(
-            prebindgen_registry::convert!(Millis)
-                .input(prebindgen_registry::fun!(millis_from_raw))
-                .output(prebindgen_registry::fun!(millis_to_raw)),
+            prebindgen_declarations::convert!(Millis)
+                .input(prebindgen_c::fun!(millis_from_raw))
+                .output(prebindgen_c::fun!(millis_to_raw)),
         );
     */
     /* Unsupported: this declaration requires unsupported conversions or builder options.
@@ -144,7 +144,7 @@ fn main() {
         // Unsupported signature: pq!(note_new_after),
         // Unsupported signature: pq!(note_new_flagged),
     ] {
-        cbindgen = cbindgen.function(function);
+        cbindgen = cbindgen.function(function).panic();
     }
     /* Unsupported: these signatures require unsupported conversions.
     if unstable {
@@ -194,13 +194,28 @@ fn main() {
     cbindgen = cbindgen
         .opaque_ptr("local_counter", pq!(LocalCounter))
         .function(fun!(local_counter_new))
+        .panic()
         .function(fun!(local_counter_value))
+        .panic()
         .function(fun!(local_counter_label))
+        .panic()
         .opaque_ptr("caption", pq!(Caption))
         .opaque_ptr("foo", pq!(Foo));
 
     let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
+    // Exercise explicit target selection independently from Cargo's build target.
+    println!("cargo:rerun-if-env-changed=PREBINDGEN_BINDING_TARGET");
+    if let Ok(target) = std::env::var("PREBINDGEN_BINDING_TARGET") {
+        cbindgen = cbindgen.target(target);
+    }
     let generation = cbindgen.build().expect("build supported declarations");
     generation.write_rust(out.join("bindings.rs")).unwrap();
     generation.write_header(out.join("bindings.h")).unwrap();
 }
+
+// Check declaration macros with only the language adapter as a generator dependency.
+const _: fn() = || {
+    let _ = prebindgen_c::expand_param!(i64).variant_self();
+    let _ = prebindgen_c::expand_return!(i64).field_self();
+    let _ = prebindgen_c::callback!(impl Fn(i64));
+};

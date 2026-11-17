@@ -1,0 +1,5809 @@
+{
+  "builds": {
+    "before": {
+      "revisions": {
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-row-replay-baseline": "718c45d8074225b24f1cbdd54e76e843461fc4e8",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-input-row-replay": "252a2e1c1bf2b1869cad6b468540b3d43eaa305c"
+      },
+      "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-row-replay-baseline",
+      "count_allocations": false,
+      "fixture_sha256": {
+        "flat.rs": "8758d64313f35e25aee10446b384bb3cd7f77d46c87724080a9f53b017a7a909",
+        "bindings.rs": "aa77c2f938d90d0195413b04ecea42f6ecfd19f2448b06549f93ffa5331826e5",
+        "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+        "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+        "input-driver.c": "e7c60b9e7a711750b094b15a63f6772d8ca2d380833e4dacea096e9e2e1d3df5",
+        "build.py": "fb6716d433e729fff2fb02e5b70bb99db692da89761e8188b84910175526be5d",
+        "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+      },
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+      "compile_command": [
+        "cc",
+        "-std=gnu11",
+        "-O3",
+        "-fno-plt",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-input-row-replay/examples/bench-c-collections/driver.c",
+        "-I/tmp/c-row-replay-build-cache/release/build/c-collection-bench-41ae4d46a5418d4e/out",
+        "-L/tmp/c-row-replay-before-time/frozen",
+        "-lc_collection_bench",
+        "-Wl,-rpath,/tmp/c-row-replay-before-time/frozen",
+        "-ldl",
+        "-o",
+        "/tmp/c-row-replay-before-time/driver"
+      ],
+      "cargo_command": [
+        "cargo",
+        "build",
+        "--offline",
+        "--locked",
+        "--release",
+        "--message-format=json"
+      ],
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "lock_sha256": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d",
+      "cargo_configs": {},
+      "profile_environment": {},
+      "library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "library_sha256": "54f1caf8aa09977bbe7c58915d0cd0aab26c86ed48bea7decf2783e46de53e0b",
+      "driver": "/tmp/c-row-replay-before-time/driver",
+      "driver_sha256": "6da2501113d83e99e83eead401448916bba27431f10ecc95b25e5a53b8bcd14f",
+      "input_driver": "/tmp/c-row-replay-before-time/input-driver",
+      "input_driver_sha256": "814e3a7125202d958db512e3c18044c76c666910858662cc40665164d2e69c01",
+      "input_compile_command": [
+        "cc",
+        "-std=gnu11",
+        "-O3",
+        "-fno-plt",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-input-row-replay/examples/bench-c-collections/input-driver.c",
+        "-I/tmp/c-row-replay-build-cache/release/build/c-collection-bench-41ae4d46a5418d4e/out",
+        "-L/tmp/c-row-replay-before-time/frozen",
+        "-lc_collection_bench",
+        "-Wl,-rpath,/tmp/c-row-replay-before-time/frozen",
+        "-ldl",
+        "-o",
+        "/tmp/c-row-replay-before-time/input-driver"
+      ],
+      "header_sha256": "dcc88c3e4fa16aef53e3b3d009ad11b0f219102fc3ddb317863854da2f90892e",
+      "header_abi_sha256": "c55f555c7795d4f798bd7a795b238bb08618e835cba199b80dac082338c6e0ec",
+      "bindings_sha256": "fea4244cb62724ae93de381f31619f9168c8eab8d2759ec662e7f5b3916fc7ad"
+    },
+    "after": {
+      "revisions": {
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-input-row-replay": "5c5105da24b5ee03af97f1da004c36902ffcfeaf"
+      },
+      "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-input-row-replay",
+      "count_allocations": false,
+      "fixture_sha256": {
+        "flat.rs": "8758d64313f35e25aee10446b384bb3cd7f77d46c87724080a9f53b017a7a909",
+        "bindings.rs": "aa77c2f938d90d0195413b04ecea42f6ecfd19f2448b06549f93ffa5331826e5",
+        "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+        "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+        "input-driver.c": "e7c60b9e7a711750b094b15a63f6772d8ca2d380833e4dacea096e9e2e1d3df5",
+        "build.py": "fb6716d433e729fff2fb02e5b70bb99db692da89761e8188b84910175526be5d",
+        "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+      },
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+      "compile_command": [
+        "cc",
+        "-std=gnu11",
+        "-O3",
+        "-fno-plt",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-input-row-replay/examples/bench-c-collections/driver.c",
+        "-I/tmp/c-row-replay-build-cache/release/build/c-collection-bench-3604d92a27ee1cba/out",
+        "-L/tmp/c-row-replay-final-time/frozen",
+        "-lc_collection_bench",
+        "-Wl,-rpath,/tmp/c-row-replay-final-time/frozen",
+        "-ldl",
+        "-o",
+        "/tmp/c-row-replay-final-time/driver"
+      ],
+      "cargo_command": [
+        "cargo",
+        "build",
+        "--offline",
+        "--locked",
+        "--release",
+        "--message-format=json"
+      ],
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "lock_sha256": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d",
+      "cargo_configs": {},
+      "profile_environment": {},
+      "library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "library_sha256": "f0b34d5202b78c81086f8454f5b14cd4db4b45bc732b5801dc0956471628418e",
+      "driver": "/tmp/c-row-replay-final-time/driver",
+      "driver_sha256": "b3a22cd4d66a9356f9ce315ac1f6f7e08898bf54ec15299c8b0d24339fccf6d6",
+      "input_driver": "/tmp/c-row-replay-final-time/input-driver",
+      "input_driver_sha256": "5a90de5af2e25e3cd9160348dc159cde1ae89e14fd966a8810d81df1c2bfb597",
+      "input_compile_command": [
+        "cc",
+        "-std=gnu11",
+        "-O3",
+        "-fno-plt",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-input-row-replay/examples/bench-c-collections/input-driver.c",
+        "-I/tmp/c-row-replay-build-cache/release/build/c-collection-bench-3604d92a27ee1cba/out",
+        "-L/tmp/c-row-replay-final-time/frozen",
+        "-lc_collection_bench",
+        "-Wl,-rpath,/tmp/c-row-replay-final-time/frozen",
+        "-ldl",
+        "-o",
+        "/tmp/c-row-replay-final-time/input-driver"
+      ],
+      "header_sha256": "2bbf5412af00030a9f571399ba8ebcd2c49e931316b71246a1cce0e05e896e56",
+      "header_abi_sha256": "c55f555c7795d4f798bd7a795b238bb08618e835cba199b80dac082338c6e0ec",
+      "bindings_sha256": "996c264a5212576bfbaf142eba4bdf2eabe20ef872d835ce2624b348109c90cc"
+    }
+  },
+  "effective_builds": {
+    "before": {
+      "revisions": {
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-row-replay-baseline": "718c45d8074225b24f1cbdd54e76e843461fc4e8",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-input-row-replay": "252a2e1c1bf2b1869cad6b468540b3d43eaa305c"
+      },
+      "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-row-replay-baseline",
+      "count_allocations": false,
+      "fixture_sha256": {
+        "flat.rs": "8758d64313f35e25aee10446b384bb3cd7f77d46c87724080a9f53b017a7a909",
+        "bindings.rs": "aa77c2f938d90d0195413b04ecea42f6ecfd19f2448b06549f93ffa5331826e5",
+        "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+        "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+        "input-driver.c": "e7c60b9e7a711750b094b15a63f6772d8ca2d380833e4dacea096e9e2e1d3df5",
+        "build.py": "fb6716d433e729fff2fb02e5b70bb99db692da89761e8188b84910175526be5d",
+        "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+      },
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+      "compile_command": [
+        "cc",
+        "-std=gnu11",
+        "-O3",
+        "-fno-plt",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-input-row-replay/examples/bench-c-collections/driver.c",
+        "-I/tmp/c-row-replay-build-cache/release/build/c-collection-bench-41ae4d46a5418d4e/out",
+        "-L/tmp/c-row-replay-before-time/frozen",
+        "-lc_collection_bench",
+        "-Wl,-rpath,/tmp/c-row-replay-before-time/frozen",
+        "-ldl",
+        "-o",
+        "/tmp/c-row-replay-before-time/driver"
+      ],
+      "cargo_command": [
+        "cargo",
+        "build",
+        "--offline",
+        "--locked",
+        "--release",
+        "--message-format=json"
+      ],
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "lock_sha256": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d",
+      "cargo_configs": {},
+      "profile_environment": {},
+      "library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "library_sha256": "54f1caf8aa09977bbe7c58915d0cd0aab26c86ed48bea7decf2783e46de53e0b",
+      "driver": "/tmp/c-row-replay-before-time/driver",
+      "driver_sha256": "6da2501113d83e99e83eead401448916bba27431f10ecc95b25e5a53b8bcd14f",
+      "input_driver": "/tmp/c-row-replay-before-time/input-driver",
+      "input_driver_sha256": "814e3a7125202d958db512e3c18044c76c666910858662cc40665164d2e69c01",
+      "input_compile_command": [
+        "cc",
+        "-std=gnu11",
+        "-O3",
+        "-fno-plt",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-input-row-replay/examples/bench-c-collections/input-driver.c",
+        "-I/tmp/c-row-replay-build-cache/release/build/c-collection-bench-41ae4d46a5418d4e/out",
+        "-L/tmp/c-row-replay-before-time/frozen",
+        "-lc_collection_bench",
+        "-Wl,-rpath,/tmp/c-row-replay-before-time/frozen",
+        "-ldl",
+        "-o",
+        "/tmp/c-row-replay-before-time/input-driver"
+      ],
+      "header_sha256": "dcc88c3e4fa16aef53e3b3d009ad11b0f219102fc3ddb317863854da2f90892e",
+      "header_abi_sha256": "c55f555c7795d4f798bd7a795b238bb08618e835cba199b80dac082338c6e0ec",
+      "bindings_sha256": "fea4244cb62724ae93de381f31619f9168c8eab8d2759ec662e7f5b3916fc7ad"
+    },
+    "after": {
+      "revisions": {
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-input-row-replay": "5c5105da24b5ee03af97f1da004c36902ffcfeaf"
+      },
+      "checkout": "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-input-row-replay",
+      "count_allocations": false,
+      "fixture_sha256": {
+        "flat.rs": "8758d64313f35e25aee10446b384bb3cd7f77d46c87724080a9f53b017a7a909",
+        "bindings.rs": "aa77c2f938d90d0195413b04ecea42f6ecfd19f2448b06549f93ffa5331826e5",
+        "allocations.rs": "f9cb138f3516d40527477e3f6dd328fb03154102038fe8e1d2a6a5ebd6c13ede",
+        "driver.c": "1a673d070ead8611d2ca5d0bcc8872939ce0272aa6f20d5a731ac26c69cbc096",
+        "input-driver.c": "e7c60b9e7a711750b094b15a63f6772d8ca2d380833e4dacea096e9e2e1d3df5",
+        "build.py": "fb6716d433e729fff2fb02e5b70bb99db692da89761e8188b84910175526be5d",
+        "Cargo.lock.snapshot": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d"
+      },
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+      "cc": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+      "compile_command": [
+        "cc",
+        "-std=gnu11",
+        "-O3",
+        "-fno-plt",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-input-row-replay/examples/bench-c-collections/driver.c",
+        "-I/tmp/c-row-replay-build-cache/release/build/c-collection-bench-3604d92a27ee1cba/out",
+        "-L/tmp/c-row-replay-final-time/frozen",
+        "-lc_collection_bench",
+        "-Wl,-rpath,/tmp/c-row-replay-final-time/frozen",
+        "-ldl",
+        "-o",
+        "/tmp/c-row-replay-final-time/driver"
+      ],
+      "cargo_command": [
+        "cargo",
+        "build",
+        "--offline",
+        "--locked",
+        "--release",
+        "--message-format=json"
+      ],
+      "cargo_profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": false
+      },
+      "lock_sha256": "761668eda255cfe1dca0dfe03da52514fcb25df29dcf4e9c9cc13ffb6a17765d",
+      "cargo_configs": {},
+      "profile_environment": {},
+      "library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "library_sha256": "f0b34d5202b78c81086f8454f5b14cd4db4b45bc732b5801dc0956471628418e",
+      "driver": "/tmp/c-row-replay-final-time/driver",
+      "driver_sha256": "b3a22cd4d66a9356f9ce315ac1f6f7e08898bf54ec15299c8b0d24339fccf6d6",
+      "input_driver": "/tmp/c-row-replay-final-time/input-driver",
+      "input_driver_sha256": "5a90de5af2e25e3cd9160348dc159cde1ae89e14fd966a8810d81df1c2bfb597",
+      "input_compile_command": [
+        "cc",
+        "-std=gnu11",
+        "-O3",
+        "-fno-plt",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/data/home/milyin/work/PREBINDGEN_WORKSPACE/prebindgen-c-input-row-replay/examples/bench-c-collections/input-driver.c",
+        "-I/tmp/c-row-replay-build-cache/release/build/c-collection-bench-3604d92a27ee1cba/out",
+        "-L/tmp/c-row-replay-final-time/frozen",
+        "-lc_collection_bench",
+        "-Wl,-rpath,/tmp/c-row-replay-final-time/frozen",
+        "-ldl",
+        "-o",
+        "/tmp/c-row-replay-final-time/input-driver"
+      ],
+      "header_sha256": "2bbf5412af00030a9f571399ba8ebcd2c49e931316b71246a1cce0e05e896e56",
+      "header_abi_sha256": "c55f555c7795d4f798bd7a795b238bb08618e835cba199b80dac082338c6e0ec",
+      "bindings_sha256": "996c264a5212576bfbaf142eba4bdf2eabe20ef872d835ce2624b348109c90cc"
+    }
+  },
+  "driver_sha256": "814e3a7125202d958db512e3c18044c76c666910858662cc40665164d2e69c01",
+  "settings": {
+    "before": "/tmp/c-row-replay-before-time",
+    "after": "/tmp/c-row-replay-final-time",
+    "output": "/tmp/c-row-replay-latency",
+    "kind": "time",
+    "forks": 4,
+    "same_build": null,
+    "smoke": false,
+    "cases": "handles,records,wide,text,numbers,control",
+    "sizes": "0,1,8,64,512,4096",
+    "batches": null,
+    "target_ms": 10
+  },
+  "cells": [
+    [
+      "handles",
+      0
+    ],
+    [
+      "handles",
+      1
+    ],
+    [
+      "handles",
+      8
+    ],
+    [
+      "handles",
+      64
+    ],
+    [
+      "handles",
+      512
+    ],
+    [
+      "handles",
+      4096
+    ],
+    [
+      "records",
+      0
+    ],
+    [
+      "records",
+      1
+    ],
+    [
+      "records",
+      8
+    ],
+    [
+      "records",
+      64
+    ],
+    [
+      "records",
+      512
+    ],
+    [
+      "records",
+      4096
+    ],
+    [
+      "wide",
+      0
+    ],
+    [
+      "wide",
+      1
+    ],
+    [
+      "wide",
+      8
+    ],
+    [
+      "wide",
+      64
+    ],
+    [
+      "wide",
+      512
+    ],
+    [
+      "wide",
+      4096
+    ],
+    [
+      "text",
+      0
+    ],
+    [
+      "text",
+      1
+    ],
+    [
+      "text",
+      8
+    ],
+    [
+      "text",
+      64
+    ],
+    [
+      "text",
+      512
+    ],
+    [
+      "text",
+      4096
+    ],
+    [
+      "numbers",
+      0
+    ],
+    [
+      "numbers",
+      1
+    ],
+    [
+      "numbers",
+      8
+    ],
+    [
+      "numbers",
+      64
+    ],
+    [
+      "numbers",
+      512
+    ],
+    [
+      "numbers",
+      4096
+    ],
+    [
+      "control",
+      1
+    ]
+  ],
+  "runs": [
+    {
+      "id": "0-text-512-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "text",
+        "512",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "ee508109a364ef5231ad663be52bab772c0cb685a061501f7b03d0538c04ee27"
+    },
+    {
+      "id": "0-text-512-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "text",
+        "512",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "57f2c8500d69a1ecae5f86a4937de06101efb97bcea5c0cb3470f09b7b7e8e1e"
+    },
+    {
+      "id": "0-text-4096-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "text",
+        "4096",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "159ae11640f5764ae9768ae9f126570efc169c3063e1f77be05ab0ca3dff0b0b"
+    },
+    {
+      "id": "0-text-4096-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "text",
+        "4096",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "b874398db969d0ad28a70a1d804ce77f3ab7fe28a415139501cda3ddd0fb29e2"
+    },
+    {
+      "id": "0-handles-0-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "handles",
+        "0",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "617f04f5d469d0c61b785a3e12f0dd54c10bde00312f9237b1d8c2eaf45670fa"
+    },
+    {
+      "id": "0-handles-0-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "handles",
+        "0",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "b784dcc6e31ad69f38e782ef98a31852089bd2cee1b22ebaec1eda3f499ec720"
+    },
+    {
+      "id": "0-numbers-8-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "numbers",
+        "8",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "4da83b7dd6a62092ce3d5832a929b13634784be70170fef4dab36763a2d24ae4"
+    },
+    {
+      "id": "0-numbers-8-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "numbers",
+        "8",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "a7e2f53f42e05bea05c98a1816ccf83e8cde656962c3d8a9e3d2944d32c41607"
+    },
+    {
+      "id": "0-records-64-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "records",
+        "64",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "004466368c1b619ba751fc99be4d489b7d02c8193e5008c6d570028db94de480"
+    },
+    {
+      "id": "0-records-64-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "records",
+        "64",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "391737a76ec67256bde2e2877e75d973c7e8df6f8d172837336578777e10024d"
+    },
+    {
+      "id": "0-records-1-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "records",
+        "1",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "36d3d6f9e33b58dddbc4e4e97e0110f8ad856683b8e9dbf241a5daf9e7d94503"
+    },
+    {
+      "id": "0-records-1-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "records",
+        "1",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "559efdb14960068b41bb0b786629ea6ebb240db64a397fbfda899c4a1cd9e679"
+    },
+    {
+      "id": "0-wide-1-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "wide",
+        "1",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "57e402d50224b2492b31f45d40e2465dc3d7af6a52836782182acfe5a43f620f"
+    },
+    {
+      "id": "0-wide-1-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "wide",
+        "1",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "9e5819316e55e8ce062d71b5fecf8a7f9dc8616722b2c8388a923b06c859a4c5"
+    },
+    {
+      "id": "0-records-4096-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "records",
+        "4096",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "1a6b0ad8b9f033361789f494f1030f639e9d4218b3152a675ba1a51a5bb8550b"
+    },
+    {
+      "id": "0-records-4096-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "records",
+        "4096",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "6bba12d2378849fe2a5bbba10883c2ad8a922029c47be80f51da73d1540a1147"
+    },
+    {
+      "id": "0-wide-64-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "wide",
+        "64",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "557d04a8acfe180ef7c23f15fd1dcc701e5dc88964fa14bcbddf6089d42348c3"
+    },
+    {
+      "id": "0-wide-64-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "wide",
+        "64",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "2a8e4ab17e08961bcef0c5b031069e7df69c45f954c6dcf2e525b2e2ad044265"
+    },
+    {
+      "id": "0-control-1-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "control",
+        "1",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "464b386a0a2c2b5b077c42ec88e5474a9f6fb9f21b16cfb382a9d9d85bec8205"
+    },
+    {
+      "id": "0-control-1-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "control",
+        "1",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "714524149dc8ff0d998548c007b894bebb152c94a7707609099d132b20e69c0b"
+    },
+    {
+      "id": "0-text-8-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "text",
+        "8",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "c6cc90605a3661ad1f1793cc769bf838cf572830a5e2f962532cb19c4b98a673"
+    },
+    {
+      "id": "0-text-8-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "text",
+        "8",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "2df157dc6289d9bb18d961e94e873f8ff41a368ae9dc3053b35574a548f07f16"
+    },
+    {
+      "id": "0-records-512-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "records",
+        "512",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "66917a7a74a8491e2fe9c902b29b5603e81907ed97a53f288689ab45b4762cbb"
+    },
+    {
+      "id": "0-records-512-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "records",
+        "512",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "b0ca4da856cf6f22a390a0a8cbd2baee826f2b7a4f9393f160ad9a48c86a0ee4"
+    },
+    {
+      "id": "0-text-0-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "text",
+        "0",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "fe1697ee03641dfa6da57761185fde6278e62f7939a918bcf5f8cc6b0688b0d8"
+    },
+    {
+      "id": "0-text-0-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "text",
+        "0",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "86b304bd90286c9fbad0592bb605a797e1880c67bd46182449fc53fcfd0768b3"
+    },
+    {
+      "id": "0-wide-4096-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "wide",
+        "4096",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "f65de0f7a7f664469e58c7fa0a27e6c6cdb6c4154dccd2a5f22067a6dbc56b27"
+    },
+    {
+      "id": "0-wide-4096-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "wide",
+        "4096",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "279db56504247a577095876e4326588617310ff77af07d1d073e06744c4486b2"
+    },
+    {
+      "id": "0-wide-0-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "wide",
+        "0",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "af11487e286a6207d42b3054f284c40559fc25438dd7809b3c703de41a0d81da"
+    },
+    {
+      "id": "0-wide-0-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "wide",
+        "0",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "d86127c7626c730ab4050724713269ac37a914fef195c398a5c90aa44b3ded56"
+    },
+    {
+      "id": "0-wide-8-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "wide",
+        "8",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "e4e17fa683c3d2343f87f8297bea7e8fce52fa0e10d878d6fb62a1e44fff05b3"
+    },
+    {
+      "id": "0-wide-8-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "wide",
+        "8",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "244e94a064466ea35b86c2f0b50d2c20eecc53a1bd4852b058d111421159affa"
+    },
+    {
+      "id": "0-numbers-64-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "numbers",
+        "64",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "0dc51da0ea98b0c169e39645533cd6a1239af3d27f6427700d67d6b47638c281"
+    },
+    {
+      "id": "0-numbers-64-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "numbers",
+        "64",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "d0a8d9256d2ebab75ed741754872bbaa5172bcb1468bea766db656d0163b9f36"
+    },
+    {
+      "id": "0-handles-64-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "handles",
+        "64",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "f7e74555ce4cbc1ab8ad3d5e350a2747f725b029d5e561610848225fdbfeeed1"
+    },
+    {
+      "id": "0-handles-64-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "handles",
+        "64",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "fce293518bfb475318219963c889d1480c8eb61ab801b30727ecff80c59d5bc0"
+    },
+    {
+      "id": "0-numbers-0-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "numbers",
+        "0",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "c4ea8c997133d77f81a95e01ed2965a827c0988bacb88e43b3569fb5251e5ed6"
+    },
+    {
+      "id": "0-numbers-0-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "numbers",
+        "0",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "22ce5673bd9d298a4ad6a5fcb09a8f5a1c2537da7de492147335586c00de2df8"
+    },
+    {
+      "id": "0-text-64-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "text",
+        "64",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "e2495e0b52a2185971a86bdb51c60af9cd3426c0fe87d85e4dc04218ef1269b7"
+    },
+    {
+      "id": "0-text-64-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "text",
+        "64",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "020448656d72a4157f50a6c6668d396836da3eeaacb4a4b7dc497fd60c7a71ab"
+    },
+    {
+      "id": "0-records-8-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "records",
+        "8",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "10142dbeeca5d6c5de5ba2a9e3fcc47ca479f502c535018716849ae49dd28dce"
+    },
+    {
+      "id": "0-records-8-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "records",
+        "8",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "b6609a547d6b1d015dbcd16747b3b8be6a6e08f394e722435a553e37ad596fcc"
+    },
+    {
+      "id": "0-wide-512-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "wide",
+        "512",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "5ebc20438db9a9a02d0438f7af4c2774d2170a27a7f4fe956982468aed318d80"
+    },
+    {
+      "id": "0-wide-512-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "wide",
+        "512",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "a5bdcf019707ade723b91688f69d8532bb747ae42813636bcfbb0f2c51b7a958"
+    },
+    {
+      "id": "0-handles-1-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "handles",
+        "1",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "51a13823490675b76d7d8dda0364e0c1098a2b70d48018e2565337c8651a3e77"
+    },
+    {
+      "id": "0-handles-1-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "handles",
+        "1",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "9055f753696a9b8df329d95de06af052b2dbed372e43d160bc871fec7eddbbb5"
+    },
+    {
+      "id": "0-numbers-4096-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "numbers",
+        "4096",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "db1d62300e149f2a4c48baf6d53a2a6227f9847936b3143fc43fc5b41c895852"
+    },
+    {
+      "id": "0-numbers-4096-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "numbers",
+        "4096",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "dd90c536001342e7acf93d9310e244627462133efe214b9aa851c3910a045190"
+    },
+    {
+      "id": "0-numbers-1-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "numbers",
+        "1",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "fefe9fba25b76b5c8cecda01a0b3f0473d9efbc8a66549ee5ba8f4d6c687a421"
+    },
+    {
+      "id": "0-numbers-1-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "numbers",
+        "1",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "8e38dcc672e1804692806fcc2fff8216f3e11e4bc88424269e3a95ec5cb1db50"
+    },
+    {
+      "id": "0-text-1-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "text",
+        "1",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "d41d23db54755720f327be4c039760951a37e1de2e8d854242cc1022dddc486f"
+    },
+    {
+      "id": "0-text-1-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "text",
+        "1",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "7c69f264060f89803bd6335b93eee26d1d38a4a4a88f3704f9f227091e157f88"
+    },
+    {
+      "id": "0-records-0-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "records",
+        "0",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "6bf0ebf7ef14fc1928d5d214d4534a1af2a260a6c8fc077210f5f233ac49746f"
+    },
+    {
+      "id": "0-records-0-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "records",
+        "0",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "3d7ea395c9d7bf2fa89af1b27b96150e09c6c23516626fcf2e6b71214c8bbc7b"
+    },
+    {
+      "id": "0-numbers-512-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "numbers",
+        "512",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "c64da02d460f919f470464d9ad729fb07cefc751e44d2131541767fdff8d0efe"
+    },
+    {
+      "id": "0-numbers-512-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "numbers",
+        "512",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "2a5ffb43a0c746844fd3e5ef9631152edf26bfa7ba2b14acc778eee4def44f24"
+    },
+    {
+      "id": "0-handles-4096-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "handles",
+        "4096",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "860bb6afc0735c89b9eb58a379e9f1934c29d822bab6dbb3605ff1dc14761c67"
+    },
+    {
+      "id": "0-handles-4096-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "handles",
+        "4096",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "0ba29c073902b3aa777fbd7f1d40de94cc9efa4a911a7505b1e21ce07e4664cb"
+    },
+    {
+      "id": "0-handles-512-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "handles",
+        "512",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "da33425daca48fd219b08fbcc6641424218891089b820a30aaac60085ffea2ed"
+    },
+    {
+      "id": "0-handles-512-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "handles",
+        "512",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "7e4ee648e7f60acfdc7b2fc35c7a809d321f2215400d82a2623fac7c073b38d8"
+    },
+    {
+      "id": "0-handles-8-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "handles",
+        "8",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "00fe252ef6d9f251310f26705d676f9c4d83738ec5f93a175cfa37798132bab1"
+    },
+    {
+      "id": "0-handles-8-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "handles",
+        "8",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "5a27cf1b0c20d399981cd8aa9143be4b12f658379e4887fbeba80b6c9550fca0"
+    },
+    {
+      "id": "1-handles-1-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "handles",
+        "1",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "e55d1f2b3f1d09e38865ec6a0a29c74f5fdf4459e77303721f81712c716d0457"
+    },
+    {
+      "id": "1-handles-1-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "handles",
+        "1",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "b788bfb0f778e3a11e060bf56c915c0760c731d6a73617b9ff7cae30754b4979"
+    },
+    {
+      "id": "1-records-64-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "records",
+        "64",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "b4e21f179856c6c1ba716bb9542cd43c6feee41badc1ef9a6563b083daa7a978"
+    },
+    {
+      "id": "1-records-64-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "records",
+        "64",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "fbfa25f1c7958f6633a93daec0c3656b91c66c8cd252f7b77657ff30b9c8b829"
+    },
+    {
+      "id": "1-handles-4096-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "handles",
+        "4096",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "05ad635aced4ebbce2ca21668fec1841bfeeaefa52f0a4f26151726d5b852f0b"
+    },
+    {
+      "id": "1-handles-4096-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "handles",
+        "4096",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "096e2df5f88ed86256a5410a6eed1842e78ed836f9897512105c5b2a7db00c02"
+    },
+    {
+      "id": "1-handles-512-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "handles",
+        "512",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "c36a90ff3d62418476598e560697beb64c3401f7ed1a1ef45b9a45c1d48f7987"
+    },
+    {
+      "id": "1-handles-512-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "handles",
+        "512",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "1391cc2411bd37b612c73be7be0ddb746fa0b62c951f52a5f096debb54af0163"
+    },
+    {
+      "id": "1-numbers-8-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "numbers",
+        "8",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "393450e44b32acc38c37e5da02afd7844a4be33db3a797cddba0dac20c3b7e80"
+    },
+    {
+      "id": "1-numbers-8-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "numbers",
+        "8",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "5b085b8c24fb00bc667368f57771456126407372b5a9e23416b27ba926f2d8fd"
+    },
+    {
+      "id": "1-wide-1-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "wide",
+        "1",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "e294936468d17a2514b1c22de908393843622c06959aa5e151e4f69fe4eaa979"
+    },
+    {
+      "id": "1-wide-1-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "wide",
+        "1",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "0dd9543ce35e284f136164dc12bfe35a05f3217a71ceacab1c4a112db18d04be"
+    },
+    {
+      "id": "1-numbers-512-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "numbers",
+        "512",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "060c83d7c8c655456883a1037840f946963bc91e0aaa07e05546c649c974f45d"
+    },
+    {
+      "id": "1-numbers-512-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "numbers",
+        "512",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "9d3ec5842bc62b4af370463d0bdf6bc1966a73e1fc47f64c56926a75e7d415e5"
+    },
+    {
+      "id": "1-handles-64-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "handles",
+        "64",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "8ac51761e2d10be5d3225b53f10f7311fa1ad4bfebaf9d22de290f85b478a6b8"
+    },
+    {
+      "id": "1-handles-64-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "handles",
+        "64",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "89fbc331e9a6b1e1ac6b61a25a4ddbbb390084413d267dbae3664a59bb651552"
+    },
+    {
+      "id": "1-numbers-1-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "numbers",
+        "1",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "d064698af1756dbb9055211cdd0c872cd3ceff844aae56003b6f5293d2401502"
+    },
+    {
+      "id": "1-numbers-1-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "numbers",
+        "1",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "fb584f6b31a13db1a916d478a17a95790a63f1d00771e0f3c7143d52afb022ab"
+    },
+    {
+      "id": "1-records-8-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "records",
+        "8",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "4f282bc3efa201f1a85f7c3a8e395d6b89b33919b97dba6ac4eb5339b07d2614"
+    },
+    {
+      "id": "1-records-8-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "records",
+        "8",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "4fca312c397e414625ca49620f925dc6a3a96692baa1e6f1f3f6bcd4fb910c59"
+    },
+    {
+      "id": "1-text-1-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "text",
+        "1",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "320c57743b078625ae0c152867967da4b89d147370e1e5abb6ffdd428f5e8843"
+    },
+    {
+      "id": "1-text-1-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "text",
+        "1",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "0d832ebeb8a54d8b5f297ea0cb0f3d810887a83a5c3022179a62307ea8cafe33"
+    },
+    {
+      "id": "1-numbers-64-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "numbers",
+        "64",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "6d699a3e9e37831ed0058bcb7b38c98403f45c8a7ac3332f0673a30ffa4c8b5c"
+    },
+    {
+      "id": "1-numbers-64-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "numbers",
+        "64",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "ff7693bc253b27a8241c1030ce483d30babc75fb555955e0230e7792be42f59d"
+    },
+    {
+      "id": "1-text-512-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "text",
+        "512",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "592f86836efbca2d3c0e44cec70b489cf818de1986cbd7bb9b78b2d4f35ace50"
+    },
+    {
+      "id": "1-text-512-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "text",
+        "512",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "ecb1ce7fed326055899cb99e0d526963c27582c8ed75ca93317f822c257a9417"
+    },
+    {
+      "id": "1-numbers-4096-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "numbers",
+        "4096",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "291e73a1a337d254010b504506ef0d27a151ddaaa31d1a2705140484382adc5b"
+    },
+    {
+      "id": "1-numbers-4096-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "numbers",
+        "4096",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "910cf5374631ed32e546570f54c02d9da49f5857b0835b81b46602e08b5cf79f"
+    },
+    {
+      "id": "1-wide-512-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "wide",
+        "512",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "d7c01c0f64de9c01bb32e36a98f7f658ba8b1bb85c80cb1766060464547d0b5d"
+    },
+    {
+      "id": "1-wide-512-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "wide",
+        "512",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "aee42d268e6cc23453383e369d09a68072d76fc26c1c57d2da3533d6bb61d083"
+    },
+    {
+      "id": "1-text-64-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "text",
+        "64",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "6320c99043ea29ed9c57ee63f2258a5ebb82fe3781732d0ba8b508fda2335def"
+    },
+    {
+      "id": "1-text-64-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "text",
+        "64",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "32cf7801518c59ac7d107baac0013892a90c2d60502b9b61a3b40d6ca47c27e2"
+    },
+    {
+      "id": "1-wide-8-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "wide",
+        "8",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "b981bb0f8851250a5625b250713efe1d03f714190d298db7d942ac335b3fe6a9"
+    },
+    {
+      "id": "1-wide-8-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "wide",
+        "8",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "fb32ee44b75286e290e2b6b65e1ae970298b398739db6e036330acba71672e35"
+    },
+    {
+      "id": "1-handles-8-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "handles",
+        "8",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "dee647d38867c9fcbc4b3d0fb89c916d284b4af9386be887e6be3bed1fc3cf62"
+    },
+    {
+      "id": "1-handles-8-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "handles",
+        "8",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "5ecccccd07a72ba9bcd5b35cec7d2e37d9e2c5c49c7e1f667e4edd12cc54a700"
+    },
+    {
+      "id": "1-numbers-0-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "numbers",
+        "0",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "e623f20e44a0884865ac6c5334b4665d18b0c92320c491f4d79fd08117d6ed1f"
+    },
+    {
+      "id": "1-numbers-0-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "numbers",
+        "0",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "910a1be2cfa0e9311094c23f45540965b4f9a53eec17871cb5ddcbb05c660f64"
+    },
+    {
+      "id": "1-wide-4096-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "wide",
+        "4096",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "19edacefe797c678805493e003d09e0f21f129eb804233c2181f9dc991939803"
+    },
+    {
+      "id": "1-wide-4096-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "wide",
+        "4096",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "9cf6ffdb8d71666d7adff95c38792801a6bdaee7b91a5bb85c2b3a6aa401e50b"
+    },
+    {
+      "id": "1-control-1-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "control",
+        "1",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "658bf3834e5e7837e0665e2c279e759578e94f5c42d54623a101fa75f544820c"
+    },
+    {
+      "id": "1-control-1-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "control",
+        "1",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "987e4c172aca03d9931d0bb29c67bdeb7560865d2005641ea6b4ebea0c6121f3"
+    },
+    {
+      "id": "1-wide-0-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "wide",
+        "0",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "cabc3502d742975632c22ba9e19fb4259a956ef7788b3bd2d6c774a35b344555"
+    },
+    {
+      "id": "1-wide-0-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "wide",
+        "0",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "c713e064ebcdf9f69e4da79ed3d78ffb61868e55494ced9166ca881d69cd9670"
+    },
+    {
+      "id": "1-records-1-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "records",
+        "1",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "eab521a4567cdef49c43c519e724aa07ea9ec01ab0246bdd592e327ca4ddf037"
+    },
+    {
+      "id": "1-records-1-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "records",
+        "1",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "69ddbf7342f8024b1c4f9448c967cef30c28a9d5cc5a42ea9fefaf436d5ab91b"
+    },
+    {
+      "id": "1-handles-0-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "handles",
+        "0",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "a3cb5067f9fa607c362395ae752facc2ac736295aa590a617b5541f47f88e0ac"
+    },
+    {
+      "id": "1-handles-0-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "handles",
+        "0",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "caa76699fa1ccf276cf6ae6be3dfd8ff0ab2d094172a65e0dc99138f00e4c402"
+    },
+    {
+      "id": "1-text-0-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "text",
+        "0",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "7cee69254c7b876a653663c1807842533ef00163db2bae8f3809b91c6d2f3a16"
+    },
+    {
+      "id": "1-text-0-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "text",
+        "0",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "ecf0a8dbf0bc1b440a3853bab0f20109c082e2e3698010f043ba685f4c419fb8"
+    },
+    {
+      "id": "1-wide-64-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "wide",
+        "64",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "a758e74f35e202e6d750be1eec286d29f17c93b9adbbb2e0cc966012e995115e"
+    },
+    {
+      "id": "1-wide-64-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "wide",
+        "64",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "d66c5a8bab50137677088d0702697ef671fc587f6bd7822083dd8bb1993dd582"
+    },
+    {
+      "id": "1-records-4096-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "records",
+        "4096",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "601a0f0b9dc095795c59e63c9018242a4aaa608b841b467e839a71f6330e02d2"
+    },
+    {
+      "id": "1-records-4096-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "records",
+        "4096",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "130f47cece209ab81675ed8a46c85a3e41e06db14f6ae33ee7946e16859c422f"
+    },
+    {
+      "id": "1-records-512-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "records",
+        "512",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "a1419878e7405200c4163ad23e897878500d9601ec9dfe9cfbb9836a46ca5fb7"
+    },
+    {
+      "id": "1-records-512-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "records",
+        "512",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "51dffedaa59605c1f460a4367b2b791dcdec8cb4b8c48455b66ac5d5bc4e695c"
+    },
+    {
+      "id": "1-records-0-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "records",
+        "0",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "04eaabed04fc06da21bbf80344cd503c0bdb0f9d9912474c9064c92d8000dddd"
+    },
+    {
+      "id": "1-records-0-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "records",
+        "0",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "1239bd265f6b3588ba95b356c223b82d575580b2ef6de52aed6386f1a83a31a3"
+    },
+    {
+      "id": "1-text-8-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "text",
+        "8",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "916637db5e42d7933d095f9050d25a7da3548360404c2ec115c2bb8f3684b7b1"
+    },
+    {
+      "id": "1-text-8-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "text",
+        "8",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "301fa63e87aaf166c50881c7cdb39d1ecd2b39c2ef357312e0dc4685f2ed33fb"
+    },
+    {
+      "id": "1-text-4096-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "text",
+        "4096",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "78b3ad4387212d0a04bd0989b451c9fca6914c6d8b08d6943506199155de3e42"
+    },
+    {
+      "id": "1-text-4096-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "text",
+        "4096",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "0d61543b9327baba338c403ec6cca042c68c9575a5d9006dffffb357c209b0a2"
+    },
+    {
+      "id": "2-text-512-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "text",
+        "512",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "9686d4f2ea330dd0a60d662f4ee7ebbfad71ea9f5255f6316e72a6df4ac4e3d6"
+    },
+    {
+      "id": "2-text-512-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "text",
+        "512",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "a85cd160191e99bb51762568679940242566220a5ca87b4c96c3e392f7b699fc"
+    },
+    {
+      "id": "2-text-0-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "text",
+        "0",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "865d9d9202a5a39e8ef61fb9e1bd76d5e8df2229349064c97307e1042f3d649a"
+    },
+    {
+      "id": "2-text-0-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "text",
+        "0",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "ac53f5513292bb6fff6721f5856311a703782355b6e4f3eee857f61ea2f7cf0d"
+    },
+    {
+      "id": "2-wide-64-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "wide",
+        "64",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "b271ccdbc2a86eee3cab316b904f2bfc917f9f33c7d6fddd46eec6992780b063"
+    },
+    {
+      "id": "2-wide-64-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "wide",
+        "64",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "e32988bd8b15746ecc5be20ca1a3d4bb3f303b4a71c53a2ad25058bb8cfa64bc"
+    },
+    {
+      "id": "2-handles-1-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "handles",
+        "1",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "06c9dd5ea6187a3069988f2f92662cac63c0bdd90af7ecc039376a733d3e7cb3"
+    },
+    {
+      "id": "2-handles-1-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "handles",
+        "1",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "f22ed044ef476e036983cf9c3b34d1e351d305f574dc5cb63d8eaace6465648f"
+    },
+    {
+      "id": "2-numbers-0-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "numbers",
+        "0",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "06693ebfe813f552e4b8b93a3b2dc82e73d01200c51c8be23d6b194a83f214cf"
+    },
+    {
+      "id": "2-numbers-0-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "numbers",
+        "0",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "47d98a0d3d33ac025eabbe72b80d39f6fa5e5f9d1a86e15f8d4c3c36b28bb72b"
+    },
+    {
+      "id": "2-records-8-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "records",
+        "8",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "743efc5613aada99c35ddb4d015d0c294f37cb9838bd083fc19aabc57522cf13"
+    },
+    {
+      "id": "2-records-8-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "records",
+        "8",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "5892efce0e2fda2163f8b99c48e1f8c18312353c3532b2454fd051938e9a02b2"
+    },
+    {
+      "id": "2-records-0-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "records",
+        "0",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "43579e03e5977d284cc962249947c9d56c5672e10a1a5f2a48d58f3ee895eca3"
+    },
+    {
+      "id": "2-records-0-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "records",
+        "0",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "5d8d439a50811ba3ff37021954d70a6b32599888d7ab09eb7c4305cd0a8bb9e2"
+    },
+    {
+      "id": "2-records-1-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "records",
+        "1",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "0f67baf23d5b257cb5fd9b770491378229b6824123993856b8b71ca1b3e55554"
+    },
+    {
+      "id": "2-records-1-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "records",
+        "1",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "14858f1cf3987ee538d43cb445c4831c65c6bc7d12c40e1f3e7fb8c061ae71ff"
+    },
+    {
+      "id": "2-wide-0-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "wide",
+        "0",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "08f32a3eb2ed1d7a409c9195d835683fbc55c18ca92aa29a138eb012308243fd"
+    },
+    {
+      "id": "2-wide-0-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "wide",
+        "0",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "72443d0326cd782e13ef5cf5f937a084a904a9bd7ede938988e46d7e4a9461c1"
+    },
+    {
+      "id": "2-wide-4096-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "wide",
+        "4096",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "f169de1e8a5d22590bf37d830525b0cee7bd2b6d6daa12c7a2a9548b9cc89700"
+    },
+    {
+      "id": "2-wide-4096-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "wide",
+        "4096",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "3e7eec75bd3bbb7fb322b783d450b7be2418eb32e700adf2ec06c1eff76d70e0"
+    },
+    {
+      "id": "2-records-4096-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "records",
+        "4096",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "c8c342697efb2ca43b94071e57776e788881d426c960acf068e04bd95b4dd77f"
+    },
+    {
+      "id": "2-records-4096-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "records",
+        "4096",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "c001561c0c32cd08f0f25a100b738ad9f2d223752c8f1ceb9a7378c80793da23"
+    },
+    {
+      "id": "2-numbers-8-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "numbers",
+        "8",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "e7b90125f3de47431ebd698b260267e2c9f5053468a85271b86e71df96edf38f"
+    },
+    {
+      "id": "2-numbers-8-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "numbers",
+        "8",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "aa8f882a906d9a89b703a0681914002c85c3c6130687ac37839d22eb35049844"
+    },
+    {
+      "id": "2-handles-0-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "handles",
+        "0",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "ad2800cb13fd61ab1c8933768a21705b5fac7ecf97f880137f0e20b719a6c87e"
+    },
+    {
+      "id": "2-handles-0-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "handles",
+        "0",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "4cc507e1cb943f0c14dd7c6d71970262de8e40e92f19be435869ac379819d950"
+    },
+    {
+      "id": "2-wide-512-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "wide",
+        "512",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "5addb867fb673eed83635bcd28ee56d2e560a8e232ee5f5025dee8d40455ba01"
+    },
+    {
+      "id": "2-wide-512-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "wide",
+        "512",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "39c099ea3afeb127b54bfee9c4b4ae477f03f631178096ea1dbc510a46809378"
+    },
+    {
+      "id": "2-handles-8-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "handles",
+        "8",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "7b05b567554f970256c1533c6fc6ab697bd0d81e6ef87f75408375b6c4c09506"
+    },
+    {
+      "id": "2-handles-8-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "handles",
+        "8",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "039b199cb3f478ee50f83f6c56efdf6ab9d534f30425e6fb5725c097945cf390"
+    },
+    {
+      "id": "2-records-512-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "records",
+        "512",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "2222766a1f102bea56bd8a2aba355177c6940c122a99a9c9a1a49650ff445f0f"
+    },
+    {
+      "id": "2-records-512-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "records",
+        "512",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "fb9f631ed576b90fa8da0a2748d150d25af0d946d17777981832b947835dd41c"
+    },
+    {
+      "id": "2-wide-8-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "wide",
+        "8",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "26d7d2e5d5828869d348ac22111a53abd6b73c5b7f582c1bab1adca60ee7b684"
+    },
+    {
+      "id": "2-wide-8-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "wide",
+        "8",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "89a2a135fa19d80d15cbac955755c7228fb0b460cd3aa1b4715e8ec785f43b87"
+    },
+    {
+      "id": "2-numbers-512-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "numbers",
+        "512",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "1fe4ae6a197b688803a4eb59231ff27f6cc66b5f53831dc2c38707f09ce6cea9"
+    },
+    {
+      "id": "2-numbers-512-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "numbers",
+        "512",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "6c741f9ef2fd818c552196562f7698e429a1cecba4405417d4b4089d861325c1"
+    },
+    {
+      "id": "2-records-64-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "records",
+        "64",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "34f097f0ef375dd3e618be44558036580593e3ed76e4023a410480d7382a7d40"
+    },
+    {
+      "id": "2-records-64-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "records",
+        "64",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "4e6f47ba4c4d6d22788a4bc32b3256b6acc50fc88b96ea61dfc105e04b6d3b56"
+    },
+    {
+      "id": "2-text-4096-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "text",
+        "4096",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "18e090cf1ee3bbe7080ba7e38909f89f1cc0a81a99550ce8f808828b21bf5593"
+    },
+    {
+      "id": "2-text-4096-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "text",
+        "4096",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "6f7cb1e0a9dddf631e476b1829837010dc92bd213ced7747c507d56e66d5d04e"
+    },
+    {
+      "id": "2-handles-4096-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "handles",
+        "4096",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "1f34f1b57a46453a5aefe363d0f510e7cba5f40d555bfd7daf2dbdc76946a942"
+    },
+    {
+      "id": "2-handles-4096-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "handles",
+        "4096",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "5a0f4307fd51ac4a59b7e425d99cbf03800ac4e7a476e0a38818c6df2103b702"
+    },
+    {
+      "id": "2-text-8-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "text",
+        "8",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "7c600561e8595afd578dab43c2f0c25641a5e5670cdb25708d2c4af4966f6903"
+    },
+    {
+      "id": "2-text-8-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "text",
+        "8",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "e11518a671d4902c340621de3782e314c73786a69c925eb06ffd46317d6af07f"
+    },
+    {
+      "id": "2-numbers-64-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "numbers",
+        "64",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "43636851852047a0f4b5d157f452c436b2431df06e0133b756ee45d5a2993b68"
+    },
+    {
+      "id": "2-numbers-64-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "numbers",
+        "64",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "bd5732c7bbc9493eb68f5e7d22da89ac8122a8025df5c4de4a001e88c6bdc8f7"
+    },
+    {
+      "id": "2-wide-1-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "wide",
+        "1",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "6f5551a6120a23e54dba4650cbfc50145740b9b2123ac5f721985656c9410e38"
+    },
+    {
+      "id": "2-wide-1-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "wide",
+        "1",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "1b11a577292d54e55a7a1494fa6024c9e3ff2aaece2e1cf7f9a2ced5d1040c2c"
+    },
+    {
+      "id": "2-handles-64-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "handles",
+        "64",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "32c5a1d869a67e93935cd6def0d9e1ee41906291098027ebd89c8c636a5ff21e"
+    },
+    {
+      "id": "2-handles-64-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "handles",
+        "64",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "1636e6985cf94b8510704641d44fb242158a8ea56ca55953071a6717a0fe6725"
+    },
+    {
+      "id": "2-text-1-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "text",
+        "1",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "cfa6c197816b57313b0143969f976bb9ab8a4aea4ff5a8d1c3c4749b88cb6e51"
+    },
+    {
+      "id": "2-text-1-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "text",
+        "1",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "931975a5e8942b68be3aa1968c497d1d94762cb2d549c3505fc1766d93e2a077"
+    },
+    {
+      "id": "2-control-1-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "control",
+        "1",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "42afd77d42cf5981191e972cab1a0d1d14a2752459bfce9c5e5a45e6567b1970"
+    },
+    {
+      "id": "2-control-1-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "control",
+        "1",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "ec0338062a51468f6583ad2d12977907a70eb46456e89fbd59e18d90a92c626f"
+    },
+    {
+      "id": "2-numbers-4096-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "numbers",
+        "4096",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "d2913f32261523f1cbc9ad67268f9b58c3efdc1985026e5b7721eb4bc62396a3"
+    },
+    {
+      "id": "2-numbers-4096-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "numbers",
+        "4096",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "c9848223fe4a263db04b366a2f034c50225d944c9edd80e7287173cb60073ac7"
+    },
+    {
+      "id": "2-text-64-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "text",
+        "64",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "ae04738d791722e9b6cca3206cfb1bea7d065bbe7591ab50524e8f6567786f81"
+    },
+    {
+      "id": "2-text-64-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "text",
+        "64",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "70a61fce01ace691da239b1918ef5cbf4b65f8c16b27e9466dfff5db514e9df1"
+    },
+    {
+      "id": "2-numbers-1-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "numbers",
+        "1",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "dc054e6dd04a40c0ff055f25740a39050c520b803d37a7066d3ffa39c279be0f"
+    },
+    {
+      "id": "2-numbers-1-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "numbers",
+        "1",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "06191395de67c249a2079eb020cd935ddf033d5dcd78192e0e49950fbfff5103"
+    },
+    {
+      "id": "2-handles-512-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "handles",
+        "512",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "c0957e7b6c378e8c1ec450d3ab736ff66f3c55423b11ecf4307e55728e09d073"
+    },
+    {
+      "id": "2-handles-512-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "handles",
+        "512",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "d6456e876707a99a681e812757be399bf0f8dd19e2ecf58e30d555ebc35a7970"
+    },
+    {
+      "id": "3-numbers-4096-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "numbers",
+        "4096",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "4f0007308825cbb7c1e9147e883530160d83e961d4e3bb79c79b5db9e90ec457"
+    },
+    {
+      "id": "3-numbers-4096-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "numbers",
+        "4096",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "660915f67d284262333ec6508eae537a5726f4add041c4c31758ab3de3f29e0a"
+    },
+    {
+      "id": "3-wide-4096-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "wide",
+        "4096",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "593a901583c48e3d136da1adedc76a08912370c9ea16a95200d4f0ce468fd828"
+    },
+    {
+      "id": "3-wide-4096-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "wide",
+        "4096",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "7df7817b75289652c7945bfe8311aaf73942002e86c8010c37a173fb4e1af03e"
+    },
+    {
+      "id": "3-records-4096-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "records",
+        "4096",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "5acc4f231f9df775e596bf66da2a98f993328c470139dca2bedea607f67b9015"
+    },
+    {
+      "id": "3-records-4096-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "records",
+        "4096",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "796fb296f4838aac8ecfdd8ab8efb2ca399f81551b02655cdf50222d19a3feb8"
+    },
+    {
+      "id": "3-wide-512-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "wide",
+        "512",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "484d5908b393fb797cb89451c0ea014dcca5fa0fc4ecb670af6dce744ac8881e"
+    },
+    {
+      "id": "3-wide-512-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "wide",
+        "512",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "eaa8f00a2fe6f97bf51ac9572499332b55b1ae43500dd5b772df217f04b5c422"
+    },
+    {
+      "id": "3-text-4096-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "text",
+        "4096",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "73e5b4c4eaa044f8263e820c521f4057d586c3d801d204e0c21ec40b2523af12"
+    },
+    {
+      "id": "3-text-4096-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "text",
+        "4096",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "3f7fa9f3037aaf99fc0252fa35bbe33fd71294be339258a781a14cc17003e5bb"
+    },
+    {
+      "id": "3-wide-1-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "wide",
+        "1",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "623621c06c79ae8d6b1ff0432a4bf16b0b3ee6ad4522b18a1f553a586ab50381"
+    },
+    {
+      "id": "3-wide-1-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "wide",
+        "1",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "d66d573853fe693f85d3e0e3a912f18b28e10511e12288e40269edd9e87ed948"
+    },
+    {
+      "id": "3-numbers-8-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "numbers",
+        "8",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "5ccc73ee8f53670c977972068b710fd4ea916f9cb056d03b256a3ce9c103875f"
+    },
+    {
+      "id": "3-numbers-8-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "numbers",
+        "8",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "2f0acf2889193dc23a31d56fd90b791459595bc1279ff3c677a8050623ad4c28"
+    },
+    {
+      "id": "3-text-512-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "text",
+        "512",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "4654bcb841242b1806211dd95bffc6be389a76d608f3b7ddefd697066657163c"
+    },
+    {
+      "id": "3-text-512-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "text",
+        "512",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "80b4c5cf17e3efd93978a593e3196b6b251b5dd4c06f70751d79b89177836671"
+    },
+    {
+      "id": "3-text-0-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "text",
+        "0",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "e07e053e6fbb8189750ef974d0d1dfecf7f9aa78307eac89421f9436f0acb3d2"
+    },
+    {
+      "id": "3-text-0-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "text",
+        "0",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "930b2f99edc5fdff70d027123b0ee65731901e1131666af8af81b4f25d92e233"
+    },
+    {
+      "id": "3-numbers-0-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "numbers",
+        "0",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "cfe27f306e18c5a0de1dd159e6b74f3c2470ace848b61198899bc9de13cec0ae"
+    },
+    {
+      "id": "3-numbers-0-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "numbers",
+        "0",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "168fffc09ba232028f7a367430810d2d78c744aa6157d3220409b84006c07859"
+    },
+    {
+      "id": "3-handles-4096-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "handles",
+        "4096",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "73d616105b1fb18227d7b14f64b97146346fe7e8fb26f60af695260c56dbb5fd"
+    },
+    {
+      "id": "3-handles-4096-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "handles",
+        "4096",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "d04a3fe2a9d345bd8b8fd2ed6a4e40746eccb2c9f8c89d710d460aaf264cafda"
+    },
+    {
+      "id": "3-wide-8-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "wide",
+        "8",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "35d9079ca621e6b7f0eea61778824da12d22f2871c35fabbc207c20be7fd8dab"
+    },
+    {
+      "id": "3-wide-8-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "wide",
+        "8",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "3736fbc556d5f1532260d21849138c7b2aca409bef5c85f1e9e10a930f93a956"
+    },
+    {
+      "id": "3-records-64-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "records",
+        "64",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "db402f102715e7530e6f265ad2c62db750e11ba937d096dde7e89fdbb137697c"
+    },
+    {
+      "id": "3-records-64-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "records",
+        "64",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "c78a89721cf7fe7145d171802e2b4322268f48ec72bc4ad8095769cede49685f"
+    },
+    {
+      "id": "3-wide-64-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "wide",
+        "64",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "869cbfae4a8f2f95774eb6d25f369b9cfec3b5d06fa742a81eba42842ef75442"
+    },
+    {
+      "id": "3-wide-64-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "wide",
+        "64",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "706999f44ef546c3344ce00989f797a12f106a8c69744761d396e4297fbb7e09"
+    },
+    {
+      "id": "3-numbers-512-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "numbers",
+        "512",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "295f039b85e28e67a296f464ae02717cdc454aa12cbfc29f0a63908cd72cefba"
+    },
+    {
+      "id": "3-numbers-512-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "numbers",
+        "512",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "4270334f67a84d8354a397fa4cd664c9efb4a17a1e66c3e625139069166dacda"
+    },
+    {
+      "id": "3-numbers-64-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "numbers",
+        "64",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "250c5201fc6252ca3a2c59e9986d0ac6cdd5bd2e6ed1cdba40ec9b60f0bfebb9"
+    },
+    {
+      "id": "3-numbers-64-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "numbers",
+        "64",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "29e18fb9bc4481e27f142847cff48880613d6329864cf6cadf91fe8b0a1ea9cb"
+    },
+    {
+      "id": "3-text-64-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "text",
+        "64",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "1ad3a0227a780d89a67ae1e59b52a0ffeee6209fedbc3efdb35cb5f8f9ea803d"
+    },
+    {
+      "id": "3-text-64-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "text",
+        "64",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "c852bb8da779cab831ed8d645c6e168a240ce31b23051a4768204cb561bb72fb"
+    },
+    {
+      "id": "3-records-0-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "records",
+        "0",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "66aaa40672bd94cbb0f7917dc7c6f26c0089dc8a6516c579272557482f856454"
+    },
+    {
+      "id": "3-records-0-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "records",
+        "0",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "047738bc9966af21365661866e006794a06d85e68016cfece16e39b466393457"
+    },
+    {
+      "id": "3-handles-64-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "handles",
+        "64",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "e53f428f630f0380ea693f2b9084ceacce09b8b54c654b75a42533bd6a6fced8"
+    },
+    {
+      "id": "3-handles-64-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "handles",
+        "64",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "71e8509dd2298971fcedf1180fc03b13425644dc42190ac08c954215dafe9c6e"
+    },
+    {
+      "id": "3-control-1-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "control",
+        "1",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "9c457abe76224a1d037e4928312ef9c5c5481aa248c09d981c6177af99023e10"
+    },
+    {
+      "id": "3-control-1-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "control",
+        "1",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "bcf063278a705e992bbd3aa1a51af76a71040793d7e61b305c2b145f57a2235f"
+    },
+    {
+      "id": "3-numbers-1-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "numbers",
+        "1",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "3285a4c385d6c3e9fde2c36d4c9a729288d695dac9b05daf11b2cf8c093a1e15"
+    },
+    {
+      "id": "3-numbers-1-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "numbers",
+        "1",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "8f5c381bd090653555246ae45bf19f648ac7258d6aef8f3e4020aba0e57cd745"
+    },
+    {
+      "id": "3-records-8-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "records",
+        "8",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "ebdb6d8fdc50d7f4ff5ad00d5caa433c6e0194227c99afbecfb1ad29df0ab6bb"
+    },
+    {
+      "id": "3-records-8-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "records",
+        "8",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "14ceb98c9296f65ea1cd053628ed3e5d213ea183ab3a4c2af64727a463eb4162"
+    },
+    {
+      "id": "3-wide-0-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "wide",
+        "0",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "888b946691675b899a9a6ca5c6ff01fe8336603196096296f3f0181a73c60253"
+    },
+    {
+      "id": "3-wide-0-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "wide",
+        "0",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "b3f1da7632b234e13d158bfb53f041395038dcbe5aa2880decc0851f9d25983a"
+    },
+    {
+      "id": "3-records-512-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "records",
+        "512",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "4590facefff14d11a2a79cee91ad0c42a35af23c9f411b5a94fda545d0b31e1b"
+    },
+    {
+      "id": "3-records-512-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "records",
+        "512",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "a6457eede69aeebc79b6d3c3ccdbaa2605748857b4076670c92e0b3dad8f80f8"
+    },
+    {
+      "id": "3-text-1-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "text",
+        "1",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "1408fe92d5e7c829efa8a39558801c8fef4d7e803d162dd1c8c8e820f07b32fc"
+    },
+    {
+      "id": "3-text-1-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "text",
+        "1",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "d7c73d8e8285ef39bb826044b6c39cf8b5e263bfde9ef3aab5bc2a5a43dceab0"
+    },
+    {
+      "id": "3-handles-0-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "handles",
+        "0",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "d0077bf3cf105fc8521e5e7ed07545aae15e0949bf5d23e2ea48591b32d295e5"
+    },
+    {
+      "id": "3-handles-0-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "handles",
+        "0",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "6a3e95a9dae7cc19ea34679f59c37f3035960759ada2e592b1b84fe31ce32421"
+    },
+    {
+      "id": "3-records-1-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "records",
+        "1",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "05317bda23d623350530ac7d6669b44c04501e8d7a6dca4d8fa7860183d73dd1"
+    },
+    {
+      "id": "3-records-1-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "records",
+        "1",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "17ad3fb64e739f3932cb5055a9394a6253a7fef14237000a018583b2825ef92b"
+    },
+    {
+      "id": "3-handles-512-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "handles",
+        "512",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "a18d95498568e87db1a65a6b46d7782c429d8acfadf211bd707a7aaded6cd1a4"
+    },
+    {
+      "id": "3-handles-512-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "handles",
+        "512",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "1fc5f5c02c535593bdfe49e3fdf8a9cc9b3e741e328a9c9533ff6bb400854334"
+    },
+    {
+      "id": "3-handles-8-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "handles",
+        "8",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "a94afb24755cf8a1ffe671985a2b5aa4f1fa070eeb17236bb311a80eabccaf69"
+    },
+    {
+      "id": "3-handles-8-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "handles",
+        "8",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "801e3d839818b5cc800a40b9c9cdc36716b8cf938490bf56ebaa1ec9f2327261"
+    },
+    {
+      "id": "3-handles-1-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "handles",
+        "1",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "beea1e2c5754f996ec431000fa24e334ed566fdc89d4c88b66c65939b270695a"
+    },
+    {
+      "id": "3-handles-1-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "handles",
+        "1",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "86b8c1c9ebe564edf8518a5f64d84d390d8c8cc6964668b04947d6bfdb152599"
+    },
+    {
+      "id": "3-text-8-after",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "text",
+        "8",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-final-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "04654688ea129b49932e9ed36b2690420776cbcc07faac53a53280986417a3ab"
+    },
+    {
+      "id": "3-text-8-before",
+      "command": [
+        "/tmp/c-row-replay-before-time/input-driver",
+        "time",
+        "text",
+        "8",
+        "12",
+        "10"
+      ],
+      "loaded_library": "/tmp/c-row-replay-before-time/frozen/libc_collection_bench.so",
+      "stdout_sha256": "93d30a0ec8669c1f95778e3f38eac1cced9b2f1528d8440b1673d5a50898d961"
+    }
+  ],
+  "summary": [
+    {
+      "case": "control",
+      "size": 1,
+      "before": {
+        "wall_ns": 3.4503989219665527,
+        "cpu_ns": 3.3999745051066084,
+        "min_wall_ns": 3.3137601216634116,
+        "max_wall_ns": 3.7904930114746094,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 3.3137601216634116,
+            "cpu_ns": 3.2746378580729165
+          },
+          {
+            "fork": 1,
+            "wall_ns": 3.5565884908040366,
+            "cpu_ns": 3.4752496083577475
+          },
+          {
+            "fork": 2,
+            "wall_ns": 3.344209353129069,
+            "cpu_ns": 3.3246994018554688
+          },
+          {
+            "fork": 3,
+            "wall_ns": 3.7904930114746094,
+            "cpu_ns": 3.7906297047932944
+          }
+        ]
+      },
+      "after": {
+        "wall_ns": 3.4056854248046875,
+        "cpu_ns": 3.40243657430013,
+        "min_wall_ns": 3.2686335245768228,
+        "max_wall_ns": 4.073850949605306,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 3.2895431518554688,
+            "cpu_ns": 3.278042475382487
+          },
+          {
+            "fork": 1,
+            "wall_ns": 3.2686335245768228,
+            "cpu_ns": 3.272546132405599
+          },
+          {
+            "fork": 2,
+            "wall_ns": 4.073850949605306,
+            "cpu_ns": 4.08180554707845
+          },
+          {
+            "fork": 3,
+            "wall_ns": 3.5218276977539062,
+            "cpu_ns": 3.5268306732177734
+          }
+        ]
+      },
+      "wall_change_percent": -1.2958935524006288,
+      "cpu_change_percent": 0.07241434280826908,
+      "paired_wall_changes_percent": [
+        -0.7308003270854346,
+        -8.096381320800939,
+        21.818059799202906,
+        -7.087872551338236
+      ]
+    },
+    {
+      "case": "handles",
+      "size": 0,
+      "before": {
+        "wall_ns": 19.41790552934011,
+        "cpu_ns": 19.203086296717323,
+        "min_wall_ns": 18.155572811762493,
+        "max_wall_ns": 20.57144594192505,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 20.57144594192505,
+            "cpu_ns": 20.568006833394367
+          },
+          {
+            "fork": 1,
+            "wall_ns": 18.155572811762493,
+            "cpu_ns": 18.12896490097046
+          },
+          {
+            "fork": 2,
+            "wall_ns": 19.050713300704956,
+            "cpu_ns": 18.617740472157795
+          },
+          {
+            "fork": 3,
+            "wall_ns": 19.78509775797526,
+            "cpu_ns": 19.788432121276855
+          }
+        ]
+      },
+      "after": {
+        "wall_ns": 18.831863403320312,
+        "cpu_ns": 18.794073661168415,
+        "min_wall_ns": 17.877203067143757,
+        "max_wall_ns": 20.56291135152181,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 20.56291135152181,
+            "cpu_ns": 20.563557942708332
+          },
+          {
+            "fork": 1,
+            "wall_ns": 17.877203067143757,
+            "cpu_ns": 17.802878220876057
+          },
+          {
+            "fork": 2,
+            "wall_ns": 18.599997679392498,
+            "cpu_ns": 18.523956139882404
+          },
+          {
+            "fork": 3,
+            "wall_ns": 19.063729127248127,
+            "cpu_ns": 19.064191182454426
+          }
+        ]
+      },
+      "wall_change_percent": -3.0180501451832598,
+      "cpu_change_percent": -2.1299317684096764,
+      "paired_wall_changes_percent": [
+        -0.04148755720591035,
+        -1.5332468300773616,
+        -2.365872679926262,
+        -3.646020047772347
+      ]
+    },
+    {
+      "case": "handles",
+      "size": 1,
+      "before": {
+        "wall_ns": 79.036426226298,
+        "cpu_ns": 79.0545686086019,
+        "min_wall_ns": 77.71216710408528,
+        "max_wall_ns": 93.2548230489095,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 93.2548230489095,
+            "cpu_ns": 93.25483957926433
+          },
+          {
+            "fork": 1,
+            "wall_ns": 79.22090911865234,
+            "cpu_ns": 79.24728393554688
+          },
+          {
+            "fork": 2,
+            "wall_ns": 77.71216710408528,
+            "cpu_ns": 77.71268844604492
+          },
+          {
+            "fork": 3,
+            "wall_ns": 78.85194333394368,
+            "cpu_ns": 78.8618532816569
+          }
+        ]
+      },
+      "after": {
+        "wall_ns": 80.59573682149251,
+        "cpu_ns": 77.35632260640462,
+        "min_wall_ns": 61.688652992248535,
+        "max_wall_ns": 106.40771166483562,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 106.40771166483562,
+            "cpu_ns": 106.45879745483398
+          },
+          {
+            "fork": 1,
+            "wall_ns": 92.0546048482259,
+            "cpu_ns": 85.98508199055989
+          },
+          {
+            "fork": 2,
+            "wall_ns": 61.688652992248535,
+            "cpu_ns": 61.6534678141276
+          },
+          {
+            "fork": 3,
+            "wall_ns": 69.13686879475911,
+            "cpu_ns": 68.72756322224934
+          }
+        ]
+      },
+      "wall_change_percent": 1.9729011920780248,
+      "cpu_change_percent": -2.148194635790468,
+      "paired_wall_changes_percent": [
+        14.104244891470973,
+        16.199884440043498,
+        -20.61905453025824,
+        -12.320653275519833
+      ]
+    },
+    {
+      "case": "handles",
+      "size": 8,
+      "before": {
+        "wall_ns": 193.17481867472333,
+        "cpu_ns": 193.1993865966797,
+        "min_wall_ns": 187.51830546061197,
+        "max_wall_ns": 203.90743001302084,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 187.51830546061197,
+            "cpu_ns": 187.57006327311197
+          },
+          {
+            "fork": 1,
+            "wall_ns": 190.28124237060547,
+            "cpu_ns": 190.24431864420572
+          },
+          {
+            "fork": 2,
+            "wall_ns": 196.06839497884116,
+            "cpu_ns": 196.15445454915366
+          },
+          {
+            "fork": 3,
+            "wall_ns": 203.90743001302084,
+            "cpu_ns": 203.9446004231771
+          }
+        ]
+      },
+      "after": {
+        "wall_ns": 179.2880376180013,
+        "cpu_ns": 179.36639149983722,
+        "min_wall_ns": 169.97844950358072,
+        "max_wall_ns": 186.25970967610678,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 186.25970967610678,
+            "cpu_ns": 180.8171844482422
+          },
+          {
+            "fork": 1,
+            "wall_ns": 178.68101247151694,
+            "cpu_ns": 178.76482645670572
+          },
+          {
+            "fork": 2,
+            "wall_ns": 169.97844950358072,
+            "cpu_ns": 169.9895222981771
+          },
+          {
+            "fork": 3,
+            "wall_ns": 179.8950627644857,
+            "cpu_ns": 179.96795654296875
+          }
+        ]
+      },
+      "wall_change_percent": -7.188711837284146,
+      "cpu_change_percent": -7.159958082951901,
+      "paired_wall_changes_percent": [
+        -0.6711855578118819,
+        -6.096360184833715,
+        -13.306553296402491,
+        -11.776111957765245
+      ]
+    },
+    {
+      "case": "handles",
+      "size": 64,
+      "before": {
+        "wall_ns": 1007.8187662760416,
+        "cpu_ns": 1007.4933878580729,
+        "min_wall_ns": 972.8888346354166,
+        "max_wall_ns": 1076.4278157552083,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 987.048583984375,
+            "cpu_ns": 987.5006103515625
+          },
+          {
+            "fork": 1,
+            "wall_ns": 972.8888346354166,
+            "cpu_ns": 966.6817220052084
+          },
+          {
+            "fork": 2,
+            "wall_ns": 1028.5889485677083,
+            "cpu_ns": 1027.4861653645833
+          },
+          {
+            "fork": 3,
+            "wall_ns": 1076.4278157552083,
+            "cpu_ns": 1074.2043050130208
+          }
+        ]
+      },
+      "after": {
+        "wall_ns": 1019.1105041503906,
+        "cpu_ns": 1019.666239420573,
+        "min_wall_ns": 939.5465494791666,
+        "max_wall_ns": 1104.4808959960938,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 939.5465494791666,
+            "cpu_ns": 938.3620198567709
+          },
+          {
+            "fork": 1,
+            "wall_ns": 1078.6323852539062,
+            "cpu_ns": 1079.2038981119792
+          },
+          {
+            "fork": 2,
+            "wall_ns": 959.588623046875,
+            "cpu_ns": 960.1285807291666
+          },
+          {
+            "fork": 3,
+            "wall_ns": 1104.4808959960938,
+            "cpu_ns": 1105.0069173177083
+          }
+        ]
+      },
+      "wall_change_percent": 1.12041353586545,
+      "cpu_change_percent": 1.208231409675009,
+      "paired_wall_changes_percent": [
+        -4.812532561817684,
+        10.869027051596936,
+        -6.708250717345832,
+        2.606127399374558
+      ]
+    },
+    {
+      "case": "handles",
+      "size": 512,
+      "before": {
+        "wall_ns": 15070.261393229168,
+        "cpu_ns": 15041.453450520834,
+        "min_wall_ns": 14945.162434895834,
+        "max_wall_ns": 15641.4345703125,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 14974.862141927084,
+            "cpu_ns": 14929.977213541666
+          },
+          {
+            "fork": 1,
+            "wall_ns": 15165.66064453125,
+            "cpu_ns": 15133.963216145834
+          },
+          {
+            "fork": 2,
+            "wall_ns": 14945.162434895834,
+            "cpu_ns": 14948.943684895834
+          },
+          {
+            "fork": 3,
+            "wall_ns": 15641.4345703125,
+            "cpu_ns": 15643.172200520834
+          }
+        ]
+      },
+      "after": {
+        "wall_ns": 15454.069905598957,
+        "cpu_ns": 15393.536783854168,
+        "min_wall_ns": 14204.345052083334,
+        "max_wall_ns": 17003.113932291668,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 14204.345052083334,
+            "cpu_ns": 14205.480143229166
+          },
+          {
+            "fork": 1,
+            "wall_ns": 16032.748046875,
+            "cpu_ns": 15908.427734375
+          },
+          {
+            "fork": 2,
+            "wall_ns": 14875.391764322916,
+            "cpu_ns": 14878.645833333334
+          },
+          {
+            "fork": 3,
+            "wall_ns": 17003.113932291668,
+            "cpu_ns": 17008.675130208332
+          }
+        ]
+      },
+      "wall_change_percent": 2.5467939961693498,
+      "cpu_change_percent": 2.3407534018671683,
+      "paired_wall_changes_percent": [
+        -5.145403560587258,
+        5.717439039864192,
+        -0.4668445115725728,
+        8.705591266952206
+      ]
+    },
+    {
+      "case": "handles",
+      "size": 4096,
+      "before": {
+        "wall_ns": 118353.42513020833,
+        "cpu_ns": 118015.20833333333,
+        "min_wall_ns": 114258.83203125,
+        "max_wall_ns": 130469.78255208333,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 114258.83203125,
+            "cpu_ns": 113383.7109375
+          },
+          {
+            "fork": 1,
+            "wall_ns": 130469.78255208333,
+            "cpu_ns": 130475.95052083333
+          },
+          {
+            "fork": 2,
+            "wall_ns": 115634.75911458333,
+            "cpu_ns": 114926.77083333333
+          },
+          {
+            "fork": 3,
+            "wall_ns": 121072.09114583333,
+            "cpu_ns": 121103.64583333333
+          }
+        ]
+      },
+      "after": {
+        "wall_ns": 125868.05078125,
+        "cpu_ns": 125927.3046875,
+        "min_wall_ns": 114905.45052083333,
+        "max_wall_ns": 132486.20182291666,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 132486.20182291666,
+            "cpu_ns": 131613.77604166666
+          },
+          {
+            "fork": 1,
+            "wall_ns": 128280.67057291667,
+            "cpu_ns": 128363.203125
+          },
+          {
+            "fork": 2,
+            "wall_ns": 114905.45052083333,
+            "cpu_ns": 114195.55989583333
+          },
+          {
+            "fork": 3,
+            "wall_ns": 123455.43098958333,
+            "cpu_ns": 123491.40625
+          }
+        ]
+      },
+      "wall_change_percent": 6.349309825866323,
+      "cpu_change_percent": 6.704302323323441,
+      "paired_wall_changes_percent": [
+        15.952700957665522,
+        -1.6778689565859928,
+        -0.6307001452974248,
+        1.9685295109665102
+      ]
+    },
+    {
+      "case": "numbers",
+      "size": 0,
+      "before": {
+        "wall_ns": 7.638114293416342,
+        "cpu_ns": 7.625133593877156,
+        "min_wall_ns": 7.553552548090617,
+        "max_wall_ns": 8.339515209197998,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 7.602754592895508,
+            "cpu_ns": 7.5851114590962725
+          },
+          {
+            "fork": 1,
+            "wall_ns": 7.553552548090617,
+            "cpu_ns": 7.554640769958496
+          },
+          {
+            "fork": 2,
+            "wall_ns": 7.673473993937175,
+            "cpu_ns": 7.66515572865804
+          },
+          {
+            "fork": 3,
+            "wall_ns": 8.339515209197998,
+            "cpu_ns": 8.340344429016113
+          }
+        ]
+      },
+      "after": {
+        "wall_ns": 8.059561053911846,
+        "cpu_ns": 8.051321903864542,
+        "min_wall_ns": 7.9064100583394366,
+        "max_wall_ns": 8.727976004282633,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 7.9064100583394366,
+            "cpu_ns": 7.891436417897542
+          },
+          {
+            "fork": 1,
+            "wall_ns": 8.12173350652059,
+            "cpu_ns": 8.104972839355469
+          },
+          {
+            "fork": 2,
+            "wall_ns": 7.997388601303101,
+            "cpu_ns": 7.997670968373616
+          },
+          {
+            "fork": 3,
+            "wall_ns": 8.727976004282633,
+            "cpu_ns": 8.7277619043986
+          }
+        ]
+      },
+      "wall_change_percent": 5.517680729899133,
+      "cpu_change_percent": 5.589256958456534,
+      "paired_wall_changes_percent": [
+        3.994019032623819,
+        7.522036218224204,
+        4.221225062101608,
+        4.658074064739215
+      ]
+    },
+    {
+      "case": "numbers",
+      "size": 1,
+      "before": {
+        "wall_ns": 26.588956038157146,
+        "cpu_ns": 26.588495572408043,
+        "min_wall_ns": 23.0031156539917,
+        "max_wall_ns": 39.65706094106039,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 39.65706094106039,
+            "cpu_ns": 39.536994298299156
+          },
+          {
+            "fork": 1,
+            "wall_ns": 28.03675715128581,
+            "cpu_ns": 28.027820587158203
+          },
+          {
+            "fork": 2,
+            "wall_ns": 23.0031156539917,
+            "cpu_ns": 23.00965944925944
+          },
+          {
+            "fork": 3,
+            "wall_ns": 25.141154925028484,
+            "cpu_ns": 25.14917055765788
+          }
+        ]
+      },
+      "after": {
+        "wall_ns": 25.214956283569336,
+        "cpu_ns": 25.14853318532308,
+        "min_wall_ns": 23.887118975321453,
+        "max_wall_ns": 33.3523333867391,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 33.3523333867391,
+            "cpu_ns": 32.45441118876139
+          },
+          {
+            "fork": 1,
+            "wall_ns": 24.66741879781087,
+            "cpu_ns": 24.529069264729817
+          },
+          {
+            "fork": 2,
+            "wall_ns": 23.887118975321453,
+            "cpu_ns": 23.893410364786785
+          },
+          {
+            "fork": 3,
+            "wall_ns": 25.7624937693278,
+            "cpu_ns": 25.76799710591634
+          }
+        ]
+      },
+      "wall_change_percent": -5.167558111781512,
+      "cpu_change_percent": -5.415734723175802,
+      "paired_wall_changes_percent": [
+        -15.898121052620562,
+        -12.01757512573245,
+        3.842972120067367,
+        2.4714013582596506
+      ]
+    },
+    {
+      "case": "numbers",
+      "size": 8,
+      "before": {
+        "wall_ns": 29.22175089518229,
+        "cpu_ns": 29.202893575032554,
+        "min_wall_ns": 27.016331990559895,
+        "max_wall_ns": 37.77813212076823,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 37.77813212076823,
+            "cpu_ns": 37.41277058919271
+          },
+          {
+            "fork": 1,
+            "wall_ns": 30.59869893391927,
+            "cpu_ns": 30.50951639811198
+          },
+          {
+            "fork": 2,
+            "wall_ns": 27.844802856445312,
+            "cpu_ns": 27.896270751953125
+          },
+          {
+            "fork": 3,
+            "wall_ns": 27.016331990559895,
+            "cpu_ns": 27.072982788085938
+          }
+        ]
+      },
+      "after": {
+        "wall_ns": 29.981932322184242,
+        "cpu_ns": 29.39957936604818,
+        "min_wall_ns": 27.655057271321613,
+        "max_wall_ns": 33.16094462076823,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 29.080650329589844,
+            "cpu_ns": 29.135538736979168
+          },
+          {
+            "fork": 1,
+            "wall_ns": 27.655057271321613,
+            "cpu_ns": 27.654190063476562
+          },
+          {
+            "fork": 2,
+            "wall_ns": 30.883214314778645,
+            "cpu_ns": 30.940628051757812
+          },
+          {
+            "fork": 3,
+            "wall_ns": 33.16094462076823,
+            "cpu_ns": 29.663619995117188
+          }
+        ]
+      },
+      "wall_change_percent": 2.6014232676498494,
+      "cpu_change_percent": 0.673514734114522,
+      "paired_wall_changes_percent": [
+        -23.022529974151396,
+        -9.620153029887724,
+        10.911951770669548,
+        22.744066930904605
+      ]
+    },
+    {
+      "case": "numbers",
+      "size": 64,
+      "before": {
+        "wall_ns": 56.97511800130208,
+        "cpu_ns": 57.39186604817708,
+        "min_wall_ns": 53.522216796875,
+        "max_wall_ns": 58.74713134765625,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 58.74713134765625,
+            "cpu_ns": 59.193318684895836
+          },
+          {
+            "fork": 1,
+            "wall_ns": 56.439615885416664,
+            "cpu_ns": 56.8609619140625
+          },
+          {
+            "fork": 2,
+            "wall_ns": 53.522216796875,
+            "cpu_ns": 53.927205403645836
+          },
+          {
+            "fork": 3,
+            "wall_ns": 57.5106201171875,
+            "cpu_ns": 57.922770182291664
+          }
+        ]
+      },
+      "after": {
+        "wall_ns": 60.64320882161458,
+        "cpu_ns": 57.919921875,
+        "min_wall_ns": 51.7415771484375,
+        "max_wall_ns": 67.71162923177083,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 58.45477294921875,
+            "cpu_ns": 52.527872721354164
+          },
+          {
+            "fork": 1,
+            "wall_ns": 62.831644694010414,
+            "cpu_ns": 63.311971028645836
+          },
+          {
+            "fork": 2,
+            "wall_ns": 51.7415771484375,
+            "cpu_ns": 52.130533854166664
+          },
+          {
+            "fork": 3,
+            "wall_ns": 67.71162923177083,
+            "cpu_ns": 68.21187337239583
+          }
+        ]
+      },
+      "wall_change_percent": 6.4380574345255015,
+      "cpu_change_percent": 0.920088268918895,
+      "paired_wall_changes_percent": [
+        -0.497655616079995,
+        11.325429325335602,
+        -3.32691684874582,
+        17.73760932119506
+      ]
+    },
+    {
+      "case": "numbers",
+      "size": 512,
+      "before": {
+        "wall_ns": 313.4698079427083,
+        "cpu_ns": 316.59749348958337,
+        "min_wall_ns": 302.7376302083333,
+        "max_wall_ns": 355.1080729166667,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 302.7376302083333,
+            "cpu_ns": 305.8365885416667
+          },
+          {
+            "fork": 1,
+            "wall_ns": 316.0486653645833,
+            "cpu_ns": 319.208984375
+          },
+          {
+            "fork": 2,
+            "wall_ns": 310.8909505208333,
+            "cpu_ns": 313.9860026041667
+          },
+          {
+            "fork": 3,
+            "wall_ns": 355.1080729166667,
+            "cpu_ns": 358.4505208333333
+          }
+        ]
+      },
+      "after": {
+        "wall_ns": 317.13134765625,
+        "cpu_ns": 320.25309244791663,
+        "min_wall_ns": 313.2747395833333,
+        "max_wall_ns": 321.5205078125,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 313.2747395833333,
+            "cpu_ns": 316.4046223958333
+          },
+          {
+            "fork": 1,
+            "wall_ns": 321.5205078125,
+            "cpu_ns": 324.7819010416667
+          },
+          {
+            "fork": 2,
+            "wall_ns": 318.8045247395833,
+            "cpu_ns": 321.9075520833333
+          },
+          {
+            "fork": 3,
+            "wall_ns": 315.4581705729167,
+            "cpu_ns": 318.5986328125
+          }
+        ]
+      },
+      "wall_change_percent": 1.1680677439311449,
+      "cpu_change_percent": 1.1546518950736884,
+      "paired_wall_changes_percent": [
+        3.480607735400687,
+        1.73132907921143,
+        2.545450166848684,
+        -11.16558742753636
+      ]
+    },
+    {
+      "case": "numbers",
+      "size": 4096,
+      "before": {
+        "wall_ns": 2764.526041666667,
+        "cpu_ns": 2776.6731770833335,
+        "min_wall_ns": 2648.953125,
+        "max_wall_ns": 3553.6770833333335,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 2839.15234375,
+            "cpu_ns": 2833.6848958333335
+          },
+          {
+            "fork": 1,
+            "wall_ns": 2689.8997395833335,
+            "cpu_ns": 2719.6614583333335
+          },
+          {
+            "fork": 2,
+            "wall_ns": 3553.6770833333335,
+            "cpu_ns": 3591.1979166666665
+          },
+          {
+            "fork": 3,
+            "wall_ns": 2648.953125,
+            "cpu_ns": 2677.03125
+          }
+        ]
+      },
+      "after": {
+        "wall_ns": 2804.11328125,
+        "cpu_ns": 2837.779947916667,
+        "min_wall_ns": 2542.4934895833335,
+        "max_wall_ns": 3206.30078125,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 3206.30078125,
+            "cpu_ns": 3242.5260416666665
+          },
+          {
+            "fork": 1,
+            "wall_ns": 2556.2174479166665,
+            "cpu_ns": 2588.5546875
+          },
+          {
+            "fork": 2,
+            "wall_ns": 3052.0091145833335,
+            "cpu_ns": 3087.0052083333335
+          },
+          {
+            "fork": 3,
+            "wall_ns": 2542.4934895833335,
+            "cpu_ns": 2570.15625
+          }
+        ]
+      },
+      "wall_change_percent": 1.4319720265491442,
+      "cpu_change_percent": 2.2007188796169697,
+      "paired_wall_changes_percent": [
+        12.931621591501653,
+        -4.969787152266669,
+        -14.116869850184521,
+        -4.018932400574904
+      ]
+    },
+    {
+      "case": "records",
+      "size": 0,
+      "before": {
+        "wall_ns": 20.860722939173378,
+        "cpu_ns": 20.862678686777752,
+        "min_wall_ns": 19.370426813761394,
+        "max_wall_ns": 41.28469022115072,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 41.28469022115072,
+            "cpu_ns": 41.29202524820963
+          },
+          {
+            "fork": 1,
+            "wall_ns": 19.370426813761394,
+            "cpu_ns": 19.33067798614502
+          },
+          {
+            "fork": 2,
+            "wall_ns": 21.25015926361084,
+            "cpu_ns": 21.254064242045086
+          },
+          {
+            "fork": 3,
+            "wall_ns": 20.47128661473592,
+            "cpu_ns": 20.471293131510418
+          }
+        ]
+      },
+      "after": {
+        "wall_ns": 19.540963530540466,
+        "cpu_ns": 19.521923462549843,
+        "min_wall_ns": 18.37246084213257,
+        "max_wall_ns": 21.25446351369222,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 18.37246084213257,
+            "cpu_ns": 18.369052410125732
+          },
+          {
+            "fork": 1,
+            "wall_ns": 18.81527002652486,
+            "cpu_ns": 18.790889581044514
+          },
+          {
+            "fork": 2,
+            "wall_ns": 21.25446351369222,
+            "cpu_ns": 21.1980136235555
+          },
+          {
+            "fork": 3,
+            "wall_ns": 20.266657034556072,
+            "cpu_ns": 20.252957344055176
+          }
+        ]
+      },
+      "wall_change_percent": -6.326527668677285,
+      "cpu_change_percent": -6.426572753946724,
+      "paired_wall_changes_percent": [
+        -55.49812595488459,
+        -2.86600183142135,
+        0.020255142693215156,
+        -0.9995931571421091
+      ]
+    },
+    {
+      "case": "records",
+      "size": 1,
+      "before": {
+        "wall_ns": 105.06804243723552,
+        "cpu_ns": 105.0882339477539,
+        "min_wall_ns": 96.20861879984538,
+        "max_wall_ns": 107.79244041442871,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 96.20861879984538,
+            "cpu_ns": 95.24538675944011
+          },
+          {
+            "fork": 1,
+            "wall_ns": 104.20702234903972,
+            "cpu_ns": 104.22950108846028
+          },
+          {
+            "fork": 2,
+            "wall_ns": 107.79244041442871,
+            "cpu_ns": 107.3442014058431
+          },
+          {
+            "fork": 3,
+            "wall_ns": 105.92906252543132,
+            "cpu_ns": 105.94696680704753
+          }
+        ]
+      },
+      "after": {
+        "wall_ns": 87.05034192403157,
+        "cpu_ns": 86.7410437266032,
+        "min_wall_ns": 81.4316857655843,
+        "max_wall_ns": 93.90524228413899,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 89.21619160970052,
+            "cpu_ns": 88.72040430704753
+          },
+          {
+            "fork": 1,
+            "wall_ns": 81.4316857655843,
+            "cpu_ns": 81.27265930175781
+          },
+          {
+            "fork": 2,
+            "wall_ns": 84.88449223836263,
+            "cpu_ns": 84.76168314615886
+          },
+          {
+            "fork": 3,
+            "wall_ns": 93.90524228413899,
+            "cpu_ns": 93.61632664998372
+          }
+        ]
+      },
+      "wall_change_percent": -17.148602082281283,
+      "cpu_change_percent": -17.45884342320595,
+      "paired_wall_changes_percent": [
+        -7.267984175816999,
+        -21.855855843543626,
+        -21.251906059452853,
+        -11.350822856952657
+      ]
+    },
+    {
+      "case": "records",
+      "size": 8,
+      "before": {
+        "wall_ns": 323.7491010030111,
+        "cpu_ns": 323.60764821370446,
+        "min_wall_ns": 299.29661814371747,
+        "max_wall_ns": 351.15343221028644,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 299.29661814371747,
+            "cpu_ns": 298.713862101237
+          },
+          {
+            "fork": 1,
+            "wall_ns": 351.15343221028644,
+            "cpu_ns": 348.837153116862
+          },
+          {
+            "fork": 2,
+            "wall_ns": 303.95405832926434,
+            "cpu_ns": 303.6319224039714
+          },
+          {
+            "fork": 3,
+            "wall_ns": 343.5441436767578,
+            "cpu_ns": 343.5833740234375
+          }
+        ]
+      },
+      "after": {
+        "wall_ns": 287.8043543497721,
+        "cpu_ns": 287.66836802164715,
+        "min_wall_ns": 263.39739990234375,
+        "max_wall_ns": 302.42362721761066,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 263.39739990234375,
+            "cpu_ns": 263.46547444661456
+          },
+          {
+            "fork": 1,
+            "wall_ns": 302.42362721761066,
+            "cpu_ns": 302.3095194498698
+          },
+          {
+            "fork": 2,
+            "wall_ns": 291.1221669514974,
+            "cpu_ns": 290.75884501139325
+          },
+          {
+            "fork": 3,
+            "wall_ns": 284.4865417480469,
+            "cpu_ns": 284.57789103190106
+          }
+        ]
+      },
+      "wall_change_percent": -11.10265527900406,
+      "cpu_change_percent": -11.105819157995821,
+      "paired_wall_changes_percent": [
+        -11.99452852625802,
+        -13.877069258857244,
+        -4.221654893604532,
+        -17.19068801367154
+      ]
+    },
+    {
+      "case": "records",
+      "size": 64,
+      "before": {
+        "wall_ns": 4372.389587402344,
+        "cpu_ns": 4331.153157552084,
+        "min_wall_ns": 4037.6595052083335,
+        "max_wall_ns": 4873.2917073567705,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 4233.3208414713545,
+            "cpu_ns": 4177.894694010417
+          },
+          {
+            "fork": 1,
+            "wall_ns": 4511.458333333333,
+            "cpu_ns": 4484.41162109375
+          },
+          {
+            "fork": 2,
+            "wall_ns": 4037.6595052083335,
+            "cpu_ns": 4035.9073893229165
+          },
+          {
+            "fork": 3,
+            "wall_ns": 4873.2917073567705,
+            "cpu_ns": 4546.127115885417
+          }
+        ]
+      },
+      "after": {
+        "wall_ns": 3852.2197469075522,
+        "cpu_ns": 3831.1471557617188,
+        "min_wall_ns": 3768.4432983398438,
+        "max_wall_ns": 4621.371276855469,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 3837.6353963216147,
+            "cpu_ns": 3835.9464518229165
+          },
+          {
+            "fork": 1,
+            "wall_ns": 3866.8040974934897,
+            "cpu_ns": 3826.347859700521
+          },
+          {
+            "fork": 2,
+            "wall_ns": 3768.4432983398438,
+            "cpu_ns": 3769.0034993489585
+          },
+          {
+            "fork": 3,
+            "wall_ns": 4621.371276855469,
+            "cpu_ns": 4350.305989583333
+          }
+        ]
+      },
+      "wall_change_percent": -11.896694704275578,
+      "cpu_change_percent": -11.544408234987525,
+      "paired_wall_changes_percent": [
+        -9.346927860355924,
+        -14.289264982827287,
+        -6.667630257608826,
+        -5.16941003389968
+      ]
+    },
+    {
+      "case": "records",
+      "size": 512,
+      "before": {
+        "wall_ns": 31268.08504231771,
+        "cpu_ns": 31211.524251302086,
+        "min_wall_ns": 29743.06103515625,
+        "max_wall_ns": 35782.903971354164,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 30578.661295572918,
+            "cpu_ns": 30467.892252604168
+          },
+          {
+            "fork": 1,
+            "wall_ns": 29743.06103515625,
+            "cpu_ns": 29748.0517578125
+          },
+          {
+            "fork": 2,
+            "wall_ns": 31957.5087890625,
+            "cpu_ns": 31955.15625
+          },
+          {
+            "fork": 3,
+            "wall_ns": 35782.903971354164,
+            "cpu_ns": 35774.397786458336
+          }
+        ]
+      },
+      "after": {
+        "wall_ns": 29835.723063151043,
+        "cpu_ns": 29787.67822265625,
+        "min_wall_ns": 29130.839518229168,
+        "max_wall_ns": 32407.147623697918,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 29295.694498697918,
+            "cpu_ns": 29201.183268229168
+          },
+          {
+            "fork": 1,
+            "wall_ns": 29130.839518229168,
+            "cpu_ns": 29129.440104166668
+          },
+          {
+            "fork": 2,
+            "wall_ns": 30375.751627604168,
+            "cpu_ns": 30374.173177083332
+          },
+          {
+            "fork": 3,
+            "wall_ns": 32407.147623697918,
+            "cpu_ns": 32412.779947916668
+          }
+        ]
+      },
+      "wall_change_percent": -4.580907264477929,
+      "cpu_change_percent": -4.56192404184309,
+      "paired_wall_changes_percent": [
+        -4.195627743392228,
+        -2.0583675506816057,
+        -4.949563409021707,
+        -9.433992138700342
+      ]
+    },
+    {
+      "case": "records",
+      "size": 4096,
+      "before": {
+        "wall_ns": 236711.8626302083,
+        "cpu_ns": 236718.22265625,
+        "min_wall_ns": 231828.734375,
+        "max_wall_ns": 258297.1171875,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 231828.734375,
+            "cpu_ns": 231847.78645833334
+          },
+          {
+            "fork": 1,
+            "wall_ns": 236815.0390625,
+            "cpu_ns": 236832.8515625
+          },
+          {
+            "fork": 2,
+            "wall_ns": 258297.1171875,
+            "cpu_ns": 258303.46354166666
+          },
+          {
+            "fork": 3,
+            "wall_ns": 236608.68619791666,
+            "cpu_ns": 236603.59375
+          }
+        ]
+      },
+      "after": {
+        "wall_ns": 230654.603515625,
+        "cpu_ns": 229821.4453125,
+        "min_wall_ns": 216755.83203125,
+        "max_wall_ns": 251703.50260416666,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 216755.83203125,
+            "cpu_ns": 216290.13020833334
+          },
+          {
+            "fork": 1,
+            "wall_ns": 223347.90104166666,
+            "cpu_ns": 222688.046875
+          },
+          {
+            "fork": 2,
+            "wall_ns": 251703.50260416666,
+            "cpu_ns": 251725.63802083334
+          },
+          {
+            "fork": 3,
+            "wall_ns": 237961.30598958334,
+            "cpu_ns": 236954.84375
+          }
+        ]
+      },
+      "wall_change_percent": -2.5589165862996754,
+      "cpu_change_percent": -2.9134965894725973,
+      "paired_wall_changes_percent": [
+        -6.501740340508643,
+        -5.686774823992113,
+        -2.552724805885842,
+        0.5716695415548978
+      ]
+    },
+    {
+      "case": "text",
+      "size": 0,
+      "before": {
+        "wall_ns": 19.491328597068787,
+        "cpu_ns": 19.490500688552856,
+        "min_wall_ns": 19.09602467219035,
+        "max_wall_ns": 22.51566791534424,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 19.09602467219035,
+            "cpu_ns": 19.043679237365723
+          },
+          {
+            "fork": 1,
+            "wall_ns": 19.408021926879883,
+            "cpu_ns": 19.40616448720296
+          },
+          {
+            "fork": 2,
+            "wall_ns": 19.57463526725769,
+            "cpu_ns": 19.574836889902752
+          },
+          {
+            "fork": 3,
+            "wall_ns": 22.51566791534424,
+            "cpu_ns": 22.50934600830078
+          }
+        ]
+      },
+      "after": {
+        "wall_ns": 19.436015605926514,
+        "cpu_ns": 19.39521312713623,
+        "min_wall_ns": 19.214927037556965,
+        "max_wall_ns": 20.654993375142414,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 19.214927037556965,
+            "cpu_ns": 19.171743392944336
+          },
+          {
+            "fork": 1,
+            "wall_ns": 19.615981101989746,
+            "cpu_ns": 19.618682861328125
+          },
+          {
+            "fork": 2,
+            "wall_ns": 19.25605010986328,
+            "cpu_ns": 19.125561714172363
+          },
+          {
+            "fork": 3,
+            "wall_ns": 20.654993375142414,
+            "cpu_ns": 20.658140182495117
+          }
+        ]
+      },
+      "wall_change_percent": -0.2837825593407284,
+      "cpu_change_percent": -0.48889232215871825,
+      "paired_wall_changes_percent": [
+        0.6226550677836729,
+        1.0715114394107328,
+        -1.6275407078838566,
+        -8.263910034548827
+      ]
+    },
+    {
+      "case": "text",
+      "size": 1,
+      "before": {
+        "wall_ns": 115.50488503774007,
+        "cpu_ns": 115.06624539693196,
+        "min_wall_ns": 101.95686467488606,
+        "max_wall_ns": 117.6553897857666,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 117.6553897857666,
+            "cpu_ns": 116.29550298055013
+          },
+          {
+            "fork": 1,
+            "wall_ns": 116.96876271565755,
+            "cpu_ns": 116.66188557942708
+          },
+          {
+            "fork": 2,
+            "wall_ns": 101.95686467488606,
+            "cpu_ns": 101.98044459025066
+          },
+          {
+            "fork": 3,
+            "wall_ns": 114.04100735982259,
+            "cpu_ns": 113.8369878133138
+          }
+        ]
+      },
+      "after": {
+        "wall_ns": 111.97349484761556,
+        "cpu_ns": 111.43500645955405,
+        "min_wall_ns": 102.8865737915039,
+        "max_wall_ns": 123.13574854532878,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 123.13574854532878,
+            "cpu_ns": 123.19299062093098
+          },
+          {
+            "fork": 1,
+            "wall_ns": 114.03107198079427,
+            "cpu_ns": 113.46685409545898
+          },
+          {
+            "fork": 2,
+            "wall_ns": 102.8865737915039,
+            "cpu_ns": 102.68649419148763
+          },
+          {
+            "fork": 3,
+            "wall_ns": 109.91591771443684,
+            "cpu_ns": 109.4031588236491
+          }
+        ]
+      },
+      "wall_change_percent": -3.0573513743342273,
+      "cpu_change_percent": -3.155781197910479,
+      "paired_wall_changes_percent": [
+        4.657975099603262,
+        -2.511517320230694,
+        0.9118651496222929,
+        -3.6171985331296175
+      ]
+    },
+    {
+      "case": "text",
+      "size": 8,
+      "before": {
+        "wall_ns": 381.31629308064777,
+        "cpu_ns": 376.44727071126306,
+        "min_wall_ns": 346.87059275309247,
+        "max_wall_ns": 386.31377665201825,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 377.5564931233724,
+            "cpu_ns": 377.49420166015625
+          },
+          {
+            "fork": 1,
+            "wall_ns": 385.07609303792316,
+            "cpu_ns": 384.9916585286458
+          },
+          {
+            "fork": 2,
+            "wall_ns": 346.87059275309247,
+            "cpu_ns": 346.93613688151044
+          },
+          {
+            "fork": 3,
+            "wall_ns": 386.31377665201825,
+            "cpu_ns": 375.4003397623698
+          }
+        ]
+      },
+      "after": {
+        "wall_ns": 368.75642903645837,
+        "cpu_ns": 368.1193542480469,
+        "min_wall_ns": 357.56468709309894,
+        "max_wall_ns": 385.63239034016925,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 359.28103892008465,
+            "cpu_ns": 358.1031036376953
+          },
+          {
+            "fork": 1,
+            "wall_ns": 357.56468709309894,
+            "cpu_ns": 356.65211995442706
+          },
+          {
+            "fork": 2,
+            "wall_ns": 378.23181915283203,
+            "cpu_ns": 378.13560485839844
+          },
+          {
+            "fork": 3,
+            "wall_ns": 385.63239034016925,
+            "cpu_ns": 385.7284291585286
+          }
+        ]
+      },
+      "wall_change_percent": -3.2938178284275477,
+      "cpu_change_percent": -2.212239830423357,
+      "paired_wall_changes_percent": [
+        -4.84045554404382,
+        -7.144407674800735,
+        9.041189150924357,
+        -0.1763815719320716
+      ]
+    },
+    {
+      "case": "text",
+      "size": 64,
+      "before": {
+        "wall_ns": 3444.2268880208335,
+        "cpu_ns": 3414.0509033203125,
+        "min_wall_ns": 3184.724365234375,
+        "max_wall_ns": 3688.5692749023438,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 3200.0096028645835,
+            "cpu_ns": 3188.5589599609375
+          },
+          {
+            "fork": 1,
+            "wall_ns": 3688.4441731770835,
+            "cpu_ns": 3639.5428466796875
+          },
+          {
+            "fork": 2,
+            "wall_ns": 3184.724365234375,
+            "cpu_ns": 3185.2473958333335
+          },
+          {
+            "fork": 3,
+            "wall_ns": 3688.5692749023438,
+            "cpu_ns": 3681.425577799479
+          }
+        ]
+      },
+      "after": {
+        "wall_ns": 3357.1717936197915,
+        "cpu_ns": 3356.1007690429688,
+        "min_wall_ns": 3228.1776123046875,
+        "max_wall_ns": 3689.816609700521,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 3346.3163248697915,
+            "cpu_ns": 3344.5841471354165
+          },
+          {
+            "fork": 1,
+            "wall_ns": 3368.0272623697915,
+            "cpu_ns": 3367.617390950521
+          },
+          {
+            "fork": 2,
+            "wall_ns": 3228.1776123046875,
+            "cpu_ns": 3227.66845703125
+          },
+          {
+            "fork": 3,
+            "wall_ns": 3689.816609700521,
+            "cpu_ns": 3687.68798828125
+          }
+        ]
+      },
+      "wall_change_percent": -2.527565611424243,
+      "cpu_change_percent": -1.697401003042598,
+      "paired_wall_changes_percent": [
+        4.572071342355888,
+        -8.687047865260144,
+        1.3644272498010812,
+        0.03381622263851636
+      ]
+    },
+    {
+      "case": "text",
+      "size": 512,
+      "before": {
+        "wall_ns": 26884.882161458336,
+        "cpu_ns": 26661.761881510414,
+        "min_wall_ns": 25398.371256510418,
+        "max_wall_ns": 28308.49658203125,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 25398.371256510418,
+            "cpu_ns": 24876.38671875
+          },
+          {
+            "fork": 1,
+            "wall_ns": 28308.49658203125,
+            "cpu_ns": 28059.2236328125
+          },
+          {
+            "fork": 2,
+            "wall_ns": 27080.04443359375,
+            "cpu_ns": 26838.6083984375
+          },
+          {
+            "fork": 3,
+            "wall_ns": 26689.719889322918,
+            "cpu_ns": 26484.915364583332
+          }
+        ]
+      },
+      "after": {
+        "wall_ns": 26433.873209635414,
+        "cpu_ns": 26358.856608072914,
+        "min_wall_ns": 24911.02783203125,
+        "max_wall_ns": 27672.88427734375,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 25297.058919270832,
+            "cpu_ns": 25301.77734375
+          },
+          {
+            "fork": 1,
+            "wall_ns": 27570.6875,
+            "cpu_ns": 27555.372721354168
+          },
+          {
+            "fork": 2,
+            "wall_ns": 24911.02783203125,
+            "cpu_ns": 24912.814127604168
+          },
+          {
+            "fork": 3,
+            "wall_ns": 27672.88427734375,
+            "cpu_ns": 27415.935872395832
+          }
+        ]
+      },
+      "wall_change_percent": -1.677555992674129,
+      "cpu_change_percent": -1.1361037383188166,
+      "paired_wall_changes_percent": [
+        -0.39889304796904,
+        -2.606316728595093,
+        -8.009649344857639,
+        3.683681927340654
+      ]
+    },
+    {
+      "case": "text",
+      "size": 4096,
+      "before": {
+        "wall_ns": 198756.47265625,
+        "cpu_ns": 197841.54296875,
+        "min_wall_ns": 194332.87630208334,
+        "max_wall_ns": 228578.44010416666,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 199461.57682291666,
+            "cpu_ns": 199394.8828125
+          },
+          {
+            "fork": 1,
+            "wall_ns": 198051.36848958334,
+            "cpu_ns": 196288.203125
+          },
+          {
+            "fork": 2,
+            "wall_ns": 194332.87630208334,
+            "cpu_ns": 194370.14322916666
+          },
+          {
+            "fork": 3,
+            "wall_ns": 228578.44010416666,
+            "cpu_ns": 228347.1484375
+          }
+        ]
+      },
+      "after": {
+        "wall_ns": 202922.1673177083,
+        "cpu_ns": 202494.44010416666,
+        "min_wall_ns": 201610.33723958334,
+        "max_wall_ns": 215471.96744791666,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 215471.96744791666,
+            "cpu_ns": 215529.70052083334
+          },
+          {
+            "fork": 1,
+            "wall_ns": 203373.8515625,
+            "cpu_ns": 203064.86979166666
+          },
+          {
+            "fork": 2,
+            "wall_ns": 202470.48307291666,
+            "cpu_ns": 201924.01041666666
+          },
+          {
+            "fork": 3,
+            "wall_ns": 201610.33723958334,
+            "cpu_ns": 200349.04947916666
+          }
+        ]
+      },
+      "wall_change_percent": 2.095878743361923,
+      "cpu_change_percent": 2.351830189755244,
+      "paired_wall_changes_percent": [
+        8.026804400134747,
+        2.6874255469719666,
+        4.1874575860153085,
+        -11.79818308861218
+      ]
+    },
+    {
+      "case": "wide",
+      "size": 0,
+      "before": {
+        "wall_ns": 19.74300765991211,
+        "cpu_ns": 19.743766387303673,
+        "min_wall_ns": 18.465499718983967,
+        "max_wall_ns": 20.58090305328369,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 18.465499718983967,
+            "cpu_ns": 18.46644163131714
+          },
+          {
+            "fork": 1,
+            "wall_ns": 20.58090305328369,
+            "cpu_ns": 20.45556386311849
+          },
+          {
+            "fork": 2,
+            "wall_ns": 19.110331058502197,
+            "cpu_ns": 19.11188046137492
+          },
+          {
+            "fork": 3,
+            "wall_ns": 20.37568426132202,
+            "cpu_ns": 20.375652313232422
+          }
+        ]
+      },
+      "after": {
+        "wall_ns": 18.92311485608419,
+        "cpu_ns": 18.78051002820333,
+        "min_wall_ns": 18.335514704386394,
+        "max_wall_ns": 19.186630090077717,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 18.335514704386394,
+            "cpu_ns": 18.336270650227863
+          },
+          {
+            "fork": 1,
+            "wall_ns": 18.934927463531494,
+            "cpu_ns": 18.83973757425944
+          },
+          {
+            "fork": 2,
+            "wall_ns": 18.911302248636883,
+            "cpu_ns": 18.721282482147217
+          },
+          {
+            "fork": 3,
+            "wall_ns": 19.186630090077717,
+            "cpu_ns": 19.189855257670086
+          }
+        ]
+      },
+      "wall_change_percent": -4.152826245885011,
+      "cpu_change_percent": -4.878787259758955,
+      "paired_wall_changes_percent": [
+        -0.7039344538503745,
+        -7.997586818667712,
+        -1.041472328532822,
+        -5.835652712294026
+      ]
+    },
+    {
+      "case": "wide",
+      "size": 1,
+      "before": {
+        "wall_ns": 94.89937655131023,
+        "cpu_ns": 94.68722661336264,
+        "min_wall_ns": 87.83973503112793,
+        "max_wall_ns": 107.64623641967773,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 88.18665568033855,
+            "cpu_ns": 87.82184600830078
+          },
+          {
+            "fork": 1,
+            "wall_ns": 101.6120974222819,
+            "cpu_ns": 101.51234308878581
+          },
+          {
+            "fork": 2,
+            "wall_ns": 87.83973503112793,
+            "cpu_ns": 87.86211013793945
+          },
+          {
+            "fork": 3,
+            "wall_ns": 107.64623641967773,
+            "cpu_ns": 107.00242360432942
+          }
+        ]
+      },
+      "after": {
+        "wall_ns": 72.64835262298584,
+        "cpu_ns": 72.65833536783853,
+        "min_wall_ns": 68.32906754811604,
+        "max_wall_ns": 76.31228860219319,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 69.18499565124512,
+            "cpu_ns": 69.18639500935872
+          },
+          {
+            "fork": 1,
+            "wall_ns": 76.31228860219319,
+            "cpu_ns": 76.2334696451823
+          },
+          {
+            "fork": 2,
+            "wall_ns": 68.32906754811604,
+            "cpu_ns": 68.32730929056804
+          },
+          {
+            "fork": 3,
+            "wall_ns": 76.11170959472656,
+            "cpu_ns": 76.13027572631836
+          }
+        ]
+      },
+      "wall_change_percent": -23.44696534048746,
+      "cpu_change_percent": -23.26490281046557,
+      "paired_wall_changes_percent": [
+        -21.547092224441734,
+        -24.89842200082455,
+        -22.211664773462548,
+        -29.294592986984036
+      ]
+    },
+    {
+      "case": "wide",
+      "size": 8,
+      "before": {
+        "wall_ns": 289.86845779418945,
+        "cpu_ns": 289.88548278808594,
+        "min_wall_ns": 269.3665491739909,
+        "max_wall_ns": 301.15196482340497,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 284.83510335286456,
+            "cpu_ns": 284.9430338541667
+          },
+          {
+            "fork": 1,
+            "wall_ns": 294.90181223551434,
+            "cpu_ns": 294.8279317220052
+          },
+          {
+            "fork": 2,
+            "wall_ns": 269.3665491739909,
+            "cpu_ns": 269.4097900390625
+          },
+          {
+            "fork": 3,
+            "wall_ns": 301.15196482340497,
+            "cpu_ns": 298.9671579996745
+          }
+        ]
+      },
+      "after": {
+        "wall_ns": 199.99848429361978,
+        "cpu_ns": 199.04478708902997,
+        "min_wall_ns": 179.62784576416016,
+        "max_wall_ns": 210.61551411946616,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 198.84820810953775,
+            "cpu_ns": 196.84766133626303
+          },
+          {
+            "fork": 1,
+            "wall_ns": 201.1487604777018,
+            "cpu_ns": 201.24191284179688
+          },
+          {
+            "fork": 2,
+            "wall_ns": 210.61551411946616,
+            "cpu_ns": 210.68984985351562
+          },
+          {
+            "fork": 3,
+            "wall_ns": 179.62784576416016,
+            "cpu_ns": 179.72101847330728
+          }
+        ]
+      },
+      "wall_change_percent": -31.003709125322832,
+      "cpu_change_percent": -31.336752301412396,
+      "paired_wall_changes_percent": [
+        -30.18830692957215,
+        -31.79127691590431,
+        -21.810813270869765,
+        -40.35308855796653
+      ]
+    },
+    {
+      "case": "wide",
+      "size": 64,
+      "before": {
+        "wall_ns": 2639.2835083007812,
+        "cpu_ns": 2634.5625813802085,
+        "min_wall_ns": 2526.5138549804688,
+        "max_wall_ns": 2754.8981323242188,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 2526.5138549804688,
+            "cpu_ns": 2526.777547200521
+          },
+          {
+            "fork": 1,
+            "wall_ns": 2754.8981323242188,
+            "cpu_ns": 2755.594278971354
+          },
+          {
+            "fork": 2,
+            "wall_ns": 2539.3846435546875,
+            "cpu_ns": 2529.2635091145835
+          },
+          {
+            "fork": 3,
+            "wall_ns": 2739.182373046875,
+            "cpu_ns": 2739.8616536458335
+          }
+        ]
+      },
+      "after": {
+        "wall_ns": 2003.1970825195312,
+        "cpu_ns": 2003.221638997396,
+        "min_wall_ns": 1944.9095052083333,
+        "max_wall_ns": 2286.2479248046875,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 1944.9095052083333,
+            "cpu_ns": 1945.1969401041667
+          },
+          {
+            "fork": 1,
+            "wall_ns": 2027.031717936198,
+            "cpu_ns": 2026.5915934244792
+          },
+          {
+            "fork": 2,
+            "wall_ns": 1979.3624471028645,
+            "cpu_ns": 1979.8516845703125
+          },
+          {
+            "fork": 3,
+            "wall_ns": 2286.2479248046875,
+            "cpu_ns": 2272.933349609375
+          }
+        ]
+      },
+      "wall_change_percent": -24.1007236918922,
+      "cpu_change_percent": -23.96378612695783,
+      "paired_wall_changes_percent": [
+        -23.020034053073957,
+        -26.4208104774438,
+        -22.053460781265944,
+        -16.535388541449137
+      ]
+    },
+    {
+      "case": "wide",
+      "size": 512,
+      "before": {
+        "wall_ns": 20972.90681966146,
+        "cpu_ns": 20879.081217447918,
+        "min_wall_ns": 19503.349446614582,
+        "max_wall_ns": 22590.16015625,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 19503.349446614582,
+            "cpu_ns": 19508.22265625
+          },
+          {
+            "fork": 1,
+            "wall_ns": 21993.07275390625,
+            "cpu_ns": 21994.391276041668
+          },
+          {
+            "fork": 2,
+            "wall_ns": 22590.16015625,
+            "cpu_ns": 22593.186848958332
+          },
+          {
+            "fork": 3,
+            "wall_ns": 19952.740885416668,
+            "cpu_ns": 19763.771158854168
+          }
+        ]
+      },
+      "after": {
+        "wall_ns": 15968.415690104168,
+        "cpu_ns": 15972.515462239582,
+        "min_wall_ns": 14895.569498697916,
+        "max_wall_ns": 18315.174153645832,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 15117.189615885416,
+            "cpu_ns": 15123.317057291666
+          },
+          {
+            "fork": 1,
+            "wall_ns": 18315.174153645832,
+            "cpu_ns": 17926.984049479168
+          },
+          {
+            "fork": 2,
+            "wall_ns": 16819.641764322918,
+            "cpu_ns": 16821.7138671875
+          },
+          {
+            "fork": 3,
+            "wall_ns": 14895.569498697916,
+            "cpu_ns": 14866.365559895834
+          }
+        ]
+      },
+      "wall_change_percent": -23.861695341466614,
+      "cpu_change_percent": -23.499912204508743,
+      "paired_wall_changes_percent": [
+        -22.489264434989252,
+        -16.722986557697705,
+        -25.54438902608027,
+        -25.345747813599917
+      ]
+    },
+    {
+      "case": "wide",
+      "size": 4096,
+      "before": {
+        "wall_ns": 153645.779296875,
+        "cpu_ns": 153600.37109375,
+        "min_wall_ns": 152372.04947916666,
+        "max_wall_ns": 171866.82161458334,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 154468.3828125,
+            "cpu_ns": 154360.76822916666
+          },
+          {
+            "fork": 1,
+            "wall_ns": 152823.17578125,
+            "cpu_ns": 152839.97395833334
+          },
+          {
+            "fork": 2,
+            "wall_ns": 171866.82161458334,
+            "cpu_ns": 171922.70833333334
+          },
+          {
+            "fork": 3,
+            "wall_ns": 152372.04947916666,
+            "cpu_ns": 152394.53125
+          }
+        ]
+      },
+      "after": {
+        "wall_ns": 126075.13346354166,
+        "cpu_ns": 126129.83072916667,
+        "min_wall_ns": 115040.109375,
+        "max_wall_ns": 137391.31510416666,
+        "forks": [
+          {
+            "fork": 0,
+            "wall_ns": 116463.72916666667,
+            "cpu_ns": 116506.3671875
+          },
+          {
+            "fork": 1,
+            "wall_ns": 115040.109375,
+            "cpu_ns": 115077.33072916667
+          },
+          {
+            "fork": 2,
+            "wall_ns": 135686.53776041666,
+            "cpu_ns": 135753.29427083334
+          },
+          {
+            "fork": 3,
+            "wall_ns": 137391.31510416666,
+            "cpu_ns": 137460.40364583334
+          }
+        ]
+      },
+      "wall_change_percent": -17.94429105667864,
+      "cpu_change_percent": -17.884423174874154,
+      "paired_wall_changes_percent": [
+        -24.603516236694812,
+        -24.723387806265983,
+        -21.05134866303753,
+        -9.831681352457144
+      ]
+    }
+  ],
+  "affinity": [
+    0,
+    1
+  ],
+  "platform": "Linux-6.8.0-138-generic-x86_64-with-glibc2.39",
+  "cpu": "Architecture:                            x86_64\nCPU op-mode(s):                          32-bit, 64-bit\nAddress sizes:                           48 bits physical, 48 bits virtual\nByte Order:                              Little Endian\nCPU(s):                                  2\nOn-line CPU(s) list:                     0,1\nVendor ID:                               AuthenticAMD\nModel name:                              AMD EPYC 7713 64-Core Processor\nCPU family:                              25\nModel:                                   1\nThread(s) per core:                      1\nCore(s) per socket:                      2\nSocket(s):                               1\nStepping:                                1\nBogoMIPS:                                4000.00\nFlags:                                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm rep_good nopl cpuid extd_apicid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw perfctr_core ssbd ibrs ibpb stibp vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms rdseed adx smap clflushopt clwb sha_ni xsaveopt xsavec xgetbv1 xsaves clzero xsaveerptr wbnoinvd arat umip pku ospke vaes vpclmulqdq rdpid overflow_recov succor fsrm\nHypervisor vendor:                       KVM\nVirtualization type:                     full\nL1d cache:                               128 KiB (2 instances)\nL1i cache:                               128 KiB (2 instances)\nL2 cache:                                1 MiB (2 instances)\nL3 cache:                                32 MiB (2 instances)\nNUMA node(s):                            1\nNUMA node0 CPU(s):                       0,1\nVulnerability Gather data sampling:      Not affected\nVulnerability Indirect target selection: Not affected\nVulnerability Itlb multihit:             Not affected\nVulnerability L1tf:                      Not affected\nVulnerability Mds:                       Not affected\nVulnerability Meltdown:                  Not affected\nVulnerability Mmio stale data:           Not affected\nVulnerability Reg file data sampling:    Not affected\nVulnerability Retbleed:                  Not affected\nVulnerability Spec rstack overflow:      Vulnerable: Safe RET, no microcode\nVulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl\nVulnerability Spectre v1:                Mitigation; usercopy/swapgs barriers and __user pointer sanitization\nVulnerability Spectre v2:                Mitigation; Retpolines; IBPB conditional; IBRS_FW; STIBP disabled; RSB filling; PBRSB-eIBRS Not affected; BHI Not affected\nVulnerability Srbds:                     Not affected\nVulnerability Tsa:                       Vulnerable: Clear CPU buffers attempted, no microcode\nVulnerability Tsx async abort:           Not affected\nVulnerability Vmscape:                   Not affected\n",
+  "loader_environment": {},
+  "samples_sha256": "0ce3dfa173f7cc99ceb53c274761e18e833f0b6e8b7108c19e2843f49dad1533",
+  "runner_sha256": "69d6521885e4a18e51b9bd01a29f7241e3b62608a120dcc68c8259c327bbbec0"
+}
