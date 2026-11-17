@@ -94,7 +94,7 @@
 <a href=#94 id=94 data-nosnippet>94</a>                <span class="kw">let </span>param = <span class="kw-2">&amp;</span>f.params[<span class="number">0</span>].ty.ty;
 <a href=#95 id=95 data-nosnippet>95</a>                <span class="kw">let </span>param = <span class="kw">match </span>param {
 <a href=#96 id=96 data-nosnippet>96</a>                    Type::Reference(r) <span class="kw">if </span>r.mutability.is_none() =&gt; <span class="kw-2">&amp;*</span>r.elem,
-<a href=#97 id=97 data-nosnippet>97</a>                    Type::Reference(<span class="kw">_</span>) =&gt; {
+<a href=#97 id=97 data-nosnippet>97</a>                    Type::Reference(<span class="kw">_</span>) <span class="kw">if </span>input || !same_type(param, ty) =&gt; {
 <a href=#98 id=98 data-nosnippet>98</a>                        <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"conversion helpers cannot take mutable references"</span>.into())
 <a href=#99 id=99 data-nosnippet>99</a>                    }
 <a href=#100 id=100 data-nosnippet>100</a>                    <span class="kw">_ </span>=&gt; param,
@@ -111,7 +111,7 @@
 <a href=#111 id=111 data-nosnippet>111</a>                    }
 <a href=#112 id=112 data-nosnippet>112</a>                    f.params[<span class="number">0</span>].ty.ty.clone()
 <a href=#113 id=113 data-nosnippet>113</a>                } <span class="kw">else </span>{
-<a href=#114 id=114 data-nosnippet>114</a>                    <span class="kw">if </span>!same_type(param, ty) {
+<a href=#114 id=114 data-nosnippet>114</a>                    <span class="kw">if </span>!same_type(param, ty) &amp;&amp; !same_type(<span class="kw-2">&amp;</span>f.params[<span class="number">0</span>].ty.ty, ty) {
 <a href=#115 id=115 data-nosnippet>115</a>                        <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format!</span>(
 <a href=#116 id=116 data-nosnippet>116</a>                            <span class="string">"output conversion `{name}` must take `{}` or its shared reference"</span>,
 <a href=#117 id=117 data-nosnippet>117</a>                            type_key(ty)
