@@ -241,7 +241,7 @@ dependencies = [
 
 [[package]]
 name = "prebindgen"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "if_rust_version",
  "itertools",
@@ -259,7 +259,7 @@ dependencies = [
 
 [[package]]
 name = "prebindgen-conversions"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "prebindgen-flat",
  "prettyplease",
@@ -270,7 +270,7 @@ dependencies = [
 
 [[package]]
 name = "prebindgen-declarations"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "prebindgen-conversions",
  "prebindgen-flat",
@@ -281,7 +281,7 @@ dependencies = [
 
 [[package]]
 name = "prebindgen-flat"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "prebindgen",
  "proc-macro2",
@@ -291,7 +291,7 @@ dependencies = [
 
 [[package]]
 name = "prebindgen-jni"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "prebindgen",
  "prebindgen-conversions",
@@ -306,7 +306,7 @@ dependencies = [
 
 [[package]]
 name = "prebindgen-jni-runtime"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "jni",
  "prebindgen-runtime",
@@ -314,7 +314,7 @@ dependencies = [
 
 [[package]]
 name = "prebindgen-proc-macro"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "prebindgen",
  "proc-macro2",
@@ -327,7 +327,7 @@ dependencies = [
 
 [[package]]
 name = "prebindgen-reprc"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -338,7 +338,7 @@ dependencies = [
 
 [[package]]
 name = "prebindgen-runtime"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "tracing",
 ]
