@@ -2477,3 +2477,21 @@ Adapter API migration for the logical schema:
   and propagation, and binding failures through `binding_failure_layout`.
   `mapped_error` retains the convenience for explicitly mapped String errors.
   C/JNI output signatures, typed error handlers and ownership rules are retained.
+
+## Comparison to other solutions
+
+Several tools solve adjacent parts of the Rust FFI problem:
+
+- **Language-specific generators** such as [`cbindgen`](https://github.com/mozilla/cbindgen) and `csbindgen` are mature and integrate well with their target ecosystems. Their drawback in a multi-language project is that each generator expects a slightly different Rust FFI surface, so a single hand-written `extern "C"` crate either becomes a compromise or has to be duplicated per language.
+- **[`UniFFI`](https://github.com/mozilla/uniffi-rs)** is production-ready and widely used, especially for Kotlin, Swift, and Python bindings. It supports both UDL files and proc-macros, generates Rust scaffolding plus foreign bindings, and has a strong object model with records, interfaces, errors, callbacks/foreign traits, and async functions. Its trade-off is that it owns the binding model: APIs must fit UniFFI's supported type/object model, proc-macro binding generation discovers metadata from a compiled library, complex values go through UniFFI's lifting/lowering layer, and it generates UniFFI bindings rather than source tailored for existing tools or C/C++ header generators.
+- **[`Diplomat`](https://github.com/rust-diplomat/diplomat)** provides a mature bridge-crate model and generates idiomatic bindings for several languages from one Rust-defined API. Its trade-off is the shared generated C ABI hub: all targets are shaped by the same bridge surface, which is not always ideal when different languages need different ownership, performance, or API projections.
+- **[`BoltFFI`](https://github.com/boltffi/boltffi)** is an end-to-end SDK/package generator with strong built-in support for Swift, Kotlin, Java, C#, TypeScript/WASM, async functions, streams, and platform packaging. Its trade-off is that it is a complete toolchain: it owns build, generation, and packaging, while some projects need a smaller layer that composes with existing generators and custom build logic.
+
+What makes `prebindgen` different:
+
+- **No separate tooling step**: the destination crate generates bindings from its `build.rs` by pulling the marked pieces of the source crate, then includes the generated Rust with `include!()`.
+- **Works with existing binding generators**: `prebindgen` is not intended to replace tools such as `cbindgen` or `csbindgen`; it prepares Rust source adapted and tweaked for the chosen generator when needed.
+- **Per-language ABI freedom**: destination crates choose their own adapter and wire representation instead of sharing one generated ABI for every language.
+- **Opt-in consumers**: each language-specific crate declares exactly which annotated functions and types it exports, so C, JNI, and other targets can expose different subsets of the same source crate.
+- **Cross-compilation-aware generation**: `prebindgen` has been proven in cross-compilation scenarios where the generated source depends on the destination platform.
+- **Performance-oriented projections**: adapters can specialize ownership and value passing for a target language, such as inline C value types or JNI bulk and handle projections, without constraining other backends.
