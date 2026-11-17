@@ -786,15 +786,15 @@ pub(crate) fn emit_tags<I: KotlinInputConversion, O: KotlinOutputConversion>(
             {
                 visit(node, &metadata.package, &mut packages)?;
             }
-            if let Some(error) = &metadata.error {
+            if let Some(error) = f.output_conversion()?.domain_error() {
                 visit(
-                    &error.output()?.output_outcomes().success,
+                    &error.output().output_outcomes().success,
                     &metadata.package,
                     &mut packages,
                 )?;
                 if let Some((package, _)) = error.handler.rsplit_once('.') {
                     visit(
-                        &error.output()?.output_outcomes().success,
+                        &error.output().output_outcomes().success,
                         package,
                         &mut packages,
                     )?;

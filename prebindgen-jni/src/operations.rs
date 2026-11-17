@@ -236,7 +236,11 @@ pub enum JniOutputLeafOp<
 }
 /// Single-child output operations.
 #[derive(Clone, Debug)]
-pub enum JniOutputUnary<TypeScope = Infallible, SequenceSelection = Infallible> {
+pub enum JniOutputUnary<
+    TypeScope = Infallible,
+    SequenceSelection = Infallible,
+    ErrorSelection = Infallible,
+> {
     /// Apply the child conversion at this source type, including nested occurrences.
     ConfigForType {
         /// Source type at which the child applies.
@@ -272,10 +276,10 @@ pub enum JniOutputUnary<TypeScope = Infallible, SequenceSelection = Infallible> 
         /// Explicit move/observation policy, or the source occurrence’s policy.
         mode: Option<ProjectionMode>,
     },
-    /// Convert success and route a source error through the adapter.
-    Result {
-        /// Explicit source message mapper, if selected.
-        error: Option<String>,
+    /// Configure success conversion and an optional domain-error message mapper.
+    ConfigResult {
+        /// Message mapper selected before resolving both result branches.
+        error: ErrorSelection,
     },
     /// Convert the payload only when present.
     Optional,
@@ -304,6 +308,15 @@ pub enum JniOutputBranch<
     /// Partially specified record fields, in the same order as the child conversions.
     ConfigNamedFields(RecordExpansion),
 
+    /// Complete a function with either success or a typed domain error.
+    /// Children are the ordinary Ok and Err output conversions, in that order.
+    Result {
+        /// Fully qualified Kotlin handler for the Err child.
+        handler: String,
+        /// The Err child starts with an explicit message mapper; handler overrides
+        /// replace its String payload conversion while retaining that mapper.
+        preserve_message_mapper: bool,
+    },
     /// Convert source record fields in declaration order.
     Fields,
     /// Move source record fields into their conversions.
@@ -525,12 +538,19 @@ pub(crate) fn lift_output_bulk(tree: JniOutput) -> JniOutput {
             operation: JniOutputBranch::Combine,
             children: c.into_iter().map(lift_output_bulk).collect(),
         },
-        JniOutput::Unary {
-            operation: JniOutputUnary::Result { error },
-            child: ok,
-        } => JniOutput::Unary {
-            operation: JniOutputUnary::Result { error },
-            child: Box::new(lift_output_bulk(*ok)),
+        JniOutput::Branch {
+            operation:
+                JniOutputBranch::Result {
+                    handler,
+                    preserve_message_mapper,
+                },
+            children,
+        } => JniOutput::Branch {
+            operation: JniOutputBranch::Result {
+                handler,
+                preserve_message_mapper,
+            },
+            children: children.into_iter().map(lift_output_bulk).collect(),
         },
         JniOutput::Unary {
             operation: JniOutputUnary::Getter { function },
@@ -854,7 +874,7 @@ impl From<JniOutputLeafOp> for JniOutputConfigLeafOp {
     }
 }
 /// Configuration specialization of [`JniOutputUnary`].
-pub type JniOutputConfigUnary = JniOutputUnary<Box<syn::Type>, bool>;
+pub type JniOutputConfigUnary = JniOutputUnary<Box<syn::Type>, bool, Option<String>>;
 impl From<JniOutputUnary> for JniOutputConfigUnary {
     fn from(operation: JniOutputUnary) -> Self {
         match operation {
@@ -865,7 +885,7 @@ impl From<JniOutputUnary> for JniOutputConfigUnary {
             JniOutputUnary::Named { name } => Self::Named { name },
             JniOutputUnary::Convert { conversion } => Self::Convert { conversion },
             JniOutputUnary::Sequence { delivery, mode } => Self::Sequence { delivery, mode },
-            JniOutputUnary::Result { error } => Self::Result { error },
+            JniOutputUnary::ConfigResult { error: never } => match never {},
             JniOutputUnary::Optional => Self::Optional,
             JniOutputUnary::Into { function } => Self::Into { function },
             JniOutputUnary::Getter { function } => Self::Getter { function },
@@ -880,6 +900,13 @@ impl From<JniOutputBranch> for JniOutputConfigBranch {
             JniOutputBranch::ConfigEnumFields(never) => match never {},
             JniOutputBranch::ConfigVariantFields(never) => match never {},
             JniOutputBranch::ConfigNamedFields(never) => match never {},
+            JniOutputBranch::Result {
+                handler,
+                preserve_message_mapper,
+            } => Self::Result {
+                handler,
+                preserve_message_mapper,
+            },
             JniOutputBranch::Fields => Self::Fields,
             JniOutputBranch::OwnedFields => Self::OwnedFields,
             JniOutputBranch::Record { mode } => Self::Record { mode },

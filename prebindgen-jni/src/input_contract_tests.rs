@@ -119,7 +119,6 @@ fn callback_bulk_return_requires_cached_carrier_support() {
         prepared_delivery: None,
         environment: syn::parse_quote!(env),
         domain_output: syn::parse_quote!(domain),
-        source_error_helper: None,
         return_sink: None,
         is_domain_error: false,
         output_committed: quote!(),

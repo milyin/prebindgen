@@ -236,3 +236,60 @@ fn repeated_resolution_preserves_enum_guards_and_existing_calls() {
     assert_eq!(before.rust, after.rust);
     assert_eq!(before.kotlin, after.kotlin);
 }
+
+#[test]
+fn result_resolution_keeps_both_payloads_in_the_return_tree() {
+    let configured =
+        builder("pub struct Failure {pub code:i64} pub fn send(value:i64)->Result<i64,Failure>{}")
+            .expand(expand_return!(Failure).fields_into(fields!()))
+            .package(package!().fun(fun!(send)))
+            .configure()
+            .unwrap();
+    let resolved = resolve(configured).unwrap();
+    let prebindgen_declarations::BindingState::Resolved(call) =
+        &resolved.function("send").unwrap().metadata[0].state
+    else {
+        panic!("resolved call")
+    };
+    let prebindgen_declarations::ResolvedSlot::Tree(JniOutput::Branch {
+        operation: JniOutputBranch::Result { .. },
+        children,
+    }) = &call.output
+    else {
+        panic!("Result owns both child conversions")
+    };
+    assert_eq!(children.len(), 2);
+    assert!(matches!(
+        children[1],
+        JniOutput::Branch {
+            operation: JniOutputBranch::OwnedFields,
+            ..
+        }
+    ));
+    let prepared = compile(resolved).unwrap();
+    assert_eq!(prepared.functions.len(), 1);
+    let output = &prepared.function("send").unwrap().metadata[0]
+        .call()
+        .unwrap()
+        .output;
+    assert_eq!(
+        output.domain_error().unwrap().handler(),
+        "example.FailureHandler"
+    );
+    assert_eq!(
+        group::error_wire_shape(output.output_outcomes().source_error.as_ref().unwrap()).unwrap(),
+        group::error_wire_shape(
+            &output
+                .domain_error()
+                .unwrap()
+                .output()
+                .output_outcomes()
+                .success
+        )
+        .unwrap()
+    );
+    let emitted = generate(&prepared).unwrap();
+    assert!(emitted.kotlin["example/FailureHandler.kt"].contains(": Long"));
+    assert!(!emitted.rust.contains("__pb_jni_error_"));
+    assert!(!emitted.kotlin["example/JNINative.kt"].contains("): Array<Any?>"));
+}

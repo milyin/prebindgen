@@ -3375,6 +3375,41 @@ pub fn result_other(succeed: bool) -> Result<i64, String> {
     }
 }
 
+#[prebindgen]
+pub fn result_reference_message(error: &str) -> String {
+    format!("value: {error}")
+}
+#[prebindgen]
+pub fn result_reference_borrow_message(error: &&str) -> String {
+    format!("borrow: {error}")
+}
+#[prebindgen]
+pub fn result_reference_value(succeed: bool, error: &str, valid: char) -> Result<i64, &str> {
+    let _ = valid;
+    if succeed {
+        Ok(42)
+    } else {
+        Err(error)
+    }
+}
+#[prebindgen]
+pub fn result_reference_borrow(succeed: bool, error: &str, valid: char) -> Result<Vec<i64>, &str> {
+    result_reference_value(succeed, error, valid).map(|value| vec![value])
+}
+#[prebindgen]
+pub fn result_reference_mut_message(error: &mut i64) -> String {
+    *error += 1;
+    format!("mut: {error}")
+}
+#[prebindgen]
+pub fn result_reference_mut(value: &mut Summary, succeed: bool) -> Result<i64, &mut i64> {
+    if succeed {
+        Ok(value.count)
+    } else {
+        Err(&mut value.count)
+    }
+}
+
 /// A structured error remains a structured value at the C boundary.
 #[prebindgen]
 pub struct CResultError {

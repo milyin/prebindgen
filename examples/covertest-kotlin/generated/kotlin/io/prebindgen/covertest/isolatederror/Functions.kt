@@ -12,3 +12,14 @@ onError.run(java.time.Duration.ofMillis(returnCapture.d0)) }
     nativeResult
     } finally { returnCapture.release() }
 }
+
+public fun mappedResult(milliseconds: Long, onBindingError: io.prebindgen.covertest.isolatederror.JniErrorHandler<Long> = io.prebindgen.covertest.isolatederror.JniErrorHandler { message -> throw IllegalArgumentException(message) }, onError: io.prebindgen.covertest.isolatederror.LocalErrorHandler_mapped_result_0c364167438e3e10<Long>): Long = run {
+    val result = try { run { run { val nativeArgument0 = try { milliseconds } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.isolatederror.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.isolatederror.JNINative.call_mapped_result_30adb72426881056(nativeArgument0) } } } catch (failure: io.prebindgen.covertest.isolatederror.HandleValidationFailure) { return@run onBindingError.run(failure.message) }
+    when (result[0]) {
+        null -> { result[1] as Long }
+        true -> {
+onError.run(result[1] as String) }
+        is String -> { onBindingError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}

@@ -94,8 +94,8 @@ impl Consumes for JniOutput {
                 operation: JniOutputUnary::Into { .. },
                 ..
             }
-            | JniOutput::Unary {
-                operation: JniOutputUnary::Result { .. },
+            | JniOutput::Branch {
+                operation: JniOutputBranch::Result { .. },
                 ..
             } => true,
             JniOutput::Branch {
@@ -351,21 +351,13 @@ impl<C: Codec<InOps = JniInputOps, OutOps = JniOutputOps, CompileState = JniComp
         value: TokenStream,
         borrowed: bool,
         reference_return: bool,
-    ) -> Result<CodecOutputPlan<C>> {
-        if let JniOutput::Unary {
-            operation: JniOutputUnary::Result { error },
-            child: ok,
-        } = recipe
-        {
-            return self
-                .cx
-                .output_result(ty, ok, error, extra, value, borrowed, reference_return);
-        }
-        if reference_return {
-            self.output_return(ty, recipe, extra, value, borrowed)
+    ) -> Result<C::Output> {
+        let plan = if reference_return {
+            self.output_return(ty, recipe, extra, value, borrowed)?
         } else {
-            self.output(ty, recipe, extra, value, borrowed)
-        }
+            self.output(ty, recipe, extra, value, borrowed)?
+        };
+        self.cx.finish_output_plan(plan, extra)
     }
     // Preserve reference semantics for source returns and getter results.
     // The codec checks whether a getter's owner survives the generated call.
@@ -580,8 +572,8 @@ impl<C: Codec<InOps = JniInputOps, OutOps = JniOutputOps, CompileState = JniComp
                 self.state.ordinary_collections.set(ordinary);
                 return result;
             }
-            JniOutput::Unary {
-                operation: JniOutputUnary::Result { .. },
+            JniOutput::Branch {
+                operation: JniOutputBranch::Result { .. },
                 ..
             } => {
                 return Err("Result error routing is supported only at the outermost return".into())
@@ -601,7 +593,8 @@ impl<C: Codec<InOps = JniInputOps, OutOps = JniOutputOps, CompileState = JniComp
             ) => match *never {},
             JniOutput::Unary {
                 operation:
-                    JniOutputUnary::ConfigForType { ty: never }
+                    JniOutputUnary::ConfigResult { error: never }
+                    | JniOutputUnary::ConfigForType { ty: never }
                     | JniOutputUnary::ConfigSequenceCallback { structural: never },
                 ..
             }

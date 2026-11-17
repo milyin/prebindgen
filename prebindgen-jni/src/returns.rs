@@ -370,13 +370,16 @@ mod tests {
     #[test]
     fn a_custom_error_delivery_keeps_the_whole_call_on_its_packet_protocol() {
         let mut flat = prepared();
-        let error = flat.function_mut("failed").unwrap().metadata[0]
-            .metadata
-            .error
-            .as_mut()
-            .unwrap();
-        let binding = std::rc::Rc::make_mut(error);
-        binding.output = Some(binding.output().unwrap().clone().packet_only());
+        let output = flat.function("failed").unwrap().metadata[0]
+            .call()
+            .unwrap()
+            .output
+            .domain_error()
+            .unwrap()
+            .output()
+            .clone()
+            .packet_only();
+        bind_error_output(&mut flat, "failed", output).unwrap();
         let generation = generate(&flat).unwrap();
         let functions = externs(&generation);
         let function = functions
@@ -405,13 +408,16 @@ mod tests {
             .package(package!().fun(fun!(rows).callback_return_only()))
             .prepare()
             .unwrap();
-        let error = flat.function_mut("rows").unwrap().metadata[0]
-            .metadata
-            .error
-            .as_mut()
-            .unwrap();
-        let binding = std::rc::Rc::make_mut(error);
-        binding.output = Some(binding.output().unwrap().clone().packet_only());
+        let output = flat.function("rows").unwrap().metadata[0]
+            .call()
+            .unwrap()
+            .output
+            .domain_error()
+            .unwrap()
+            .output()
+            .clone()
+            .packet_only();
+        bind_error_output(&mut flat, "rows", output).unwrap();
         let generation = generate(&flat).unwrap();
         let functions = externs(&generation);
         let function = functions
@@ -422,7 +428,9 @@ mod tests {
         let code = quote!(#function).to_string();
         // The fallback still allocates its required outer packet, but no
         // separate marker array or local reference for the collection.
-        assert_eq!(code.matches("prebindgen_jni_runtime :: array").count(), 1);
+        // One packet on the success arm and one on the inlined Err arm;
+        // they are mutually exclusive at runtime.
+        assert_eq!(code.matches("prebindgen_jni_runtime :: array").count(), 2);
         assert!(code.contains("valueOf"));
         assert!(!code.contains("new_local_ref"));
         assert!(generation.kotlin["test/Functions.kt"].contains("if (result[1] as Int == 0)"));

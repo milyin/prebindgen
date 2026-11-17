@@ -342,7 +342,6 @@ impl JniCallback {
             prepared_delivery: None,
             environment: environment.clone(),
             domain_output: format_ident!("unused_domain"),
-            source_error_helper: None,
             return_sink: None,
             is_domain_error: false,
             output_committed: quote!(),

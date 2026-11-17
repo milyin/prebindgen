@@ -293,6 +293,19 @@ pub trait KotlinOutputConversion:
     SlotFragment<'a> = prebindgen_conversions::OutputFragment<'a, JniContext>,
 >
 {
+    /// Typed Err output owned by this function-return converter, if any.
+    /// Wrappers around a Result converter must forward this together with its outcomes.
+    fn domain_error(&self) -> Option<&crate::JniDomainError> {
+        None
+    }
+    /// Replace only this Result's error payload conversion, preserving its success
+    /// conversion and any explicit message mapper. Other converters reject this.
+    fn with_domain_error(&self, _error: crate::JniDomainError) -> Result<Self>
+    where
+        Self: Sized,
+    {
+        Err("output converter does not own a Result error branch".into())
+    }
     /// Emit destination-side output conversion and rollback for this slot.
     fn kotlin(&self, context: &KotlinContext<'_>) -> Result<KotlinOutput>;
     /// Allow the adapter to select direct/capture delivery, or preserve an

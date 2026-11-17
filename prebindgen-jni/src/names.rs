@@ -9,6 +9,7 @@ pub(crate) struct Names {
     identities: BTreeMap<String, Vec<String>>,
 }
 impl Names {
+    #[cfg(test)]
     pub(crate) fn reserve(&mut self, name: &str, role: &str, parts: &[&str]) -> Result<()> {
         let identity = std::iter::once(role)
             .chain(parts.iter().copied())

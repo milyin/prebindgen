@@ -37,6 +37,19 @@ impl OutputConversion for ExternalOutput {
     }
 }
 impl KotlinOutputConversion for ExternalOutput {
+    fn domain_error(&self) -> Option<&crate::JniDomainError> {
+        self.native.domain_error()
+    }
+    fn with_domain_error(&self, error: crate::JniDomainError) -> Result<Self> {
+        Ok(ExternalOutput {
+            native: self.native.with_domain_error(error)?,
+            preparations: self.preparations.clone(),
+            projections: self.projections.clone(),
+            omit_delivery: self.omit_delivery,
+            mark_delivery: self.mark_delivery,
+        })
+    }
+
     fn kotlin(&self, context: &KotlinContext<'_>) -> Result<KotlinOutput> {
         self.native.kotlin(context)
     }
@@ -195,8 +208,7 @@ fn local_error_override_rejects_an_incompatible_wire_description() {
         &(),
     )
     .unwrap();
-    bind_error_output(&mut flat, "failed", output).unwrap();
-    let error = generate(&flat).err().unwrap();
+    let error = bind_error_output(&mut flat, "failed", output).unwrap_err();
     assert!(error.contains("domain-error converter differs"), "{error}");
 }
 
@@ -214,7 +226,6 @@ fn one_prepared_output_supports_packet_direct_and_capture_without_mutation() {
         prepared_delivery: None,
         environment: syn::parse_quote!(env),
         domain_output: syn::parse_quote!(unused_domain),
-        source_error_helper: None,
         return_sink: Some(syn::parse_quote!(capture)),
         is_domain_error: false,
         output_committed: quote!(),
@@ -331,26 +342,27 @@ fn local_error_handlers_are_independent_for_overloads() {
     for name in ["overloaded_i64", "overloaded_string"] {
         flat.function_mut(name).unwrap().metadata[0].metadata.name = "overloaded".into();
         let native = flat.function(name).unwrap().metadata[0]
-            .metadata
-            .error
-            .as_ref()
+            .call()
+            .unwrap()
+            .output
+            .domain_error()
             .unwrap()
             .output()
-            .unwrap()
             .clone();
         bind_error_output(&mut flat, name, native).unwrap();
     }
     let first = flat.function("overloaded_i64").unwrap().metadata[0]
-        .metadata
-        .error
-        .as_ref()
+        .call()
+        .unwrap()
+        .output
+        .domain_error()
         .unwrap();
     let second = flat.function("overloaded_string").unwrap().metadata[0]
-        .metadata
-        .error
-        .as_ref()
+        .call()
+        .unwrap()
+        .output
+        .domain_error()
         .unwrap();
-    assert_ne!(first.helper, second.helper);
     assert_ne!(first.handler, second.handler);
     let output = generate(&flat).unwrap();
     assert_eq!(
@@ -408,10 +420,8 @@ fn nested_error_layouts_must_match_even_with_the_same_outer_byte_array() {
             .collect::<Vec<_>>()
     };
     assert_eq!(top(old), top(&output.output_outcomes().success));
-    bind_error_output(&mut flat, "failed", output).unwrap();
-    assert!(generate(&flat)
-        .err()
-        .unwrap()
+    assert!(bind_error_output(&mut flat, "failed", output)
+        .unwrap_err()
         .contains("domain-error converter differs"));
 }
 
@@ -439,4 +449,31 @@ fn explicit_plan_delivery_edits_are_preserved_with_fixed_policy() {
     let output = generate(&flat).unwrap();
     assert!(output.rust.contains("__pb_plan_delivery_hook"));
     assert!(output.kotlin["test/JNINative.kt"].contains("): Array<Any?>"));
+}
+
+#[test]
+fn error_replacement_preserves_an_independent_root_projection() {
+    let mut flat = external(prepared());
+    let native = flat.function("failed").unwrap().metadata[0]
+        .call()
+        .unwrap()
+        .output
+        .native
+        .domain_error()
+        .unwrap()
+        .output()
+        .clone()
+        .packet_only();
+    bind_error_output(&mut flat, "failed", native).unwrap();
+    let generated = generate(&flat).unwrap();
+    assert!(generated.kotlin["test/JNINative.kt"].contains("): Array<Any?>"));
+    assert!(
+        flat.function("failed").unwrap().metadata[0]
+            .call()
+            .unwrap()
+            .output
+            .projections
+            .get()
+            > 0
+    );
 }

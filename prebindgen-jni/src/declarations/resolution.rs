@@ -159,7 +159,7 @@ impl JniSourceResolver {
                     },
                     JniOutputConfig::auto(),
                     |error, child| OutputNode::Unary {
-                        operation: JniOutputUnary::Result { error },
+                        operation: JniOutputUnary::ConfigResult { error },
                         child: Box::new(child),
                     },
                 );
@@ -668,6 +668,27 @@ impl JniSourceResolver {
             }
         }
         match tree {
+            OutputNode::Branch {
+                operation:
+                    JniOutputBranch::Result {
+                        handler,
+                        preserve_message_mapper,
+                    },
+                children,
+            } => {
+                let (ok, err) = result_parts(ty).ok_or("Result recipe requires Result<T, E>")?;
+                let [success, error] = children.as_slice() else {
+                    return Err("Result completion needs Ok and Err conversions".into());
+                };
+                Ok(OutputNode::Branch {
+                    operation: JniOutputBranch::Result {
+                        handler: handler.clone(),
+                        preserve_message_mapper: *preserve_message_mapper,
+                    },
+                    children: vec![resolve(ok, success, stack)?, resolve(err, error, stack)?],
+                })
+            }
+
             OutputNode::Unary {
                 operation: JniOutputUnary::ConfigSequenceCallback { structural },
                 child: output,
@@ -1109,7 +1130,7 @@ impl JniSourceResolver {
                 })
             }
             OutputNode::Unary {
-                operation: JniOutputUnary::Result { error },
+                operation: JniOutputUnary::ConfigResult { error },
                 child: ok,
             } => {
                 let (success, failure) =
@@ -1117,11 +1138,38 @@ impl JniSourceResolver {
                 if let Some(name) = error {
                     prebindgen_declarations::validate_error_mapper(flat, failure, name)?;
                 }
-                Ok(OutputNode::Unary {
-                    operation: JniOutputUnary::Result {
-                        error: error.clone(),
+                let handler = crate::errors::handler_name(flat, failure, error.is_some())?;
+                let failure_output = if let Some(name) = error {
+                    let conversion = ValueConversion {
+                        representation: syn::parse_quote!(String),
+                        source: prebindgen_conversions::ValueSource::Function(name.clone()),
+                    };
+                    self.resolve_output_conversion(
+                        flat,
+                        codec,
+                        failure,
+                        conversion,
+                        &JniOutputConfig::value(),
+                        extra,
+                        stack,
+                    )?
+                } else {
+                    self.output(
+                        flat,
+                        codec,
+                        failure,
+                        &JniOutputConfig::auto(),
+                        extra,
+                        stack,
+                        false,
+                    )?
+                };
+                Ok(OutputNode::Branch {
+                    operation: JniOutputBranch::Result {
+                        handler,
+                        preserve_message_mapper: error.is_some(),
                     },
-                    child: Box::new(resolve(success, ok, stack)?),
+                    children: vec![resolve(success, ok, stack)?, failure_output],
                 })
             }
         }

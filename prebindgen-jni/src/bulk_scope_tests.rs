@@ -29,13 +29,12 @@ fn prepared() -> (JniBindings, JniOutputPlan<JniWire>) {
     let recipe = sequence(sequence(JniOutput::Leaf(JniOutputLeafOp::Value))).bulk();
     let codec = JniCodec::raw();
     let mut plan = prebindgen_declarations::Compiler::new(&model, &codec, "ret".into())
-        .output_root(
+        .output_return(
             &model.function("rows").unwrap().ret.ty,
             &recipe,
             &(),
             prebindgen_conversions::source_result_expr(),
             false,
-            true,
         )
         .unwrap();
     plan.outcomes.binding_failure = codec.binding_failure_layout(&()).unwrap();

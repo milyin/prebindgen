@@ -23,6 +23,39 @@ private inline fun <reified T : Throwable> resultFailure(message: String, action
 }
 
 fun checkResults() {
+    val referenceMessage = "borrowed 世界"
+    check(resultReferenceValue(true, referenceMessage, 65, onError = { error(it) }) == 42L)
+    check(resultReferenceBorrow(true, referenceMessage, 65, onError = { error(it) }) == listOf(42L))
+    check(resultReferenceValue(false, referenceMessage, 65, onError = {
+        check(it == "value: $referenceMessage")
+        // The mapper's borrowed source has already been copied across JNI.
+        resultReferenceValue(true, "reentrant", 65, onError = { error(it) })
+    }) == 42L)
+    check(resultReferenceBorrow(false, referenceMessage, 65, onError = {
+        check(it == "borrow: $referenceMessage"); listOf(17L)
+    }) == listOf(17L))
+    check(resultReferenceBorrowFold(true, referenceMessage, 65, 1L, onError = { error(it) }) { acc, value -> acc + value } == 43L)
+    check(resultReferenceBorrowFold(false, referenceMessage, 65, 0L, onError = {
+        check(it == "borrow: $referenceMessage"); 23L
+    }) { _, _ -> error("success callback for Err") } == 23L)
+    check(resultReferenceValue(false, referenceMessage, 0xd800,
+        onBindingError = JniErrorHandler { 29L }, onError = { error("domain callback for binding failure") }) == 29L)
+    check(resultReferenceBorrowFold(false, referenceMessage, 0xd800, 0L,
+        onBindingError = JniErrorHandler { 31L }, onError = { error("domain callback for binding failure") }) { _, _ ->
+        error("success callback for binding failure")
+    } == 31L)
+    io.prebindgen.covertest.storage.storageNew().use { storage ->
+        storageSummaryHandle(storage).use { summary ->
+            check(resultReferenceMut(summary, false, onError = {
+                check(it == "mut: 1")
+                val unlocked = java.util.concurrent.atomic.AtomicBoolean(false)
+                val worker = Thread { synchronized(summary) { unlocked.set(true) } }.also { it.isDaemon = true; it.start() }
+                worker.join(3000)
+                check(!worker.isAlive && unlocked.get()) { "domain callback ran while the handle monitor was held" }
+                resultReferenceMut(summary, true, onError = { error(it) })
+            }) == 1L)
+        }
+    }
     check(resultUnitError(false, onError = { error("unexpected unit error") }) == 42L)
     check(resultUnitError(true, onError = { 17L }) == 17L)
     // The getter's .name("code") survives preparation into the handler API.

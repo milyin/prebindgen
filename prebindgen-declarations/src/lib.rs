@@ -337,18 +337,14 @@ fn compile_output_at<C: Codec>(
     position: OutputPosition,
 ) -> Result<C::Output> {
     let value = prebindgen_conversions::source_result_expr();
-    let mut plan = match position {
+    match position {
         OutputPosition::Return => Compiler::new(flat, codec, "ret".into())
-            .output_root(ty, recipe, extra, value, false, true)?,
+            .output_root(ty, recipe, extra, value, false, true),
         OutputPosition::CallbackArgument { index, borrowed } => {
             Compiler::new(flat, codec, format!("callback_arg_{index}"))
-                .output_root(ty, recipe, extra, value, borrowed, true)?
+                .output_root(ty, recipe, extra, value, borrowed, true)
         }
-    };
-    finalize_output_schema(codec, &mut plan, extra)?;
-    codec.finish_output(&mut plan, extra)?;
-    codec.validate_output(&plan)?;
-    Ok(plan.into())
+    }
 }
 
 fn finalize_output_schema<C: Codec>(
@@ -383,6 +379,17 @@ pub struct Compiler<'a, C: Codec> {
 }
 #[allow(missing_docs, clippy::too_many_arguments)]
 impl<'a, C: Codec> Compiler<'a, C> {
+    /// Finish a root's value plan using the adapter's ordinary delivery and validation.
+    pub fn finish_output_plan(
+        &self,
+        mut plan: CodecOutputPlan<C>,
+        extra: &C::Extra,
+    ) -> Result<C::Output> {
+        finalize_output_schema(self.codec, &mut plan, extra)?;
+        self.codec.finish_output(&mut plan, extra)?;
+        self.codec.validate_output(&plan)?;
+        Ok(plan.into())
+    }
     pub fn new(flat: &'a Flat<C::Schema>, codec: &'a C, prefix: String) -> Self {
         Self {
             input_role: std::cell::Cell::new(InputRole::Parameter),
@@ -423,7 +430,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
         value: TokenStream,
         borrowed: bool,
         reference_return: bool,
-    ) -> Result<CodecOutputPlan<C>> {
+    ) -> Result<C::Output> {
         self.codec
             .compile_output_root(self, ty, recipe, extra, value, borrowed, reference_return)
     }
