@@ -94,7 +94,7 @@ impl DeclConvertSource {
                 let param = &f.params[0].ty.ty;
                 let param = match param {
                     Type::Reference(r) if r.mutability.is_none() => &*r.elem,
-                    Type::Reference(_) => {
+                    Type::Reference(_) if input || !same_type(param, ty) => {
                         return Err("conversion helpers cannot take mutable references".into())
                     }
                     _ => param,
@@ -111,7 +111,7 @@ impl DeclConvertSource {
                     }
                     f.params[0].ty.ty.clone()
                 } else {
-                    if !same_type(param, ty) {
+                    if !same_type(param, ty) && !same_type(&f.params[0].ty.ty, ty) {
                         return Err(format!(
                             "output conversion `{name}` must take `{}` or its shared reference",
                             type_key(ty)

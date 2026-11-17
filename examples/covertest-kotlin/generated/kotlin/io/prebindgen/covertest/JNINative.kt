@@ -529,6 +529,9 @@ internal object JNINative {
     @JvmStatic external fun call_c_result_resource_error_f29a434ac3a17580(p0_w1: Boolean, returns: Return_Empty_ErrorLong_String2_a3fb4f88f2014cb0): Unit
     @JvmStatic external fun call_c_result_rich_error_e97eeeaedd2fcd23(p0_w1: Boolean, returns: Return_Empty_ErrorInt_String2_b786195c4ed75c25): Unit
     @JvmStatic external fun call_result_scalar_717ad7e5f39fb113(p0_w1: Long, returns: Return_Empty_ErrorLong1_5ff51b1265add9de): Long
+    @JvmStatic external fun call_result_reference_value_379e5b8ace1e6589(p0_w1: Boolean, p1_w1: String?, p2_w1: Int, returns: Return_Empty_ErrorString1_6b62d91b16305083): Long
+    @JvmStatic external fun call_result_reference_borrow_c6dadc96c75a7900(p0_w1: Boolean, p1_w1: String?, p2_w1: Int, returns: Return_Empty_ErrorString1_6b62d91b16305083): ByteArray?
+    @JvmStatic external fun call_result_reference_mut_8a8b88f27a6a317f(p0_w1: Long, p1_w1: Boolean, returns: Return_Empty_ErrorString1_6b62d91b16305083): Long
     @JvmStatic external fun call_result_unit_error_6007a70d185fe955(p0_w1: Boolean, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_result_unit_fc0177d655b15009(p0_w1: Boolean, returns: Return_Empty_ErrorLong1_5ff51b1265add9de): Unit
     @JvmStatic external fun call_result_optional_01608adeaf654d25(p0_w1: Int, returns: Return_Empty_ErrorLong1_5ff51b1265add9de): Int
@@ -902,6 +905,13 @@ internal object JNINative {
         override fun run(v0: Long, v1: Int, v2: Double, v3: Boolean) { rows.add(SequenceRow_Long_Int_Double_4_5e82f5e29d89a757(v0, v1, v2, v3)) }
     }
     @JvmStatic external fun call_storage_get_vec_fold_3251bfb51da9217c(p0_w1: Long, callback: SequenceSink_storage_get_vec_fold_886389afd9ad2e6a, outputAccepted: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Int
+    internal interface SequenceSink_result_reference_borrow_fold_77b3ca0518a3a6b3 : SequenceCapacity { fun run(v0: Long) }
+    internal class SequenceCollector_result_reference_borrow_fold_f644ab2e98c9a174 : SequenceSink_result_reference_borrow_fold_77b3ca0518a3a6b3 {
+        @JvmField val rows = kotlin.collections.ArrayList<SequenceRow_Long_1_127a3c24b600dbe0>()
+        override fun reserve(capacity: Int) { rows.ensureCapacity(capacity) }
+        override fun run(v0: Long) { rows.add(SequenceRow_Long_1_127a3c24b600dbe0(v0)) }
+    }
+    @JvmStatic external fun call_result_reference_borrow_fold_8f5acc8cfca656bd(p0_w1: Boolean, p1_w1: String?, p2_w1: Int, callback: SequenceSink_result_reference_borrow_fold_77b3ca0518a3a6b3, outputAccepted: BooleanArray, returns: Return_Empty_ErrorString1_6b62d91b16305083): Int
     internal interface SequenceSink_api_record_rows_fold_5bd1116027b7610c : SequenceCapacity { fun run(v0: Long, v1: String?) }
     internal class SequenceCollector_api_record_rows_fold_3cd13ff4cf046193 : SequenceSink_api_record_rows_fold_5bd1116027b7610c {
         @JvmField val rows = kotlin.collections.ArrayList<SequenceRow_Long_String_2_3ea2c8aa47ab7590>()

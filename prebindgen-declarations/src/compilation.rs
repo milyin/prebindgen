@@ -718,14 +718,15 @@ impl<C: Codec> Compiler<'_, C> {
         borrowed: bool,
     ) -> Result<(syn::Ident, TokenStream, bool)> {
         crate::convert::validate_conversion(self.flat, ty, conversion, false)?;
-        let borrowed = borrowed || matches!(ty, Type::Reference(_));
         let source = self.name();
         let (expr, fallible) = match &conversion.source {
             ValueSource::Function(name) => {
                 let f = self.flat.function(name)?;
                 let path = &f.path;
-                let shared =
-                    matches!(&f.params[0].ty.ty,Type::Reference(r) if r.mutability.is_none());
+                // A reference-valued source can be passed as E or borrowed as
+                // &E. Its type alone does not mean this occurrence borrows E.
+                let shared = matches!(&f.params[0].ty.ty,Type::Reference(r) if r.mutability.is_none())
+                    && !same_type(&f.params[0].ty.ty, ty);
                 if !shared && borrowed {
                     return Err(format!("consuming conversion `{name}` cannot convert a borrowed source; use a shared-reference conversion"));
                 }

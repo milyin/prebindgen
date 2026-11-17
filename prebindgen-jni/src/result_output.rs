@@ -299,6 +299,53 @@ mod tests {
     use super::*;
 
     #[test]
+    fn reference_error_mappers_preserve_e_and_shared_e_arguments() {
+        let calls = regex::Regex::new(r"crate::message\((&?)[a-zA-Z0-9_]+\)").unwrap();
+        for error in ["&str", "&i64", "&mut i64"] {
+            for shared in [false, true] {
+                for default in [false, true] {
+                    for success in ["i64", "Vec<i64>"] {
+                        let parameter = if shared {
+                            format!("&{error}")
+                        } else {
+                            error.into()
+                        };
+                        let source = syn::parse_file(&format!(
+                            "pub fn read(lifetime: &str)->Result<{success},{error}>{{}} \
+                         pub fn message(error: {parameter})->String{{}}"
+                        ))
+                        .unwrap();
+                        let mut builder = JniGen::builder()
+                            .items(
+                                source
+                                    .items
+                                    .into_iter()
+                                    .map(|item| (item, Default::default())),
+                            )
+                            .set_package_prefix("test");
+                        let mut function = fun!(read);
+                        if success == "Vec<i64>" {
+                            function = function.callback_return();
+                        }
+                        if default {
+                            builder =
+                                builder.error_mapper(syn::parse_str(error).unwrap(), fun!(message));
+                        } else {
+                            function = function.on_error(fun!(message));
+                        }
+                        let generated = builder.package(package!().fun(function)).build().unwrap();
+                        let arguments: Vec<_> = calls.captures_iter(&generated.rust).collect();
+                        assert_eq!(arguments.len(), if success == "i64" { 1 } else { 2 });
+                        for argument in arguments {
+                            assert_eq!(&argument[1], if shared { "&" } else { "" });
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
     fn same_handler_name_requires_the_complete_kotlin_signature_to_match() {
         let source = syn::parse_file(
             "pub fn first()->Result<i64,i64>{} pub fn second()->Result<i64,String>{}",
