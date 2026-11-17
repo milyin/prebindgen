@@ -41,14 +41,6 @@ pub(crate) fn nodes<I: KotlinInputConversion, O: KotlinOutputConversion>(
                     .chain(outcomes.binding_failure.iter())
                     .map(BoundaryNode::Output),
             );
-            if let Some(output) = binding
-                .metadata
-                .error
-                .as_deref()
-                .and_then(|e| e.output.as_ref())
-            {
-                nodes.push(BoundaryNode::Output(&output.output_outcomes().success));
-            }
         }
     }
     for input in crate::callback::declarations(flat)? {
@@ -98,7 +90,6 @@ pub struct JniFunction {
     pub name: String,
     /// Declaration order used when rendering functions.
     pub order: usize,
-    pub(crate) error: Option<Rc<errors::ErrorBinding>>,
 }
 /// Kotlin/JNI declaration information shared by occurrences of a Rust type.
 #[derive(Clone, Debug, Default)]
@@ -113,7 +104,6 @@ pub struct JniType {
     /// Canonical value conversions selected for this source type.
     pub conversion: prebindgen_conversions::ValueConversions,
     pub(crate) class: Option<Rc<Class>>,
-    pub(crate) errors: BTreeMap<bool, Rc<errors::ErrorBinding>>,
     pub(crate) error_class: Option<String>,
 }
 

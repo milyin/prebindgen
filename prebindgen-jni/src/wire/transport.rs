@@ -166,7 +166,6 @@ impl JniWire {
     ///     prepared_delivery: None,
     ///     environment: syn::parse_quote!(env),
     ///     domain_output: syn::parse_quote!(domain_output),
-    ///     source_error_helper: None,
     ///     return_sink: None,
     ///     is_domain_error: false,
     ///     output_committed: quote!(),

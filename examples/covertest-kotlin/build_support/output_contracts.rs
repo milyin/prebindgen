@@ -66,6 +66,13 @@ impl DurationOutput {
     }
 }
 impl KotlinOutputConversion for DurationOutput {
+    fn domain_error(&self) -> Option<&prebindgen_jni::JniDomainError> {
+        self.0.domain_error()
+    }
+    fn with_domain_error(&self, error: prebindgen_jni::JniDomainError) -> Result<Self> {
+        Ok(DurationOutput(self.0.with_domain_error(error)?))
+    }
+
     fn kotlin(&self, context: &KotlinContext<'_>) -> Result<KotlinOutput> {
         Self::project(self.0.kotlin(context)?)
     }
@@ -264,9 +271,10 @@ pub fn generate() -> Result<JniGen> {
 }
 
 // This module contains only the export with a replaced error converter. Its
-// native code must not depend on another export retaining the old shared helper.
+// native code must retain the local Err converter without another export.
+// The second export checks that replacement preserves its explicit message mapper.
 pub fn generate_isolated_error() -> Result<JniGen> {
-    let items = syn::parse_file("pub fn duration_result(milliseconds:i64)->Result<i64,i64>{}")
+    let items = syn::parse_file("pub fn duration_result(milliseconds:i64)->Result<i64,i64>{} pub fn mapped_result(milliseconds:i64)->Result<i64,i64>{} pub fn mapped_message(error:&i64)->String{}")
         .map_err(|e| e.to_string())?
         .items;
     let mut flat = JniGen::builder()
@@ -281,7 +289,11 @@ pub fn generate_isolated_error() -> Result<JniGen> {
         }))
         .set_package_prefix("io.prebindgen.covertest.isolatederror")
         .set_jni_native_init("io.prebindgen.covertest.NativeLibrary.ensureLoaded()")
-        .package(package!().fun(fun!(duration_result)))
+        .package(
+            package!()
+                .fun(fun!(duration_result))
+                .fun(fun!(mapped_result).on_error(fun!(mapped_message))),
+        )
         .prepare()?;
     let output = prebindgen_declarations::compile_output_value(
         &JniBindings::parse([])?,
@@ -291,15 +303,32 @@ pub fn generate_isolated_error() -> Result<JniGen> {
         &(),
     )?;
     prebindgen_jni::bind_error_output(&mut flat, "duration_result", DurationOutput(output))?;
-    // Reconfiguration must retain the new error helper as well as the prepared result.
+    let message = prebindgen_declarations::compile_output_value(
+        &JniBindings::parse([])?,
+        &prebindgen_jni::JniCodec::raw(),
+        &syn::parse_quote!(String),
+        &prebindgen_jni::JniOutput::Leaf(prebindgen_jni::JniOutputLeafOp::Value),
+        &(),
+    )?;
+    // Preserve fixed packet delivery and a mapper whose Rust input is i64,
+    // while the replacement converter consumes the mapped String payload.
+    prebindgen_jni::bind_error_output(&mut flat, "mapped_result", message.packet_only())?;
+    // Input reconfiguration retains the complete result, including both local Err converters.
     let flat = JniGen::builder()
         .flat(flat)
         .set_package_prefix("io.prebindgen.covertest.isolatederror")
         .set_jni_native_init("io.prebindgen.covertest.NativeLibrary.ensureLoaded()")
-        .package(package!().fun(fun!(duration_result).expand_param(
-            "milliseconds",
-            prebindgen_jni::JniInputConfig::Leaf(prebindgen_jni::JniInputLeafOp::Value),
-        )))
+        .package(
+            package!()
+                .fun(fun!(duration_result).expand_param(
+                    "milliseconds",
+                    prebindgen_jni::JniInputConfig::Leaf(prebindgen_jni::JniInputLeafOp::Value),
+                ))
+                .fun(fun!(mapped_result).expand_param(
+                    "milliseconds",
+                    prebindgen_jni::JniInputConfig::Leaf(prebindgen_jni::JniInputLeafOp::Value),
+                )),
+        )
         .prepare()?;
     prebindgen_jni::generate(&flat)
 }

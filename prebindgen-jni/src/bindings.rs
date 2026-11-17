@@ -102,7 +102,7 @@ fn install_one(
     flat: &mut JniBindings,
     source: &str,
     name: String,
-    mut metadata: JniFunction,
+    metadata: JniFunction,
     decl: DeclJniFunction,
     inherited_inputs: Option<
         Vec<prebindgen_declarations::ConfiguredSlot<JniInputConfig, JniInputConverter>>,
@@ -115,19 +115,13 @@ fn install_one(
     });
     let previous =
         previous_index.map(|index| flat.function_mut(source).unwrap().metadata.remove(index));
-    let preserve_output = decl.ret.is_none() && decl.error.is_none() && !decl.result_value;
     let previous = match previous {
         None => None,
-        Some(binding) => {
-            if preserve_output {
-                metadata.error = binding.metadata.error;
-            }
-            match binding.state {
-                BindingState::Prepared(call) => Some(call.into()),
-                BindingState::Configured(call) => Some(call),
-                _ => return Err(format!("duplicate binding `{name}`")),
-            }
-        }
+        Some(binding) => match binding.state {
+            BindingState::Prepared(call) => Some(call.into()),
+            BindingState::Configured(call) => Some(call),
+            _ => return Err(format!("duplicate binding `{name}`")),
+        },
     };
     let mut call = ConfiguredCall::from_declaration(flat.function(source)?, decl, previous)?;
     if let Some(inputs) = inherited_inputs {

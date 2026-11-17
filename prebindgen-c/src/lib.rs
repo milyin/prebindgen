@@ -190,15 +190,16 @@ impl Codec for CCodec {
         value: TokenStream,
         borrowed: bool,
         reference_return: bool,
-    ) -> Result<prebindgen_declarations::CodecOutputPlan<Self>> {
-        compilation::CCompiler { cx }.output_root(
+    ) -> Result<Self::Output> {
+        let plan = compilation::CCompiler { cx }.output_root(
             ty,
             tree,
             extra,
             value,
             borrowed,
             reference_return,
-        )
+        )?;
+        cx.finish_output_plan(plan, extra)
     }
     fn compile_output_return(
         &self,

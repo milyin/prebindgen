@@ -405,8 +405,7 @@ fn unrelated_declarations_and_reordering_preserve_existing_native_bindings() {
     }
     let original = generate_example(false, false);
     let functions = rust_functions(&original);
-    assert!(original.rust.contains("__pb_jni_error_Error_typed_"));
-    assert!(original.rust.contains("__pb_jni_error_Error_mapped_"));
+    assert!(!original.rust.contains("__pb_jni_error_"));
     assert!(original.kotlin["test/JNINative.kt"].contains("SequenceSink_values_fold_"));
     assert!(original.kotlin["test/api/Handle.kt"].contains("JNINative.drop_Handle_"));
     for reverse in [false, true] {
@@ -1386,14 +1385,15 @@ fn logical_outcomes_keep_typed_errors_and_match_both_jni_sequence_deliveries() {
     let decl = fun!(f).callback_return();
     flat.metadata.package = "test".into();
     bindings::install(&mut flat, decl, None).unwrap();
-    errors::resolve(&mut flat, &codec, &defaults).unwrap();
     bindings::resolve_with(&mut flat, &defaults, &codec, &()).unwrap();
     codec.compile_declarations(&mut flat, &()).unwrap();
     bindings::compile_with(&mut flat, &codec, &()).unwrap();
     assert_eq!(flat.functions.len(), 2); // f plus its explicit error accessor
     assert!(flat.function("f").unwrap().metadata[0]
-        .metadata
-        .error
+        .call()
+        .unwrap()
+        .output
+        .domain_error()
         .is_some());
     let ordinary = test_export(&flat, "f");
     let output = ordinary.output_conversion().unwrap();
@@ -1600,16 +1600,12 @@ fn emission_reads_only_the_prepared_flat_and_shared_source_metadata() {
         "kotlin.String?"
     );
     let error = prepared.function("echo").unwrap().metadata[0]
-        .metadata
-        .error
-        .as_ref()
-        .unwrap();
-    let shared = &prepared
-        .type_info(&syn::parse_quote!(String))
+        .call()
         .unwrap()
-        .metadata
-        .errors[&false];
-    assert!(std::rc::Rc::ptr_eq(error, shared));
+        .output
+        .domain_error()
+        .unwrap();
+    assert_eq!(error.handler(), "test.StringHandler");
     let first = generate(&prepared).unwrap();
     let second = generate(&prepared.clone()).unwrap();
     assert_eq!(first.rust, second.rust);
@@ -1720,7 +1716,6 @@ fn explicit_view_names_reach_builders_and_duplicate_parameters_are_rejected() {
 
 #[test]
 fn preparation_uses_module_placement_and_error_selection_from_flat() {
-    use std::rc::Rc;
     let source="pub type E=String;pub fn code(e:&E)->i64{}pub fn message(e:&E)->String{}pub fn rows()->Result<Vec<i64>,E>{}pub fn mapped()->Result<i64,E>{}";
     let prepared = JniGen::builder()
         .flat(flat(source))
@@ -1746,13 +1741,20 @@ fn preparation_uses_module_placement_and_error_selection_from_flat() {
         })
         .prepare()
         .unwrap();
-    let ty = prepared.resolve_type(&syn::parse_quote!(E)).unwrap();
-    let errors = &prepared.type_info(&ty).unwrap().metadata.errors;
-    assert_eq!(errors.len(), 2);
-    let rows = test_export(&prepared, "rows_fold").metadata;
-    let mapped = &prepared.function("mapped").unwrap().metadata[0].metadata;
-    assert!(Rc::ptr_eq(rows.error.as_ref().unwrap(), &errors[&false]));
-    assert!(Rc::ptr_eq(mapped.error.as_ref().unwrap(), &errors[&true]));
+    let rows_binding = test_export(&prepared, "rows_fold");
+    let rows = rows_binding
+        .output_conversion()
+        .unwrap()
+        .domain_error()
+        .unwrap();
+    let mapped = prepared.function("mapped").unwrap().metadata[0]
+        .call()
+        .unwrap()
+        .output
+        .domain_error()
+        .unwrap();
+    assert_eq!(rows.handler(), "canonical.EHandler");
+    assert_eq!(mapped.handler(), "canonical.EMessageHandler");
     assert!(!prepared
         .functions
         .keys()
@@ -1841,7 +1843,7 @@ fn completing_flat_again_preserves_prepared_enum_overrides() {
 }
 
 #[test]
-fn extending_prepared_flat_keeps_error_helpers_unique_and_existing_projections() {
+fn extending_prepared_flat_keeps_error_outputs_independent_and_existing_projections() {
     let source="pub type E=String;pub type F=String;pub fn code(e:&E)->i64{}pub fn message(f:&F)->String{}pub fn first()->Result<i64,E>{}pub fn second()->Result<i64,F>{}";
     let initial = JniGen::builder()
         .flat(flat(source))
@@ -1851,9 +1853,10 @@ fn extending_prepared_flat_keeps_error_helpers_unique_and_existing_projections()
         .prepare()
         .unwrap();
     let original = initial.function("first").unwrap().metadata[0]
-        .metadata
-        .error
-        .as_ref()
+        .call()
+        .unwrap()
+        .output
+        .domain_error()
         .unwrap()
         .clone();
     let extended = JniGen::builder()
@@ -1864,17 +1867,19 @@ fn extending_prepared_flat_keeps_error_helpers_unique_and_existing_projections()
         .prepare()
         .unwrap();
     let first = extended.function("first").unwrap().metadata[0]
-        .metadata
-        .error
-        .as_ref()
+        .call()
+        .unwrap()
+        .output
+        .domain_error()
         .unwrap();
     let second = extended.function("second").unwrap().metadata[0]
-        .metadata
-        .error
-        .as_ref()
+        .call()
+        .unwrap()
+        .output
+        .domain_error()
         .unwrap();
-    assert!(std::rc::Rc::ptr_eq(first, &original));
-    assert_ne!(first.helper, second.helper);
+    assert_eq!(first.handler, original.handler);
+    assert_ne!(first.handler, second.handler);
     let generated = generate(&extended).unwrap();
     assert!(generated.kotlin["test/EHandler.kt"].contains("Long"));
     assert!(generated.kotlin["test/FHandler.kt"].contains("String"));
@@ -4619,20 +4624,21 @@ fn input_only_reconfiguration_preserves_mapped_and_custom_error_outputs() {
             .prepare().unwrap();
         if custom {
             let output = prepared.function("send").unwrap().metadata[0]
-                .metadata
-                .error
-                .as_ref()
+                .call()
+                .unwrap()
+                .output
+                .domain_error()
                 .unwrap()
                 .output()
-                .unwrap()
                 .clone()
                 .packet_only();
             bind_error_output(&mut prepared, "send", output).unwrap();
         }
         let previous = prepared.function("send").unwrap().metadata[0]
-            .metadata
-            .error
-            .as_ref()
+            .call()
+            .unwrap()
+            .output
+            .domain_error()
             .unwrap()
             .clone();
         let prepared = JniGen::builder()
@@ -4644,11 +4650,12 @@ fn input_only_reconfiguration_preserves_mapped_and_custom_error_outputs() {
             .prepare()
             .unwrap();
         let current = prepared.function("send").unwrap().metadata[0]
-            .metadata
-            .error
-            .as_ref()
+            .call()
+            .unwrap()
+            .output
+            .domain_error()
             .unwrap();
-        assert!(std::rc::Rc::ptr_eq(&previous, current));
+        assert_eq!(previous.handler, current.handler);
         let generated = generate(&prepared).unwrap();
         assert!(generated.kotlin["test/Functions.kt"].contains(&current.handler));
     }

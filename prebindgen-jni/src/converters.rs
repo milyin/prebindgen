@@ -1,4 +1,4 @@
-//! Retain heterogeneous converters in callback/error metadata, only at generation time.
+//! Retain heterogeneous converters in prepared calls and callbacks during generation.
 use super::*;
 use prebindgen_conversions::{Delivery, DeliveryPolicy, InputFragment, OutputFragment};
 
@@ -103,6 +103,8 @@ impl KotlinInputConversion for JniInputConverter {
 }
 
 trait OutputProvider {
+    fn domain_error(&self) -> Option<&crate::JniDomainError>;
+    fn with_domain_error(&self, error: crate::JniDomainError) -> Result<JniOutputConverter>;
     fn outcomes(&self) -> &Outcomes<JniOutputWireNode>;
     fn fragment(
         &self,
@@ -124,7 +126,15 @@ trait OutputProvider {
     ) -> Result<KotlinOutput>;
     fn kotlin_return(&self, context: &KotlinReturnContext<'_>) -> Result<KotlinOutput>;
 }
-impl<T: KotlinOutputConversion> OutputProvider for T {
+impl<T: KotlinOutputConversion + 'static> OutputProvider for T {
+    fn domain_error(&self) -> Option<&crate::JniDomainError> {
+        KotlinOutputConversion::domain_error(self)
+    }
+    fn with_domain_error(&self, error: crate::JniDomainError) -> Result<JniOutputConverter> {
+        Ok(JniOutputConverter::new(
+            KotlinOutputConversion::with_domain_error(self, error)?,
+        ))
+    }
     fn outcomes(&self) -> &Outcomes<JniOutputWireNode> {
         self.output_outcomes()
     }
@@ -224,6 +234,14 @@ impl OutputConversion for JniOutputConverter {
     }
 }
 impl KotlinOutputConversion for JniOutputConverter {
+    fn domain_error(&self) -> Option<&crate::JniDomainError> {
+        self.provider.domain_error()
+    }
+    fn with_domain_error(&self, error: crate::JniDomainError) -> Result<JniOutputConverter> {
+        let mut output = self.provider.with_domain_error(error)?;
+        output.packet_only |= self.packet_only;
+        Ok(output)
+    }
     fn kotlin(&self, context: &KotlinContext<'_>) -> Result<KotlinOutput> {
         self.provider.kotlin(context)
     }

@@ -684,10 +684,42 @@ impl<C: Codec> Compiler<'_, C> {
         value: TokenStream,
         borrowed: bool,
     ) -> Result<CodecOutputPlan<C>> {
+        let borrowed = borrowed || matches!(ty, Type::Reference(_));
+        let (repr, preparation, fallible) =
+            self.prepare_output_conversion(ty, conversion, value, borrowed)?;
+        let mut child = self.output_return(
+            &conversion.representation,
+            output,
+            extra,
+            quote!(#repr),
+            false,
+        )?;
+        self.codec.validate_getter_output(
+            self.flat,
+            ty,
+            borrowed && !self.temporary_receiver.get(),
+            &conversion.representation,
+            &child,
+            extra,
+        )?;
+        let prepared = child.statements;
+        child.statements = quote!(#preparation #prepared);
+        child.fallible |= fallible;
+        Ok(child)
+    }
+
+    /// Prepare a Rust value conversion before compiling its outgoing representation.
+    /// The returned local is available within the generated preparation's scope.
+    pub fn prepare_output_conversion(
+        &self,
+        ty: &Type,
+        conversion: &ValueConversion,
+        value: TokenStream,
+        borrowed: bool,
+    ) -> Result<(syn::Ident, TokenStream, bool)> {
         crate::convert::validate_conversion(self.flat, ty, conversion, false)?;
         let borrowed = borrowed || matches!(ty, Type::Reference(_));
         let source = self.name();
-        let repr = self.name();
         let (expr, fallible) = match &conversion.source {
             ValueSource::Function(name) => {
                 let f = self.flat.function(name)?;
@@ -731,25 +763,12 @@ impl<C: Codec> Compiler<'_, C> {
         } else {
             expr
         };
-        let mut child = self.output_return(
-            &conversion.representation,
-            output,
-            extra,
-            quote!(#repr),
-            false,
-        )?;
-        self.codec.validate_getter_output(
-            self.flat,
-            ty,
-            borrowed && !self.temporary_receiver.get(),
-            &conversion.representation,
-            &child,
-            extra,
-        )?;
-        let prepared = child.statements;
-        child.statements = quote!(let #source=#value;let #repr=#expr;#prepared);
-        child.fallible |= fallible;
-        Ok(child)
+        let repr = self.name();
+        Ok((
+            repr.clone(),
+            quote!(let #source=#value; let #repr=#expr;),
+            fallible,
+        ))
     }
 
     #[allow(clippy::too_many_arguments)]

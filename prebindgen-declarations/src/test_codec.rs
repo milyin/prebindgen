@@ -837,15 +837,16 @@ macro_rules! test_operations {
             value: proc_macro2::TokenStream,
             borrowed: bool,
             reference_return: bool,
-        ) -> prebindgen_flat::Result<crate::CodecOutputPlan<Self>> {
-            crate::test_codec::TestCompiler { cx }.output_root(
+        ) -> prebindgen_flat::Result<Self::Output> {
+            let plan = crate::test_codec::TestCompiler { cx }.output_root(
                 ty,
                 tree,
                 extra,
                 value,
                 borrowed,
                 reference_return,
-            )
+            )?;
+            cx.finish_output_plan(plan, extra)
         }
         fn compile_output_return(
             &self,

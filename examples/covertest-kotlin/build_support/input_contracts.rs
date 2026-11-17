@@ -70,9 +70,11 @@ pub fn generate() -> Result<JniGen> {
     )?;
     flat.metadata.package = "io.prebindgen.covertest.inputcontracts".into();
     flat.metadata.native_init = "io.prebindgen.covertest.NativeLibrary.ensureLoaded()".into();
-    let mut placement = JniFunction::default();
-    placement.package = flat.metadata.package.clone();
-    placement.name = "durationMillis".into();
+    let placement = JniFunction {
+        package: flat.metadata.package.clone(),
+        name: "durationMillis".into(),
+        ..Default::default()
+    };
     // Output conversion remains the standard implementation in this stage.
     let output = prebindgen_declarations::compile_output_value(
         &JniBindings::parse([])?,

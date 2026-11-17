@@ -54,6 +54,32 @@ impl DeclConvertSource {
         ty: &Type,
         input: bool,
     ) -> Result<ValueConversion> {
+        let conversion = self.resolve_signature(flat, ty, input)?;
+        let representation = &conversion.representation;
+        if same_type(
+            match representation {
+                Type::Reference(r) => &r.elem,
+                _ => representation,
+            },
+            ty,
+        ) {
+            return Err(format!(
+                "conversion for `{}` must use a different representation type",
+                type_key(ty)
+            ));
+        }
+        Ok(conversion)
+    }
+
+    // A resolved tree names one finite conversion operation. In particular a
+    // message formatter may take String and return String. Canonical defaults
+    // additionally reject self-representations to avoid recursive resolution.
+    fn resolve_signature<S: Schema>(
+        &self,
+        flat: &Flat<S>,
+        ty: &Type,
+        input: bool,
+    ) -> Result<ValueConversion> {
         if self.input.is_some_and(|i| i != input) {
             return Err("conversion trait source has the wrong direction".into());
         }
@@ -96,18 +122,6 @@ impl DeclConvertSource {
             }
             ValueSource::Into { .. } => flat.resolve_type(self.representation.as_ref().unwrap())?,
         };
-        if same_type(
-            match &representation {
-                Type::Reference(r) => &r.elem,
-                _ => &representation,
-            },
-            ty,
-        ) {
-            return Err(format!(
-                "conversion for `{}` must use a different representation type",
-                type_key(ty)
-            ));
-        }
         Ok(ValueConversion {
             representation,
             source: self.source.clone(),
@@ -338,7 +352,7 @@ pub fn validate_conversion<S: Schema>(
             ValueSource::Into { .. } => false,
         },
     }
-    .resolve(flat, ty, input)?;
+    .resolve_signature(flat, ty, input)?;
     if !same_type(&resolved.representation, &conversion.representation) {
         return Err("conversion representation does not match its helper signature".into());
     }

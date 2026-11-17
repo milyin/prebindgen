@@ -39,3 +39,10 @@ pub fn duration_callback(callback: impl Fn(i64) -> i64) -> i64 {
 pub fn plain_callback(callback: impl Fn(i64) -> i64) -> i64 {
     callback(43)
 }
+
+pub fn mapped_result(milliseconds: i64) -> Result<i64, i64> {
+    duration_result(milliseconds)
+}
+pub fn mapped_message(error: &i64) -> String {
+    format!("mapped:{error}")
+}

@@ -55,7 +55,7 @@ pub fn source_items<'a>(
                 ..
             } => names.push(function.clone()),
             JniOutputConfig::Unary {
-                operation: JniOutputUnary::Result { error: Some(name) },
+                operation: JniOutputUnary::ConfigResult { error: Some(name) },
                 ..
             } => names.push(name.clone()),
             _ => {}

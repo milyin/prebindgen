@@ -3,6 +3,10 @@
 //! expansion declarations, retained `impl Fn` inputs, `.name()`, source selection,
 //! package prefix and native initialization.
 //! Declaration processing prepares each export's converters before wrappers are generated.
+//! A function's `Result<T, E>` completes through ordinary output conversions for
+//! both payloads. The `Ok` payload keeps its normal direct or callback delivery;
+//! the `Err` payload supplies a typed Kotlin handler invoked after JNI and locks.
+//! `.result_as_value()` instead transports the whole Result as ordinary enum data.
 #![warn(missing_docs)]
 
 use prebindgen_conversions::{Conversion, OutputConversion, WireKind};
@@ -60,9 +64,11 @@ pub use wire::{JniArgument, JniWire};
 mod emission;
 mod errors;
 pub use errors::{bind_error_output, bind_export_error_output};
+pub use result_output::JniDomainError;
 mod handles;
 mod names;
 mod parameter_names;
+mod result_output;
 pub use emission::JniContext;
 /// Prepared input tree exposed by input converters.
 ///
@@ -767,14 +773,14 @@ fn validate_declaration_names(flat: &JniBindings) -> Result<()> {
 }
 /// Check a prospective generated declaration against canonical class, function and handler names.
 fn foreign_name_exists(flat: &JniBindings, name: &str) -> bool {
-    flat.types.values().any(|t| {
-        t.metadata.class.as_ref().is_some_and(|c| c.fqn() == name)
-            || t.metadata.errors.values().any(|e| e.handler == name)
-    }) || flat.functions.values().any(|f| {
-        f.metadata.iter().any(|binding| {
-            format!("{}.{}", binding.metadata.package, binding.metadata.name) == name
+    flat.types
+        .values()
+        .any(|t| t.metadata.class.as_ref().is_some_and(|c| c.fqn() == name))
+        || flat.functions.values().any(|f| {
+            f.metadata.iter().any(|binding| {
+                format!("{}.{}", binding.metadata.package, binding.metadata.name) == name
+            })
         })
-    })
 }
 /// Conversions and slot glue used by [`JniGen`].
 /// Prepared code explicitly references the emission context's JNI environment
@@ -844,8 +850,13 @@ impl Codec for JniCodec {
         value: TokenStream,
         borrowed: bool,
         reference_return: bool,
-    ) -> Result<prebindgen_declarations::CodecOutputPlan<Self>> {
+    ) -> Result<Self::Output> {
         self.require_resolved_classes(cx.flat)?;
+        if let Some(output) =
+            result_output::compile(cx, ty, tree, value.clone(), borrowed, reference_return)?
+        {
+            return Ok(output);
+        }
         compilation::JniCompiler { cx }.output_root(
             ty,
             tree,
@@ -870,7 +881,6 @@ impl Codec for JniCodec {
 
     fn compile_declarations(&self, flat: &mut JniBindings, _: &()) -> Result<()> {
         self.require_resolved_classes(flat)?;
-        errors::compile(flat, self)?;
         callback::compile_declarations(flat, self)?;
         Ok(())
     }
@@ -1420,24 +1430,9 @@ impl Codec for JniCodec {
         if !self.declared {
             return prebindgen_declarations::prepare_mapped_source_error(self, request);
         }
-        let mapped = request.message.is_some();
-        let binding = request
-            .flat
-            .type_info(request.ty)?
-            .metadata
-            .errors
-            .get(&mapped)
-            .ok_or("missing declared JNI error output")?;
-        let helper = prebindgen_conversions::template_parameter("source_error_helper");
-        let env = prebindgen_conversions::template_parameter("environment");
-        let reported = prebindgen_conversions::template_parameter("domain_output");
-        let sink = prebindgen_conversions::template_parameter("return_sink");
-        let value = request.message.unwrap_or(request.value);
-        Ok(SourceErrorPlan {
-            payload: binding.output()?.output_outcomes().success.clone(),
-            propagate: quote!({#helper(&mut #env, #value, &mut #reported, #sink)?; String::new()}),
-        })
+        Err("declared JNI domain errors must be compiled as a Result output branch".into())
     }
+
     fn input_arrow(
         &self,
         request: prebindgen_declarations::InputArrow<'_, Self>,
@@ -1795,7 +1790,6 @@ pub fn resolve(mut flat: JniBindings) -> Result<JniBindings> {
     data::resolve_declarations(&mut flat)?;
     let resolver = JniSourceResolver::default();
     let codec = JniCodec::declared();
-    errors::resolve(&mut flat, &codec, &resolver)?;
     callback::resolve_declarations(&mut flat, &resolver, &codec)?;
     bindings::resolve_with(&mut flat, &resolver, &codec, &())?;
     Ok(flat)
@@ -1847,13 +1841,8 @@ pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
     functions.sort_by_key(|f| f.metadata.order);
     let errors = functions
         .iter()
-        .filter_map(|f| {
-            f.metadata
-                .error
-                .as_deref()
-                .map(|e| (e.helper.to_string(), e))
-        })
-        .collect::<BTreeMap<_, _>>();
+        .filter_map(|f| f.ret.slot.domain_error())
+        .collect::<Vec<_>>();
     let mut files = BTreeMap::new();
     for t in flat.types.values() {
         if let Some(class) = &t.metadata.class {
@@ -1881,7 +1870,7 @@ pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
             }
         }
     }
-    let mut rust = errors::emit(&errors)?;
+    let mut rust = TokenStream::new();
     let mut packages: BTreeMap<String, String> = BTreeMap::new();
     errors::interfaces(prefix, &mut files)?;
     let mut native = format!("package {prefix}\n\ninternal object JNINative {{\n");
@@ -1943,12 +1932,12 @@ pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
         let name = &placement.name;
         let callback =
             sequence::callback_delivery(&f.output_conversion()?.output_outcomes().success)?;
-        let error = placement.error.as_deref();
+        let error = f.output_conversion()?.domain_error();
         let outcomes = f.output_conversion()?.output_outcomes();
         let logical = &outcomes.success;
         if let (Some(declared), Some(error)) = (&outcomes.source_error, error) {
             if group::error_wire_shape(declared)?
-                != group::error_wire_shape(&error.output()?.output_outcomes().success)?
+                != group::error_wire_shape(&error.output().output_outcomes().success)?
             {
                 return Err(format!(
                     "`{source}`: domain-error converter differs from the declared error wires"
@@ -1980,13 +1969,7 @@ pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
         // existing native parameter limit; previously valid signatures stay valid.
         let native_return = returns::select(f.output_conversion()?)
             .filter(|_| input_slots + acknowledgement + 2 * usize::from(callback) < 255)
-            .filter(|_| {
-                error.is_none_or(|e| {
-                    e.output
-                        .as_ref()
-                        .is_some_and(|output| returns::select(output).is_some())
-                })
-            });
+            .filter(|_| error.is_none_or(|e| returns::select(e.output()).is_some()));
         let native_result_type = native_return.as_ref().map_or_else(
             || syn::parse_quote!(::prebindgen_jni_runtime::jni::sys::jobjectArray),
             returns::NativeReturn::rust_type,
@@ -2036,7 +2019,6 @@ pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
             prepared_delivery: None,
             environment: env.clone(),
             domain_output: format_ident!("domain_output"),
-            source_error_helper: error.map(|e| e.helper.clone()),
             return_sink: native_return.as_ref().map(|_| return_sink.clone()),
             is_domain_error: false,
             output_committed: if native_return.is_some() {
@@ -2479,7 +2461,7 @@ pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
             let mut delivery = errors::delivery(error, &kotlin_context)?;
             if native_return.is_some() {
                 let fields =
-                    crate::group::result_packet_fields(&error.output()?.output_outcomes().success)
+                    crate::group::result_packet_fields(&error.output().output_outcomes().success)
                         .collect::<Vec<_>>();
                 let values = (0..fields.len())
                     .map(|i| format!("returnCapture.d{i}"))

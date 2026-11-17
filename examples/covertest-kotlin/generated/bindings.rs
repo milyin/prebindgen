@@ -1,4269 +1,3 @@
-#[allow(
-    non_snake_case,
-    clippy::needless_borrow,
-    clippy::let_unit_value,
-    clippy::unnecessary_cast,
-    clippy::useless_conversion
-)]
-fn __pb_jni_error_BulkFailure_typed_e4c5fe4d26ff5840(
-    mut env: &mut ::prebindgen_jni_runtime::jni::JNIEnv<'_>,
-    source: perftest_flat::BulkFailure,
-    reported: &mut Option<::prebindgen_jni_runtime::jni::sys::jobjectArray>,
-    return_sink: Option<&::prebindgen_jni_runtime::jni::objects::JObject<'_>>,
-) -> ::prebindgen_runtime::Result<()> {
-    if let Some(__pb_return) = return_sink {
-        {
-            let mut ret_w0_writer = ::prebindgen_jni_runtime::bulk::Writer::new(
-                ::core::mem::size_of::<__PbBulk_i64_97145e0ef6a1193d>(),
-            );
-            let ret_w1 = perftest_flat::bulk_failure_code(&source);
-            let ret_w2 = ret_w1;
-            ret_w0_writer
-                .write(
-                    ::core::mem::offset_of!(__PbBulk_i64_97145e0ef6a1193d, v0),
-                    ret_w2,
-                )?;
-            let ret_w0 = ::prebindgen_jni_runtime::jni::objects::JObject::from(
-                env
-                    .byte_array_from_slice(ret_w0_writer.bytes())
-                    .map_err(|e| e.to_string())?,
-            );
-            let __pb_return_argument_0 = ret_w0;
-            unsafe {
-                ::prebindgen_jni_runtime::invoke_error_callback(
-                    &mut env,
-                    &__pb_return,
-                    "domainError0",
-                    "([B)V",
-                    &[
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            l: __pb_return_argument_0.as_raw(),
-                        },
-                    ],
-                )
-            }?;
-            let _: () = {
-                ret_w0_writer.commit();
-                *reported = Some(std::ptr::null_mut());
-            };
-            Ok(())
-        }
-    } else {
-        {
-            let mut ret_w0_writer = ::prebindgen_jni_runtime::bulk::Writer::new(
-                ::core::mem::size_of::<__PbBulk_i64_97145e0ef6a1193d>(),
-            );
-            let ret_w1 = perftest_flat::bulk_failure_code(&source);
-            let ret_w2 = ret_w1;
-            ret_w0_writer
-                .write(
-                    ::core::mem::offset_of!(__PbBulk_i64_97145e0ef6a1193d, v0),
-                    ret_w2,
-                )?;
-            let ret_w0 = ::prebindgen_jni_runtime::jni::objects::JObject::from(
-                env
-                    .byte_array_from_slice(ret_w0_writer.bytes())
-                    .map_err(|e| e.to_string())?,
-            );
-            let result = ::prebindgen_jni_runtime::array(&mut env, 2usize)?;
-            let object = ret_w0;
-            env.set_object_array_element(&result, 1i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            ::prebindgen_jni_runtime::mark_domain_packet(&mut env, &result)?;
-            let _: () = {
-                ret_w0_writer.commit();
-                *reported = Some(result.as_raw());
-            };
-            Ok(())
-        }
-    }
-}
-#[allow(
-    non_snake_case,
-    clippy::needless_borrow,
-    clippy::let_unit_value,
-    clippy::unnecessary_cast,
-    clippy::useless_conversion
-)]
-fn __pb_jni_error_CDropError_typed_2250cb445abcc18e(
-    mut env: &mut ::prebindgen_jni_runtime::jni::JNIEnv<'_>,
-    source: perftest_flat::CDropError,
-    reported: &mut Option<::prebindgen_jni_runtime::jni::sys::jobjectArray>,
-    return_sink: Option<&::prebindgen_jni_runtime::jni::objects::JObject<'_>>,
-) -> ::prebindgen_runtime::Result<()> {
-    if let Some(__pb_return) = return_sink {
-        {
-            let ret_w0 = perftest_flat::result_drop_error_into(source);
-            let ret_w1 = ret_w0;
-            let ret_w2 = perftest_flat::c_panic_output_value(&ret_w1.resource);
-            let mut ret_w3 = Box::new(::prebindgen_jni_runtime::Allocation {
-                value: ret_w2,
-            });
-            unsafe {
-                ::prebindgen_jni_runtime::invoke_error_callback(
-                    &mut env,
-                    &__pb_return,
-                    "domainError0",
-                    "(J)V",
-                    &[
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ((&mut *ret_w3)
-                                as *mut ::prebindgen_jni_runtime::Allocation<
-                                    perftest_flat::OwnedResource,
-                                >) as i64,
-                        },
-                    ],
-                )
-            }?;
-            let _: () = {
-                let _ = Box::into_raw(ret_w3).expose_provenance();
-                *reported = Some(std::ptr::null_mut());
-            };
-            Ok(())
-        }
-    } else {
-        {
-            let ret_w0 = perftest_flat::result_drop_error_into(source);
-            let ret_w1 = ret_w0;
-            let ret_w2 = perftest_flat::c_panic_output_value(&ret_w1.resource);
-            let mut ret_w3 = Box::new(::prebindgen_jni_runtime::Allocation {
-                value: ret_w2,
-            });
-            let result = ::prebindgen_jni_runtime::array(&mut env, 2usize)?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ((&mut *ret_w3)
-                                as *mut ::prebindgen_jni_runtime::Allocation<
-                                    perftest_flat::OwnedResource,
-                                >) as i64,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 1i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            ::prebindgen_jni_runtime::mark_domain_packet(&mut env, &result)?;
-            let _: () = {
-                let _ = Box::into_raw(ret_w3).expose_provenance();
-                *reported = Some(result.as_raw());
-            };
-            Ok(())
-        }
-    }
-}
-#[allow(
-    non_snake_case,
-    clippy::needless_borrow,
-    clippy::let_unit_value,
-    clippy::unnecessary_cast,
-    clippy::useless_conversion
-)]
-fn __pb_jni_error_CResourceError_typed_b601e344955ebc63(
-    mut env: &mut ::prebindgen_jni_runtime::jni::JNIEnv<'_>,
-    source: perftest_flat::CResourceError,
-    reported: &mut Option<::prebindgen_jni_runtime::jni::sys::jobjectArray>,
-    return_sink: Option<&::prebindgen_jni_runtime::jni::objects::JObject<'_>>,
-) -> ::prebindgen_runtime::Result<()> {
-    if let Some(__pb_return) = return_sink {
-        {
-            let ret_w0 = perftest_flat::result_resource_error_into(source);
-            let ret_w1 = ret_w0;
-            let mut ret_w2 = Box::new(::prebindgen_jni_runtime::Allocation {
-                value: ret_w1.resource,
-            });
-            let ret_w3: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
-                let ret_w3 = ret_w1.message;
-                ::prebindgen_jni_runtime::text_object(
-                    &mut env,
-                    ::core::convert::AsRef::<str>::as_ref(&ret_w3),
-                )?
-            };
-            let __pb_return_argument_1 = ret_w3;
-            unsafe {
-                ::prebindgen_jni_runtime::invoke_error_callback(
-                    &mut env,
-                    &__pb_return,
-                    "domainError0",
-                    "(JLjava/lang/String;)V",
-                    &[
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ((&mut *ret_w2)
-                                as *mut ::prebindgen_jni_runtime::Allocation<
-                                    perftest_flat::OwnedResource,
-                                >) as i64,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            l: __pb_return_argument_1.as_raw(),
-                        },
-                    ],
-                )
-            }?;
-            let _: () = {
-                let _ = Box::into_raw(ret_w2).expose_provenance();
-                *reported = Some(std::ptr::null_mut());
-            };
-            Ok(())
-        }
-    } else {
-        {
-            let ret_w0 = perftest_flat::result_resource_error_into(source);
-            let ret_w1 = ret_w0;
-            let mut ret_w2 = Box::new(::prebindgen_jni_runtime::Allocation {
-                value: ret_w1.resource,
-            });
-            let ret_w3: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
-                let ret_w3 = ret_w1.message;
-                ::prebindgen_jni_runtime::text_object(
-                    &mut env,
-                    ::core::convert::AsRef::<str>::as_ref(&ret_w3),
-                )?
-            };
-            let result = ::prebindgen_jni_runtime::array(&mut env, 3usize)?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ((&mut *ret_w2)
-                                as *mut ::prebindgen_jni_runtime::Allocation<
-                                    perftest_flat::OwnedResource,
-                                >) as i64,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 1i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = ret_w3;
-            env.set_object_array_element(&result, 2i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            ::prebindgen_jni_runtime::mark_domain_packet(&mut env, &result)?;
-            let _: () = {
-                let _ = Box::into_raw(ret_w2).expose_provenance();
-                *reported = Some(result.as_raw());
-            };
-            Ok(())
-        }
-    }
-}
-#[allow(
-    non_snake_case,
-    clippy::needless_borrow,
-    clippy::let_unit_value,
-    clippy::unnecessary_cast,
-    clippy::useless_conversion
-)]
-fn __pb_jni_error_CResultError_typed_fdc76b156eba8b0a(
-    mut env: &mut ::prebindgen_jni_runtime::jni::JNIEnv<'_>,
-    source: perftest_flat::CResultError,
-    reported: &mut Option<::prebindgen_jni_runtime::jni::sys::jobjectArray>,
-    return_sink: Option<&::prebindgen_jni_runtime::jni::objects::JObject<'_>>,
-) -> ::prebindgen_runtime::Result<()> {
-    if let Some(__pb_return) = return_sink {
-        {
-            let ret_w0 = perftest_flat::result_pair_error_into(source);
-            let ret_w1 = ret_w0;
-            let ret_w2 = ret_w1.code;
-            let ret_w3: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
-                let ret_w3 = ret_w1.message;
-                ::prebindgen_jni_runtime::text_object(
-                    &mut env,
-                    ::core::convert::AsRef::<str>::as_ref(&ret_w3),
-                )?
-            };
-            let __pb_return_argument_1 = ret_w3;
-            unsafe {
-                ::prebindgen_jni_runtime::invoke_error_callback(
-                    &mut env,
-                    &__pb_return,
-                    "domainError0",
-                    "(JLjava/lang/String;)V",
-                    &[
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w2,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            l: __pb_return_argument_1.as_raw(),
-                        },
-                    ],
-                )
-            }?;
-            let _: () = {
-                *reported = Some(std::ptr::null_mut());
-            };
-            Ok(())
-        }
-    } else {
-        {
-            let ret_w0 = perftest_flat::result_pair_error_into(source);
-            let ret_w1 = ret_w0;
-            let ret_w2 = ret_w1.code;
-            let ret_w3: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
-                let ret_w3 = ret_w1.message;
-                ::prebindgen_jni_runtime::text_object(
-                    &mut env,
-                    ::core::convert::AsRef::<str>::as_ref(&ret_w3),
-                )?
-            };
-            let result = ::prebindgen_jni_runtime::array(&mut env, 3usize)?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[::prebindgen_jni_runtime::jni::objects::JValue::Long(ret_w2)],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 1i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = ret_w3;
-            env.set_object_array_element(&result, 2i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            ::prebindgen_jni_runtime::mark_domain_packet(&mut env, &result)?;
-            let _: () = {
-                *reported = Some(result.as_raw());
-            };
-            Ok(())
-        }
-    }
-}
-#[allow(
-    non_snake_case,
-    clippy::needless_borrow,
-    clippy::let_unit_value,
-    clippy::unnecessary_cast,
-    clippy::useless_conversion
-)]
-fn __pb_jni_error_CRichError_typed_567a9ede94b6be79(
-    mut env: &mut ::prebindgen_jni_runtime::jni::JNIEnv<'_>,
-    source: perftest_flat::CRichError,
-    reported: &mut Option<::prebindgen_jni_runtime::jni::sys::jobjectArray>,
-    return_sink: Option<&::prebindgen_jni_runtime::jni::objects::JObject<'_>>,
-) -> ::prebindgen_runtime::Result<()> {
-    if let Some(__pb_return) = return_sink {
-        {
-            let ret_w0 = perftest_flat::result_rich_error_into(source);
-            let ret_w1 = ret_w0;
-            let ret_w2: i32 = match &(ret_w1.kind) {
-                perftest_flat::SparseCode::Bottom => -2147483648i32,
-                perftest_flat::SparseCode::MinusTwo => -2i32,
-                perftest_flat::SparseCode::MinusOne => -1i32,
-                perftest_flat::SparseCode::Zero => 0i32,
-                perftest_flat::SparseCode::Seven => 7i32,
-                perftest_flat::SparseCode::Eight => 8i32,
-                perftest_flat::SparseCode::Top => 2147483647i32,
-            };
-            let (_, (ret_w3_value0,), ret_w3_commit) = if let Some(ret_w4) = ret_w1
-                .message
-            {
-                let ret_w5: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
-                    let ret_w5 = ret_w4;
-                    ::prebindgen_jni_runtime::text_object(
-                        &mut env,
-                        ::core::convert::AsRef::<str>::as_ref(&ret_w5),
-                    )?
-                };
-                let ret_w3_values = (ret_w5,);
-                (1i32, ret_w3_values, Some(move || {}))
-            } else {
-                (0i32, (::prebindgen_jni_runtime::jni::objects::JObject::null(),), None)
-            };
-            let __pb_return_argument_1 = ret_w3_value0;
-            unsafe {
-                ::prebindgen_jni_runtime::invoke_error_callback(
-                    &mut env,
-                    &__pb_return,
-                    "domainError0",
-                    "(ILjava/lang/String;)V",
-                    &[
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            i: ret_w2,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            l: __pb_return_argument_1.as_raw(),
-                        },
-                    ],
-                )
-            }?;
-            let _: () = {
-                if let Some(ret_w3_action) = ret_w3_commit {
-                    ret_w3_action();
-                }
-                *reported = Some(std::ptr::null_mut());
-            };
-            Ok(())
-        }
-    } else {
-        {
-            let ret_w0 = perftest_flat::result_rich_error_into(source);
-            let ret_w1 = ret_w0;
-            let ret_w2: i32 = match &(ret_w1.kind) {
-                perftest_flat::SparseCode::Bottom => -2147483648i32,
-                perftest_flat::SparseCode::MinusTwo => -2i32,
-                perftest_flat::SparseCode::MinusOne => -1i32,
-                perftest_flat::SparseCode::Zero => 0i32,
-                perftest_flat::SparseCode::Seven => 7i32,
-                perftest_flat::SparseCode::Eight => 8i32,
-                perftest_flat::SparseCode::Top => 2147483647i32,
-            };
-            let (_, (ret_w3_value0,), ret_w3_commit) = if let Some(ret_w4) = ret_w1
-                .message
-            {
-                let ret_w5: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
-                    let ret_w5 = ret_w4;
-                    ::prebindgen_jni_runtime::text_object(
-                        &mut env,
-                        ::core::convert::AsRef::<str>::as_ref(&ret_w5),
-                    )?
-                };
-                let ret_w3_values = (ret_w5,);
-                (1i32, ret_w3_values, Some(move || {}))
-            } else {
-                (0i32, (::prebindgen_jni_runtime::jni::objects::JObject::null(),), None)
-            };
-            let result = ::prebindgen_jni_runtime::array(&mut env, 3usize)?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Integer",
-                    "valueOf",
-                    "(I)Ljava/lang/Integer;",
-                    &[::prebindgen_jni_runtime::jni::objects::JValue::Int(ret_w2)],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 1i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = ret_w3_value0;
-            env.set_object_array_element(&result, 2i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            ::prebindgen_jni_runtime::mark_domain_packet(&mut env, &result)?;
-            let _: () = {
-                if let Some(ret_w3_action) = ret_w3_commit {
-                    ret_w3_action();
-                }
-                *reported = Some(result.as_raw());
-            };
-            Ok(())
-        }
-    }
-}
-#[allow(
-    non_snake_case,
-    clippy::needless_borrow,
-    clippy::let_unit_value,
-    clippy::unnecessary_cast,
-    clippy::useless_conversion
-)]
-fn __pb_jni_error_CallbackBoundaryError_typed_0dc61bae09ff09f2(
-    mut env: &mut ::prebindgen_jni_runtime::jni::JNIEnv<'_>,
-    source: perftest_flat::CallbackBoundaryError,
-    reported: &mut Option<::prebindgen_jni_runtime::jni::sys::jobjectArray>,
-    return_sink: Option<&::prebindgen_jni_runtime::jni::objects::JObject<'_>>,
-) -> ::prebindgen_runtime::Result<()> {
-    if let Some(__pb_return) = return_sink {
-        {
-            let ret_w0 = perftest_flat::callback_boundary_error_into(source);
-            let ret_w1 = ret_w0;
-            let ret_w2 = ret_w1.code;
-            let ret_w3: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
-                let ret_w3 = ret_w1.message;
-                ::prebindgen_jni_runtime::text_object(
-                    &mut env,
-                    ::core::convert::AsRef::<str>::as_ref(&ret_w3),
-                )?
-            };
-            let __pb_return_argument_1 = ret_w3;
-            unsafe {
-                ::prebindgen_jni_runtime::invoke_error_callback(
-                    &mut env,
-                    &__pb_return,
-                    "domainError0",
-                    "(JLjava/lang/String;)V",
-                    &[
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w2,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            l: __pb_return_argument_1.as_raw(),
-                        },
-                    ],
-                )
-            }?;
-            let _: () = {
-                *reported = Some(std::ptr::null_mut());
-            };
-            Ok(())
-        }
-    } else {
-        {
-            let ret_w0 = perftest_flat::callback_boundary_error_into(source);
-            let ret_w1 = ret_w0;
-            let ret_w2 = ret_w1.code;
-            let ret_w3: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
-                let ret_w3 = ret_w1.message;
-                ::prebindgen_jni_runtime::text_object(
-                    &mut env,
-                    ::core::convert::AsRef::<str>::as_ref(&ret_w3),
-                )?
-            };
-            let result = ::prebindgen_jni_runtime::array(&mut env, 3usize)?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[::prebindgen_jni_runtime::jni::objects::JValue::Long(ret_w2)],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 1i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = ret_w3;
-            env.set_object_array_element(&result, 2i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            ::prebindgen_jni_runtime::mark_domain_packet(&mut env, &result)?;
-            let _: () = {
-                *reported = Some(result.as_raw());
-            };
-            Ok(())
-        }
-    }
-}
-#[allow(
-    non_snake_case,
-    clippy::needless_borrow,
-    clippy::let_unit_value,
-    clippy::unnecessary_cast,
-    clippy::useless_conversion
-)]
-fn __pb_jni_error_CanonError_typed_f4794d301ab5bce1(
-    mut env: &mut ::prebindgen_jni_runtime::jni::JNIEnv<'_>,
-    source: perftest_flat::CanonError,
-    reported: &mut Option<::prebindgen_jni_runtime::jni::sys::jobjectArray>,
-    return_sink: Option<&::prebindgen_jni_runtime::jni::objects::JObject<'_>>,
-) -> ::prebindgen_runtime::Result<()> {
-    if let Some(__pb_return) = return_sink {
-        {
-            let ret_w0 = perftest_flat::canonical_error_code(&source);
-            let ret_w1 = ret_w0;
-            unsafe {
-                ::prebindgen_jni_runtime::invoke_error_callback(
-                    &mut env,
-                    &__pb_return,
-                    "domainError0",
-                    "(I)V",
-                    &[
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            i: ret_w1,
-                        },
-                    ],
-                )
-            }?;
-            let _: () = {
-                *reported = Some(std::ptr::null_mut());
-            };
-            Ok(())
-        }
-    } else {
-        {
-            let ret_w0 = perftest_flat::canonical_error_code(&source);
-            let ret_w1 = ret_w0;
-            let result = ::prebindgen_jni_runtime::array(&mut env, 2usize)?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Integer",
-                    "valueOf",
-                    "(I)Ljava/lang/Integer;",
-                    &[::prebindgen_jni_runtime::jni::objects::JValue::Int(ret_w1)],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 1i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            ::prebindgen_jni_runtime::mark_domain_packet(&mut env, &result)?;
-            let _: () = {
-                *reported = Some(result.as_raw());
-            };
-            Ok(())
-        }
-    }
-}
-#[allow(
-    non_snake_case,
-    clippy::needless_borrow,
-    clippy::let_unit_value,
-    clippy::unnecessary_cast,
-    clippy::useless_conversion
-)]
-fn __pb_jni_error_CollectionError_typed_88bd5d3dac8727c4(
-    mut env: &mut ::prebindgen_jni_runtime::jni::JNIEnv<'_>,
-    source: perftest_flat::CollectionError,
-    reported: &mut Option<::prebindgen_jni_runtime::jni::sys::jobjectArray>,
-    return_sink: Option<&::prebindgen_jni_runtime::jni::objects::JObject<'_>>,
-) -> ::prebindgen_runtime::Result<()> {
-    if let Some(__pb_return) = return_sink {
-        {
-            let ret_w0 = perftest_flat::collection_error_into(source);
-            let ret_w1 = ret_w0;
-            let mut ret_w2_writer = ::prebindgen_jni_runtime::bulk::Writer::new(
-                ::core::mem::size_of::<__PbBulk_Range_f59dc5e9e3cec997>(),
-            );
-            let ret_w3_source: ::std::vec::Vec<perftest_flat::OwnedResource> = ret_w1
-                .resources;
-            let ret_w5 = ::std::vec::Vec::len(&ret_w3_source);
-            let ret_w3 = ret_w2_writer
-                .rows(
-                    ret_w5,
-                    ::core::mem::size_of::<__PbBulk_i64_1759b2fb0606880d>(),
-                    ::core::mem::align_of::<__PbBulk_i64_1759b2fb0606880d>(),
-                )?;
-            let ret_w3_owners = unsafe {
-                ret_w2_writer
-                    .own_rows(
-                        ret_w3,
-                        ::core::mem::size_of::<__PbBulk_i64_1759b2fb0606880d>(),
-                        __pb_cleanup_native_OwnedResource_6815841e39c71731,
-                    )
-            };
-            for (ret_w6, ret_w4) in ::core::iter::Iterator::enumerate(
-                ::core::iter::IntoIterator::into_iter(ret_w3_source),
-            ) {
-                let mut ret_w7 = Box::new(::prebindgen_jni_runtime::Allocation {
-                    value: ret_w4,
-                });
-                ret_w2_writer
-                    .write(
-                        (ret_w3.offset as usize
-                            + ret_w6
-                                * ::core::mem::size_of::<__PbBulk_i64_1759b2fb0606880d>())
-                            + ::core::mem::offset_of!(__PbBulk_i64_1759b2fb0606880d, v0),
-                        ((&mut *ret_w7)
-                            as *mut ::prebindgen_jni_runtime::Allocation<
-                                perftest_flat::OwnedResource,
-                            >) as i64,
-                    )?;
-                #[allow(
-                    clippy::redundant_closure_call,
-                    clippy::let_unit_value,
-                    clippy::unused_unit
-                )]
-                let _: () = (|| -> () {
-                    let _ = Box::into_raw(ret_w7).expose_provenance();
-                })();
-                unsafe {
-                    ret_w2_writer.commit_rows(ret_w3_owners, ret_w6 + 1);
-                }
-            }
-            let ret_w3 = Some(ret_w3);
-            ret_w2_writer
-                .range(
-                    ::core::mem::offset_of!(__PbBulk_Range_f59dc5e9e3cec997, v0),
-                    ret_w3,
-                )?;
-            let ret_w2 = ::prebindgen_jni_runtime::jni::objects::JObject::from(
-                env
-                    .byte_array_from_slice(ret_w2_writer.bytes())
-                    .map_err(|e| e.to_string())?,
-            );
-            let mut ret_w8_writer = ::prebindgen_jni_runtime::bulk::Writer::new(
-                ::core::mem::size_of::<__PbBulk_Range_01c263066f8f1a73>(),
-            );
-            let ret_w9_source: ::std::vec::Vec<Vec<i64>> = ret_w1.codes;
-            let ret_w11 = ::std::vec::Vec::len(&ret_w9_source);
-            let ret_w9 = ret_w8_writer
-                .rows(
-                    ret_w11,
-                    ::core::mem::size_of::<__PbBulk_Range_1800d3dd3eceec6d>(),
-                    ::core::mem::align_of::<__PbBulk_Range_1800d3dd3eceec6d>(),
-                )?;
-            for (ret_w12, ret_w10) in ::core::iter::Iterator::enumerate(
-                ::core::iter::IntoIterator::into_iter(ret_w9_source),
-            ) {
-                let ret_w13_source: ::std::vec::Vec<i64> = ret_w10;
-                let ret_w15 = ::std::vec::Vec::len(&ret_w13_source);
-                let ret_w13 = ret_w8_writer
-                    .rows(
-                        ret_w15,
-                        ::core::mem::size_of::<__PbBulk_i64_a60d3960993b9a77>(),
-                        ::core::mem::align_of::<__PbBulk_i64_a60d3960993b9a77>(),
-                    )?;
-                for (ret_w16, ret_w14) in ::core::iter::Iterator::enumerate(
-                    ::core::iter::IntoIterator::into_iter(ret_w13_source),
-                ) {
-                    let ret_w17 = ret_w14;
-                    ret_w8_writer
-                        .write(
-                            (ret_w13.offset as usize
-                                + ret_w16
-                                    * ::core::mem::size_of::<__PbBulk_i64_a60d3960993b9a77>())
-                                + ::core::mem::offset_of!(
-                                    __PbBulk_i64_a60d3960993b9a77, v0
-                                ),
-                            ret_w17,
-                        )?;
-                    #[allow(
-                        clippy::redundant_closure_call,
-                        clippy::let_unit_value,
-                        clippy::unused_unit
-                    )]
-                    let _: () = (|| -> () {})();
-                }
-                let ret_w13 = Some(ret_w13);
-                ret_w8_writer
-                    .range(
-                        (ret_w9.offset as usize
-                            + ret_w12
-                                * ::core::mem::size_of::<__PbBulk_Range_1800d3dd3eceec6d>())
-                            + ::core::mem::offset_of!(
-                                __PbBulk_Range_1800d3dd3eceec6d, v0
-                            ),
-                        ret_w13,
-                    )?;
-                #[allow(
-                    clippy::redundant_closure_call,
-                    clippy::let_unit_value,
-                    clippy::unused_unit
-                )]
-                let _: () = (|| -> () {})();
-            }
-            let ret_w9 = Some(ret_w9);
-            ret_w8_writer
-                .range(
-                    ::core::mem::offset_of!(__PbBulk_Range_01c263066f8f1a73, v0),
-                    ret_w9,
-                )?;
-            let ret_w8 = ::prebindgen_jni_runtime::jni::objects::JObject::from(
-                env
-                    .byte_array_from_slice(ret_w8_writer.bytes())
-                    .map_err(|e| e.to_string())?,
-            );
-            let __pb_return_argument_0 = ret_w2;
-            let __pb_return_argument_1 = ret_w8;
-            unsafe {
-                ::prebindgen_jni_runtime::invoke_error_callback(
-                    &mut env,
-                    &__pb_return,
-                    "domainError0",
-                    "([B[B)V",
-                    &[
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            l: __pb_return_argument_0.as_raw(),
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            l: __pb_return_argument_1.as_raw(),
-                        },
-                    ],
-                )
-            }?;
-            let _: () = {
-                ret_w2_writer.commit();
-                ret_w8_writer.commit();
-                *reported = Some(std::ptr::null_mut());
-            };
-            Ok(())
-        }
-    } else {
-        {
-            let ret_w0 = perftest_flat::collection_error_into(source);
-            let ret_w1 = ret_w0;
-            let mut ret_w2_writer = ::prebindgen_jni_runtime::bulk::Writer::new(
-                ::core::mem::size_of::<__PbBulk_Range_f59dc5e9e3cec997>(),
-            );
-            let ret_w3_source: ::std::vec::Vec<perftest_flat::OwnedResource> = ret_w1
-                .resources;
-            let ret_w5 = ::std::vec::Vec::len(&ret_w3_source);
-            let ret_w3 = ret_w2_writer
-                .rows(
-                    ret_w5,
-                    ::core::mem::size_of::<__PbBulk_i64_1759b2fb0606880d>(),
-                    ::core::mem::align_of::<__PbBulk_i64_1759b2fb0606880d>(),
-                )?;
-            let ret_w3_owners = unsafe {
-                ret_w2_writer
-                    .own_rows(
-                        ret_w3,
-                        ::core::mem::size_of::<__PbBulk_i64_1759b2fb0606880d>(),
-                        __pb_cleanup_native_OwnedResource_6815841e39c71731,
-                    )
-            };
-            for (ret_w6, ret_w4) in ::core::iter::Iterator::enumerate(
-                ::core::iter::IntoIterator::into_iter(ret_w3_source),
-            ) {
-                let mut ret_w7 = Box::new(::prebindgen_jni_runtime::Allocation {
-                    value: ret_w4,
-                });
-                ret_w2_writer
-                    .write(
-                        (ret_w3.offset as usize
-                            + ret_w6
-                                * ::core::mem::size_of::<__PbBulk_i64_1759b2fb0606880d>())
-                            + ::core::mem::offset_of!(__PbBulk_i64_1759b2fb0606880d, v0),
-                        ((&mut *ret_w7)
-                            as *mut ::prebindgen_jni_runtime::Allocation<
-                                perftest_flat::OwnedResource,
-                            >) as i64,
-                    )?;
-                #[allow(
-                    clippy::redundant_closure_call,
-                    clippy::let_unit_value,
-                    clippy::unused_unit
-                )]
-                let _: () = (|| -> () {
-                    let _ = Box::into_raw(ret_w7).expose_provenance();
-                })();
-                unsafe {
-                    ret_w2_writer.commit_rows(ret_w3_owners, ret_w6 + 1);
-                }
-            }
-            let ret_w3 = Some(ret_w3);
-            ret_w2_writer
-                .range(
-                    ::core::mem::offset_of!(__PbBulk_Range_f59dc5e9e3cec997, v0),
-                    ret_w3,
-                )?;
-            let ret_w2 = ::prebindgen_jni_runtime::jni::objects::JObject::from(
-                env
-                    .byte_array_from_slice(ret_w2_writer.bytes())
-                    .map_err(|e| e.to_string())?,
-            );
-            let mut ret_w8_writer = ::prebindgen_jni_runtime::bulk::Writer::new(
-                ::core::mem::size_of::<__PbBulk_Range_01c263066f8f1a73>(),
-            );
-            let ret_w9_source: ::std::vec::Vec<Vec<i64>> = ret_w1.codes;
-            let ret_w11 = ::std::vec::Vec::len(&ret_w9_source);
-            let ret_w9 = ret_w8_writer
-                .rows(
-                    ret_w11,
-                    ::core::mem::size_of::<__PbBulk_Range_1800d3dd3eceec6d>(),
-                    ::core::mem::align_of::<__PbBulk_Range_1800d3dd3eceec6d>(),
-                )?;
-            for (ret_w12, ret_w10) in ::core::iter::Iterator::enumerate(
-                ::core::iter::IntoIterator::into_iter(ret_w9_source),
-            ) {
-                let ret_w13_source: ::std::vec::Vec<i64> = ret_w10;
-                let ret_w15 = ::std::vec::Vec::len(&ret_w13_source);
-                let ret_w13 = ret_w8_writer
-                    .rows(
-                        ret_w15,
-                        ::core::mem::size_of::<__PbBulk_i64_a60d3960993b9a77>(),
-                        ::core::mem::align_of::<__PbBulk_i64_a60d3960993b9a77>(),
-                    )?;
-                for (ret_w16, ret_w14) in ::core::iter::Iterator::enumerate(
-                    ::core::iter::IntoIterator::into_iter(ret_w13_source),
-                ) {
-                    let ret_w17 = ret_w14;
-                    ret_w8_writer
-                        .write(
-                            (ret_w13.offset as usize
-                                + ret_w16
-                                    * ::core::mem::size_of::<__PbBulk_i64_a60d3960993b9a77>())
-                                + ::core::mem::offset_of!(
-                                    __PbBulk_i64_a60d3960993b9a77, v0
-                                ),
-                            ret_w17,
-                        )?;
-                    #[allow(
-                        clippy::redundant_closure_call,
-                        clippy::let_unit_value,
-                        clippy::unused_unit
-                    )]
-                    let _: () = (|| -> () {})();
-                }
-                let ret_w13 = Some(ret_w13);
-                ret_w8_writer
-                    .range(
-                        (ret_w9.offset as usize
-                            + ret_w12
-                                * ::core::mem::size_of::<__PbBulk_Range_1800d3dd3eceec6d>())
-                            + ::core::mem::offset_of!(
-                                __PbBulk_Range_1800d3dd3eceec6d, v0
-                            ),
-                        ret_w13,
-                    )?;
-                #[allow(
-                    clippy::redundant_closure_call,
-                    clippy::let_unit_value,
-                    clippy::unused_unit
-                )]
-                let _: () = (|| -> () {})();
-            }
-            let ret_w9 = Some(ret_w9);
-            ret_w8_writer
-                .range(
-                    ::core::mem::offset_of!(__PbBulk_Range_01c263066f8f1a73, v0),
-                    ret_w9,
-                )?;
-            let ret_w8 = ::prebindgen_jni_runtime::jni::objects::JObject::from(
-                env
-                    .byte_array_from_slice(ret_w8_writer.bytes())
-                    .map_err(|e| e.to_string())?,
-            );
-            let result = ::prebindgen_jni_runtime::array(&mut env, 3usize)?;
-            let object = ret_w2;
-            env.set_object_array_element(&result, 1i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = ret_w8;
-            env.set_object_array_element(&result, 2i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            ::prebindgen_jni_runtime::mark_domain_packet(&mut env, &result)?;
-            let _: () = {
-                ret_w2_writer.commit();
-                ret_w8_writer.commit();
-                *reported = Some(result.as_raw());
-            };
-            Ok(())
-        }
-    }
-}
-#[allow(
-    non_snake_case,
-    clippy::needless_borrow,
-    clippy::let_unit_value,
-    clippy::unnecessary_cast,
-    clippy::useless_conversion
-)]
-fn __pb_jni_error_JniBufferResourceRow_typed_c6e25d27c04718b4(
-    mut env: &mut ::prebindgen_jni_runtime::jni::JNIEnv<'_>,
-    source: perftest_flat::JniBufferResourceRow,
-    reported: &mut Option<::prebindgen_jni_runtime::jni::sys::jobjectArray>,
-    return_sink: Option<&::prebindgen_jni_runtime::jni::objects::JObject<'_>>,
-) -> ::prebindgen_runtime::Result<()> {
-    if let Some(__pb_return) = return_sink {
-        {
-            let ret_w0_record = source;
-            let mut ret_w0_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
-                value: ret_w0_record.resource,
-            });
-            let ret_w0_f1: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
-                let ret_w0_f1 = ret_w0_record.text;
-                ::prebindgen_jni_runtime::text_object(
-                    &mut env,
-                    ::core::convert::AsRef::<str>::as_ref(&ret_w0_f1),
-                )?
-            };
-            let ret_w0_f2: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
-                let ret_w0_f2 = ret_w0_record.bytes;
-                ::prebindgen_jni_runtime::bytes_object(
-                    &mut env,
-                    ::core::convert::AsRef::<[u8]>::as_ref(&ret_w0_f2),
-                )?
-            };
-            let __pb_return_argument_1 = ret_w0_f1;
-            let __pb_return_argument_2 = ret_w0_f2;
-            unsafe {
-                ::prebindgen_jni_runtime::invoke_error_callback(
-                    &mut env,
-                    &__pb_return,
-                    "domainError0",
-                    "(JLjava/lang/String;[B)V",
-                    &[
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ((&mut *ret_w0_f0)
-                                as *mut ::prebindgen_jni_runtime::Allocation<
-                                    perftest_flat::CallbackOwned,
-                                >) as i64,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            l: __pb_return_argument_1.as_raw(),
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            l: __pb_return_argument_2.as_raw(),
-                        },
-                    ],
-                )
-            }?;
-            let _: () = {
-                let _ = Box::into_raw(ret_w0_f0).expose_provenance();
-                *reported = Some(std::ptr::null_mut());
-            };
-            Ok(())
-        }
-    } else {
-        {
-            let ret_w0_record = source;
-            let mut ret_w0_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
-                value: ret_w0_record.resource,
-            });
-            let ret_w0_f1: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
-                let ret_w0_f1 = ret_w0_record.text;
-                ::prebindgen_jni_runtime::text_object(
-                    &mut env,
-                    ::core::convert::AsRef::<str>::as_ref(&ret_w0_f1),
-                )?
-            };
-            let ret_w0_f2: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
-                let ret_w0_f2 = ret_w0_record.bytes;
-                ::prebindgen_jni_runtime::bytes_object(
-                    &mut env,
-                    ::core::convert::AsRef::<[u8]>::as_ref(&ret_w0_f2),
-                )?
-            };
-            let result = ::prebindgen_jni_runtime::array(&mut env, 4usize)?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ((&mut *ret_w0_f0)
-                                as *mut ::prebindgen_jni_runtime::Allocation<
-                                    perftest_flat::CallbackOwned,
-                                >) as i64,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 1i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = ret_w0_f1;
-            env.set_object_array_element(&result, 2i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = ret_w0_f2;
-            env.set_object_array_element(&result, 3i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            ::prebindgen_jni_runtime::mark_domain_packet(&mut env, &result)?;
-            let _: () = {
-                let _ = Box::into_raw(ret_w0_f0).expose_provenance();
-                *reported = Some(result.as_raw());
-            };
-            Ok(())
-        }
-    }
-}
-#[allow(
-    non_snake_case,
-    clippy::needless_borrow,
-    clippy::let_unit_value,
-    clippy::unnecessary_cast,
-    clippy::useless_conversion
-)]
-fn __pb_jni_error_ResultFailure_typed_1183170f6901c4fd(
-    mut env: &mut ::prebindgen_jni_runtime::jni::JNIEnv<'_>,
-    source: perftest_flat::ResultFailure,
-    reported: &mut Option<::prebindgen_jni_runtime::jni::sys::jobjectArray>,
-    return_sink: Option<&::prebindgen_jni_runtime::jni::objects::JObject<'_>>,
-) -> ::prebindgen_runtime::Result<()> {
-    if let Some(__pb_return) = return_sink {
-        {
-            let ret_w0 = perftest_flat::result_error_code(&source);
-            let ret_w1 = ret_w0;
-            unsafe {
-                ::prebindgen_jni_runtime::invoke_error_callback(
-                    &mut env,
-                    &__pb_return,
-                    "domainError0",
-                    "(J)V",
-                    &[
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w1,
-                        },
-                    ],
-                )
-            }?;
-            let _: () = {
-                *reported = Some(std::ptr::null_mut());
-            };
-            Ok(())
-        }
-    } else {
-        {
-            let ret_w0 = perftest_flat::result_error_code(&source);
-            let ret_w1 = ret_w0;
-            let result = ::prebindgen_jni_runtime::array(&mut env, 2usize)?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[::prebindgen_jni_runtime::jni::objects::JValue::Long(ret_w1)],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 1i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            ::prebindgen_jni_runtime::mark_domain_packet(&mut env, &result)?;
-            let _: () = {
-                *reported = Some(result.as_raw());
-            };
-            Ok(())
-        }
-    }
-}
-#[allow(
-    non_snake_case,
-    clippy::needless_borrow,
-    clippy::let_unit_value,
-    clippy::unnecessary_cast,
-    clippy::useless_conversion
-)]
-fn __pb_jni_error_ReturnFailure_typed_a573c5734718430a(
-    mut env: &mut ::prebindgen_jni_runtime::jni::JNIEnv<'_>,
-    source: perftest_flat::ReturnFailure,
-    reported: &mut Option<::prebindgen_jni_runtime::jni::sys::jobjectArray>,
-    return_sink: Option<&::prebindgen_jni_runtime::jni::objects::JObject<'_>>,
-) -> ::prebindgen_runtime::Result<()> {
-    if let Some(__pb_return) = return_sink {
-        {
-            let ret_w0 = perftest_flat::return_failure_code(&source);
-            let ret_w1 = ret_w0;
-            unsafe {
-                ::prebindgen_jni_runtime::invoke_error_callback(
-                    &mut env,
-                    &__pb_return,
-                    "domainError0",
-                    "(J)V",
-                    &[
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w1,
-                        },
-                    ],
-                )
-            }?;
-            let _: () = {
-                *reported = Some(std::ptr::null_mut());
-            };
-            Ok(())
-        }
-    } else {
-        {
-            let ret_w0 = perftest_flat::return_failure_code(&source);
-            let ret_w1 = ret_w0;
-            let result = ::prebindgen_jni_runtime::array(&mut env, 2usize)?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[::prebindgen_jni_runtime::jni::objects::JValue::Long(ret_w1)],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 1i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            ::prebindgen_jni_runtime::mark_domain_packet(&mut env, &result)?;
-            let _: () = {
-                *reported = Some(result.as_raw());
-            };
-            Ok(())
-        }
-    }
-}
-#[allow(
-    non_snake_case,
-    clippy::needless_borrow,
-    clippy::let_unit_value,
-    clippy::unnecessary_cast,
-    clippy::useless_conversion
-)]
-fn __pb_jni_error_ReturnWideError_typed_1cad12a60e60a2bd(
-    mut env: &mut ::prebindgen_jni_runtime::jni::JNIEnv<'_>,
-    source: perftest_flat::ReturnWideError,
-    reported: &mut Option<::prebindgen_jni_runtime::jni::sys::jobjectArray>,
-    return_sink: Option<&::prebindgen_jni_runtime::jni::objects::JObject<'_>>,
-) -> ::prebindgen_runtime::Result<()> {
-    if let Some(__pb_return) = return_sink {
-        {
-            let ret_w0_record = source;
-            let ret_w0_f0_record = ret_w0_record.a;
-            let ret_w0_f0_f0 = ret_w0_f0_record.v0;
-            let ret_w0_f0_f1 = ret_w0_f0_record.v1;
-            let ret_w0_f0_f2 = ret_w0_f0_record.v2;
-            let ret_w0_f0_f3 = ret_w0_f0_record.v3;
-            let ret_w0_f0_f4 = ret_w0_f0_record.v4;
-            let ret_w0_f0_f5 = ret_w0_f0_record.v5;
-            let ret_w0_f0_f6 = ret_w0_f0_record.v6;
-            let ret_w0_f0_f7 = ret_w0_f0_record.v7;
-            let ret_w0_f0_f8 = ret_w0_f0_record.v8;
-            let ret_w0_f0_f9 = ret_w0_f0_record.v9;
-            let ret_w0_f0_f10 = ret_w0_f0_record.v10;
-            let ret_w0_f0_f11 = ret_w0_f0_record.v11;
-            let ret_w0_f0_f12 = ret_w0_f0_record.v12;
-            let ret_w0_f0_f13 = ret_w0_f0_record.v13;
-            let ret_w0_f0_f14 = ret_w0_f0_record.v14;
-            let ret_w0_f0_f15 = ret_w0_f0_record.v15;
-            let ret_w0_f0_f16 = ret_w0_f0_record.v16;
-            let ret_w0_f0_f17 = ret_w0_f0_record.v17;
-            let ret_w0_f0_f18 = ret_w0_f0_record.v18;
-            let ret_w0_f0_f19 = ret_w0_f0_record.v19;
-            let ret_w0_f0_f20 = ret_w0_f0_record.v20;
-            let ret_w0_f0_f21 = ret_w0_f0_record.v21;
-            let ret_w0_f0_f22 = ret_w0_f0_record.v22;
-            let ret_w0_f0_f23 = ret_w0_f0_record.v23;
-            let ret_w0_f0_f24 = ret_w0_f0_record.v24;
-            let ret_w0_f0_f25 = ret_w0_f0_record.v25;
-            let ret_w0_f0_f26 = ret_w0_f0_record.v26;
-            let ret_w0_f0_f27 = ret_w0_f0_record.v27;
-            let ret_w0_f0_f28 = ret_w0_f0_record.v28;
-            let ret_w0_f0_f29 = ret_w0_f0_record.v29;
-            let ret_w0_f0_f30 = ret_w0_f0_record.v30;
-            let ret_w0_f0_f31 = ret_w0_f0_record.v31;
-            let ret_w0_f0_f32 = ret_w0_f0_record.v32;
-            let ret_w0_f0_f33 = ret_w0_f0_record.v33;
-            let ret_w0_f0_f34 = ret_w0_f0_record.v34;
-            let ret_w0_f0_f35 = ret_w0_f0_record.v35;
-            let ret_w0_f0_f36 = ret_w0_f0_record.v36;
-            let ret_w0_f0_f37 = ret_w0_f0_record.v37;
-            let ret_w0_f0_f38 = ret_w0_f0_record.v38;
-            let ret_w0_f0_f39 = ret_w0_f0_record.v39;
-            let ret_w0_f0_f40 = ret_w0_f0_record.v40;
-            let ret_w0_f0_f41 = ret_w0_f0_record.v41;
-            let ret_w0_f0_f42 = ret_w0_f0_record.v42;
-            let ret_w0_f0_f43 = ret_w0_f0_record.v43;
-            let ret_w0_f0_f44 = ret_w0_f0_record.v44;
-            let ret_w0_f0_f45 = ret_w0_f0_record.v45;
-            let ret_w0_f0_f46 = ret_w0_f0_record.v46;
-            let ret_w0_f0_f47 = ret_w0_f0_record.v47;
-            let ret_w0_f0_f48 = ret_w0_f0_record.v48;
-            let ret_w0_f0_f49 = ret_w0_f0_record.v49;
-            let ret_w0_f0_f50 = ret_w0_f0_record.v50;
-            let ret_w0_f0_f51 = ret_w0_f0_record.v51;
-            let ret_w0_f0_f52 = ret_w0_f0_record.v52;
-            let ret_w0_f0_f53 = ret_w0_f0_record.v53;
-            let ret_w0_f0_f54 = ret_w0_f0_record.v54;
-            let ret_w0_f0_f55 = ret_w0_f0_record.v55;
-            let ret_w0_f0_f56 = ret_w0_f0_record.v56;
-            let ret_w0_f0_f57 = ret_w0_f0_record.v57;
-            let ret_w0_f0_f58 = ret_w0_f0_record.v58;
-            let ret_w0_f0_f59 = ret_w0_f0_record.v59;
-            let ret_w0_f0_f60 = ret_w0_f0_record.v60;
-            let ret_w0_f0_f61 = ret_w0_f0_record.v61;
-            let ret_w0_f0_f62 = ret_w0_f0_record.v62;
-            let ret_w0_f0_f63 = ret_w0_f0_record.v63;
-            let ret_w0_f1_record = ret_w0_record.b;
-            let ret_w0_f1_f0 = ret_w0_f1_record.v0;
-            let ret_w0_f1_f1 = ret_w0_f1_record.v1;
-            let ret_w0_f1_f2 = ret_w0_f1_record.v2;
-            let ret_w0_f1_f3 = ret_w0_f1_record.v3;
-            let ret_w0_f1_f4 = ret_w0_f1_record.v4;
-            let ret_w0_f1_f5 = ret_w0_f1_record.v5;
-            let ret_w0_f1_f6 = ret_w0_f1_record.v6;
-            let ret_w0_f1_f7 = ret_w0_f1_record.v7;
-            let ret_w0_f1_f8 = ret_w0_f1_record.v8;
-            let ret_w0_f1_f9 = ret_w0_f1_record.v9;
-            let ret_w0_f1_f10 = ret_w0_f1_record.v10;
-            let ret_w0_f1_f11 = ret_w0_f1_record.v11;
-            let ret_w0_f1_f12 = ret_w0_f1_record.v12;
-            let ret_w0_f1_f13 = ret_w0_f1_record.v13;
-            let ret_w0_f1_f14 = ret_w0_f1_record.v14;
-            let ret_w0_f1_f15 = ret_w0_f1_record.v15;
-            let ret_w0_f1_f16 = ret_w0_f1_record.v16;
-            let ret_w0_f1_f17 = ret_w0_f1_record.v17;
-            let ret_w0_f1_f18 = ret_w0_f1_record.v18;
-            let ret_w0_f1_f19 = ret_w0_f1_record.v19;
-            let ret_w0_f1_f20 = ret_w0_f1_record.v20;
-            let ret_w0_f1_f21 = ret_w0_f1_record.v21;
-            let ret_w0_f1_f22 = ret_w0_f1_record.v22;
-            let ret_w0_f1_f23 = ret_w0_f1_record.v23;
-            let ret_w0_f1_f24 = ret_w0_f1_record.v24;
-            let ret_w0_f1_f25 = ret_w0_f1_record.v25;
-            let ret_w0_f1_f26 = ret_w0_f1_record.v26;
-            let ret_w0_f1_f27 = ret_w0_f1_record.v27;
-            let ret_w0_f1_f28 = ret_w0_f1_record.v28;
-            let ret_w0_f1_f29 = ret_w0_f1_record.v29;
-            let ret_w0_f1_f30 = ret_w0_f1_record.v30;
-            let ret_w0_f1_f31 = ret_w0_f1_record.v31;
-            let ret_w0_f1_f32 = ret_w0_f1_record.v32;
-            let ret_w0_f1_f33 = ret_w0_f1_record.v33;
-            let ret_w0_f1_f34 = ret_w0_f1_record.v34;
-            let ret_w0_f1_f35 = ret_w0_f1_record.v35;
-            let ret_w0_f1_f36 = ret_w0_f1_record.v36;
-            let ret_w0_f1_f37 = ret_w0_f1_record.v37;
-            let ret_w0_f1_f38 = ret_w0_f1_record.v38;
-            let ret_w0_f1_f39 = ret_w0_f1_record.v39;
-            let ret_w0_f1_f40 = ret_w0_f1_record.v40;
-            let ret_w0_f1_f41 = ret_w0_f1_record.v41;
-            let ret_w0_f1_f42 = ret_w0_f1_record.v42;
-            let ret_w0_f1_f43 = ret_w0_f1_record.v43;
-            let ret_w0_f1_f44 = ret_w0_f1_record.v44;
-            let ret_w0_f1_f45 = ret_w0_f1_record.v45;
-            let ret_w0_f1_f46 = ret_w0_f1_record.v46;
-            let ret_w0_f1_f47 = ret_w0_f1_record.v47;
-            let ret_w0_f1_f48 = ret_w0_f1_record.v48;
-            let ret_w0_f1_f49 = ret_w0_f1_record.v49;
-            let ret_w0_f1_f50 = ret_w0_f1_record.v50;
-            let ret_w0_f1_f51 = ret_w0_f1_record.v51;
-            let ret_w0_f1_f52 = ret_w0_f1_record.v52;
-            let ret_w0_f1_f53 = ret_w0_f1_record.v53;
-            let ret_w0_f1_f54 = ret_w0_f1_record.v54;
-            let ret_w0_f1_f55 = ret_w0_f1_record.v55;
-            let ret_w0_f1_f56 = ret_w0_f1_record.v56;
-            let ret_w0_f1_f57 = ret_w0_f1_record.v57;
-            let ret_w0_f1_f58 = ret_w0_f1_record.v58;
-            let ret_w0_f1_f59 = ret_w0_f1_record.v59;
-            let ret_w0_f1_f60 = ret_w0_f1_record.v60;
-            let ret_w0_f1_f61 = ret_w0_f1_record.v61;
-            let ret_w0_f1_f62 = ret_w0_f1_record.v62;
-            let ret_w0_f1_f63 = ret_w0_f1_record.v63;
-            let ret_w0_f1_f64 = ret_w0_f1_record.v64;
-            let ret_w0_f1_f65 = ret_w0_f1_record.v65;
-            unsafe {
-                ::prebindgen_jni_runtime::invoke_error_callback(
-                    &mut env,
-                    &__pb_return,
-                    "domainError0",
-                    "(JJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJ)V",
-                    &[
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f0,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f1,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f2,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f3,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f4,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f5,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f6,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f7,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f8,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f9,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f10,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f11,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f12,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f13,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f14,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f15,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f16,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f17,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f18,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f19,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f20,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f21,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f22,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f23,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f24,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f25,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f26,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f27,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f28,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f29,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f30,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f31,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f32,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f33,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f34,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f35,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f36,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f37,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f38,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f39,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f40,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f41,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f42,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f43,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f44,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f45,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f46,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f47,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f48,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f49,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f50,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f51,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f52,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f53,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f54,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f55,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f56,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f57,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f58,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f59,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f60,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f61,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f62,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f0_f63,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f0,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f1,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f2,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f3,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f4,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f5,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f6,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f7,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f8,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f9,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f10,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f11,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f12,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f13,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f14,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f15,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f16,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f17,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f18,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f19,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f20,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f21,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f22,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f23,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f24,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f25,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f26,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f27,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f28,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f29,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f30,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f31,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f32,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f33,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f34,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f35,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f36,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f37,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f38,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f39,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f40,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f41,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f42,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f43,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f44,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f45,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f46,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f47,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f48,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f49,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f50,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f51,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f52,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f53,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f54,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f55,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f56,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f57,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f58,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f59,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f60,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f61,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f62,
-                        },
-                    ],
-                )
-            }?;
-            unsafe {
-                ::prebindgen_jni_runtime::invoke_error_callback(
-                    &mut env,
-                    &__pb_return,
-                    "domainError1",
-                    "(JJJ)V",
-                    &[
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f63,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f64,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0_f1_f65,
-                        },
-                    ],
-                )
-            }?;
-            let _: () = {
-                *reported = Some(std::ptr::null_mut());
-            };
-            Ok(())
-        }
-    } else {
-        {
-            let ret_w0_record = source;
-            let ret_w0_f0_record = ret_w0_record.a;
-            let ret_w0_f0_f0 = ret_w0_f0_record.v0;
-            let ret_w0_f0_f1 = ret_w0_f0_record.v1;
-            let ret_w0_f0_f2 = ret_w0_f0_record.v2;
-            let ret_w0_f0_f3 = ret_w0_f0_record.v3;
-            let ret_w0_f0_f4 = ret_w0_f0_record.v4;
-            let ret_w0_f0_f5 = ret_w0_f0_record.v5;
-            let ret_w0_f0_f6 = ret_w0_f0_record.v6;
-            let ret_w0_f0_f7 = ret_w0_f0_record.v7;
-            let ret_w0_f0_f8 = ret_w0_f0_record.v8;
-            let ret_w0_f0_f9 = ret_w0_f0_record.v9;
-            let ret_w0_f0_f10 = ret_w0_f0_record.v10;
-            let ret_w0_f0_f11 = ret_w0_f0_record.v11;
-            let ret_w0_f0_f12 = ret_w0_f0_record.v12;
-            let ret_w0_f0_f13 = ret_w0_f0_record.v13;
-            let ret_w0_f0_f14 = ret_w0_f0_record.v14;
-            let ret_w0_f0_f15 = ret_w0_f0_record.v15;
-            let ret_w0_f0_f16 = ret_w0_f0_record.v16;
-            let ret_w0_f0_f17 = ret_w0_f0_record.v17;
-            let ret_w0_f0_f18 = ret_w0_f0_record.v18;
-            let ret_w0_f0_f19 = ret_w0_f0_record.v19;
-            let ret_w0_f0_f20 = ret_w0_f0_record.v20;
-            let ret_w0_f0_f21 = ret_w0_f0_record.v21;
-            let ret_w0_f0_f22 = ret_w0_f0_record.v22;
-            let ret_w0_f0_f23 = ret_w0_f0_record.v23;
-            let ret_w0_f0_f24 = ret_w0_f0_record.v24;
-            let ret_w0_f0_f25 = ret_w0_f0_record.v25;
-            let ret_w0_f0_f26 = ret_w0_f0_record.v26;
-            let ret_w0_f0_f27 = ret_w0_f0_record.v27;
-            let ret_w0_f0_f28 = ret_w0_f0_record.v28;
-            let ret_w0_f0_f29 = ret_w0_f0_record.v29;
-            let ret_w0_f0_f30 = ret_w0_f0_record.v30;
-            let ret_w0_f0_f31 = ret_w0_f0_record.v31;
-            let ret_w0_f0_f32 = ret_w0_f0_record.v32;
-            let ret_w0_f0_f33 = ret_w0_f0_record.v33;
-            let ret_w0_f0_f34 = ret_w0_f0_record.v34;
-            let ret_w0_f0_f35 = ret_w0_f0_record.v35;
-            let ret_w0_f0_f36 = ret_w0_f0_record.v36;
-            let ret_w0_f0_f37 = ret_w0_f0_record.v37;
-            let ret_w0_f0_f38 = ret_w0_f0_record.v38;
-            let ret_w0_f0_f39 = ret_w0_f0_record.v39;
-            let ret_w0_f0_f40 = ret_w0_f0_record.v40;
-            let ret_w0_f0_f41 = ret_w0_f0_record.v41;
-            let ret_w0_f0_f42 = ret_w0_f0_record.v42;
-            let ret_w0_f0_f43 = ret_w0_f0_record.v43;
-            let ret_w0_f0_f44 = ret_w0_f0_record.v44;
-            let ret_w0_f0_f45 = ret_w0_f0_record.v45;
-            let ret_w0_f0_f46 = ret_w0_f0_record.v46;
-            let ret_w0_f0_f47 = ret_w0_f0_record.v47;
-            let ret_w0_f0_f48 = ret_w0_f0_record.v48;
-            let ret_w0_f0_f49 = ret_w0_f0_record.v49;
-            let ret_w0_f0_f50 = ret_w0_f0_record.v50;
-            let ret_w0_f0_f51 = ret_w0_f0_record.v51;
-            let ret_w0_f0_f52 = ret_w0_f0_record.v52;
-            let ret_w0_f0_f53 = ret_w0_f0_record.v53;
-            let ret_w0_f0_f54 = ret_w0_f0_record.v54;
-            let ret_w0_f0_f55 = ret_w0_f0_record.v55;
-            let ret_w0_f0_f56 = ret_w0_f0_record.v56;
-            let ret_w0_f0_f57 = ret_w0_f0_record.v57;
-            let ret_w0_f0_f58 = ret_w0_f0_record.v58;
-            let ret_w0_f0_f59 = ret_w0_f0_record.v59;
-            let ret_w0_f0_f60 = ret_w0_f0_record.v60;
-            let ret_w0_f0_f61 = ret_w0_f0_record.v61;
-            let ret_w0_f0_f62 = ret_w0_f0_record.v62;
-            let ret_w0_f0_f63 = ret_w0_f0_record.v63;
-            let ret_w0_f1_record = ret_w0_record.b;
-            let ret_w0_f1_f0 = ret_w0_f1_record.v0;
-            let ret_w0_f1_f1 = ret_w0_f1_record.v1;
-            let ret_w0_f1_f2 = ret_w0_f1_record.v2;
-            let ret_w0_f1_f3 = ret_w0_f1_record.v3;
-            let ret_w0_f1_f4 = ret_w0_f1_record.v4;
-            let ret_w0_f1_f5 = ret_w0_f1_record.v5;
-            let ret_w0_f1_f6 = ret_w0_f1_record.v6;
-            let ret_w0_f1_f7 = ret_w0_f1_record.v7;
-            let ret_w0_f1_f8 = ret_w0_f1_record.v8;
-            let ret_w0_f1_f9 = ret_w0_f1_record.v9;
-            let ret_w0_f1_f10 = ret_w0_f1_record.v10;
-            let ret_w0_f1_f11 = ret_w0_f1_record.v11;
-            let ret_w0_f1_f12 = ret_w0_f1_record.v12;
-            let ret_w0_f1_f13 = ret_w0_f1_record.v13;
-            let ret_w0_f1_f14 = ret_w0_f1_record.v14;
-            let ret_w0_f1_f15 = ret_w0_f1_record.v15;
-            let ret_w0_f1_f16 = ret_w0_f1_record.v16;
-            let ret_w0_f1_f17 = ret_w0_f1_record.v17;
-            let ret_w0_f1_f18 = ret_w0_f1_record.v18;
-            let ret_w0_f1_f19 = ret_w0_f1_record.v19;
-            let ret_w0_f1_f20 = ret_w0_f1_record.v20;
-            let ret_w0_f1_f21 = ret_w0_f1_record.v21;
-            let ret_w0_f1_f22 = ret_w0_f1_record.v22;
-            let ret_w0_f1_f23 = ret_w0_f1_record.v23;
-            let ret_w0_f1_f24 = ret_w0_f1_record.v24;
-            let ret_w0_f1_f25 = ret_w0_f1_record.v25;
-            let ret_w0_f1_f26 = ret_w0_f1_record.v26;
-            let ret_w0_f1_f27 = ret_w0_f1_record.v27;
-            let ret_w0_f1_f28 = ret_w0_f1_record.v28;
-            let ret_w0_f1_f29 = ret_w0_f1_record.v29;
-            let ret_w0_f1_f30 = ret_w0_f1_record.v30;
-            let ret_w0_f1_f31 = ret_w0_f1_record.v31;
-            let ret_w0_f1_f32 = ret_w0_f1_record.v32;
-            let ret_w0_f1_f33 = ret_w0_f1_record.v33;
-            let ret_w0_f1_f34 = ret_w0_f1_record.v34;
-            let ret_w0_f1_f35 = ret_w0_f1_record.v35;
-            let ret_w0_f1_f36 = ret_w0_f1_record.v36;
-            let ret_w0_f1_f37 = ret_w0_f1_record.v37;
-            let ret_w0_f1_f38 = ret_w0_f1_record.v38;
-            let ret_w0_f1_f39 = ret_w0_f1_record.v39;
-            let ret_w0_f1_f40 = ret_w0_f1_record.v40;
-            let ret_w0_f1_f41 = ret_w0_f1_record.v41;
-            let ret_w0_f1_f42 = ret_w0_f1_record.v42;
-            let ret_w0_f1_f43 = ret_w0_f1_record.v43;
-            let ret_w0_f1_f44 = ret_w0_f1_record.v44;
-            let ret_w0_f1_f45 = ret_w0_f1_record.v45;
-            let ret_w0_f1_f46 = ret_w0_f1_record.v46;
-            let ret_w0_f1_f47 = ret_w0_f1_record.v47;
-            let ret_w0_f1_f48 = ret_w0_f1_record.v48;
-            let ret_w0_f1_f49 = ret_w0_f1_record.v49;
-            let ret_w0_f1_f50 = ret_w0_f1_record.v50;
-            let ret_w0_f1_f51 = ret_w0_f1_record.v51;
-            let ret_w0_f1_f52 = ret_w0_f1_record.v52;
-            let ret_w0_f1_f53 = ret_w0_f1_record.v53;
-            let ret_w0_f1_f54 = ret_w0_f1_record.v54;
-            let ret_w0_f1_f55 = ret_w0_f1_record.v55;
-            let ret_w0_f1_f56 = ret_w0_f1_record.v56;
-            let ret_w0_f1_f57 = ret_w0_f1_record.v57;
-            let ret_w0_f1_f58 = ret_w0_f1_record.v58;
-            let ret_w0_f1_f59 = ret_w0_f1_record.v59;
-            let ret_w0_f1_f60 = ret_w0_f1_record.v60;
-            let ret_w0_f1_f61 = ret_w0_f1_record.v61;
-            let ret_w0_f1_f62 = ret_w0_f1_record.v62;
-            let ret_w0_f1_f63 = ret_w0_f1_record.v63;
-            let ret_w0_f1_f64 = ret_w0_f1_record.v64;
-            let ret_w0_f1_f65 = ret_w0_f1_record.v65;
-            let result = ::prebindgen_jni_runtime::array(&mut env, 131usize)?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[::prebindgen_jni_runtime::jni::objects::JValue::Long(ret_w0_f0_f0)],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 1i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[::prebindgen_jni_runtime::jni::objects::JValue::Long(ret_w0_f0_f1)],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 2i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[::prebindgen_jni_runtime::jni::objects::JValue::Long(ret_w0_f0_f2)],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 3i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[::prebindgen_jni_runtime::jni::objects::JValue::Long(ret_w0_f0_f3)],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 4i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[::prebindgen_jni_runtime::jni::objects::JValue::Long(ret_w0_f0_f4)],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 5i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[::prebindgen_jni_runtime::jni::objects::JValue::Long(ret_w0_f0_f5)],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 6i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[::prebindgen_jni_runtime::jni::objects::JValue::Long(ret_w0_f0_f6)],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 7i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[::prebindgen_jni_runtime::jni::objects::JValue::Long(ret_w0_f0_f7)],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 8i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[::prebindgen_jni_runtime::jni::objects::JValue::Long(ret_w0_f0_f8)],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 9i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[::prebindgen_jni_runtime::jni::objects::JValue::Long(ret_w0_f0_f9)],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 10i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f10,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 11i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f11,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 12i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f12,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 13i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f13,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 14i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f14,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 15i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f15,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 16i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f16,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 17i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f17,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 18i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f18,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 19i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f19,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 20i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f20,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 21i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f21,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 22i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f22,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 23i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f23,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 24i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f24,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 25i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f25,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 26i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f26,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 27i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f27,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 28i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f28,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 29i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f29,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 30i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f30,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 31i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f31,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 32i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f32,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 33i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f33,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 34i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f34,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 35i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f35,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 36i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f36,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 37i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f37,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 38i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f38,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 39i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f39,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 40i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f40,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 41i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f41,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 42i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f42,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 43i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f43,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 44i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f44,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 45i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f45,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 46i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f46,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 47i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f47,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 48i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f48,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 49i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f49,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 50i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f50,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 51i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f51,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 52i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f52,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 53i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f53,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 54i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f54,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 55i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f55,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 56i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f56,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 57i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f57,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 58i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f58,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 59i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f59,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 60i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f60,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 61i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f61,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 62i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f62,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 63i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f0_f63,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 64i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[::prebindgen_jni_runtime::jni::objects::JValue::Long(ret_w0_f1_f0)],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 65i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[::prebindgen_jni_runtime::jni::objects::JValue::Long(ret_w0_f1_f1)],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 66i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[::prebindgen_jni_runtime::jni::objects::JValue::Long(ret_w0_f1_f2)],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 67i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[::prebindgen_jni_runtime::jni::objects::JValue::Long(ret_w0_f1_f3)],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 68i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[::prebindgen_jni_runtime::jni::objects::JValue::Long(ret_w0_f1_f4)],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 69i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[::prebindgen_jni_runtime::jni::objects::JValue::Long(ret_w0_f1_f5)],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 70i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[::prebindgen_jni_runtime::jni::objects::JValue::Long(ret_w0_f1_f6)],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 71i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[::prebindgen_jni_runtime::jni::objects::JValue::Long(ret_w0_f1_f7)],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 72i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[::prebindgen_jni_runtime::jni::objects::JValue::Long(ret_w0_f1_f8)],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 73i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[::prebindgen_jni_runtime::jni::objects::JValue::Long(ret_w0_f1_f9)],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 74i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f10,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 75i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f11,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 76i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f12,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 77i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f13,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 78i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f14,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 79i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f15,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 80i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f16,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 81i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f17,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 82i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f18,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 83i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f19,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 84i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f20,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 85i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f21,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 86i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f22,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 87i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f23,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 88i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f24,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 89i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f25,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 90i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f26,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 91i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f27,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 92i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f28,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 93i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f29,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 94i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f30,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 95i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f31,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 96i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f32,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 97i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f33,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 98i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f34,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 99i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f35,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 100i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f36,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 101i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f37,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 102i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f38,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 103i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f39,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 104i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f40,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 105i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f41,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 106i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f42,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 107i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f43,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 108i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f44,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 109i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f45,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 110i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f46,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 111i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f47,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 112i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f48,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 113i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f49,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 114i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f50,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 115i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f51,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 116i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f52,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 117i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f53,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 118i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f54,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 119i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f55,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 120i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f56,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 121i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f57,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 122i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f58,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 123i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f59,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 124i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f60,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 125i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f61,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 126i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f62,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 127i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f63,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 128i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f64,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 129i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_f1_f65,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 130i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            ::prebindgen_jni_runtime::mark_domain_packet(&mut env, &result)?;
-            let _: () = {
-                *reported = Some(result.as_raw());
-            };
-            Ok(())
-        }
-    }
-}
-#[allow(
-    non_snake_case,
-    clippy::needless_borrow,
-    clippy::let_unit_value,
-    clippy::unnecessary_cast,
-    clippy::useless_conversion
-)]
-fn __pb_jni_error_StorageError_mapped_1df44b7ffab026ad(
-    mut env: &mut ::prebindgen_jni_runtime::jni::JNIEnv<'_>,
-    source: String,
-    reported: &mut Option<::prebindgen_jni_runtime::jni::sys::jobjectArray>,
-    return_sink: Option<&::prebindgen_jni_runtime::jni::objects::JObject<'_>>,
-) -> ::prebindgen_runtime::Result<()> {
-    if let Some(__pb_return) = return_sink {
-        {
-            let ret_w0: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
-                let ret_w0 = source;
-                ::prebindgen_jni_runtime::text_object(
-                    &mut env,
-                    ::core::convert::AsRef::<str>::as_ref(&ret_w0),
-                )?
-            };
-            let __pb_return_argument_0 = ret_w0;
-            unsafe {
-                ::prebindgen_jni_runtime::invoke_error_callback(
-                    &mut env,
-                    &__pb_return,
-                    "domainError0",
-                    "(Ljava/lang/String;)V",
-                    &[
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            l: __pb_return_argument_0.as_raw(),
-                        },
-                    ],
-                )
-            }?;
-            let _: () = {
-                *reported = Some(std::ptr::null_mut());
-            };
-            Ok(())
-        }
-    } else {
-        {
-            let ret_w0: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
-                let ret_w0 = source;
-                ::prebindgen_jni_runtime::text_object(
-                    &mut env,
-                    ::core::convert::AsRef::<str>::as_ref(&ret_w0),
-                )?
-            };
-            let result = ::prebindgen_jni_runtime::array(&mut env, 2usize)?;
-            let object = ret_w0;
-            env.set_object_array_element(&result, 1i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            ::prebindgen_jni_runtime::mark_domain_packet(&mut env, &result)?;
-            let _: () = {
-                *reported = Some(result.as_raw());
-            };
-            Ok(())
-        }
-    }
-}
-#[allow(
-    non_snake_case,
-    clippy::needless_borrow,
-    clippy::let_unit_value,
-    clippy::unnecessary_cast,
-    clippy::useless_conversion
-)]
-fn __pb_jni_error_String_mapped_a4e45f5146673c62(
-    mut env: &mut ::prebindgen_jni_runtime::jni::JNIEnv<'_>,
-    source: String,
-    reported: &mut Option<::prebindgen_jni_runtime::jni::sys::jobjectArray>,
-    return_sink: Option<&::prebindgen_jni_runtime::jni::objects::JObject<'_>>,
-) -> ::prebindgen_runtime::Result<()> {
-    if let Some(__pb_return) = return_sink {
-        {
-            let ret_w0: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
-                let ret_w0 = source;
-                ::prebindgen_jni_runtime::text_object(
-                    &mut env,
-                    ::core::convert::AsRef::<str>::as_ref(&ret_w0),
-                )?
-            };
-            let __pb_return_argument_0 = ret_w0;
-            unsafe {
-                ::prebindgen_jni_runtime::invoke_error_callback(
-                    &mut env,
-                    &__pb_return,
-                    "domainError0",
-                    "(Ljava/lang/String;)V",
-                    &[
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            l: __pb_return_argument_0.as_raw(),
-                        },
-                    ],
-                )
-            }?;
-            let _: () = {
-                *reported = Some(std::ptr::null_mut());
-            };
-            Ok(())
-        }
-    } else {
-        {
-            let ret_w0: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
-                let ret_w0 = source;
-                ::prebindgen_jni_runtime::text_object(
-                    &mut env,
-                    ::core::convert::AsRef::<str>::as_ref(&ret_w0),
-                )?
-            };
-            let result = ::prebindgen_jni_runtime::array(&mut env, 2usize)?;
-            let object = ret_w0;
-            env.set_object_array_element(&result, 1i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            ::prebindgen_jni_runtime::mark_domain_packet(&mut env, &result)?;
-            let _: () = {
-                *reported = Some(result.as_raw());
-            };
-            Ok(())
-        }
-    }
-}
-#[allow(
-    non_snake_case,
-    clippy::needless_borrow,
-    clippy::let_unit_value,
-    clippy::unnecessary_cast,
-    clippy::useless_conversion
-)]
-fn __pb_jni_error_Unit_typed_a1e0cd1748dcb6ca(
-    mut env: &mut ::prebindgen_jni_runtime::jni::JNIEnv<'_>,
-    source: (),
-    reported: &mut Option<::prebindgen_jni_runtime::jni::sys::jobjectArray>,
-    return_sink: Option<&::prebindgen_jni_runtime::jni::objects::JObject<'_>>,
-) -> ::prebindgen_runtime::Result<()> {
-    if let Some(__pb_return) = return_sink {
-        {
-            unsafe {
-                ::prebindgen_jni_runtime::invoke_error_callback(
-                    &mut env,
-                    &__pb_return,
-                    "domainError0",
-                    "()V",
-                    &[],
-                )
-            }?;
-            let _: () = {
-                *reported = Some(std::ptr::null_mut());
-            };
-            Ok(())
-        }
-    } else {
-        {
-            let result = ::prebindgen_jni_runtime::array(&mut env, 1usize)?;
-            ::prebindgen_jni_runtime::mark_domain_packet(&mut env, &result)?;
-            let _: () = {
-                *reported = Some(result.as_raw());
-            };
-            Ok(())
-        }
-    }
-}
-#[allow(
-    non_snake_case,
-    clippy::needless_borrow,
-    clippy::let_unit_value,
-    clippy::unnecessary_cast,
-    clippy::useless_conversion
-)]
-fn __pb_jni_error_WireErrorKind_typed_6fcf8b26d9116763(
-    mut env: &mut ::prebindgen_jni_runtime::jni::JNIEnv<'_>,
-    source: perftest_flat::WireErrorKind,
-    reported: &mut Option<::prebindgen_jni_runtime::jni::sys::jobjectArray>,
-    return_sink: Option<&::prebindgen_jni_runtime::jni::objects::JObject<'_>>,
-) -> ::prebindgen_runtime::Result<()> {
-    if let Some(__pb_return) = return_sink {
-        {
-            #[allow(non_camel_case_types)]
-            enum __PbEnumCommit_ret_w1<F0, F1> {
-                A0(F0),
-                A1(F1),
-            }
-            let (
-                ret_w1_tag,
-                (__ret_w1_a0_value0, __ret_w1_a1_value0),
-                __ret_w1_commit,
-            ) = match source {
-                perftest_flat::WireErrorKind::Code(__ret_w1_a0_b0) => {
-                    let ret_w1_a0_f0 = __ret_w1_a0_b0;
-                    let values = (
-                        ret_w1_a0_f0,
-                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                    );
-                    (0i32, values, __PbEnumCommit_ret_w1::A0(move || {}))
-                }
-                perftest_flat::WireErrorKind::Message(__ret_w1_a1_b0) => {
-                    let ret_w1_a1_f0: ::prebindgen_jni_runtime::jni::objects::JObject<
-                        '_,
-                    > = {
-                        let ret_w1_a1_f0 = __ret_w1_a1_b0;
-                        ::prebindgen_jni_runtime::text_object(
-                            &mut env,
-                            ::core::convert::AsRef::<str>::as_ref(&ret_w1_a1_f0),
-                        )?
-                    };
-                    let values = (0, ret_w1_a1_f0);
-                    (1i32, values, __PbEnumCommit_ret_w1::A1(move || {}))
-                }
-            };
-            let __pb_return_argument_2 = __ret_w1_a1_value0;
-            unsafe {
-                ::prebindgen_jni_runtime::invoke_error_callback(
-                    &mut env,
-                    &__pb_return,
-                    "domainError0",
-                    "(IJLjava/lang/String;)V",
-                    &[
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            i: ret_w1_tag,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: __ret_w1_a0_value0,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            l: __pb_return_argument_2.as_raw(),
-                        },
-                    ],
-                )
-            }?;
-            let _: () = {
-                match __ret_w1_commit {
-                    __PbEnumCommit_ret_w1::A0(action) => action(),
-                    __PbEnumCommit_ret_w1::A1(action) => action(),
-                }
-                *reported = Some(std::ptr::null_mut());
-            };
-            Ok(())
-        }
-    } else {
-        {
-            #[allow(non_camel_case_types)]
-            enum __PbEnumCommit_ret_w1<F0, F1> {
-                A0(F0),
-                A1(F1),
-            }
-            let (
-                ret_w1_tag,
-                (__ret_w1_a0_value0, __ret_w1_a1_value0),
-                __ret_w1_commit,
-            ) = match source {
-                perftest_flat::WireErrorKind::Code(__ret_w1_a0_b0) => {
-                    let ret_w1_a0_f0 = __ret_w1_a0_b0;
-                    let values = (
-                        ret_w1_a0_f0,
-                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                    );
-                    (0i32, values, __PbEnumCommit_ret_w1::A0(move || {}))
-                }
-                perftest_flat::WireErrorKind::Message(__ret_w1_a1_b0) => {
-                    let ret_w1_a1_f0: ::prebindgen_jni_runtime::jni::objects::JObject<
-                        '_,
-                    > = {
-                        let ret_w1_a1_f0 = __ret_w1_a1_b0;
-                        ::prebindgen_jni_runtime::text_object(
-                            &mut env,
-                            ::core::convert::AsRef::<str>::as_ref(&ret_w1_a1_f0),
-                        )?
-                    };
-                    let values = (0, ret_w1_a1_f0);
-                    (1i32, values, __PbEnumCommit_ret_w1::A1(move || {}))
-                }
-            };
-            let result = ::prebindgen_jni_runtime::array(&mut env, 4usize)?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Integer",
-                    "valueOf",
-                    "(I)Ljava/lang/Integer;",
-                    &[::prebindgen_jni_runtime::jni::objects::JValue::Int(ret_w1_tag)],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 1i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            __ret_w1_a0_value0,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 2i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = __ret_w1_a1_value0;
-            env.set_object_array_element(&result, 3i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            ::prebindgen_jni_runtime::mark_domain_packet(&mut env, &result)?;
-            let _: () = {
-                match __ret_w1_commit {
-                    __PbEnumCommit_ret_w1::A0(action) => action(),
-                    __PbEnumCommit_ret_w1::A1(action) => action(),
-                }
-                *reported = Some(result.as_raw());
-            };
-            Ok(())
-        }
-    }
-}
-#[allow(
-    non_snake_case,
-    clippy::needless_borrow,
-    clippy::let_unit_value,
-    clippy::unnecessary_cast,
-    clippy::useless_conversion
-)]
-fn __pb_jni_error_i64_typed_7b82463b61f2de72(
-    mut env: &mut ::prebindgen_jni_runtime::jni::JNIEnv<'_>,
-    source: i64,
-    reported: &mut Option<::prebindgen_jni_runtime::jni::sys::jobjectArray>,
-    return_sink: Option<&::prebindgen_jni_runtime::jni::objects::JObject<'_>>,
-) -> ::prebindgen_runtime::Result<()> {
-    if let Some(__pb_return) = return_sink {
-        {
-            let ret_w0 = source;
-            unsafe {
-                ::prebindgen_jni_runtime::invoke_error_callback(
-                    &mut env,
-                    &__pb_return,
-                    "domainError0",
-                    "(J)V",
-                    &[
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: ret_w0,
-                        },
-                    ],
-                )
-            }?;
-            let _: () = {
-                *reported = Some(std::ptr::null_mut());
-            };
-            Ok(())
-        }
-    } else {
-        {
-            let ret_w0 = source;
-            let result = ::prebindgen_jni_runtime::array(&mut env, 2usize)?;
-            let object = env
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[::prebindgen_jni_runtime::jni::objects::JValue::Long(ret_w0)],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            env.set_object_array_element(&result, 1i32, &object)
-                .map_err(|e| e.to_string())?;
-            env.delete_local_ref(object).map_err(|e| e.to_string())?;
-            ::prebindgen_jni_runtime::mark_domain_packet(&mut env, &result)?;
-            let _: () = {
-                *reported = Some(result.as_raw());
-            };
-            Ok(())
-        }
-    }
-}
 /**# Safety
 Only generated Kotlin ownership release paths may call this entry point. The pointer must be a live allocation of the declared type with no outstanding native access; an opted-in Cleaner may release an unreachable wrapper without its monitor.*/
 #[no_mangle]
@@ -10092,53 +5826,80 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1wire_
             let source_value = perftest_flat::wire_nested_outcome(
                 __prebindgen_argument_0,
             );
-            let ret_w0 = match source_value {
+            let ret_w5 = match source_value {
                 ::core::result::Result::Ok(value) => value,
-                ::core::result::Result::Err(ret_w1) => {
-                    return Err({
-                        __pb_jni_error_String_mapped_a4e45f5146673c62(
-                            &mut jni_environment,
-                            perftest_flat::callback_return_error_message(&ret_w1),
-                            &mut domain_output,
-                            Some(&__pb_return),
-                        )?;
-                        String::new()
-                    });
+                ::core::result::Result::Err(ret_w6) => {
+                    let _: () = ((|| -> ::prebindgen_runtime::Result<()> {
+                        let ret_w2 = ret_w6;
+                        let ret_w3 = perftest_flat::callback_return_error_message(
+                            &ret_w2,
+                        );
+                        {
+                            let ret_w4: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                '_,
+                            > = {
+                                let ret_w4 = ret_w3;
+                                ::prebindgen_jni_runtime::text_object(
+                                    &mut jni_environment,
+                                    ::core::convert::AsRef::<str>::as_ref(&ret_w4),
+                                )?
+                            };
+                            let __pb_return_argument_0 = ret_w4;
+                            unsafe {
+                                ::prebindgen_jni_runtime::invoke_error_callback(
+                                    &mut jni_environment,
+                                    &__pb_return,
+                                    "domainError0",
+                                    "(Ljava/lang/String;)V",
+                                    &[
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            l: __pb_return_argument_0.as_raw(),
+                                        },
+                                    ],
+                                )
+                            }?;
+                            let _: () = {
+                                domain_output = Some(std::ptr::null_mut());
+                            };
+                            Ok(())
+                        }
+                    })())?;
+                    return Err(String::new());
                 }
             };
             #[allow(non_camel_case_types)]
-            enum __PbEnumCommit_ret_w3<F0, F1> {
+            enum __PbEnumCommit_ret_w1<F0, F1> {
                 A0(F0),
                 A1(F1),
             }
             let (
-                ret_w3_tag,
-                (__ret_w3_a0_value0, __ret_w3_a1_value0),
-                __ret_w3_commit,
-            ) = match ret_w0 {
-                ::core::result::Result::Ok(__ret_w3_a0_b0) => {
-                    let ret_w3_a0_f0 = __ret_w3_a0_b0;
+                ret_w1_tag,
+                (__ret_w1_a0_value0, __ret_w1_a1_value0),
+                __ret_w1_commit,
+            ) = match ret_w5 {
+                ::core::result::Result::Ok(__ret_w1_a0_b0) => {
+                    let ret_w1_a0_f0 = __ret_w1_a0_b0;
                     let values = (
-                        ret_w3_a0_f0,
+                        ret_w1_a0_f0,
                         ::prebindgen_jni_runtime::jni::objects::JObject::null(),
                     );
-                    (0i32, values, __PbEnumCommit_ret_w3::A0(move || {}))
+                    (0i32, values, __PbEnumCommit_ret_w1::A0(move || {}))
                 }
-                ::core::result::Result::Err(__ret_w3_a1_b0) => {
-                    let ret_w3_a1_f0: ::prebindgen_jni_runtime::jni::objects::JObject<
+                ::core::result::Result::Err(__ret_w1_a1_b0) => {
+                    let ret_w1_a1_f0: ::prebindgen_jni_runtime::jni::objects::JObject<
                         '_,
                     > = {
-                        let ret_w3_a1_f0 = __ret_w3_a1_b0;
+                        let ret_w1_a1_f0 = __ret_w1_a1_b0;
                         ::prebindgen_jni_runtime::text_object(
                             &mut jni_environment,
-                            ::core::convert::AsRef::<str>::as_ref(&ret_w3_a1_f0),
+                            ::core::convert::AsRef::<str>::as_ref(&ret_w1_a1_f0),
                         )?
                     };
-                    let values = (0, ret_w3_a1_f0);
-                    (1i32, values, __PbEnumCommit_ret_w3::A1(move || {}))
+                    let values = (0, ret_w1_a1_f0);
+                    (1i32, values, __PbEnumCommit_ret_w1::A1(move || {}))
                 }
             };
-            let __pb_return_argument_2 = __ret_w3_a1_value0;
+            let __pb_return_argument_2 = __ret_w1_a1_value0;
             static __PB_RETURN_METHOD_0: ::prebindgen_jni_runtime::ReturnCallback = ::prebindgen_jni_runtime::ReturnCallback::new();
             unsafe {
                 __PB_RETURN_METHOD_0
@@ -10149,10 +5910,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1wire_
                         "(IJLjava/lang/String;)V",
                         &[
                             ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                i: ret_w3_tag,
+                                i: ret_w1_tag,
                             },
                             ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                j: __ret_w3_a0_value0,
+                                j: __ret_w1_a0_value0,
                             },
                             ::prebindgen_jni_runtime::jni::sys::jvalue {
                                 l: __pb_return_argument_2.as_raw(),
@@ -10161,9 +5922,9 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1wire_
                     )
             }?;
             let _: () = {
-                match __ret_w3_commit {
-                    __PbEnumCommit_ret_w3::A0(action) => action(),
-                    __PbEnumCommit_ret_w3::A1(action) => action(),
+                match __ret_w1_commit {
+                    __PbEnumCommit_ret_w1::A0(action) => action(),
+                    __PbEnumCommit_ret_w1::A1(action) => action(),
                 }
                 success_transferred = true;
             };
@@ -10230,18 +5991,74 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1wire_
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
             let source_value = perftest_flat::wire_error_outcome();
-            let ret_w0 = match source_value {
+            let ret_w2 = match source_value {
                 ::core::result::Result::Ok(value) => value,
-                ::core::result::Result::Err(ret_w1) => {
-                    return Err({
-                        __pb_jni_error_WireErrorKind_typed_6fcf8b26d9116763(
-                            &mut jni_environment,
-                            ret_w1,
-                            &mut domain_output,
-                            Some(&__pb_return),
-                        )?;
-                        String::new()
-                    });
+                ::core::result::Result::Err(ret_w3) => {
+                    let _: () = ((|| -> ::prebindgen_runtime::Result<()> {
+                        {
+                            #[allow(non_camel_case_types)]
+                            enum __PbEnumCommit_ret_w1<F0, F1> {
+                                A0(F0),
+                                A1(F1),
+                            }
+                            let (
+                                ret_w1_tag,
+                                (__ret_w1_a0_value0, __ret_w1_a1_value0),
+                                __ret_w1_commit,
+                            ) = match ret_w3 {
+                                perftest_flat::WireErrorKind::Code(__ret_w1_a0_b0) => {
+                                    let ret_w1_a0_f0 = __ret_w1_a0_b0;
+                                    let values = (
+                                        ret_w1_a0_f0,
+                                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                    );
+                                    (0i32, values, __PbEnumCommit_ret_w1::A0(move || {}))
+                                }
+                                perftest_flat::WireErrorKind::Message(__ret_w1_a1_b0) => {
+                                    let ret_w1_a1_f0: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                        '_,
+                                    > = {
+                                        let ret_w1_a1_f0 = __ret_w1_a1_b0;
+                                        ::prebindgen_jni_runtime::text_object(
+                                            &mut jni_environment,
+                                            ::core::convert::AsRef::<str>::as_ref(&ret_w1_a1_f0),
+                                        )?
+                                    };
+                                    let values = (0, ret_w1_a1_f0);
+                                    (1i32, values, __PbEnumCommit_ret_w1::A1(move || {}))
+                                }
+                            };
+                            let __pb_return_argument_2 = __ret_w1_a1_value0;
+                            unsafe {
+                                ::prebindgen_jni_runtime::invoke_error_callback(
+                                    &mut jni_environment,
+                                    &__pb_return,
+                                    "domainError0",
+                                    "(IJLjava/lang/String;)V",
+                                    &[
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            i: ret_w1_tag,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: __ret_w1_a0_value0,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            l: __pb_return_argument_2.as_raw(),
+                                        },
+                                    ],
+                                )
+                            }?;
+                            let _: () = {
+                                match __ret_w1_commit {
+                                    __PbEnumCommit_ret_w1::A0(action) => action(),
+                                    __PbEnumCommit_ret_w1::A1(action) => action(),
+                                }
+                                domain_output = Some(std::ptr::null_mut());
+                            };
+                            Ok(())
+                        }
+                    })())?;
+                    return Err(String::new());
                 }
             };
             let _: () = {
@@ -11603,55 +7420,82 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1wire_
             let p0_w0: i64 = ::core::convert::Into::into(p0_w1);
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::wire_checked_new(__prebindgen_argument_0);
-            let ret_w0 = match source_value {
+            let ret_w8 = match source_value {
                 ::core::result::Result::Ok(value) => value,
-                ::core::result::Result::Err(ret_w1) => {
-                    return Err({
-                        __pb_jni_error_String_mapped_a4e45f5146673c62(
-                            &mut jni_environment,
-                            perftest_flat::callback_return_error_message(&ret_w1),
-                            &mut domain_output,
-                            Some(&__pb_return),
-                        )?;
-                        String::new()
-                    });
+                ::core::result::Result::Err(ret_w9) => {
+                    let _: () = ((|| -> ::prebindgen_runtime::Result<()> {
+                        let ret_w5 = ret_w9;
+                        let ret_w6 = perftest_flat::callback_return_error_message(
+                            &ret_w5,
+                        );
+                        {
+                            let ret_w7: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                '_,
+                            > = {
+                                let ret_w7 = ret_w6;
+                                ::prebindgen_jni_runtime::text_object(
+                                    &mut jni_environment,
+                                    ::core::convert::AsRef::<str>::as_ref(&ret_w7),
+                                )?
+                            };
+                            let __pb_return_argument_0 = ret_w7;
+                            unsafe {
+                                ::prebindgen_jni_runtime::invoke_error_callback(
+                                    &mut jni_environment,
+                                    &__pb_return,
+                                    "domainError0",
+                                    "(Ljava/lang/String;)V",
+                                    &[
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            l: __pb_return_argument_0.as_raw(),
+                                        },
+                                    ],
+                                )
+                            }?;
+                            let _: () = {
+                                domain_output = Some(std::ptr::null_mut());
+                            };
+                            Ok(())
+                        }
+                    })())?;
+                    return Err(String::new());
                 }
             };
             #[allow(non_camel_case_types)]
-            enum __PbEnumCommit_ret_w3<F0, F1> {
+            enum __PbEnumCommit_ret_w1<F0, F1> {
                 A0(F0),
                 A1(F1),
             }
             let (
-                ret_w3_tag,
-                (__ret_w3_a1_value0, __ret_w3_a1_value1, __ret_w3_a1_value2),
-                __ret_w3_commit,
-            ) = match ret_w0 {
+                ret_w1_tag,
+                (__ret_w1_a1_value0, __ret_w1_a1_value1, __ret_w1_a1_value2),
+                __ret_w1_commit,
+            ) = match ret_w8 {
                 perftest_flat::WireCheckedEvent::Empty => {
                     let values = (std::ptr::null_mut(), 0, std::ptr::null_mut());
-                    (0i32, values, __PbEnumCommit_ret_w3::A0(move || {}))
+                    (0i32, values, __PbEnumCommit_ret_w1::A0(move || {}))
                 }
                 perftest_flat::WireCheckedEvent::Data {
-                    first: __ret_w3_a1_b0,
-                    marker: __ret_w3_a1_b1,
-                    last: __ret_w3_a1_b2,
+                    first: __ret_w1_a1_b0,
+                    marker: __ret_w1_a1_b1,
+                    last: __ret_w1_a1_b2,
                 } => {
-                    let mut ret_w3_a1_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
-                        value: __ret_w3_a1_b0,
+                    let mut ret_w1_a1_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
+                        value: __ret_w1_a1_b0,
                     });
-                    let ret_w4 = __ret_w3_a1_b1;
-                    let ret_w5 = perftest_flat::wire_marker_value(&ret_w4);
-                    let ret_w6 = ret_w5;
-                    let mut ret_w3_a1_f2 = Box::new(::prebindgen_jni_runtime::Allocation {
-                        value: __ret_w3_a1_b2,
+                    let ret_w2 = __ret_w1_a1_b1;
+                    let ret_w3 = perftest_flat::wire_marker_value(&ret_w2);
+                    let ret_w4 = ret_w3;
+                    let mut ret_w1_a1_f2 = Box::new(::prebindgen_jni_runtime::Allocation {
+                        value: __ret_w1_a1_b2,
                     });
                     let values = (
-                        (&mut *ret_w3_a1_f0)
+                        (&mut *ret_w1_a1_f0)
                             as *mut ::prebindgen_jni_runtime::Allocation<
                                 perftest_flat::CallbackReturnResource,
                             >,
-                        ret_w6,
-                        (&mut *ret_w3_a1_f2)
+                        ret_w4,
+                        (&mut *ret_w1_a1_f2)
                             as *mut ::prebindgen_jni_runtime::Allocation<
                                 perftest_flat::CallbackReturnResource,
                             >,
@@ -11659,9 +7503,9 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1wire_
                     (
                         1i32,
                         values,
-                        __PbEnumCommit_ret_w3::A1(move || {
-                            let _ = Box::into_raw(ret_w3_a1_f0).expose_provenance();
-                            let _ = Box::into_raw(ret_w3_a1_f2).expose_provenance();
+                        __PbEnumCommit_ret_w1::A1(move || {
+                            let _ = Box::into_raw(ret_w1_a1_f0).expose_provenance();
+                            let _ = Box::into_raw(ret_w1_a1_f2).expose_provenance();
                         }),
                     )
                 }
@@ -11676,24 +7520,24 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1wire_
                         "(IJJJ)V",
                         &[
                             ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                i: ret_w3_tag,
+                                i: ret_w1_tag,
                             },
                             ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                j: (__ret_w3_a1_value0) as i64,
+                                j: (__ret_w1_a1_value0) as i64,
                             },
                             ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                j: __ret_w3_a1_value1,
+                                j: __ret_w1_a1_value1,
                             },
                             ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                j: (__ret_w3_a1_value2) as i64,
+                                j: (__ret_w1_a1_value2) as i64,
                             },
                         ],
                     )
             }?;
             let _: () = {
-                match __ret_w3_commit {
-                    __PbEnumCommit_ret_w3::A0(action) => action(),
-                    __PbEnumCommit_ret_w3::A1(action) => action(),
+                match __ret_w1_commit {
+                    __PbEnumCommit_ret_w1::A0(action) => action(),
+                    __PbEnumCommit_ret_w1::A1(action) => action(),
                 }
                 success_transferred = true;
             };
@@ -11910,24 +7754,51 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1wire_
             let source_value = perftest_flat::wire_checked_callback(
                 __prebindgen_argument_0,
             );
-            let ret_w0 = match source_value {
+            let ret_w4 = match source_value {
                 ::core::result::Result::Ok(value) => value,
-                ::core::result::Result::Err(ret_w1) => {
-                    return Err({
-                        __pb_jni_error_String_mapped_a4e45f5146673c62(
-                            &mut jni_environment,
-                            perftest_flat::callback_return_error_message(&ret_w1),
-                            &mut domain_output,
-                            Some(&__pb_return),
-                        )?;
-                        String::new()
-                    });
+                ::core::result::Result::Err(ret_w5) => {
+                    let _: () = ((|| -> ::prebindgen_runtime::Result<()> {
+                        let ret_w1 = ret_w5;
+                        let ret_w2 = perftest_flat::callback_return_error_message(
+                            &ret_w1,
+                        );
+                        {
+                            let ret_w3: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                '_,
+                            > = {
+                                let ret_w3 = ret_w2;
+                                ::prebindgen_jni_runtime::text_object(
+                                    &mut jni_environment,
+                                    ::core::convert::AsRef::<str>::as_ref(&ret_w3),
+                                )?
+                            };
+                            let __pb_return_argument_0 = ret_w3;
+                            unsafe {
+                                ::prebindgen_jni_runtime::invoke_error_callback(
+                                    &mut jni_environment,
+                                    &__pb_return,
+                                    "domainError0",
+                                    "(Ljava/lang/String;)V",
+                                    &[
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            l: __pb_return_argument_0.as_raw(),
+                                        },
+                                    ],
+                                )
+                            }?;
+                            let _: () = {
+                                domain_output = Some(std::ptr::null_mut());
+                            };
+                            Ok(())
+                        }
+                    })())?;
+                    return Err(String::new());
                 }
             };
-            let ret_w2 = ret_w0;
+            let ret_w0 = ret_w4;
             let __pb_direct_result = unsafe {
                 (::prebindgen_jni_runtime::jni::sys::jvalue {
-                    j: ret_w2,
+                    j: ret_w0,
                 })
                     .j
             };
@@ -12161,18 +8032,45 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1wire_
                 __prebindgen_argument_0,
                 __prebindgen_argument_1,
             );
-            let ret_w0 = match source_value {
+            let ret_w3 = match source_value {
                 ::core::result::Result::Ok(value) => value,
-                ::core::result::Result::Err(ret_w1) => {
-                    return Err({
-                        __pb_jni_error_String_mapped_a4e45f5146673c62(
-                            &mut jni_environment,
-                            perftest_flat::callback_return_error_message(&ret_w1),
-                            &mut domain_output,
-                            Some(&__pb_return),
-                        )?;
-                        String::new()
-                    });
+                ::core::result::Result::Err(ret_w4) => {
+                    let _: () = ((|| -> ::prebindgen_runtime::Result<()> {
+                        let ret_w0 = ret_w4;
+                        let ret_w1 = perftest_flat::callback_return_error_message(
+                            &ret_w0,
+                        );
+                        {
+                            let ret_w2: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                '_,
+                            > = {
+                                let ret_w2 = ret_w1;
+                                ::prebindgen_jni_runtime::text_object(
+                                    &mut jni_environment,
+                                    ::core::convert::AsRef::<str>::as_ref(&ret_w2),
+                                )?
+                            };
+                            let __pb_return_argument_0 = ret_w2;
+                            unsafe {
+                                ::prebindgen_jni_runtime::invoke_error_callback(
+                                    &mut jni_environment,
+                                    &__pb_return,
+                                    "domainError0",
+                                    "(Ljava/lang/String;)V",
+                                    &[
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            l: __pb_return_argument_0.as_raw(),
+                                        },
+                                    ],
+                                )
+                            }?;
+                            let _: () = {
+                                domain_output = Some(std::ptr::null_mut());
+                            };
+                            Ok(())
+                        }
+                    })())?;
+                    return Err(String::new());
                 }
             };
             let _: () = {
@@ -20376,26 +16274,41 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1canon
             let source_value = perftest_flat::canonical_domain_error(
                 __prebindgen_argument_0,
             );
-            let ret_w0 = match source_value {
+            let ret_w5 = match source_value {
                 ::core::result::Result::Ok(value) => value,
-                ::core::result::Result::Err(ret_w1) => {
-                    return Err({
-                        __pb_jni_error_CanonError_typed_f4794d301ab5bce1(
-                            &mut jni_environment,
-                            ret_w1,
-                            &mut domain_output,
-                            Some(&__pb_return),
-                        )?;
-                        String::new()
-                    });
+                ::core::result::Result::Err(ret_w6) => {
+                    let _: () = ((|| -> ::prebindgen_runtime::Result<()> {
+                        {
+                            let ret_w3 = perftest_flat::canonical_error_code(&ret_w6);
+                            let ret_w4 = ret_w3;
+                            unsafe {
+                                ::prebindgen_jni_runtime::invoke_error_callback(
+                                    &mut jni_environment,
+                                    &__pb_return,
+                                    "domainError0",
+                                    "(I)V",
+                                    &[
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            i: ret_w4,
+                                        },
+                                    ],
+                                )
+                            }?;
+                            let _: () = {
+                                domain_output = Some(std::ptr::null_mut());
+                            };
+                            Ok(())
+                        }
+                    })())?;
+                    return Err(String::new());
                 }
             };
-            let ret_w2 = ret_w0;
-            let ret_w3 = perftest_flat::canonical_millis_value(&ret_w2);
-            let ret_w4 = ret_w3;
+            let ret_w0 = ret_w5;
+            let ret_w1 = perftest_flat::canonical_millis_value(&ret_w0);
+            let ret_w2 = ret_w1;
             let __pb_direct_result = unsafe {
                 (::prebindgen_jni_runtime::jni::sys::jvalue {
-                    j: ret_w4,
+                    j: ret_w2,
                 })
                     .j
             };
@@ -21645,24 +17558,39 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1canon
                 __prebindgen_argument_1,
                 __prebindgen_argument_2,
             );
-            let ret_w0 = match source_value {
+            let ret_w3 = match source_value {
                 ::core::result::Result::Ok(value) => value,
-                ::core::result::Result::Err(ret_w1) => {
-                    return Err({
-                        __pb_jni_error_CanonError_typed_f4794d301ab5bce1(
-                            &mut jni_environment,
-                            ret_w1,
-                            &mut domain_output,
-                            Some(&__pb_return),
-                        )?;
-                        String::new()
-                    });
+                ::core::result::Result::Err(ret_w4) => {
+                    let _: () = ((|| -> ::prebindgen_runtime::Result<()> {
+                        {
+                            let ret_w1 = perftest_flat::canonical_error_code(&ret_w4);
+                            let ret_w2 = ret_w1;
+                            unsafe {
+                                ::prebindgen_jni_runtime::invoke_error_callback(
+                                    &mut jni_environment,
+                                    &__pb_return,
+                                    "domainError0",
+                                    "(I)V",
+                                    &[
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            i: ret_w2,
+                                        },
+                                    ],
+                                )
+                            }?;
+                            let _: () = {
+                                domain_output = Some(std::ptr::null_mut());
+                            };
+                            Ok(())
+                        }
+                    })())?;
+                    return Err(String::new());
                 }
             };
-            let ret_w2 = ret_w0;
+            let ret_w0 = ret_w3;
             let __pb_direct_result = unsafe {
                 (::prebindgen_jni_runtime::jni::sys::jvalue {
-                    j: ret_w2,
+                    j: ret_w0,
                 })
                     .j
             };
@@ -40896,44 +36824,74 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                 __prebindgen_argument_0,
                 __prebindgen_argument_1,
             );
-            let ret_w0 = match source_value {
+            let ret_w8 = match source_value {
                 ::core::result::Result::Ok(value) => value,
-                ::core::result::Result::Err(ret_w1) => {
-                    return Err({
-                        __pb_jni_error_BulkFailure_typed_e4c5fe4d26ff5840(
-                            &mut jni_environment,
-                            ret_w1,
-                            &mut domain_output,
-                            Some(&__pb_return),
-                        )?;
-                        String::new()
-                    });
+                ::core::result::Result::Err(ret_w9) => {
+                    let _: () = ((|| -> ::prebindgen_runtime::Result<()> {
+                        {
+                            let mut ret_w5_writer = ::prebindgen_jni_runtime::bulk::Writer::new(
+                                ::core::mem::size_of::<__PbBulk_i64_97145e0ef6a1193d>(),
+                            );
+                            let ret_w6 = perftest_flat::bulk_failure_code(&ret_w9);
+                            let ret_w7 = ret_w6;
+                            ret_w5_writer
+                                .write(
+                                    ::core::mem::offset_of!(__PbBulk_i64_97145e0ef6a1193d, v0),
+                                    ret_w7,
+                                )?;
+                            let ret_w5 = ::prebindgen_jni_runtime::jni::objects::JObject::from(
+                                jni_environment
+                                    .byte_array_from_slice(ret_w5_writer.bytes())
+                                    .map_err(|e| e.to_string())?,
+                            );
+                            let __pb_return_argument_0 = ret_w5;
+                            unsafe {
+                                ::prebindgen_jni_runtime::invoke_error_callback(
+                                    &mut jni_environment,
+                                    &__pb_return,
+                                    "domainError0",
+                                    "([B)V",
+                                    &[
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            l: __pb_return_argument_0.as_raw(),
+                                        },
+                                    ],
+                                )
+                            }?;
+                            let _: () = {
+                                ret_w5_writer.commit();
+                                domain_output = Some(std::ptr::null_mut());
+                            };
+                            Ok(())
+                        }
+                    })())?;
+                    return Err(String::new());
                 }
             };
-            let mut ret_w2_writer = ::prebindgen_jni_runtime::bulk::Writer::new(
+            let mut ret_w0_writer = ::prebindgen_jni_runtime::bulk::Writer::new(
                 ::core::mem::size_of::<__PbBulk_i64_Range_0b9b7f90ad764db3>(),
             );
-            let ret_w3 = perftest_flat::bulk_expanded_number(&ret_w0);
-            let ret_w4 = ret_w3;
-            let ret_w5 = perftest_flat::bulk_expanded_text(&ret_w0);
-            let ret_w6_source = ret_w5;
-            let ret_w6 = Some(ret_w2_writer.append_buffer(ret_w6_source.as_bytes())?);
-            ret_w2_writer
+            let ret_w1 = perftest_flat::bulk_expanded_number(&ret_w8);
+            let ret_w2 = ret_w1;
+            let ret_w3 = perftest_flat::bulk_expanded_text(&ret_w8);
+            let ret_w4_source = ret_w3;
+            let ret_w4 = Some(ret_w0_writer.append_buffer(ret_w4_source.as_bytes())?);
+            ret_w0_writer
                 .write(
                     ::core::mem::offset_of!(__PbBulk_i64_Range_0b9b7f90ad764db3, v0),
-                    ret_w4,
+                    ret_w2,
                 )?;
-            ret_w2_writer
+            ret_w0_writer
                 .range(
                     ::core::mem::offset_of!(__PbBulk_i64_Range_0b9b7f90ad764db3, v1),
-                    ret_w6,
+                    ret_w4,
                 )?;
-            let ret_w2 = ::prebindgen_jni_runtime::jni::objects::JObject::from(
+            let ret_w0 = ::prebindgen_jni_runtime::jni::objects::JObject::from(
                 jni_environment
-                    .byte_array_from_slice(ret_w2_writer.bytes())
+                    .byte_array_from_slice(ret_w0_writer.bytes())
                     .map_err(|e| e.to_string())?,
             );
-            let __pb_direct_object = ret_w2;
+            let __pb_direct_object = ret_w0;
             let __pb_direct_result = unsafe {
                 (::prebindgen_jni_runtime::jni::sys::jvalue {
                     l: __pb_direct_object.as_raw(),
@@ -40941,7 +36899,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                     .l
             };
             let _: () = {
-                ret_w2_writer.commit();
+                ret_w0_writer.commit();
                 direct_output = __pb_direct_result;
                 success_transferred = true;
             };
@@ -46837,18 +42795,561 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1retur
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
             let source_value = perftest_flat::return_wide_error();
-            let ret_w0 = match source_value {
+            let ret_w1 = match source_value {
                 ::core::result::Result::Ok(value) => value,
-                ::core::result::Result::Err(ret_w1) => {
-                    return Err({
-                        __pb_jni_error_ReturnWideError_typed_1cad12a60e60a2bd(
-                            &mut jni_environment,
-                            ret_w1,
-                            &mut domain_output,
-                            Some(&__pb_return),
-                        )?;
-                        String::new()
-                    });
+                ::core::result::Result::Err(ret_w2) => {
+                    let _: () = ((|| -> ::prebindgen_runtime::Result<()> {
+                        {
+                            let ret_w0_record = ret_w2;
+                            let ret_w0_f0_record = ret_w0_record.a;
+                            let ret_w0_f0_f0 = ret_w0_f0_record.v0;
+                            let ret_w0_f0_f1 = ret_w0_f0_record.v1;
+                            let ret_w0_f0_f2 = ret_w0_f0_record.v2;
+                            let ret_w0_f0_f3 = ret_w0_f0_record.v3;
+                            let ret_w0_f0_f4 = ret_w0_f0_record.v4;
+                            let ret_w0_f0_f5 = ret_w0_f0_record.v5;
+                            let ret_w0_f0_f6 = ret_w0_f0_record.v6;
+                            let ret_w0_f0_f7 = ret_w0_f0_record.v7;
+                            let ret_w0_f0_f8 = ret_w0_f0_record.v8;
+                            let ret_w0_f0_f9 = ret_w0_f0_record.v9;
+                            let ret_w0_f0_f10 = ret_w0_f0_record.v10;
+                            let ret_w0_f0_f11 = ret_w0_f0_record.v11;
+                            let ret_w0_f0_f12 = ret_w0_f0_record.v12;
+                            let ret_w0_f0_f13 = ret_w0_f0_record.v13;
+                            let ret_w0_f0_f14 = ret_w0_f0_record.v14;
+                            let ret_w0_f0_f15 = ret_w0_f0_record.v15;
+                            let ret_w0_f0_f16 = ret_w0_f0_record.v16;
+                            let ret_w0_f0_f17 = ret_w0_f0_record.v17;
+                            let ret_w0_f0_f18 = ret_w0_f0_record.v18;
+                            let ret_w0_f0_f19 = ret_w0_f0_record.v19;
+                            let ret_w0_f0_f20 = ret_w0_f0_record.v20;
+                            let ret_w0_f0_f21 = ret_w0_f0_record.v21;
+                            let ret_w0_f0_f22 = ret_w0_f0_record.v22;
+                            let ret_w0_f0_f23 = ret_w0_f0_record.v23;
+                            let ret_w0_f0_f24 = ret_w0_f0_record.v24;
+                            let ret_w0_f0_f25 = ret_w0_f0_record.v25;
+                            let ret_w0_f0_f26 = ret_w0_f0_record.v26;
+                            let ret_w0_f0_f27 = ret_w0_f0_record.v27;
+                            let ret_w0_f0_f28 = ret_w0_f0_record.v28;
+                            let ret_w0_f0_f29 = ret_w0_f0_record.v29;
+                            let ret_w0_f0_f30 = ret_w0_f0_record.v30;
+                            let ret_w0_f0_f31 = ret_w0_f0_record.v31;
+                            let ret_w0_f0_f32 = ret_w0_f0_record.v32;
+                            let ret_w0_f0_f33 = ret_w0_f0_record.v33;
+                            let ret_w0_f0_f34 = ret_w0_f0_record.v34;
+                            let ret_w0_f0_f35 = ret_w0_f0_record.v35;
+                            let ret_w0_f0_f36 = ret_w0_f0_record.v36;
+                            let ret_w0_f0_f37 = ret_w0_f0_record.v37;
+                            let ret_w0_f0_f38 = ret_w0_f0_record.v38;
+                            let ret_w0_f0_f39 = ret_w0_f0_record.v39;
+                            let ret_w0_f0_f40 = ret_w0_f0_record.v40;
+                            let ret_w0_f0_f41 = ret_w0_f0_record.v41;
+                            let ret_w0_f0_f42 = ret_w0_f0_record.v42;
+                            let ret_w0_f0_f43 = ret_w0_f0_record.v43;
+                            let ret_w0_f0_f44 = ret_w0_f0_record.v44;
+                            let ret_w0_f0_f45 = ret_w0_f0_record.v45;
+                            let ret_w0_f0_f46 = ret_w0_f0_record.v46;
+                            let ret_w0_f0_f47 = ret_w0_f0_record.v47;
+                            let ret_w0_f0_f48 = ret_w0_f0_record.v48;
+                            let ret_w0_f0_f49 = ret_w0_f0_record.v49;
+                            let ret_w0_f0_f50 = ret_w0_f0_record.v50;
+                            let ret_w0_f0_f51 = ret_w0_f0_record.v51;
+                            let ret_w0_f0_f52 = ret_w0_f0_record.v52;
+                            let ret_w0_f0_f53 = ret_w0_f0_record.v53;
+                            let ret_w0_f0_f54 = ret_w0_f0_record.v54;
+                            let ret_w0_f0_f55 = ret_w0_f0_record.v55;
+                            let ret_w0_f0_f56 = ret_w0_f0_record.v56;
+                            let ret_w0_f0_f57 = ret_w0_f0_record.v57;
+                            let ret_w0_f0_f58 = ret_w0_f0_record.v58;
+                            let ret_w0_f0_f59 = ret_w0_f0_record.v59;
+                            let ret_w0_f0_f60 = ret_w0_f0_record.v60;
+                            let ret_w0_f0_f61 = ret_w0_f0_record.v61;
+                            let ret_w0_f0_f62 = ret_w0_f0_record.v62;
+                            let ret_w0_f0_f63 = ret_w0_f0_record.v63;
+                            let ret_w0_f1_record = ret_w0_record.b;
+                            let ret_w0_f1_f0 = ret_w0_f1_record.v0;
+                            let ret_w0_f1_f1 = ret_w0_f1_record.v1;
+                            let ret_w0_f1_f2 = ret_w0_f1_record.v2;
+                            let ret_w0_f1_f3 = ret_w0_f1_record.v3;
+                            let ret_w0_f1_f4 = ret_w0_f1_record.v4;
+                            let ret_w0_f1_f5 = ret_w0_f1_record.v5;
+                            let ret_w0_f1_f6 = ret_w0_f1_record.v6;
+                            let ret_w0_f1_f7 = ret_w0_f1_record.v7;
+                            let ret_w0_f1_f8 = ret_w0_f1_record.v8;
+                            let ret_w0_f1_f9 = ret_w0_f1_record.v9;
+                            let ret_w0_f1_f10 = ret_w0_f1_record.v10;
+                            let ret_w0_f1_f11 = ret_w0_f1_record.v11;
+                            let ret_w0_f1_f12 = ret_w0_f1_record.v12;
+                            let ret_w0_f1_f13 = ret_w0_f1_record.v13;
+                            let ret_w0_f1_f14 = ret_w0_f1_record.v14;
+                            let ret_w0_f1_f15 = ret_w0_f1_record.v15;
+                            let ret_w0_f1_f16 = ret_w0_f1_record.v16;
+                            let ret_w0_f1_f17 = ret_w0_f1_record.v17;
+                            let ret_w0_f1_f18 = ret_w0_f1_record.v18;
+                            let ret_w0_f1_f19 = ret_w0_f1_record.v19;
+                            let ret_w0_f1_f20 = ret_w0_f1_record.v20;
+                            let ret_w0_f1_f21 = ret_w0_f1_record.v21;
+                            let ret_w0_f1_f22 = ret_w0_f1_record.v22;
+                            let ret_w0_f1_f23 = ret_w0_f1_record.v23;
+                            let ret_w0_f1_f24 = ret_w0_f1_record.v24;
+                            let ret_w0_f1_f25 = ret_w0_f1_record.v25;
+                            let ret_w0_f1_f26 = ret_w0_f1_record.v26;
+                            let ret_w0_f1_f27 = ret_w0_f1_record.v27;
+                            let ret_w0_f1_f28 = ret_w0_f1_record.v28;
+                            let ret_w0_f1_f29 = ret_w0_f1_record.v29;
+                            let ret_w0_f1_f30 = ret_w0_f1_record.v30;
+                            let ret_w0_f1_f31 = ret_w0_f1_record.v31;
+                            let ret_w0_f1_f32 = ret_w0_f1_record.v32;
+                            let ret_w0_f1_f33 = ret_w0_f1_record.v33;
+                            let ret_w0_f1_f34 = ret_w0_f1_record.v34;
+                            let ret_w0_f1_f35 = ret_w0_f1_record.v35;
+                            let ret_w0_f1_f36 = ret_w0_f1_record.v36;
+                            let ret_w0_f1_f37 = ret_w0_f1_record.v37;
+                            let ret_w0_f1_f38 = ret_w0_f1_record.v38;
+                            let ret_w0_f1_f39 = ret_w0_f1_record.v39;
+                            let ret_w0_f1_f40 = ret_w0_f1_record.v40;
+                            let ret_w0_f1_f41 = ret_w0_f1_record.v41;
+                            let ret_w0_f1_f42 = ret_w0_f1_record.v42;
+                            let ret_w0_f1_f43 = ret_w0_f1_record.v43;
+                            let ret_w0_f1_f44 = ret_w0_f1_record.v44;
+                            let ret_w0_f1_f45 = ret_w0_f1_record.v45;
+                            let ret_w0_f1_f46 = ret_w0_f1_record.v46;
+                            let ret_w0_f1_f47 = ret_w0_f1_record.v47;
+                            let ret_w0_f1_f48 = ret_w0_f1_record.v48;
+                            let ret_w0_f1_f49 = ret_w0_f1_record.v49;
+                            let ret_w0_f1_f50 = ret_w0_f1_record.v50;
+                            let ret_w0_f1_f51 = ret_w0_f1_record.v51;
+                            let ret_w0_f1_f52 = ret_w0_f1_record.v52;
+                            let ret_w0_f1_f53 = ret_w0_f1_record.v53;
+                            let ret_w0_f1_f54 = ret_w0_f1_record.v54;
+                            let ret_w0_f1_f55 = ret_w0_f1_record.v55;
+                            let ret_w0_f1_f56 = ret_w0_f1_record.v56;
+                            let ret_w0_f1_f57 = ret_w0_f1_record.v57;
+                            let ret_w0_f1_f58 = ret_w0_f1_record.v58;
+                            let ret_w0_f1_f59 = ret_w0_f1_record.v59;
+                            let ret_w0_f1_f60 = ret_w0_f1_record.v60;
+                            let ret_w0_f1_f61 = ret_w0_f1_record.v61;
+                            let ret_w0_f1_f62 = ret_w0_f1_record.v62;
+                            let ret_w0_f1_f63 = ret_w0_f1_record.v63;
+                            let ret_w0_f1_f64 = ret_w0_f1_record.v64;
+                            let ret_w0_f1_f65 = ret_w0_f1_record.v65;
+                            unsafe {
+                                ::prebindgen_jni_runtime::invoke_error_callback(
+                                    &mut jni_environment,
+                                    &__pb_return,
+                                    "domainError0",
+                                    "(JJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJ)V",
+                                    &[
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f0,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f1,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f2,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f3,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f4,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f5,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f6,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f7,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f8,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f9,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f10,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f11,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f12,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f13,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f14,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f15,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f16,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f17,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f18,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f19,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f20,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f21,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f22,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f23,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f24,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f25,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f26,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f27,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f28,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f29,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f30,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f31,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f32,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f33,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f34,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f35,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f36,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f37,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f38,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f39,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f40,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f41,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f42,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f43,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f44,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f45,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f46,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f47,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f48,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f49,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f50,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f51,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f52,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f53,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f54,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f55,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f56,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f57,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f58,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f59,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f60,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f61,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f62,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f0_f63,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f0,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f1,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f2,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f3,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f4,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f5,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f6,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f7,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f8,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f9,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f10,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f11,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f12,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f13,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f14,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f15,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f16,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f17,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f18,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f19,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f20,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f21,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f22,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f23,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f24,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f25,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f26,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f27,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f28,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f29,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f30,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f31,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f32,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f33,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f34,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f35,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f36,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f37,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f38,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f39,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f40,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f41,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f42,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f43,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f44,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f45,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f46,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f47,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f48,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f49,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f50,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f51,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f52,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f53,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f54,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f55,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f56,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f57,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f58,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f59,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f60,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f61,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f62,
+                                        },
+                                    ],
+                                )
+                            }?;
+                            unsafe {
+                                ::prebindgen_jni_runtime::invoke_error_callback(
+                                    &mut jni_environment,
+                                    &__pb_return,
+                                    "domainError1",
+                                    "(JJJ)V",
+                                    &[
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f63,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f64,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w0_f1_f65,
+                                        },
+                                    ],
+                                )
+                            }?;
+                            let _: () = {
+                                domain_output = Some(std::ptr::null_mut());
+                            };
+                            Ok(())
+                        }
+                    })())?;
+                    return Err(String::new());
                 }
             };
             let _: () = {
@@ -47200,24 +43701,39 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1retur
                 __prebindgen_argument_1,
                 __prebindgen_argument_2,
             );
-            let ret_w0 = match source_value {
+            let ret_w3 = match source_value {
                 ::core::result::Result::Ok(value) => value,
-                ::core::result::Result::Err(ret_w1) => {
-                    return Err({
-                        __pb_jni_error_ReturnFailure_typed_a573c5734718430a(
-                            &mut jni_environment,
-                            ret_w1,
-                            &mut domain_output,
-                            Some(&__pb_return),
-                        )?;
-                        String::new()
-                    });
+                ::core::result::Result::Err(ret_w4) => {
+                    let _: () = ((|| -> ::prebindgen_runtime::Result<()> {
+                        {
+                            let ret_w1 = perftest_flat::return_failure_code(&ret_w4);
+                            let ret_w2 = ret_w1;
+                            unsafe {
+                                ::prebindgen_jni_runtime::invoke_error_callback(
+                                    &mut jni_environment,
+                                    &__pb_return,
+                                    "domainError0",
+                                    "(J)V",
+                                    &[
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w2,
+                                        },
+                                    ],
+                                )
+                            }?;
+                            let _: () = {
+                                domain_output = Some(std::ptr::null_mut());
+                            };
+                            Ok(())
+                        }
+                    })())?;
+                    return Err(String::new());
                 }
             };
-            let ret_w2 = ret_w0;
+            let ret_w0 = ret_w3;
             let __pb_direct_result = unsafe {
                 (::prebindgen_jni_runtime::jni::sys::jvalue {
-                    j: ret_w2,
+                    j: ret_w0,
                 })
                     .j
             };
@@ -51962,24 +48478,38 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gc_1r
             };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::gc_resource_fail(__prebindgen_argument_0);
-            let ret_w0 = match source_value {
+            let ret_w2 = match source_value {
                 ::core::result::Result::Ok(value) => value,
-                ::core::result::Result::Err(ret_w1) => {
-                    return Err({
-                        __pb_jni_error_i64_typed_7b82463b61f2de72(
-                            &mut jni_environment,
-                            ret_w1,
-                            &mut domain_output,
-                            Some(&__pb_return),
-                        )?;
-                        String::new()
-                    });
+                ::core::result::Result::Err(ret_w3) => {
+                    let _: () = ((|| -> ::prebindgen_runtime::Result<()> {
+                        {
+                            let ret_w1 = ret_w3;
+                            unsafe {
+                                ::prebindgen_jni_runtime::invoke_error_callback(
+                                    &mut jni_environment,
+                                    &__pb_return,
+                                    "domainError0",
+                                    "(J)V",
+                                    &[
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w1,
+                                        },
+                                    ],
+                                )
+                            }?;
+                            let _: () = {
+                                domain_output = Some(std::ptr::null_mut());
+                            };
+                            Ok(())
+                        }
+                    })())?;
+                    return Err(String::new());
                 }
             };
-            let ret_w2 = (ret_w0) as i64;
+            let ret_w0 = (ret_w2) as i64;
             let __pb_direct_result = unsafe {
                 (::prebindgen_jni_runtime::jni::sys::jvalue {
-                    j: ret_w2,
+                    j: ret_w0,
                 })
                     .j
             };
@@ -53990,18 +50520,65 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
             let source_value = perftest_flat::jni_buffer_domain_failure();
-            let ret_w0 = match source_value {
+            let ret_w1 = match source_value {
                 ::core::result::Result::Ok(value) => value,
-                ::core::result::Result::Err(ret_w1) => {
-                    return Err({
-                        __pb_jni_error_JniBufferResourceRow_typed_c6e25d27c04718b4(
-                            &mut jni_environment,
-                            ret_w1,
-                            &mut domain_output,
-                            Some(&__pb_return),
-                        )?;
-                        String::new()
-                    });
+                ::core::result::Result::Err(ret_w2) => {
+                    let _: () = ((|| -> ::prebindgen_runtime::Result<()> {
+                        {
+                            let ret_w0_record = ret_w2;
+                            let mut ret_w0_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
+                                value: ret_w0_record.resource,
+                            });
+                            let ret_w0_f1: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                '_,
+                            > = {
+                                let ret_w0_f1 = ret_w0_record.text;
+                                ::prebindgen_jni_runtime::text_object(
+                                    &mut jni_environment,
+                                    ::core::convert::AsRef::<str>::as_ref(&ret_w0_f1),
+                                )?
+                            };
+                            let ret_w0_f2: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                '_,
+                            > = {
+                                let ret_w0_f2 = ret_w0_record.bytes;
+                                ::prebindgen_jni_runtime::bytes_object(
+                                    &mut jni_environment,
+                                    ::core::convert::AsRef::<[u8]>::as_ref(&ret_w0_f2),
+                                )?
+                            };
+                            let __pb_return_argument_1 = ret_w0_f1;
+                            let __pb_return_argument_2 = ret_w0_f2;
+                            unsafe {
+                                ::prebindgen_jni_runtime::invoke_error_callback(
+                                    &mut jni_environment,
+                                    &__pb_return,
+                                    "domainError0",
+                                    "(JLjava/lang/String;[B)V",
+                                    &[
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ((&mut *ret_w0_f0)
+                                                as *mut ::prebindgen_jni_runtime::Allocation<
+                                                    perftest_flat::CallbackOwned,
+                                                >) as i64,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            l: __pb_return_argument_1.as_raw(),
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            l: __pb_return_argument_2.as_raw(),
+                                        },
+                                    ],
+                                )
+                            }?;
+                            let _: () = {
+                                let _ = Box::into_raw(ret_w0_f0).expose_provenance();
+                                domain_output = Some(std::ptr::null_mut());
+                            };
+                            Ok(())
+                        }
+                    })())?;
+                    return Err(String::new());
                 }
             };
             let _: () = {
@@ -59039,69 +55616,84 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1c_1ou
             let p0_w0: i64 = ::core::convert::Into::into(p0_w1);
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::c_output_rows(__prebindgen_argument_0);
-            let ret_w0 = match source_value {
+            let ret_w7 = match source_value {
                 ::core::result::Result::Ok(value) => value,
-                ::core::result::Result::Err(ret_w1) => {
-                    return Err({
-                        __pb_jni_error_ResultFailure_typed_1183170f6901c4fd(
-                            &mut jni_environment,
-                            ret_w1,
-                            &mut domain_output,
-                            Some(&__pb_return),
-                        )?;
-                        String::new()
-                    });
+                ::core::result::Result::Err(ret_w8) => {
+                    let _: () = ((|| -> ::prebindgen_runtime::Result<()> {
+                        {
+                            let ret_w5 = perftest_flat::result_error_code(&ret_w8);
+                            let ret_w6 = ret_w5;
+                            unsafe {
+                                ::prebindgen_jni_runtime::invoke_error_callback(
+                                    &mut jni_environment,
+                                    &__pb_return,
+                                    "domainError0",
+                                    "(J)V",
+                                    &[
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w6,
+                                        },
+                                    ],
+                                )
+                            }?;
+                            let _: () = {
+                                domain_output = Some(std::ptr::null_mut());
+                            };
+                            Ok(())
+                        }
+                    })())?;
+                    return Err(String::new());
                 }
             };
-            let ret_w2_source: ::std::vec::Vec<perftest_flat::CallbackRow> = ret_w0;
-            let ret_w4 = ::std::vec::Vec::len(&ret_w2_source);
-            let ret_w2_row_constructor = __pb_row_type_SequenceRow_Long_String_Long_3_b4558cb7b740d7c6
+            let ret_w0_source: ::std::vec::Vec<perftest_flat::CallbackRow> = ret_w7;
+            let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
+            let ret_w0_row_constructor = __pb_row_type_SequenceRow_Long_String_Long_3_b4558cb7b740d7c6
                 .get()?;
-            let ret_w2 = ::prebindgen_jni_runtime::array(&mut jni_environment, ret_w4)?;
-            let mut ret_w2_owner = unsafe {
+            let ret_w0 = ::prebindgen_jni_runtime::array(&mut jni_environment, ret_w2)?;
+            let mut ret_w0_owner = unsafe {
                 ::prebindgen_jni_runtime::OutputRows::new_objects(
                     &mut jni_environment,
-                    &ret_w2,
+                    &ret_w0,
                     __pb_cleanup_typed_CallbackRowResource_CallbackRowResource_f07a6dca97ae09a2,
                 )
             };
-            for (ret_w5, ret_w3) in ::core::iter::Iterator::enumerate(
-                ::core::iter::IntoIterator::into_iter(ret_w2_source),
+            for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w0_source),
             ) {
-                let ret_w2_frame = unsafe {
+                let ret_w0_frame = unsafe {
                     ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 11i32)
                 }?;
-                let ret_w6_record = &(ret_w3);
-                let mut ret_w6_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
-                    value: ::core::clone::Clone::clone(&ret_w6_record.first),
+                let ret_w4_record = &(ret_w1);
+                let mut ret_w4_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
+                    value: ::core::clone::Clone::clone(&ret_w4_record.first),
                 });
-                let ret_w6_f1: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
-                    let ret_w6_f1 = &ret_w6_record.label;
+                let ret_w4_f1: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                    let ret_w4_f1 = &ret_w4_record.label;
                     ::prebindgen_jni_runtime::text_object(
                         &mut jni_environment,
-                        ::core::convert::AsRef::<str>::as_ref(&ret_w6_f1),
+                        ::core::convert::AsRef::<str>::as_ref(&ret_w4_f1),
                     )?
                 };
-                let mut ret_w6_f2 = Box::new(::prebindgen_jni_runtime::Allocation {
-                    value: ::core::clone::Clone::clone(&ret_w6_record.second),
+                let mut ret_w4_f2 = Box::new(::prebindgen_jni_runtime::Allocation {
+                    value: ::core::clone::Clone::clone(&ret_w4_record.second),
                 });
-                let ret_w2_row_argument_1 = ret_w6_f1;
-                let ret_w2_row = unsafe {
-                    ret_w2_row_constructor
+                let ret_w0_row_argument_1 = ret_w4_f1;
+                let ret_w0_row = unsafe {
+                    ret_w0_row_constructor
                         .construct(
                             &mut jni_environment,
                             &[
                                 ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                    j: ((&mut *ret_w6_f0)
+                                    j: ((&mut *ret_w4_f0)
                                         as *mut ::prebindgen_jni_runtime::Allocation<
                                             perftest_flat::CallbackRowResource,
                                         >) as i64,
                                 },
                                 ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                    l: ret_w2_row_argument_1.as_raw(),
+                                    l: ret_w0_row_argument_1.as_raw(),
                                 },
                                 ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                    j: ((&mut *ret_w6_f2)
+                                    j: ((&mut *ret_w4_f2)
                                         as *mut ::prebindgen_jni_runtime::Allocation<
                                             perftest_flat::CallbackRowResource,
                                         >) as i64,
@@ -59110,7 +55702,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1c_1ou
                         )
                 }?;
                 jni_environment
-                    .set_object_array_element(&ret_w2, ret_w5 as i32, &ret_w2_row)
+                    .set_object_array_element(&ret_w0, ret_w3 as i32, &ret_w0_row)
                     .map_err(|e| e.to_string())?;
                 #[allow(
                     clippy::redundant_closure_call,
@@ -59118,16 +55710,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1c_1ou
                     clippy::unused_unit
                 )]
                 let _: () = (|| -> () {
-                    let _ = Box::into_raw(ret_w6_f0).expose_provenance();
-                    let _ = Box::into_raw(ret_w6_f2).expose_provenance();
+                    let _ = Box::into_raw(ret_w4_f0).expose_provenance();
+                    let _ = Box::into_raw(ret_w4_f2).expose_provenance();
                 })();
                 unsafe {
-                    ret_w2_owner.complete_row();
+                    ret_w0_owner.complete_row();
                 }
-                drop(ret_w2_frame);
+                drop(ret_w0_frame);
             }
-            let ret_w2 = Some(ret_w2);
-            let __pb_direct_object = match (ret_w2).as_ref() {
+            let ret_w0 = Some(ret_w0);
+            let __pb_direct_object = match (ret_w0).as_ref() {
                 Some(value) => {
                     jni_environment.new_local_ref(value).map_err(|e| e.to_string())?
                 }
@@ -59140,7 +55732,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1c_1ou
                     .l
             };
             let _: () = {
-                ret_w2_owner.commit();
+                ret_w0_owner.commit();
                 direct_output = __pb_direct_result;
                 success_transferred = true;
             };
@@ -59212,95 +55804,108 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1c_1ou
             let p0_w0: i64 = ::core::convert::Into::into(p0_w1);
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::c_output_nested(__prebindgen_argument_0);
-            let ret_w0 = match source_value {
+            let ret_w11 = match source_value {
                 ::core::result::Result::Ok(value) => value,
-                ::core::result::Result::Err(ret_w1) => {
-                    return Err({
-                        __pb_jni_error_ResultFailure_typed_1183170f6901c4fd(
-                            &mut jni_environment,
-                            ret_w1,
-                            &mut domain_output,
-                            Some(&__pb_return),
-                        )?;
-                        String::new()
-                    });
+                ::core::result::Result::Err(ret_w12) => {
+                    let _: () = ((|| -> ::prebindgen_runtime::Result<()> {
+                        {
+                            let ret_w9 = perftest_flat::result_error_code(&ret_w12);
+                            let ret_w10 = ret_w9;
+                            unsafe {
+                                ::prebindgen_jni_runtime::invoke_error_callback(
+                                    &mut jni_environment,
+                                    &__pb_return,
+                                    "domainError0",
+                                    "(J)V",
+                                    &[
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w10,
+                                        },
+                                    ],
+                                )
+                            }?;
+                            let _: () = {
+                                domain_output = Some(std::ptr::null_mut());
+                            };
+                            Ok(())
+                        }
+                    })())?;
+                    return Err(String::new());
                 }
             };
-            let ret_w2_source: ::std::vec::Vec<Vec<perftest_flat::CallbackRow>> = ret_w0;
-            let ret_w4 = ::std::vec::Vec::len(&ret_w2_source);
-            let ret_w2_row_constructor = __pb_row_type_SequenceRow_Array_Any___1_00f39593b4ea53ea
+            let ret_w0_source: ::std::vec::Vec<Vec<perftest_flat::CallbackRow>> = ret_w11;
+            let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
+            let ret_w0_row_constructor = __pb_row_type_SequenceRow_Array_Any___1_00f39593b4ea53ea
                 .get()?;
-            let ret_w2 = ::prebindgen_jni_runtime::array(&mut jni_environment, ret_w4)?;
-            let mut ret_w2_owner = unsafe {
+            let ret_w0 = ::prebindgen_jni_runtime::array(&mut jni_environment, ret_w2)?;
+            let mut ret_w0_owner = unsafe {
                 ::prebindgen_jni_runtime::OutputRows::new_objects(
                     &mut jni_environment,
-                    &ret_w2,
+                    &ret_w0,
                     __pb_cleanup_typed_Rows_b60a6666c818ce72,
                 )
             };
-            for (ret_w5, ret_w3) in ::core::iter::Iterator::enumerate(
-                ::core::iter::IntoIterator::into_iter(ret_w2_source),
+            for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w0_source),
             ) {
-                let ret_w2_frame = unsafe {
+                let ret_w0_frame = unsafe {
                     ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
                 }?;
-                let ret_w6_source: ::std::vec::Vec<perftest_flat::CallbackRow> = ret_w3;
-                let ret_w8 = ::std::vec::Vec::len(&ret_w6_source);
-                let ret_w6_row_constructor = __pb_row_type_SequenceRow_Long_String_Long_3_b4558cb7b740d7c6
+                let ret_w4_source: ::std::vec::Vec<perftest_flat::CallbackRow> = ret_w1;
+                let ret_w6 = ::std::vec::Vec::len(&ret_w4_source);
+                let ret_w4_row_constructor = __pb_row_type_SequenceRow_Long_String_Long_3_b4558cb7b740d7c6
                     .get()?;
-                let ret_w6 = ::prebindgen_jni_runtime::array(
+                let ret_w4 = ::prebindgen_jni_runtime::array(
                     &mut jni_environment,
-                    ret_w8,
+                    ret_w6,
                 )?;
-                let mut ret_w6_owner = unsafe {
+                let mut ret_w4_owner = unsafe {
                     ::prebindgen_jni_runtime::OutputRows::new_objects(
                         &mut jni_environment,
-                        &ret_w6,
+                        &ret_w4,
                         __pb_cleanup_typed_CallbackRowResource_CallbackRowResource_f07a6dca97ae09a2,
                     )
                 };
-                for (ret_w9, ret_w7) in ::core::iter::Iterator::enumerate(
-                    ::core::iter::IntoIterator::into_iter(ret_w6_source),
+                for (ret_w7, ret_w5) in ::core::iter::Iterator::enumerate(
+                    ::core::iter::IntoIterator::into_iter(ret_w4_source),
                 ) {
-                    let ret_w6_frame = unsafe {
+                    let ret_w4_frame = unsafe {
                         ::prebindgen_jni_runtime::LocalFrame::new(
                             &jni_environment,
                             11i32,
                         )
                     }?;
-                    let ret_w10_record = &(ret_w7);
-                    let mut ret_w10_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
-                        value: ::core::clone::Clone::clone(&ret_w10_record.first),
+                    let ret_w8_record = &(ret_w5);
+                    let mut ret_w8_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
+                        value: ::core::clone::Clone::clone(&ret_w8_record.first),
                     });
-                    let ret_w10_f1: ::prebindgen_jni_runtime::jni::objects::JObject<
-                        '_,
-                    > = {
-                        let ret_w10_f1 = &ret_w10_record.label;
+                    let ret_w8_f1: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                        let ret_w8_f1 = &ret_w8_record.label;
                         ::prebindgen_jni_runtime::text_object(
                             &mut jni_environment,
-                            ::core::convert::AsRef::<str>::as_ref(&ret_w10_f1),
+                            ::core::convert::AsRef::<str>::as_ref(&ret_w8_f1),
                         )?
                     };
-                    let mut ret_w10_f2 = Box::new(::prebindgen_jni_runtime::Allocation {
-                        value: ::core::clone::Clone::clone(&ret_w10_record.second),
+                    let mut ret_w8_f2 = Box::new(::prebindgen_jni_runtime::Allocation {
+                        value: ::core::clone::Clone::clone(&ret_w8_record.second),
                     });
-                    let ret_w6_row_argument_1 = ret_w10_f1;
-                    let ret_w6_row = unsafe {
-                        ret_w6_row_constructor
+                    let ret_w4_row_argument_1 = ret_w8_f1;
+                    let ret_w4_row = unsafe {
+                        ret_w4_row_constructor
                             .construct(
                                 &mut jni_environment,
                                 &[
                                     ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                        j: ((&mut *ret_w10_f0)
+                                        j: ((&mut *ret_w8_f0)
                                             as *mut ::prebindgen_jni_runtime::Allocation<
                                                 perftest_flat::CallbackRowResource,
                                             >) as i64,
                                     },
                                     ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                        l: ret_w6_row_argument_1.as_raw(),
+                                        l: ret_w4_row_argument_1.as_raw(),
                                     },
                                     ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                        j: ((&mut *ret_w10_f2)
+                                        j: ((&mut *ret_w8_f2)
                                             as *mut ::prebindgen_jni_runtime::Allocation<
                                                 perftest_flat::CallbackRowResource,
                                             >) as i64,
@@ -59309,7 +55914,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1c_1ou
                             )
                     }?;
                     jni_environment
-                        .set_object_array_element(&ret_w6, ret_w9 as i32, &ret_w6_row)
+                        .set_object_array_element(&ret_w4, ret_w7 as i32, &ret_w4_row)
                         .map_err(|e| e.to_string())?;
                     #[allow(
                         clippy::redundant_closure_call,
@@ -59317,34 +55922,34 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1c_1ou
                         clippy::unused_unit
                     )]
                     let _: () = (|| -> () {
-                        let _ = Box::into_raw(ret_w10_f0).expose_provenance();
-                        let _ = Box::into_raw(ret_w10_f2).expose_provenance();
+                        let _ = Box::into_raw(ret_w8_f0).expose_provenance();
+                        let _ = Box::into_raw(ret_w8_f2).expose_provenance();
                     })();
                     unsafe {
-                        ret_w6_owner.complete_row();
+                        ret_w4_owner.complete_row();
                     }
-                    drop(ret_w6_frame);
+                    drop(ret_w4_frame);
                 }
-                let ret_w6 = Some(ret_w6);
-                let ret_w2_row_argument_0 = match (ret_w6).as_ref() {
+                let ret_w4 = Some(ret_w4);
+                let ret_w0_row_argument_0 = match (ret_w4).as_ref() {
                     Some(value) => {
                         jni_environment.new_local_ref(value).map_err(|e| e.to_string())?
                     }
                     None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
                 };
-                let ret_w2_row = unsafe {
-                    ret_w2_row_constructor
+                let ret_w0_row = unsafe {
+                    ret_w0_row_constructor
                         .construct(
                             &mut jni_environment,
                             &[
                                 ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                    l: ret_w2_row_argument_0.as_raw(),
+                                    l: ret_w0_row_argument_0.as_raw(),
                                 },
                             ],
                         )
                 }?;
                 jni_environment
-                    .set_object_array_element(&ret_w2, ret_w5 as i32, &ret_w2_row)
+                    .set_object_array_element(&ret_w0, ret_w3 as i32, &ret_w0_row)
                     .map_err(|e| e.to_string())?;
                 #[allow(
                     clippy::redundant_closure_call,
@@ -59352,15 +55957,15 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1c_1ou
                     clippy::unused_unit
                 )]
                 let _: () = (|| -> () {
-                    ret_w6_owner.commit();
+                    ret_w4_owner.commit();
                 })();
                 unsafe {
-                    ret_w2_owner.complete_row();
+                    ret_w0_owner.complete_row();
                 }
-                drop(ret_w2_frame);
+                drop(ret_w0_frame);
             }
-            let ret_w2 = Some(ret_w2);
-            let __pb_direct_object = match (ret_w2).as_ref() {
+            let ret_w0 = Some(ret_w0);
+            let __pb_direct_object = match (ret_w0).as_ref() {
                 Some(value) => {
                     jni_environment.new_local_ref(value).map_err(|e| e.to_string())?
                 }
@@ -59373,7 +55978,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1c_1ou
                     .l
             };
             let _: () = {
-                ret_w2_owner.commit();
+                ret_w0_owner.commit();
                 direct_output = __pb_direct_result;
                 success_transferred = true;
             };
@@ -59444,71 +56049,86 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1c_1ou
             let p0_w0: i64 = ::core::convert::Into::into(p0_w1);
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::c_output_pair(__prebindgen_argument_0);
-            let ret_w0 = match source_value {
+            let ret_w13 = match source_value {
                 ::core::result::Result::Ok(value) => value,
-                ::core::result::Result::Err(ret_w1) => {
-                    return Err({
-                        __pb_jni_error_ResultFailure_typed_1183170f6901c4fd(
-                            &mut jni_environment,
-                            ret_w1,
-                            &mut domain_output,
-                            Some(&__pb_return),
-                        )?;
-                        String::new()
-                    });
+                ::core::result::Result::Err(ret_w14) => {
+                    let _: () = ((|| -> ::prebindgen_runtime::Result<()> {
+                        {
+                            let ret_w11 = perftest_flat::result_error_code(&ret_w14);
+                            let ret_w12 = ret_w11;
+                            unsafe {
+                                ::prebindgen_jni_runtime::invoke_error_callback(
+                                    &mut jni_environment,
+                                    &__pb_return,
+                                    "domainError0",
+                                    "(J)V",
+                                    &[
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w12,
+                                        },
+                                    ],
+                                )
+                            }?;
+                            let _: () = {
+                                domain_output = Some(std::ptr::null_mut());
+                            };
+                            Ok(())
+                        }
+                    })())?;
+                    return Err(String::new());
                 }
             };
-            let ret_w2 = ret_w0;
-            let ret_w3_source: ::std::vec::Vec<perftest_flat::CallbackRow> = ret_w2
+            let ret_w0 = ret_w13;
+            let ret_w1_source: ::std::vec::Vec<perftest_flat::CallbackRow> = ret_w0
                 .first;
-            let ret_w5 = ::std::vec::Vec::len(&ret_w3_source);
-            let ret_w3_row_constructor = __pb_row_type_SequenceRow_Long_String_Long_3_b4558cb7b740d7c6
+            let ret_w3 = ::std::vec::Vec::len(&ret_w1_source);
+            let ret_w1_row_constructor = __pb_row_type_SequenceRow_Long_String_Long_3_b4558cb7b740d7c6
                 .get()?;
-            let ret_w3 = ::prebindgen_jni_runtime::array(&mut jni_environment, ret_w5)?;
-            let mut ret_w3_owner = unsafe {
+            let ret_w1 = ::prebindgen_jni_runtime::array(&mut jni_environment, ret_w3)?;
+            let mut ret_w1_owner = unsafe {
                 ::prebindgen_jni_runtime::OutputRows::new_objects(
                     &mut jni_environment,
-                    &ret_w3,
+                    &ret_w1,
                     __pb_cleanup_typed_CallbackRowResource_CallbackRowResource_f07a6dca97ae09a2,
                 )
             };
-            for (ret_w6, ret_w4) in ::core::iter::Iterator::enumerate(
-                ::core::iter::IntoIterator::into_iter(ret_w3_source),
+            for (ret_w4, ret_w2) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w1_source),
             ) {
-                let ret_w3_frame = unsafe {
+                let ret_w1_frame = unsafe {
                     ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 11i32)
                 }?;
-                let ret_w7_record = &(ret_w4);
-                let mut ret_w7_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
-                    value: ::core::clone::Clone::clone(&ret_w7_record.first),
+                let ret_w5_record = &(ret_w2);
+                let mut ret_w5_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
+                    value: ::core::clone::Clone::clone(&ret_w5_record.first),
                 });
-                let ret_w7_f1: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
-                    let ret_w7_f1 = &ret_w7_record.label;
+                let ret_w5_f1: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                    let ret_w5_f1 = &ret_w5_record.label;
                     ::prebindgen_jni_runtime::text_object(
                         &mut jni_environment,
-                        ::core::convert::AsRef::<str>::as_ref(&ret_w7_f1),
+                        ::core::convert::AsRef::<str>::as_ref(&ret_w5_f1),
                     )?
                 };
-                let mut ret_w7_f2 = Box::new(::prebindgen_jni_runtime::Allocation {
-                    value: ::core::clone::Clone::clone(&ret_w7_record.second),
+                let mut ret_w5_f2 = Box::new(::prebindgen_jni_runtime::Allocation {
+                    value: ::core::clone::Clone::clone(&ret_w5_record.second),
                 });
-                let ret_w3_row_argument_1 = ret_w7_f1;
-                let ret_w3_row = unsafe {
-                    ret_w3_row_constructor
+                let ret_w1_row_argument_1 = ret_w5_f1;
+                let ret_w1_row = unsafe {
+                    ret_w1_row_constructor
                         .construct(
                             &mut jni_environment,
                             &[
                                 ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                    j: ((&mut *ret_w7_f0)
+                                    j: ((&mut *ret_w5_f0)
                                         as *mut ::prebindgen_jni_runtime::Allocation<
                                             perftest_flat::CallbackRowResource,
                                         >) as i64,
                                 },
                                 ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                    l: ret_w3_row_argument_1.as_raw(),
+                                    l: ret_w1_row_argument_1.as_raw(),
                                 },
                                 ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                    j: ((&mut *ret_w7_f2)
+                                    j: ((&mut *ret_w5_f2)
                                         as *mut ::prebindgen_jni_runtime::Allocation<
                                             perftest_flat::CallbackRowResource,
                                         >) as i64,
@@ -59517,7 +56137,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1c_1ou
                         )
                 }?;
                 jni_environment
-                    .set_object_array_element(&ret_w3, ret_w6 as i32, &ret_w3_row)
+                    .set_object_array_element(&ret_w1, ret_w4 as i32, &ret_w1_row)
                     .map_err(|e| e.to_string())?;
                 #[allow(
                     clippy::redundant_closure_call,
@@ -59525,65 +56145,65 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1c_1ou
                     clippy::unused_unit
                 )]
                 let _: () = (|| -> () {
-                    let _ = Box::into_raw(ret_w7_f0).expose_provenance();
-                    let _ = Box::into_raw(ret_w7_f2).expose_provenance();
+                    let _ = Box::into_raw(ret_w5_f0).expose_provenance();
+                    let _ = Box::into_raw(ret_w5_f2).expose_provenance();
                 })();
                 unsafe {
-                    ret_w3_owner.complete_row();
+                    ret_w1_owner.complete_row();
                 }
-                drop(ret_w3_frame);
+                drop(ret_w1_frame);
             }
-            let ret_w3 = Some(ret_w3);
-            let ret_w8_source: ::std::vec::Vec<perftest_flat::CallbackRow> = ret_w2
+            let ret_w1 = Some(ret_w1);
+            let ret_w6_source: ::std::vec::Vec<perftest_flat::CallbackRow> = ret_w0
                 .second;
-            let ret_w10 = ::std::vec::Vec::len(&ret_w8_source);
-            let ret_w8_row_constructor = __pb_row_type_SequenceRow_Long_String_Long_3_b4558cb7b740d7c6
+            let ret_w8 = ::std::vec::Vec::len(&ret_w6_source);
+            let ret_w6_row_constructor = __pb_row_type_SequenceRow_Long_String_Long_3_b4558cb7b740d7c6
                 .get()?;
-            let ret_w8 = ::prebindgen_jni_runtime::array(&mut jni_environment, ret_w10)?;
-            let mut ret_w8_owner = unsafe {
+            let ret_w6 = ::prebindgen_jni_runtime::array(&mut jni_environment, ret_w8)?;
+            let mut ret_w6_owner = unsafe {
                 ::prebindgen_jni_runtime::OutputRows::new_objects(
                     &mut jni_environment,
-                    &ret_w8,
+                    &ret_w6,
                     __pb_cleanup_typed_CallbackRowResource_CallbackRowResource_f07a6dca97ae09a2,
                 )
             };
-            for (ret_w11, ret_w9) in ::core::iter::Iterator::enumerate(
-                ::core::iter::IntoIterator::into_iter(ret_w8_source),
+            for (ret_w9, ret_w7) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w6_source),
             ) {
-                let ret_w8_frame = unsafe {
+                let ret_w6_frame = unsafe {
                     ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 11i32)
                 }?;
-                let ret_w12_record = &(ret_w9);
-                let mut ret_w12_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
-                    value: ::core::clone::Clone::clone(&ret_w12_record.first),
+                let ret_w10_record = &(ret_w7);
+                let mut ret_w10_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
+                    value: ::core::clone::Clone::clone(&ret_w10_record.first),
                 });
-                let ret_w12_f1: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
-                    let ret_w12_f1 = &ret_w12_record.label;
+                let ret_w10_f1: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                    let ret_w10_f1 = &ret_w10_record.label;
                     ::prebindgen_jni_runtime::text_object(
                         &mut jni_environment,
-                        ::core::convert::AsRef::<str>::as_ref(&ret_w12_f1),
+                        ::core::convert::AsRef::<str>::as_ref(&ret_w10_f1),
                     )?
                 };
-                let mut ret_w12_f2 = Box::new(::prebindgen_jni_runtime::Allocation {
-                    value: ::core::clone::Clone::clone(&ret_w12_record.second),
+                let mut ret_w10_f2 = Box::new(::prebindgen_jni_runtime::Allocation {
+                    value: ::core::clone::Clone::clone(&ret_w10_record.second),
                 });
-                let ret_w8_row_argument_1 = ret_w12_f1;
-                let ret_w8_row = unsafe {
-                    ret_w8_row_constructor
+                let ret_w6_row_argument_1 = ret_w10_f1;
+                let ret_w6_row = unsafe {
+                    ret_w6_row_constructor
                         .construct(
                             &mut jni_environment,
                             &[
                                 ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                    j: ((&mut *ret_w12_f0)
+                                    j: ((&mut *ret_w10_f0)
                                         as *mut ::prebindgen_jni_runtime::Allocation<
                                             perftest_flat::CallbackRowResource,
                                         >) as i64,
                                 },
                                 ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                    l: ret_w8_row_argument_1.as_raw(),
+                                    l: ret_w6_row_argument_1.as_raw(),
                                 },
                                 ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                    j: ((&mut *ret_w12_f2)
+                                    j: ((&mut *ret_w10_f2)
                                         as *mut ::prebindgen_jni_runtime::Allocation<
                                             perftest_flat::CallbackRowResource,
                                         >) as i64,
@@ -59592,7 +56212,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1c_1ou
                         )
                 }?;
                 jni_environment
-                    .set_object_array_element(&ret_w8, ret_w11 as i32, &ret_w8_row)
+                    .set_object_array_element(&ret_w6, ret_w9 as i32, &ret_w6_row)
                     .map_err(|e| e.to_string())?;
                 #[allow(
                     clippy::redundant_closure_call,
@@ -59600,22 +56220,22 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1c_1ou
                     clippy::unused_unit
                 )]
                 let _: () = (|| -> () {
-                    let _ = Box::into_raw(ret_w12_f0).expose_provenance();
-                    let _ = Box::into_raw(ret_w12_f2).expose_provenance();
+                    let _ = Box::into_raw(ret_w10_f0).expose_provenance();
+                    let _ = Box::into_raw(ret_w10_f2).expose_provenance();
                 })();
                 unsafe {
-                    ret_w8_owner.complete_row();
+                    ret_w6_owner.complete_row();
                 }
-                drop(ret_w8_frame);
+                drop(ret_w6_frame);
             }
-            let ret_w8 = Some(ret_w8);
-            let __pb_return_argument_0 = match (ret_w3).as_ref() {
+            let ret_w6 = Some(ret_w6);
+            let __pb_return_argument_0 = match (ret_w1).as_ref() {
                 Some(value) => {
                     jni_environment.new_local_ref(value).map_err(|e| e.to_string())?
                 }
                 None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
             };
-            let __pb_return_argument_1 = match (ret_w8).as_ref() {
+            let __pb_return_argument_1 = match (ret_w6).as_ref() {
                 Some(value) => {
                     jni_environment.new_local_ref(value).map_err(|e| e.to_string())?
                 }
@@ -59640,8 +56260,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1c_1ou
                     )
             }?;
             let _: () = {
-                ret_w3_owner.commit();
-                ret_w8_owner.commit();
+                ret_w1_owner.commit();
+                ret_w6_owner.commit();
                 success_transferred = true;
             };
             Ok(())
@@ -59746,26 +56366,57 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 __prebindgen_argument_0,
                 __prebindgen_argument_1,
             );
-            let ret_w0 = match source_value {
+            let ret_w5 = match source_value {
                 ::core::result::Result::Ok(value) => value,
-                ::core::result::Result::Err(ret_w1) => {
-                    return Err({
-                        __pb_jni_error_CallbackBoundaryError_typed_0dc61bae09ff09f2(
-                            &mut jni_environment,
-                            ret_w1,
-                            &mut domain_output,
-                            Some(&__pb_return),
-                        )?;
-                        String::new()
-                    });
+                ::core::result::Result::Err(ret_w6) => {
+                    let _: () = ((|| -> ::prebindgen_runtime::Result<()> {
+                        {
+                            let ret_w1 = perftest_flat::callback_boundary_error_into(
+                                ret_w6,
+                            );
+                            let ret_w2 = ret_w1;
+                            let ret_w3 = ret_w2.code;
+                            let ret_w4: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                '_,
+                            > = {
+                                let ret_w4 = ret_w2.message;
+                                ::prebindgen_jni_runtime::text_object(
+                                    &mut jni_environment,
+                                    ::core::convert::AsRef::<str>::as_ref(&ret_w4),
+                                )?
+                            };
+                            let __pb_return_argument_1 = ret_w4;
+                            unsafe {
+                                ::prebindgen_jni_runtime::invoke_error_callback(
+                                    &mut jni_environment,
+                                    &__pb_return,
+                                    "domainError0",
+                                    "(JLjava/lang/String;)V",
+                                    &[
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w3,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            l: __pb_return_argument_1.as_raw(),
+                                        },
+                                    ],
+                                )
+                            }?;
+                            let _: () = {
+                                domain_output = Some(std::ptr::null_mut());
+                            };
+                            Ok(())
+                        }
+                    })())?;
+                    return Err(String::new());
                 }
             };
-            let mut ret_w2 = Box::new(::prebindgen_jni_runtime::Allocation {
-                value: ret_w0,
+            let mut ret_w0 = Box::new(::prebindgen_jni_runtime::Allocation {
+                value: ret_w5,
             });
             let __pb_direct_result = unsafe {
                 (::prebindgen_jni_runtime::jni::sys::jvalue {
-                    j: ((&mut *ret_w2)
+                    j: ((&mut *ret_w0)
                         as *mut ::prebindgen_jni_runtime::Allocation<
                             perftest_flat::CallbackBoundaryHandler,
                         >) as i64,
@@ -59773,7 +56424,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                     .j
             };
             let _: () = {
-                let _ = Box::into_raw(ret_w2).expose_provenance();
+                let _ = Box::into_raw(ret_w0).expose_provenance();
                 direct_output = __pb_direct_result;
                 success_transferred = true;
             };
@@ -76406,26 +73057,53 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 __prebindgen_argument_0,
                 __prebindgen_argument_1,
             );
-            let ret_w0 = match source_value {
+            let ret_w4 = match source_value {
                 ::core::result::Result::Ok(value) => value,
-                ::core::result::Result::Err(ret_w1) => {
-                    return Err({
-                        __pb_jni_error_String_mapped_a4e45f5146673c62(
-                            &mut jni_environment,
-                            perftest_flat::callback_return_error_message(&ret_w1),
-                            &mut domain_output,
-                            Some(&__pb_return),
-                        )?;
-                        String::new()
-                    });
+                ::core::result::Result::Err(ret_w5) => {
+                    let _: () = ((|| -> ::prebindgen_runtime::Result<()> {
+                        let ret_w1 = ret_w5;
+                        let ret_w2 = perftest_flat::callback_return_error_message(
+                            &ret_w1,
+                        );
+                        {
+                            let ret_w3: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                '_,
+                            > = {
+                                let ret_w3 = ret_w2;
+                                ::prebindgen_jni_runtime::text_object(
+                                    &mut jni_environment,
+                                    ::core::convert::AsRef::<str>::as_ref(&ret_w3),
+                                )?
+                            };
+                            let __pb_return_argument_0 = ret_w3;
+                            unsafe {
+                                ::prebindgen_jni_runtime::invoke_error_callback(
+                                    &mut jni_environment,
+                                    &__pb_return,
+                                    "domainError0",
+                                    "(Ljava/lang/String;)V",
+                                    &[
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            l: __pb_return_argument_0.as_raw(),
+                                        },
+                                    ],
+                                )
+                            }?;
+                            let _: () = {
+                                domain_output = Some(std::ptr::null_mut());
+                            };
+                            Ok(())
+                        }
+                    })())?;
+                    return Err(String::new());
                 }
             };
-            let mut ret_w2 = Box::new(::prebindgen_jni_runtime::Allocation {
-                value: ret_w0,
+            let mut ret_w0 = Box::new(::prebindgen_jni_runtime::Allocation {
+                value: ret_w4,
             });
             let __pb_direct_result = unsafe {
                 (::prebindgen_jni_runtime::jni::sys::jvalue {
-                    j: ((&mut *ret_w2)
+                    j: ((&mut *ret_w0)
                         as *mut ::prebindgen_jni_runtime::Allocation<
                             perftest_flat::CallbackReturnHandler,
                         >) as i64,
@@ -76433,7 +73111,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                     .j
             };
             let _: () = {
-                let _ = Box::into_raw(ret_w2).expose_provenance();
+                let _ = Box::into_raw(ret_w0).expose_provenance();
                 direct_output = __pb_direct_result;
                 success_transferred = true;
             };
@@ -103736,52 +100414,67 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 __prebindgen_argument_1,
                 __prebindgen_argument_2,
             );
-            let ret_w0 = match source_value {
+            let ret_w8 = match source_value {
                 ::core::result::Result::Ok(value) => value,
-                ::core::result::Result::Err(ret_w1) => {
-                    return Err({
-                        __pb_jni_error_ResultFailure_typed_1183170f6901c4fd(
-                            &mut jni_environment,
-                            ret_w1,
-                            &mut domain_output,
-                            Some(&__pb_return),
-                        )?;
-                        String::new()
-                    });
+                ::core::result::Result::Err(ret_w9) => {
+                    let _: () = ((|| -> ::prebindgen_runtime::Result<()> {
+                        {
+                            let ret_w6 = perftest_flat::result_error_code(&ret_w9);
+                            let ret_w7 = ret_w6;
+                            unsafe {
+                                ::prebindgen_jni_runtime::invoke_error_callback(
+                                    &mut jni_environment,
+                                    &__pb_return,
+                                    "domainError0",
+                                    "(J)V",
+                                    &[
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w7,
+                                        },
+                                    ],
+                                )
+                            }?;
+                            let _: () = {
+                                domain_output = Some(std::ptr::null_mut());
+                            };
+                            Ok(())
+                        }
+                    })())?;
+                    return Err(String::new());
                 }
             };
-            let mut ret_w2_writer = ::prebindgen_jni_runtime::bulk::Writer::new(
+            let mut ret_w0_writer = ::prebindgen_jni_runtime::bulk::Writer::new(
                 ::core::mem::size_of::<__PbBulk_Range_f59dc5e9e3cec997>(),
             );
-            let ret_w3_source: ::std::vec::Vec<perftest_flat::OwnedResource> = ret_w0;
-            let ret_w5 = ::std::vec::Vec::len(&ret_w3_source);
-            let ret_w3 = ret_w2_writer
+            let ret_w1_source: ::std::vec::Vec<perftest_flat::OwnedResource> = ret_w8;
+            let ret_w3 = ::std::vec::Vec::len(&ret_w1_source);
+            let ret_w1 = ret_w0_writer
                 .rows(
-                    ret_w5,
+                    ret_w3,
                     ::core::mem::size_of::<__PbBulk_i64_1759b2fb0606880d>(),
                     ::core::mem::align_of::<__PbBulk_i64_1759b2fb0606880d>(),
                 )?;
-            let ret_w3_owners = unsafe {
-                ret_w2_writer
+            let ret_w1_owners = unsafe {
+                ret_w0_writer
                     .own_rows(
-                        ret_w3,
+                        ret_w1,
                         ::core::mem::size_of::<__PbBulk_i64_1759b2fb0606880d>(),
                         __pb_cleanup_native_OwnedResource_6815841e39c71731,
                     )
             };
-            for (ret_w6, ret_w4) in ::core::iter::Iterator::enumerate(
-                ::core::iter::IntoIterator::into_iter(ret_w3_source),
+            for (ret_w4, ret_w2) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w1_source),
             ) {
-                let mut ret_w7 = Box::new(::prebindgen_jni_runtime::Allocation {
-                    value: ret_w4,
+                let mut ret_w5 = Box::new(::prebindgen_jni_runtime::Allocation {
+                    value: ret_w2,
                 });
-                ret_w2_writer
+                ret_w0_writer
                     .write(
-                        (ret_w3.offset as usize
-                            + ret_w6
+                        (ret_w1.offset as usize
+                            + ret_w4
                                 * ::core::mem::size_of::<__PbBulk_i64_1759b2fb0606880d>())
                             + ::core::mem::offset_of!(__PbBulk_i64_1759b2fb0606880d, v0),
-                        ((&mut *ret_w7)
+                        ((&mut *ret_w5)
                             as *mut ::prebindgen_jni_runtime::Allocation<
                                 perftest_flat::OwnedResource,
                             >) as i64,
@@ -103792,24 +100485,24 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                     clippy::unused_unit
                 )]
                 let _: () = (|| -> () {
-                    let _ = Box::into_raw(ret_w7).expose_provenance();
+                    let _ = Box::into_raw(ret_w5).expose_provenance();
                 })();
                 unsafe {
-                    ret_w2_writer.commit_rows(ret_w3_owners, ret_w6 + 1);
+                    ret_w0_writer.commit_rows(ret_w1_owners, ret_w4 + 1);
                 }
             }
-            let ret_w3 = Some(ret_w3);
-            ret_w2_writer
+            let ret_w1 = Some(ret_w1);
+            ret_w0_writer
                 .range(
                     ::core::mem::offset_of!(__PbBulk_Range_f59dc5e9e3cec997, v0),
-                    ret_w3,
+                    ret_w1,
                 )?;
-            let ret_w2 = ::prebindgen_jni_runtime::jni::objects::JObject::from(
+            let ret_w0 = ::prebindgen_jni_runtime::jni::objects::JObject::from(
                 jni_environment
-                    .byte_array_from_slice(ret_w2_writer.bytes())
+                    .byte_array_from_slice(ret_w0_writer.bytes())
                     .map_err(|e| e.to_string())?,
             );
-            let __pb_direct_object = ret_w2;
+            let __pb_direct_object = ret_w0;
             let __pb_direct_result = unsafe {
                 (::prebindgen_jni_runtime::jni::sys::jvalue {
                     l: __pb_direct_object.as_raw(),
@@ -103817,7 +100510,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                     .l
             };
             let _: () = {
-                ret_w2_writer.commit();
+                ret_w0_writer.commit();
                 direct_output = __pb_direct_result;
                 success_transferred = true;
             };
@@ -104125,42 +100818,57 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 __prebindgen_argument_0,
                 __prebindgen_argument_1,
             );
-            let ret_w0 = match source_value {
+            let ret_w8 = match source_value {
                 ::core::result::Result::Ok(value) => value,
-                ::core::result::Result::Err(ret_w1) => {
-                    return Err({
-                        __pb_jni_error_ResultFailure_typed_1183170f6901c4fd(
-                            &mut jni_environment,
-                            ret_w1,
-                            &mut domain_output,
-                            Some(&__pb_return),
-                        )?;
-                        String::new()
-                    });
+                ::core::result::Result::Err(ret_w9) => {
+                    let _: () = ((|| -> ::prebindgen_runtime::Result<()> {
+                        {
+                            let ret_w6 = perftest_flat::result_error_code(&ret_w9);
+                            let ret_w7 = ret_w6;
+                            unsafe {
+                                ::prebindgen_jni_runtime::invoke_error_callback(
+                                    &mut jni_environment,
+                                    &__pb_return,
+                                    "domainError0",
+                                    "(J)V",
+                                    &[
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w7,
+                                        },
+                                    ],
+                                )
+                            }?;
+                            let _: () = {
+                                domain_output = Some(std::ptr::null_mut());
+                            };
+                            Ok(())
+                        }
+                    })())?;
+                    return Err(String::new());
                 }
             };
-            let mut ret_w2_writer = ::prebindgen_jni_runtime::bulk::Writer::new(
+            let mut ret_w0_writer = ::prebindgen_jni_runtime::bulk::Writer::new(
                 ::core::mem::size_of::<__PbBulk_Range_1800d3dd3eceec6d>(),
             );
-            let ret_w3_source: ::std::vec::Vec<i64> = ret_w0;
-            let ret_w5 = ::std::vec::Vec::len(&ret_w3_source);
-            let ret_w3 = ret_w2_writer
+            let ret_w1_source: ::std::vec::Vec<i64> = ret_w8;
+            let ret_w3 = ::std::vec::Vec::len(&ret_w1_source);
+            let ret_w1 = ret_w0_writer
                 .rows(
-                    ret_w5,
+                    ret_w3,
                     ::core::mem::size_of::<__PbBulk_i64_a60d3960993b9a77>(),
                     ::core::mem::align_of::<__PbBulk_i64_a60d3960993b9a77>(),
                 )?;
-            for (ret_w6, ret_w4) in ::core::iter::Iterator::enumerate(
-                ::core::iter::IntoIterator::into_iter(ret_w3_source),
+            for (ret_w4, ret_w2) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w1_source),
             ) {
-                let ret_w7 = ret_w4;
-                ret_w2_writer
+                let ret_w5 = ret_w2;
+                ret_w0_writer
                     .write(
-                        (ret_w3.offset as usize
-                            + ret_w6
+                        (ret_w1.offset as usize
+                            + ret_w4
                                 * ::core::mem::size_of::<__PbBulk_i64_a60d3960993b9a77>())
                             + ::core::mem::offset_of!(__PbBulk_i64_a60d3960993b9a77, v0),
-                        ret_w7,
+                        ret_w5,
                     )?;
                 #[allow(
                     clippy::redundant_closure_call,
@@ -104169,18 +100877,18 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 )]
                 let _: () = (|| -> () {})();
             }
-            let ret_w3 = Some(ret_w3);
-            ret_w2_writer
+            let ret_w1 = Some(ret_w1);
+            ret_w0_writer
                 .range(
                     ::core::mem::offset_of!(__PbBulk_Range_1800d3dd3eceec6d, v0),
-                    ret_w3,
+                    ret_w1,
                 )?;
-            let ret_w2 = ::prebindgen_jni_runtime::jni::objects::JObject::from(
+            let ret_w0 = ::prebindgen_jni_runtime::jni::objects::JObject::from(
                 jni_environment
-                    .byte_array_from_slice(ret_w2_writer.bytes())
+                    .byte_array_from_slice(ret_w0_writer.bytes())
                     .map_err(|e| e.to_string())?,
             );
-            let __pb_direct_object = ret_w2;
+            let __pb_direct_object = ret_w0;
             let __pb_direct_result = unsafe {
                 (::prebindgen_jni_runtime::jni::sys::jvalue {
                     l: __pb_direct_object.as_raw(),
@@ -104188,7 +100896,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                     .l
             };
             let _: () = {
-                ret_w2_writer.commit();
+                ret_w0_writer.commit();
                 direct_output = __pb_direct_result;
                 success_transferred = true;
             };
@@ -104256,18 +100964,179 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
             let source_value = perftest_flat::collection_fail();
-            let ret_w0 = match source_value {
+            let ret_w18 = match source_value {
                 ::core::result::Result::Ok(value) => value,
-                ::core::result::Result::Err(ret_w1) => {
-                    return Err({
-                        __pb_jni_error_CollectionError_typed_88bd5d3dac8727c4(
-                            &mut jni_environment,
-                            ret_w1,
-                            &mut domain_output,
-                            Some(&__pb_return),
-                        )?;
-                        String::new()
-                    });
+                ::core::result::Result::Err(ret_w19) => {
+                    let _: () = ((|| -> ::prebindgen_runtime::Result<()> {
+                        {
+                            let ret_w0 = perftest_flat::collection_error_into(ret_w19);
+                            let ret_w1 = ret_w0;
+                            let mut ret_w2_writer = ::prebindgen_jni_runtime::bulk::Writer::new(
+                                ::core::mem::size_of::<__PbBulk_Range_f59dc5e9e3cec997>(),
+                            );
+                            let ret_w3_source: ::std::vec::Vec<
+                                perftest_flat::OwnedResource,
+                            > = ret_w1.resources;
+                            let ret_w5 = ::std::vec::Vec::len(&ret_w3_source);
+                            let ret_w3 = ret_w2_writer
+                                .rows(
+                                    ret_w5,
+                                    ::core::mem::size_of::<__PbBulk_i64_1759b2fb0606880d>(),
+                                    ::core::mem::align_of::<__PbBulk_i64_1759b2fb0606880d>(),
+                                )?;
+                            let ret_w3_owners = unsafe {
+                                ret_w2_writer
+                                    .own_rows(
+                                        ret_w3,
+                                        ::core::mem::size_of::<__PbBulk_i64_1759b2fb0606880d>(),
+                                        __pb_cleanup_native_OwnedResource_6815841e39c71731,
+                                    )
+                            };
+                            for (ret_w6, ret_w4) in ::core::iter::Iterator::enumerate(
+                                ::core::iter::IntoIterator::into_iter(ret_w3_source),
+                            ) {
+                                let mut ret_w7 = Box::new(::prebindgen_jni_runtime::Allocation {
+                                    value: ret_w4,
+                                });
+                                ret_w2_writer
+                                    .write(
+                                        (ret_w3.offset as usize
+                                            + ret_w6
+                                                * ::core::mem::size_of::<__PbBulk_i64_1759b2fb0606880d>())
+                                            + ::core::mem::offset_of!(
+                                                __PbBulk_i64_1759b2fb0606880d, v0
+                                            ),
+                                        ((&mut *ret_w7)
+                                            as *mut ::prebindgen_jni_runtime::Allocation<
+                                                perftest_flat::OwnedResource,
+                                            >) as i64,
+                                    )?;
+                                #[allow(
+                                    clippy::redundant_closure_call,
+                                    clippy::let_unit_value,
+                                    clippy::unused_unit
+                                )]
+                                let _: () = (|| -> () {
+                                    let _ = Box::into_raw(ret_w7).expose_provenance();
+                                })();
+                                unsafe {
+                                    ret_w2_writer.commit_rows(ret_w3_owners, ret_w6 + 1);
+                                }
+                            }
+                            let ret_w3 = Some(ret_w3);
+                            ret_w2_writer
+                                .range(
+                                    ::core::mem::offset_of!(
+                                        __PbBulk_Range_f59dc5e9e3cec997, v0
+                                    ),
+                                    ret_w3,
+                                )?;
+                            let ret_w2 = ::prebindgen_jni_runtime::jni::objects::JObject::from(
+                                jni_environment
+                                    .byte_array_from_slice(ret_w2_writer.bytes())
+                                    .map_err(|e| e.to_string())?,
+                            );
+                            let mut ret_w8_writer = ::prebindgen_jni_runtime::bulk::Writer::new(
+                                ::core::mem::size_of::<__PbBulk_Range_01c263066f8f1a73>(),
+                            );
+                            let ret_w9_source: ::std::vec::Vec<Vec<i64>> = ret_w1.codes;
+                            let ret_w11 = ::std::vec::Vec::len(&ret_w9_source);
+                            let ret_w9 = ret_w8_writer
+                                .rows(
+                                    ret_w11,
+                                    ::core::mem::size_of::<__PbBulk_Range_1800d3dd3eceec6d>(),
+                                    ::core::mem::align_of::<__PbBulk_Range_1800d3dd3eceec6d>(),
+                                )?;
+                            for (ret_w12, ret_w10) in ::core::iter::Iterator::enumerate(
+                                ::core::iter::IntoIterator::into_iter(ret_w9_source),
+                            ) {
+                                let ret_w13_source: ::std::vec::Vec<i64> = ret_w10;
+                                let ret_w15 = ::std::vec::Vec::len(&ret_w13_source);
+                                let ret_w13 = ret_w8_writer
+                                    .rows(
+                                        ret_w15,
+                                        ::core::mem::size_of::<__PbBulk_i64_a60d3960993b9a77>(),
+                                        ::core::mem::align_of::<__PbBulk_i64_a60d3960993b9a77>(),
+                                    )?;
+                                for (ret_w16, ret_w14) in ::core::iter::Iterator::enumerate(
+                                    ::core::iter::IntoIterator::into_iter(ret_w13_source),
+                                ) {
+                                    let ret_w17 = ret_w14;
+                                    ret_w8_writer
+                                        .write(
+                                            (ret_w13.offset as usize
+                                                + ret_w16
+                                                    * ::core::mem::size_of::<__PbBulk_i64_a60d3960993b9a77>())
+                                                + ::core::mem::offset_of!(
+                                                    __PbBulk_i64_a60d3960993b9a77, v0
+                                                ),
+                                            ret_w17,
+                                        )?;
+                                    #[allow(
+                                        clippy::redundant_closure_call,
+                                        clippy::let_unit_value,
+                                        clippy::unused_unit
+                                    )]
+                                    let _: () = (|| -> () {})();
+                                }
+                                let ret_w13 = Some(ret_w13);
+                                ret_w8_writer
+                                    .range(
+                                        (ret_w9.offset as usize
+                                            + ret_w12
+                                                * ::core::mem::size_of::<__PbBulk_Range_1800d3dd3eceec6d>())
+                                            + ::core::mem::offset_of!(
+                                                __PbBulk_Range_1800d3dd3eceec6d, v0
+                                            ),
+                                        ret_w13,
+                                    )?;
+                                #[allow(
+                                    clippy::redundant_closure_call,
+                                    clippy::let_unit_value,
+                                    clippy::unused_unit
+                                )]
+                                let _: () = (|| -> () {})();
+                            }
+                            let ret_w9 = Some(ret_w9);
+                            ret_w8_writer
+                                .range(
+                                    ::core::mem::offset_of!(
+                                        __PbBulk_Range_01c263066f8f1a73, v0
+                                    ),
+                                    ret_w9,
+                                )?;
+                            let ret_w8 = ::prebindgen_jni_runtime::jni::objects::JObject::from(
+                                jni_environment
+                                    .byte_array_from_slice(ret_w8_writer.bytes())
+                                    .map_err(|e| e.to_string())?,
+                            );
+                            let __pb_return_argument_0 = ret_w2;
+                            let __pb_return_argument_1 = ret_w8;
+                            unsafe {
+                                ::prebindgen_jni_runtime::invoke_error_callback(
+                                    &mut jni_environment,
+                                    &__pb_return,
+                                    "domainError0",
+                                    "([B[B)V",
+                                    &[
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            l: __pb_return_argument_0.as_raw(),
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            l: __pb_return_argument_1.as_raw(),
+                                        },
+                                    ],
+                                )
+                            }?;
+                            let _: () = {
+                                ret_w2_writer.commit();
+                                ret_w8_writer.commit();
+                                domain_output = Some(std::ptr::null_mut());
+                            };
+                            Ok(())
+                        }
+                    })())?;
+                    return Err(String::new());
                 }
             };
             let _: () = {
@@ -104416,55 +101285,70 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 __prebindgen_argument_0,
                 __prebindgen_argument_1,
             );
-            let ret_w0 = match source_value {
+            let ret_w10 = match source_value {
                 ::core::result::Result::Ok(value) => value,
-                ::core::result::Result::Err(ret_w1) => {
-                    return Err({
-                        __pb_jni_error_ResultFailure_typed_1183170f6901c4fd(
-                            &mut jni_environment,
-                            ret_w1,
-                            &mut domain_output,
-                            Some(&__pb_return),
-                        )?;
-                        String::new()
-                    });
+                ::core::result::Result::Err(ret_w11) => {
+                    let _: () = ((|| -> ::prebindgen_runtime::Result<()> {
+                        {
+                            let ret_w8 = perftest_flat::result_error_code(&ret_w11);
+                            let ret_w9 = ret_w8;
+                            unsafe {
+                                ::prebindgen_jni_runtime::invoke_error_callback(
+                                    &mut jni_environment,
+                                    &__pb_return,
+                                    "domainError0",
+                                    "(J)V",
+                                    &[
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w9,
+                                        },
+                                    ],
+                                )
+                            }?;
+                            let _: () = {
+                                domain_output = Some(std::ptr::null_mut());
+                            };
+                            Ok(())
+                        }
+                    })())?;
+                    return Err(String::new());
                 }
             };
-            let mut ret_w2_writer = ::prebindgen_jni_runtime::bulk::Writer::new(
+            let mut ret_w0_writer = ::prebindgen_jni_runtime::bulk::Writer::new(
                 ::core::mem::size_of::<__PbBulk_i32_Range_227a8bb975da144e>(),
             );
-            let (ret_w3, (ret_w3_value0,), ret_w3_commit) = if let Some(ret_w4) = ret_w0 {
-                let ret_w5_source: ::std::vec::Vec<perftest_flat::OwnedResource> = ret_w4;
-                let ret_w7 = ::std::vec::Vec::len(&ret_w5_source);
-                let ret_w5 = ret_w2_writer
+            let (ret_w1, (ret_w1_value0,), ret_w1_commit) = if let Some(ret_w2) = ret_w10 {
+                let ret_w3_source: ::std::vec::Vec<perftest_flat::OwnedResource> = ret_w2;
+                let ret_w5 = ::std::vec::Vec::len(&ret_w3_source);
+                let ret_w3 = ret_w0_writer
                     .rows(
-                        ret_w7,
+                        ret_w5,
                         ::core::mem::size_of::<__PbBulk_i64_1759b2fb0606880d>(),
                         ::core::mem::align_of::<__PbBulk_i64_1759b2fb0606880d>(),
                     )?;
-                let ret_w5_owners = unsafe {
-                    ret_w2_writer
+                let ret_w3_owners = unsafe {
+                    ret_w0_writer
                         .own_rows(
-                            ret_w5,
+                            ret_w3,
                             ::core::mem::size_of::<__PbBulk_i64_1759b2fb0606880d>(),
                             __pb_cleanup_native_OwnedResource_6815841e39c71731,
                         )
                 };
-                for (ret_w8, ret_w6) in ::core::iter::Iterator::enumerate(
-                    ::core::iter::IntoIterator::into_iter(ret_w5_source),
+                for (ret_w6, ret_w4) in ::core::iter::Iterator::enumerate(
+                    ::core::iter::IntoIterator::into_iter(ret_w3_source),
                 ) {
-                    let mut ret_w9 = Box::new(::prebindgen_jni_runtime::Allocation {
-                        value: ret_w6,
+                    let mut ret_w7 = Box::new(::prebindgen_jni_runtime::Allocation {
+                        value: ret_w4,
                     });
-                    ret_w2_writer
+                    ret_w0_writer
                         .write(
-                            (ret_w5.offset as usize
-                                + ret_w8
+                            (ret_w3.offset as usize
+                                + ret_w6
                                     * ::core::mem::size_of::<__PbBulk_i64_1759b2fb0606880d>())
                                 + ::core::mem::offset_of!(
                                     __PbBulk_i64_1759b2fb0606880d, v0
                                 ),
-                            ((&mut *ret_w9)
+                            ((&mut *ret_w7)
                                 as *mut ::prebindgen_jni_runtime::Allocation<
                                     perftest_flat::OwnedResource,
                                 >) as i64,
@@ -104475,36 +101359,36 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                         clippy::unused_unit
                     )]
                     let _: () = (|| -> () {
-                        let _ = Box::into_raw(ret_w9).expose_provenance();
+                        let _ = Box::into_raw(ret_w7).expose_provenance();
                     })();
                     unsafe {
-                        ret_w2_writer.commit_rows(ret_w5_owners, ret_w8 + 1);
+                        ret_w0_writer.commit_rows(ret_w3_owners, ret_w6 + 1);
                     }
                 }
-                let ret_w5 = Some(ret_w5);
-                let ret_w3_values = (ret_w5,);
-                (1i32, ret_w3_values, Some(move || {}))
+                let ret_w3 = Some(ret_w3);
+                let ret_w1_values = (ret_w3,);
+                (1i32, ret_w1_values, Some(move || {}))
             } else {
                 (0i32, (None,), None)
             };
-            ret_w2_writer
+            ret_w0_writer
                 .write(
                     ::core::mem::offset_of!(__PbBulk_i32_Range_227a8bb975da144e, v0),
-                    ret_w3,
+                    ret_w1,
                 )?;
-            if (ret_w3) == 1 {
-                ret_w2_writer
+            if (ret_w1) == 1 {
+                ret_w0_writer
                     .range(
                         ::core::mem::offset_of!(__PbBulk_i32_Range_227a8bb975da144e, v1),
-                        ret_w3_value0,
+                        ret_w1_value0,
                     )?;
             }
-            let ret_w2 = ::prebindgen_jni_runtime::jni::objects::JObject::from(
+            let ret_w0 = ::prebindgen_jni_runtime::jni::objects::JObject::from(
                 jni_environment
-                    .byte_array_from_slice(ret_w2_writer.bytes())
+                    .byte_array_from_slice(ret_w0_writer.bytes())
                     .map_err(|e| e.to_string())?,
             );
-            let __pb_direct_object = ret_w2;
+            let __pb_direct_object = ret_w0;
             let __pb_direct_result = unsafe {
                 (::prebindgen_jni_runtime::jni::sys::jvalue {
                     l: __pb_direct_object.as_raw(),
@@ -104512,10 +101396,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                     .l
             };
             let _: () = {
-                if let Some(ret_w3_action) = ret_w3_commit {
-                    ret_w3_action();
+                if let Some(ret_w1_action) = ret_w1_commit {
+                    ret_w1_action();
                 }
-                ret_w2_writer.commit();
+                ret_w0_writer.commit();
                 direct_output = __pb_direct_result;
                 success_transferred = true;
             };
@@ -104959,18 +101843,43 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1c_1re
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
             let source_value = perftest_flat::c_result_error_drop();
-            let ret_w0 = match source_value {
+            let ret_w4 = match source_value {
                 ::core::result::Result::Ok(value) => value,
-                ::core::result::Result::Err(ret_w1) => {
-                    return Err({
-                        __pb_jni_error_CDropError_typed_2250cb445abcc18e(
-                            &mut jni_environment,
-                            ret_w1,
-                            &mut domain_output,
-                            Some(&__pb_return),
-                        )?;
-                        String::new()
-                    });
+                ::core::result::Result::Err(ret_w5) => {
+                    let _: () = ((|| -> ::prebindgen_runtime::Result<()> {
+                        {
+                            let ret_w0 = perftest_flat::result_drop_error_into(ret_w5);
+                            let ret_w1 = ret_w0;
+                            let ret_w2 = perftest_flat::c_panic_output_value(
+                                &ret_w1.resource,
+                            );
+                            let mut ret_w3 = Box::new(::prebindgen_jni_runtime::Allocation {
+                                value: ret_w2,
+                            });
+                            unsafe {
+                                ::prebindgen_jni_runtime::invoke_error_callback(
+                                    &mut jni_environment,
+                                    &__pb_return,
+                                    "domainError0",
+                                    "(J)V",
+                                    &[
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ((&mut *ret_w3)
+                                                as *mut ::prebindgen_jni_runtime::Allocation<
+                                                    perftest_flat::OwnedResource,
+                                                >) as i64,
+                                        },
+                                    ],
+                                )
+                            }?;
+                            let _: () = {
+                                let _ = Box::into_raw(ret_w3).expose_provenance();
+                                domain_output = Some(std::ptr::null_mut());
+                            };
+                            Ok(())
+                        }
+                    })())?;
+                    return Err(String::new());
                 }
             };
             let _: () = {
@@ -105044,24 +101953,53 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1c_1re
             let source_value = perftest_flat::c_result_late_niche(
                 __prebindgen_argument_0,
             );
-            let ret_w0 = match source_value {
+            let ret_w8 = match source_value {
                 ::core::result::Result::Ok(value) => value,
-                ::core::result::Result::Err(ret_w1) => {
-                    return Err({
-                        __pb_jni_error_CResultError_typed_fdc76b156eba8b0a(
-                            &mut jni_environment,
-                            ret_w1,
-                            &mut domain_output,
-                            Some(&__pb_return),
-                        )?;
-                        String::new()
-                    });
+                ::core::result::Result::Err(ret_w9) => {
+                    let _: () = ((|| -> ::prebindgen_runtime::Result<()> {
+                        {
+                            let ret_w4 = perftest_flat::result_pair_error_into(ret_w9);
+                            let ret_w5 = ret_w4;
+                            let ret_w6 = ret_w5.code;
+                            let ret_w7: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                '_,
+                            > = {
+                                let ret_w7 = ret_w5.message;
+                                ::prebindgen_jni_runtime::text_object(
+                                    &mut jni_environment,
+                                    ::core::convert::AsRef::<str>::as_ref(&ret_w7),
+                                )?
+                            };
+                            let __pb_return_argument_1 = ret_w7;
+                            unsafe {
+                                ::prebindgen_jni_runtime::invoke_error_callback(
+                                    &mut jni_environment,
+                                    &__pb_return,
+                                    "domainError0",
+                                    "(JLjava/lang/String;)V",
+                                    &[
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w6,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            l: __pb_return_argument_1.as_raw(),
+                                        },
+                                    ],
+                                )
+                            }?;
+                            let _: () = {
+                                domain_output = Some(std::ptr::null_mut());
+                            };
+                            Ok(())
+                        }
+                    })())?;
+                    return Err(String::new());
                 }
             };
-            let ret_w2 = perftest_flat::c_result_pair_into(ret_w0);
-            let ret_w3 = ret_w2;
-            let ret_w4 = ret_w3.number;
-            let ret_w5 = (ret_w3.character) as i32;
+            let ret_w0 = perftest_flat::c_result_pair_into(ret_w8);
+            let ret_w1 = ret_w0;
+            let ret_w2 = ret_w1.number;
+            let ret_w3 = (ret_w1.character) as i32;
             static __PB_RETURN_METHOD_0: ::prebindgen_jni_runtime::ReturnCallback = ::prebindgen_jni_runtime::ReturnCallback::new();
             unsafe {
                 __PB_RETURN_METHOD_0
@@ -105072,10 +102010,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1c_1re
                         "(JI)V",
                         &[
                             ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                j: ret_w4,
+                                j: ret_w2,
                             },
                             ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                i: ret_w5,
+                                i: ret_w3,
                             },
                         ],
                     )
@@ -105151,18 +102089,55 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1c_1re
             let source_value = perftest_flat::c_result_resource_error(
                 __prebindgen_argument_0,
             );
-            let ret_w0 = match source_value {
+            let ret_w4 = match source_value {
                 ::core::result::Result::Ok(value) => value,
-                ::core::result::Result::Err(ret_w1) => {
-                    return Err({
-                        __pb_jni_error_CResourceError_typed_b601e344955ebc63(
-                            &mut jni_environment,
-                            ret_w1,
-                            &mut domain_output,
-                            Some(&__pb_return),
-                        )?;
-                        String::new()
-                    });
+                ::core::result::Result::Err(ret_w5) => {
+                    let _: () = ((|| -> ::prebindgen_runtime::Result<()> {
+                        {
+                            let ret_w0 = perftest_flat::result_resource_error_into(
+                                ret_w5,
+                            );
+                            let ret_w1 = ret_w0;
+                            let mut ret_w2 = Box::new(::prebindgen_jni_runtime::Allocation {
+                                value: ret_w1.resource,
+                            });
+                            let ret_w3: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                '_,
+                            > = {
+                                let ret_w3 = ret_w1.message;
+                                ::prebindgen_jni_runtime::text_object(
+                                    &mut jni_environment,
+                                    ::core::convert::AsRef::<str>::as_ref(&ret_w3),
+                                )?
+                            };
+                            let __pb_return_argument_1 = ret_w3;
+                            unsafe {
+                                ::prebindgen_jni_runtime::invoke_error_callback(
+                                    &mut jni_environment,
+                                    &__pb_return,
+                                    "domainError0",
+                                    "(JLjava/lang/String;)V",
+                                    &[
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ((&mut *ret_w2)
+                                                as *mut ::prebindgen_jni_runtime::Allocation<
+                                                    perftest_flat::OwnedResource,
+                                                >) as i64,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            l: __pb_return_argument_1.as_raw(),
+                                        },
+                                    ],
+                                )
+                            }?;
+                            let _: () = {
+                                let _ = Box::into_raw(ret_w2).expose_provenance();
+                                domain_output = Some(std::ptr::null_mut());
+                            };
+                            Ok(())
+                        }
+                    })())?;
+                    return Err(String::new());
                 }
             };
             let _: () = {
@@ -105236,18 +102211,71 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1c_1re
             let source_value = perftest_flat::c_result_rich_error(
                 __prebindgen_argument_0,
             );
-            let ret_w0 = match source_value {
+            let ret_w6 = match source_value {
                 ::core::result::Result::Ok(value) => value,
-                ::core::result::Result::Err(ret_w1) => {
-                    return Err({
-                        __pb_jni_error_CRichError_typed_567a9ede94b6be79(
-                            &mut jni_environment,
-                            ret_w1,
-                            &mut domain_output,
-                            Some(&__pb_return),
-                        )?;
-                        String::new()
-                    });
+                ::core::result::Result::Err(ret_w7) => {
+                    let _: () = ((|| -> ::prebindgen_runtime::Result<()> {
+                        {
+                            let ret_w0 = perftest_flat::result_rich_error_into(ret_w7);
+                            let ret_w1 = ret_w0;
+                            let ret_w2: i32 = match &(ret_w1.kind) {
+                                perftest_flat::SparseCode::Bottom => -2147483648i32,
+                                perftest_flat::SparseCode::MinusTwo => -2i32,
+                                perftest_flat::SparseCode::MinusOne => -1i32,
+                                perftest_flat::SparseCode::Zero => 0i32,
+                                perftest_flat::SparseCode::Seven => 7i32,
+                                perftest_flat::SparseCode::Eight => 8i32,
+                                perftest_flat::SparseCode::Top => 2147483647i32,
+                            };
+                            let (_, (ret_w3_value0,), ret_w3_commit) = if let Some(
+                                ret_w4,
+                            ) = ret_w1.message
+                            {
+                                let ret_w5: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                    '_,
+                                > = {
+                                    let ret_w5 = ret_w4;
+                                    ::prebindgen_jni_runtime::text_object(
+                                        &mut jni_environment,
+                                        ::core::convert::AsRef::<str>::as_ref(&ret_w5),
+                                    )?
+                                };
+                                let ret_w3_values = (ret_w5,);
+                                (1i32, ret_w3_values, Some(move || {}))
+                            } else {
+                                (
+                                    0i32,
+                                    (::prebindgen_jni_runtime::jni::objects::JObject::null(),),
+                                    None,
+                                )
+                            };
+                            let __pb_return_argument_1 = ret_w3_value0;
+                            unsafe {
+                                ::prebindgen_jni_runtime::invoke_error_callback(
+                                    &mut jni_environment,
+                                    &__pb_return,
+                                    "domainError0",
+                                    "(ILjava/lang/String;)V",
+                                    &[
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            i: ret_w2,
+                                        },
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            l: __pb_return_argument_1.as_raw(),
+                                        },
+                                    ],
+                                )
+                            }?;
+                            let _: () = {
+                                if let Some(ret_w3_action) = ret_w3_commit {
+                                    ret_w3_action();
+                                }
+                                domain_output = Some(std::ptr::null_mut());
+                            };
+                            Ok(())
+                        }
+                    })())?;
+                    return Err(String::new());
                 }
             };
             let _: () = {
@@ -105320,24 +102348,39 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resul
             let p0_w0: i64 = ::core::convert::Into::into(p0_w1);
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::result_scalar(__prebindgen_argument_0);
-            let ret_w0 = match source_value {
+            let ret_w3 = match source_value {
                 ::core::result::Result::Ok(value) => value,
-                ::core::result::Result::Err(ret_w1) => {
-                    return Err({
-                        __pb_jni_error_ResultFailure_typed_1183170f6901c4fd(
-                            &mut jni_environment,
-                            ret_w1,
-                            &mut domain_output,
-                            Some(&__pb_return),
-                        )?;
-                        String::new()
-                    });
+                ::core::result::Result::Err(ret_w4) => {
+                    let _: () = ((|| -> ::prebindgen_runtime::Result<()> {
+                        {
+                            let ret_w1 = perftest_flat::result_error_code(&ret_w4);
+                            let ret_w2 = ret_w1;
+                            unsafe {
+                                ::prebindgen_jni_runtime::invoke_error_callback(
+                                    &mut jni_environment,
+                                    &__pb_return,
+                                    "domainError0",
+                                    "(J)V",
+                                    &[
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w2,
+                                        },
+                                    ],
+                                )
+                            }?;
+                            let _: () = {
+                                domain_output = Some(std::ptr::null_mut());
+                            };
+                            Ok(())
+                        }
+                    })())?;
+                    return Err(String::new());
                 }
             };
-            let ret_w2 = ret_w0;
+            let ret_w0 = ret_w3;
             let __pb_direct_result = unsafe {
                 (::prebindgen_jni_runtime::jni::sys::jvalue {
-                    j: ret_w2,
+                    j: ret_w0,
                 })
                     .j
             };
@@ -105413,24 +102456,33 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resul
             let p0_w0: bool = ::core::convert::Into::into(p0_w1 != 0);
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::result_unit_error(__prebindgen_argument_0);
-            let ret_w0 = match source_value {
+            let ret_w1 = match source_value {
                 ::core::result::Result::Ok(value) => value,
-                ::core::result::Result::Err(ret_w1) => {
-                    return Err({
-                        __pb_jni_error_Unit_typed_a1e0cd1748dcb6ca(
-                            &mut jni_environment,
-                            ret_w1,
-                            &mut domain_output,
-                            Some(&__pb_return),
-                        )?;
-                        String::new()
-                    });
+                ::core::result::Result::Err(ret_w2) => {
+                    let _: () = ((|| -> ::prebindgen_runtime::Result<()> {
+                        {
+                            unsafe {
+                                ::prebindgen_jni_runtime::invoke_error_callback(
+                                    &mut jni_environment,
+                                    &__pb_return,
+                                    "domainError0",
+                                    "()V",
+                                    &[],
+                                )
+                            }?;
+                            let _: () = {
+                                domain_output = Some(std::ptr::null_mut());
+                            };
+                            Ok(())
+                        }
+                    })())?;
+                    return Err(String::new());
                 }
             };
-            let ret_w2 = ret_w0;
+            let ret_w0 = ret_w1;
             let __pb_direct_result = unsafe {
                 (::prebindgen_jni_runtime::jni::sys::jvalue {
-                    j: ret_w2,
+                    j: ret_w0,
                 })
                     .j
             };
@@ -105505,18 +102557,33 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resul
             let p0_w0: bool = ::core::convert::Into::into(p0_w1 != 0);
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::result_unit(__prebindgen_argument_0);
-            let ret_w0 = match source_value {
+            let ret_w2 = match source_value {
                 ::core::result::Result::Ok(value) => value,
-                ::core::result::Result::Err(ret_w1) => {
-                    return Err({
-                        __pb_jni_error_ResultFailure_typed_1183170f6901c4fd(
-                            &mut jni_environment,
-                            ret_w1,
-                            &mut domain_output,
-                            Some(&__pb_return),
-                        )?;
-                        String::new()
-                    });
+                ::core::result::Result::Err(ret_w3) => {
+                    let _: () = ((|| -> ::prebindgen_runtime::Result<()> {
+                        {
+                            let ret_w0 = perftest_flat::result_error_code(&ret_w3);
+                            let ret_w1 = ret_w0;
+                            unsafe {
+                                ::prebindgen_jni_runtime::invoke_error_callback(
+                                    &mut jni_environment,
+                                    &__pb_return,
+                                    "domainError0",
+                                    "(J)V",
+                                    &[
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w1,
+                                        },
+                                    ],
+                                )
+                            }?;
+                            let _: () = {
+                                domain_output = Some(std::ptr::null_mut());
+                            };
+                            Ok(())
+                        }
+                    })())?;
+                    return Err(String::new());
                 }
             };
             let _: () = {
@@ -105589,22 +102656,37 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resul
             let p0_w0: i32 = ::core::convert::Into::into(p0_w1);
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::result_optional(__prebindgen_argument_0);
-            let ret_w0 = match source_value {
+            let ret_w5 = match source_value {
                 ::core::result::Result::Ok(value) => value,
-                ::core::result::Result::Err(ret_w1) => {
-                    return Err({
-                        __pb_jni_error_ResultFailure_typed_1183170f6901c4fd(
-                            &mut jni_environment,
-                            ret_w1,
-                            &mut domain_output,
-                            Some(&__pb_return),
-                        )?;
-                        String::new()
-                    });
+                ::core::result::Result::Err(ret_w6) => {
+                    let _: () = ((|| -> ::prebindgen_runtime::Result<()> {
+                        {
+                            let ret_w3 = perftest_flat::result_error_code(&ret_w6);
+                            let ret_w4 = ret_w3;
+                            unsafe {
+                                ::prebindgen_jni_runtime::invoke_error_callback(
+                                    &mut jni_environment,
+                                    &__pb_return,
+                                    "domainError0",
+                                    "(J)V",
+                                    &[
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w4,
+                                        },
+                                    ],
+                                )
+                            }?;
+                            let _: () = {
+                                domain_output = Some(std::ptr::null_mut());
+                            };
+                            Ok(())
+                        }
+                    })())?;
+                    return Err(String::new());
                 }
             };
-            let (_, (ret_w2_value0,), ret_w2_commit) = if let Some(ret_w3) = ret_w0 {
-                let ret_w4: i32 = match &(ret_w3) {
+            let (_, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = ret_w5 {
+                let ret_w2: i32 = match &(ret_w1) {
                     perftest_flat::SparseCode::Bottom => -2147483648i32,
                     perftest_flat::SparseCode::MinusTwo => -2i32,
                     perftest_flat::SparseCode::MinusOne => -1i32,
@@ -105613,20 +102695,20 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resul
                     perftest_flat::SparseCode::Eight => 8i32,
                     perftest_flat::SparseCode::Top => 2147483647i32,
                 };
-                let ret_w2_values = (ret_w4,);
-                (1i32, ret_w2_values, Some(move || {}))
+                let ret_w0_values = (ret_w2,);
+                (1i32, ret_w0_values, Some(move || {}))
             } else {
                 (0i32, (-3,), None)
             };
             let __pb_direct_result = unsafe {
                 (::prebindgen_jni_runtime::jni::sys::jvalue {
-                    i: ret_w2_value0,
+                    i: ret_w0_value0,
                 })
                     .i
             };
             let _: () = {
-                if let Some(ret_w2_action) = ret_w2_commit {
-                    ret_w2_action();
+                if let Some(ret_w0_action) = ret_w0_commit {
+                    ret_w0_action();
                 }
                 direct_output = __pb_direct_result;
                 success_transferred = true;
@@ -105699,28 +102781,43 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resul
             let p0_w0: bool = ::core::convert::Into::into(p0_w1 != 0);
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::result_text(__prebindgen_argument_0);
-            let ret_w0 = match source_value {
+            let ret_w3 = match source_value {
                 ::core::result::Result::Ok(value) => value,
-                ::core::result::Result::Err(ret_w1) => {
-                    return Err({
-                        __pb_jni_error_ResultFailure_typed_1183170f6901c4fd(
-                            &mut jni_environment,
-                            ret_w1,
-                            &mut domain_output,
-                            Some(&__pb_return),
-                        )?;
-                        String::new()
-                    });
+                ::core::result::Result::Err(ret_w4) => {
+                    let _: () = ((|| -> ::prebindgen_runtime::Result<()> {
+                        {
+                            let ret_w1 = perftest_flat::result_error_code(&ret_w4);
+                            let ret_w2 = ret_w1;
+                            unsafe {
+                                ::prebindgen_jni_runtime::invoke_error_callback(
+                                    &mut jni_environment,
+                                    &__pb_return,
+                                    "domainError0",
+                                    "(J)V",
+                                    &[
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w2,
+                                        },
+                                    ],
+                                )
+                            }?;
+                            let _: () = {
+                                domain_output = Some(std::ptr::null_mut());
+                            };
+                            Ok(())
+                        }
+                    })())?;
+                    return Err(String::new());
                 }
             };
-            let ret_w2: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
-                let ret_w2 = ret_w0;
+            let ret_w0: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w0 = ret_w3;
                 ::prebindgen_jni_runtime::text_object(
                     &mut jni_environment,
-                    ::core::convert::AsRef::<str>::as_ref(&ret_w2),
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w0),
                 )?
             };
-            let __pb_direct_object = ret_w2;
+            let __pb_direct_object = ret_w0;
             let __pb_direct_result = unsafe {
                 (::prebindgen_jni_runtime::jni::sys::jvalue {
                     l: __pb_direct_object.as_raw(),
@@ -105798,31 +102895,46 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resul
             let p0_w0: bool = ::core::convert::Into::into(p0_w1 != 0);
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::result_record(__prebindgen_argument_0);
-            let ret_w0 = match source_value {
+            let ret_w3 = match source_value {
                 ::core::result::Result::Ok(value) => value,
-                ::core::result::Result::Err(ret_w1) => {
-                    return Err({
-                        __pb_jni_error_ResultFailure_typed_1183170f6901c4fd(
-                            &mut jni_environment,
-                            ret_w1,
-                            &mut domain_output,
-                            Some(&__pb_return),
-                        )?;
-                        String::new()
-                    });
+                ::core::result::Result::Err(ret_w4) => {
+                    let _: () = ((|| -> ::prebindgen_runtime::Result<()> {
+                        {
+                            let ret_w1 = perftest_flat::result_error_code(&ret_w4);
+                            let ret_w2 = ret_w1;
+                            unsafe {
+                                ::prebindgen_jni_runtime::invoke_error_callback(
+                                    &mut jni_environment,
+                                    &__pb_return,
+                                    "domainError0",
+                                    "(J)V",
+                                    &[
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w2,
+                                        },
+                                    ],
+                                )
+                            }?;
+                            let _: () = {
+                                domain_output = Some(std::ptr::null_mut());
+                            };
+                            Ok(())
+                        }
+                    })())?;
+                    return Err(String::new());
                 }
             };
-            let ret_w2_record = ret_w0;
-            let ret_w2_f0: i32 = match &(ret_w2_record.priority) {
+            let ret_w0_record = ret_w3;
+            let ret_w0_f0: i32 = match &(ret_w0_record.priority) {
                 perftest_flat::Priority::Low => 0i32,
                 perftest_flat::Priority::Normal => 1i32,
                 perftest_flat::Priority::High => 2i32,
             };
-            let (_, (ret_w2_f1_present_value0,), ret_w2_f1_present_commit) = if let Some(
-                ret_w2_f1_payload,
-            ) = ret_w2_record.code
+            let (_, (ret_w0_f1_present_value0,), ret_w0_f1_present_commit) = if let Some(
+                ret_w0_f1_payload,
+            ) = ret_w0_record.code
             {
-                let ret_w2_f1_some: i32 = match &(ret_w2_f1_payload) {
+                let ret_w0_f1_some: i32 = match &(ret_w0_f1_payload) {
                     perftest_flat::SparseCode::Bottom => -2147483648i32,
                     perftest_flat::SparseCode::MinusTwo => -2i32,
                     perftest_flat::SparseCode::MinusOne => -1i32,
@@ -105831,8 +102943,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resul
                     perftest_flat::SparseCode::Eight => 8i32,
                     perftest_flat::SparseCode::Top => 2147483647i32,
                 };
-                let ret_w2_f1_present_values = (ret_w2_f1_some,);
-                (1i32, ret_w2_f1_present_values, Some(move || {}))
+                let ret_w0_f1_present_values = (ret_w0_f1_some,);
+                (1i32, ret_w0_f1_present_values, Some(move || {}))
             } else {
                 (0i32, (-3,), None)
             };
@@ -105846,17 +102958,17 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resul
                         "(II)V",
                         &[
                             ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                i: ret_w2_f0,
+                                i: ret_w0_f0,
                             },
                             ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                i: ret_w2_f1_present_value0,
+                                i: ret_w0_f1_present_value0,
                             },
                         ],
                     )
             }?;
             let _: () = {
-                if let Some(ret_w2_f1_present_action) = ret_w2_f1_present_commit {
-                    ret_w2_f1_present_action();
+                if let Some(ret_w0_f1_present_action) = ret_w0_f1_present_commit {
+                    ret_w0_f1_present_action();
                 }
                 success_transferred = true;
             };
@@ -105962,26 +103074,41 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resul
                 __prebindgen_argument_1,
                 __prebindgen_argument_2,
             );
-            let ret_w0 = match source_value {
+            let ret_w3 = match source_value {
                 ::core::result::Result::Ok(value) => value,
-                ::core::result::Result::Err(ret_w1) => {
-                    return Err({
-                        __pb_jni_error_ResultFailure_typed_1183170f6901c4fd(
-                            &mut jni_environment,
-                            ret_w1,
-                            &mut domain_output,
-                            Some(&__pb_return),
-                        )?;
-                        String::new()
-                    });
+                ::core::result::Result::Err(ret_w4) => {
+                    let _: () = ((|| -> ::prebindgen_runtime::Result<()> {
+                        {
+                            let ret_w1 = perftest_flat::result_error_code(&ret_w4);
+                            let ret_w2 = ret_w1;
+                            unsafe {
+                                ::prebindgen_jni_runtime::invoke_error_callback(
+                                    &mut jni_environment,
+                                    &__pb_return,
+                                    "domainError0",
+                                    "(J)V",
+                                    &[
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w2,
+                                        },
+                                    ],
+                                )
+                            }?;
+                            let _: () = {
+                                domain_output = Some(std::ptr::null_mut());
+                            };
+                            Ok(())
+                        }
+                    })())?;
+                    return Err(String::new());
                 }
             };
-            let mut ret_w2 = Box::new(::prebindgen_jni_runtime::Allocation {
-                value: ret_w0,
+            let mut ret_w0 = Box::new(::prebindgen_jni_runtime::Allocation {
+                value: ret_w3,
             });
             let __pb_direct_result = unsafe {
                 (::prebindgen_jni_runtime::jni::sys::jvalue {
-                    j: ((&mut *ret_w2)
+                    j: ((&mut *ret_w0)
                         as *mut ::prebindgen_jni_runtime::Allocation<
                             perftest_flat::OwnedResource,
                         >) as i64,
@@ -105989,7 +103116,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resul
                     .j
             };
             let _: () = {
-                let _ = Box::into_raw(ret_w2).expose_provenance();
+                let _ = Box::into_raw(ret_w0).expose_provenance();
                 direct_output = __pb_direct_result;
                 success_transferred = true;
             };
@@ -106071,24 +103198,49 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resul
             let p0_w0: bool = ::core::convert::Into::into(p0_w1 != 0);
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::result_other(__prebindgen_argument_0);
-            let ret_w0 = match source_value {
+            let ret_w4 = match source_value {
                 ::core::result::Result::Ok(value) => value,
-                ::core::result::Result::Err(ret_w1) => {
-                    return Err({
-                        __pb_jni_error_String_mapped_a4e45f5146673c62(
-                            &mut jni_environment,
-                            perftest_flat::result_string_message(ret_w1),
-                            &mut domain_output,
-                            Some(&__pb_return),
-                        )?;
-                        String::new()
-                    });
+                ::core::result::Result::Err(ret_w5) => {
+                    let _: () = ((|| -> ::prebindgen_runtime::Result<()> {
+                        let ret_w1 = ret_w5;
+                        let ret_w2 = perftest_flat::result_string_message(ret_w1);
+                        {
+                            let ret_w3: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                '_,
+                            > = {
+                                let ret_w3 = ret_w2;
+                                ::prebindgen_jni_runtime::text_object(
+                                    &mut jni_environment,
+                                    ::core::convert::AsRef::<str>::as_ref(&ret_w3),
+                                )?
+                            };
+                            let __pb_return_argument_0 = ret_w3;
+                            unsafe {
+                                ::prebindgen_jni_runtime::invoke_error_callback(
+                                    &mut jni_environment,
+                                    &__pb_return,
+                                    "domainError0",
+                                    "(Ljava/lang/String;)V",
+                                    &[
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            l: __pb_return_argument_0.as_raw(),
+                                        },
+                                    ],
+                                )
+                            }?;
+                            let _: () = {
+                                domain_output = Some(std::ptr::null_mut());
+                            };
+                            Ok(())
+                        }
+                    })())?;
+                    return Err(String::new());
                 }
             };
-            let ret_w2 = ret_w0;
+            let ret_w0 = ret_w4;
             let __pb_direct_result = unsafe {
                 (::prebindgen_jni_runtime::jni::sys::jvalue {
-                    j: ret_w2,
+                    j: ret_w0,
                 })
                     .j
             };
@@ -106170,26 +103322,51 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
             let source_value = perftest_flat::storage_try_with_label(
                 __prebindgen_argument_0,
             );
-            let ret_w0 = match source_value {
+            let ret_w4 = match source_value {
                 ::core::result::Result::Ok(value) => value,
-                ::core::result::Result::Err(ret_w1) => {
-                    return Err({
-                        __pb_jni_error_StorageError_mapped_1df44b7ffab026ad(
-                            &mut jni_environment,
-                            perftest_flat::storage_error_message(&ret_w1),
-                            &mut domain_output,
-                            Some(&__pb_return),
-                        )?;
-                        String::new()
-                    });
+                ::core::result::Result::Err(ret_w5) => {
+                    let _: () = ((|| -> ::prebindgen_runtime::Result<()> {
+                        let ret_w1 = ret_w5;
+                        let ret_w2 = perftest_flat::storage_error_message(&ret_w1);
+                        {
+                            let ret_w3: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                '_,
+                            > = {
+                                let ret_w3 = ret_w2;
+                                ::prebindgen_jni_runtime::text_object(
+                                    &mut jni_environment,
+                                    ::core::convert::AsRef::<str>::as_ref(&ret_w3),
+                                )?
+                            };
+                            let __pb_return_argument_0 = ret_w3;
+                            unsafe {
+                                ::prebindgen_jni_runtime::invoke_error_callback(
+                                    &mut jni_environment,
+                                    &__pb_return,
+                                    "domainError0",
+                                    "(Ljava/lang/String;)V",
+                                    &[
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            l: __pb_return_argument_0.as_raw(),
+                                        },
+                                    ],
+                                )
+                            }?;
+                            let _: () = {
+                                domain_output = Some(std::ptr::null_mut());
+                            };
+                            Ok(())
+                        }
+                    })())?;
+                    return Err(String::new());
                 }
             };
-            let mut ret_w2 = Box::new(::prebindgen_jni_runtime::Allocation {
-                value: ret_w0,
+            let mut ret_w0 = Box::new(::prebindgen_jni_runtime::Allocation {
+                value: ret_w4,
             });
             let __pb_direct_result = unsafe {
                 (::prebindgen_jni_runtime::jni::sys::jvalue {
-                    j: ((&mut *ret_w2)
+                    j: ((&mut *ret_w0)
                         as *mut ::prebindgen_jni_runtime::Allocation<
                             perftest_flat::Storage,
                         >) as i64,
@@ -106197,7 +103374,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
                     .j
             };
             let _: () = {
-                let _ = Box::into_raw(ret_w2).expose_provenance();
+                let _ = Box::into_raw(ret_w0).expose_provenance();
                 direct_output = __pb_direct_result;
                 success_transferred = true;
             };
@@ -121870,24 +119047,39 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1scope
                 __prebindgen_argument_0,
                 __prebindgen_argument_1,
             );
-            let ret_w0 = match source_value {
+            let ret_w3 = match source_value {
                 ::core::result::Result::Ok(value) => value,
-                ::core::result::Result::Err(ret_w1) => {
-                    return Err({
-                        __pb_jni_error_ResultFailure_typed_1183170f6901c4fd(
-                            &mut jni_environment,
-                            ret_w1,
-                            &mut domain_output,
-                            Some(&__pb_return),
-                        )?;
-                        String::new()
-                    });
+                ::core::result::Result::Err(ret_w4) => {
+                    let _: () = ((|| -> ::prebindgen_runtime::Result<()> {
+                        {
+                            let ret_w1 = perftest_flat::result_error_code(&ret_w4);
+                            let ret_w2 = ret_w1;
+                            unsafe {
+                                ::prebindgen_jni_runtime::invoke_error_callback(
+                                    &mut jni_environment,
+                                    &__pb_return,
+                                    "domainError0",
+                                    "(J)V",
+                                    &[
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w2,
+                                        },
+                                    ],
+                                )
+                            }?;
+                            let _: () = {
+                                domain_output = Some(std::ptr::null_mut());
+                            };
+                            Ok(())
+                        }
+                    })())?;
+                    return Err(String::new());
                 }
             };
-            let ret_w2 = ret_w0;
+            let ret_w0 = ret_w3;
             let __pb_direct_result = unsafe {
                 (::prebindgen_jni_runtime::jni::sys::jvalue {
-                    j: ret_w2,
+                    j: ret_w0,
                 })
                     .j
             };
@@ -122971,33 +120163,48 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1
             let p0_w0: i64 = ::core::convert::Into::into(p0_w1);
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::jni_output_fold(__prebindgen_argument_0);
-            let ret_w0 = match source_value {
+            let ret_w7 = match source_value {
                 ::core::result::Result::Ok(value) => value,
-                ::core::result::Result::Err(ret_w1) => {
-                    return Err({
-                        __pb_jni_error_ResultFailure_typed_1183170f6901c4fd(
-                            &mut jni_environment,
-                            ret_w1,
-                            &mut domain_output,
-                            Some(&__pb_return),
-                        )?;
-                        String::new()
-                    });
+                ::core::result::Result::Err(ret_w8) => {
+                    let _: () = ((|| -> ::prebindgen_runtime::Result<()> {
+                        {
+                            let ret_w5 = perftest_flat::result_error_code(&ret_w8);
+                            let ret_w6 = ret_w5;
+                            unsafe {
+                                ::prebindgen_jni_runtime::invoke_error_callback(
+                                    &mut jni_environment,
+                                    &__pb_return,
+                                    "domainError0",
+                                    "(J)V",
+                                    &[
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w6,
+                                        },
+                                    ],
+                                )
+                            }?;
+                            let _: () = {
+                                domain_output = Some(std::ptr::null_mut());
+                            };
+                            Ok(())
+                        }
+                    })())?;
+                    return Err(String::new());
                 }
             };
-            let ret_w2_source: ::std::vec::Vec<perftest_flat::CallbackRow> = ret_w0;
-            let ret_w4 = ::std::vec::Vec::len(&ret_w2_source);
+            let ret_w0_source: ::std::vec::Vec<perftest_flat::CallbackRow> = ret_w7;
+            let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
             jni_environment
                 .set_boolean_array_region(&__pb_output_accepted, 0, &[1])
                 .map_err(|e| e.to_string())?;
-            let ret_w2_callback_class = jni_environment
+            let ret_w0_callback_class = jni_environment
                 .get_object_class(&__pb_callback)
                 .map_err(|e| e.to_string())?;
-            let ret_w2_callback_method = jni_environment
-                .get_method_id(&ret_w2_callback_class, "run", "(JLjava/lang/String;J)V")
+            let ret_w0_callback_method = jni_environment
+                .get_method_id(&ret_w0_callback_class, "run", "(JLjava/lang/String;J)V")
                 .map_err(|e| e.to_string())?;
-            if ret_w4 >= 64 {
-                let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w4)
+            if ret_w2 >= 64 {
+                let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w2)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
                 let (_, reserve) = __PB_SEQUENCE_CAPACITY
                     .get()
@@ -123022,49 +120229,49 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1
                     .map_err(|e| e.to_string())?;
             }
             jni_environment
-                .delete_local_ref(ret_w2_callback_class)
+                .delete_local_ref(ret_w0_callback_class)
                 .map_err(|e| e.to_string())?;
-            for (ret_w5, ret_w3) in ::core::iter::Iterator::enumerate(
-                ::core::iter::IntoIterator::into_iter(ret_w2_source),
+            for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w0_source),
             ) {
-                let ret_w2_callback_frame = unsafe {
+                let ret_w0_callback_frame = unsafe {
                     ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 11i32)
                 }?;
-                let ret_w6_record = &(ret_w3);
-                let mut ret_w6_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
-                    value: ::core::clone::Clone::clone(&ret_w6_record.first),
+                let ret_w4_record = &(ret_w1);
+                let mut ret_w4_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
+                    value: ::core::clone::Clone::clone(&ret_w4_record.first),
                 });
-                let ret_w6_f1: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
-                    let ret_w6_f1 = &ret_w6_record.label;
+                let ret_w4_f1: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                    let ret_w4_f1 = &ret_w4_record.label;
                     ::prebindgen_jni_runtime::text_object(
                         &mut jni_environment,
-                        ::core::convert::AsRef::<str>::as_ref(&ret_w6_f1),
+                        ::core::convert::AsRef::<str>::as_ref(&ret_w4_f1),
                     )?
                 };
-                let mut ret_w6_f2 = Box::new(::prebindgen_jni_runtime::Allocation {
-                    value: ::core::clone::Clone::clone(&ret_w6_record.second),
+                let mut ret_w4_f2 = Box::new(::prebindgen_jni_runtime::Allocation {
+                    value: ::core::clone::Clone::clone(&ret_w4_record.second),
                 });
-                let ret_w2_callback_object_1 = ret_w6_f1;
+                let ret_w0_callback_object_1 = ret_w4_f1;
                 unsafe {
                     jni_environment
                         .call_method_unchecked(
                             &__pb_callback,
-                            ret_w2_callback_method,
+                            ret_w0_callback_method,
                             ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
                                 ::prebindgen_jni_runtime::jni::signature::Primitive::Void,
                             ),
                             &[
                                 ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                    j: ((&mut *ret_w6_f0)
+                                    j: ((&mut *ret_w4_f0)
                                         as *mut ::prebindgen_jni_runtime::Allocation<
                                             perftest_flat::CallbackRowResource,
                                         >) as i64,
                                 },
                                 ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                    l: ret_w2_callback_object_1.as_raw(),
+                                    l: ret_w0_callback_object_1.as_raw(),
                                 },
                                 ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                    j: ((&mut *ret_w6_f2)
+                                    j: ((&mut *ret_w4_f2)
                                         as *mut ::prebindgen_jni_runtime::Allocation<
                                             perftest_flat::CallbackRowResource,
                                         >) as i64,
@@ -123079,15 +120286,15 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1
                     clippy::unused_unit
                 )]
                 let _: () = (|| -> () {
-                    let _ = Box::into_raw(ret_w6_f0).expose_provenance();
-                    let _ = Box::into_raw(ret_w6_f2).expose_provenance();
+                    let _ = Box::into_raw(ret_w4_f0).expose_provenance();
+                    let _ = Box::into_raw(ret_w4_f2).expose_provenance();
                 })();
-                drop(ret_w2_callback_frame);
+                drop(ret_w0_callback_frame);
             }
-            let ret_w2 = 0i32;
+            let ret_w0 = 0i32;
             let __pb_direct_result = unsafe {
                 (::prebindgen_jni_runtime::jni::sys::jvalue {
-                    i: ret_w2,
+                    i: ret_w0,
                 })
                     .i
             };
@@ -128151,33 +125358,48 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 __prebindgen_argument_1,
                 __prebindgen_argument_2,
             );
-            let ret_w0 = match source_value {
+            let ret_w7 = match source_value {
                 ::core::result::Result::Ok(value) => value,
-                ::core::result::Result::Err(ret_w1) => {
-                    return Err({
-                        __pb_jni_error_ResultFailure_typed_1183170f6901c4fd(
-                            &mut jni_environment,
-                            ret_w1,
-                            &mut domain_output,
-                            Some(&__pb_return),
-                        )?;
-                        String::new()
-                    });
+                ::core::result::Result::Err(ret_w8) => {
+                    let _: () = ((|| -> ::prebindgen_runtime::Result<()> {
+                        {
+                            let ret_w5 = perftest_flat::result_error_code(&ret_w8);
+                            let ret_w6 = ret_w5;
+                            unsafe {
+                                ::prebindgen_jni_runtime::invoke_error_callback(
+                                    &mut jni_environment,
+                                    &__pb_return,
+                                    "domainError0",
+                                    "(J)V",
+                                    &[
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w6,
+                                        },
+                                    ],
+                                )
+                            }?;
+                            let _: () = {
+                                domain_output = Some(std::ptr::null_mut());
+                            };
+                            Ok(())
+                        }
+                    })())?;
+                    return Err(String::new());
                 }
             };
-            let ret_w2_source: ::std::vec::Vec<perftest_flat::OwnedResource> = ret_w0;
-            let ret_w4 = ::std::vec::Vec::len(&ret_w2_source);
+            let ret_w0_source: ::std::vec::Vec<perftest_flat::OwnedResource> = ret_w7;
+            let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
             jni_environment
                 .set_boolean_array_region(&__pb_output_accepted, 0, &[1])
                 .map_err(|e| e.to_string())?;
-            let ret_w2_callback_class = jni_environment
+            let ret_w0_callback_class = jni_environment
                 .get_object_class(&__pb_callback)
                 .map_err(|e| e.to_string())?;
-            let ret_w2_callback_method = jni_environment
-                .get_method_id(&ret_w2_callback_class, "run", "(J)V")
+            let ret_w0_callback_method = jni_environment
+                .get_method_id(&ret_w0_callback_class, "run", "(J)V")
                 .map_err(|e| e.to_string())?;
-            if ret_w4 >= 64 {
-                let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w4)
+            if ret_w2 >= 64 {
+                let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w2)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
                 let (_, reserve) = __PB_SEQUENCE_CAPACITY
                     .get()
@@ -128202,25 +125424,25 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                     .map_err(|e| e.to_string())?;
             }
             jni_environment
-                .delete_local_ref(ret_w2_callback_class)
+                .delete_local_ref(ret_w0_callback_class)
                 .map_err(|e| e.to_string())?;
-            for (ret_w5, ret_w3) in ::core::iter::Iterator::enumerate(
-                ::core::iter::IntoIterator::into_iter(ret_w2_source),
+            for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w0_source),
             ) {
-                let mut ret_w6 = Box::new(::prebindgen_jni_runtime::Allocation {
-                    value: ret_w3,
+                let mut ret_w4 = Box::new(::prebindgen_jni_runtime::Allocation {
+                    value: ret_w1,
                 });
                 unsafe {
                     jni_environment
                         .call_method_unchecked(
                             &__pb_callback,
-                            ret_w2_callback_method,
+                            ret_w0_callback_method,
                             ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
                                 ::prebindgen_jni_runtime::jni::signature::Primitive::Void,
                             ),
                             &[
                                 ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                    j: ((&mut *ret_w6)
+                                    j: ((&mut *ret_w4)
                                         as *mut ::prebindgen_jni_runtime::Allocation<
                                             perftest_flat::OwnedResource,
                                         >) as i64,
@@ -128235,13 +125457,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                     clippy::unused_unit
                 )]
                 let _: () = (|| -> () {
-                    let _ = Box::into_raw(ret_w6).expose_provenance();
+                    let _ = Box::into_raw(ret_w4).expose_provenance();
                 })();
             }
-            let ret_w2 = 0i32;
+            let ret_w0 = 0i32;
             let __pb_direct_result = unsafe {
                 (::prebindgen_jni_runtime::jni::sys::jvalue {
-                    i: ret_w2,
+                    i: ret_w0,
                 })
                     .i
             };
@@ -128392,33 +125614,48 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 __prebindgen_argument_0,
                 __prebindgen_argument_1,
             );
-            let ret_w0 = match source_value {
+            let ret_w7 = match source_value {
                 ::core::result::Result::Ok(value) => value,
-                ::core::result::Result::Err(ret_w1) => {
-                    return Err({
-                        __pb_jni_error_ResultFailure_typed_1183170f6901c4fd(
-                            &mut jni_environment,
-                            ret_w1,
-                            &mut domain_output,
-                            Some(&__pb_return),
-                        )?;
-                        String::new()
-                    });
+                ::core::result::Result::Err(ret_w8) => {
+                    let _: () = ((|| -> ::prebindgen_runtime::Result<()> {
+                        {
+                            let ret_w5 = perftest_flat::result_error_code(&ret_w8);
+                            let ret_w6 = ret_w5;
+                            unsafe {
+                                ::prebindgen_jni_runtime::invoke_error_callback(
+                                    &mut jni_environment,
+                                    &__pb_return,
+                                    "domainError0",
+                                    "(J)V",
+                                    &[
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w6,
+                                        },
+                                    ],
+                                )
+                            }?;
+                            let _: () = {
+                                domain_output = Some(std::ptr::null_mut());
+                            };
+                            Ok(())
+                        }
+                    })())?;
+                    return Err(String::new());
                 }
             };
-            let ret_w2_source: ::std::vec::Vec<i64> = ret_w0;
-            let ret_w4 = ::std::vec::Vec::len(&ret_w2_source);
+            let ret_w0_source: ::std::vec::Vec<i64> = ret_w7;
+            let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
             jni_environment
                 .set_boolean_array_region(&__pb_output_accepted, 0, &[1])
                 .map_err(|e| e.to_string())?;
-            let ret_w2_callback_class = jni_environment
+            let ret_w0_callback_class = jni_environment
                 .get_object_class(&__pb_callback)
                 .map_err(|e| e.to_string())?;
-            let ret_w2_callback_method = jni_environment
-                .get_method_id(&ret_w2_callback_class, "run", "(J)V")
+            let ret_w0_callback_method = jni_environment
+                .get_method_id(&ret_w0_callback_class, "run", "(J)V")
                 .map_err(|e| e.to_string())?;
-            if ret_w4 >= 64 {
-                let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w4)
+            if ret_w2 >= 64 {
+                let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w2)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
                 let (_, reserve) = __PB_SEQUENCE_CAPACITY
                     .get()
@@ -128443,23 +125680,23 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                     .map_err(|e| e.to_string())?;
             }
             jni_environment
-                .delete_local_ref(ret_w2_callback_class)
+                .delete_local_ref(ret_w0_callback_class)
                 .map_err(|e| e.to_string())?;
-            for (ret_w5, ret_w3) in ::core::iter::Iterator::enumerate(
-                ::core::iter::IntoIterator::into_iter(ret_w2_source),
+            for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w0_source),
             ) {
-                let ret_w6 = ret_w3;
+                let ret_w4 = ret_w1;
                 unsafe {
                     jni_environment
                         .call_method_unchecked(
                             &__pb_callback,
-                            ret_w2_callback_method,
+                            ret_w0_callback_method,
                             ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
                                 ::prebindgen_jni_runtime::jni::signature::Primitive::Void,
                             ),
                             &[
                                 ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                    j: ret_w6,
+                                    j: ret_w4,
                                 },
                             ],
                         )
@@ -128472,10 +125709,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 )]
                 let _: () = (|| -> () {})();
             }
-            let ret_w2 = 0i32;
+            let ret_w0 = 0i32;
             let __pb_direct_result = unsafe {
                 (::prebindgen_jni_runtime::jni::sys::jvalue {
-                    i: ret_w2,
+                    i: ret_w0,
                 })
                     .i
             };
@@ -128638,34 +125875,49 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 __prebindgen_argument_0,
                 __prebindgen_argument_1,
             );
-            let ret_w0 = match source_value {
+            let ret_w10 = match source_value {
                 ::core::result::Result::Ok(value) => value,
-                ::core::result::Result::Err(ret_w1) => {
-                    return Err({
-                        __pb_jni_error_ResultFailure_typed_1183170f6901c4fd(
-                            &mut jni_environment,
-                            ret_w1,
-                            &mut domain_output,
-                            Some(&__pb_return),
-                        )?;
-                        String::new()
-                    });
+                ::core::result::Result::Err(ret_w11) => {
+                    let _: () = ((|| -> ::prebindgen_runtime::Result<()> {
+                        {
+                            let ret_w8 = perftest_flat::result_error_code(&ret_w11);
+                            let ret_w9 = ret_w8;
+                            unsafe {
+                                ::prebindgen_jni_runtime::invoke_error_callback(
+                                    &mut jni_environment,
+                                    &__pb_return,
+                                    "domainError0",
+                                    "(J)V",
+                                    &[
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w9,
+                                        },
+                                    ],
+                                )
+                            }?;
+                            let _: () = {
+                                domain_output = Some(std::ptr::null_mut());
+                            };
+                            Ok(())
+                        }
+                    })())?;
+                    return Err(String::new());
                 }
             };
-            let (_, (ret_w2_value0,), ret_w2_commit) = if let Some(ret_w3) = ret_w0 {
-                let ret_w4_source: ::std::vec::Vec<perftest_flat::OwnedResource> = ret_w3;
-                let ret_w6 = ::std::vec::Vec::len(&ret_w4_source);
+            let (_, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = ret_w10 {
+                let ret_w2_source: ::std::vec::Vec<perftest_flat::OwnedResource> = ret_w1;
+                let ret_w4 = ::std::vec::Vec::len(&ret_w2_source);
                 jni_environment
                     .set_boolean_array_region(&__pb_output_accepted, 0, &[1])
                     .map_err(|e| e.to_string())?;
-                let ret_w4_callback_class = jni_environment
+                let ret_w2_callback_class = jni_environment
                     .get_object_class(&__pb_callback)
                     .map_err(|e| e.to_string())?;
-                let ret_w4_callback_method = jni_environment
-                    .get_method_id(&ret_w4_callback_class, "run", "([B)V")
+                let ret_w2_callback_method = jni_environment
+                    .get_method_id(&ret_w2_callback_class, "run", "([B)V")
                     .map_err(|e| e.to_string())?;
-                if ret_w6 >= 64 {
-                    let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w6)
+                if ret_w4 >= 64 {
+                    let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w4)
                         .map_err(|_| "collection exceeds JVM capacity".to_string())?;
                     let (_, reserve) = __PB_SEQUENCE_CAPACITY
                         .get()
@@ -128690,45 +125942,45 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                         .map_err(|e| e.to_string())?;
                 }
                 jni_environment
-                    .delete_local_ref(ret_w4_callback_class)
+                    .delete_local_ref(ret_w2_callback_class)
                     .map_err(|e| e.to_string())?;
-                for (ret_w7, ret_w5) in ::core::iter::Iterator::enumerate(
-                    ::core::iter::IntoIterator::into_iter(ret_w4_source),
+                for (ret_w5, ret_w3) in ::core::iter::Iterator::enumerate(
+                    ::core::iter::IntoIterator::into_iter(ret_w2_source),
                 ) {
-                    let ret_w4_callback_frame = unsafe {
+                    let ret_w2_callback_frame = unsafe {
                         ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
                     }?;
-                    let mut ret_w8_writer = ::prebindgen_jni_runtime::bulk::Writer::new(
+                    let mut ret_w6_writer = ::prebindgen_jni_runtime::bulk::Writer::new(
                         ::core::mem::size_of::<__PbBulk_i64_1759b2fb0606880d>(),
                     );
-                    let mut ret_w9 = Box::new(::prebindgen_jni_runtime::Allocation {
-                        value: ret_w5,
+                    let mut ret_w7 = Box::new(::prebindgen_jni_runtime::Allocation {
+                        value: ret_w3,
                     });
-                    ret_w8_writer
+                    ret_w6_writer
                         .write(
                             ::core::mem::offset_of!(__PbBulk_i64_1759b2fb0606880d, v0),
-                            ((&mut *ret_w9)
+                            ((&mut *ret_w7)
                                 as *mut ::prebindgen_jni_runtime::Allocation<
                                     perftest_flat::OwnedResource,
                                 >) as i64,
                         )?;
-                    let ret_w8 = ::prebindgen_jni_runtime::jni::objects::JObject::from(
+                    let ret_w6 = ::prebindgen_jni_runtime::jni::objects::JObject::from(
                         jni_environment
-                            .byte_array_from_slice(ret_w8_writer.bytes())
+                            .byte_array_from_slice(ret_w6_writer.bytes())
                             .map_err(|e| e.to_string())?,
                     );
-                    let ret_w4_callback_object_0 = ret_w8;
+                    let ret_w2_callback_object_0 = ret_w6;
                     unsafe {
                         jni_environment
                             .call_method_unchecked(
                                 &__pb_callback,
-                                ret_w4_callback_method,
+                                ret_w2_callback_method,
                                 ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
                                     ::prebindgen_jni_runtime::jni::signature::Primitive::Void,
                                 ),
                                 &[
                                     ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                        l: ret_w4_callback_object_0.as_raw(),
+                                        l: ret_w2_callback_object_0.as_raw(),
                                     },
                                 ],
                             )
@@ -128740,26 +125992,26 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                         clippy::unused_unit
                     )]
                     let _: () = (|| -> () {
-                        let _ = Box::into_raw(ret_w9).expose_provenance();
-                        ret_w8_writer.commit();
+                        let _ = Box::into_raw(ret_w7).expose_provenance();
+                        ret_w6_writer.commit();
                     })();
-                    drop(ret_w4_callback_frame);
+                    drop(ret_w2_callback_frame);
                 }
-                let ret_w4 = 0i32;
-                let ret_w2_values = (ret_w4,);
-                (1i32, ret_w2_values, Some(move || {}))
+                let ret_w2 = 0i32;
+                let ret_w0_values = (ret_w2,);
+                (1i32, ret_w0_values, Some(move || {}))
             } else {
                 (0i32, (-1,), None)
             };
             let __pb_direct_result = unsafe {
                 (::prebindgen_jni_runtime::jni::sys::jvalue {
-                    i: ret_w2_value0,
+                    i: ret_w0_value0,
                 })
                     .i
             };
             let _: () = {
-                if let Some(ret_w2_action) = ret_w2_commit {
-                    ret_w2_action();
+                if let Some(ret_w0_action) = ret_w0_commit {
+                    ret_w0_action();
                 }
                 direct_output = __pb_direct_result;
                 success_transferred = true;
@@ -128850,34 +126102,49 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1seque
         }
         {
             let source_value = perftest_flat::sequence_late_drop();
-            let ret_w0 = match source_value {
+            let ret_w8 = match source_value {
                 ::core::result::Result::Ok(value) => value,
-                ::core::result::Result::Err(ret_w1) => {
-                    return Err({
-                        __pb_jni_error_ResultFailure_typed_1183170f6901c4fd(
-                            &mut jni_environment,
-                            ret_w1,
-                            &mut domain_output,
-                            Some(&__pb_return),
-                        )?;
-                        String::new()
-                    });
+                ::core::result::Result::Err(ret_w9) => {
+                    let _: () = ((|| -> ::prebindgen_runtime::Result<()> {
+                        {
+                            let ret_w6 = perftest_flat::result_error_code(&ret_w9);
+                            let ret_w7 = ret_w6;
+                            unsafe {
+                                ::prebindgen_jni_runtime::invoke_error_callback(
+                                    &mut jni_environment,
+                                    &__pb_return,
+                                    "domainError0",
+                                    "(J)V",
+                                    &[
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w7,
+                                        },
+                                    ],
+                                )
+                            }?;
+                            let _: () = {
+                                domain_output = Some(std::ptr::null_mut());
+                            };
+                            Ok(())
+                        }
+                    })())?;
+                    return Err(String::new());
                 }
             };
-            let ret_w2 = perftest_flat::sequence_late_view(&ret_w0);
-            let ret_w3_source: ::std::vec::Vec<perftest_flat::OwnedResource> = ret_w2;
-            let ret_w5 = ::std::vec::Vec::len(&ret_w3_source);
+            let ret_w0 = perftest_flat::sequence_late_view(&ret_w8);
+            let ret_w1_source: ::std::vec::Vec<perftest_flat::OwnedResource> = ret_w0;
+            let ret_w3 = ::std::vec::Vec::len(&ret_w1_source);
             jni_environment
                 .set_boolean_array_region(&__pb_output_accepted, 0, &[1])
                 .map_err(|e| e.to_string())?;
-            let ret_w3_callback_class = jni_environment
+            let ret_w1_callback_class = jni_environment
                 .get_object_class(&__pb_callback)
                 .map_err(|e| e.to_string())?;
-            let ret_w3_callback_method = jni_environment
-                .get_method_id(&ret_w3_callback_class, "run", "(J)V")
+            let ret_w1_callback_method = jni_environment
+                .get_method_id(&ret_w1_callback_class, "run", "(J)V")
                 .map_err(|e| e.to_string())?;
-            if ret_w5 >= 64 {
-                let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w5)
+            if ret_w3 >= 64 {
+                let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w3)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
                 let (_, reserve) = __PB_SEQUENCE_CAPACITY
                     .get()
@@ -128902,25 +126169,25 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1seque
                     .map_err(|e| e.to_string())?;
             }
             jni_environment
-                .delete_local_ref(ret_w3_callback_class)
+                .delete_local_ref(ret_w1_callback_class)
                 .map_err(|e| e.to_string())?;
-            for (ret_w6, ret_w4) in ::core::iter::Iterator::enumerate(
-                ::core::iter::IntoIterator::into_iter(ret_w3_source),
+            for (ret_w4, ret_w2) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w1_source),
             ) {
-                let mut ret_w7 = Box::new(::prebindgen_jni_runtime::Allocation {
-                    value: ret_w4,
+                let mut ret_w5 = Box::new(::prebindgen_jni_runtime::Allocation {
+                    value: ret_w2,
                 });
                 unsafe {
                     jni_environment
                         .call_method_unchecked(
                             &__pb_callback,
-                            ret_w3_callback_method,
+                            ret_w1_callback_method,
                             ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
                                 ::prebindgen_jni_runtime::jni::signature::Primitive::Void,
                             ),
                             &[
                                 ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                    j: ((&mut *ret_w7)
+                                    j: ((&mut *ret_w5)
                                         as *mut ::prebindgen_jni_runtime::Allocation<
                                             perftest_flat::OwnedResource,
                                         >) as i64,
@@ -128935,13 +126202,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1seque
                     clippy::unused_unit
                 )]
                 let _: () = (|| -> () {
-                    let _ = Box::into_raw(ret_w7).expose_provenance();
+                    let _ = Box::into_raw(ret_w5).expose_provenance();
                 })();
             }
-            let ret_w3 = 0i32;
+            let ret_w1 = 0i32;
             let __pb_direct_result = unsafe {
                 (::prebindgen_jni_runtime::jni::sys::jvalue {
-                    i: ret_w3,
+                    i: ret_w1,
                 })
                     .i
             };
@@ -129273,33 +126540,48 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1seque
             let p0_w0: i32 = ::core::convert::Into::into(p0_w1);
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::sequence_parts(__prebindgen_argument_0);
-            let ret_w0 = match source_value {
+            let ret_w11 = match source_value {
                 ::core::result::Result::Ok(value) => value,
-                ::core::result::Result::Err(ret_w1) => {
-                    return Err({
-                        __pb_jni_error_ResultFailure_typed_1183170f6901c4fd(
-                            &mut jni_environment,
-                            ret_w1,
-                            &mut domain_output,
-                            Some(&__pb_return),
-                        )?;
-                        String::new()
-                    });
+                ::core::result::Result::Err(ret_w12) => {
+                    let _: () = ((|| -> ::prebindgen_runtime::Result<()> {
+                        {
+                            let ret_w9 = perftest_flat::result_error_code(&ret_w12);
+                            let ret_w10 = ret_w9;
+                            unsafe {
+                                ::prebindgen_jni_runtime::invoke_error_callback(
+                                    &mut jni_environment,
+                                    &__pb_return,
+                                    "domainError0",
+                                    "(J)V",
+                                    &[
+                                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                            j: ret_w10,
+                                        },
+                                    ],
+                                )
+                            }?;
+                            let _: () = {
+                                domain_output = Some(std::ptr::null_mut());
+                            };
+                            Ok(())
+                        }
+                    })())?;
+                    return Err(String::new());
                 }
             };
-            let ret_w2_source: ::std::vec::Vec<perftest_flat::SequencePart> = ret_w0;
-            let ret_w4 = ::std::vec::Vec::len(&ret_w2_source);
+            let ret_w0_source: ::std::vec::Vec<perftest_flat::SequencePart> = ret_w11;
+            let ret_w2 = ::std::vec::Vec::len(&ret_w0_source);
             jni_environment
                 .set_boolean_array_region(&__pb_output_accepted, 0, &[1])
                 .map_err(|e| e.to_string())?;
-            let ret_w2_callback_class = jni_environment
+            let ret_w0_callback_class = jni_environment
                 .get_object_class(&__pb_callback)
                 .map_err(|e| e.to_string())?;
-            let ret_w2_callback_method = jni_environment
-                .get_method_id(&ret_w2_callback_class, "run", "(JLjava/lang/String;J)V")
+            let ret_w0_callback_method = jni_environment
+                .get_method_id(&ret_w0_callback_class, "run", "(JLjava/lang/String;J)V")
                 .map_err(|e| e.to_string())?;
-            if ret_w4 >= 64 {
-                let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w4)
+            if ret_w2 >= 64 {
+                let capacity = <i32 as ::core::convert::TryFrom<_>>::try_from(ret_w2)
                     .map_err(|_| "collection exceeds JVM capacity".to_string())?;
                 let (_, reserve) = __PB_SEQUENCE_CAPACITY
                     .get()
@@ -129324,45 +126606,45 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1seque
                     .map_err(|e| e.to_string())?;
             }
             jni_environment
-                .delete_local_ref(ret_w2_callback_class)
+                .delete_local_ref(ret_w0_callback_class)
                 .map_err(|e| e.to_string())?;
-            for (ret_w5, ret_w3) in ::core::iter::Iterator::enumerate(
-                ::core::iter::IntoIterator::into_iter(ret_w2_source),
+            for (ret_w3, ret_w1) in ::core::iter::Iterator::enumerate(
+                ::core::iter::IntoIterator::into_iter(ret_w0_source),
             ) {
-                let ret_w2_callback_frame = unsafe {
+                let ret_w0_callback_frame = unsafe {
                     ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 11i32)
                 }?;
-                let ret_w6 = perftest_flat::sequence_part_into(ret_w3);
-                let ret_w7 = ret_w6;
-                let ret_w8 = ret_w7.number;
-                let ret_w9: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
-                    let ret_w9 = ret_w7.text;
+                let ret_w4 = perftest_flat::sequence_part_into(ret_w1);
+                let ret_w5 = ret_w4;
+                let ret_w6 = ret_w5.number;
+                let ret_w7: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                    let ret_w7 = ret_w5.text;
                     ::prebindgen_jni_runtime::text_object(
                         &mut jni_environment,
-                        ::core::convert::AsRef::<str>::as_ref(&ret_w9),
+                        ::core::convert::AsRef::<str>::as_ref(&ret_w7),
                     )?
                 };
-                let mut ret_w10 = Box::new(::prebindgen_jni_runtime::Allocation {
-                    value: ret_w7.resource,
+                let mut ret_w8 = Box::new(::prebindgen_jni_runtime::Allocation {
+                    value: ret_w5.resource,
                 });
-                let ret_w2_callback_object_1 = ret_w9;
+                let ret_w0_callback_object_1 = ret_w7;
                 unsafe {
                     jni_environment
                         .call_method_unchecked(
                             &__pb_callback,
-                            ret_w2_callback_method,
+                            ret_w0_callback_method,
                             ::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(
                                 ::prebindgen_jni_runtime::jni::signature::Primitive::Void,
                             ),
                             &[
                                 ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                    j: ret_w8,
+                                    j: ret_w6,
                                 },
                                 ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                    l: ret_w2_callback_object_1.as_raw(),
+                                    l: ret_w0_callback_object_1.as_raw(),
                                 },
                                 ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                    j: ((&mut *ret_w10)
+                                    j: ((&mut *ret_w8)
                                         as *mut ::prebindgen_jni_runtime::Allocation<
                                             perftest_flat::OwnedResource,
                                         >) as i64,
@@ -129377,14 +126659,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1seque
                     clippy::unused_unit
                 )]
                 let _: () = (|| -> () {
-                    let _ = Box::into_raw(ret_w10).expose_provenance();
+                    let _ = Box::into_raw(ret_w8).expose_provenance();
                 })();
-                drop(ret_w2_callback_frame);
+                drop(ret_w0_callback_frame);
             }
-            let ret_w2 = 0i32;
+            let ret_w0 = 0i32;
             let __pb_direct_result = unsafe {
                 (::prebindgen_jni_runtime::jni::sys::jvalue {
-                    i: ret_w2,
+                    i: ret_w0,
                 })
                     .i
             };

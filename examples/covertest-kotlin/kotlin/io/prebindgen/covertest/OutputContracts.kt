@@ -4,6 +4,12 @@ import io.prebindgen.covertest.outputcontracts.*
 import java.time.Duration
 
 fun checkOutputContracts() {
+    check(io.prebindgen.covertest.isolatederror.mappedResult(12, onError = { error(it) }) == 12L)
+    check(io.prebindgen.covertest.isolatederror.mappedResult(-12, onError = { message ->
+        check(message == "mapped:12")
+        81L
+    }) == 81L)
+
     for (millis in listOf(0L, -1L, 123456L, Long.MIN_VALUE, Long.MAX_VALUE)) {
         check(durationEcho(millis) == Duration.ofMillis(millis))
         check(durationPacket(millis) == Duration.ofMillis(millis))

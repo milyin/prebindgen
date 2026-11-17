@@ -52,15 +52,16 @@ pub trait Codec {
         value: TokenStream,
         borrowed: bool,
         reference_return: bool,
-    ) -> Result<CodecOutputPlan<Self>>
+    ) -> Result<Self::Output>
     where
         Self: Sized,
     {
-        if reference_return {
-            self.compile_output_return(cx, ty, tree, extra, value, borrowed)
+        let plan = if reference_return {
+            self.compile_output_return(cx, ty, tree, extra, value, borrowed)?
         } else {
-            cx.output(ty, tree, extra, value, borrowed)
-        }
+            cx.output(ty, tree, extra, value, borrowed)?
+        };
+        cx.finish_output_plan(plan, extra)
     }
     /// Interpret a Rust return or getter result with its reference lifetime.
     fn compile_output_return(
@@ -101,7 +102,7 @@ pub trait Codec {
     /// Borrowed occurrence settings used while preparing nested conversions.
     type Extra;
 
-    /// Compile standalone callback declarations and typed error outputs stored in Flat.
+    /// Compile standalone declarations, such as callback interfaces, stored in Flat.
     /// Called before function plans; implementations consume only resolved model data.
     fn compile_declarations(
         &self,
