@@ -482,7 +482,7 @@
 <a href=#482 id=482 data-nosnippet>482</a>            <span class="string">"pub struct Row{pub value:i64}pub fn call(foreign:i64,callback:impl Fn(Row))-&gt;Row{}"</span>;
 <a href=#483 id=483 data-nosnippet>483</a>        <span class="kw">let </span>output = builder(source)
 <a href=#484 id=484 data-nosnippet>484</a>            .set_package_prefix(<span class="string">"foreign"</span>)
-<a href=#485 id=485 data-nosnippet>485</a>            .configure(|flat| {
+<a href=#485 id=485 data-nosnippet>485</a>            .on_configure(|flat| {
 <a href=#486 id=486 data-nosnippet>486</a>                flat.metadata.package = <span class="string">"native"</span>.into();
 <a href=#487 id=487 data-nosnippet>487</a>                <span class="prelude-val">Ok</span>(())
 <a href=#488 id=488 data-nosnippet>488</a>            })
