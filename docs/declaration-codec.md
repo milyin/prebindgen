@@ -5,6 +5,31 @@ no shared declaration operation vocabulary and no translation into adapter opera
 The shared crate provides tree structure, typed configuration containers, source-aware
 resolution helpers and compilation helpers.
 
+## Start with a runnable adapter
+
+The [minimal adapter](../examples/adapter-minimal/README.md) is an independent
+crate using only public APIs. From the repository root, with `TMPDIR` set to a
+scratch directory, run:
+
+```sh
+cargo run --offline --manifest-path examples/adapter-minimal/Cargo.toml -- "$TMPDIR/adapter-minimal"
+```
+
+It defines its own operation vocabulary, compiles `i64` and unit calls through
+`ResolvedCall` → `compile_call` → `PreparedCall::view`, and selects final result
+delivery before emitting wrappers. It then invokes `rustc` on the emitted program
+and runs scalar/unit assertions. An optional-input recipe is deliberately rejected
+with a named feature diagnostic. The crate has no private test frontend or C/JNI
+imports; its Rust boundary demonstrates conversion compilation, not a foreign ABI.
+Its separate workspace means root workspace checks do not run it automatically.
+
+Read [src/main.rs](../examples/adapter-minimal/src/main.rs) before extending the
+vocabulary. Unit is `InputNode::None` / `OutputNode::None`; unsupported branch and
+arrow operations use `Infallible`. The required group/field hooks still need a
+deliberate policy: the example permits empty unit groups and rejects source fields.
+The [richer-conversion paths](#progressing-to-richer-conversions) below explain
+the extra contracts needed beyond this scalar/unit subset.
+
 ## Trees and names
 
 `InputNode<InOps, OutOps>` describes foreign-to-Rust
@@ -285,7 +310,9 @@ time; generated calls gain no dispatch or allocations from this refactoring.
 Besides its operation vocabularies and compilation state, a codec selects
 `Schema`, `Context`, `Extra` and prepared converters. Those converters select
 `Wire`, `Chain`, `Branch`, `Annotation` and `Container`. `Schema` fixes the
-converters and declaration metadata; `Wire` describes one boundary value.
+source attachments and declaration metadata, independently of `Codec::Input` and
+`Codec::Output`; it does not select those prepared converter implementations.
+`Wire` describes one boundary value.
 `Context` supplies Rust emission bindings, and `Extra` supplies occurrence
 settings. Parent metadata describes children without duplicating their trees.
 Annotations preserve a child boundary, chains/branches add controls, and containers
@@ -311,8 +338,9 @@ composition happens during generation, not during an FFI call.
 independent decisions made by the adapter:
 
 - `representation`: `Ordinary` or native fields inside a `Bulk` frame.
-- `role`: a function `Parameter` or a retained source callback's `CallbackResult`.
-  The role propagates through nested fields and constructors.
+- `role`: a function `Parameter`, a retained source callback's `CallbackResult`,
+  or an ordinary enum carrier's `EnumField`. The role propagates through nested
+  fields and constructors.
 
 `InputLeaf::new(...)` requests an ordinary enclosing parameter conversion.
 Set the public fields when manually preparing another context. These request
@@ -337,9 +365,10 @@ must still reject unsupported types. Whole-expansion packing (`bulk_input` /
 
 ## Complete optional, alternative and sequence operations
 
-`optional(Optional)` receives the mutable payload tree, requested normalized
-presence binding, occurrence settings and direction. It returns one
-`OptionalEncoding` containing:
+`input_optional(InputOptional)` and `output_optional(OutputOptional)` each
+receive their directional mutable payload tree, requested normalized presence
+binding and occurrence settings. The method selects the direction; the request
+has no direction field. Each returns one `OptionalEncoding` containing:
 
 - a flag wire named by that presence binding, or a niche with an input test;
 - chain metadata describing that encoding;
@@ -358,11 +387,12 @@ the domain conformance tests use structured predicates unrelated to either ABI.
 An adapter must select its own scope: a sequence carrier and its element fields
 belong to different native scopes.
 
-`selector(extra)` returns `Result<WireKind>`, so an unsupported selector can be
-rejected. The compiler names and prefixes it, compiles and prefixes each arm,
-then calls `alternatives(Alternatives)`. This operation validates the selector
-and retires inactive arm offers. Runtime invalid-selector handling remains the
-compiler's policy. All wires remain owned by the tree.
+`input_selector(extra)` and `output_selector(extra)` return their directional
+wire kind in a `Result`, so unsupported tags can be rejected. For input
+alternatives, the shared helper names and prefixes the input selector, compiles
+and prefixes each arm, then calls `alternatives(Alternatives)`. That operation
+validates the selector and retires inactive arm offers. Runtime invalid-selector
+handling remains the compiler's policy. All wires remain owned by the tree.
 
 `sequence_input(SequenceInputRequest)` and
 `sequence_output(SequenceOutputRequest)` choose ordinary or bulk transport using
@@ -373,8 +403,8 @@ packing within each callback element remain separate choices.
 
 ## Source errors
 
-`source_error(SourceError)` receives the original error type, owned value and
-optional explicit message-mapper expression. It returns a `SourceErrorPlan`
+The shared `source_error(SourceError)` operation receives the original error
+type, owned value and optional explicit message-mapper expression. It returns a `SourceErrorPlan`
 containing both the payload tree and its propagation expression. Layout and
 routing are prepared together rather than selected by two independent hooks.
 
@@ -382,8 +412,71 @@ The default requires an explicit mapper and calls `mapped_error`; a codec that
 only supports mapped String errors can override that convenience operation.
 `prepare_mapped_source_error` provides the same fallback to codecs that also
 handle typed errors. No implicit stringification is introduced. C keeps its
-structured error outputs; JNI keeps typed domain-error callbacks and the
-separate binding-error callback, with user handlers invoked after native return.
+structured error outputs through this operation. JNI's Result root instead owns
+ordinary converters for both payloads, as described below. It keeps typed
+domain-error callbacks and the separate binding-error callback, with user
+handlers invoked after native return and after handle locks are released.
+
+## Root and Result migration
+
+`Codec::compile_output_root(...) -> Result<Self::Output>` returns a complete
+converter for a function result or callback argument. Nested
+`compile_output_tree` and `compile_output_return` still return
+`CodecOutputPlan<Self>`. When the default root implementation fits, leave it in
+place: it composes the plan and calls `Compiler::finish_output_plan` to add the
+binding-failure layout, run `finish_output` (including unit), validate and convert
+the plan. A custom root that returns a plan-based converter should call that
+helper once; a composite root must finalize its ordinary child converters and
+preserve their outcomes and delivery. Do not finalize the same plan twice.
+
+JNI configuration uses `JniOutputUnary::ConfigResult`; resolution produces
+`JniOutputBranch::Result` with two visible children, Ok and Err. A compiled return
+converter owns both ordinary payload converters. The old `ErrorBinding`
+recipe/output stages, error registry, generated error helper and reference-repair
+scan are removed. `.result_as_value()` continues to select enum data instead of
+an error channel; C retains `COutputUnary::Result` and its structured error path.
+
+An explicit error mapper accepts E or &E and returns String. Reference-valued E
+does not itself mean the mapper borrows E: for `Result<T, &str>`, a mapper taking
+`&str` receives E, while one taking `&&str` receives &E. Both local `.on_error(...)`
+and type-wide mapper defaults preserve this distinction. Mapping remains before
+a replaceable error payload projection, so a custom message projection does not
+discard or repeat the mapper. There is no implicit stringification.
+
+A custom `KotlinOutputConversion` wrapping a JNI Result converter must now forward
+`domain_error(&self) -> Option<&JniDomainError>` and
+`with_domain_error(&self, error: JniDomainError) -> Result<Self>`. The latter
+rebuilds the wrapper around the replaced inner converter, retaining the wrapper's
+own settings. Forward these alongside `output_outcomes`, native fragments,
+`delivery_policy`, `prepare_return_delivery`, `callback_arguments` and the relevant
+Kotlin projections (`kotlin`, `kotlin_return`, `kotlin_sequence_element`). Returning
+the default `None` loses the Result error branch. See the complete
+[Duration wrapper](../examples/covertest-kotlin/build_support/output_contracts.rs)
+and [custom-output contract tests](../prebindgen-jni/src/output_contract_tests.rs).
+Neither Kotlin forwarding nor JNI error carriers are obligations of a different
+language adapter such as the minimal example.
+
+## Progressing to richer conversions
+
+Add operations only for representations the adapter can implement. Optional
+feature defaults reject unsupported work; a custom interpreter must also enforce
+its own representation choices, including bulk opt-in. Source helpers resolve
+constructors/getters/fields without requiring support for every other feature.
+
+| Next contract | Read before adding support | Existing executable coverage / limits |
+| --- | --- | --- |
+| Optional values and input alternatives | [Complete encodings](#complete-optional-alternative-and-sequence-operations), [README option rules](../README.md#optional-values-and-niches) | [Independent niche domains](../prebindgen-declarations/src/niche_tests.rs), [Kotlin option assertions](../examples/covertest-kotlin/kotlin/io/prebindgen/covertest/Options.kt). Reserve distinct nested states and keep inactive arm wires inert. |
+| Collection rows and delivery | [Sequence transport contracts](../prebindgen-declarations/src/sequence.rs), [README collections](../README.md#collections) | [Sequence delivery assertions](../examples/covertest-kotlin/kotlin/io/prebindgen/covertest/SequenceDelivery.kt). Keep row backing storage alive through construction; separate element packing, whole-collection storage and callback delivery. |
+| Callbacks | [Arrow resolution](../prebindgen-declarations/src/source.rs), [README callbacks](../README.md#retained-jni-source-callbacks) | [Independent callback extension](../prebindgen-declarations/src/extension_tests.rs), [source callback assertions](../examples/covertest-kotlin/kotlin/io/prebindgen/covertest/SourceCallbacks.kt). Reverse argument direction and preserve scoped/transferred ownership. |
+| Borrowed values and explicit copies | [Reference/owner hooks](../prebindgen-declarations/src/codec.rs), [README boundary limits](../README.md#boundary-contracts-and-limits) | [C loan tests](../prebindgen-c/src/borrowing_tests.rs), [explicit JNI copy assertions](../examples/covertest-kotlin/kotlin/io/prebindgen/covertest/ExplicitBorrowCopies.kt). Reject escaping temporary views; do not infer permission to clone from a shared observation. |
+| Independent custom converters | [README converter contracts](../README.md#preparation-and-generation-apis), [generator-defined requests](../prebindgen-conversions/src/contract.rs) | [Independent input fixture](../examples/covertest-kotlin/build_support/input_contracts.rs), [Duration output fixture](../examples/covertest-kotlin/build_support/output_contracts.rs). A converter can own its storage/protocol without a stored plan. |
+| Typed errors and binding failures | [Root/Result migration](#root-and-result-migration), [README Result rules](../README.md#result-returns) | [Reference-mapper tests](../prebindgen-jni/src/result_output.rs), [Kotlin result assertions](../examples/covertest-kotlin/kotlin/io/prebindgen/covertest/Results.kt). Keep typed domain payloads separate from conversion/panic failures and run user handlers after JNI/locks. |
+
+These links identify coverage sources, not a promise that every shape works in
+every position or language. The minimal example runs only its scalar/unit Rust
+boundary. Richer C/JNI changes require their actual generated foreign-boundary
+checks; reference-valued collection elements and full lifetime-bearing records
+remain outside the documented supported subset.
 
 ## Migration
 
@@ -413,17 +506,19 @@ option value, including any options already selected by adapter methods.
 
 | Former API | Replacement |
 | --- | --- |
-| `input_leaf`, `input_row_leaf`, `input_bulk_leaf`, `input_bulk_row_leaf` | `input_leaf(InputLeaf)` with representation/construction context. |
+| `input_leaf`, `input_row_leaf`, `input_bulk_leaf`, `input_bulk_row_leaf` | `input_leaf(InputLeaf)` with representation and role; complete input scopes use continuations and backing storage. |
 | `output_leaf`, `output_bulk_leaf` | `output_leaf(OutputLeaf)`. |
 | `output_projected`, `output_bulk_projected` | `output_projected(OutputLeaf, Projection)`. |
 | `consumes` | `output_consumes`. |
 | `group_metadata`, `fields_group` | `input_group(GroupKind)` / `output_group(GroupKind)` for ordered child lists. |
 | `field_group` | `input_field(name)` / `output_field(name)` for single-child field annotations. |
 | `named_output_group` | `output_named(name)` for a single-child output annotation. |
-| Required optional metadata/reservation hooks | One optional `optional` operation; opt-in wire helpers. |
+| Required optional metadata/reservation hooks | Directional `input_optional(InputOptional)` / `output_optional(OutputOptional)`; opt-in wire helpers. |
+| `selector(extra)` | `input_selector(extra)` / `output_selector(extra)` with independent wire kinds. |
+| `prefix_layout` | `prefix_input` / `prefix_output` with independent tree metadata. |
 | `alternatives_metadata` plus niche retirement | `alternatives` receives the prefixed selector and mutable arms. |
 | `sequence_*` and `sequence_*_bulk` | Request-based `sequence_input` / `sequence_output`. |
-| `result_error_value` plus `source_error_layout` | `source_error`, returning both parts. |
+| `result_error_value` plus `source_error_layout` | Shared `source_error` returns both parts; JNI Result roots now compose ordinary Ok/Err converters. |
 | `result_error` | `mapped_error`. |
 | Unit values `CCodec` / `JniCodec` | `CCodec::raw()` / `JniCodec::raw()` (also `Default`). |
 
@@ -436,3 +531,22 @@ no external callback output set is needed. Raw policy
 preserves the former low-level conversion behavior; it still respects existing
 C opaque-pointer and inline-owner declarations. There is no legacy forwarding
 codec or second declaration implementation.
+
+For stored inputs, replace the former resource-registration/staging fields with
+`InputPlan::code` and `storage`. `code` constructs/binds the target and evaluates
+its continuation exactly once; `storage` holds only inert declarations needed
+outside optional/selector branches. Use `InputPlan::new` and `bind` to compose
+scopes, keeping backing owners alive through the remaining call. Native ownership
+takes must report completed transfers before later failures; the language's wire
+access and Kotlin handle/consumption contracts still apply. See
+[InputPlan](../prebindgen-conversions/src/plan.rs) and the
+[README boundary contract](../README.md#boundary-contracts-and-limits).
+
+The historical [#902 proposal](https://github.com/milyin/prebindgen/pull/902)
+informed the codec-operation reduction merged in #903. Later directional metadata,
+adapter-owned operation trees, continuation-based inputs and composed JNI Result
+outputs superseded parts of that sketch. Keep its [overview](https://github.com/milyin/prebindgen/blob/14a9256bff9571868753844f8cecd444948e5e02/docs/investigations/declaration-codec-api/README.md),
+[API sketch](https://github.com/milyin/prebindgen/blob/14a9256bff9571868753844f8cecd444948e5e02/docs/investigations/declaration-codec-api/api.md)
+and [hook audit](https://github.com/milyin/prebindgen/blob/14a9256bff9571868753844f8cecd444948e5e02/docs/investigations/declaration-codec-api/audit.md)
+as exact-revision history. Their method inventory and signatures are not the
+current authoring contract; use this guide and the runnable example instead.

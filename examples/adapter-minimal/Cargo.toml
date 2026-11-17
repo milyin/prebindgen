@@ -1,0 +1,17 @@
+[package]
+name = "adapter-minimal"
+version = "0.0.0"
+edition = "2021"
+rust-version = "1.85"
+publish = false
+
+# An independent crate: no workspace test helpers or C/JNI adapters.
+[workspace]
+
+[dependencies]
+prebindgen-declarations = { path = "../../prebindgen-declarations" }
+prebindgen-conversions = { path = "../../prebindgen-conversions" }
+prebindgen-flat = { path = "../../prebindgen-flat" }
+proc-macro2 = "1.0"
+quote = "1.0"
+syn = { version = "2.0", features = ["full"] }
