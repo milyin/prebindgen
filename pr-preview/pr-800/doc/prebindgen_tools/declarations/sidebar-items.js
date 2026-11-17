@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["ExpandDecl"],"fn":["source_functions"],"struct":["Declarations","ExpandParamDecl","ExpandReturnDecl","FieldsDecl","FunctionDecl"]};
