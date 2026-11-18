@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["input"],"struct":["Range","Reader","Writer"],"trait":["Field"]};
