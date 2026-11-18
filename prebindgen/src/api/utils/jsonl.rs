@@ -7,6 +7,8 @@ use std::{
     path::Path,
 };
 
+use serde::{de::DeserializeOwned, Deserialize};
+
 use crate::api::record::Record;
 
 /// Write a collection of records to a file in JSON-lines format
@@ -30,7 +32,26 @@ pub fn write_to_jsonl_file<P: AsRef<Path>, R: Borrow<Record>>(
 pub fn read_jsonl_file<P: AsRef<Path>>(
     file_path: P,
 ) -> Result<Vec<Record>, Box<dyn std::error::Error>> {
-    let content = fs::read_to_string(&file_path)?;
+    read_records(file_path.as_ref())
+}
+
+#[derive(Deserialize)]
+pub(crate) struct CapturedRecord {
+    pub capture_group: Option<String>,
+    #[serde(flatten)]
+    pub record: Record,
+}
+
+pub(crate) fn read_capture_file(
+    path: &Path,
+) -> Result<Vec<CapturedRecord>, Box<dyn std::error::Error>> {
+    read_records(path)
+}
+
+fn read_records<T: DeserializeOwned>(
+    file_path: &Path,
+) -> Result<Vec<T>, Box<dyn std::error::Error>> {
+    let content = fs::read_to_string(file_path)?;
     let mut records = Vec::new();
 
     // Parse JSON-lines format: each line is a separate JSON object
@@ -40,8 +61,8 @@ pub fn read_jsonl_file<P: AsRef<Path>>(
             continue; // Skip empty lines
         }
 
-        let record: Record = serde_json::from_str(line)
-            .map_err(|e| format!("{}:{}: {}", file_path.as_ref().display(), line_num + 1, e))?;
+        let record = serde_json::from_str(line)
+            .map_err(|e| format!("{}:{}: {}", file_path.display(), line_num + 1, e))?;
 
         records.push(record);
     }
