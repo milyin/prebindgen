@@ -1,6 +1,6 @@
 use std::{
     cell::RefCell,
-    collections::{HashMap, HashSet},
+    collections::{hash_map::Entry, HashMap},
     fs,
     path::{Path, PathBuf},
 };
@@ -9,7 +9,11 @@ use itertools::Itertools;
 use roxygen::roxygen;
 
 use crate::{
-    api::{batching::cfg_filter, record::Record, utils::jsonl::read_jsonl_file},
+    api::{
+        batching::cfg_filter,
+        record::{Record, RecordKind},
+        utils::jsonl::{read_capture_file, CapturedRecord},
+    },
     SourceLocation, TargetTriple, CRATE_NAME_FILE, FEATURES_FILE,
 };
 
@@ -36,6 +40,15 @@ thread_local! {
 /// Items are organized into groups based on the first parameter of the `#[prebindgen]`
 /// macro. For example, `#[prebindgen("structs")]` creates items in the "structs" group.
 /// Items without an explicit group are placed in the "default" group.
+/// Identical records in a group are read once. Distinct anonymous constants
+/// are retained. Conflicting named records with the same name and captured cfg
+/// in a group cause source construction to panic.
+///
+/// New captures store the full group in each record. Older captures keep the
+/// historical group before the first underscore in the filename. In mixed
+/// output, each record follows its own rule and deduplicates only within its
+/// assigned group. Rebuild the source crate with the updated macro into fresh
+/// capture output to get full group names for all records.
 ///
 /// # Example
 ///
@@ -124,10 +137,8 @@ impl Source {
         });
         let crate_name = crate_name_override.unwrap_or_else(|| stored_crate_name.clone());
 
-        let groups = Self::discover_groups(input_dir);
         let mut items = HashMap::new();
-        for group in groups {
-            let records = Self::read_group(input_dir, &group);
+        for (group, records) in Self::read_groups(input_dir) {
             let group_items = records
                 .iter()
                 .map(|r| {
@@ -356,60 +367,69 @@ impl Source {
         builder.build()
     }
 
-    /// Internal method to read all exported files matching the group name pattern `<group>_*`
-    fn read_group<P: AsRef<Path>>(input_dir: P, group: &str) -> Vec<Record> {
-        let pattern = format!("{group}_");
-        let mut record_map = HashMap::new();
+    fn read_groups(input_dir: &Path) -> HashMap<String, Vec<Record>> {
+        let Ok(entries) = fs::read_dir(input_dir) else {
+            return HashMap::new();
+        };
+        let mut paths: Vec<_> = entries.flatten().map(|entry| entry.path()).collect();
+        paths.sort_unstable();
 
-        // Read the directory and find all matching files
-        if let Ok(entries) = fs::read_dir(&input_dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
-                    if file_name.starts_with(&pattern) && file_name.ends_with(JSONL_EXTENSION) {
-                        #[cfg(feature = "debug")]
-                        println!("Reading exported file: {}", path.display());
-                        let path_clone = path.clone();
-
-                        match read_jsonl_file(&path) {
-                            Ok(records) => {
-                                for record in records {
-                                    // Use a HashMap to deduplicate records by name and cfg
-                                    let key = if let Some(cfg) = &record.cfg {
-                                        format!("{}#{}", record.name, cfg)
-                                    } else {
-                                        record.name.clone()
-                                    };
-                                    record_map.insert(key, record);
-                                }
-                            }
-                            Err(e) => {
-                                panic!("Failed to read {}: {}", path_clone.display(), e);
-                            }
-                        }
-                    }
-                }
-            }
+        #[derive(Default)]
+        struct Group<'a> {
+            named: HashMap<(String, Option<String>), (Record, &'a Path)>,
+            anonymous_consts: Vec<Record>,
         }
+        let mut groups = HashMap::<String, Group<'_>>::new();
+        for path in &paths {
+            let Some(legacy_group) = path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .and_then(|name| name.strip_suffix(JSONL_EXTENSION))
+                .and_then(|stem| stem.split_once('_').map(|(group, _)| group))
+            else {
+                continue;
+            };
+            #[cfg(feature = "debug")]
+            println!("Reading exported file: {}", path.display());
 
-        // Return deduplicated records for this group
-        record_map.into_values().collect::<Vec<_>>()
-    }
-
-    /// Internal method to discover all available groups from the directory
-    fn discover_groups<P: AsRef<Path>>(input_dir: P) -> HashSet<String> {
-        let mut groups = HashSet::new();
-
-        // Discover all available groups
-        if let Ok(entries) = fs::read_dir(input_dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
-                    if file_name.ends_with(JSONL_EXTENSION) {
-                        // Extract group name from filename (everything before the first underscore)
-                        if let Some(underscore_pos) = file_name.find('_') {
-                            let group_name = &file_name[..underscore_pos];
-                            groups.insert(group_name.to_string());
+            let records = read_capture_file(path)
+                .unwrap_or_else(|e| panic!("Failed to read {}: {}", path.display(), e));
+            for CapturedRecord {
+                capture_group,
+                record,
+            } in records
+            {
+                let group = capture_group.as_deref().unwrap_or(legacy_group);
+                let captures = groups.entry(group.to_owned()).or_default();
+                if record.kind == RecordKind::Const && record.name == "_" {
+                    if !captures.anonymous_consts.contains(&record) {
+                        captures.anonymous_consts.push(record);
+                    }
+                    continue;
+                }
+                match captures
+                    .named
+                    .entry((record.name.clone(), record.cfg.clone()))
+                {
+                    Entry::Vacant(slot) => {
+                        slot.insert((record, path));
+                    }
+                    Entry::Occupied(slot) => {
+                        let (previous, previous_path) = slot.get();
+                        if previous != &record {
+                            panic!(
+                                "Conflicting prebindgen records for `{}` in group `{}` (cfg: {}):\n  \
+                                 {} at {} (capture file {})\n  {} at {} (capture file {})",
+                                record.name,
+                                group,
+                                record.cfg.as_deref().unwrap_or("<none>"),
+                                previous.kind,
+                                previous.source_location,
+                                previous_path.display(),
+                                record.kind,
+                                record.source_location,
+                                path.display(),
+                            );
                         }
                     }
                 }
@@ -417,6 +437,17 @@ impl Source {
         }
 
         groups
+            .into_iter()
+            .map(|(group, captures)| {
+                let records = captures
+                    .named
+                    .into_values()
+                    .map(|(record, _)| record)
+                    .chain(captures.anonymous_consts)
+                    .collect();
+                (group, records)
+            })
+            .collect()
     }
 }
 
@@ -585,3 +616,6 @@ impl Builder {
         )
     }
 }
+
+#[cfg(test)]
+mod tests;

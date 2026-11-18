@@ -36,7 +36,7 @@
 //!
 //! See also: [`prebindgen`](https://docs.rs/prebindgen) for the main processing library.
 //!
-use std::{collections::HashMap, fs::OpenOptions};
+use std::{collections::HashMap, fs::OpenOptions, io::Write, path::Path};
 
 use prebindgen::{get_prebindgen_out_dir, Record, RecordKind, SourceLocation, DEFAULT_GROUP_NAME};
 use proc_macro::TokenStream;
@@ -140,7 +140,7 @@ thread_local! {
     static JSONL_PATHS: std::cell::RefCell<HashMap<String, std::path::PathBuf>> = std::cell::RefCell::new(HashMap::new());
 }
 
-/// Get the full path to `{group}_{pid}_{thread_id}.jsonl` generated in OUT_DIR.
+/// Get the capture path in OUT_DIR, with an optional random collision suffix.
 fn get_prebindgen_jsonl_path(group: &str) -> std::path::PathBuf {
     if let Some(p) = JSONL_PATHS.with(|path| path.borrow().get(group).cloned()) {
         return p;
@@ -180,6 +180,30 @@ fn get_prebindgen_jsonl_path(group: &str) -> std::path::PathBuf {
             .insert(group.to_string(), new_path.clone());
     });
     new_path
+}
+
+fn write_capture(
+    path: &Path,
+    group: &str,
+    record: &Record,
+) -> std::result::Result<(), Box<dyn std::error::Error>> {
+    // Keep the Record fields at the top level so existing readers can
+    // deserialize the line and ignore the additional group field.
+    #[derive(serde::Serialize)]
+    struct Capture<'a> {
+        #[serde(flatten)]
+        record: &'a Record,
+        capture_group: &'a str,
+    }
+
+    let line = serde_json::to_string(&Capture {
+        record,
+        capture_group: group,
+    })?;
+    let mut file = OpenOptions::new().create(true).append(true).open(path)?;
+    writeln!(file, "{line}")?;
+    file.flush()?;
+    Ok(())
 }
 
 /// Attribute macro that exports FFI definitions for use in language-specific binding crates.
@@ -309,7 +333,7 @@ pub fn prebindgen(args: TokenStream, input: TokenStream) -> TokenStream {
 
     // Get the full path to the JSONL file
     let file_path = get_prebindgen_jsonl_path(&group);
-    if prebindgen::utils::write_to_jsonl_file(&file_path, &[&new_record]).is_err() {
+    if write_capture(&file_path, &group, &new_record).is_err() {
         return TokenStream::from(quote! {
             compile_error!("Failed to write prebindgen record");
         });
