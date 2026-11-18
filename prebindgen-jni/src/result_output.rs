@@ -253,34 +253,39 @@ pub(crate) fn compile(
     let [success, error] = children.as_slice() else {
         return Err("Result completion needs Ok and Err conversions".into());
     };
-    let success = cx.output_root(ok, success, &(), value.clone(), false, reference_return)?;
-    let (error, mapping) = if *preserve_message_mapper {
-        let OutputNode::Unary {
-            operation: JniOutputUnary::Convert { conversion },
-            child,
-        } = error
-        else {
-            return Err("mapped Result error requires its resolved value conversion".into());
-        };
-        if prebindgen_flat::type_key(&conversion.representation) != "String" {
-            return Err("a preserved Result message mapper must produce String".into());
-        }
-        let (local, preparation, _) =
-            cx.prepare_output_conversion(err, conversion, value, false)?;
-        (
-            cx.output_root(
-                &conversion.representation,
+    let success = cx
+        .output_root(ok, success, &(), value.clone(), false, reference_return)
+        .map_err(|e| format!("Result Ok: {e}"))?;
+    let (error, mapping) = (|| {
+        if *preserve_message_mapper {
+            let OutputNode::Unary {
+                operation: JniOutputUnary::Convert { conversion },
                 child,
-                &(),
-                prebindgen_conversions::source_result_expr(),
-                false,
-                true,
-            )?,
-            Some((local, preparation)),
-        )
-    } else {
-        (cx.output_root(err, error, &(), value, false, true)?, None)
-    };
+            } = error
+            else {
+                return Err("mapped Result error requires its resolved value conversion".into());
+            };
+            if prebindgen_flat::type_key(&conversion.representation) != "String" {
+                return Err("a preserved Result message mapper must produce String".into());
+            }
+            let (local, preparation, _) =
+                cx.prepare_output_conversion(err, conversion, value, false)?;
+            Ok((
+                cx.output_root(
+                    &conversion.representation,
+                    child,
+                    &(),
+                    prebindgen_conversions::source_result_expr(),
+                    false,
+                    true,
+                )?,
+                Some((local, preparation)),
+            ))
+        } else {
+            Ok((cx.output_root(err, error, &(), value, false, true)?, None))
+        }
+    })()
+    .map_err(|e: String| format!("Result Err: {e}"))?;
     let error = JniDomainError {
         handler: handler.clone(),
         output: error,
@@ -297,6 +302,46 @@ pub(crate) fn compile(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn occurrence_diagnostics_name_result_branches_before_completion() {
+        let flat: JniBindings = Flat::parse(
+            syn::parse_file("pub fn read()->Result<i64,i64>{}")
+                .unwrap()
+                .items
+                .into_iter()
+                .map(|i| (i, Default::default())),
+        )
+        .unwrap();
+        let value = || OutputNode::Leaf(crate::JniOutputLeafOp::Value);
+        for (children, branch) in [
+            (vec![OutputNode::None, value()], "Ok"),
+            (vec![value(), OutputNode::None], "Err"),
+            (vec![OutputNode::None, OutputNode::None], "Ok"),
+        ] {
+            let tree = OutputNode::Branch {
+                operation: JniOutputBranch::Result {
+                    handler: "test.ErrorHandler".into(),
+                    preserve_message_mapper: false,
+                },
+                children,
+            };
+            let error = prebindgen_declarations::compile_output(
+                &flat,
+                &JniCodec::raw(),
+                "read",
+                &tree,
+                &(),
+            )
+            .err()
+            .unwrap();
+            println!("{error}");
+            assert_eq!(
+                error,
+                format!("function `read` result: Result {branch}: None output requires unit")
+            );
+        }
+    }
 
     #[test]
     fn reference_error_mappers_preserve_e_and_shared_e_arguments() {

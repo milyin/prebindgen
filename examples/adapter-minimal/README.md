@@ -18,7 +18,7 @@ offline execution requires dependencies to have been fetched. The program writes
 `rustc --edition=2021`, and runs the executable. Successful output includes:
 
 ```text
-expected rejection for maybe's optional input: optional conversion is unsupported by this codec
+expected rejection for maybe's optional input: function `maybe` parameter `value`: optional conversion is unsupported by this codec
 generated scalar/unit assertions passed
 ```
 

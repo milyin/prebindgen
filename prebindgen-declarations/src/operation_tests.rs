@@ -3,6 +3,8 @@ use super::*;
 use prebindgen_conversions::{staged::emit_call, value};
 
 struct Scalars;
+#[path = "diagnostic_tests.rs"]
+mod diagnostic_tests;
 impl Codec for Scalars {
     type Input = prebindgen_conversions::InputPlan<Type, (), (), ()>;
     type Output = prebindgen_conversions::OutputPlan<Type, (), (), ()>;

@@ -159,7 +159,24 @@ pub(crate) fn resolve_with(
                 BindingState::Configured(call) => BindingState::Resolved(
                     resolver
                         .resolve_call(flat, codec, &source, call, extra)
-                        .map_err(|e| format!("{}: {e}", binding.name))?,
+                        .map_err(|e| {
+                            if binding.metadata.name.is_empty()
+                                || (binding.metadata.package.is_empty()
+                                    && binding.name == binding.metadata.name)
+                            {
+                                format!("{}: {e}", binding.name)
+                            } else {
+                                let export = if binding.metadata.package.is_empty() {
+                                    binding.metadata.name.clone()
+                                } else {
+                                    format!(
+                                        "{}.{}",
+                                        binding.metadata.package, binding.metadata.name
+                                    )
+                                };
+                                format!("{} (export `{export}`): {e}", binding.name)
+                            }
+                        })?,
                 ),
                 other => other,
             };
@@ -178,7 +195,24 @@ pub(crate) fn compile_with(flat: &mut JniBindings, codec: &JniCodec, extra: &())
             binding.state = match binding.state {
                 BindingState::Resolved(call) => BindingState::Prepared(
                     prebindgen_declarations::compile_call(flat, codec, &source, call, extra)
-                        .map_err(|e| format!("{}: {e}", binding.name))?,
+                        .map_err(|e| {
+                            if binding.metadata.name.is_empty()
+                                || (binding.metadata.package.is_empty()
+                                    && binding.name == binding.metadata.name)
+                            {
+                                format!("{}: {e}", binding.name)
+                            } else {
+                                let export = if binding.metadata.package.is_empty() {
+                                    binding.metadata.name.clone()
+                                } else {
+                                    format!(
+                                        "{}.{}",
+                                        binding.metadata.package, binding.metadata.name
+                                    )
+                                };
+                                format!("{} (export `{export}`): {e}", binding.name)
+                            }
+                        })?,
                 ),
                 BindingState::Prepared(call) => BindingState::Prepared(call),
                 BindingState::Configured(_) => {

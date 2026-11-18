@@ -190,23 +190,23 @@ pub fn resolve_call<P, R, F, IC, OC, IR, OR, I, O>(
         .iter()
         .zip(call.inputs)
         .map(|(p, slot)| {
-            Ok(match slot {
-                ConfiguredSlot::Default => ResolvedSlot::Tree(input(&p.ty.ty, None)?),
-                ConfiguredSlot::Recipe(tree) => ResolvedSlot::Tree(input(&p.ty.ty, Some(tree))?),
-                ConfiguredSlot::Prepared(plan) => ResolvedSlot::Prepared(plan),
-            })
+            let resolved = match slot {
+                ConfiguredSlot::Default => input(&p.ty.ty, None).map(ResolvedSlot::Tree),
+                ConfiguredSlot::Recipe(tree) => input(&p.ty.ty, Some(tree)).map(ResolvedSlot::Tree),
+                ConfiguredSlot::Prepared(plan) => Ok(ResolvedSlot::Prepared(plan)),
+            };
+            resolved.map_err(|e| format!("function `{}` parameter `{}`: {e}", source.name, p.name))
         })
         .collect::<Result<_>>()?;
     let output = match call.output {
-        ConfiguredSlot::Default => {
-            ResolvedSlot::Tree(output(&source.ret.ty, None, call.result_value, call.error)?)
-        }
-        ConfiguredSlot::Recipe(tree) => ResolvedSlot::Tree(output(
-            &source.ret.ty,
-            Some(tree),
-            call.result_value,
-            call.error,
-        )?),
+        ConfiguredSlot::Default => ResolvedSlot::Tree(
+            output(&source.ret.ty, None, call.result_value, call.error)
+                .map_err(|e| format!("function `{}` result: {e}", source.name))?,
+        ),
+        ConfiguredSlot::Recipe(tree) => ResolvedSlot::Tree(
+            output(&source.ret.ty, Some(tree), call.result_value, call.error)
+                .map_err(|e| format!("function `{}` result: {e}", source.name))?,
+        ),
         ConfiguredSlot::Prepared(plan) => ResolvedSlot::Prepared(plan),
     };
     Ok(ResolvedCall { inputs, output })

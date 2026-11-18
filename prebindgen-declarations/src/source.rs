@@ -245,7 +245,7 @@ pub fn resolve_record_fields<M: Schema, T, R>(
         .fields
         .iter()
         .zip(recipes)
-        .map(|(f, r)| resolve(&f.ty, r))
+        .map(|(f, r)| resolve(&f.ty, r).map_err(|e| format!("field `{}`: {e}", f.name)))
         .collect()
 }
 
@@ -361,10 +361,14 @@ pub fn resolve_typed_expansion<T, R>(
         }
     }
     if let Some(inner) = crate::option_inner(ty) {
-        return resolve(inner, enclosing, stack).map(optional);
+        return resolve(inner, enclosing, stack)
+            .map(optional)
+            .map_err(|e| format!("optional payload: {e}"));
     }
     if let Some((inner, _)) = crate::sequence_parts(ty) {
-        return resolve(inner, enclosing, stack).map(sequence);
+        return resolve(inner, enclosing, stack)
+            .map(sequence)
+            .map_err(|e| format!("element: {e}"));
     }
     let name = match direction {
         crate::Direction::Input => "input",
@@ -397,7 +401,7 @@ pub fn resolve_getter<M: Schema, T, R>(
             type_key(&expected)
         ));
     }
-    resolve(&f.ret.ty, child)
+    resolve(&f.ret.ty, child).map_err(|e| format!("getter `{function}` result: {e}"))
 }
 
 /// Resolve record fields by source name, inheriting defaults for unspecified members.
@@ -427,6 +431,7 @@ pub fn resolve_named_fields<M: Schema, T, R, B: std::borrow::Borrow<T>>(
                     .map(std::borrow::Borrow::borrow)
                     .unwrap_or(default),
             )
+            .map_err(|e| format!("field `{}`: {e}", f.name))
         })
         .collect()
 }
@@ -498,10 +503,16 @@ pub fn resolve_container<T>(
     sequence: impl FnOnce(T) -> T,
 ) -> Result<Option<T>> {
     if let Some(inner) = prebindgen_flat::option_inner(ty) {
-        return resolve(inner).map(optional).map(Some);
+        return resolve(inner)
+            .map(optional)
+            .map(Some)
+            .map_err(|e| format!("optional payload: {e}"));
     }
     if let Some((element, _)) = prebindgen_flat::sequence_parts(ty).filter(|_| expand_sequence) {
-        return resolve(element).map(sequence).map(Some);
+        return resolve(element)
+            .map(sequence)
+            .map(Some)
+            .map_err(|e| format!("element: {e}"));
     }
     Ok(None)
 }
@@ -782,13 +793,15 @@ fn resolve_callback_choices<M: Schema, I, O, RI, RO, E: Clone>(
                     selected.params.get(&index).copied().unwrap_or(auto_output),
                     ownership,
                 )
+                .map_err(|e| format!("callback argument {index}: {e}"))
             })
             .collect::<Result<Vec<_>>>()?;
         let ret = input(
             &signature.return_type,
             selected.ret.unwrap_or(auto_input),
             stack,
-        )?;
+        )
+        .map_err(|e| format!("callback result: {e}"))?;
         Ok((
             crate::CallbackOperation {
                 ty: canonical,
@@ -827,9 +840,13 @@ pub fn resolve_callback_arrow<M: Schema, I, O, RI, RO, E>(
     let arguments = arguments
         .iter()
         .zip(&signature.arguments)
-        .map(|(tree, ty)| output(ty, tree))
+        .enumerate()
+        .map(|(index, (tree, ty))| {
+            output(ty, tree).map_err(|e| format!("callback argument {index}: {e}"))
+        })
         .collect::<Result<Vec<_>>>()?;
-    let result = input(&signature.return_type, result)?;
+    let result =
+        input(&signature.return_type, result).map_err(|e| format!("callback result: {e}"))?;
     Ok((arguments, result))
 }
 
@@ -1154,7 +1171,7 @@ mod tests {
             |child| child,
         )
         .unwrap_err();
-        assert_eq!(error, "child conversion failed");
+        assert_eq!(error, "optional payload: child conversion failed");
     }
 
     #[test]

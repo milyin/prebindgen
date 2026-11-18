@@ -527,7 +527,10 @@ impl CSourceResolver {
                 let inner = option_inner(ty).ok_or("optional recipe requires Option<T>")?;
                 Ok(InputNode::Unary {
                     operation: CInputUnary::Optional,
-                    child: Box::new(resolve(inner, child, stack)?),
+                    child: Box::new(
+                        resolve(inner, child, stack)
+                            .map_err(|e| format!("optional payload: {e}"))?,
+                    ),
                 })
             }
             InputNode::Unary {
@@ -538,7 +541,9 @@ impl CSourceResolver {
                     sequence_parts(ty).ok_or("sequence input requires Vec<T>, &[T] or &Vec<T>")?;
                 Ok(InputNode::Unary {
                     operation: CInputUnary::Sequence,
-                    child: Box::new(resolve(element, child, stack)?),
+                    child: Box::new(
+                        resolve(element, child, stack).map_err(|e| format!("element: {e}"))?,
+                    ),
                 })
             }
             InputNode::Branch {
@@ -572,7 +577,11 @@ impl CSourceResolver {
                     operation: CInputBranch::Selector,
                     children: arms
                         .iter()
-                        .map(|child| resolve(ty, child, stack))
+                        .enumerate()
+                        .map(|(index, child)| {
+                            resolve(ty, child, stack)
+                                .map_err(|e| format!("alternative {index}: {e}"))
+                        })
                         .collect::<Result<_>>()?,
                 })
             }
@@ -902,7 +911,10 @@ impl CSourceResolver {
                 let inner = option_inner(ty).ok_or("optional recipe requires Option<T>")?;
                 Ok(OutputNode::Unary {
                     operation: COutputUnary::Optional,
-                    child: Box::new(resolve(inner, child, stack)?),
+                    child: Box::new(
+                        resolve(inner, child, stack)
+                            .map_err(|e| format!("optional payload: {e}"))?,
+                    ),
                 })
             }
             OutputNode::Unary {
@@ -916,7 +928,9 @@ impl CSourceResolver {
                         delivery: *delivery,
                         mode: *mode,
                     },
-                    child: Box::new(resolve(ty, element, stack)?),
+                    child: Box::new(
+                        resolve(ty, element, stack).map_err(|e| format!("element: {e}"))?,
+                    ),
                 })
             }
             OutputNode::Branch {
@@ -1046,13 +1060,16 @@ impl CSourceResolver {
                 let (success, failure) =
                     result_parts(ty).ok_or("Result recipe requires Result<T, E>")?;
                 if let Some(name) = error {
-                    prebindgen_declarations::validate_error_mapper(flat, failure, name)?;
+                    prebindgen_declarations::validate_error_mapper(flat, failure, name)
+                        .map_err(|e| format!("Result Err: {e}"))?;
                 }
                 Ok(OutputNode::Unary {
                     operation: COutputUnary::Result {
                         error: error.clone(),
                     },
-                    child: Box::new(resolve(success, ok, stack)?),
+                    child: Box::new(
+                        resolve(success, ok, stack).map_err(|e| format!("Result Ok: {e}"))?,
+                    ),
                 })
             }
         }

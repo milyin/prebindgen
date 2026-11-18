@@ -138,10 +138,11 @@ impl<C: Codec> Compiler<'_, C> {
                     extra,
                     &active.arm(tag.clone(), 1),
                     Some((&format_ident!("{wire}_some"), &format_ident!("{var}_some"))),
-                )?
+                )
             } else {
-                self.input(ty, inner, extra, &active.arm(tag.clone(), 1))?
-            };
+                self.input(ty, inner, extra, &active.arm(tag.clone(), 1))
+            }
+            .map_err(|e| format!("optional payload: {e}"))?;
             optional_input(self.codec, extra, tag, var, active, child)
         }
     }
@@ -197,10 +198,11 @@ impl<C: Codec> Compiler<'_, C> {
                                     &format_ident!("{wire}_f{index}"),
                                     &format_ident!("{var}_f{index}"),
                                 )),
-                            )?
+                            )
                         } else {
-                            self.input(&field.ty, child, extra, active)?
-                        };
+                            self.input(&field.ty, child, extra, active)
+                        }
+                        .map_err(|e| format!("field `{}`: {e}", field.name))?;
                         Ok((field.name.clone(), plan))
                     }),
             )?;
@@ -311,7 +313,9 @@ impl<C: Codec> Compiler<'_, C> {
             }
             let mut cases = Vec::new();
             for (i, arm) in arms.iter().enumerate() {
-                let mut p = self.input(ty, arm, extra, &active.arm(tag.clone(), i as i32))?;
+                let mut p = self
+                    .input(ty, arm, extra, &active.arm(tag.clone(), i as i32))
+                    .map_err(|e| format!("alternative {i}: {e}"))?;
                 self.prefix_input(&mut p.node, ComponentSegment::Alternative(i));
                 fallible |= p.fallible;
                 storage.extend(std::mem::take(&mut p.storage));
@@ -399,14 +403,16 @@ impl<C: Codec> Compiler<'_, C> {
                 .map(|w| format_ident!("{w}_payload"))
                 .unwrap_or_else(|| self.name());
             let child_wire = wire_name.map(|w| format_ident!("{w}_some"));
-            let child = self.output_named(
-                ty,
-                inner,
-                extra,
-                quote!(# payload),
-                borrowed,
-                child_wire.as_ref(),
-            )?;
+            let child = self
+                .output_named(
+                    ty,
+                    inner,
+                    extra,
+                    quote!(# payload),
+                    borrowed,
+                    child_wire.as_ref(),
+                )
+                .map_err(|e| format!("optional payload: {e}"))?;
             optional_output(self.codec, extra, tag, payload, value, borrowed, child)
         }
     }
@@ -591,15 +597,19 @@ impl<C: Codec> Compiler<'_, C> {
                 quote!(&# value)
             };
             out.statements = quote!(let # v =# path (# arg) ;);
-            let mut child = self.output_return(&f.ret.ty, output, extra, quote!(# v), false)?;
-            self.codec.validate_getter_output(
-                self.flat,
-                ty,
-                borrowed && !self.temporary_receiver.get(),
-                &f.ret.ty,
-                &child,
-                extra,
-            )?;
+            let mut child = self
+                .output_return(&f.ret.ty, output, extra, quote!(# v), false)
+                .map_err(|e| format!("getter `{function}` result: {e}"))?;
+            self.codec
+                .validate_getter_output(
+                    self.flat,
+                    ty,
+                    borrowed && !self.temporary_receiver.get(),
+                    &f.ret.ty,
+                    &child,
+                    extra,
+                )
+                .map_err(|e| format!("getter `{function}` result: {e}"))?;
             self.prefix_output(
                 &mut child.outcomes.success,
                 ComponentSegment::Getter(function.clone()),
@@ -1150,41 +1160,45 @@ impl<C: Codec> Compiler<'_, C> {
             result_parts(ty).ok_or("Result recipe requires Result<T, E>")?;
         let payload = self.name();
         let failure = self.name();
-        let mapped = if let Some(error) = error {
-            let mapper = self.flat.function(error)?;
-            let mapper_arg = mapper.params.first().map(|p| &p.ty.ty);
-            let shared = matches!(mapper_arg , Some (Type :: Reference (r)) if r . mutability . is_none () && same_type (& r . elem , error_ty));
-            if mapper.params.len() != 1
-                || !(mapper_arg.is_some_and(|ty| same_type(ty, error_ty)) || shared)
-                || type_key(&mapper.ret.ty) != "String"
-            {
-                return Err(
-                    "Result error mapper must take exactly E or &E and return String".into(),
-                );
-            }
-            let path = &mapper.path;
-            let argument = if shared {
-                quote!(&# failure)
+        let error = (|| {
+            let mapped = if let Some(error) = error {
+                let mapper = self.flat.function(error)?;
+                let mapper_arg = mapper.params.first().map(|p| &p.ty.ty);
+                let shared = matches!(mapper_arg, Some(Type::Reference(r)) if r.mutability.is_none() && same_type(&r.elem, error_ty));
+                if mapper.params.len() != 1
+                    || !(mapper_arg.is_some_and(|ty| same_type(ty, error_ty)) || shared)
+                    || type_key(&mapper.ret.ty) != "String"
+                {
+                    return Err(
+                        "Result error mapper must take exactly E or &E and return String".into(),
+                    );
+                }
+                let path = &mapper.path;
+                let argument = if shared {
+                    quote!(&# failure)
+                } else {
+                    quote!(# failure)
+                };
+                Some(quote!(# path (# argument)))
             } else {
-                quote!(# failure)
+                None
             };
-            Some(quote!(# path (# argument)))
-        } else {
-            None
-        };
-        let error = self.codec.source_error(SourceError {
-            flat: self.flat,
-            ty: error_ty,
-            value: quote!(# failure),
-            message: mapped,
-            extra,
-        })?;
+            self.codec.source_error(SourceError {
+                flat: self.flat,
+                ty: error_ty,
+                value: quote!(# failure),
+                message: mapped,
+                extra,
+            })
+        })()
+        .map_err(|e| format!("Result Err: {e}"))?;
         let message = error.propagate;
         let mut child = if reference_return {
-            self.output_return(success_ty, ok, extra, quote!(# payload), false)?
+            self.output_return(success_ty, ok, extra, quote!(# payload), false)
         } else {
-            self.output(success_ty, ok, extra, quote!(# payload), false)?
-        };
+            self.output(success_ty, ok, extra, quote!(# payload), false)
+        }
+        .map_err(|e| format!("Result Ok: {e}"))?;
         let prepare = child.statements;
         child.statements = quote! { let # payload = match # value { :: core :: result :: Result :: Ok (value) => value , :: core :: result :: Result :: Err (# failure) => return Err (# message) , } ; # prepare };
         child.outcomes.source_error = Some(error.payload);
@@ -1225,7 +1239,7 @@ impl<C: Codec> Compiler<'_, C> {
             let length = self.name();
             let index = self.name();
             let child = self.input(element, element_recipe, extra, &Condition::default());
-            let child = child?;
+            let child = child.map_err(|e| format!("element: {e}"))?;
             sequence::input(
                 self.flat, self.codec, ty, extra, wire, var, length, index, active, child, bulk,
             )
@@ -1287,7 +1301,7 @@ impl<C: Codec> Compiler<'_, C> {
                     },
                 )
             });
-            let child = child?;
+            let child = child.map_err(|e| format!("element: {e}"))?;
             sequence::output(
                 self.flat,
                 self.codec,
