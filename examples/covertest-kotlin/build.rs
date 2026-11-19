@@ -729,6 +729,7 @@ fn main() {
             .fun(fun!(bulk_optional_handles).expand_param("value",expand_param!(BulkHandle).variant_self().bulk()).expand_return(expand_return!(BulkHandle).field_self_into().bulk()))
             .fun(fun!(bulk_array).expand_param("value",expand_param!(i64).variant_self().bulk()).expand_return(expand_return!(i64).field_self().bulk()))
             .fun(fun!(bulk_array_borrow).expand_param("value",expand_param!(i64).variant_self().bulk()))
+            .class(data_class!(ArrayRecord)).fun(fun!(array_record_echo))
             .fun(fun!(bulk_scalar).expand_param("value", expand_param!(i64).variant_self().bulk()).expand_return(expand_return!(i64).field_self().bulk()))
             .fun(fun!(bulk_numbers).expand_param("values", expand_param!(i64).variant_self().bulk()).expand_return(expand_return!(i64).field_self().bulk()))
             .fun(fun!(bulk_nested).expand_param("values", expand_param!(i64).variant_self().bulk()).expand_return(expand_return!(i64).field_self().bulk()))

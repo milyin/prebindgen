@@ -2248,6 +2248,28 @@ val nativeResult = try { run { run { val nativeArgument0 = try { p0_w1_writer_st
     } finally { returnCapture.release() }
 }
 
+public fun arrayRecordEcho(`value`: io.prebindgen.covertest.bulk.ArrayRecord, onError: io.prebindgen.covertest.JniErrorHandler<io.prebindgen.covertest.bulk.ArrayRecord> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): io.prebindgen.covertest.bulk.ArrayRecord = run {
+    val p0_w2_elements = try { if (true) `value`.bytes?.toList()?.let { p0_w2_snapshot -> kotlin.Array<kotlin.Any?>(p0_w2_snapshot.size) { p0_w2_index -> val p0_w6 = p0_w2_snapshot[p0_w2_index]
+kotlin.arrayOf<kotlin.Any?>(io.prebindgen.covertest.InputValidation.value { p0_w6 }) } } else null } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
+    try {
+val nativeResult = try { run { run { val nativeArgument0 = try { p0_w2_elements } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_array_record_echo_87ecc4e4832828a5(nativeArgument0, nativeArgument1) } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    if (returnCapture.status == 2) {
+        return@run onError.run(returnCapture.message) }
+
+    var outputg0_g0_list: kotlin.collections.MutableList<Int>? = null
+outputg0_g0_list = kotlin.collections.ArrayList((nativeResult as kotlin.Array<*>).size)
+for (outputg0_g0_index in (nativeResult as kotlin.Array<*>).indices) {
+val outputg0_g0__row = (nativeResult as kotlin.Array<*>)[outputg0_g0_index] as io.prebindgen.covertest.JNINative.SequenceRow_Int_1_740d8169e2b203e5
+
+
+outputg0_g0_list.add(outputg0_g0__row.c0)
+}
+
+io.prebindgen.covertest.bulk.ArrayRecord(requireNotNull(outputg0_g0_list))
+    } finally { returnCapture.release() }
+}
+
 public fun bulkScalar(`value`: Long, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
     val p0_w1_writer_state = try { if (true) run { val p0_w1_writer = io.prebindgen.covertest.BulkWriter(io.prebindgen.covertest.BulkLayouts.ra60d3960993b9a77.size)
 p0_w1_writer.long((0) + io.prebindgen.covertest.BulkLayouts.ra60d3960993b9a77.offsets[0], io.prebindgen.covertest.InputValidation.value { `value` })

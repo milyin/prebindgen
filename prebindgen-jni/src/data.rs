@@ -7,7 +7,7 @@ use std::rc::Rc;
 /// A Kotlin data class whose fields are converted across the JNI boundary.
 ///
 /// Supports owned public named-field records containing scalars, `String`,
-/// `Vec<T>` collections (`Vec<u8>` is a byte array), other declared data classes,
+/// `Vec<T>` and fixed-size array collections (`Vec<u8>` is a byte array), other declared data classes,
 /// declared opaque handles, and optional fields. Records containing handles,
 /// including through collections, require explicit input field ownership, such as
 /// `expand_param!(Row).variant_record(param_fields!())`. Select named constructor
@@ -183,6 +183,11 @@ fn value_type(
         let (inner, changed) = value_type(flat, inner, input, stack)?;
         return Ok((syn::parse_quote!(Vec<#inner>), changed));
     }
+    if let syn::Type::Array(array) = ty {
+        let (element, changed) = value_type(flat, &array.elem, input, stack)?;
+        let length = &array.len;
+        return Ok((syn::parse_quote!([#element; #length]), changed));
+    }
     let ty = if let syn::Type::Reference(r) = ty {
         match Value::of(ty) {
             Some(Value::Text) => syn::parse_quote!(String),
@@ -248,7 +253,9 @@ pub(crate) fn resolve_declarations(flat: &mut JniBindings) -> Result<()> {
             };
             return Ok((class.fqn(), handles));
         }
-        if let Some(inner) = prebindgen_flat::vec_inner(ty) {
+        if let Some((inner, _)) =
+            prebindgen_flat::sequence_parts(ty).filter(|(_, view)| view.is_owned())
+        {
             let (ty, handles) = element(flat, inner, stack, resolved)?;
             return Ok((format!("kotlin.collections.List<{ty}>"), handles));
         }
@@ -416,13 +423,15 @@ pub(crate) fn resolve_declarations(flat: &mut JniBindings) -> Result<()> {
                     has_handles = true;
                 }
                 child.fqn()
-            } else if let Some(inner) = prebindgen_flat::vec_inner(ty) {
+            } else if let Some((inner, _)) =
+                prebindgen_flat::sequence_parts(ty).filter(|(_, view)| view.is_owned())
+            {
                 let (ty, handles) = element(flat, inner, stack, resolved)
                     .map_err(|error| format!("data class `{key}` field `{name}`: {error}"))?;
                 has_handles |= handles;
                 format!("kotlin.collections.List<{ty}>")
             } else {
-                return Err(format!("data class `{key}` field `{name}` has unsupported type `{field_key}`; expected a scalar, String, Vec<T>, declared data class, or declared handle"));
+                return Err(format!("data class `{key}` field `{name}` has unsupported type `{field_key}`; expected a scalar, String, owned collection, declared data class, or declared handle"));
             };
             if optional.is_some() {
                 kotlin_type.push('?');

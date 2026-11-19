@@ -29,6 +29,28 @@ fn payload_enum_round_trip_uses_sealed_properties() {
     assert!(functions.contains(": test.Event"), "{functions}");
 }
 #[test]
+fn sealed_variant_closes_handles_in_fixed_array_fields() {
+    let generated = build(
+        "pub type Resource = String;
+         pub enum Event { Ready { members: [Resource; 2] } }
+         pub fn event() -> Event {}",
+    )
+    .package(
+        package!()
+            .class(ptr_class!(Resource))
+            .class(sealed_class!(Event))
+            .fun(fun!(event)),
+    )
+    .build()
+    .unwrap();
+    let class = &generated.kotlin["test/Event.kt"];
+    assert!(
+        class.contains("this.members.forEach { member0 -> member0.close()"),
+        "{class}"
+    );
+}
+
+#[test]
 fn recovery_config_nests_optional_enum_with_canonical_duration() {
     let source="pub struct Duration{pub ms:u64}pub fn duration(ms:u64)->Duration{}pub fn millis(d:Duration)->u64{}pub enum RecoveryMode{PeriodicQueries(Duration),Heartbeat}pub struct RecoveryConfig{pub mode:Option<RecoveryMode>,pub retention_period:Option<Duration>}pub fn echo(value:RecoveryConfig)->RecoveryConfig{}";
     let generated = build(source)

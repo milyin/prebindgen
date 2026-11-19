@@ -462,7 +462,10 @@ value types; type-wide expansions apply to boundary occurrences, not to the
 properties inside a data class. Borrowed projections clone strings and byte
 vectors; owned projections move them. The shared helpers `record_output` and
 `record_output_owned` implement the respective access modes. `Option` fields are
-supported; fixed-size array fields remain unsupported. The low-level `JniCodec::raw()` ignores data-class declarations: it binds records
+supported. Fixed-size array fields use the same Kotlin lists and input length checks
+as standalone fixed arrays, including for byte elements. Bring any array-length
+constants into scope where the generated Rust is included. The low-level
+`JniCodec::raw()` ignores data-class declarations: it binds records
 as handles. Using it in an `on_configure(...)` callback for a type declared only as a data class
 therefore fails with a missing handle-class error unless an explicit expansion
 replaces that slot. Use data-class declarations for automatic value-record conversion.

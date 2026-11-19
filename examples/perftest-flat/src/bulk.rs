@@ -175,6 +175,20 @@ pub fn bulk_array(value: [i64; 3]) -> [i64; 3] {
 pub fn bulk_array_borrow(value: &[i64; 3]) -> i64 {
     value.iter().sum()
 }
+
+#[prebindgen]
+pub const ARRAY_RECORD_WIDTH: usize = 3;
+
+#[prebindgen]
+pub struct ArrayRecord {
+    pub bytes: [u8; ARRAY_RECORD_WIDTH],
+}
+
+#[prebindgen]
+pub fn array_record_echo(value: ArrayRecord) -> ArrayRecord {
+    value
+}
+
 #[prebindgen]
 pub fn bulk_point_array(value: [BulkPoint; 2]) -> [BulkPoint; 2] {
     value

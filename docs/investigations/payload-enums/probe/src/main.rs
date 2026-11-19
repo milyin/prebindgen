@@ -13,13 +13,6 @@ fn items(source: &str) -> Vec<(syn::Item, prebindgen::SourceLocation)> {
         .map(|item| (item, Default::default()))
         .collect()
 }
-fn rejected<T>(label: &str, result: Result<T>, expected: &str) {
-    let error = result
-        .err()
-        .expect("this case requires a separate prerequisite");
-    assert!(error.contains(expected), "{label}: {error}");
-    println!("{label}: {error}");
-}
 fn main() -> Result<()> {
     for source in [
         "pub enum Event{Idle,Count(i64)}",

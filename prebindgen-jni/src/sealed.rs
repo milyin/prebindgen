@@ -643,7 +643,9 @@ fn close_member<S: prebindgen_flat::Schema<Field = data::JniField, Type = JniTyp
             format!("{value}?.let {{ {name} -> {body} }}\n")
         });
     }
-    if let Some(inner) = prebindgen_flat::vec_inner(ty) {
+    if let Some((inner, _)) =
+        prebindgen_flat::sequence_parts(ty).filter(|(_, view)| view.is_owned())
+    {
         let name = format!("member{depth}");
         let body = close_member(flat, inner, &name, depth + 1)?;
         return Ok(if body.is_empty() {

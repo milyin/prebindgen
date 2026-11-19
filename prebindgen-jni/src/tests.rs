@@ -669,6 +669,37 @@ fn data_classes_resolve_forward_declarations_and_keep_overrides() {
 }
 
 #[test]
+fn data_class_array_fields_use_the_existing_sequence_representation() {
+    let source = syn::parse_file(
+        "pub const WIDTH: usize = 16;
+         pub struct NodeId { pub bytes: [u8; WIDTH], pub samples: Option<[[i64; 2]; 3]> }
+         pub fn echo(value: NodeId) -> NodeId {}",
+    )
+    .unwrap();
+    let generated = JniGen::builder()
+        .items(
+            source
+                .items
+                .into_iter()
+                .map(|item| (item, Default::default())),
+        )
+        .set_package_prefix("test")
+        .package(package!().class(data_class!(NodeId)).fun(fun!(echo)))
+        .build()
+        .unwrap();
+    let node = &generated.kotlin["test/NodeId.kt"];
+    assert!(
+        node.contains("kotlin.collections.List<kotlin.Int>"),
+        "{node}"
+    );
+    assert!(
+        node.contains("kotlin.collections.List<kotlin.collections.List<kotlin.Long>>?"),
+        "{node}"
+    );
+    assert!(generated.rust.contains("wrong fixed array length"));
+}
+
+#[test]
 fn data_classes_reject_unsupported_shapes_before_emission() {
     for (source, expected) in [
         ("pub type Value = String;", "named-field record"),

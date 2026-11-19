@@ -19,6 +19,14 @@ fun checkBulk() {
     var arrayFailed = false
     check(bulkArray(listOf(1L), JniErrorHandler { arrayFailed = true; emptyList() }).isEmpty())
     check(arrayFailed)
+    val record = ArrayRecord(listOf(0, 128, 255))
+    check(arrayRecordEcho(record) == record)
+    var wrongFieldLength = false
+    check(arrayRecordEcho(ArrayRecord(listOf(0)), JniErrorHandler {
+        wrongFieldLength = it == "wrong fixed array length"
+        record
+    }) == record)
+    check(wrongFieldLength)
     check(bulkNested(listOf(numbers, emptyList(), listOf(7L))) == listOf(numbers, emptyList<Long>(), listOf(7L)))
     val point = BulkPoint(9, 1.5)
     check(bulkPoint(point) == point)
