@@ -2387,7 +2387,7 @@
 <a href=#2387 id=2387 data-nosnippet>2387</a>                .map_or(<span class="string">"Array&lt;Any?&gt;"</span>, returns::NativeReturn::kotlin_type)
 <a href=#2388 id=2388 data-nosnippet>2388</a>        ));
 <a href=#2389 id=2389 data-nosnippet>2389</a>        <span class="kw">let </span>(<span class="kw-2">mut </span>generic, ret, end) = <span class="kw">match </span>delivered.len() {
-<a href=#2390 id=2390 data-nosnippet>2390</a>            <span class="number">0 </span>=&gt; (<span class="string">""</span>, <span class="string">"Unit"</span>.into(), <span class="string">"Unit"</span>.into()),
+<a href=#2390 id=2390 data-nosnippet>2390</a>            <span class="number">0 </span>=&gt; (<span class="string">""</span>, <span class="string">"Unit"</span>.into(), <span class="string">"return@run"</span>.into()),
 <a href=#2391 id=2391 data-nosnippet>2391</a>            <span class="number">1 </span>=&gt; (<span class="string">""</span>, result_types[<span class="number">0</span>].clone(), delivered[<span class="number">0</span>].clone()),
 <a href=#2392 id=2392 data-nosnippet>2392</a>            <span class="kw">_ </span>=&gt; {
 <a href=#2393 id=2393 data-nosnippet>2393</a>                kt_params.push(<span class="macro">format!</span>(<span class="string">"build: ({build_parameters}) -&gt; R"</span>));

@@ -358,83 +358,87 @@
 <a href=#358 id=358 data-nosnippet>358</a>        <span class="kw">let </span>kotlin = <span class="kw-2">&amp;</span>generation.kotlin[<span class="string">"test/Functions.kt"</span>];
 <a href=#359 id=359 data-nosnippet>359</a>        <span class="macro">assert!</span>(!kotlin.contains(<span class="string">"when (result[0])"</span>));
 <a href=#360 id=360 data-nosnippet>360</a>        <span class="macro">assert!</span>(kotlin.contains(<span class="string">"returnCapture.release()"</span>));
-<a href=#361 id=361 data-nosnippet>361</a>        <span class="macro">assert!</span>(kotlin.contains(<span class="string">"if (returnCapture.discardSuccess)"</span>));
-<a href=#362 id=362 data-nosnippet>362</a>        <span class="comment">// Scalar and handle functions with the same error payload share one pool.
-<a href=#363 id=363 data-nosnippet>363</a>        </span><span class="kw">let </span>captures = generation
-<a href=#364 id=364 data-nosnippet>364</a>            .kotlin
-<a href=#365 id=365 data-nosnippet>365</a>            .keys()
-<a href=#366 id=366 data-nosnippet>366</a>            .filter(|k| k.contains(<span class="string">"/Return_"</span>))
-<a href=#367 id=367 data-nosnippet>367</a>            .count();
-<a href=#368 id=368 data-nosnippet>368</a>        <span class="macro">assert_eq!</span>(captures, <span class="number">2</span>);
-<a href=#369 id=369 data-nosnippet>369</a>    }
-<a href=#370 id=370 data-nosnippet>370</a>    <span class="attr">#[test]
-<a href=#371 id=371 data-nosnippet>371</a>    </span><span class="kw">fn </span>a_custom_error_delivery_keeps_the_whole_call_on_its_packet_protocol() {
-<a href=#372 id=372 data-nosnippet>372</a>        <span class="kw">let </span><span class="kw-2">mut </span>flat = prepared();
-<a href=#373 id=373 data-nosnippet>373</a>        <span class="kw">let </span>output = flat.function(<span class="string">"failed"</span>).unwrap().metadata[<span class="number">0</span>]
-<a href=#374 id=374 data-nosnippet>374</a>            .call()
-<a href=#375 id=375 data-nosnippet>375</a>            .unwrap()
-<a href=#376 id=376 data-nosnippet>376</a>            .output
-<a href=#377 id=377 data-nosnippet>377</a>            .domain_error()
-<a href=#378 id=378 data-nosnippet>378</a>            .unwrap()
-<a href=#379 id=379 data-nosnippet>379</a>            .output()
-<a href=#380 id=380 data-nosnippet>380</a>            .clone()
-<a href=#381 id=381 data-nosnippet>381</a>            .packet_only();
-<a href=#382 id=382 data-nosnippet>382</a>        bind_error_output(<span class="kw-2">&amp;mut </span>flat, <span class="string">"failed"</span>, output).unwrap();
-<a href=#383 id=383 data-nosnippet>383</a>        <span class="kw">let </span>generation = generate(<span class="kw-2">&amp;</span>flat).unwrap();
-<a href=#384 id=384 data-nosnippet>384</a>        <span class="kw">let </span>functions = externs(<span class="kw-2">&amp;</span>generation);
-<a href=#385 id=385 data-nosnippet>385</a>        <span class="kw">let </span>function = functions
-<a href=#386 id=386 data-nosnippet>386</a>            .iter()
-<a href=#387 id=387 data-nosnippet>387</a>            .find(|(n, <span class="kw">_</span>)| n.contains(<span class="string">"call_1failed_1"</span>))
-<a href=#388 id=388 data-nosnippet>388</a>            .unwrap()
-<a href=#389 id=389 data-nosnippet>389</a>            .<span class="number">1</span>;
-<a href=#390 id=390 data-nosnippet>390</a>        <span class="kw">let </span>code = <span class="macro">quote!</span>(#function).to_string();
-<a href=#391 id=391 data-nosnippet>391</a>        <span class="macro">assert!</span>(code.contains(<span class="string">"jobjectArray"</span>));
-<a href=#392 id=392 data-nosnippet>392</a>        <span class="macro">assert!</span>(!code.contains(<span class="string">"__pb_return :"</span>));
-<a href=#393 id=393 data-nosnippet>393</a>        <span class="macro">assert!</span>(code.contains(<span class="string">"binding_packet"</span>));
-<a href=#394 id=394 data-nosnippet>394</a>    }
-<a href=#395 id=395 data-nosnippet>395</a>
-<a href=#396 id=396 data-nosnippet>396</a>    <span class="attr">#[test]
-<a href=#397 id=397 data-nosnippet>397</a>    </span><span class="kw">fn </span>packet_fallback_keeps_callback_collection_presence_scalar() {
-<a href=#398 id=398 data-nosnippet>398</a>        <span class="kw">let </span>source = syn::parse_file(<span class="string">"pub type Failure=String; pub fn rows()-&gt;Result&lt;Option&lt;Vec&lt;i64&gt;&gt;,Failure&gt;{} pub fn message(x:Failure)-&gt;String{}"</span>).unwrap();
-<a href=#399 id=399 data-nosnippet>399</a>        <span class="kw">let </span><span class="kw-2">mut </span>flat = JniGen::builder()
-<a href=#400 id=400 data-nosnippet>400</a>            .items(
-<a href=#401 id=401 data-nosnippet>401</a>                source
-<a href=#402 id=402 data-nosnippet>402</a>                    .items
-<a href=#403 id=403 data-nosnippet>403</a>                    .into_iter()
-<a href=#404 id=404 data-nosnippet>404</a>                    .map(|item| (item, Default::default())),
-<a href=#405 id=405 data-nosnippet>405</a>            )
-<a href=#406 id=406 data-nosnippet>406</a>            .set_package_prefix(<span class="string">"test"</span>)
-<a href=#407 id=407 data-nosnippet>407</a>            .error_mapper(<span class="macro">syn::parse_quote!</span>(Failure), <span class="macro">fun!</span>(message))
-<a href=#408 id=408 data-nosnippet>408</a>            .package(<span class="macro">package!</span>().fun(<span class="macro">fun!</span>(rows).callback_return_only()))
-<a href=#409 id=409 data-nosnippet>409</a>            .prepare()
-<a href=#410 id=410 data-nosnippet>410</a>            .unwrap();
-<a href=#411 id=411 data-nosnippet>411</a>        <span class="kw">let </span>output = flat.function(<span class="string">"rows"</span>).unwrap().metadata[<span class="number">0</span>]
-<a href=#412 id=412 data-nosnippet>412</a>            .call()
-<a href=#413 id=413 data-nosnippet>413</a>            .unwrap()
-<a href=#414 id=414 data-nosnippet>414</a>            .output
-<a href=#415 id=415 data-nosnippet>415</a>            .domain_error()
-<a href=#416 id=416 data-nosnippet>416</a>            .unwrap()
-<a href=#417 id=417 data-nosnippet>417</a>            .output()
-<a href=#418 id=418 data-nosnippet>418</a>            .clone()
-<a href=#419 id=419 data-nosnippet>419</a>            .packet_only();
-<a href=#420 id=420 data-nosnippet>420</a>        bind_error_output(<span class="kw-2">&amp;mut </span>flat, <span class="string">"rows"</span>, output).unwrap();
-<a href=#421 id=421 data-nosnippet>421</a>        <span class="kw">let </span>generation = generate(<span class="kw-2">&amp;</span>flat).unwrap();
-<a href=#422 id=422 data-nosnippet>422</a>        <span class="kw">let </span>functions = externs(<span class="kw-2">&amp;</span>generation);
-<a href=#423 id=423 data-nosnippet>423</a>        <span class="kw">let </span>function = functions
-<a href=#424 id=424 data-nosnippet>424</a>            .iter()
-<a href=#425 id=425 data-nosnippet>425</a>            .find(|(name, <span class="kw">_</span>)| name.contains(<span class="string">"call_1rows_1fold_1"</span>))
-<a href=#426 id=426 data-nosnippet>426</a>            .unwrap()
-<a href=#427 id=427 data-nosnippet>427</a>            .<span class="number">1</span>;
-<a href=#428 id=428 data-nosnippet>428</a>        <span class="kw">let </span>code = <span class="macro">quote!</span>(#function).to_string();
-<a href=#429 id=429 data-nosnippet>429</a>        <span class="comment">// The fallback still allocates its required outer packet, but no
-<a href=#430 id=430 data-nosnippet>430</a>        // separate marker array or local reference for the collection.
-<a href=#431 id=431 data-nosnippet>431</a>        // One packet on the success arm and one on the inlined Err arm;
-<a href=#432 id=432 data-nosnippet>432</a>        // they are mutually exclusive at runtime.
-<a href=#433 id=433 data-nosnippet>433</a>        </span><span class="macro">assert_eq!</span>(code.matches(<span class="string">"prebindgen_jni_runtime :: array"</span>).count(), <span class="number">2</span>);
-<a href=#434 id=434 data-nosnippet>434</a>        <span class="macro">assert!</span>(code.contains(<span class="string">"valueOf"</span>));
-<a href=#435 id=435 data-nosnippet>435</a>        <span class="macro">assert!</span>(!code.contains(<span class="string">"new_local_ref"</span>));
-<a href=#436 id=436 data-nosnippet>436</a>        <span class="macro">assert!</span>(generation.kotlin[<span class="string">"test/Functions.kt"</span>].contains(<span class="string">"if (result[1] as Int == 0)"</span>));
-<a href=#437 id=437 data-nosnippet>437</a>        <span class="macro">assert!</span>(generation.kotlin[<span class="string">"test/JNINative.kt"</span>].contains(<span class="string">"): Array&lt;Any?&gt;"</span>));
-<a href=#438 id=438 data-nosnippet>438</a>    }
-<a href=#439 id=439 data-nosnippet>439</a>}
+<a href=#361 id=361 data-nosnippet>361</a>        <span class="macro">assert!</span>(
+<a href=#362 id=362 data-nosnippet>362</a>            !kotlin.lines().any(|line| line.trim() == <span class="string">"Unit"</span>),
+<a href=#363 id=363 data-nosnippet>363</a>            <span class="string">"{kotlin}"
+<a href=#364 id=364 data-nosnippet>364</a>        </span>);
+<a href=#365 id=365 data-nosnippet>365</a>        <span class="macro">assert!</span>(kotlin.contains(<span class="string">"if (returnCapture.discardSuccess)"</span>));
+<a href=#366 id=366 data-nosnippet>366</a>        <span class="comment">// Scalar and handle functions with the same error payload share one pool.
+<a href=#367 id=367 data-nosnippet>367</a>        </span><span class="kw">let </span>captures = generation
+<a href=#368 id=368 data-nosnippet>368</a>            .kotlin
+<a href=#369 id=369 data-nosnippet>369</a>            .keys()
+<a href=#370 id=370 data-nosnippet>370</a>            .filter(|k| k.contains(<span class="string">"/Return_"</span>))
+<a href=#371 id=371 data-nosnippet>371</a>            .count();
+<a href=#372 id=372 data-nosnippet>372</a>        <span class="macro">assert_eq!</span>(captures, <span class="number">2</span>);
+<a href=#373 id=373 data-nosnippet>373</a>    }
+<a href=#374 id=374 data-nosnippet>374</a>    <span class="attr">#[test]
+<a href=#375 id=375 data-nosnippet>375</a>    </span><span class="kw">fn </span>a_custom_error_delivery_keeps_the_whole_call_on_its_packet_protocol() {
+<a href=#376 id=376 data-nosnippet>376</a>        <span class="kw">let </span><span class="kw-2">mut </span>flat = prepared();
+<a href=#377 id=377 data-nosnippet>377</a>        <span class="kw">let </span>output = flat.function(<span class="string">"failed"</span>).unwrap().metadata[<span class="number">0</span>]
+<a href=#378 id=378 data-nosnippet>378</a>            .call()
+<a href=#379 id=379 data-nosnippet>379</a>            .unwrap()
+<a href=#380 id=380 data-nosnippet>380</a>            .output
+<a href=#381 id=381 data-nosnippet>381</a>            .domain_error()
+<a href=#382 id=382 data-nosnippet>382</a>            .unwrap()
+<a href=#383 id=383 data-nosnippet>383</a>            .output()
+<a href=#384 id=384 data-nosnippet>384</a>            .clone()
+<a href=#385 id=385 data-nosnippet>385</a>            .packet_only();
+<a href=#386 id=386 data-nosnippet>386</a>        bind_error_output(<span class="kw-2">&amp;mut </span>flat, <span class="string">"failed"</span>, output).unwrap();
+<a href=#387 id=387 data-nosnippet>387</a>        <span class="kw">let </span>generation = generate(<span class="kw-2">&amp;</span>flat).unwrap();
+<a href=#388 id=388 data-nosnippet>388</a>        <span class="kw">let </span>functions = externs(<span class="kw-2">&amp;</span>generation);
+<a href=#389 id=389 data-nosnippet>389</a>        <span class="kw">let </span>function = functions
+<a href=#390 id=390 data-nosnippet>390</a>            .iter()
+<a href=#391 id=391 data-nosnippet>391</a>            .find(|(n, <span class="kw">_</span>)| n.contains(<span class="string">"call_1failed_1"</span>))
+<a href=#392 id=392 data-nosnippet>392</a>            .unwrap()
+<a href=#393 id=393 data-nosnippet>393</a>            .<span class="number">1</span>;
+<a href=#394 id=394 data-nosnippet>394</a>        <span class="kw">let </span>code = <span class="macro">quote!</span>(#function).to_string();
+<a href=#395 id=395 data-nosnippet>395</a>        <span class="macro">assert!</span>(code.contains(<span class="string">"jobjectArray"</span>));
+<a href=#396 id=396 data-nosnippet>396</a>        <span class="macro">assert!</span>(!code.contains(<span class="string">"__pb_return :"</span>));
+<a href=#397 id=397 data-nosnippet>397</a>        <span class="macro">assert!</span>(code.contains(<span class="string">"binding_packet"</span>));
+<a href=#398 id=398 data-nosnippet>398</a>    }
+<a href=#399 id=399 data-nosnippet>399</a>
+<a href=#400 id=400 data-nosnippet>400</a>    <span class="attr">#[test]
+<a href=#401 id=401 data-nosnippet>401</a>    </span><span class="kw">fn </span>packet_fallback_keeps_callback_collection_presence_scalar() {
+<a href=#402 id=402 data-nosnippet>402</a>        <span class="kw">let </span>source = syn::parse_file(<span class="string">"pub type Failure=String; pub fn rows()-&gt;Result&lt;Option&lt;Vec&lt;i64&gt;&gt;,Failure&gt;{} pub fn message(x:Failure)-&gt;String{}"</span>).unwrap();
+<a href=#403 id=403 data-nosnippet>403</a>        <span class="kw">let </span><span class="kw-2">mut </span>flat = JniGen::builder()
+<a href=#404 id=404 data-nosnippet>404</a>            .items(
+<a href=#405 id=405 data-nosnippet>405</a>                source
+<a href=#406 id=406 data-nosnippet>406</a>                    .items
+<a href=#407 id=407 data-nosnippet>407</a>                    .into_iter()
+<a href=#408 id=408 data-nosnippet>408</a>                    .map(|item| (item, Default::default())),
+<a href=#409 id=409 data-nosnippet>409</a>            )
+<a href=#410 id=410 data-nosnippet>410</a>            .set_package_prefix(<span class="string">"test"</span>)
+<a href=#411 id=411 data-nosnippet>411</a>            .error_mapper(<span class="macro">syn::parse_quote!</span>(Failure), <span class="macro">fun!</span>(message))
+<a href=#412 id=412 data-nosnippet>412</a>            .package(<span class="macro">package!</span>().fun(<span class="macro">fun!</span>(rows).callback_return_only()))
+<a href=#413 id=413 data-nosnippet>413</a>            .prepare()
+<a href=#414 id=414 data-nosnippet>414</a>            .unwrap();
+<a href=#415 id=415 data-nosnippet>415</a>        <span class="kw">let </span>output = flat.function(<span class="string">"rows"</span>).unwrap().metadata[<span class="number">0</span>]
+<a href=#416 id=416 data-nosnippet>416</a>            .call()
+<a href=#417 id=417 data-nosnippet>417</a>            .unwrap()
+<a href=#418 id=418 data-nosnippet>418</a>            .output
+<a href=#419 id=419 data-nosnippet>419</a>            .domain_error()
+<a href=#420 id=420 data-nosnippet>420</a>            .unwrap()
+<a href=#421 id=421 data-nosnippet>421</a>            .output()
+<a href=#422 id=422 data-nosnippet>422</a>            .clone()
+<a href=#423 id=423 data-nosnippet>423</a>            .packet_only();
+<a href=#424 id=424 data-nosnippet>424</a>        bind_error_output(<span class="kw-2">&amp;mut </span>flat, <span class="string">"rows"</span>, output).unwrap();
+<a href=#425 id=425 data-nosnippet>425</a>        <span class="kw">let </span>generation = generate(<span class="kw-2">&amp;</span>flat).unwrap();
+<a href=#426 id=426 data-nosnippet>426</a>        <span class="kw">let </span>functions = externs(<span class="kw-2">&amp;</span>generation);
+<a href=#427 id=427 data-nosnippet>427</a>        <span class="kw">let </span>function = functions
+<a href=#428 id=428 data-nosnippet>428</a>            .iter()
+<a href=#429 id=429 data-nosnippet>429</a>            .find(|(name, <span class="kw">_</span>)| name.contains(<span class="string">"call_1rows_1fold_1"</span>))
+<a href=#430 id=430 data-nosnippet>430</a>            .unwrap()
+<a href=#431 id=431 data-nosnippet>431</a>            .<span class="number">1</span>;
+<a href=#432 id=432 data-nosnippet>432</a>        <span class="kw">let </span>code = <span class="macro">quote!</span>(#function).to_string();
+<a href=#433 id=433 data-nosnippet>433</a>        <span class="comment">// The fallback still allocates its required outer packet, but no
+<a href=#434 id=434 data-nosnippet>434</a>        // separate marker array or local reference for the collection.
+<a href=#435 id=435 data-nosnippet>435</a>        // One packet on the success arm and one on the inlined Err arm;
+<a href=#436 id=436 data-nosnippet>436</a>        // they are mutually exclusive at runtime.
+<a href=#437 id=437 data-nosnippet>437</a>        </span><span class="macro">assert_eq!</span>(code.matches(<span class="string">"prebindgen_jni_runtime :: array"</span>).count(), <span class="number">2</span>);
+<a href=#438 id=438 data-nosnippet>438</a>        <span class="macro">assert!</span>(code.contains(<span class="string">"valueOf"</span>));
+<a href=#439 id=439 data-nosnippet>439</a>        <span class="macro">assert!</span>(!code.contains(<span class="string">"new_local_ref"</span>));
+<a href=#440 id=440 data-nosnippet>440</a>        <span class="macro">assert!</span>(generation.kotlin[<span class="string">"test/Functions.kt"</span>].contains(<span class="string">"if (result[1] as Int == 0)"</span>));
+<a href=#441 id=441 data-nosnippet>441</a>        <span class="macro">assert!</span>(generation.kotlin[<span class="string">"test/JNINative.kt"</span>].contains(<span class="string">"): Array&lt;Any?&gt;"</span>));
+<a href=#442 id=442 data-nosnippet>442</a>    }
+<a href=#443 id=443 data-nosnippet>443</a>}
 </code></pre></div></section></main></body></html>
