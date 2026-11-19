@@ -358,6 +358,10 @@ mod tests {
         let kotlin = &generation.kotlin["test/Functions.kt"];
         assert!(!kotlin.contains("when (result[0])"));
         assert!(kotlin.contains("returnCapture.release()"));
+        assert!(
+            !kotlin.lines().any(|line| line.trim() == "Unit"),
+            "{kotlin}"
+        );
         assert!(kotlin.contains("if (returnCapture.discardSuccess)"));
         // Scalar and handle functions with the same error payload share one pool.
         let captures = generation

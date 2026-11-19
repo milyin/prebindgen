@@ -182,7 +182,7 @@ val nativeResult = try { run { val __pb_handle0: io.prebindgen.covertest.NativeH
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -210,7 +210,7 @@ val nativeResult = try { run { val __pb_handle0: io.prebindgen.covertest.NativeH
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -242,7 +242,7 @@ val nativeResult = try { run { val __pb_handle0: io.prebindgen.covertest.NativeH
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -267,7 +267,7 @@ val nativeResult = try { run { val __pb_handle0: io.prebindgen.covertest.NativeH
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -295,7 +295,7 @@ val nativeResult = try { run { val __pb_handle0: io.prebindgen.covertest.NativeH
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -362,6 +362,6 @@ val nativeResult = try { run { val __pb_handle0: io.prebindgen.covertest.NativeH
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }

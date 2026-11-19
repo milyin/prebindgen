@@ -255,6 +255,6 @@ callbackOutput0_g3_g0_bulkList!!.add(io.prebindgen.covertest.getters.GetterDetai
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }

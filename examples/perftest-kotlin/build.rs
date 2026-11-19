@@ -1,15 +1,11 @@
-//! Migrated from main. Unsupported declarations remain commented below.
 //! Build script generating Kotlin/JNI bindings for `perftest-flat` using the
 //! separate `prebindgen-jni` crate's `JniGenBuilder` adapter. It produces:
-//!   * `src/generated_bindings.rs` — the Rust-side JNI wrappers (included by
-//!     `src/lib.rs`), and
-//!   * `kotlin/generated/ **` — the matching typed Kotlin classes.
+//!   * `OUT_DIR/bindings.rs` for the native library
+//!   * `OUT_DIR/kotlin/` for the smoke client
 //!
-//! The enabled surface projects `Payload` through its constructor and fields.
-//! `storage_get` delivers four nullable fields to a caller-supplied builder;
-//! `storage_put_opt` accepts an explicit presence flag and constructor arguments.
-//! `Payload.label`, callbacks, collections, and whole-object input declarations
-//! remain disabled pending their respective conversion support.
+//! In addition to scalar constructors and projections, the client keeps one
+//! `PayloadHandler` and uses it for repeated delivery from `Storage`.
+//! The separate whole-batch callback example remains disabled below.
 
 /* Unsupported: imports and helpers for the disabled declarations.
 use prebindgen_jni::{data_class, package, ptr_class, JniGen};
@@ -74,40 +70,36 @@ fn main() {
                 */
                 // `Storage` as an opaque Kotlin handle class (`NativeHandle`, closeable);
                 // the functions read/write the payload it owns.
-                .class(ptr_class!(Storage)), // `PayloadHandler` as an opaque Kotlin handle class: a prepared callback built
-                                             // once via `payloadHandlerNew` and fired by `storageCallback` — the
-                                             // registered-subscriber pattern (the JNI trampoline is built once, not per call).
-                                             /* Unsupported: this class kind or its binding is not available yet.
-                                             .class(ptr_class!(PayloadHandler))
-                                             */
-                                                             // `PayloadVecHandler`: a prepared WHOLE-BATCH callback fired by
-                                                             // `storageCallbackVec` — its `PayloadListCallback.run(List<Payload>)` receives
-                                                             // the entire batch in one upcall. Because `Payload` is a `data_class!`, the
-                                                             // `List` is assembled by a **fold**: the trampoline allocates the list and
-                                                             // folds each element's raw leaves through the hoisted folder (Kotlin does
-                                                             // `fromParts` + `add`) — no per-element Java object is built on the Rust side.
-                                                             /* Unsupported: this class kind or its binding is not available yet.
-                                             .class(ptr_class!(PayloadVecHandler))
-                                             */
-                                                             // Twin minimal handles for the LIFECYCLE benchmark: identical Rust
-                                                             // shape, one plain, one `.gc_managed()` — head-to-head rows in
-                                                             // `Bench.kt` price the GC-cleanup machinery (atomic cell, Cleaner
-                                                             // registration, CAS release ticket) per handle create/close/call.
-                                                             /* Unsupported: this class kind or its binding is not available yet.
-                                             .class(
-                                                                 ptr_class!(Token)
-                                                                     .constructor(fun!(token_new))
-                                                                     .method(fun!(token_value)),
-                                                             )
-                                             */
-                                                             /* Unsupported: this class kind or its binding is not available yet.
-                                             .class(
-                                                                 ptr_class!(TokenGc)
-                                                                     .gc_managed()
-                                                                     .constructor(fun!(token_gc_new))
-                                                                     .method(fun!(token_gc_value)),
-                                                             )
-                                             */
+                .class(ptr_class!(Storage))
+                .class(ptr_class!(PayloadHandler)),
+            // `PayloadVecHandler`: a prepared WHOLE-BATCH callback fired by
+            // `storageCallbackVec` — its `PayloadListCallback.run(List<Payload>)` receives
+            // the entire batch in one upcall. Because `Payload` is a `data_class!`, the
+            // `List` is assembled by a **fold**: the trampoline allocates the list and
+            // folds each element's raw leaves through the hoisted folder (Kotlin does
+            // `fromParts` + `add`) — no per-element Java object is built on the Rust side.
+            /* Unsupported: this class kind or its binding is not available yet.
+            .class(ptr_class!(PayloadVecHandler))
+            */
+                            // Twin minimal handles for the LIFECYCLE benchmark: identical Rust
+                            // shape, one plain, one `.gc_managed()` — head-to-head rows in
+                            // `Bench.kt` price the GC-cleanup machinery (atomic cell, Cleaner
+                            // registration, CAS release ticket) per handle create/close/call.
+                            /* Unsupported: this class kind or its binding is not available yet.
+            .class(
+                                ptr_class!(Token)
+                                    .constructor(fun!(token_new))
+                                    .method(fun!(token_value)),
+                            )
+            */
+                            /* Unsupported: this class kind or its binding is not available yet.
+            .class(
+                                ptr_class!(TokenGc)
+                                    .gc_managed()
+                                    .constructor(fun!(token_gc_new))
+                                    .method(fun!(token_gc_value)),
+                            )
+            */
         )
         // Only the value/ref-input put forms map to JNI: `storage_put_by_take`
         // (by-value `Payload`) and `storage_put_by_read` (`&Payload`). The
@@ -116,26 +108,19 @@ fn main() {
         // Kotlin `data class` is an immutable value with no out-param/uninit
         // semantics — so they are left undeclared here.
         //
-        // `payload_handler_new(impl Fn(&Payload)) -> PayloadHandler` prepares the callback
-        // ONCE (decodes the JVM callback into the reusable native trampoline); then
-        // `storage_callback(s, &PayloadHandler)` fires it. The callback arg still crosses
-        // as decoupled leaves reassembled into a whole `PayloadCallback.run(Payload)` — only
-        // WHERE the trampoline is built changes (once, in `payloadHandlerNew`).
+        // Register the callback once. Later calls borrow the stored payloads
+        // and deliver scalar fields through the generated PayloadCallback.
         .package(
             package!("storage")
                 .fun(fun!(storage_new))
-                .fun(fun!(storage_get)),
+                .fun(fun!(storage_get))
+                .fun(fun!(payload_handler_new))
+                .fun(fun!(storage_callback)),
             /* Unsupported: the signature or function options need unsupported conversions.
             .fun(fun!(storage_put_by_take))
             */
                             /* Unsupported: the signature or function options need unsupported conversions.
             .fun(fun!(storage_put_by_read))
-            */
-                            /* Unsupported: the signature or function options need unsupported conversions.
-            .fun(fun!(payload_handler_new))
-            */
-                            /* Unsupported: the signature or function options need unsupported conversions.
-            .fun(fun!(storage_callback))
             */
                             // Array (slice / Vec) API. `storage_put_slice(&[Payload])` takes a
                             // `List<Payload>` (decoded element-by-element into an owned `Vec`, then

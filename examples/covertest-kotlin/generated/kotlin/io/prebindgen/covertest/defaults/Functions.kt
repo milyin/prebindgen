@@ -310,7 +310,7 @@ callbackOutput0_bulkList!!.add(io.prebindgen.covertest.defaults.DefaultBulkRow((
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -375,7 +375,7 @@ callbackOutput1_bulkList!!.add(requireNotNull(callbackOutput1_bulkItem_bulkList)
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 

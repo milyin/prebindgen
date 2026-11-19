@@ -20,7 +20,7 @@ onError.run(requireNotNull(outputg0_g0_g0_0))
 
 if (!callbackFailed) cleanupFailure?.let { throw it }
 } }
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -55,7 +55,7 @@ onError.run(requireNotNull(outputg0_g0_0), returnCapture.d1 as String)
 
 if (!callbackFailed) cleanupFailure?.let { throw it }
 } }
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -69,7 +69,7 @@ val nativeResult = try { run { run { val nativeArgument0 = try { present } catch
             }
 
 onError.run(io.prebindgen.covertest.enums.Code.fromWire(returnCapture.d0), if (returnCapture.d1 != null) returnCapture.d1 as String else null) }
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -154,7 +154,7 @@ val nativeResult = try { run { run { val nativeArgument0 = try { succeed } catch
         return@run onBindingError.run(returnCapture.message) }
     if (returnCapture.status == 3) return@run run {
 onError.run(returnCapture.d0) }
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 

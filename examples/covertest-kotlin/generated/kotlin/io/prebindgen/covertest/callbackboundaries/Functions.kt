@@ -43,7 +43,7 @@ val nativeResult = try { run { val __pb_handle0: io.prebindgen.covertest.NativeH
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -168,7 +168,7 @@ callbackCleanupFailure = callbackOutput0_bulkFailure
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -217,7 +217,7 @@ val nativeResult = try { run { run { val nativeArgument0 = try { object {
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -266,7 +266,7 @@ val nativeResult = try { run { run { val nativeArgument0 = try { object {
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -303,7 +303,7 @@ callbackOutput0_bulkList!!.add((requireNotNull(callbackOutput0_bulkReader).text(
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 

@@ -155,7 +155,7 @@ val nativeResult = try { run { run { val nativeArgument0 = try { id.toLong() } c
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -236,7 +236,7 @@ val nativeResult = try { run { run { val nativeArgument0 = try { id.toLong() } c
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
