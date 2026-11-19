@@ -176,7 +176,7 @@ pub fn bulk_array_borrow(value: &[i64; 3]) -> i64 {
     value.iter().sum()
 }
 
-#[prebindgen]
+// The JNI crate imports this Rust constant for the generated array length check.
 pub const ARRAY_RECORD_WIDTH: usize = 3;
 
 #[prebindgen]
