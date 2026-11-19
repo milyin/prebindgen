@@ -74,6 +74,7 @@ def run_java(arguments):
     for line in completed.stdout.splitlines():
         if "WARNING in native method" in line or ("JNI local refs:" in line and "exceeds capacity" in line):
             raise RuntimeError("JNI boundary warning: " + line)
+    return completed.stdout
 
 
 for name in ["covertest-kotlin", "perftest-kotlin"]:
@@ -81,7 +82,12 @@ for name in ["covertest-kotlin", "perftest-kotlin"]:
     kotlin += sorted(Path(f"examples/{name}/kotlin").rglob("*.kt"))
     jar = build / (name + ".jar")
     subprocess.run([os.environ.get("KOTLINC", "kotlinc"), *map(str, kotlin), "-include-runtime", "-d", str(jar)], check=True)
-    run_java(["-Djava.library.path=" + str(lib), "-jar", str(jar)])
+    result = run_java(["-Djava.library.path=" + str(lib), "-jar", str(jar)])
+    if (
+        name == "perftest-kotlin"
+        and "java.lang.IllegalStateException: expected retained Payload callback failure" not in result
+    ):
+        raise RuntimeError("The retained Payload callback exception was not reported")
     if name == "covertest-kotlin":
         # A separate cold JVM makes the lock stack limit independent of earlier JIT warmup.
         run_java(["-Xss1m", "-Djava.library.path=" + str(lib), "-jar", str(jar), "handle-lock-stack"])

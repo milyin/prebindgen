@@ -35,10 +35,10 @@ conversion declarations use the builder API.
 Import shared declaration types and macros directly from
 `prebindgen-declarations` (`prebindgen_declarations` in Rust imports).
 
-The workspace contains eight Rust example crates.
-Unsupported declarations, record fields and matching constructor arguments are
-commented in the flat sources and `build.rs` files as the checklist for future
-work. The retained records demonstrate the supported shapes of the real examples.
+The workspace contains eight Rust example crates. The table lists active
+boundary examples. Some legacy declarations remain commented in the source
+and build scripts. They describe fixture paths still to migrate, and their
+comments may predate support for the same shapes in other fixtures.
 
 Language-adapter authors can start with the separate
 [minimal public-API adapter](examples/adapter-minimal/README.md). It compiles and
@@ -52,9 +52,9 @@ checks; the [adapter guide](docs/declaration-codec.md) explains the next contrac
 | [example-cbindgen](examples/example-cbindgen/build.rs) | Calculator/Caption/Foo creation, Foo ID extraction and typed release |
 | [perftest-flat](examples/perftest-flat) | Payload scalar fields, Stamp, Summary, Unsigned, BlobValue and Report projections |
 | [perftest-c](examples/perftest-c/build.rs) | Storage, strings, BlobValue transfer, Report constructor selectors and label/pointer outputs |
-| [perftest-kotlin](examples/perftest-kotlin/build.rs) | Payload construction/projection and Storage creation/release through JNI |
-| [covertest-kotlin](examples/covertest-kotlin/build.rs) | Data-class round trips, Report projections, strings, Storage, selectors, subpackages and class renames |
-| [covertest-helpers](examples/covertest-helpers) | Unsupported helper functions and multi-source bindings are commented out |
+| [perftest-kotlin](examples/perftest-kotlin/build.rs) | Payload construction and projection, Storage ownership, and a reusable Payload callback through JNI |
+| [covertest-kotlin](examples/covertest-kotlin/build.rs) | Data-class and enum conversions, optional and collection values, callback delivery and return failures, handle ownership, selectors and custom converters |
+| [covertest-helpers](examples/covertest-helpers) | Feature-stamped helper crate for a multi-source example whose bindings remain commented |
 | [emitcheck](examples/emitcheck/build.rs) | Plain string/byte-vector fields compile; callback entry points remain commented, so it currently emits no API wrappers |
 
 Source selection happens before subset validation. Automatic dependency discovery
@@ -62,22 +62,24 @@ follows unqualified declared type names. Types referenced only through qualified
 paths need explicit selection by their unqualified declaration name, for example
 with `ptr_class!(Foo)` or `.opaque_ptr("foo", syn::parse_quote!(Foo))`; an already
 parsed `Flat` model can also include them. Unbound data-carrying enums, callbacks,
-collections and functions can stay in the source crate; selecting one still
-produces a generation error when its shape is unsupported. Both annotated flat
-examples also have tests that parse the entire captured surface, ensuring no
-unsupported shapes remain active behind that selection.
+collections and functions can stay in the source crate. Both annotated flat
+examples test that the entire captured surface parses. Each adapter validates
+conversion support for the declarations it selects.
 
-The old foreign performance drivers require the commented bindings and have
-been removed. Full coverage clients are replaced with focused C and Kotlin smoke
-clients exercising the active declarations; these examples make no performance or
-full downstream compatibility claim. Generated artifacts remain under `OUT_DIR`.
+The C and Kotlin smoke clients exercise the active declarations. The Kotlin
+perftest registers a unit callback once and verifies that the same handler
+continues delivery after a reported exception. Non-unit callback failure
+behavior is exercised separately in the Kotlin covertest. The smoke clients
+cover fixture boundaries. Downstream compatibility and performance require
+their own checks. Builds use `OUT_DIR`. The repository also commits
+[review snapshots](examples/GENERATED.md).
 
 Named flat objects must have nonzero Rust size, including opaque aliases and
 records delivered as fields. The model emits compile-time size assertions for
 all selected named types; adapters must emit these guards. This checks actual
 Rust layout, including hidden or nested zero-sized types. Unit results remain
-supported. The reduced `Archive` example is disabled because its remaining
-fields give it zero size.
+supported. The active `Archive` fixture stores an optional summary and exercises
+a borrowed result in C and an explicit owned copy in Kotlin.
 
 ## Supported generator API
 
