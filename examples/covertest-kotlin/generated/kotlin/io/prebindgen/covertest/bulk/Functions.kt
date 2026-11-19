@@ -499,7 +499,7 @@ val nativeResult = try { run { run { val nativeArgument0 = try { failText.toLong
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 

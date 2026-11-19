@@ -52,7 +52,7 @@ callbackCleanupFailure = callbackOutput0_failure
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -149,7 +149,7 @@ val released = kotlin.collections.HashSet<Long>(); for (owner in returnedOwners)
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -247,7 +247,7 @@ callbackCleanupFailure = callbackOutput0_bulkFailure
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -334,7 +334,7 @@ callbackCleanupFailure = callbackOutput0_bulkFailure
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -390,7 +390,7 @@ val nativeResult = try { run { val __pb_handle0: io.prebindgen.covertest.NativeH
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -449,7 +449,7 @@ callbackCleanupFailure = callbackOutput0_failure
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -516,7 +516,7 @@ callbackCleanupFailure = callbackOutput0_failure
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -610,7 +610,7 @@ callbackCleanupFailure = callbackOutput0_failure
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -705,7 +705,7 @@ callbackCleanupFailure = callbackOutput1_failure
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -764,7 +764,7 @@ callbackCleanupFailure = callbackOutput0_failure
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -859,7 +859,7 @@ callbackCleanupFailure = callbackOutput1_failure
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -952,7 +952,7 @@ callbackCleanupFailure = callbackOutput0_bulkFailure
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -1045,7 +1045,7 @@ callbackCleanupFailure = callbackOutput0_bulkFailure
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -1150,7 +1150,7 @@ callbackCleanupFailure = callbackOutput0_bulkFailure
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -1297,7 +1297,7 @@ callbackCleanupFailure = callbackOutput0_bulkFailure
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -1448,7 +1448,7 @@ callbackCleanupFailure = callbackOutput1_bulkFailure
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -1535,7 +1535,7 @@ callbackCleanupFailure = callbackOutput0_bulkFailure
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -1594,7 +1594,7 @@ callbackCleanupFailure = callbackOutput0_failure
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -1723,7 +1723,7 @@ callbackCleanupFailure = callbackOutput1_bulkFailure
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -1816,7 +1816,7 @@ callbackCleanupFailure = callbackOutput0_bulkFailure
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -1971,7 +1971,7 @@ val nativeResult = try { run { val __pb_handle0: io.prebindgen.covertest.NativeH
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -2238,7 +2238,7 @@ val nativeResult = try { run { run { val nativeArgument0 = try { object {
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -2279,7 +2279,7 @@ val nativeResult = try { run { run { val nativeArgument0 = try { object {
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -2318,7 +2318,7 @@ val nativeResult = try { run { run { val nativeArgument0 = try { object {
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -2357,7 +2357,7 @@ val nativeResult = try { run { run { val nativeArgument0 = try { object {
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -2396,7 +2396,7 @@ val nativeResult = try { run { run { val nativeArgument0 = try { object {
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -2421,7 +2421,7 @@ val nativeResult = try { run { run { val nativeArgument0 = try { object {
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -2467,7 +2467,7 @@ val nativeResult = try { run { val __pb_handle0: io.prebindgen.covertest.NativeH
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -2493,7 +2493,7 @@ val nativeResult = try { run { val __pb_handle0: io.prebindgen.covertest.NativeH
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -2545,7 +2545,7 @@ val nativeResult = try { run { run { val nativeArgument0 = try { p0_w1_elements 
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -2570,7 +2570,7 @@ val nativeResult = try { run { run { val nativeArgument0 = try { object {
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -2629,7 +2629,7 @@ val nativeResult = try { run { val __pb_handle0: io.prebindgen.covertest.NativeH
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -2661,7 +2661,7 @@ val nativeResult = try { run { val __pb_handle0: io.prebindgen.covertest.NativeH
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -2744,7 +2744,7 @@ val nativeResult = try { run { run { val nativeArgument0 = try { object {
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -2785,7 +2785,7 @@ val nativeResult = try { run { val __pb_handle0: io.prebindgen.covertest.NativeH
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -2844,7 +2844,7 @@ val nativeResult = try { run { run { val nativeArgument0 = try { object {
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -2874,7 +2874,7 @@ val nativeResult = try { run { run { val nativeArgument0 = try { object {
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -2909,7 +2909,7 @@ val nativeResult = try { run { val __pb_handle0: io.prebindgen.covertest.NativeH
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -2936,7 +2936,7 @@ val nativeResult = try { run { run { val nativeArgument0 = try { object {
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -2977,7 +2977,7 @@ callbackOutput2_bulkList!!.add((requireNotNull(callbackOutput2_bulkReader).long(
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -3024,7 +3024,7 @@ val nativeResult = try { run { run { val nativeArgument0 = try { object {
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -3065,7 +3065,7 @@ val nativeResult = try { run { run { val nativeArgument0 = try { object {
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -3108,7 +3108,7 @@ val nativeResult = try { run { run { val nativeArgument0 = try { object {
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -3137,6 +3137,6 @@ val nativeResult = try { run { run { val nativeArgument0 = try { object {
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }

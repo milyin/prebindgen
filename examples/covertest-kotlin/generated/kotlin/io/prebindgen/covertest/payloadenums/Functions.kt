@@ -29,7 +29,7 @@ callbackOutput0_enumValue = when (raw0 as Int) { 0 -> {  io.prebindgen.covertest
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -104,7 +104,7 @@ outputenumValue = when (returnCapture.d0) { 0 -> {  io.prebindgen.covertest.payl
  else -> error("invalid native enum tag") }
 
 onError.run(requireNotNull(outputenumValue)) }
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -454,7 +454,7 @@ if (raw0 as Int == 0) {             try { val owner = callbackOutput0_g0_g0_g0_a
         return@run onBindingError.run(returnCapture.message) }
     if (returnCapture.status == 3) return@run run {
 onError.run(returnCapture.d0 as String) }
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 

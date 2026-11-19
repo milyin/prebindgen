@@ -435,7 +435,7 @@ callbackCleanupFailure = callbackOutput0_bulkFailure
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -1193,7 +1193,7 @@ callbackCleanupFailure = callbackOutput0_failure
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -1288,7 +1288,7 @@ callbackCleanupFailure = callbackOutput0_bulkFailure
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 

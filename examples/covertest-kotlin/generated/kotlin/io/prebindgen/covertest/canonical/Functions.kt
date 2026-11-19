@@ -136,7 +136,7 @@ val nativeResult = try { run { run { val nativeArgument0 = try { object {
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -247,7 +247,7 @@ val nativeResult = try { run { run { val nativeArgument0 = try { object {
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 
@@ -681,7 +681,7 @@ callbackCleanupFailure = callbackOutput0_bulkFailure
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 
-    Unit
+    return@run
     } finally { returnCapture.release() }
 }
 

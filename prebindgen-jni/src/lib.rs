@@ -2387,7 +2387,7 @@ pub fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
                 .map_or("Array<Any?>", returns::NativeReturn::kotlin_type)
         ));
         let (mut generic, ret, end) = match delivered.len() {
-            0 => ("", "Unit".into(), "Unit".into()),
+            0 => ("", "Unit".into(), "return@run".into()),
             1 => ("", result_types[0].clone(), delivered[0].clone()),
             _ => {
                 kt_params.push(format!("build: ({build_parameters}) -> R"));
