@@ -1141,37 +1141,56 @@
 <a href=#1141 id=1141 data-nosnippet>1141</a>}
 <a href=#1142 id=1142 data-nosnippet>1142</a><span class="doccomment">/// Source collection shape, excluding byte vectors/slices which retain byte transport.
 <a href=#1143 id=1143 data-nosnippet>1143</a></span><span class="kw">pub fn </span>sequence_parts(ty: <span class="kw-2">&amp;</span>Type) -&gt; <span class="prelude-ty">Option</span>&lt;(<span class="kw-2">&amp;</span>Type, SequenceView)&gt; {
-<a href=#1144 id=1144 data-nosnippet>1144</a>    <span class="kw">let </span>(inner, reference) = <span class="kw">match </span>ty {
-<a href=#1145 id=1145 data-nosnippet>1145</a>        Type::Reference(r) =&gt; (r.elem.as_ref(), <span class="prelude-val">Some</span>(r)),
-<a href=#1146 id=1146 data-nosnippet>1146</a>        <span class="kw">_ </span>=&gt; (ty, <span class="prelude-val">None</span>),
+<a href=#1144 id=1144 data-nosnippet>1144</a>    <span class="kw">let </span>payload = <span class="kw">match </span>ty {
+<a href=#1145 id=1145 data-nosnippet>1145</a>        Type::Reference(r) =&gt; <span class="kw-2">&amp;*</span>r.elem,
+<a href=#1146 id=1146 data-nosnippet>1146</a>        <span class="kw">_ </span>=&gt; ty,
 <a href=#1147 id=1147 data-nosnippet>1147</a>    };
-<a href=#1148 id=1148 data-nosnippet>1148</a>    <span class="kw">if let </span>Type::Array(array) = inner {
-<a href=#1149 id=1149 data-nosnippet>1149</a>        <span class="kw">return </span><span class="prelude-val">Some</span>((
-<a href=#1150 id=1150 data-nosnippet>1150</a>            <span class="kw-2">&amp;</span>array.elem,
-<a href=#1151 id=1151 data-nosnippet>1151</a>            <span class="kw">match </span>reference {
-<a href=#1152 id=1152 data-nosnippet>1152</a>                <span class="prelude-val">Some</span>(r) <span class="kw">if </span>r.mutability.is_some() =&gt; SequenceView::Mutable,
-<a href=#1153 id=1153 data-nosnippet>1153</a>                <span class="prelude-val">Some</span>(<span class="kw">_</span>) =&gt; SequenceView::ArrayReference,
-<a href=#1154 id=1154 data-nosnippet>1154</a>                <span class="prelude-val">None </span>=&gt; SequenceView::Array,
-<a href=#1155 id=1155 data-nosnippet>1155</a>            },
-<a href=#1156 id=1156 data-nosnippet>1156</a>        ));
-<a href=#1157 id=1157 data-nosnippet>1157</a>    }
-<a href=#1158 id=1158 data-nosnippet>1158</a>    <span class="kw">let </span>(element, slice) = <span class="kw">if let </span><span class="prelude-val">Some</span>(element) = vec_inner(inner) {
-<a href=#1159 id=1159 data-nosnippet>1159</a>        (element, <span class="bool-val">false</span>)
-<a href=#1160 id=1160 data-nosnippet>1160</a>    } <span class="kw">else if let </span>Type::Slice(s) = inner {
-<a href=#1161 id=1161 data-nosnippet>1161</a>        (s.elem.as_ref(), <span class="bool-val">true</span>)
-<a href=#1162 id=1162 data-nosnippet>1162</a>    } <span class="kw">else </span>{
-<a href=#1163 id=1163 data-nosnippet>1163</a>        <span class="kw">return </span><span class="prelude-val">None</span>;
-<a href=#1164 id=1164 data-nosnippet>1164</a>    };
-<a href=#1165 id=1165 data-nosnippet>1165</a>    <span class="kw">if </span>type_key(element) == <span class="string">"u8" </span>{
-<a href=#1166 id=1166 data-nosnippet>1166</a>        <span class="kw">return </span><span class="prelude-val">None</span>;
+<a href=#1148 id=1148 data-nosnippet>1148</a>    collection_parts(ty)
+<a href=#1149 id=1149 data-nosnippet>1149</a>        .filter(|(element, <span class="kw">_</span>)| <span class="macro">matches!</span>(payload, Type::Array(<span class="kw">_</span>)) || type_key(element) != <span class="string">"u8"</span>)
+<a href=#1150 id=1150 data-nosnippet>1150</a>}
+<a href=#1151 id=1151 data-nosnippet>1151</a>
+<a href=#1152 id=1152 data-nosnippet>1152</a><span class="doccomment">/// Source collection shape, including buffers used by an explicit element conversion.
+<a href=#1153 id=1153 data-nosnippet>1153</a></span><span class="kw">pub fn </span>collection_parts(ty: <span class="kw-2">&amp;</span>Type) -&gt; <span class="prelude-ty">Option</span>&lt;(<span class="kw-2">&amp;</span>Type, SequenceView)&gt; {
+<a href=#1154 id=1154 data-nosnippet>1154</a>    <span class="kw">let </span>(inner, reference) = <span class="kw">match </span>ty {
+<a href=#1155 id=1155 data-nosnippet>1155</a>        Type::Reference(r) =&gt; (r.elem.as_ref(), <span class="prelude-val">Some</span>(r)),
+<a href=#1156 id=1156 data-nosnippet>1156</a>        <span class="kw">_ </span>=&gt; (ty, <span class="prelude-val">None</span>),
+<a href=#1157 id=1157 data-nosnippet>1157</a>    };
+<a href=#1158 id=1158 data-nosnippet>1158</a>    <span class="kw">if let </span>Type::Array(array) = inner {
+<a href=#1159 id=1159 data-nosnippet>1159</a>        <span class="kw">return </span><span class="prelude-val">Some</span>((
+<a href=#1160 id=1160 data-nosnippet>1160</a>            <span class="kw-2">&amp;</span>array.elem,
+<a href=#1161 id=1161 data-nosnippet>1161</a>            <span class="kw">match </span>reference {
+<a href=#1162 id=1162 data-nosnippet>1162</a>                <span class="prelude-val">Some</span>(r) <span class="kw">if </span>r.mutability.is_some() =&gt; SequenceView::Mutable,
+<a href=#1163 id=1163 data-nosnippet>1163</a>                <span class="prelude-val">Some</span>(<span class="kw">_</span>) =&gt; SequenceView::ArrayReference,
+<a href=#1164 id=1164 data-nosnippet>1164</a>                <span class="prelude-val">None </span>=&gt; SequenceView::Array,
+<a href=#1165 id=1165 data-nosnippet>1165</a>            },
+<a href=#1166 id=1166 data-nosnippet>1166</a>        ));
 <a href=#1167 id=1167 data-nosnippet>1167</a>    }
-<a href=#1168 id=1168 data-nosnippet>1168</a>    <span class="kw">let </span>view = <span class="kw">match </span>reference {
-<a href=#1169 id=1169 data-nosnippet>1169</a>        <span class="prelude-val">Some</span>(r) <span class="kw">if </span>r.mutability.is_some() =&gt; SequenceView::Mutable,
-<a href=#1170 id=1170 data-nosnippet>1170</a>        <span class="prelude-val">Some</span>(<span class="kw">_</span>) <span class="kw">if </span>slice =&gt; SequenceView::Slice,
-<a href=#1171 id=1171 data-nosnippet>1171</a>        <span class="prelude-val">Some</span>(<span class="kw">_</span>) =&gt; SequenceView::Vector,
-<a href=#1172 id=1172 data-nosnippet>1172</a>        <span class="prelude-val">None </span><span class="kw">if </span>slice =&gt; <span class="kw">return </span><span class="prelude-val">None</span>,
-<a href=#1173 id=1173 data-nosnippet>1173</a>        <span class="prelude-val">None </span>=&gt; SequenceView::Owned,
+<a href=#1168 id=1168 data-nosnippet>1168</a>    <span class="kw">let </span>(element, slice) = <span class="kw">if let </span><span class="prelude-val">Some</span>(element) = vec_inner(inner) {
+<a href=#1169 id=1169 data-nosnippet>1169</a>        (element, <span class="bool-val">false</span>)
+<a href=#1170 id=1170 data-nosnippet>1170</a>    } <span class="kw">else if let </span>Type::Slice(s) = inner {
+<a href=#1171 id=1171 data-nosnippet>1171</a>        (s.elem.as_ref(), <span class="bool-val">true</span>)
+<a href=#1172 id=1172 data-nosnippet>1172</a>    } <span class="kw">else </span>{
+<a href=#1173 id=1173 data-nosnippet>1173</a>        <span class="kw">return </span><span class="prelude-val">None</span>;
 <a href=#1174 id=1174 data-nosnippet>1174</a>    };
-<a href=#1175 id=1175 data-nosnippet>1175</a>    <span class="prelude-val">Some</span>((element, view))
-<a href=#1176 id=1176 data-nosnippet>1176</a>}
+<a href=#1175 id=1175 data-nosnippet>1175</a>    <span class="kw">let </span>view = <span class="kw">match </span>reference {
+<a href=#1176 id=1176 data-nosnippet>1176</a>        <span class="prelude-val">Some</span>(r) <span class="kw">if </span>r.mutability.is_some() =&gt; SequenceView::Mutable,
+<a href=#1177 id=1177 data-nosnippet>1177</a>        <span class="prelude-val">Some</span>(<span class="kw">_</span>) <span class="kw">if </span>slice =&gt; SequenceView::Slice,
+<a href=#1178 id=1178 data-nosnippet>1178</a>        <span class="prelude-val">Some</span>(<span class="kw">_</span>) =&gt; SequenceView::Vector,
+<a href=#1179 id=1179 data-nosnippet>1179</a>        <span class="prelude-val">None </span><span class="kw">if </span>slice =&gt; <span class="kw">return </span><span class="prelude-val">None</span>,
+<a href=#1180 id=1180 data-nosnippet>1180</a>        <span class="prelude-val">None </span>=&gt; SequenceView::Owned,
+<a href=#1181 id=1181 data-nosnippet>1181</a>    };
+<a href=#1182 id=1182 data-nosnippet>1182</a>    <span class="prelude-val">Some</span>((element, view))
+<a href=#1183 id=1183 data-nosnippet>1183</a>}
+<a href=#1184 id=1184 data-nosnippet>1184</a>
+<a href=#1185 id=1185 data-nosnippet>1185</a><span class="doccomment">/// Return the length of an owned or shared fixed-size byte array.
+<a href=#1186 id=1186 data-nosnippet>1186</a></span><span class="kw">pub fn </span>fixed_byte_array_length(ty: <span class="kw-2">&amp;</span>Type) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>syn::Expr&gt; {
+<a href=#1187 id=1187 data-nosnippet>1187</a>    <span class="kw">let </span>ty = <span class="kw">match </span>ty {
+<a href=#1188 id=1188 data-nosnippet>1188</a>        Type::Reference(r) <span class="kw">if </span>r.mutability.is_none() =&gt; <span class="kw-2">&amp;*</span>r.elem,
+<a href=#1189 id=1189 data-nosnippet>1189</a>        <span class="kw">_ </span>=&gt; ty,
+<a href=#1190 id=1190 data-nosnippet>1190</a>    };
+<a href=#1191 id=1191 data-nosnippet>1191</a>    <span class="kw">let </span>Type::Array(array) = ty <span class="kw">else </span>{
+<a href=#1192 id=1192 data-nosnippet>1192</a>        <span class="kw">return </span><span class="prelude-val">None</span>;
+<a href=#1193 id=1193 data-nosnippet>1193</a>    };
+<a href=#1194 id=1194 data-nosnippet>1194</a>    (Primitive::from_type(<span class="kw-2">&amp;</span>array.elem) == <span class="prelude-val">Some</span>(Primitive::U8)).then_some(<span class="kw-2">&amp;</span>array.len)
+<a href=#1195 id=1195 data-nosnippet>1195</a>}
 </code></pre></div></section></main></body></html>
