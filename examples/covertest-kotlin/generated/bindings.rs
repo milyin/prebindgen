@@ -40900,7 +40900,11 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bindi
         {
             let p0_w0_f0: [u8; ARRAY_RECORD_WIDTH] = ::core::convert::Into::into(
                 <[u8; ARRAY_RECORD_WIDTH]>::try_from(
-                        ::prebindgen_jni_runtime::bytes(&mut jni_environment, &p0_w1_f0)?,
+                        ::prebindgen_jni_runtime::fixed_bytes(
+                            &mut jni_environment,
+                            &p0_w1_f0,
+                            const { ARRAY_RECORD_WIDTH },
+                        )?,
                     )
                     .map_err(|_| "wrong fixed array length".to_owned())?,
             );
@@ -41127,19 +41131,134 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bindi
             #[allow(unused_mut, unused_assignments)]
             let mut p0_w0 = None;
             p0_w0 = Some(
-                ::core::convert::Into::<
-                    [u8; ARRAY_RECORD_WIDTH],
-                >::into(
-                    <[u8; ARRAY_RECORD_WIDTH]>::try_from(
-                            ::prebindgen_jni_runtime::bytes(
-                                &mut jni_environment,
-                                &p0_w1,
-                            )?,
-                        )
-                        .map_err(|_| "wrong fixed array length".to_owned())?,
-                ),
+                ::prebindgen_jni_runtime::fixed_bytes(
+                    &mut jni_environment,
+                    &p0_w1,
+                    const { ARRAY_RECORD_WIDTH },
+                )?,
             );
-            let __prebindgen_argument_0 = p0_w0.as_ref().expect("active value");
+            let __prebindgen_argument_0 = <&[u8; ARRAY_RECORD_WIDTH]>::try_from(
+                    ::core::convert::AsRef::<
+                        [u8],
+                    >::as_ref(p0_w0.as_ref().expect("active value")),
+                )
+                .map_err(|_| "wrong fixed array length".to_owned())?;
+            let source_value = perftest_flat::fixed_bytes_echo(__prebindgen_argument_0);
+            let ret_w0: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w0 = source_value;
+                ::prebindgen_jni_runtime::bytes_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<[u8]>::as_ref(&ret_w0),
+                )?
+            };
+            let __pb_direct_object = ret_w0;
+            let __pb_direct_result = unsafe {
+                (::prebindgen_jni_runtime::jni::sys::jvalue {
+                    l: __pb_direct_object.as_raw(),
+                })
+                    .l
+            };
+            let _: () = {
+                direct_output = __pb_direct_result;
+                success_transferred = true;
+            };
+            Ok(__pb_direct_result)
+        }
+    });
+    match outcome {
+        Ok(result) => result,
+        Err(e) => {
+            if domain_output.is_none()
+                && matches!(jni_environment.exception_check(), Ok(false))
+            {
+                let reported = ::prebindgen_runtime::boundary(|| {
+                    let message = ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        &e,
+                    )?;
+                    unsafe {
+                        ::prebindgen_jni_runtime::invoke_error_callback(
+                            &mut jni_environment,
+                            &__pb_return,
+                            "bindingError",
+                            "(Ljava/lang/String;Z)V",
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    l: message.as_raw(),
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    z: u8::from(success_transferred),
+                                },
+                            ],
+                        )
+                    }
+                });
+                if let Err(message) = reported {
+                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                }
+            }
+            direct_output
+        }
+    }
+}
+#[allow(
+    clippy::let_and_return,
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+The caller must uphold the generated wrapper's locking, preparation and ownership protocol, with live pointers of the declared types. Complete Kotlin handle preflight before this entry point; native decoding does not check input aliases.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1binding_1fixed_1bytes_1echo_1a8012c5845757607_10a6d6e8dcc125cdb<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+    p0_w1: ::prebindgen_jni_runtime::jni::objects::JByteArray<'local>,
+    p0_w1_length: i32,
+    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+) -> ::prebindgen_jni_runtime::jni::sys::jobject {
+    #[allow(unused_mut)]
+    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
+    let mut success_transferred = false;
+    let mut direct_output: ::prebindgen_jni_runtime::jni::sys::jobject = std::ptr::null_mut();
+    let __pb_receipt_valid = ::core::cell::Cell::new(false);
+    let outcome = ::prebindgen_runtime::boundary(|| {
+        {
+            #[allow(clippy::needless_late_init)]
+            let p0_w1_bytes;
+            #[allow(unused_mut, unused_assignments)]
+            let mut p0_w2 = None;
+            #[allow(clippy::redundant_closure_call)]
+            let bulk_value = (::prebindgen_jni_runtime::bulk::input)(
+                &mut jni_environment,
+                &p0_w1,
+                p0_w1_length,
+            )?;
+            p0_w1_bytes = bulk_value;
+            let p0_w1_bytes = &p0_w1_bytes;
+            let p0_w1_reader = &::prebindgen_jni_runtime::bulk::Reader::new(p0_w1_bytes);
+            if p0_w1_bytes.len()
+                < ::core::mem::size_of::<__PbBulk_Range_e048ef6766326a01>()
+            {
+                return Err("truncated bulk root record".into());
+            }
+            let p0_w3 = if true {
+                p0_w1_reader
+                    .range(::core::mem::offset_of!(__PbBulk_Range_e048ef6766326a01, v0))?
+            } else {
+                None
+            };
+            p0_w2 = Some(p0_w1_reader.buffer_range(p0_w3)?.ok_or("null bulk bytes")?);
+            let __prebindgen_argument_0 = <&[u8; ARRAY_RECORD_WIDTH]>::try_from(
+                    ::core::convert::AsRef::<
+                        [u8],
+                    >::as_ref(p0_w2.as_ref().expect("active value")),
+                )
+                .map_err(|_| "wrong fixed array length".to_owned())?;
             let source_value = perftest_flat::fixed_bytes_echo(__prebindgen_argument_0);
             let ret_w0: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
                 let ret_w0 = source_value;

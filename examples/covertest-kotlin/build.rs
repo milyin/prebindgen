@@ -734,6 +734,8 @@ fn main() {
                 .expand_param("value", expand_param!(ArrayRecord).variant_self().bulk())
                 .expand_return(expand_return!(ArrayRecord).field_self_into().bulk()))
             .fun(fun!(fixed_bytes_echo))
+            .fun(fun!(fixed_bytes_echo).name("fixedBytesBulk")
+                .expand_param("value", expand_param!(&[u8; ARRAY_RECORD_WIDTH]).variant_self().bulk()))
             .fun(fun!(qualified_byte_views))
             .fun(fun!(fixed_bytes_echo).name("fixedBytesAsList")
                 .expand_param("value", expand_param!(&[u8; ARRAY_RECORD_WIDTH]).element(expand_param!(u8).variant_self()))

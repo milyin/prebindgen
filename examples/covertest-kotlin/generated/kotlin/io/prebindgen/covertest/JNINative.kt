@@ -247,6 +247,7 @@ internal object JNINative {
     @JvmStatic external fun call_binding_array_record_echo_e4b0cb2d9e61e35b_2f06982b51b6bf1f(p0_w1_f0: ByteArray?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
     @JvmStatic external fun call_binding_array_record_echo_f0fb20f1ccbacf7e_b83d462e54db6e08(p0_w1: ByteArray?, p0_w1_length: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
     @JvmStatic external fun call_binding_fixed_bytes_echo_755c5a3fa4ffaeee_9aeece2c418e1e66(p0_w1: ByteArray?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
+    @JvmStatic external fun call_binding_fixed_bytes_echo_a8012c5845757607_0a6d6e8dcc125cdb(p0_w1: ByteArray?, p0_w1_length: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
     @JvmStatic external fun call_qualified_byte_views_b70fb1d44f421d03(p0_w1: ByteArray?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
     @JvmStatic external fun call_binding_fixed_bytes_echo_3ee5f83fd540cd99_c8f8c4e73998051b(p0_w1: Array<Any?>?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?
     @JvmStatic external fun call_binding_bytes_echo_285357ce5c3a417d_f1c82e4d2d5b1104(p0_w1: Array<Any?>?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Array<Any?>?

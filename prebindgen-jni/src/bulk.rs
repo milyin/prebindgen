@@ -381,21 +381,13 @@ pub(crate) fn input_leaf(
     active: &Condition,
 ) -> Result<JniInputPlan<JniWire>> {
     match Value::of(ty) {
-        Some(Value::Text) | Some(Value::Bytes) => {
-            let text = Value::of(ty) == Some(Value::Text);
-            let decode = decode_buffer(text, &w);
-            let decode = super::checked_bytes(ty, decode);
-            prebindgen_conversions::value::input(
-                ty,
-                w,
-                v,
-                decode,
-                if text {
-                    JniWire::FrameUtf8
-                } else {
-                    JniWire::FrameBytes
-                },
-            )
+        Some(Value::Text) => {
+            let decode = decode_buffer(true, &w);
+            prebindgen_conversions::value::input(ty, w, v, decode, JniWire::FrameUtf8)
+        }
+        Some(Value::Bytes) => {
+            let decode = decode_buffer(false, &w);
+            super::input_bytes(ty, w, v, decode, JniWire::FrameBytes)
         }
         Some(Value::Scalar(p @ (Primitive::I128 | Primitive::U128))) => {
             let native = p.rust_type();

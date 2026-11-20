@@ -24,11 +24,19 @@ fun checkBulk() {
     check(arrayRecordEcho(record) == record)
     check(arrayRecordBulk(record) == record)
     check(fixedBytesEcho(octets).contentEquals(octets))
+    check(fixedBytesBulk(octets).contentEquals(octets))
     check(qualifiedByteViews(octets).contentEquals(octets))
-    check(fixedBytesEcho(byteArrayOf(0), JniErrorHandler {
+    var wrongByteLength = 0
+    val byteLengthError = JniErrorHandler<ByteArray> {
         check(it == "wrong fixed array length")
+        wrongByteLength++
         ByteArray(0)
-    }).isEmpty())
+    }
+    for (invalid in listOf(byteArrayOf(0), ByteArray(64 * 1024))) {
+        check(fixedBytesEcho(invalid, byteLengthError).isEmpty())
+        check(fixedBytesBulk(invalid, byteLengthError).isEmpty())
+    }
+    check(wrongByteLength == 4)
     var wrongFieldLength = 0
     val shortRecord = ArrayRecord(byteArrayOf(0))
     val lengthError = JniErrorHandler<ArrayRecord> {
