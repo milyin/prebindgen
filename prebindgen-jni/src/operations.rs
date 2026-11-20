@@ -768,7 +768,7 @@ pub(crate) fn sequence_callback(
         fn structural(ty: &syn::Type, output: &JniOutput) -> Option<crate::JniOutputConfig> {
             match output {
                 JniOutput::Leaf(JniOutputLeafOp::Value)
-                    if prebindgen_flat::sequence_parts(ty).is_some() =>
+                    if prebindgen_flat::collection_parts(ty).is_some() =>
                 {
                     Some(crate::JniOutputConfig::Unary {
                         operation: crate::JniOutputUnary::Sequence {

@@ -1115,7 +1115,7 @@ impl Codec for JniCodec {
             }
         }
 
-        if prebindgen_flat::sequence_parts(ty).is_some() {
+        if Value::of(ty) != Some(Value::Bytes) && prebindgen_flat::sequence_parts(ty).is_some() {
             return Err("collections require a Sequence recipe, not an opaque leaf; use an alias for opaque storage".into());
         }
         // Materialize JVM buffers while their source is still in scope. Optional
@@ -1480,7 +1480,7 @@ impl JniCodec {
         let w = wire;
         let v = var;
 
-        if prebindgen_flat::sequence_parts(ty).is_some() {
+        if Value::of(ty) != Some(Value::Bytes) && prebindgen_flat::sequence_parts(ty).is_some() {
             return Err("collections require a Sequence recipe, not an opaque leaf; use an alias for opaque storage".into());
         }
         if prebindgen_declarations::option_inner(ty).is_some() {
@@ -1496,10 +1496,15 @@ impl JniCodec {
                 quote!(::prebindgen_jni_runtime::text(&mut #env,&#w)?),
                 JniWire::text(),
             ),
-            Some(Value::Bytes) => (
-                quote!(::prebindgen_jni_runtime::bytes(&mut #env,&#w)?),
-                JniWire::bytes(),
-            ),
+            Some(Value::Bytes) => {
+                let bytes = match prebindgen_flat::fixed_byte_array_length(ty) {
+                    Some(width) => {
+                        quote!(::prebindgen_jni_runtime::fixed_bytes(&mut #env, &#w, const { #width })?)
+                    }
+                    None => quote!(::prebindgen_jni_runtime::bytes(&mut #env, &#w)?),
+                };
+                return input_bytes(ty, w, v, bytes, JniWire::bytes());
+            }
             None => {
                 return prebindgen_conversions::boxed::input(&storage(), ty, w, v, |b| {
                     JniWire::handle(b, kotlin_condition(active))
@@ -1508,6 +1513,36 @@ impl JniCodec {
         };
         prebindgen_conversions::value::input(ty, w, v, decode, kind)
     }
+}
+
+fn input_bytes(
+    ty: &syn::Type,
+    wire: syn::Ident,
+    var: syn::Ident,
+    bytes: TokenStream,
+    kind: JniWire,
+) -> Result<JniInputPlan<JniWire>> {
+    use prebindgen_conversions::value::input;
+
+    if prebindgen_flat::fixed_byte_array_length(ty).is_none() {
+        return input(ty, wire, var, bytes, kind);
+    }
+    let as_array = |bytes: &TokenStream| quote!(<#ty>::try_from(#bytes).map_err(|_| "wrong fixed array length".to_owned())?);
+    if matches!(ty, syn::Type::Reference(_)) {
+        // The ordinary decoder owns a Vec and the bulk decoder has a frame slice.
+        // Keep that backing storage in scope and borrow the fixed array from it.
+        let slice =
+            quote!(::core::convert::AsRef::<[u8]>::as_ref(#var.as_ref().expect("active value")));
+        let mut plan = JniInputPlan::new(
+            JniInputWireNode::Leaf(vec![prebindgen_conversions::Wire { name: wire, kind }]),
+            quote!(#var = Some(#bytes);),
+            as_array(&slice),
+        );
+        plan.storage = quote!(#[allow(unused_mut, unused_assignments)] let mut #var = None;);
+        plan.fallible = true;
+        return Ok(plan);
+    }
+    input(ty, wire, var, as_array(&bytes), kind)
 }
 
 // Cow bytes can be observed directly during output encoding. Keep this separate

@@ -1,5 +1,5 @@
 //! Source-shape checks and controls for Zenoh's nested expansion requirements.
-use super::{items, rejected};
+use super::items;
 use prebindgen_jni::prelude::*;
 
 use prebindgen_flat::{Flat, Result};
@@ -136,12 +136,12 @@ pub fn run() -> Result<()> {
         .items(items(&id))
         .set_package_prefix("example")
         .package(package!().class(data_class!(ZenohId)).fun(fun!(echo_id)))
-        .build();
-    rejected(
-        "Zenoh fixed-array property prerequisite",
-        generated,
-        "unsupported type",
-    );
+        .build()?;
+    syn::parse_file(&generated.rust).map_err(|e| e.to_string())?;
+    let class = &generated.kotlin["example/ZenohId.kt"];
+    assert!(class.contains("bytes: kotlin.ByteArray"), "{class}");
+    assert!(generated.rust.contains("wrong fixed array length"));
+    println!("ZenohId fixed byte array uses a length-checked Kotlin ByteArray");
 
     // A control without enums isolates today's distinction between explicit
     // field expansion and a declared class with canonical property types.

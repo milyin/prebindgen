@@ -1,4 +1,6 @@
 #![allow(non_camel_case_types, unused_variables)]
+use perftest_flat::ARRAY_RECORD_WIDTH;
+
 mod callback_frames;
 mod diagnostics;
 mod input_contracts;

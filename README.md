@@ -464,7 +464,11 @@ value types; type-wide expansions apply to boundary occurrences, not to the
 properties inside a data class. Borrowed projections clone strings and byte
 vectors; owned projections move them. The shared helpers `record_output` and
 `record_output_owned` implement the respective access modes. `Option` fields are
-supported; fixed-size array fields remain unsupported. The low-level `JniCodec::raw()` ignores data-class declarations: it binds records
+supported. Fixed-size array fields use the same Kotlin types and input length checks
+as standalone fixed arrays. Byte vectors and fixed-size byte arrays use `ByteArray`.
+Other fixed-size arrays use Kotlin lists. Bring any array-length
+constants into scope where the generated Rust is included. The low-level
+`JniCodec::raw()` ignores data-class declarations: it binds records
 as handles. Using it in an `on_configure(...)` callback for a type declared only as a data class
 therefore fails with a missing handle-class error unless an explicit expansion
 replaces that slot. Use data-class declarations for automatic value-record conversion.
@@ -1557,9 +1561,18 @@ Direct byte buffers keep their existing byte-array representation. Inputs and
 scalar returns keep ordinary transport unless an expansion selects bulk. A single
 record keeps ordinary fields while automatic collection components of an expanded
 result each use bulk. Explicit ordinary collection expansions keep nested automatic
-rows ordinary;
-explicit bulk modifiers and callback/fold delivery retain their own behavior.
+rows ordinary. Explicit bulk modifiers and callback/fold delivery retain their own behavior.
 Unsupported conversions report the normal generation diagnostic.
+
+To expose a byte sequence as a `List<Int>` at a function boundary, explicitly
+expand its elements. The same declarations work with `[u8; N]` in place of
+`Vec<u8>`. The fixed width and the `u8` input range are still checked.
+
+```rust,ignore
+fun!(echo)
+    .expand_param("value", expand_param!(Vec<u8>).element(expand_param!(u8).variant_self()))
+    .expand_return(expand_return!(Vec<u8>).element_objects(expand_return!(u8).field_self()))
+```
 
 Disable automatic selection project-wide with
 `JniGen::builder().set_bulk_collection_outputs(false)`. Explicit type-wide collection

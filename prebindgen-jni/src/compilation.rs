@@ -67,7 +67,11 @@ impl Consumes for JniOutput {
                 ..
             } => match mode {
                 Some(mode) => *mode == ProjectionMode::Owned,
-                None => !borrowed && sequence_parts(ty).is_some_and(|(_, view)| view.is_owned()),
+                None => {
+                    !borrowed
+                        && prebindgen_flat::collection_parts(ty)
+                            .is_some_and(|(_, view)| view.is_owned())
+                }
             },
             JniOutput::Unary {
                 operation: JniOutputUnary::Bulk,

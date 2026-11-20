@@ -239,7 +239,7 @@ Sources: [C declaration and callback ownership](https://github.com/ZettaScaleLab
 | Function error versus reply error | Distinct existing channels; reply payload/encoding preserved | No mandatory stringification of data errors |
 | TimestampStackRecord list | Nested record/enum/bytes work in bulk; selected-arm cleanup | No eager access to the stack during normal message delivery |
 | u64 Timestamp field | Public ULong and bit-preserving JNI/bulk conversion | No signed range rejection of a valid high-bit timestamp |
-| Optional EntityGlobalId beside ReplyResult | Remains a sibling, including its fixed-width node id | Current #808 data-class properties reject ZenohId's `[u8; ZENOH_ID_MAX_SIZE]`; record the fixed-array prerequisite |
+| Optional EntityGlobalId beside ReplyResult | Remains a sibling, including its fixed-width node id | ZenohId's fixed array crosses as a length-checked Kotlin `ByteArray` |
 | Existing C callback examples | Scoped/takeable objects still require their original cleanup contract | Separate callback delivery-policy migration, not solved by payload enums |
 
 The Rust source contains 44 textual `impl Fn` occurrences across both tiers,
@@ -280,8 +280,8 @@ The checks confirm that:
 * All 16 fixture declarations match the pinned source after attribute removal.
 * The three nested source cases now generate through the payload-enum compiler.
 * The real Timestamp shape already generates ULong/ByteArray Kotlin properties.
-* ZenohId's fixed-array property remains unsupported by the current data-class
-  adapter, independently of payload enums.
+* ZenohId's fixed byte array generates a Kotlin `ByteArray` with a native input
+  length check.
 * A small record control can expand an opaque child through its configured
   output recipe with no foreign class, for both a function and a callback.
   It uses the existing type-wide `view` builder. Declaring a data class for that same

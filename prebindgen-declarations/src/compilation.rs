@@ -1233,8 +1233,8 @@ impl<C: Codec> Compiler<'_, C> {
                 }
                 self.next.set(next);
             }
-            let (element, _) =
-                sequence_parts(ty).ok_or("sequence input requires Vec<T>, &[T] or &Vec<T>")?;
+            let (element, _) = prebindgen_flat::collection_parts(ty)
+                .ok_or("sequence input requires a collection")?;
             let wire = self.name();
             let length = self.name();
             let index = self.name();
@@ -1257,11 +1257,11 @@ impl<C: Codec> Compiler<'_, C> {
         bulk: bool,
     ) -> Result<CodecOutputPlan<C>> {
         {
-            let (element_type, _) =
-                sequence_parts(ty).ok_or("sequence output requires a collection")?;
+            let (element_type, view) = prebindgen_flat::collection_parts(ty)
+                .ok_or("sequence output requires a collection")?;
             let explicit_copy = *mode == Some(ProjectionMode::Borrowed);
             let mode = mode.unwrap_or_else(|| {
-                if borrowed || !sequence_parts(ty).unwrap().1.is_owned() {
+                if borrowed || !view.is_owned() {
                     ProjectionMode::Borrowed
                 } else {
                     ProjectionMode::Owned
@@ -1287,9 +1287,7 @@ impl<C: Codec> Compiler<'_, C> {
             let index = self.name();
             let child = self.with_copy_permission(explicit_copy, || {
                 self.with_temporary_receiver(
-                    mode == ProjectionMode::Borrowed
-                        && !borrowed
-                        && sequence_parts(ty).unwrap().1.is_owned(),
+                    mode == ProjectionMode::Borrowed && !borrowed && view.is_owned(),
                     || {
                         self.output(
                             element_type,

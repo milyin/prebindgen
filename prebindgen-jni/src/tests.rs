@@ -669,6 +669,34 @@ fn data_classes_resolve_forward_declarations_and_keep_overrides() {
 }
 
 #[test]
+fn data_class_array_fields_use_byte_buffers_or_lists_by_element_type() {
+    let source = syn::parse_file(
+        "pub const WIDTH: usize = 16;
+         pub struct NodeId { pub bytes: [u8; WIDTH], pub samples: Option<[[i64; 2]; 3]> }
+         pub fn echo(value: NodeId) -> NodeId {}",
+    )
+    .unwrap();
+    let generated = JniGen::builder()
+        .items(
+            source
+                .items
+                .into_iter()
+                .map(|item| (item, Default::default())),
+        )
+        .set_package_prefix("test")
+        .package(package!().class(data_class!(NodeId)).fun(fun!(echo)))
+        .build()
+        .unwrap();
+    let node = &generated.kotlin["test/NodeId.kt"];
+    assert!(node.contains("bytes: kotlin.ByteArray"), "{node}");
+    assert!(
+        node.contains("kotlin.collections.List<kotlin.collections.List<kotlin.Long>>?"),
+        "{node}"
+    );
+    assert!(generated.rust.contains("wrong fixed array length"));
+}
+
+#[test]
 fn data_classes_reject_unsupported_shapes_before_emission() {
     for (source, expected) in [
         ("pub type Value = String;", "named-field record"),
@@ -3191,9 +3219,10 @@ fn nested_folds_remain_available_and_primitive_array_types_do_not_change() {
             .unwrap();
         assert!(generated.kotlin["test/Functions.kt"].contains("rowsFold("));
     }
-    // This Flat API maps fixed arrays to lists, including byte arrays. The
-    // legacy generator's primitive-array representation is not used here.
-    for (ty, kotlin) in [("[i64;4]", "Long"), ("[u8;16]", "Int")] {
+    for (ty, kotlin, bulk) in [
+        ("[i64;4]", "kotlin.collections.List<Long>", true),
+        ("[u8;16]", "ByteArray", false),
+    ] {
         for enabled in [false, true] {
             let generated = JniGen::builder()
                 .flat(flat(&format!("pub fn array()->{ty}{{}}")))
@@ -3202,9 +3231,11 @@ fn nested_folds_remain_available_and_primitive_array_types_do_not_change() {
                 .package(package!().fun(fun!(array)))
                 .build()
                 .unwrap();
-            assert!(generated.kotlin["test/Functions.kt"]
-                .contains(&format!(": kotlin.collections.List<{kotlin}>")));
-            assert_eq!(generated.rust.contains("bulk::Writer::new"), enabled);
+            assert!(generated.kotlin["test/Functions.kt"].contains(&format!(": {kotlin}")));
+            assert_eq!(
+                generated.rust.contains("bulk::Writer::new"),
+                enabled && bulk
+            );
         }
     }
 }

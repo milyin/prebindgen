@@ -175,6 +175,30 @@ pub fn bulk_array(value: [i64; 3]) -> [i64; 3] {
 pub fn bulk_array_borrow(value: &[i64; 3]) -> i64 {
     value.iter().sum()
 }
+
+// The JNI crate imports this Rust constant for the generated array length check.
+pub const ARRAY_RECORD_WIDTH: usize = 3;
+
+#[prebindgen]
+pub struct ArrayRecord {
+    pub bytes: [u8; ARRAY_RECORD_WIDTH],
+}
+
+#[prebindgen]
+pub fn array_record_echo(value: ArrayRecord) -> ArrayRecord {
+    value
+}
+
+#[prebindgen]
+pub fn fixed_bytes_echo(value: &[u8; ARRAY_RECORD_WIDTH]) -> [u8; ARRAY_RECORD_WIDTH] {
+    *value
+}
+
+#[prebindgen]
+pub fn qualified_byte_views(value: &[core::primitive::u8]) -> Vec<std::primitive::u8> {
+    value.to_vec()
+}
+
 #[prebindgen]
 pub fn bulk_point_array(value: [BulkPoint; 2]) -> [BulkPoint; 2] {
     value

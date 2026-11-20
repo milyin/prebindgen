@@ -34,6 +34,14 @@ pub fn text(env: &mut JNIEnv<'_>, value: &JString<'_>) -> Result<String> {
 pub fn bytes(env: &mut JNIEnv<'_>, value: &JByteArray<'_>) -> Result<Vec<u8>> {
     env.convert_byte_array(value).map_err(|e| e.to_string())
 }
+/// Check the Java byte array's width before allocating and copying its bytes.
+pub fn fixed_bytes(env: &mut JNIEnv<'_>, value: &JByteArray<'_>, width: usize) -> Result<Vec<u8>> {
+    let length = env.get_array_length(value).map_err(|e| e.to_string())?;
+    if length as usize != width {
+        return Err("wrong fixed array length".into());
+    }
+    bytes(env, value)
+}
 /// Box address bits as a Java `Long` and return a local JNI reference.
 ///
 /// `value` is the address of the allocation being delivered to Kotlin.

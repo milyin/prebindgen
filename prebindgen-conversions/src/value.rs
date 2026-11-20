@@ -17,7 +17,7 @@ pub enum Value {
     Scalar(Primitive),
     /// `String`, `&String` or `&str`.
     Text,
-    /// `Vec<u8>`, `&Vec<u8>` or `&[u8]`.
+    /// Byte vectors, fixed-size byte arrays, and shared byte views.
     Bytes,
 }
 impl Value {
@@ -37,11 +37,14 @@ impl Value {
         if let Some(p) = Primitive::from_type(core) {
             return Some(Self::Scalar(p));
         }
+        if prebindgen_flat::collection_parts(ty)
+            .is_some_and(|(element, _)| Primitive::from_type(element) == Some(Primitive::U8))
+        {
+            return Some(Self::Bytes);
+        }
         match type_key(core).as_str() {
             "String" => Some(Self::Text),
             "str" if borrowed => Some(Self::Text),
-            "Vec < u8 >" => Some(Self::Bytes),
-            "[u8]" if borrowed => Some(Self::Bytes),
             _ => None,
         }
     }
@@ -89,7 +92,9 @@ pub fn input<W: crate::WireKind, C, N, B, A, T>(
     let (storage, code, value) = match ty {
         Type::Reference(r) => {
             let owned = &r.elem;
-            let (decode, value) = if matches!(type_key(owned).as_str(), "str" | "[u8]") {
+            let (decode, value) = if type_key(owned) == "str"
+                || matches!(owned.as_ref(), Type::Slice(_))
+            {
                 (
                     decode,
                     quote!(::core::convert::AsRef::<#owned>::as_ref(#var.as_ref().expect("active value"))),
@@ -178,4 +183,23 @@ pub fn output<W: crate::WireKind, C, N, B, A, T>(
         values: vec![(wire.clone(), quote!(#wire))],
         commit: quote!(),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn byte_buffers_accept_qualified_u8_and_one_shared_reference() {
+        for ty in [
+            syn::parse_quote!(Vec<core::primitive::u8>),
+            syn::parse_quote!(&[std::primitive::u8]),
+            syn::parse_quote!([::core::primitive::u8; 3]),
+            syn::parse_quote!(&[u8; 3]),
+        ] {
+            assert_eq!(Value::of(&ty), Some(Value::Bytes));
+        }
+        assert_eq!(Value::of(&syn::parse_quote!(&&[u8; 3])), None);
+        assert_eq!(Value::of(&syn::parse_quote!(&mut [u8; 3])), None);
+    }
 }
