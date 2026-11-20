@@ -7,7 +7,7 @@ use std::rc::Rc;
 /// A Kotlin data class whose fields are converted across the JNI boundary.
 ///
 /// Supports owned public named-field records containing scalars, `String`,
-/// `Vec<T>` and fixed-size array collections (`Vec<u8>` is a byte array), other declared data classes,
+/// vectors and fixed-size arrays, other declared data classes,
 /// declared opaque handles, and optional fields. Records containing handles,
 /// including through collections, require explicit input field ownership, such as
 /// `expand_param!(Row).variant_record(param_fields!())`. Select named constructor
@@ -21,7 +21,8 @@ use std::rc::Rc;
 /// Moving Rust fields requires that the record itself does not implement `Drop`.
 /// Callers close each returned handle explicitly; data-class `copy` shares those
 /// handle objects and does not duplicate native ownership. References, empty
-/// records, and recursive records are rejected.
+/// records, and recursive records are rejected. Byte vectors and fixed-size
+/// byte arrays use `ByteArray`.
 /// Collection properties use standard Kotlin list equality and hash codes;
 /// byte arrays directly nested in lists therefore compare by reference.
 ///
@@ -134,12 +135,19 @@ pub struct JniField {
 }
 // Resolve the Rust type describing one public value, independently of boundary
 // expansions. Function slots still retain the actual domain type and conversion.
+enum PropertyType {
+    Value(Box<syn::Type>),
+    Optional(Box<PropertyType>),
+    List(Box<PropertyType>),
+}
+
 fn value_type(
     flat: &JniBindings,
     ty: &syn::Type,
     input: bool,
     stack: &mut Vec<String>,
-) -> Result<(syn::Type, bool)> {
+    converted: bool,
+) -> Result<(PropertyType, bool)> {
     let key = type_key(ty);
     let conversion = flat
         .type_info(ty)
@@ -171,33 +179,41 @@ fn value_type(
             ));
         }
         stack.push(key);
-        let result = value_type(flat, &c.representation, input, stack);
+        let result = value_type(flat, &c.representation, input, stack, true);
         stack.pop();
         return result.map(|(ty, _)| (ty, true));
     }
     if let Some(inner) = prebindgen_flat::option_inner(ty) {
-        let (inner, changed) = value_type(flat, inner, input, stack)?;
-        return Ok((syn::parse_quote!(Option<#inner>), changed));
+        let (inner, changed) = value_type(flat, inner, input, stack, converted)?;
+        return Ok((PropertyType::Optional(Box::new(inner)), changed));
     }
-    if let Some(inner) = prebindgen_flat::vec_inner(ty) {
-        let (inner, changed) = value_type(flat, inner, input, stack)?;
-        return Ok((syn::parse_quote!(Vec<#inner>), changed));
+    if let Some((inner, _)) = prebindgen_flat::sequence_parts(ty)
+        .filter(|(_, view)| view.is_owned() && Value::of(ty) != Some(Value::Bytes))
+    {
+        let (inner, changed) = value_type(flat, inner, input, stack, converted)?;
+        return Ok((PropertyType::List(Box::new(inner)), changed));
     }
-    if let syn::Type::Array(array) = ty {
-        let (element, changed) = value_type(flat, &array.elem, input, stack)?;
-        let length = &array.len;
-        return Ok((syn::parse_quote!([#element; #length]), changed));
-    }
-    let ty = if let syn::Type::Reference(r) = ty {
-        match Value::of(ty) {
-            Some(Value::Text) => syn::parse_quote!(String),
-            Some(Value::Bytes) => syn::parse_quote!(Vec<u8>),
-            _ => (*r.elem).clone(),
+    if let syn::Type::Reference(r) = ty {
+        if !converted {
+            return Ok((PropertyType::Value(Box::new(ty.clone())), false));
         }
-    } else {
-        ty.clone()
-    };
-    Ok((ty, false))
+        match Value::of(ty) {
+            Some(Value::Text) => {
+                return Ok((
+                    PropertyType::Value(Box::new(syn::parse_quote!(String))),
+                    false,
+                ))
+            }
+            Some(Value::Bytes) => {
+                return Ok((
+                    PropertyType::Value(Box::new(syn::parse_quote!(Vec<u8>))),
+                    false,
+                ))
+            }
+            _ => return value_type(flat, &r.elem, input, stack, converted),
+        }
+    }
+    Ok((PropertyType::Value(Box::new(ty.clone())), false))
 }
 
 /// Resolve public properties, ownership and enum mappings on their source owners.
@@ -205,17 +221,26 @@ fn value_type(
 pub(crate) fn resolve_declarations(flat: &mut JniBindings) -> Result<()> {
     fn element(
         flat: &mut JniBindings,
-        ty: &syn::Type,
+        ty: &PropertyType,
         stack: &mut Vec<String>,
         resolved: &mut BTreeSet<String>,
     ) -> Result<(String, bool)> {
-        if let Some(inner) = prebindgen_declarations::option_inner(ty) {
-            if prebindgen_declarations::option_inner(inner).is_some() {
+        let ty = match ty {
+            PropertyType::Optional(inner)
+                if matches!(inner.as_ref(), PropertyType::Optional(_)) =>
+            {
                 return Err("nested Option data fields require an explicit expansion".into());
             }
-            let (ty, handles) = element(flat, inner, stack, resolved)?;
-            return Ok((format!("{ty}?"), handles));
-        }
+            PropertyType::Optional(inner) => {
+                let (ty, handles) = element(flat, inner, stack, resolved)?;
+                return Ok((format!("{ty}?"), handles));
+            }
+            PropertyType::List(inner) => {
+                let (ty, handles) = element(flat, inner, stack, resolved)?;
+                return Ok((format!("kotlin.collections.List<{ty}>"), handles));
+            }
+            PropertyType::Value(ty) => ty.as_ref(),
+        };
         if matches!(ty, syn::Type::Reference(_)) {
             return Err("data class collection elements cannot be references".into());
         }
@@ -252,12 +277,6 @@ pub(crate) fn resolve_declarations(flat: &mut JniBindings) -> Result<()> {
                 )
             };
             return Ok((class.fqn(), handles));
-        }
-        if let Some((inner, _)) =
-            prebindgen_flat::sequence_parts(ty).filter(|(_, view)| view.is_owned())
-        {
-            let (ty, handles) = element(flat, inner, stack, resolved)?;
-            return Ok((format!("kotlin.collections.List<{ty}>"), handles));
         }
         Err(format!(
             "unsupported data class collection element `{}`",
@@ -343,8 +362,10 @@ pub(crate) fn resolve_declarations(flat: &mut JniBindings) -> Result<()> {
                     "data class `{key}` field `{name}` has a conflicting JVM getter `{getter}"
                 ));
             }
-            let (input_type, input_changed) = value_type(flat, &f.ty, true, &mut Vec::new())?;
-            let (output_type, output_changed) = value_type(flat, &f.ty, false, &mut Vec::new())?;
+            let (input_type, input_changed) =
+                value_type(flat, &f.ty, true, &mut Vec::new(), false)?;
+            let (output_type, output_changed) =
+                value_type(flat, &f.ty, false, &mut Vec::new(), false)?;
             if input_changed && output_changed {
                 let input = element(flat, &input_type, stack, resolved)?;
                 let output = element(flat, &output_type, stack, resolved)?;
@@ -352,88 +373,81 @@ pub(crate) fn resolve_declarations(flat: &mut JniBindings) -> Result<()> {
                     return Err(format!("data class `{key}` field `{name}` has incompatible canonical input/output representations: {} versus {}",input.0,output.0));
                 }
             }
-            let property_type = if input_changed {
-                &input_type
-            } else if output_changed {
+            let property_type = if !input_changed && output_changed {
                 &output_type
             } else {
-                &f.ty
+                &input_type
             };
-            let optional = prebindgen_declarations::option_inner(property_type);
-            let ty = optional.unwrap_or(property_type);
-            let ty = match ty {
-                syn::Type::Reference(r)
-                    if (input_changed || output_changed) && Value::of(ty).is_none() =>
-                {
-                    &*r.elem
-                }
-                _ => ty,
+            let (ty, optional) = match property_type {
+                PropertyType::Optional(inner) => (inner.as_ref(), true),
+                _ => (property_type, false),
             };
-            if optional
-                .and_then(prebindgen_declarations::option_inner)
-                .is_some()
-            {
-                return Err("nested Option data fields require an explicit expansion".into());
-            }
-            if matches!(ty, syn::Type::Reference(_)) {
-                return Err(format!(
-                    "data class `{key}` field `{name}` cannot be a reference"
-                ));
-            }
-            let field_key = type_key(ty);
             let mut bytes = false;
             let mut floating = false;
             let mut slots = 1;
-            let mut kotlin_type = if type_key(ty) == "()" {
-                "kotlin.Unit".into()
-            } else if let Some(value) = Value::of(ty) {
-                match value {
-                    Value::Scalar(p @ (Primitive::I128 | Primitive::U128)) => {
-                        slots = JniWire::scalar(p).parameter_slots();
-                        "java.math.BigInteger".into()
+            let mut kotlin_type = match ty {
+                PropertyType::Optional(_) => {
+                    return Err("nested Option data fields require an explicit expansion".into());
+                }
+                PropertyType::List(_) => {
+                    let (ty, handles) = element(flat, ty, stack, resolved)
+                        .map_err(|error| format!("data class `{key}` field `{name}`: {error}"))?;
+                    has_handles |= handles;
+                    ty
+                }
+                PropertyType::Value(ty) => {
+                    if matches!(ty.as_ref(), syn::Type::Reference(_)) {
+                        return Err(format!(
+                            "data class `{key}` field `{name}` cannot be a reference"
+                        ));
                     }
-                    Value::Scalar(p) => {
-                        slots = JniWire::scalar(p).parameter_slots();
-                        floating = matches!(p, Primitive::F32 | Primitive::F64);
-                        format!("kotlin.{}", scalar::kotlin(p))
-                    }
-                    Value::Text => "kotlin.String".into(),
-                    Value::Bytes => {
-                        bytes = true;
-                        "kotlin.ByteArray".into()
+                    let field_key = type_key(ty);
+                    if field_key == "()" {
+                        "kotlin.Unit".into()
+                    } else if let Some(value) = Value::of(ty) {
+                        match value {
+                            Value::Scalar(p @ (Primitive::I128 | Primitive::U128)) => {
+                                slots = JniWire::scalar(p).parameter_slots();
+                                "java.math.BigInteger".into()
+                            }
+                            Value::Scalar(p) => {
+                                slots = JniWire::scalar(p).parameter_slots();
+                                floating = matches!(p, Primitive::F32 | Primitive::F64);
+                                format!("kotlin.{}", scalar::kotlin(p))
+                            }
+                            Value::Text => "kotlin.String".into(),
+                            Value::Bytes => {
+                                bytes = true;
+                                "kotlin.ByteArray".into()
+                            }
+                        }
+                    } else if let Some(class) = flat
+                        .type_info(ty)
+                        .ok()
+                        .and_then(|t| t.metadata.class.clone())
+                    {
+                        if matches!(
+                            class.representation,
+                            ClassRepresentation::ConfiguredData
+                                | ClassRepresentation::Data { .. }
+                                | ClassRepresentation::ConfiguredSealed { .. }
+                                | ClassRepresentation::Sealed { .. }
+                        ) {
+                            has_handles |= resolve(flat, &field_key, stack, resolved)?;
+                        } else if !matches!(
+                            class.representation,
+                            ClassRepresentation::ConfiguredEnum { .. }
+                                | ClassRepresentation::Enum(_)
+                        ) {
+                            has_handles = true;
+                        }
+                        class.fqn()
+                    } else {
+                        return Err(format!("data class `{key}` field `{name}` has unsupported type `{field_key}`; expected a scalar, String, owned collection, declared data class, or declared handle"));
                     }
                 }
-            } else if let Some(child) = flat
-                .type_info(ty)
-                .ok()
-                .and_then(|t| t.metadata.class.clone())
-            {
-                if matches!(
-                    child.representation,
-                    ClassRepresentation::ConfiguredData
-                        | ClassRepresentation::Data { .. }
-                        | ClassRepresentation::ConfiguredSealed { .. }
-                        | ClassRepresentation::Sealed { .. }
-                ) {
-                    has_handles |= resolve(flat, &field_key, stack, resolved)?;
-                } else if !matches!(
-                    child.representation,
-                    ClassRepresentation::ConfiguredEnum { .. } | ClassRepresentation::Enum(_)
-                ) {
-                    has_handles = true;
-                }
-                child.fqn()
-            } else if let Some((inner, _)) =
-                prebindgen_flat::sequence_parts(ty).filter(|(_, view)| view.is_owned())
-            {
-                let (ty, handles) = element(flat, inner, stack, resolved)
-                    .map_err(|error| format!("data class `{key}` field `{name}`: {error}"))?;
-                has_handles |= handles;
-                format!("kotlin.collections.List<{ty}>")
-            } else {
-                return Err(format!("data class `{key}` field `{name}` has unsupported type `{field_key}`; expected a scalar, String, owned collection, declared data class, or declared handle"));
             };
-            if optional.is_some() {
+            if optional {
                 kotlin_type.push('?');
                 slots = 1;
                 floating = false;

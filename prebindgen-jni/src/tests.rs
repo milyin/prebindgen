@@ -669,7 +669,7 @@ fn data_classes_resolve_forward_declarations_and_keep_overrides() {
 }
 
 #[test]
-fn data_class_array_fields_use_the_existing_sequence_representation() {
+fn data_class_array_fields_use_byte_buffers_or_lists_by_element_type() {
     let source = syn::parse_file(
         "pub const WIDTH: usize = 16;
          pub struct NodeId { pub bytes: [u8; WIDTH], pub samples: Option<[[i64; 2]; 3]> }
@@ -688,10 +688,7 @@ fn data_class_array_fields_use_the_existing_sequence_representation() {
         .build()
         .unwrap();
     let node = &generated.kotlin["test/NodeId.kt"];
-    assert!(
-        node.contains("kotlin.collections.List<kotlin.Int>"),
-        "{node}"
-    );
+    assert!(node.contains("bytes: kotlin.ByteArray"), "{node}");
     assert!(
         node.contains("kotlin.collections.List<kotlin.collections.List<kotlin.Long>>?"),
         "{node}"
@@ -3222,9 +3219,10 @@ fn nested_folds_remain_available_and_primitive_array_types_do_not_change() {
             .unwrap();
         assert!(generated.kotlin["test/Functions.kt"].contains("rowsFold("));
     }
-    // This Flat API maps fixed arrays to lists, including byte arrays. The
-    // legacy generator's primitive-array representation is not used here.
-    for (ty, kotlin) in [("[i64;4]", "Long"), ("[u8;16]", "Int")] {
+    for (ty, kotlin, bulk) in [
+        ("[i64;4]", "kotlin.collections.List<Long>", true),
+        ("[u8;16]", "ByteArray", false),
+    ] {
         for enabled in [false, true] {
             let generated = JniGen::builder()
                 .flat(flat(&format!("pub fn array()->{ty}{{}}")))
@@ -3233,9 +3231,11 @@ fn nested_folds_remain_available_and_primitive_array_types_do_not_change() {
                 .package(package!().fun(fun!(array)))
                 .build()
                 .unwrap();
-            assert!(generated.kotlin["test/Functions.kt"]
-                .contains(&format!(": kotlin.collections.List<{kotlin}>")));
-            assert_eq!(generated.rust.contains("bulk::Writer::new"), enabled);
+            assert!(generated.kotlin["test/Functions.kt"].contains(&format!(": {kotlin}")));
+            assert_eq!(
+                generated.rust.contains("bulk::Writer::new"),
+                enabled && bulk
+            );
         }
     }
 }

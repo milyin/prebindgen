@@ -190,6 +190,16 @@ pub fn array_record_echo(value: ArrayRecord) -> ArrayRecord {
 }
 
 #[prebindgen]
+pub fn fixed_bytes_echo(value: &[u8; ARRAY_RECORD_WIDTH]) -> [u8; ARRAY_RECORD_WIDTH] {
+    *value
+}
+
+#[prebindgen]
+pub fn qualified_byte_views(value: &[core::primitive::u8]) -> Vec<std::primitive::u8> {
+    value.to_vec()
+}
+
+#[prebindgen]
 pub fn bulk_point_array(value: [BulkPoint; 2]) -> [BulkPoint; 2] {
     value
 }

@@ -139,9 +139,9 @@ pub fn run() -> Result<()> {
         .build()?;
     syn::parse_file(&generated.rust).map_err(|e| e.to_string())?;
     let class = &generated.kotlin["example/ZenohId.kt"];
-    assert!(class.contains("kotlin.collections.List<kotlin.Int>"), "{class}");
+    assert!(class.contains("bytes: kotlin.ByteArray"), "{class}");
     assert!(generated.rust.contains("wrong fixed array length"));
-    println!("ZenohId fixed-array property uses a length-checked Kotlin list");
+    println!("ZenohId fixed byte array uses a length-checked Kotlin ByteArray");
 
     // A control without enums isolates today's distinction between explicit
     // field expansion and a declared class with canonical property types.

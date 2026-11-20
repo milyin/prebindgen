@@ -1141,6 +1141,16 @@ impl SequenceView {
 }
 /// Source collection shape, excluding byte vectors/slices which retain byte transport.
 pub fn sequence_parts(ty: &Type) -> Option<(&Type, SequenceView)> {
+    let payload = match ty {
+        Type::Reference(r) => &*r.elem,
+        _ => ty,
+    };
+    collection_parts(ty)
+        .filter(|(element, _)| matches!(payload, Type::Array(_)) || type_key(element) != "u8")
+}
+
+/// Source collection shape, including buffers used by an explicit element conversion.
+pub fn collection_parts(ty: &Type) -> Option<(&Type, SequenceView)> {
     let (inner, reference) = match ty {
         Type::Reference(r) => (r.elem.as_ref(), Some(r)),
         _ => (ty, None),
@@ -1162,9 +1172,6 @@ pub fn sequence_parts(ty: &Type) -> Option<(&Type, SequenceView)> {
     } else {
         return None;
     };
-    if type_key(element) == "u8" {
-        return None;
-    }
     let view = match reference {
         Some(r) if r.mutability.is_some() => SequenceView::Mutable,
         Some(_) if slice => SequenceView::Slice,
@@ -1173,4 +1180,16 @@ pub fn sequence_parts(ty: &Type) -> Option<(&Type, SequenceView)> {
         None => SequenceView::Owned,
     };
     Some((element, view))
+}
+
+/// Return the length of an owned or shared fixed-size byte array.
+pub fn fixed_byte_array_length(ty: &Type) -> Option<&syn::Expr> {
+    let ty = match ty {
+        Type::Reference(r) if r.mutability.is_none() => &*r.elem,
+        _ => ty,
+    };
+    let Type::Array(array) = ty else {
+        return None;
+    };
+    (Primitive::from_type(&array.elem) == Some(Primitive::U8)).then_some(&array.len)
 }

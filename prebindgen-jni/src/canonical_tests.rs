@@ -69,6 +69,24 @@ fn value_properties_ignore_boundary_defaults_and_accept_local_overrides() {
     assert!(functions.contains("fun local(v: Short"));
 }
 #[test]
+fn element_conversion_to_u8_keeps_record_collections_as_lists() {
+    let generated = builder(
+        "pub struct Octet { pub value: u8 }
+         pub fn make(value: u8) -> Octet {}
+         pub fn read(value: &Octet) -> u8 {}
+         pub struct Row { pub array: [Octet; 2], pub nested: Vec<[Octet; 2]> }
+         pub fn echo(row: Row) -> Row {}",
+    )
+    .convert(convert!(Octet).input(fun!(make)).output(fun!(read)))
+    .package(package!().class(data_class!(Row)).fun(fun!(echo)))
+    .build()
+    .unwrap();
+    let row = &generated.kotlin["test/Row.kt"];
+    assert!(row.contains("array: kotlin.collections.List<kotlin.Int>"));
+    assert!(row.contains("nested: kotlin.collections.List<kotlin.collections.List<kotlin.Int>>"));
+}
+
+#[test]
 fn canonical_trait_directions_and_chains_are_compiled_statically() {
     let generated=builder("pub struct Value{pub n:i64} pub struct Intermediate{pub n:i64} pub fn echo(v:Value)->Value{}")
         .convert(convert!(Value).input(from!(Intermediate)).output(into!(Intermediate)))

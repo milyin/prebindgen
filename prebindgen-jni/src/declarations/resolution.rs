@@ -332,7 +332,7 @@ impl JniSourceResolver {
                 }
                 if let Some(tree) = prebindgen_declarations::resolve_container(
                     ty,
-                    true,
+                    Value::of(ty) != Some(Value::Bytes),
                     |inner| resolve(inner, &JniInputConfig::auto(), stack),
                     |child| InputNode::Unary {
                         operation: JniInputUnary::Optional,
@@ -409,7 +409,9 @@ impl JniSourceResolver {
                         )?),
                     });
                 }
-                if let Some((element, _)) = sequence_parts(ty) {
+                if let Some((element, _)) =
+                    sequence_parts(ty).filter(|_| Value::of(ty) != Some(Value::Bytes))
+                {
                     return Ok(InputNode::Unary {
                         operation: JniInputUnary::Sequence,
                         child: Box::new(resolve(element, &JniInputConfig::auto(), stack)?),
@@ -567,8 +569,8 @@ impl JniSourceResolver {
                 operation: JniInputUnary::Sequence,
                 child,
             } => {
-                let (element, _) =
-                    sequence_parts(ty).ok_or("sequence input requires Vec<T>, &[T] or &Vec<T>")?;
+                let (element, _) = prebindgen_flat::collection_parts(ty)
+                    .ok_or("sequence input requires a collection")?;
                 Ok(InputNode::Unary {
                     operation: JniInputUnary::Sequence,
                     child: Box::new(
@@ -857,7 +859,7 @@ impl JniSourceResolver {
                 }
                 if let Some(tree) = prebindgen_declarations::resolve_container(
                     ty,
-                    true,
+                    Value::of(ty) != Some(Value::Bytes),
                     |inner| resolve(inner, &JniOutputConfig::auto(), stack),
                     |child| OutputNode::Unary {
                         operation: JniOutputUnary::Optional,
@@ -964,7 +966,9 @@ impl JniSourceResolver {
                         child: Box::new(resolve(inner, tree, stack)?),
                     });
                 }
-                if let Some((element, _)) = sequence_parts(ty) {
+                if let Some((element, _)) =
+                    sequence_parts(ty).filter(|_| Value::of(ty) != Some(Value::Bytes))
+                {
                     let mode = if let OutputNode::Leaf(JniOutputLeafOp::Projected(p)) = tree {
                         if !p.fields.is_empty() {
                             return Err(
@@ -1002,8 +1006,8 @@ impl JniSourceResolver {
                 operation: JniOutputUnary::Sequence { delivery, mode },
                 child: element,
             } => {
-                let (ty, _) =
-                    sequence_parts(ty).ok_or("sequence output requires a collection source")?;
+                let (ty, _) = prebindgen_flat::collection_parts(ty)
+                    .ok_or("sequence output requires a collection source")?;
                 Ok(OutputNode::Unary {
                     operation: JniOutputUnary::Sequence {
                         delivery: *delivery,
@@ -1281,7 +1285,7 @@ impl JniSourceResolver {
         }
         if let Some(tree) = prebindgen_declarations::resolve_container(
             ty,
-            true,
+            Value::of(ty) != Some(Value::Bytes),
             |inner| self.resolve_input_value(flat, codec, inner, extra, stack),
             |child| InputNode::Unary {
                 operation: JniInputUnary::Optional,
@@ -1335,7 +1339,7 @@ impl JniSourceResolver {
         }
         if let Some(tree) = prebindgen_declarations::resolve_container(
             ty,
-            true,
+            Value::of(ty) != Some(Value::Bytes),
             |inner| self.resolve_output_value(flat, codec, inner, extra, stack, getter, policy),
             |child| OutputNode::Unary {
                 operation: JniOutputUnary::Optional,

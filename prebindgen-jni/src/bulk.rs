@@ -384,6 +384,7 @@ pub(crate) fn input_leaf(
         Some(Value::Text) | Some(Value::Bytes) => {
             let text = Value::of(ty) == Some(Value::Text);
             let decode = decode_buffer(text, &w);
+            let decode = super::checked_bytes(ty, decode);
             prebindgen_conversions::value::input(
                 ty,
                 w,

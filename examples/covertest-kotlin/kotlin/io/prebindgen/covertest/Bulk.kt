@@ -19,14 +19,38 @@ fun checkBulk() {
     var arrayFailed = false
     check(bulkArray(listOf(1L), JniErrorHandler { arrayFailed = true; emptyList() }).isEmpty())
     check(arrayFailed)
-    val record = ArrayRecord(listOf(0, 128, 255))
+    val octets = byteArrayOf(0, -128, -1)
+    val record = ArrayRecord(octets)
     check(arrayRecordEcho(record) == record)
-    var wrongFieldLength = false
-    check(arrayRecordEcho(ArrayRecord(listOf(0)), JniErrorHandler {
-        wrongFieldLength = it == "wrong fixed array length"
+    check(arrayRecordBulk(record) == record)
+    check(fixedBytesEcho(octets).contentEquals(octets))
+    check(qualifiedByteViews(octets).contentEquals(octets))
+    check(fixedBytesEcho(byteArrayOf(0), JniErrorHandler {
+        check(it == "wrong fixed array length")
+        ByteArray(0)
+    }).isEmpty())
+    var wrongFieldLength = 0
+    val shortRecord = ArrayRecord(byteArrayOf(0))
+    val lengthError = JniErrorHandler<ArrayRecord> {
+        check(it == "wrong fixed array length")
+        wrongFieldLength++
         record
-    }) == record)
-    check(wrongFieldLength)
+    }
+    check(arrayRecordEcho(shortRecord, lengthError) == record)
+    check(arrayRecordBulk(shortRecord, lengthError) == record)
+    check(wrongFieldLength == 2)
+    val octetList = listOf(0, 128, 255)
+    check(fixedBytesAsList(octetList) == octetList)
+    check(bytesAsList(octetList) == octetList)
+    check(bytesAsList(emptyList()).isEmpty())
+    check(bytesAsList(listOf(256), JniErrorHandler {
+        check(it == "primitive input out of range")
+        emptyList()
+    }).isEmpty())
+    check(fixedBytesAsList(listOf(0), JniErrorHandler {
+        check(it == "wrong fixed array length")
+        emptyList()
+    }).isEmpty())
     check(bulkNested(listOf(numbers, emptyList(), listOf(7L))) == listOf(numbers, emptyList<Long>(), listOf(7L)))
     val point = BulkPoint(9, 1.5)
     check(bulkPoint(point) == point)

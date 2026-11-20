@@ -131,8 +131,8 @@ pub fn input<C: Codec>(
     child: CodecInputPlan<C>,
     bulk: bool,
 ) -> Result<CodecInputPlan<C>> {
-    let (element, view) = prebindgen_flat::sequence_parts(ty)
-        .ok_or("sequence recipe requires Vec<T>, &[T] or &Vec<T>")?;
+    let (element, view) =
+        prebindgen_flat::collection_parts(ty).ok_or("sequence recipe requires a collection")?;
     if view == SequenceView::Mutable {
         return Err("mutable collections require explicit write-back support".into());
     }
@@ -286,7 +286,7 @@ pub fn output<C: Codec>(
     bulk: bool,
 ) -> Result<CodecOutputPlan<C>> {
     let (element_type, view) =
-        prebindgen_flat::sequence_parts(ty).ok_or("sequence recipe requires a collection")?;
+        prebindgen_flat::collection_parts(ty).ok_or("sequence recipe requires a collection")?;
     if matches!(element_type, Type::Reference(_)) {
         return Err("collection reference elements are unsupported; use owned elements".into());
     }

@@ -1115,7 +1115,7 @@ impl Codec for JniCodec {
             }
         }
 
-        if prebindgen_flat::sequence_parts(ty).is_some() {
+        if Value::of(ty) != Some(Value::Bytes) && prebindgen_flat::sequence_parts(ty).is_some() {
             return Err("collections require a Sequence recipe, not an opaque leaf; use an alias for opaque storage".into());
         }
         // Materialize JVM buffers while their source is still in scope. Optional
@@ -1480,7 +1480,7 @@ impl JniCodec {
         let w = wire;
         let v = var;
 
-        if prebindgen_flat::sequence_parts(ty).is_some() {
+        if Value::of(ty) != Some(Value::Bytes) && prebindgen_flat::sequence_parts(ty).is_some() {
             return Err("collections require a Sequence recipe, not an opaque leaf; use an alias for opaque storage".into());
         }
         if prebindgen_declarations::option_inner(ty).is_some() {
@@ -1497,7 +1497,7 @@ impl JniCodec {
                 JniWire::text(),
             ),
             Some(Value::Bytes) => (
-                quote!(::prebindgen_jni_runtime::bytes(&mut #env,&#w)?),
+                checked_bytes(ty, quote!(::prebindgen_jni_runtime::bytes(&mut #env,&#w)?)),
                 JniWire::bytes(),
             ),
             None => {
@@ -1507,6 +1507,16 @@ impl JniCodec {
             }
         };
         prebindgen_conversions::value::input(ty, w, v, decode, kind)
+    }
+}
+
+fn checked_bytes(ty: &syn::Type, bytes: TokenStream) -> TokenStream {
+    match prebindgen_flat::fixed_byte_array_length(ty) {
+        Some(length) => quote!(
+            <[u8; #length]>::try_from(#bytes)
+                .map_err(|_| "wrong fixed array length".to_owned())?
+        ),
+        None => bytes,
     }
 }
 
